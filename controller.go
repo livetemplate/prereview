@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/livetemplate/livetemplate"
@@ -33,6 +34,51 @@ type PrereviewController struct {
 	// ShutdownReq receives a struct{} when the user clicks Quit. main.go
 	// listens for it and triggers graceful HTTP shutdown.
 	ShutdownReq chan<- struct{}
+
+	// diffCache memoises parsed+highlighted FileDiffs so switching back
+	// to a file the user has already viewed skips the git shell + parser
+	// + chroma tokenize cost (~50-150 ms for medium-large files). Keyed
+	// by `base + "\t" + path`; invalidated when the working-tree file's
+	// mtime changes (covers user edits, branch swaps that touch the
+	// file, and stash pops). Safe for concurrent use via sync.Map —
+	// concurrent reads of the same file are racy but the worst case is
+	// re-doing the work, not a stale read of stale data.
+	diffCache sync.Map // map[string]cachedDiff
+}
+
+type cachedDiff struct {
+	diff  *gitdiff.FileDiff
+	mtime time.Time // working-tree file mtime when this was cached
+}
+
+// loadDiffCached returns the highlighted FileDiff for (base, path), reusing
+// a previously-parsed copy when the working-tree file's mtime hasn't
+// changed since it was cached.
+func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDiff, error) {
+	key := base + "\t" + path
+	curMtime := fileMtime(filepath.Join(c.RepoPath, path))
+	if v, ok := c.diffCache.Load(key); ok {
+		cd := v.(cachedDiff)
+		if cd.mtime.Equal(curMtime) {
+			return cd.diff, nil
+		}
+	}
+	diff, err := gitdiff.LoadDiff(c.RepoPath, base, path)
+	if err != nil {
+		return nil, err
+	}
+	c.diffCache.Store(key, cachedDiff{diff: diff, mtime: curMtime})
+	return diff, nil
+}
+
+// fileMtime returns the file's mtime or the zero time if it can't be
+// stat'd. Used as the cache-invalidation hash for diffCache.
+func fileMtime(full string) time.Time {
+	st, err := os.Stat(full)
+	if err != nil {
+		return time.Time{}
+	}
+	return st.ModTime()
 }
 
 // Mount runs on every HTTP GET and WebSocket connect. It rebuilds the file
@@ -96,7 +142,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// Eager-load the diff for the selected file so the right pane is
 	// populated on first paint (no second-roundtrip needed).
 	if state.SelectedFile != "" {
-		diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, state.SelectedFile)
+		diff, err := c.loadDiffCached(state.Base, state.SelectedFile)
 		if err != nil {
 			slog.Warn("load diff in mount", "path", state.SelectedFile, "err", err)
 			state.CurrentDiff = nil
@@ -143,7 +189,7 @@ func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Co
 		state.FileDrawerOpen = true
 	} else if state.SelectedFile != "" {
 		// Same file is still in the diff — reload it against the new base.
-		diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, state.SelectedFile)
+		diff, err := c.loadDiffCached(state.Base, state.SelectedFile)
 		if err != nil {
 			slog.Warn("reload diff after SetBase", "path", state.SelectedFile, "err", err)
 			state.CurrentDiff = nil
@@ -163,7 +209,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	if path == "" {
 		return state, fmt.Errorf("selectFile: missing path")
 	}
-	diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, path)
+	diff, err := c.loadDiffCached(state.Base, path)
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
 	}
@@ -211,7 +257,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	// Wrap. (-1+1)%n = 0 (lands on first file when nothing selected and Next).
 	next = ((next % n) + n) % n
 	path := state.Files[next].Path
-	diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, path)
+	diff, err := c.loadDiffCached(state.Base, path)
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
 	}
@@ -318,7 +364,7 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	}
 	cm := state.Comments[idx]
 	if cm.File != state.SelectedFile {
-		diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, cm.File)
+		diff, err := c.loadDiffCached(state.Base, cm.File)
 		if err != nil {
 			return state, fmt.Errorf("load diff: %w", err)
 		}
@@ -489,7 +535,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	cm := state.Comments[idx]
 	state.SelectedFile = cm.File
 	// Reload diff for the comment's file in case we're on a different one.
-	diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, cm.File)
+	diff, err := c.loadDiffCached(state.Base, cm.File)
 	if err == nil {
 		state.CurrentDiff = diff
 	}
