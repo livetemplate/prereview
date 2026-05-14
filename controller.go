@@ -78,22 +78,30 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	state.CSVPath = c.CSVPath
 
-	// Eager-load the diff for whichever file was previously selected so a
-	// page refresh keeps the right pane populated.
+	// If the previously-selected file disappeared (working tree edits,
+	// branch swap), reset before the auto-select block fires so we pick
+	// a still-existing file instead of trying to load a stale path.
+	if state.SelectedFile != "" && !fileInList(state.Files, state.SelectedFile) {
+		state.SelectedFile = ""
+		state.CurrentDiff = nil
+	}
+
+	// Auto-select the first file when nothing is selected — happens on
+	// initial connect and after the gone-file reset above. Saves the
+	// user a tap and avoids landing on the empty "Pick a file" state.
+	if state.SelectedFile == "" && len(state.Files) > 0 {
+		state.SelectedFile = state.Files[0].Path
+	}
+
+	// Eager-load the diff for the selected file so the right pane is
+	// populated on first paint (no second-roundtrip needed).
 	if state.SelectedFile != "" {
-		if !fileInList(state.Files, state.SelectedFile) {
-			// The previously-selected file disappeared (e.g. user discarded changes).
-			// Reset so we don't render a stale viewer.
-			state.SelectedFile = ""
+		diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, state.SelectedFile)
+		if err != nil {
+			slog.Warn("load diff in mount", "path", state.SelectedFile, "err", err)
 			state.CurrentDiff = nil
 		} else {
-			diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, state.SelectedFile)
-			if err != nil {
-				slog.Warn("load diff in mount", "path", state.SelectedFile, "err", err)
-				state.CurrentDiff = nil
-			} else {
-				state.CurrentDiff = diff
-			}
+			state.CurrentDiff = diff
 		}
 	}
 	return state, nil

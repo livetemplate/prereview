@@ -509,12 +509,14 @@ func TestE2E_MobileDrawer(t *testing.T) {
 		t.Error("drawer didn't open after tapping hamburger")
 	}
 
-	// Tap a file → drawer closes, diff renders.
+	// Tap a file → drawer closes, diff renders. Pick fresh.go (not the
+	// auto-selected first file) so the action's effect is observable —
+	// WaitVisible on a state that's already true is a no-op.
 	var drawerOpenAfterFile bool
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
-		chromedp.Click(`//button[@name='selectFile' and contains(., 'edited.go')]`, chromedp.BySearch),
-		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='edited.go']`, chromedp.BySearch),
+		chromedp.Click(`//button[@name='selectFile' and contains(., 'fresh.go')]`, chromedp.BySearch),
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='fresh.go']`, chromedp.BySearch),
 		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &drawerOpenAfterFile),
 	); err != nil {
 		t.Fatalf("tap file: %v\nstderr: %s", err, p.stderr.String())
@@ -1187,6 +1189,41 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	}
 	if delFinal == 0 {
 		t.Error("del lines should reappear after toggling back to diff mode")
+	}
+}
+
+// TestE2E_AutoSelectFirstFile verifies that landing on the page with
+// no SelectedFile (initial connect) auto-loads the diff for the first
+// file in the drawer, so the right pane is populated on first paint
+// instead of showing the "Pick a file" empty state.
+func TestE2E_AutoSelectFirstFile(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	// First file in the fixture (alphabetical sort): edited.go. The
+	// viewer's file-head should display it, and there should be no
+	// "Pick a file" empty placeholder.
+	var headFilename string
+	var hasEmptyPlaceholder bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Text(`main.viewer article header.file-head strong`, &headFilename, chromedp.ByQuery),
+		chromedp.Evaluate(`!!Array.from(document.querySelectorAll('main.viewer p.empty')).find(p => p.textContent.includes('Pick a file'))`, &hasEmptyPlaceholder),
+	); err != nil {
+		t.Fatalf("post-mount query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if headFilename == "" {
+		t.Error("file-head should be populated on initial load; got empty")
+	}
+	if hasEmptyPlaceholder {
+		t.Error("'Pick a file' placeholder should not render when a file is auto-selected")
+	}
+	// The auto-selected file is the alphabetically-first one — for the
+	// shared fixture (with the second commit + working-tree changes)
+	// the working-tree files sorted alpha are: edited.go, fresh.go.
+	// (history.go was committed in the second commit so it's unchanged
+	// vs HEAD — it still appears in ListFiles since we show all files.)
+	if headFilename != "edited.go" {
+		t.Errorf("auto-selected file = %q, want %q (alphabetically first)", headFilename, "edited.go")
 	}
 }
 
