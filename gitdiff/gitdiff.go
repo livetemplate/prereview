@@ -1,0 +1,133 @@
+// Package gitdiff shells out to the git CLI to enumerate changed files and
+// load per-file unified diffs for prereview. Shelling out (vs. a Go git
+// library) is deliberate — it respects the user's local git config (rename
+// detection thresholds, autocrlf, etc.) so what prereview shows matches
+// what `git diff` shows in their terminal.
+package gitdiff
+
+import (
+	"bytes"
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+// FileEntry is one row in the changed-files list.
+type FileEntry struct {
+	Path         string // post-rename / current path
+	Status       string // "A","M","D","R","C","T","U"
+	Renamed      string // pre-rename path for R/C; empty otherwise
+	CommentCount int    // populated by the controller, not by gitdiff
+}
+
+// ListFiles enumerates files that differ between base and the working tree.
+//
+// base may be "HEAD" (working tree vs last commit), a branch name
+// ("main", "origin/main"), or any revision spec git accepts.
+//
+// Uses `git diff --name-status -M` so renames surface as a single 'R' entry
+// rather than a delete+add pair. Untracked files are surfaced as 'A' entries
+// — without this, `git diff` would silently omit them and reviewers would
+// miss freshly-generated code that hasn't been `git add`-ed yet, which is
+// the dominant prereview use case.
+func ListFiles(repo, base string) ([]FileEntry, error) {
+	out, err := runGit(repo, "diff", "--name-status", "-M", base)
+	if err != nil {
+		return nil, err
+	}
+	entries := parseNameStatus(out)
+
+	if isWorkingTreeBase(repo, base) {
+		untracked, err := listUntracked(repo)
+		if err != nil {
+			return nil, err
+		}
+		for _, path := range untracked {
+			entries = append(entries, FileEntry{Path: path, Status: "A"})
+		}
+	}
+	return entries, nil
+}
+
+// isWorkingTreeBase reports whether base resolves to HEAD — in which case
+// untracked files in the working tree should also count as changes.
+func isWorkingTreeBase(repo, base string) bool {
+	if base == "HEAD" {
+		return true
+	}
+	resolved, err := runGit(repo, "rev-parse", "--verify", base)
+	if err != nil {
+		return false
+	}
+	head, err := runGit(repo, "rev-parse", "--verify", "HEAD")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(resolved)) == strings.TrimSpace(string(head))
+}
+
+// listUntracked returns files that exist in the working tree but are not yet
+// tracked by git. Respects .gitignore via --exclude-standard.
+func listUntracked(repo string) ([]string, error) {
+	out, err := runGit(repo, "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for line := range strings.SplitSeq(strings.TrimRight(string(out), "\n"), "\n") {
+		if line != "" {
+			paths = append(paths, line)
+		}
+	}
+	return paths, nil
+}
+
+func parseNameStatus(raw []byte) []FileEntry {
+	var entries []FileEntry
+	for line := range strings.SplitSeq(strings.TrimRight(string(raw), "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		// Format:
+		//   M\tpath
+		//   A\tpath
+		//   D\tpath
+		//   R<score>\toldpath\tnewpath
+		//   C<score>\toldpath\tnewpath
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			continue
+		}
+		status := fields[0]
+		// Strip similarity score from R100, C075, etc.
+		kind := status[:1]
+		switch kind {
+		case "R", "C":
+			if len(fields) < 3 {
+				continue
+			}
+			entries = append(entries, FileEntry{
+				Path:    fields[2],
+				Status:  kind,
+				Renamed: fields[1],
+			})
+		default:
+			entries = append(entries, FileEntry{Path: fields[1], Status: kind})
+		}
+	}
+	return entries
+}
+
+// runGit executes `git <args...>` in repo and returns stdout. Stderr is
+// folded into the error so callers see the underlying git complaint.
+func runGit(repo string, args ...string) ([]byte, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repo
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.Bytes(), nil
+}

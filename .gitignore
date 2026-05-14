@@ -1,0 +1,6 @@
+/prereview
+/bin/
+internal/assets/client/*.js
+.prereview/
+*.out
+*.test

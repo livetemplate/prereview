@@ -1,0 +1,226 @@
+package gitdiff
+
+import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+// FileDiff is the full-file, line-by-line diff for one path.
+type FileDiff struct {
+	Path     string
+	Lines    []DiffLine
+	IsBinary bool   // true when git reports "Binary files differ" — Lines is nil
+	Note     string // e.g. "file added", "file deleted"; informational, may be empty
+}
+
+// DiffLine is one rendered line in the viewer. Exactly one of OldNum / NewNum
+// may be zero (for additions and deletions respectively); for context lines
+// (Kind == "ctx") both are populated.
+type DiffLine struct {
+	OldNum  int    // 0 when the line doesn't exist on the old side
+	NewNum  int    // 0 when the line doesn't exist on the new side
+	Kind    string // "add" | "del" | "ctx"
+	Content string // raw line text, no leading +/-/space, no trailing \n
+}
+
+// LoadDiff returns the full-file diff for one path against base.
+//
+// Uses `git diff --no-color -U999999` so every line of the file appears
+// (additions, deletions, context). For files that are pure additions (A) or
+// pure deletions (D) git produces a diff against /dev/null, which the parser
+// handles naturally — every line is "add" or "del" respectively.
+func LoadDiff(repo, base, path string) (*FileDiff, error) {
+	out, err := runGit(repo,
+		"diff", "--no-color", "-U999999", "-M", "--no-ext-diff",
+		base, "--", path,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(out)) == 0 {
+		// Empty diff output could mean either: (a) the file is genuinely
+		// unchanged, or (b) the file is untracked (git diff is silent about
+		// those). Disambiguate by checking whether the file is tracked in
+		// base. If it isn't, treat working-tree content as a pure addition.
+		if isWorkingTreeBase(repo, base) && !isTracked(repo, base, path) {
+			return loadUntrackedAsAdded(repo, path)
+		}
+		return &FileDiff{Path: path, Note: "no changes"}, nil
+	}
+	return parseUnifiedDiff(path, out)
+}
+
+// isTracked reports whether path exists in the tree at base.
+func isTracked(repo, base, path string) bool {
+	_, err := runGit(repo, "cat-file", "-e", base+":"+path)
+	return err == nil
+}
+
+// loadUntrackedAsAdded reads the working-tree file and synthesizes a FileDiff
+// where every line is an add. Used when ListFiles surfaced an untracked file.
+func loadUntrackedAsAdded(repo, path string) (*FileDiff, error) {
+	full := filepath.Join(repo, path)
+	data, err := os.ReadFile(full)
+	if err != nil {
+		return nil, fmt.Errorf("read untracked %s: %w", path, err)
+	}
+	// Cheap binary detection: any NUL byte → binary.
+	if bytes.IndexByte(data, 0x00) >= 0 {
+		return &FileDiff{Path: path, IsBinary: true, Note: "binary file"}, nil
+	}
+
+	fd := &FileDiff{Path: path, Note: "file added"}
+	content := string(data)
+	// Strip trailing newline so we don't emit a phantom empty add line.
+	content = strings.TrimSuffix(content, "\n")
+	if content == "" {
+		return fd, nil
+	}
+	for i, line := range strings.Split(content, "\n") {
+		fd.Lines = append(fd.Lines, DiffLine{NewNum: i + 1, Kind: "add", Content: line})
+	}
+	return fd, nil
+}
+
+func parseUnifiedDiff(path string, raw []byte) (*FileDiff, error) {
+	fd := &FileDiff{Path: path}
+
+	sc := bufio.NewScanner(bytes.NewReader(raw))
+	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
+
+	// Track running line numbers from the hunk header @@ -a,b +c,d @@.
+	// With -U999999 there is at most one hunk per file in practice, but the
+	// loop tolerates multiple hunks defensively.
+	var oldLn, newLn int
+	inHunk := false
+
+	for sc.Scan() {
+		line := sc.Text()
+
+		if strings.HasPrefix(line, "diff --git ") ||
+			strings.HasPrefix(line, "index ") ||
+			strings.HasPrefix(line, "old mode") ||
+			strings.HasPrefix(line, "new mode") ||
+			strings.HasPrefix(line, "similarity index") ||
+			strings.HasPrefix(line, "rename from") ||
+			strings.HasPrefix(line, "rename to") {
+			continue
+		}
+		if strings.HasPrefix(line, "new file mode") {
+			fd.Note = "file added"
+			continue
+		}
+		if strings.HasPrefix(line, "deleted file mode") {
+			fd.Note = "file deleted"
+			continue
+		}
+		if strings.HasPrefix(line, "Binary files ") && strings.HasSuffix(line, " differ") {
+			fd.IsBinary = true
+			fd.Note = "binary file"
+			return fd, nil
+		}
+		if strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "@@") {
+			var err error
+			oldLn, newLn, err = parseHunkHeader(line)
+			if err != nil {
+				return nil, err
+			}
+			inHunk = true
+			continue
+		}
+
+		if !inHunk {
+			continue
+		}
+
+		// Diff body. -U999999 means context dominates; "+" and "-" mark changes.
+		// Note: git emits a "\ No newline at end of file" marker we skip.
+		if strings.HasPrefix(line, `\ `) {
+			continue
+		}
+		if line == "" {
+			// A truly empty body line is a context line with empty content. The
+			// unified-diff format encodes that as " " (a single space) so this
+			// branch is for paranoia / robustness.
+			fd.Lines = append(fd.Lines, DiffLine{OldNum: oldLn, NewNum: newLn, Kind: "ctx"})
+			oldLn++
+			newLn++
+			continue
+		}
+
+		prefix, content := line[0], line[1:]
+		switch prefix {
+		case '+':
+			fd.Lines = append(fd.Lines, DiffLine{NewNum: newLn, Kind: "add", Content: content})
+			newLn++
+		case '-':
+			fd.Lines = append(fd.Lines, DiffLine{OldNum: oldLn, Kind: "del", Content: content})
+			oldLn++
+		case ' ':
+			fd.Lines = append(fd.Lines, DiffLine{OldNum: oldLn, NewNum: newLn, Kind: "ctx", Content: content})
+			oldLn++
+			newLn++
+		default:
+			// Unrecognized content line — skip rather than fail; git output
+			// generally won't reach here for clean diffs.
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("scan diff: %w", err)
+	}
+	return fd, nil
+}
+
+// parseHunkHeader extracts the starting old/new line numbers from a hunk header
+// of the form "@@ -123,4 +124,7 @@ optional context".
+func parseHunkHeader(line string) (oldStart, newStart int, err error) {
+	end := strings.Index(line[2:], "@@")
+	if end < 0 {
+		return 0, 0, fmt.Errorf("bad hunk header: %q", line)
+	}
+	body := strings.TrimSpace(line[2 : 2+end])
+	// body looks like "-123,4 +124,7" or "-1 +0,0" etc.
+	parts := strings.Fields(body)
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("bad hunk header parts: %q", line)
+	}
+	oldStart, err = parseHunkRangeStart(parts[0], '-')
+	if err != nil {
+		return 0, 0, err
+	}
+	newStart, err = parseHunkRangeStart(parts[1], '+')
+	if err != nil {
+		return 0, 0, err
+	}
+	return oldStart, newStart, nil
+}
+
+func parseHunkRangeStart(s string, sigil byte) (int, error) {
+	if len(s) < 2 || s[0] != sigil {
+		return 0, fmt.Errorf("bad hunk range %q", s)
+	}
+	num := s[1:]
+	if comma := strings.IndexByte(num, ','); comma >= 0 {
+		num = num[:comma]
+	}
+	n, err := strconv.Atoi(num)
+	if err != nil {
+		return 0, fmt.Errorf("bad hunk range %q: %w", s, err)
+	}
+	if n == 0 {
+		// git uses "-0,0" for a brand-new file's old side; surface 0 so the
+		// caller increments from 1 once content arrives. But -0 actually means
+		// "no lines on this side" — return 1 so subsequent increments stay sane.
+		return 1, nil
+	}
+	return n, nil
+}
