@@ -33,6 +33,7 @@ func main() {
 	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit)")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on (default 127.0.0.1, localhost-only)")
+	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -41,13 +42,13 @@ func main() {
 		return
 	}
 
-	if err := run(*repo, *base, *host, *port); err != nil {
+	if err := run(*repo, *base, *host, *port, *skill); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, base, host string, port int) error {
+func run(repo, base, host string, port int, skillMode bool) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -63,12 +64,33 @@ func run(repo, base, host string, port int) error {
 		return fmt.Errorf("mkdir %s: %w", prereviewDir, err)
 	}
 	startedAt := time.Now()
-	csvPath := filepath.Join(prereviewDir, fmt.Sprintf("comments-%s.csv", startedAt.UTC().Format("20060102-150405")))
+	// Fixed CSV filename — survives server restarts so users can resume
+	// editing where they left off. (Earlier versions timestamped the
+	// filename per session, which orphaned previous comments on restart.)
+	csvPath := filepath.Join(prereviewDir, "comments.csv")
 	donePath := filepath.Join(prereviewDir, "DONE")
 	// Wipe any stale DONE marker from a previous session so the skill
 	// doesn't read it and exit before the user has done anything.
 	_ = os.Remove(donePath)
 	csvWriter := csv.NewWriter(csvPath)
+
+	// Load any existing comments from disk so a restart resumes the session.
+	existing, err := csv.Read(csvPath)
+	if err != nil {
+		return fmt.Errorf("read existing csv: %w", err)
+	}
+	initialComments := make([]Comment, 0, len(existing))
+	for _, r := range existing {
+		initialComments = append(initialComments, Comment{
+			ID:       r.ID,
+			File:     r.File,
+			FromLine: r.FromLine,
+			ToLine:   r.ToLine,
+			Side:     r.Side,
+			Body:     r.Body,
+			Created:  r.CreatedAt,
+		})
+	}
 
 	// livetemplate.New requires templates as files on disk. Write the embedded
 	// template to a temp file for the lifetime of the process. Same workaround
@@ -86,18 +108,26 @@ func run(repo, base, host string, port int) error {
 		return fmt.Errorf("livetemplate.New: %w", err)
 	}
 
+	// Quit action signals here so the HTTP server can shut down gracefully
+	// AFTER the framework has rendered the "stopping…" state back to the client.
+	shutdownReq := make(chan struct{}, 1)
+
 	controller := &PrereviewController{
-		RepoPath:  absRepo,
-		Base:      base,
-		CSVPath:   csvPath,
-		DonePath:  donePath,
-		CSVWriter: csvWriter,
+		RepoPath:    absRepo,
+		Base:        base,
+		CSVPath:     csvPath,
+		DonePath:    donePath,
+		CSVWriter:   csvWriter,
+		SkillMode:   skillMode,
+		ShutdownReq: shutdownReq,
 	}
 	initial := &PrereviewState{
 		RepoPath:  absRepo,
 		Base:      base,
 		StartedAt: startedAt.Format("2006-01-02 15:04:05"),
 		CSVPath:   csvPath,
+		Comments:  initialComments,
+		SkillMode: skillMode,
 	}
 
 	mux := http.NewServeMux()
@@ -135,6 +165,8 @@ func run(repo, base, host string, port int) error {
 	select {
 	case <-ctx.Done():
 		slog.Info("shutdown signal received")
+	case <-shutdownReq:
+		slog.Info("quit requested from UI")
 	case err := <-serveErr:
 		if err != nil {
 			return fmt.Errorf("server: %w", err)

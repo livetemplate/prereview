@@ -2,78 +2,365 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>prereview · {{.RepoPath}}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
 <link rel="stylesheet" href="/livetemplate.css">
 <style>
-:root { --pr-add: #1f4e1f; --pr-del: #4e1f1f; --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9; --pr-sel-bg: #fff3a8; }
-html, body { height: 100%; }
-body { padding: 0; }
-header.bar { padding: 0.5rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-header.bar hgroup { margin: 0; }
+:root {
+  --pr-bar-h: 44px;
+  --pr-drawer-w: 280px;
+  --pr-add: #1f4e1f; --pr-del: #4e1f1f;
+  --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9;
+  --pr-sel-bg: #fff3a8;
+  --pr-comment-bg: #eef4ff;
+  --pr-comment-bd: #b9cdf0;
+}
+
+/* ===== Mobile-first base ===== */
+
+html, body { height: 100%; margin: 0; font-size: 14px; }
+body { padding: 0; display: flex; flex-direction: column; min-height: 100dvh; }
+.layout { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* Top bar — sticky on mobile, becomes header row on desktop */
+header.bar {
+  position: sticky; top: 0; z-index: 30;
+  height: var(--pr-bar-h);
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0 0.5rem;
+  background: var(--pico-card-background-color);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+header.bar .title {
+  flex: 1; min-width: 0;
+  font-weight: 600; font-size: 0.95rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+header.bar .title small { color: var(--pico-muted-color); font-weight: normal; }
+header.bar .title { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Always-visible "saved" pill — fits even on narrow phones. */
+header.bar .title .save-pill {
+  flex-shrink: 0;
+  font-size: 0.65rem; font-weight: 600;
+  padding: 0.1rem 0.4rem; border-radius: 999px;
+  background: var(--pr-add-bg); color: var(--pr-add);
+  white-space: nowrap;
+}
+/* Verbose count — only on desktop where there's room. */
+header.bar .title .auto-saved-long { display: none; font-size: 0.7rem; flex-shrink: 0; }
+@media (min-width: 900px) {
+  header.bar .title .auto-saved-long { display: inline; }
+}
+.banner-stopping {
+  padding: 0.5rem 0.75rem; background: var(--pr-del-bg); color: var(--pr-del);
+  border-bottom: 1px solid var(--pr-del); font-size: 0.85rem; text-align: center;
+  font-weight: 600;
+}
 header.bar form { margin: 0; }
-main.split { display: grid; grid-template-columns: 280px 1fr 360px; gap: 0; height: calc(100vh - 56px); }
-aside.files, aside.comments { overflow: auto; padding: 0.5rem; }
-aside.files { border-right: 1px solid var(--pico-muted-border-color); }
-aside.comments { border-left: 1px solid var(--pico-muted-border-color); background: var(--pico-card-background-color); }
-aside.files ul { list-style: none; padding: 0; margin: 0; }
-aside.files button { width: 100%; text-align: left; margin: 0; padding: 0.25rem 0.5rem; font-size: 0.85rem; word-break: break-all; }
-aside.files form { margin: 0; }
-section.viewer { overflow: auto; padding: 1rem; }
-pre.code { background: var(--pico-card-background-color); border-radius: 4px; padding: 0; margin: 0; overflow: auto; font-size: 0.85rem; line-height: 1.4; }
-pre.code form { margin: 0; display: contents; }
-pre.code .line { display: flex; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; width: 100%; text-align: left; }
-pre.code .line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
-pre.code .line.add { background: var(--pr-add-bg); color: var(--pr-add); }
-pre.code .line.del { background: var(--pr-del-bg); color: var(--pr-del); }
-pre.code .line.selected { background: var(--pr-sel-bg) !important; outline: 2px solid var(--pico-primary); outline-offset: -2px; }
-pre.code .gutter { flex: 0 0 6ch; color: var(--pico-muted-color); user-select: none; text-align: right; padding-right: 0.5rem; }
-pre.code .content { white-space: pre; flex: 1; padding-left: 0.5rem; }
+header.bar button { margin: 0; padding: 0.25rem 0.55rem; font-size: 0.85rem; min-height: 32px; }
+.hamburger {
+  background: none; border: 1px solid var(--pico-muted-border-color);
+  padding: 0 !important; line-height: 1;
+  min-width: 36px; min-height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--pico-color);
+}
+.hamburger svg { display: block; pointer-events: none; }
+/* iOS Safari sometimes dispatches taps to <svg> children of a <button>
+   rather than the button itself; pointer-events: none ensures the button
+   wins the tap and submits its form. */
+.close-btn svg { pointer-events: none; }
+
+/* Files drawer — overlay on mobile, sidebar on desktop.
+   The `html body` prefix raises specificity over Pico's default dialog rules
+   which otherwise force width:100% and align-items:center on every <dialog>. */
+html body dialog#files-drawer {
+  position: fixed;
+  top: var(--pr-bar-h); bottom: 0; left: 0;
+  width: 85vw; max-width: var(--pr-drawer-w); min-width: 0; inset-inline-end: auto;
+  margin: 0; padding: 0; border: 0; border-right: 1px solid var(--pico-muted-border-color);
+  background: var(--pico-card-background-color);
+  transform: translateX(-100%); transition: transform 220ms ease;
+  z-index: 40;
+  overflow: hidden; display: flex; flex-direction: column; align-items: stretch;
+}
+html body dialog#files-drawer.is-open { transform: translateX(0); }
+/* All direct flex children should fill the drawer's width. */
+dialog#files-drawer > * { width: 100%; }
+dialog#files-drawer .drawer-head {
+  padding: 0.4rem 0.6rem; display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  gap: 0.5rem;
+}
+dialog#files-drawer .drawer-head strong { font-size: 0.85rem; color: var(--pico-muted-color); }
+dialog#files-drawer .drawer-head form { margin: 0; }
+dialog#files-drawer .close-btn {
+  margin: 0; padding: 0.25rem 0.4rem;
+  min-height: 28px; min-width: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; color: var(--pico-muted-color);
+}
+dialog#files-drawer .close-btn:hover { border-color: var(--pico-muted-border-color); }
+dialog#files-drawer .drawer-body { flex: 1; overflow-y: auto; padding: 0.5rem; }
+dialog#files-drawer ul { list-style: none; padding: 0; margin: 0; }
+dialog#files-drawer li { margin: 0 0 0.15rem 0; }
+dialog#files-drawer button.file-btn {
+  width: 100%; text-align: left; margin: 0;
+  padding: 0.5rem 0.6rem; font-size: 0.9rem;
+  line-height: 1.3;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+dialog#files-drawer button.file-btn .file-label {
+  flex: 1; min-width: 0;
+  word-break: break-all;
+}
+dialog#files-drawer button.file-btn .file-count {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+/* Selected-file highlight. Pico's theme-aware variables resolve to dark
+   colors that fight our dark status-A/M/D text — so we hardcode a light
+   cyan tint and a strong primary border. Status text colors stay readable. */
+/* Selected file: light blue tint + strong left accent + bold weight.
+   The bg color (#dbeafe, tailwind blue-100) is light enough that
+   dark status-A/M/D text colors stay readable. */
+dialog#files-drawer button.file-btn.is-selected {
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-left: 4px solid #1e40af;
+  padding-left: calc(0.6rem - 3px);
+  font-weight: 600;
+}
+dialog#files-drawer form { margin: 0; }
+
+/* Backdrop behind the drawer, click-to-close on mobile */
+.drawer-backdrop {
+  position: fixed; top: var(--pr-bar-h); bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,.4); z-index: 35;
+  opacity: 0; pointer-events: none; transition: opacity 200ms;
+}
+.drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+/* Backdrop only catches taps in the visible strip to the right of the
+   open drawer. Restricting pointer-events to that strip prevents taps in
+   the drawer's area from being eaten before they reach the drawer. */
+.drawer-backdrop.open { cursor: pointer; }
+
+/* Main viewer */
+main.viewer { flex: 1; overflow-y: auto; padding: 0; }
+main.viewer > article { margin: 0; padding: 0; }
+main.viewer header.file-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.35rem 0.5rem; background: var(--pico-card-background-color);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  position: sticky; top: 0; z-index: 5;
+  font-size: 0.85rem;
+}
+main.viewer header.file-head strong { word-break: break-all; font-size: 0.9rem; }
+main.viewer header.file-head small { color: var(--pico-muted-color); font-size: 0.75rem; }
+
+/* Diff viewer container — was <pre> but that preserves whitespace which
+   made every template-loop newline a visible blank line. Now a <div>
+   stack with per-line <button> blocks. */
+.code {
+  background: var(--pico-card-background-color);
+  padding: 0; margin: 0; overflow-x: auto;
+  font-size: 0.8rem; line-height: 1.2;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.code form { margin: 0; padding: 0; display: block; line-height: 1.2; }
+.code .line-row { line-height: 1.2; }
+.code button.line {
+  display: flex; width: 100%; padding: 0; margin: 0; min-height: 0;
+  border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+  text-align: left; align-items: baseline; line-height: 1.2;
+}
+.code button.line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
+.code button.line.add { background: var(--pr-add-bg); color: var(--pr-add); }
+.code button.line.del { background: var(--pr-del-bg); color: var(--pr-del); }
+/* When EVERY line in the file is an add (or every line is a del) the
+   per-line background carries no information — the [A]/[D] badge in the
+   file list already signals the file-level state. Drop the noise. */
+.code.pure-add button.line.add { background: none; color: inherit; }
+.code.pure-del button.line.del { background: none; color: inherit; }
+.code button.line.selected { background: var(--pr-sel-bg) !important; outline: 1px solid var(--pico-primary); outline-offset: -1px; }
+.code .gutter {
+  flex: 0 0 5.5ch; color: var(--pico-muted-color); user-select: none;
+  text-align: right; padding-right: 0.4rem; font-size: 0.75rem;
+  white-space: nowrap;
+}
+.code .content { white-space: pre; flex: 1; padding-left: 0.35rem; min-height: 1em; }
+
+/* Inline comment cards — between the diff lines */
+.inline-comment {
+  margin: 0.25rem 0.4rem; padding: 0.35rem 0.5rem;
+  background: var(--pr-comment-bg);
+  border-left: 3px solid var(--pr-comment-bd);
+  border-radius: 3px;
+  font-size: 0.82rem; line-height: 1.35;
+}
+.inline-comment header {
+  font-size: 0.7rem; color: var(--pico-muted-color); margin: 0 0 0.2rem 0;
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 600;
+}
+.inline-comment .body { white-space: pre-wrap; word-break: break-word; }
+.inline-comment .ic-actions { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
+.inline-comment .ic-actions button {
+  padding: 0.15rem 0.5rem; font-size: 0.72rem; margin: 0;
+  min-height: 26px; min-width: auto; line-height: 1.2;
+}
+.inline-comment .ic-actions form { margin: 0; }
+
+/* Inline composer — sticky on mobile, static on desktop. Save and Cancel
+   live in separate <form> elements (siblings, not nested) so Cancel can't
+   get blocked by the required-textarea validation on the add form. */
+.composer {
+  position: sticky; bottom: 0; z-index: 10;
+  margin: 0.35rem 0.4rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 4px;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.06);
+  display: flex; flex-direction: column;
+}
+.composer strong { font-size: 0.78rem; }
+.composer textarea {
+  min-height: 3rem; margin: 0.25rem 0; font-size: 16px; width: 100%;
+  padding: 0.35rem 0.45rem; line-height: 1.4;
+}
+.composer .composer-add { margin: 0; display: flex; flex-direction: column; }
+.composer .composer-cancel { margin: 0.3rem 0 0 0; display: flex; }
+.composer .c-actions { display: flex; gap: 0.3rem; justify-content: flex-end; align-items: center; }
+.composer .save-btn { margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 30px; }
+.composer .cancel-btn {
+  margin: 0; padding: 0.3rem 0.7rem; font-size: 0.78rem; min-height: 28px;
+  flex: 1;
+  background: none; border: 1px solid var(--pico-muted-border-color);
+  color: var(--pico-muted-color);
+}
+
+/* File status badges in the drawer */
 .status-A { color: #1f4e1f; }
 .status-M { color: #5a4500; }
 .status-D { color: #4e1f1f; }
 .status-R { color: #1f3a4e; }
+
+/* Empty states */
 .empty { color: var(--pico-muted-color); padding: 2rem; text-align: center; }
-.composer { margin-top: 1rem; padding: 0.75rem; background: var(--pico-card-background-color); border-radius: 4px; }
-.composer textarea { min-height: 5rem; margin-bottom: 0.5rem; }
-.composer .actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-.comment-card { background: var(--pico-background-color); border-radius: 4px; padding: 0.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; }
-.comment-card header { font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.25rem; }
-.comment-card .body { white-space: pre-wrap; word-break: break-word; }
-.comment-card .actions { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
-.comment-card button { padding: 0.1rem 0.4rem; font-size: 0.75rem; margin: 0; }
-.banner-done { padding: 0.5rem 1rem; background: var(--pr-add-bg); color: var(--pr-add); border-bottom: 1px solid var(--pr-add); }
+
+/* Floating toast — confirms DONE write without consuming header space.
+   Positioned absolutely so the layout doesn't shift when it appears/dismisses. */
+.toast {
+  position: fixed;
+  top: calc(var(--pr-bar-h) + 0.5rem);
+  right: 0.75rem;
+  max-width: calc(100vw - 1.5rem);
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.7rem;
+  background: var(--pr-add-bg); color: var(--pr-add);
+  border: 1px solid var(--pr-add); border-radius: 6px;
+  font-size: 0.8rem; line-height: 1.3;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1);
+  z-index: 25;
+}
+.toast .toast-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.toast .toast-msg code { font-size: 0.75rem; background: rgba(255,255,255,.5); padding: 0 0.25rem; border-radius: 3px; }
+.toast-dismiss-form { margin: 0; }
+.toast-dismiss {
+  margin: 0; padding: 0.15rem 0.3rem; min-height: 22px; min-width: 22px;
+  background: transparent; border: 0; color: inherit;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; line-height: 1;
+}
+.toast-dismiss svg { pointer-events: none; display: block; }
+@media (min-width: 900px) {
+  .toast { font-size: 0.85rem; max-width: 500px; }
+  .toast .toast-msg { white-space: normal; }
+}
+
+/* ===== Desktop overrides (>=900px) ===== */
+@media (min-width: 900px) {
+  .hamburger { display: none; }
+  .drawer-backdrop { display: none; }
+  .layout { flex-direction: row; }
+  html body dialog#files-drawer {
+    position: static; transform: none;
+    width: var(--pr-drawer-w); max-width: var(--pr-drawer-w);
+    height: auto; align-self: stretch;
+    flex-shrink: 0;
+  }
+  main.viewer { flex: 1; padding: 0; min-width: 0; }
+  .composer { position: static; box-shadow: none; }
+  .code { font-size: 0.85rem; }
+}
 </style>
 </head>
 <body>
+
 <header class="bar">
-  <hgroup>
-    <strong>prereview</strong>
-    <small>{{.RepoPath}} · base {{.Base}}{{if .StartedAt}} · {{.StartedAt}}{{end}}</small>
-  </hgroup>
-  <div>
-    <small>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{if .LastSaved}} · saved {{.LastSaved}}{{end}}</small>
-    <form method="POST" style="display:inline">
-      <button type="submit" name="done" class="contrast">Done</button>
-    </form>
+  <form method="POST">
+    <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+  </form>
+  <div class="title">
+    <span class="title-main">{{if .CurrentDiff}}{{.CurrentDiff.Path}}{{else}}<small>Pick a file from {{len .Files}} changed</small>{{end}}</span>
+    <span class="save-pill" title="Comments are auto-saved on every change">✓ saved</span>
+    <small class="auto-saved-long">· {{len .Files}} files · {{len .Comments}} comments</small>
   </div>
+  <form method="POST">
+    {{if .SkillMode}}
+    <button type="submit" name="handOff" class="contrast">Hand off →</button>
+    {{else}}
+    <button type="submit" name="quit" class="contrast">Quit</button>
+    {{end}}
+  </form>
 </header>
 
-{{if .DoneWritten}}
-<div class="banner-done"><small>DONE marker written. CSV at <code>{{.CSVPath}}</code>. Keep editing if you want — re-clicking Done refreshes the marker.</small></div>
+{{if .Quitting}}
+<div class="banner-stopping" role="status">
+  Server stopping… you can close this tab.
+</div>
 {{end}}
 
-<main class="split">
-  <aside class="files">
+{{if .DoneWritten}}
+<div class="toast" role="status">
+  <span class="toast-msg">✓ Saved to <code>.prereview/{{.CSVBasename}}</code></span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="dismissBanner" class="toast-dismiss" aria-label="Dismiss">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+    </button>
+  </form>
+</div>
+{{end}}
+
+{{/* Backdrop is rendered when the drawer is open on mobile. Any tap submits
+     CloseFiles via lvt-on:click — simpler and more reliable than a form-wrapped
+     button which had submission edge cases. */}}
+<div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" lvt-on:click="closeFiles" aria-label="Close file list"></div>
+
+<div class="layout">
+<dialog id="files-drawer" open class="{{if .FileDrawerOpen}}is-open{{end}}">
+  <div class="drawer-head">
+    <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
+    <form method="POST">
+      <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+    </form>
+  </div>
+  <div class="drawer-body">
     {{if .Files}}
     <ul>
       {{range .Files}}
       <li data-key="{{.Path}}">
         <form method="POST">
           <input type="hidden" name="path" value="{{.Path}}">
-          <button type="submit" name="selectFile" class="status-{{.Status}}{{if eq .Path $.SelectedFile}} secondary{{else}} outline contrast{{end}}">
-            <small>[{{.Status}}]</small> {{.Path}}{{if gt .CommentCount 0}} <mark>{{.CommentCount}}</mark>{{end}}
+          <button type="submit" name="selectFile" class="file-btn outline contrast status-{{.Status}}{{if eq .Path $.SelectedFile}} is-selected{{end}}">
+            <span class="file-label"><small>[{{.Status}}]</small> {{.Path}}</span>
+            {{if gt .CommentCount 0}}<mark class="file-count">{{.CommentCount}}</mark>{{end}}
           </button>
         </form>
       </li>
@@ -82,87 +369,30 @@ pre.code .content { white-space: pre; flex: 1; padding-left: 0.5rem; }
     {{else}}
     <p class="empty"><small>No changes vs <code>{{.Base}}</code>.</small></p>
     {{end}}
-  </aside>
+  </div>
+</dialog>
 
-  <section class="viewer">
-    {{with .CurrentDiff}}
-    <article>
-      <header>
-        <strong>{{.Path}}</strong>
-        {{if .Note}}<small> — {{.Note}}</small>{{end}}
-        {{if not ($.SelectionEmpty)}}
-          <small> · selection {{$.SelectionLabel}}</small>
-        {{else}}
-          <small> · click a line to start a comment</small>
-        {{end}}
-      </header>
-      {{if .IsBinary}}
-      <p class="empty">Binary file — cannot display.</p>
-      {{else if .Lines}}
-      <pre class="code"><code>{{range .Lines}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<form method="POST"><input type="hidden" name="line" value="{{$ln}}"><input type="hidden" name="side" value="{{if eq .Kind "del"}}old{{else}}new{{end}}"><button type="submit" name="selectLine" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter">{{if .OldNum}}{{.OldNum}}{{else}}·{{end}} {{if .NewNum}}{{.NewNum}}{{else}}·{{end}}</span><span class="content">{{.Content}}</span></button></form>
-{{end}}</code></pre>
-      {{else}}
-      <p class="empty"><small>No diff content.</small></p>
-      {{end}}
-    </article>
-
-    {{if not ($.SelectionEmpty)}}
-    <div class="composer">
-      <form method="POST" lvt-form:preserve>
-        <strong>Comment on {{$.SelectionLabel}}</strong>
-        <textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea>
-        <div class="actions">
-          <button type="submit" name="addComment">Save comment</button>
-        </div>
-      </form>
-      <form method="POST" style="display:inline">
-        <button type="submit" name="clearSelection" formnovalidate class="secondary outline">Cancel</button>
-      </form>
-    </div>
-    {{end}}
-    {{else}}
-    <p class="empty">Pick a file on the left.</p>
-    {{end}}
-  </section>
-
-  <aside class="comments">
-    <strong>Comments ({{len .Comments}})</strong>
-    {{if .Comments}}
-    <div style="margin-top:0.5rem">
-      {{range .Comments}}
-      <div class="comment-card" data-key="{{.ID}}">
-        <header>
-          <code>{{.File}}</code>{{if eq .FromLine .ToLine}} L{{.FromLine}}{{else}} L{{.FromLine}}-L{{.ToLine}}{{end}} <small>({{.Side}})</small>
-        </header>
-        <div class="body">{{.Body}}</div>
-        <div class="actions">
-          <form method="POST" style="display:inline">
-            <input type="hidden" name="id" value="{{.ID}}">
-            <button type="submit" name="editComment" class="outline">Edit</button>
-          </form>
-          <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
-        </div>
-        <dialog id="confirm-delete-{{.ID}}">
-          <article>
-            <header><strong>Delete comment?</strong></header>
-            <p><small><code>{{.File}}</code> {{if eq .FromLine .ToLine}}L{{.FromLine}}{{else}}L{{.FromLine}}-L{{.ToLine}}{{end}}</small></p>
-            <footer>
-              <form method="POST" style="display:inline">
-                <input type="hidden" name="id" value="{{.ID}}">
-                <button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button>
-                <button type="submit" name="deleteComment" class="contrast">Delete</button>
-              </form>
-            </footer>
-          </article>
-        </dialog>
-      </div>
-      {{end}}
-    </div>
-    {{else}}
-    <p class="empty"><small>No comments yet.</small></p>
-    {{end}}
-  </aside>
+<main class="viewer">
+{{with .CurrentDiff}}
+<article>
+  <header class="file-head">
+    <strong>{{.Path}}</strong>
+    {{if .Note}}<small>{{.Note}}</small>{{end}}
+  </header>
+  {{if .IsBinary}}
+  <p class="empty">Binary file — cannot display.</p>
+  {{else if .Lines}}
+  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}">{{range .Lines}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><form method="POST"><input type="hidden" name="line" value="{{$ln}}"><input type="hidden" name="side" value="{{if eq .Kind "del"}}old{{else}}new{{end}}"><button type="submit" name="selectLine" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} {{$ln}}</span><span class="content">{{.Content}}</span></button></form>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment" data-key="{{.ID}}"><header><span>{{.LineSpan}} · <small>{{.Side}}</small></span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form><button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>Comment on {{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea><div class="c-actions"><button type="submit" name="addComment" class="save-btn">Save</button></div></form><form method="POST" class="composer-cancel"><button type="submit" name="clearSelection" class="cancel-btn">Cancel</button></form></div>{{end}}</div>
+{{end}}</div>
+  {{else}}
+  <p class="empty"><small>No diff content.</small></p>
+  {{end}}
+</article>
+{{else}}
+<p class="empty">Pick a file from the list.</p>
+{{end}}
 </main>
+</div>
 
 <script defer src="/livetemplate-client.js"></script>
 </body>

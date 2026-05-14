@@ -35,10 +35,18 @@ Authoritative plan: `~/.claude/plans/prereview-webapp-to-add-elegant-gosling.md`
 - [x] Native `<dialog command="show-modal" commandfor=...>` for delete confirm
 - [x] Chromedp E2E covers: file pick → two-click range → type → save → CSV row verified → Edit → re-save → CSV updated → open delete dialog → confirm → CSV emptied → Done → DONE marker contains valid CSV path
 
-### Session 4 — skill + polish + manual test
-- [ ] `skill/SKILL.md` with triggers + usage
-- [ ] `skill/reference.md` with CSV schema + flag reference
-- [ ] `README.md` install/flags/CSV schema
+### Session 5 — Done-button rethink: skill mode vs standalone ✅
+- [x] `main.go`: `--skill` bool flag, `ShutdownReq` channel, extended select
+- [x] `state.go`: `SkillMode` + `Quitting` fields
+- [x] `controller.go`: `HandOff` action (renamed from `Done`), `Quit` action with delayed shutdown signal, Mount mirrors `SkillMode`
+- [x] `prereview.tmpl`: mode-aware button, `N files · M comments · auto-saved` status (desktop), "Server stopping…" banner
+- [x] `skill/SKILL.md` created with launch command including `--skill`
+- [x] e2e: `TestE2E_HandOffMarker` (skill), `TestE2E_QuitShutsServer` (standalone); existing `TestE2E_CommentLifecycle` updated to launch with `--skill`
+- [x] All 5 e2e tests green
+
+### Session 6 — final polish + skill packaging
+- [ ] `skill/reference.md` with CSV schema + flag reference (incl. `--skill`)
+- [ ] `README.md` install/flags/CSV schema/skill-vs-standalone usage
 - [ ] Edge cases: empty diff (banner), binary files (skip with note), files >1MB (warn)
 - [ ] `lvt-fx:animate="fade"` + `lvt-fx:highlight="flash"` on comment list
 - [ ] Manual test on a real repo with 20+ changed files

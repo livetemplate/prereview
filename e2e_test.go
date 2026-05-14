@@ -16,6 +16,7 @@ import (
 	stdcsv "encoding/csv"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,9 +96,11 @@ func mustWrite(t *testing.T, dir, path, content string) {
 
 // startPrereview launches the binary against repo and returns the READY URL,
 // the running cmd, and a captured stderr buffer. Caller must kill the cmd.
-func startPrereview(t *testing.T, binary, repo string) (string, *exec.Cmd, *bytesBuf) {
+// Pass extraArgs to enable --skill mode for tests asserting Hand off behavior.
+func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (string, *exec.Cmd, *bytesBuf) {
 	t.Helper()
-	cmd := exec.Command(binary, "--repo", repo, "--base", "HEAD", "--port", "0")
+	args := append([]string{"--repo", repo, "--base", "HEAD", "--port", "0"}, extraArgs...)
+	cmd := exec.Command(binary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("stdout pipe: %v", err)
@@ -184,12 +187,14 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 		_, _ = srv.Process.Wait()
 	}()
 
-	// Chromedp setup: headless chromium, capture console.
+	// Chromedp setup: headless chromium with desktop viewport (above the
+	// 900px breakpoint so the file-drawer renders as a permanent sidebar).
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(chromium),
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
+		chromedp.WindowSize(1200, 800),
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOpts...)
 	defer allocCancel()
@@ -218,9 +223,10 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 	var fileButtons int
 	var bodyText string
 	if err := chromedp.Run(timeout,
+		chromedp.EmulateViewport(1200, 800),
 		chromedp.Navigate(url),
-		chromedp.WaitVisible(`aside.files button`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll('aside.files button').length`, &fileButtons),
+		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('#files-drawer button.file-btn').length`, &fileButtons),
 		chromedp.OuterHTML(`body`, &bodyText, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("initial nav: %v\nserver stderr: %s\nconsole: %s", err, stderr.String(), strings.Join(consoleLines, "\n"))
@@ -239,8 +245,8 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 	// Click the edited.go button — should be the second one (after fresh.go alphabetically).
 	if err := chromedp.Run(timeout,
 		chromedp.Click(`//button[contains(., 'edited.go')]`, chromedp.BySearch),
-		chromedp.WaitVisible(`pre.code .line`, chromedp.ByQuery),
-		chromedp.OuterHTML(`section.viewer`, &bodyText, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
+		chromedp.OuterHTML(`main.viewer`, &bodyText, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("click edited.go: %v\nserver stderr: %s\nconsole: %s", err, stderr.String(), strings.Join(consoleLines, "\n"))
 	}
@@ -261,8 +267,8 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 	// class selector; wait until the viewer header text mentions fresh.go.
 	if err := chromedp.Run(timeout,
 		chromedp.Click(`//button[contains(., 'fresh.go')]`, chromedp.BySearch),
-		chromedp.WaitVisible(`//section[contains(@class,'viewer')]//strong[normalize-space(text())='fresh.go']`, chromedp.BySearch),
-		chromedp.OuterHTML(`section.viewer`, &bodyText, chromedp.ByQuery),
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='fresh.go']`, chromedp.BySearch),
+		chromedp.OuterHTML(`main.viewer`, &bodyText, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("click fresh.go: %v\nstderr: %s", err, stderr.String())
 	}
@@ -299,7 +305,12 @@ type runningPrereview struct {
 	cancel context.CancelFunc
 }
 
-func bootChromeAgainstPrereview(t *testing.T) *runningPrereview {
+// bootChromeAgainstPrereview compiles the binary, sets up a fixture repo,
+// launches prereview, and opens a chromedp session at the given viewport.
+// Above 900px the template renders desktop mode (sidebar always visible);
+// at/below 900px it renders mobile mode (drawer overlay).
+// Pass extraArgs to enable --skill for tests asserting handoff/DONE behavior.
+func bootChromeAgainstPrereview(t *testing.T, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
 	t.Helper()
 	chromium := findChromium(t)
 	binary := filepath.Join(t.TempDir(), "prereview")
@@ -308,13 +319,14 @@ func bootChromeAgainstPrereview(t *testing.T) *runningPrereview {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	repo := setupFixtureRepo(t)
-	url, srv, stderr := startPrereview(t, binary, repo)
+	url, srv, stderr := startPrereview(t, binary, repo, extraArgs...)
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(chromium),
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
+		chromedp.WindowSize(viewportW, viewportH),
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOpts...)
 	ctx, cancel := chromedp.NewContext(allocCtx)
@@ -332,14 +344,23 @@ func bootChromeAgainstPrereview(t *testing.T) *runningPrereview {
 	}
 }
 
-// waitReady gives the page time to render the initial file list. Always
-// follow with chromedp.Run for the actual test actions.
+// waitReady navigates the chromedp browser to the prereview URL after
+// forcing a desktop viewport via DevTools emulation (headless chromium
+// otherwise pins the viewport to 800x600 regardless of --window-size).
+// Pass viewportW = 0 to skip emulation and keep the default mobile viewport.
 func (p *runningPrereview) waitReady() {
 	p.t.Helper()
-	if err := chromedp.Run(p.ctx,
+	p.waitReadyAt(1200, 800)
+}
+
+func (p *runningPrereview) waitReadyAt(viewportW, viewportH int) {
+	p.t.Helper()
+	actions := []chromedp.Action{
+		chromedp.EmulateViewport(int64(viewportW), int64(viewportH)),
 		chromedp.Navigate(p.url),
-		chromedp.WaitVisible(`aside.files button`, chromedp.ByQuery),
-	); err != nil {
+		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
+	}
+	if err := chromedp.Run(p.ctx, actions...); err != nil {
 		p.t.Fatalf("initial nav: %v\nstderr: %s", err, p.stderr.String())
 	}
 }
@@ -351,66 +372,61 @@ func (p *runningPrereview) clickFile(path string) {
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(xpath, chromedp.BySearch),
 		chromedp.WaitVisible(
-			fmt.Sprintf(`//section[contains(@class,'viewer')]//strong[normalize-space(text())='%s']`, path),
+			fmt.Sprintf(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='%s']`, path),
 			chromedp.BySearch),
 	); err != nil {
 		p.t.Fatalf("clickFile %s: %v\nstderr: %s", path, err, p.stderr.String())
 	}
 }
 
-// clickLine selects the diff line whose gutter span exactly matches the
-// "<old> <new>" pattern. Pass 0 for the absent side.
+// clickLine selects the diff line identified by old/new line numbers.
+// Pass (0, N) for an add at new=N, (N, 0) for a del at old=N, (N, N) for a
+// ctx line. The function disambiguates same-numbered del/add pairs by
+// matching the hidden form's side input.
 func (p *runningPrereview) clickLine(oldNum, newNum int) {
 	p.t.Helper()
-	old := "·"
-	if oldNum != 0 {
-		old = fmt.Sprintf("%d", oldNum)
+	var displayLine int
+	var side string
+	switch {
+	case oldNum == 0 && newNum != 0:
+		displayLine, side = newNum, "new"
+	case oldNum != 0 && newNum == 0:
+		displayLine, side = oldNum, "old"
+	case oldNum == newNum && newNum != 0:
+		displayLine, side = newNum, "new" // ctx lines are always side=new in our template
+	default:
+		p.t.Fatalf("clickLine: ambiguous old=%d new=%d", oldNum, newNum)
 	}
-	newS := "·"
-	if newNum != 0 {
-		newS = fmt.Sprintf("%d", newNum)
-	}
-	gutter := fmt.Sprintf("%s %s", old, newS)
-	// JS click is more reliable than chromedp.Click inside complex layouts.
 	js := fmt.Sprintf(`
 		(() => {
-			const spans = document.querySelectorAll('pre.code .gutter');
-			for (const s of spans) {
-				if (s.textContent.trim() === %q) {
-					s.closest('button').click();
+			const buttons = document.querySelectorAll('.code button.line');
+			for (const b of buttons) {
+				const form = b.parentElement;
+				const lineInput = form.querySelector('input[name="line"]');
+				const sideInput = form.querySelector('input[name="side"]');
+				if (lineInput && lineInput.value === "%d" && sideInput && sideInput.value === %q) {
+					b.click();
 					return true;
 				}
 			}
 			return false;
-		})()`, gutter)
+		})()`, displayLine, side)
 	var clicked bool
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(js, &clicked)); err != nil {
 		p.t.Fatalf("clickLine eval: %v", err)
 	}
 	if !clicked {
-		p.t.Fatalf("clickLine: no gutter matching %q", gutter)
+		p.t.Fatalf("clickLine: no button line=%d side=%s", displayLine, side)
 	}
 }
 
 // readCSV returns the rows in the prereview CSV file (header included).
 func (p *runningPrereview) readCSV() [][]string {
 	p.t.Helper()
-	entries, err := os.ReadDir(filepath.Join(p.repo, ".prereview"))
-	if err != nil {
-		p.t.Fatalf("readdir .prereview: %v", err)
-	}
-	var csvPath string
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "comments-") && strings.HasSuffix(e.Name(), ".csv") {
-			csvPath = filepath.Join(p.repo, ".prereview", e.Name())
-		}
-	}
-	if csvPath == "" {
-		p.t.Fatalf(".prereview/comments-*.csv not found; entries: %v", entries)
-	}
+	csvPath := filepath.Join(p.repo, ".prereview", "comments.csv")
 	data, err := os.ReadFile(csvPath)
 	if err != nil {
-		p.t.Fatalf("read csv: %v", err)
+		p.t.Fatalf("read %s: %v", csvPath, err)
 	}
 	r := stdcsv.NewReader(strings.NewReader(string(data)))
 	rows, err := r.ReadAll()
@@ -420,8 +436,99 @@ func (p *runningPrereview) readCSV() [][]string {
 	return rows
 }
 
+// TestE2E_MobileDrawer covers the mobile layout: viewport <900px should
+// render the file list as a closed drawer with a visible hamburger.
+// Tapping hamburger opens drawer; tapping a file closes the drawer (the
+// SelectFile action sets FileDrawerOpen=false) and displays the diff.
+func TestE2E_MobileDrawer(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 375, 812)
+
+	// Initial mobile load — hamburger should be visible; file buttons
+	// rendered in the DOM but the drawer is offscreen (transform: translateX(-100%)).
+	var hamburgerVisible bool
+	var initialDrawerOpen bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(375, 812),
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`.hamburger`, chromedp.ByQuery),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.hamburger')).display !== 'none'`, &hamburgerVisible),
+		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &initialDrawerOpen),
+	); err != nil {
+		t.Fatalf("initial mobile nav: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !hamburgerVisible {
+		t.Error("hamburger not visible at 375x812; mobile media query failed")
+	}
+	if initialDrawerOpen {
+		t.Error("file drawer should be closed by default on mobile load")
+	}
+
+	// Tap hamburger → drawer opens.
+	var drawerOpenAfterTap bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.hamburger`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &drawerOpenAfterTap),
+	); err != nil {
+		t.Fatalf("tap hamburger: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !drawerOpenAfterTap {
+		t.Error("drawer didn't open after tapping hamburger")
+	}
+
+	// Tap a file → drawer closes, diff renders.
+	var drawerOpenAfterFile bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
+		chromedp.Click(`//button[@name='selectFile' and contains(., 'edited.go')]`, chromedp.BySearch),
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='edited.go']`, chromedp.BySearch),
+		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &drawerOpenAfterFile),
+	); err != nil {
+		t.Fatalf("tap file: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if drawerOpenAfterFile {
+		t.Error("drawer should auto-close after selecting a file")
+	}
+
+	// Reopen via hamburger, verify open, then close via the X button.
+	var openAfterReopen, drawerOpenAfterX bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.hamburger`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &openAfterReopen),
+		chromedp.Click(`#files-drawer .close-btn`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &drawerOpenAfterX),
+	); err != nil {
+		t.Fatalf("close via X: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !openAfterReopen {
+		t.Fatal("drawer didn't re-open after second hamburger tap; can't validate X close")
+	}
+	if drawerOpenAfterX {
+		t.Error("X close-btn didn't close the drawer")
+	}
+
+	// Reopen, then close by tapping the backdrop. The backdrop has
+	// `lvt-on:click="closeFiles"` so any click on it dispatches the action.
+	var drawerOpenAfterBackdrop bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.hamburger`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('.drawer-backdrop.open').click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &drawerOpenAfterBackdrop),
+	); err != nil {
+		t.Fatalf("close via backdrop: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if drawerOpenAfterBackdrop {
+		t.Error("backdrop tap didn't close the drawer")
+	}
+}
+
 func TestE2E_CommentLifecycle(t *testing.T) {
-	p := bootChromeAgainstPrereview(t)
+	// --skill so the Hand off button is rendered (this test asserts DONE).
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
 	p.waitReady()
 
 	// Switch to edited.go (so we have ctx/del/add lines to comment on).
@@ -438,7 +545,7 @@ func TestE2E_CommentLifecycle(t *testing.T) {
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 		chromedp.SendKeys(`.composer textarea`, "this hello world might be too friendly", chromedp.ByQuery),
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`aside.comments .comment-card`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("add comment: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -502,12 +609,14 @@ func TestE2E_CommentLifecycle(t *testing.T) {
 		t.Errorf("post-delete: expected header-only, got %d rows:\n%v", len(rows), rows)
 	}
 
-	// Done — writes the marker.
+	// Hand off — writes the DONE marker. The composer is gone (no selection
+	// after the delete-confirm cycle), so the Hand off button at the top bar
+	// is reachable. Skill mode required for the button to render.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='done']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.banner-done`, chromedp.ByQuery),
+		chromedp.Click(`button[name='handOff']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.toast`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("click done: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("click handOff: %v\nstderr: %s", err, p.stderr.String())
 	}
 
 	doneBytes, err := os.ReadFile(filepath.Join(p.repo, ".prereview", "DONE"))
@@ -515,10 +624,78 @@ func TestE2E_CommentLifecycle(t *testing.T) {
 		t.Fatalf("DONE marker missing: %v", err)
 	}
 	csvPath := strings.TrimSpace(string(doneBytes))
-	if !strings.Contains(csvPath, ".prereview/comments-") || !strings.HasSuffix(csvPath, ".csv") {
-		t.Errorf("DONE points at %q, want a .prereview/comments-*.csv", csvPath)
+	if !strings.HasSuffix(csvPath, ".prereview/comments.csv") {
+		t.Errorf("DONE points at %q, want ending with .prereview/comments.csv", csvPath)
 	}
 	if _, err := os.Stat(csvPath); err != nil {
 		t.Errorf("CSV path from DONE doesn't exist: %v", err)
+	}
+}
+
+// TestE2E_HandOffMarker verifies that in skill mode the top-bar button is
+// "Hand off" and clicking it writes the DONE marker — without needing to
+// add or delete any comments first.
+func TestE2E_HandOffMarker(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
+	p.waitReady()
+
+	var btnText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Text(`header.bar button[name='handOff']`, &btnText, chromedp.ByQuery),
+		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.toast`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("hand off: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !strings.Contains(btnText, "Hand off") {
+		t.Errorf("button text = %q, want 'Hand off'", btnText)
+	}
+
+	donePath := filepath.Join(p.repo, ".prereview", "DONE")
+	doneBytes, err := os.ReadFile(donePath)
+	if err != nil {
+		t.Fatalf("DONE marker missing after hand off: %v", err)
+	}
+	csvPath := strings.TrimSpace(string(doneBytes))
+	if !strings.HasSuffix(csvPath, ".prereview/comments.csv") {
+		t.Errorf("DONE points at %q, want ending with .prereview/comments.csv", csvPath)
+	}
+}
+
+// TestE2E_QuitShutsServer verifies that in standalone mode the top-bar
+// button is "Quit" and clicking it gracefully shuts the server down —
+// no DONE marker, subsequent HTTP requests fail.
+func TestE2E_QuitShutsServer(t *testing.T) {
+	// Default boot — no --skill.
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	var btnText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Text(`header.bar button[name='quit']`, &btnText, chromedp.ByQuery),
+		chromedp.Click(`header.bar button[name='quit']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.banner-stopping`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("quit click: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !strings.Contains(btnText, "Quit") {
+		t.Errorf("button text = %q, want 'Quit'", btnText)
+	}
+
+	// Server shuts down ~300ms after the click. Wait, then confirm the
+	// listener has closed by attempting a fresh HTTP request.
+	time.Sleep(1 * time.Second)
+
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	resp, err := client.Get(p.url)
+	if err == nil {
+		resp.Body.Close()
+		t.Errorf("server still responding after Quit; expected dial error")
+	}
+
+	// And no DONE marker was written — Quit is not a hand-off.
+	donePath := filepath.Join(p.repo, ".prereview", "DONE")
+	if _, err := os.Stat(donePath); err == nil {
+		t.Errorf("DONE marker exists after Quit; should only be written by Hand off")
 	}
 }

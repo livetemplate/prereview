@@ -24,12 +24,32 @@ type PrereviewController struct {
 	CSVPath   string
 	DonePath  string
 	CSVWriter *csv.Writer
+
+	// SkillMode is true when prereview is launched via `--skill` (the
+	// Claude skill sets this). It selects the top-bar button label:
+	// "Hand off → Claude" vs "Quit".
+	SkillMode bool
+
+	// ShutdownReq receives a struct{} when the user clicks Quit. main.go
+	// listens for it and triggers graceful HTTP shutdown.
+	ShutdownReq chan<- struct{}
 }
 
 // Mount runs on every HTTP GET and WebSocket connect. It rebuilds the file
 // list from `git diff` so the user sees current state without restarting
 // the binary.
 func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	// Reload comments from CSV every Mount. The framework doesn't persist
+	// state.Comments across WebSocket reconnects (it's not lvt:"persist"
+	// tagged, and we don't want it to be — comments can be large).
+	// The CSV file is the source of truth.
+	state.Comments = c.loadCommentsFromDisk()
+
+	// SkillMode is mirror-only: refresh from the controller every connect
+	// so a binary launched with --skill renders the right button even after
+	// a session-storage reconnect.
+	state.SkillMode = c.SkillMode
+
 	files, err := gitdiff.ListFiles(c.RepoPath, c.Base)
 	if err != nil {
 		return state, fmt.Errorf("list files: %w", err)
@@ -60,7 +80,9 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 }
 
 // SelectFile loads the diff for the file path supplied as a hidden form
-// input (`name="path"`). Resets any line selection.
+// input (`name="path"`). Resets any line selection. Auto-closes the
+// mobile file drawer so tapping a file goes straight to the diff —
+// the user doesn't have to also close the drawer manually.
 func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	path := ctx.GetString("path")
 	if path == "" {
@@ -75,6 +97,30 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
+	state.FileDrawerOpen = false
+	return state, nil
+}
+
+// ToggleFiles flips the mobile file-drawer's open state. Bound to the
+// hamburger button and to the drawer's backdrop "close" form.
+func (c *PrereviewController) ToggleFiles(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FileDrawerOpen = !state.FileDrawerOpen
+	return state, nil
+}
+
+// CloseFiles unconditionally hides the file drawer. Distinct from
+// ToggleFiles because the backdrop tap should only close, never open.
+func (c *PrereviewController) CloseFiles(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FileDrawerOpen = false
+	return state, nil
+}
+
+// DismissBanner hides the DONE confirmation banner. The on-disk DONE marker
+// and CSV file are unaffected — this only clears the UI signal, freeing
+// header space. Clicking Done again will rewrite the marker and reshow
+// the banner.
+func (c *PrereviewController) DismissBanner(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.DoneWritten = false
 	return state, nil
 }
 
@@ -245,14 +291,14 @@ func (c *PrereviewController) DeleteComment(state PrereviewState, ctx *livetempl
 	return state, nil
 }
 
-// Done is the "I'm finished reviewing" handoff. Writes the CSV one more
-// time (defensive — should already be current), then writes the DONE
-// marker AFTER the CSV is fsynced + renamed. The skill polls for the
-// marker, so writing DONE before the CSV is durable would let the skill
-// race and read a half-written file.
+// HandOff is the skill-mode "I'm finished reviewing" handoff. Writes
+// the CSV one more time (defensive — should already be current), then
+// writes the DONE marker AFTER the CSV is fsynced + renamed. The skill
+// polls for the marker, so writing DONE before the CSV is durable
+// would let the skill race and read a half-written file.
 //
 // Server keeps running afterwards so the user can keep editing.
-func (c *PrereviewController) Done(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+func (c *PrereviewController) HandOff(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	if err := c.persist(state.Comments); err != nil {
 		return state, fmt.Errorf("final csv write: %w", err)
 	}
@@ -261,6 +307,24 @@ func (c *PrereviewController) Done(state PrereviewState, ctx *livetemplate.Conte
 	}
 	state.DoneWritten = true
 	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
+// Quit gracefully shuts the HTTP server down. The actual shutdown is
+// dispatched on a delay so the framework gets to render `Quitting=true`
+// back to the client before the WebSocket is torn down — otherwise the
+// browser sees a sudden disconnect with no UI feedback.
+func (c *PrereviewController) Quit(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.Quitting = true
+	if c.ShutdownReq != nil {
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			select {
+			case c.ShutdownReq <- struct{}{}:
+			default:
+			}
+		}()
+	}
 	return state, nil
 }
 
@@ -315,6 +379,25 @@ func writeDoneMarker(donePath, csvPath string) error {
 	}
 	tmpName = ""
 	return nil
+}
+
+// loadCommentsFromDisk reads the CSV and converts to []Comment. Errors
+// are logged and an empty slice returned so a corrupt CSV doesn't break
+// the UI — the next write regenerates the file from in-memory state.
+func (c *PrereviewController) loadCommentsFromDisk() []Comment {
+	rows, err := csv.Read(c.CSVPath)
+	if err != nil {
+		slog.Warn("loadCommentsFromDisk", "err", err)
+		return nil
+	}
+	out := make([]Comment, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Comment{
+			ID: r.ID, File: r.File, FromLine: r.FromLine, ToLine: r.ToLine,
+			Side: r.Side, Body: r.Body, Created: r.CreatedAt,
+		})
+	}
+	return out
 }
 
 // fileInList reports whether path appears among entries.

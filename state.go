@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/livetemplate/prereview/gitdiff"
@@ -39,6 +40,22 @@ type PrereviewState struct {
 	// UI status.
 	LastSaved   string `json:"last_saved"`
 	DoneWritten bool   `json:"done_written" lvt:"persist"`
+
+	// Mobile drawer visibility. Persisted so a reconnect mid-drawer doesn't
+	// surprise the user with a closed drawer. The desktop CSS ignores this
+	// field (sidebar is always visible above 900px).
+	FileDrawerOpen bool `json:"file_drawer_open" lvt:"persist"`
+
+	// SkillMode is mirrored from the controller (set by --skill flag) into
+	// state in Mount so the template can branch the top-bar button between
+	// "Hand off → Claude" (skill) and "Quit" (standalone). Not persisted —
+	// the controller is the source of truth; Mount refreshes it every connect.
+	SkillMode bool `json:"skill_mode"`
+
+	// Quitting flips true when the user clicks Quit. The template renders
+	// a "Server stopping…" banner; ~250ms later the HTTP server actually
+	// shuts down (giving the framework time to flush the render).
+	Quitting bool `json:"quitting"`
 }
 
 // Comment is one row in the CSV output (and one entry in state).
@@ -61,8 +78,51 @@ func (c Comment) LineSpan() string {
 	return fmt.Sprintf("L%d-L%d", c.FromLine, c.ToLine)
 }
 
+// CSVBasename returns just the filename portion of CSVPath — useful for
+// compact toast/banner display where the full repo path is noise.
+func (s PrereviewState) CSVBasename() string {
+	return filepath.Base(s.CSVPath)
+}
+
 // SelectionEmpty reports whether nothing is currently selected.
 func (s PrereviewState) SelectionEmpty() bool { return s.SelectionAnchor == 0 }
+
+// CommentsByEndLine groups the current comments by their ToLine — the line
+// the comment trails. The template renders each line N, then inlines any
+// comment whose ToLine == N right after it (GitHub-mobile-style). Zero-arg
+// for the same reason as SelectedLines: the livetemplate framework only
+// pre-computes zero-arg methods into the data map.
+//
+// Comments restrict to the currently-selected file because the diff viewer
+// only shows one file at a time — including comments for other files would
+// be wasted work.
+func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
+	if s.SelectedFile == "" {
+		return nil
+	}
+	out := make(map[int][]Comment)
+	for _, c := range s.Comments {
+		if c.File != s.SelectedFile {
+			continue
+		}
+		out[c.ToLine] = append(out[c.ToLine], c)
+	}
+	return out
+}
+
+// SelectionEndMax returns max(SelectionAnchor, SelectionEnd) — the line
+// after which the inline composer should render. Zero means "no selection,
+// don't render the composer". Order-independent so the user can pick
+// anchor=10 → end=5 and the composer still lands after line 10.
+func (s PrereviewState) SelectionEndMax() int {
+	if s.SelectionAnchor == 0 {
+		return 0
+	}
+	if s.SelectionEnd > s.SelectionAnchor {
+		return s.SelectionEnd
+	}
+	return s.SelectionAnchor
+}
 
 // SelectedLines returns a set of line numbers currently selected. Zero-arg
 // so the livetemplate framework eagerly pre-computes it once per render
