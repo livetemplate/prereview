@@ -13,6 +13,7 @@ package main
 import (
 	"bufio"
 	"context"
+	stdcsv "encoding/csv"
 	"fmt"
 	"io"
 	"os"
@@ -284,3 +285,240 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 
 // avoid unused-imports if compilation is skipped.
 var _ = fmt.Sprintf
+
+// buildAndStart compiles the binary, sets up a fixture repo with both a
+// modified and an untracked file, launches the binary, and returns
+// everything the comment-lifecycle tests need.
+type runningPrereview struct {
+	t      *testing.T
+	url    string
+	repo   string
+	cmd    *exec.Cmd
+	stderr *bytesBuf
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func bootChromeAgainstPrereview(t *testing.T) *runningPrereview {
+	t.Helper()
+	chromium := findChromium(t)
+	binary := filepath.Join(t.TempDir(), "prereview")
+	build := exec.Command("go", "build", "-o", binary, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	repo := setupFixtureRepo(t)
+	url, srv, stderr := startPrereview(t, binary, repo)
+
+	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(chromium),
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+	)
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOpts...)
+	ctx, cancel := chromedp.NewContext(allocCtx)
+
+	t.Cleanup(func() {
+		cancel()
+		allocCancel()
+		_ = srv.Process.Kill()
+		_, _ = srv.Process.Wait()
+	})
+
+	return &runningPrereview{
+		t: t, url: url, repo: repo, cmd: srv, stderr: stderr,
+		ctx: ctx, cancel: cancel,
+	}
+}
+
+// waitReady gives the page time to render the initial file list. Always
+// follow with chromedp.Run for the actual test actions.
+func (p *runningPrereview) waitReady() {
+	p.t.Helper()
+	if err := chromedp.Run(p.ctx,
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`aside.files button`, chromedp.ByQuery),
+	); err != nil {
+		p.t.Fatalf("initial nav: %v\nstderr: %s", err, p.stderr.String())
+	}
+}
+
+// clickFile clicks the file-tab button by path.
+func (p *runningPrereview) clickFile(path string) {
+	p.t.Helper()
+	xpath := fmt.Sprintf(`//button[@name='selectFile' and contains(., '%s')]`, path)
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(xpath, chromedp.BySearch),
+		chromedp.WaitVisible(
+			fmt.Sprintf(`//section[contains(@class,'viewer')]//strong[normalize-space(text())='%s']`, path),
+			chromedp.BySearch),
+	); err != nil {
+		p.t.Fatalf("clickFile %s: %v\nstderr: %s", path, err, p.stderr.String())
+	}
+}
+
+// clickLine selects the diff line whose gutter span exactly matches the
+// "<old> <new>" pattern. Pass 0 for the absent side.
+func (p *runningPrereview) clickLine(oldNum, newNum int) {
+	p.t.Helper()
+	old := "·"
+	if oldNum != 0 {
+		old = fmt.Sprintf("%d", oldNum)
+	}
+	newS := "·"
+	if newNum != 0 {
+		newS = fmt.Sprintf("%d", newNum)
+	}
+	gutter := fmt.Sprintf("%s %s", old, newS)
+	// JS click is more reliable than chromedp.Click inside complex layouts.
+	js := fmt.Sprintf(`
+		(() => {
+			const spans = document.querySelectorAll('pre.code .gutter');
+			for (const s of spans) {
+				if (s.textContent.trim() === %q) {
+					s.closest('button').click();
+					return true;
+				}
+			}
+			return false;
+		})()`, gutter)
+	var clicked bool
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(js, &clicked)); err != nil {
+		p.t.Fatalf("clickLine eval: %v", err)
+	}
+	if !clicked {
+		p.t.Fatalf("clickLine: no gutter matching %q", gutter)
+	}
+}
+
+// readCSV returns the rows in the prereview CSV file (header included).
+func (p *runningPrereview) readCSV() [][]string {
+	p.t.Helper()
+	entries, err := os.ReadDir(filepath.Join(p.repo, ".prereview"))
+	if err != nil {
+		p.t.Fatalf("readdir .prereview: %v", err)
+	}
+	var csvPath string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "comments-") && strings.HasSuffix(e.Name(), ".csv") {
+			csvPath = filepath.Join(p.repo, ".prereview", e.Name())
+		}
+	}
+	if csvPath == "" {
+		p.t.Fatalf(".prereview/comments-*.csv not found; entries: %v", entries)
+	}
+	data, err := os.ReadFile(csvPath)
+	if err != nil {
+		p.t.Fatalf("read csv: %v", err)
+	}
+	r := stdcsv.NewReader(strings.NewReader(string(data)))
+	rows, err := r.ReadAll()
+	if err != nil {
+		p.t.Fatalf("parse csv: %v", err)
+	}
+	return rows
+}
+
+func TestE2E_CommentLifecycle(t *testing.T) {
+	p := bootChromeAgainstPrereview(t)
+	p.waitReady()
+
+	// Switch to edited.go (so we have ctx/del/add lines to comment on).
+	p.clickFile("edited.go")
+
+	// Two-click range: anchor at NEW line 3 (the func signature), end at
+	// NEW line 4 (the new "hello world" return). Same side, so the range
+	// stays as L3-L4 with side="new".
+	p.clickLine(3, 3)
+	p.clickLine(0, 4)
+
+	// Type comment + submit.
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "this hello world might be too friendly", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`aside.comments .comment-card`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected header + 1 row, got %d:\n%v", len(rows), rows)
+	}
+	row := rows[1]
+	if row[1] != "edited.go" {
+		t.Errorf("file = %q, want edited.go", row[1])
+	}
+	if row[2] != "3" || row[3] != "4" {
+		t.Errorf("from/to lines = %q/%q, want 3/4", row[2], row[3])
+	}
+	if row[4] != "new" {
+		t.Errorf("side = %q, want new", row[4])
+	}
+	if !strings.Contains(row[5], "too friendly") {
+		t.Errorf("body = %q, missing comment text", row[5])
+	}
+
+	// Edit: click Edit, change the body, save again.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='editComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.composer textarea').value = ''`, nil),
+		chromedp.SendKeys(`.composer textarea`, "EDITED: sound the alarm", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond), // give the WS update room to land
+	); err != nil {
+		t.Fatalf("edit comment: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rows = p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("post-edit: expected header + 1 row, got %d:\n%v", len(rows), rows)
+	}
+	if !strings.Contains(rows[1][5], "EDITED") {
+		t.Errorf("post-edit body = %q, expected EDITED prefix", rows[1][5])
+	}
+
+	// Delete via the confirm dialog. The `<dialog>` starts closed; clicking
+	// the "Delete" trigger button uses command/commandfor to open it, but
+	// chromedp.Click is finicky with command-attribute buttons in headless
+	// chromium. Open the dialog via JS and submit the form inside it.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`
+			const dlg = document.querySelector('dialog[id^="confirm-delete-"]');
+			dlg.showModal();
+		`, nil),
+		chromedp.WaitVisible(`dialog[id^='confirm-delete-'][open] button[name='deleteComment']`, chromedp.ByQuery),
+		chromedp.Click(`dialog[id^='confirm-delete-'][open] button[name='deleteComment']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("delete comment: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rows = p.readCSV()
+	if len(rows) != 1 {
+		t.Errorf("post-delete: expected header-only, got %d rows:\n%v", len(rows), rows)
+	}
+
+	// Done — writes the marker.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='done']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.banner-done`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("click done: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	doneBytes, err := os.ReadFile(filepath.Join(p.repo, ".prereview", "DONE"))
+	if err != nil {
+		t.Fatalf("DONE marker missing: %v", err)
+	}
+	csvPath := strings.TrimSpace(string(doneBytes))
+	if !strings.Contains(csvPath, ".prereview/comments-") || !strings.HasSuffix(csvPath, ".csv") {
+		t.Errorf("DONE points at %q, want a .prereview/comments-*.csv", csvPath)
+	}
+	if _, err := os.Stat(csvPath); err != nil {
+		t.Errorf("CSV path from DONE doesn't exist: %v", err)
+	}
+}

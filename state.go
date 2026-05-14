@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/livetemplate/prereview/gitdiff"
@@ -49,4 +50,53 @@ type Comment struct {
 	Side     string    `json:"side"`
 	Body     string    `json:"body"`
 	Created  time.Time `json:"created"`
+}
+
+// LineSpan returns "L42" for single-line and "L42-L48" for ranges.
+// Method on Comment so the template can call {{.LineSpan}} on each entry.
+func (c Comment) LineSpan() string {
+	if c.FromLine == c.ToLine {
+		return fmt.Sprintf("L%d", c.FromLine)
+	}
+	return fmt.Sprintf("L%d-L%d", c.FromLine, c.ToLine)
+}
+
+// SelectionEmpty reports whether nothing is currently selected.
+func (s PrereviewState) SelectionEmpty() bool { return s.SelectionAnchor == 0 }
+
+// SelectedLines returns a set of line numbers currently selected. Zero-arg
+// so the livetemplate framework eagerly pre-computes it once per render
+// (the framework only pre-computes zero-arg methods, so a SelectionContains(n)
+// helper would not be callable from the template). The template membership-tests
+// with `{{index $.SelectedLines $n}}` — index returns the zero value (false)
+// for missing keys, which is exactly what we want for unselected lines.
+func (s PrereviewState) SelectedLines() map[int]bool {
+	if s.SelectionAnchor == 0 {
+		return nil
+	}
+	lo, hi := s.SelectionAnchor, s.SelectionEnd
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	out := make(map[int]bool, hi-lo+1)
+	for n := lo; n <= hi; n++ {
+		out[n] = true
+	}
+	return out
+}
+
+// SelectionLabel returns the human-readable form of the current selection
+// (e.g. "L42" or "L42-L48"). Empty string when nothing is selected.
+func (s PrereviewState) SelectionLabel() string {
+	if s.SelectionAnchor == 0 {
+		return ""
+	}
+	lo, hi := s.SelectionAnchor, s.SelectionEnd
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	if lo == hi {
+		return fmt.Sprintf("L%d", lo)
+	}
+	return fmt.Sprintf("L%d-L%d", lo, hi)
 }

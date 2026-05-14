@@ -18,6 +18,7 @@ import (
 	_ "embed"
 
 	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/assets"
 )
 
@@ -55,6 +56,20 @@ func run(repo, base, host string, port int) error {
 		return err
 	}
 
+	// .prereview/ holds the CSV and the DONE marker. Create it eagerly so
+	// the skill's polling loop has a stable directory to watch.
+	prereviewDir := filepath.Join(absRepo, ".prereview")
+	if err := os.MkdirAll(prereviewDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", prereviewDir, err)
+	}
+	startedAt := time.Now()
+	csvPath := filepath.Join(prereviewDir, fmt.Sprintf("comments-%s.csv", startedAt.UTC().Format("20060102-150405")))
+	donePath := filepath.Join(prereviewDir, "DONE")
+	// Wipe any stale DONE marker from a previous session so the skill
+	// doesn't read it and exit before the user has done anything.
+	_ = os.Remove(donePath)
+	csvWriter := csv.NewWriter(csvPath)
+
 	// livetemplate.New requires templates as files on disk. Write the embedded
 	// template to a temp file for the lifetime of the process. Same workaround
 	// used by tinkerdown — see tinkerdown/internal/server/websocket.go:465.
@@ -71,11 +86,18 @@ func run(repo, base, host string, port int) error {
 		return fmt.Errorf("livetemplate.New: %w", err)
 	}
 
-	controller := &PrereviewController{RepoPath: absRepo, Base: base}
+	controller := &PrereviewController{
+		RepoPath:  absRepo,
+		Base:      base,
+		CSVPath:   csvPath,
+		DonePath:  donePath,
+		CSVWriter: csvWriter,
+	}
 	initial := &PrereviewState{
 		RepoPath:  absRepo,
 		Base:      base,
-		StartedAt: time.Now().Format("2006-01-02 15:04:05"),
+		StartedAt: startedAt.Format("2006-01-02 15:04:05"),
+		CSVPath:   csvPath,
 	}
 
 	mux := http.NewServeMux()

@@ -24,17 +24,16 @@ Authoritative plan: `~/.claude/plans/prereview-webapp-to-add-elegant-gosling.md`
 - [x] Chromedp test (`e2e_test.go`, build tag `browser`): opens UI, clicks edited file, asserts add+del+ctx; clicks untracked file, asserts all-add
 - [x] No console errors in chromedp run
 
-### Session 3 — comments + selection + CSV
-- [ ] `helpers.go` `selectionContains` template func registered
-- [ ] `controller.go` adds `SelectLine`, `ClearSelection`, `SaveDraft`, `AddComment`, `EditComment`, `DeleteComment`
-- [ ] Selection highlight emits per-line `["u",…]` ops (verify via WS-message capture in E2E)
-- [ ] `csv/schema.go` column constants
-- [ ] `csv/writer.go` atomic write with `sync.Mutex` + fsync + rename + parent-dir fsync
-- [ ] `csv/writer_test.go` covers crash-mid-write safety
-- [ ] `Done` action writes `.prereview/DONE` AFTER CSV fsync
-- [ ] `lvt-form:preserve` on draft textarea
-- [ ] Native `<dialog>` for delete-confirm (clones `examples/dialog-patterns/`)
-- [ ] Chromedp E2E: select range (two clicks) → type comment → submit → assert CSV row → edit → delete → Done → assert DONE marker content
+### Session 3 — comments + selection + CSV ✅
+- [x] Selection driven by `PrereviewState.SelectedLines() map[int]bool` zero-arg method (the livetemplate framework only pre-computes zero-arg methods, so `SelectionContains(n int)` would NOT be callable from the template; using `{{index $.SelectedLines $ln}}` works instead)
+- [x] `controller.go` adds `SelectLine` (two-click range), `ClearSelection`, `SaveDraft`, `AddComment`, `EditComment` (delete-and-reseed), `DeleteComment`, `Done`
+- [x] `csv/schema.go` column constants — load-bearing for skill contract
+- [x] `csv/writer.go` atomic write: `sync.Mutex` + `tmp` + `fsync` + `rename` + parent-dir `fsync`
+- [x] `csv/writer_test.go`: header, RFC-4180 multi-line bodies, rewrite-replaces, empty-list, no-tmp-leak, concurrent stress (6 tests)
+- [x] `Done` action writes `.prereview/DONE` AFTER the CSV is fsynced; DONE contains the CSV path
+- [x] `lvt-form:preserve` on draft textarea so unsubmitted edits survive re-renders
+- [x] Native `<dialog command="show-modal" commandfor=...>` for delete confirm
+- [x] Chromedp E2E covers: file pick → two-click range → type → save → CSV row verified → Edit → re-save → CSV updated → open delete dialog → confirm → CSV emptied → Done → DONE marker contains valid CSV path
 
 ### Session 4 — skill + polish + manual test
 - [ ] `skill/SKILL.md` with triggers + usage

@@ -7,29 +7,43 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
 <link rel="stylesheet" href="/livetemplate.css">
 <style>
-:root { --pr-add: #1f4e1f; --pr-del: #4e1f1f; --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9; }
+:root { --pr-add: #1f4e1f; --pr-del: #4e1f1f; --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9; --pr-sel-bg: #fff3a8; }
 html, body { height: 100%; }
 body { padding: 0; }
-header.bar { padding: 0.5rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color); display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+header.bar { padding: 0.5rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
 header.bar hgroup { margin: 0; }
-main.split { display: grid; grid-template-columns: 320px 1fr; gap: 0; height: calc(100vh - 56px); }
-aside.files { overflow: auto; border-right: 1px solid var(--pico-muted-border-color); padding: 0.5rem; }
+header.bar form { margin: 0; }
+main.split { display: grid; grid-template-columns: 280px 1fr 360px; gap: 0; height: calc(100vh - 56px); }
+aside.files, aside.comments { overflow: auto; padding: 0.5rem; }
+aside.files { border-right: 1px solid var(--pico-muted-border-color); }
+aside.comments { border-left: 1px solid var(--pico-muted-border-color); background: var(--pico-card-background-color); }
 aside.files ul { list-style: none; padding: 0; margin: 0; }
-aside.files li { margin: 0; }
 aside.files button { width: 100%; text-align: left; margin: 0; padding: 0.25rem 0.5rem; font-size: 0.85rem; word-break: break-all; }
 aside.files form { margin: 0; }
 section.viewer { overflow: auto; padding: 1rem; }
 pre.code { background: var(--pico-card-background-color); border-radius: 4px; padding: 0; margin: 0; overflow: auto; font-size: 0.85rem; line-height: 1.4; }
-pre.code .line { display: flex; padding: 0 0.5rem; }
+pre.code form { margin: 0; display: contents; }
+pre.code .line { display: flex; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; width: 100%; text-align: left; }
+pre.code .line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
 pre.code .line.add { background: var(--pr-add-bg); color: var(--pr-add); }
 pre.code .line.del { background: var(--pr-del-bg); color: var(--pr-del); }
+pre.code .line.selected { background: var(--pr-sel-bg) !important; outline: 2px solid var(--pico-primary); outline-offset: -2px; }
 pre.code .gutter { flex: 0 0 6ch; color: var(--pico-muted-color); user-select: none; text-align: right; padding-right: 0.5rem; }
-pre.code .content { white-space: pre; flex: 1; }
+pre.code .content { white-space: pre; flex: 1; padding-left: 0.5rem; }
 .status-A { color: #1f4e1f; }
 .status-M { color: #5a4500; }
 .status-D { color: #4e1f1f; }
 .status-R { color: #1f3a4e; }
 .empty { color: var(--pico-muted-color); padding: 2rem; text-align: center; }
+.composer { margin-top: 1rem; padding: 0.75rem; background: var(--pico-card-background-color); border-radius: 4px; }
+.composer textarea { min-height: 5rem; margin-bottom: 0.5rem; }
+.composer .actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+.comment-card { background: var(--pico-background-color); border-radius: 4px; padding: 0.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; }
+.comment-card header { font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.25rem; }
+.comment-card .body { white-space: pre-wrap; word-break: break-word; }
+.comment-card .actions { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
+.comment-card button { padding: 0.1rem 0.4rem; font-size: 0.75rem; margin: 0; }
+.banner-done { padding: 0.5rem 1rem; background: var(--pr-add-bg); color: var(--pr-add); border-bottom: 1px solid var(--pr-add); }
 </style>
 </head>
 <body>
@@ -38,8 +52,17 @@ pre.code .content { white-space: pre; flex: 1; }
     <strong>prereview</strong>
     <small>{{.RepoPath}} · base {{.Base}}{{if .StartedAt}} · {{.StartedAt}}{{end}}</small>
   </hgroup>
-  <small>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>
+  <div>
+    <small>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{if .LastSaved}} · saved {{.LastSaved}}{{end}}</small>
+    <form method="POST" style="display:inline">
+      <button type="submit" name="done" class="contrast">Done</button>
+    </form>
+  </div>
 </header>
+
+{{if .DoneWritten}}
+<div class="banner-done"><small>DONE marker written. CSV at <code>{{.CSVPath}}</code>. Keep editing if you want — re-clicking Done refreshes the marker.</small></div>
+{{end}}
 
 <main class="split">
   <aside class="files">
@@ -67,20 +90,78 @@ pre.code .content { white-space: pre; flex: 1; }
       <header>
         <strong>{{.Path}}</strong>
         {{if .Note}}<small> — {{.Note}}</small>{{end}}
+        {{if not ($.SelectionEmpty)}}
+          <small> · selection {{$.SelectionLabel}}</small>
+        {{else}}
+          <small> · click a line to start a comment</small>
+        {{end}}
       </header>
       {{if .IsBinary}}
       <p class="empty">Binary file — cannot display.</p>
       {{else if .Lines}}
-      <pre class="code"><code>{{range .Lines}}<span class="line {{.Kind}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter">{{if .OldNum}}{{.OldNum}}{{else}}·{{end}} {{if .NewNum}}{{.NewNum}}{{else}}·{{end}}</span><span class="content">{{.Content}}</span></span>
+      <pre class="code"><code>{{range .Lines}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<form method="POST"><input type="hidden" name="line" value="{{$ln}}"><input type="hidden" name="side" value="{{if eq .Kind "del"}}old{{else}}new{{end}}"><button type="submit" name="selectLine" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter">{{if .OldNum}}{{.OldNum}}{{else}}·{{end}} {{if .NewNum}}{{.NewNum}}{{else}}·{{end}}</span><span class="content">{{.Content}}</span></button></form>
 {{end}}</code></pre>
       {{else}}
       <p class="empty"><small>No diff content.</small></p>
       {{end}}
     </article>
+
+    {{if not ($.SelectionEmpty)}}
+    <div class="composer">
+      <form method="POST" lvt-form:preserve>
+        <strong>Comment on {{$.SelectionLabel}}</strong>
+        <textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea>
+        <div class="actions">
+          <button type="submit" name="addComment">Save comment</button>
+        </div>
+      </form>
+      <form method="POST" style="display:inline">
+        <button type="submit" name="clearSelection" formnovalidate class="secondary outline">Cancel</button>
+      </form>
+    </div>
+    {{end}}
     {{else}}
     <p class="empty">Pick a file on the left.</p>
     {{end}}
   </section>
+
+  <aside class="comments">
+    <strong>Comments ({{len .Comments}})</strong>
+    {{if .Comments}}
+    <div style="margin-top:0.5rem">
+      {{range .Comments}}
+      <div class="comment-card" data-key="{{.ID}}">
+        <header>
+          <code>{{.File}}</code>{{if eq .FromLine .ToLine}} L{{.FromLine}}{{else}} L{{.FromLine}}-L{{.ToLine}}{{end}} <small>({{.Side}})</small>
+        </header>
+        <div class="body">{{.Body}}</div>
+        <div class="actions">
+          <form method="POST" style="display:inline">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button type="submit" name="editComment" class="outline">Edit</button>
+          </form>
+          <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
+        </div>
+        <dialog id="confirm-delete-{{.ID}}">
+          <article>
+            <header><strong>Delete comment?</strong></header>
+            <p><small><code>{{.File}}</code> {{if eq .FromLine .ToLine}}L{{.FromLine}}{{else}}L{{.FromLine}}-L{{.ToLine}}{{end}}</small></p>
+            <footer>
+              <form method="POST" style="display:inline">
+                <input type="hidden" name="id" value="{{.ID}}">
+                <button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button>
+                <button type="submit" name="deleteComment" class="contrast">Delete</button>
+              </form>
+            </footer>
+          </article>
+        </dialog>
+      </div>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="empty"><small>No comments yet.</small></p>
+    {{end}}
+  </aside>
 </main>
 
 <script defer src="/livetemplate-client.js"></script>
