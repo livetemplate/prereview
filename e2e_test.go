@@ -778,6 +778,111 @@ func TestE2E_NextPrevFile(t *testing.T) {
 	}
 }
 
+// TestE2E_EditCancelPreservesComment verifies that clicking Cancel
+// during an edit leaves the original comment intact. Regression test
+// for a bug where EditComment was deleting the comment immediately,
+// expecting AddComment to re-add it on Save — so Cancel destroyed
+// the comment instead of just discarding the edit.
+func TestE2E_EditCancelPreservesComment(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "keep me", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("seed comment: %v\nstderr: %s", err, p.stderr.String())
+	}
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("after add: expected 1 row + header, got %d: %v", len(rows), rows)
+	}
+
+	// Click Edit → composer opens with body pre-filled. Click Cancel.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='editComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.Click(`button[name='clearSelection']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("edit + cancel: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Comment should still be visible in the diff stream and still be
+	// in the CSV. Composer should be closed.
+	var hasInlineComment, hasComposer bool
+	var commentBody string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`!!document.querySelector('.inline-comment')`, &hasInlineComment),
+		chromedp.Evaluate(`!!document.querySelector('.composer textarea')`, &hasComposer),
+		chromedp.Evaluate(`(document.querySelector('.inline-comment .body') || {textContent:""}).textContent`, &commentBody),
+	); err != nil {
+		t.Fatalf("post-cancel query: %v", err)
+	}
+	if !hasInlineComment {
+		t.Error("comment should still be visible after cancelling an edit; got deleted")
+	}
+	if hasComposer {
+		t.Error("composer should close after cancel; still open")
+	}
+	if commentBody != "keep me" {
+		t.Errorf("comment body after cancel = %q, want %q", commentBody, "keep me")
+	}
+	rows = p.readCSV()
+	if len(rows) != 2 {
+		t.Errorf("after cancel: CSV should still have 1 row + header, got %d: %v", len(rows), rows)
+	}
+}
+
+// TestE2E_EditSaveUpdatesInPlace verifies that an edit that's saved
+// (Update via Save) keeps the same ID and updates the body in place —
+// the audit trail (Created timestamp, position) survives.
+func TestE2E_EditSaveUpdatesInPlace(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "first body", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("seed: %v\nstderr: %s", err, p.stderr.String())
+	}
+	rowsBefore := p.readCSV()
+	if len(rowsBefore) != 2 {
+		t.Fatalf("after seed: expected 1 row + header, got %d", len(rowsBefore))
+	}
+	originalID := rowsBefore[1][0]
+
+	// Edit, change body, save.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='editComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.composer textarea').value = ''`, nil),
+		chromedp.SendKeys(`.composer textarea`, "updated body", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("edit + save: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rowsAfter := p.readCSV()
+	if len(rowsAfter) != 2 {
+		t.Errorf("after update: CSV should still have 1 row + header, got %d", len(rowsAfter))
+	}
+	if rowsAfter[1][0] != originalID {
+		t.Errorf("comment ID changed across edit: was %q, now %q (should be in-place update)", originalID, rowsAfter[1][0])
+	}
+	if rowsAfter[1][5] != "updated body" {
+		t.Errorf("comment body after update = %q, want %q", rowsAfter[1][5], "updated body")
+	}
+}
+
 // TestE2E_EditModeLabel verifies the composer says "Editing comment on Lx"
 // after clicking Edit rather than the default "Comment on Lx".
 func TestE2E_EditModeLabel(t *testing.T) {

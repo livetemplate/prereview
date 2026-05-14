@@ -398,20 +398,44 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 		from, to = to, from
 	}
 
-	cm := Comment{
-		ID:       newCommentID(),
-		File:     state.SelectedFile,
-		FromLine: from,
-		ToLine:   to,
-		Side:     state.SelectionSide,
-		Body:     body,
-		Created:  time.Now().UTC(),
+	// Edit-mode: state.EditingCommentID was set by EditComment when the
+	// user clicked Edit on an existing comment. Update that comment in
+	// place rather than appending a new one. ID, Created, and Resolved
+	// stay the same; body, line range, and side may change.
+	//
+	// If the user concurrently deleted the comment we're "editing"
+	// (e.g., a session race), the lookup misses and we fall through to
+	// the append path — better to surface the change as a new comment
+	// than to lose the body the user typed.
+	var rollback func()
+	if state.EditingCommentID != "" {
+		idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == state.EditingCommentID })
+		if idx >= 0 {
+			prev := state.Comments[idx]
+			state.Comments[idx].Body = body
+			state.Comments[idx].FromLine = from
+			state.Comments[idx].ToLine = to
+			state.Comments[idx].Side = state.SelectionSide
+			rollback = func() { state.Comments[idx] = prev }
+		}
 	}
-	state.Comments = append(state.Comments, cm)
+	if rollback == nil {
+		cm := Comment{
+			ID:       newCommentID(),
+			File:     state.SelectedFile,
+			FromLine: from,
+			ToLine:   to,
+			Side:     state.SelectionSide,
+			Body:     body,
+			Created:  time.Now().UTC(),
+		}
+		state.Comments = append(state.Comments, cm)
+		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
+	}
 
 	if err := c.persist(state.Comments); err != nil {
-		// Roll back the in-memory append so state stays consistent with disk.
-		state.Comments = state.Comments[:len(state.Comments)-1]
+		// Roll back so memory stays consistent with disk.
+		rollback()
 		return state, fmt.Errorf("persist comment: %w", err)
 	}
 
@@ -426,16 +450,11 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 	return state, nil
 }
 
-// EditComment loads the named comment back into the composer (draft body +
-// selection range) so the user can rewrite it. The original Comment stays
-// in the slice until the new submission, at which point AddComment will
-// have appended a fresh one — Edit's job is to seed the composer, not to
-// mutate in place. (Saves us a separate code path for the actual update.)
-//
-// On submission, the OLD comment is removed by ID inside this same action
-// when called with `commit=true`. Two-phase keeps the UI predictable:
-// click Edit → seeds composer → optionally edit → click "Update" which
-// calls EditComment with the form data + original ID.
+// EditComment seeds the composer with an existing comment's body +
+// line range so the user can rewrite it. The original comment stays in
+// state.Comments — AddComment detects EditingCommentID and updates
+// in place rather than appending. This keeps Cancel non-destructive:
+// if the user opens Edit and changes their mind, the original survives.
 func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	id := ctx.GetString("id")
 	if id == "" {
@@ -458,15 +477,6 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	state.DraftBody = cm.Body
 	state.EditingCommentID = cm.ID
 	state.LastDeletedComment = nil
-
-	// Remove the comment being edited — submission of the composer will
-	// re-add it via AddComment with the (possibly updated) body. This
-	// avoids a separate UpdateComment code path and keeps CSV writes idempotent.
-	state.Comments = slices.Delete(state.Comments, idx, idx+1)
-	if err := c.persist(state.Comments); err != nil {
-		return state, fmt.Errorf("persist after edit: %w", err)
-	}
-	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
 }
 
