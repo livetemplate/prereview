@@ -17,6 +17,13 @@ type FileDiff struct {
 	Lines    []DiffLine
 	IsBinary bool   // true when git reports "Binary files differ" — Lines is nil
 	Note     string // e.g. "file added", "file deleted"; informational, may be empty
+	// MaxLineChars is the longest Content length (in characters) across
+	// all DiffLines. Used by the template to set `.code` width in `ch`
+	// units up front; without this hint, the browser would compute
+	// `width: max-content` for every line-row to determine the diff
+	// container's scrollable extent — expensive on big files (950+
+	// rows) and the dominant cost in perceived vertical-scroll lag.
+	MaxLineChars int
 }
 
 // DiffLine is one rendered line in the viewer. Exactly one of OldNum / NewNum
@@ -80,9 +87,9 @@ func LoadDiff(repo, base, path string) (*FileDiff, error) {
 }
 
 // highlightLines fills DiffLine.HighlightedContent for each non-binary
-// line in the diff. Runs after parsing/loading so all three paths
-// (parseUnifiedDiff, loadFileAsCtx, loadUntrackedAsAdded) get
-// highlighting uniformly.
+// line in the diff and computes fd.MaxLineChars. Runs after
+// parsing/loading so all three paths (parseUnifiedDiff, loadFileAsCtx,
+// loadUntrackedAsAdded) get highlighting + width info uniformly.
 //
 // Uses the bulk HighlightLines helper so the chroma tokenizer
 // initialises once for the whole file rather than once per line.
@@ -91,9 +98,14 @@ func highlightLines(fd *FileDiff) {
 		return
 	}
 	contents := make([]string, len(fd.Lines))
+	maxChars := 0
 	for i := range fd.Lines {
 		contents[i] = fd.Lines[i].Content
+		if n := len(fd.Lines[i].Content); n > maxChars {
+			maxChars = n
+		}
 	}
+	fd.MaxLineChars = maxChars
 	highlighted := HighlightLines(fd.Path, contents)
 	for i := range fd.Lines {
 		if i < len(highlighted) {
