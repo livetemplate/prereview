@@ -108,10 +108,141 @@ func (c *PrereviewController) ToggleFiles(state PrereviewState, ctx *livetemplat
 	return state, nil
 }
 
+// NextFile selects the next file in state.Files relative to SelectedFile.
+// Wraps to the first file from the last. If no file is selected, picks the
+// first file. Falls back to no-op for an empty file list.
+func (c *PrereviewController) NextFile(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.stepFile(state, +1)
+}
+
+// PrevFile selects the previous file. Wraps to the last file from the first.
+func (c *PrereviewController) PrevFile(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.stepFile(state, -1)
+}
+
+func (c *PrereviewController) stepFile(state PrereviewState, delta int) (PrereviewState, error) {
+	if len(state.Files) == 0 {
+		return state, nil
+	}
+	cur := -1
+	for i, f := range state.Files {
+		if f.Path == state.SelectedFile {
+			cur = i
+			break
+		}
+	}
+	next := cur + delta
+	n := len(state.Files)
+	// Wrap. (-1+1)%n = 0 (lands on first file when nothing selected and Next).
+	next = ((next % n) + n) % n
+	path := state.Files[next].Path
+	diff, err := gitdiff.LoadDiff(c.RepoPath, c.Base, path)
+	if err != nil {
+		return state, fmt.Errorf("load diff %s: %w", path, err)
+	}
+	state.SelectedFile = path
+	state.CurrentDiff = diff
+	state.SelectionAnchor = 0
+	state.SelectionEnd = 0
+	state.SelectionSide = ""
+	state.LastDeletedComment = nil
+	state.EditingCommentID = ""
+	return state, nil
+}
+
 // CloseFiles unconditionally hides the file drawer. Distinct from
 // ToggleFiles because the backdrop tap should only close, never open.
 func (c *PrereviewController) CloseFiles(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.FileDrawerOpen = false
+	return state, nil
+}
+
+// ToggleViewed flips the "reviewed" flag for the file passed via the hidden
+// `path` input. Bound to a per-file checkbox/button in the drawer.
+func (c *PrereviewController) ToggleViewed(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	path := ctx.GetString("path")
+	if path == "" {
+		return state, fmt.Errorf("toggleViewed: missing path")
+	}
+	if state.ViewedFiles == nil {
+		state.ViewedFiles = map[string]bool{}
+	}
+	if state.ViewedFiles[path] {
+		delete(state.ViewedFiles, path)
+	} else {
+		state.ViewedFiles[path] = true
+	}
+	return state, nil
+}
+
+// SetFileFilter updates the search filter applied to the file drawer.
+// Bound to the search input via lvt-on:input with a debounce modifier.
+func (c *PrereviewController) SetFileFilter(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FileFilter = ctx.GetString("filter")
+	return state, nil
+}
+
+// ToggleCommentList flips between the diff viewer and the all-comments
+// overview pane. Bound to the "N comments" entry in the overflow menu.
+// Closes the menu so the user sees the result immediately.
+func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.ShowAllComments = !state.ShowAllComments
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// ToggleShowResolved flips whether resolved comments are visible in the
+// inline diff and the all-comments overview. Default off — resolved
+// comments add noise once they're handled. Bound to an entry in the
+// overflow menu. Closes the menu so the user can immediately see the
+// effect on the diff.
+func (c *PrereviewController) ToggleShowResolved(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.ShowResolved = !state.ShowResolved
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// ToggleMoreMenu opens/closes the 3-dots overflow menu in the top bar.
+// Mirrors the file-drawer pattern: state-driven boolean + CSS class
+// toggle. No JS. Backdrop tap submits CloseMoreMenu.
+func (c *PrereviewController) ToggleMoreMenu(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.MoreMenuOpen = !state.MoreMenuOpen
+	return state, nil
+}
+
+// CloseMoreMenu is the explicit close action — bound to the menu
+// backdrop so tapping outside dismisses without toggling the open state
+// to "true" on a subsequent click.
+func (c *PrereviewController) CloseMoreMenu(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// JumpToComment closes the all-comments view, selects the comment's
+// file, and sets ScrollToCommentID so the framework's
+// `lvt-fx:scroll="into-view"` directive on the matching inline comment
+// scrolls it into view on the next render. Pure declarative wiring —
+// no custom app-level JS.
+func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("jumpToComment: missing id")
+	}
+	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
+	if idx < 0 {
+		return state, fmt.Errorf("jumpToComment: id %s not found", id)
+	}
+	cm := state.Comments[idx]
+	if cm.File != state.SelectedFile {
+		diff, err := gitdiff.LoadDiff(c.RepoPath, c.Base, cm.File)
+		if err != nil {
+			return state, fmt.Errorf("load diff: %w", err)
+		}
+		state.SelectedFile = cm.File
+		state.CurrentDiff = diff
+	}
+	state.ShowAllComments = false
+	state.ScrollToCommentID = cm.ID
 	return state, nil
 }
 
@@ -169,12 +300,13 @@ func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate
 }
 
 // ClearSelection wipes the line selection and any draft. Bound to a
-// "Cancel" button next to the composer.
+// "Cancel" button next to the composer and to ESC keydown on the body.
 func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
 	state.DraftBody = ""
+	state.EditingCommentID = ""
 	return state, nil
 }
 
@@ -225,6 +357,8 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
 	state.DraftBody = ""
+	state.EditingCommentID = ""
+	state.LastDeletedComment = nil
 	state.LastSaved = time.Now().Format("15:04:05")
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
@@ -260,6 +394,8 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	state.SelectionEnd = cm.ToLine
 	state.SelectionSide = cm.Side
 	state.DraftBody = cm.Body
+	state.EditingCommentID = cm.ID
+	state.LastDeletedComment = nil
 
 	// Remove the comment being edited — submission of the composer will
 	// re-add it via AddComment with the (possibly updated) body. This
@@ -272,7 +408,9 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	return state, nil
 }
 
-// DeleteComment removes the named comment and rewrites the CSV.
+// DeleteComment removes the named comment, rewrites the CSV, and stashes
+// the deleted comment in state.LastDeletedComment so the user can undo
+// for the remainder of the session (or until another mutation).
 func (c *PrereviewController) DeleteComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	id := ctx.GetString("id")
 	if id == "" {
@@ -282,10 +420,54 @@ func (c *PrereviewController) DeleteComment(state PrereviewState, ctx *livetempl
 	if idx < 0 {
 		return state, fmt.Errorf("deleteComment: id %s not found", id)
 	}
+	deleted := state.Comments[idx]
 	state.Comments = slices.Delete(state.Comments, idx, idx+1)
 	if err := c.persist(state.Comments); err != nil {
 		return state, fmt.Errorf("persist after delete: %w", err)
 	}
+	state.LastDeletedComment = &deleted
+	state.Files = annotateCommentCounts(state.Files, state.Comments)
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
+// ToggleResolved flips the Resolved flag on the named comment and rewrites
+// the CSV. Unlike DeleteComment, this keeps the comment as a historical
+// record; the skill should treat resolved comments as "addressed" and
+// only act on unresolved ones.
+func (c *PrereviewController) ToggleResolved(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("toggleResolved: missing id")
+	}
+	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
+	if idx < 0 {
+		return state, fmt.Errorf("toggleResolved: id %s not found", id)
+	}
+	state.Comments[idx].Resolved = !state.Comments[idx].Resolved
+	if err := c.persist(state.Comments); err != nil {
+		// Roll back so disk and memory match.
+		state.Comments[idx].Resolved = !state.Comments[idx].Resolved
+		return state, fmt.Errorf("persist after toggle resolved: %w", err)
+	}
+	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
+// UndoDelete restores the most recently deleted comment to state.Comments
+// and rewrites the CSV. No-op if LastDeletedComment is nil (the undo
+// affordance shouldn't even render in that case, but defending in depth).
+func (c *PrereviewController) UndoDelete(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if state.LastDeletedComment == nil {
+		return state, nil
+	}
+	state.Comments = append(state.Comments, *state.LastDeletedComment)
+	if err := c.persist(state.Comments); err != nil {
+		// Don't clear LastDeletedComment so the user can try again.
+		return state, fmt.Errorf("persist after undo: %w", err)
+	}
+	state.LastDeletedComment = nil
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
@@ -306,6 +488,7 @@ func (c *PrereviewController) HandOff(state PrereviewState, ctx *livetemplate.Co
 		return state, fmt.Errorf("write done marker: %w", err)
 	}
 	state.DoneWritten = true
+	state.LastDeletedComment = nil
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
 }
@@ -344,6 +527,7 @@ func (c *PrereviewController) persist(comments []Comment) error {
 			Side:      cm.Side,
 			Body:      cm.Body,
 			CreatedAt: cm.Created,
+			Resolved:  cm.Resolved,
 		})
 	}
 	return c.CSVWriter.Write(rows)
@@ -394,7 +578,7 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 	for _, r := range rows {
 		out = append(out, Comment{
 			ID: r.ID, File: r.File, FromLine: r.FromLine, ToLine: r.ToLine,
-			Side: r.Side, Body: r.Body, Created: r.CreatedAt,
+			Side: r.Side, Body: r.Body, Created: r.CreatedAt, Resolved: r.Resolved,
 		})
 	}
 	return out

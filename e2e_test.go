@@ -699,3 +699,384 @@ func TestE2E_QuitShutsServer(t *testing.T) {
 		t.Errorf("DONE marker exists after Quit; should only be written by Hand off")
 	}
 }
+
+// TestE2E_NextPrevFile verifies the top-bar Next/Prev arrows cycle through
+// state.Files and update the viewer accordingly.
+func TestE2E_NextPrevFile(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	// Pick the second file in the drawer (index 2 in 1-based XPath).
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`(//button[@name='selectFile'])[2]`, chromedp.BySearch),
+		chromedp.WaitVisible(`main.viewer article header strong`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("pick first file: %v\nstderr: %s", err, p.stderr.String())
+	}
+	var first string
+	if err := chromedp.Run(p.ctx, chromedp.Text(`main.viewer article header strong`, &first, chromedp.ByQuery)); err != nil {
+		t.Fatalf("read first filename: %v", err)
+	}
+
+	// Click Next; expect a different file in the viewer.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`header.bar button[name='nextFile']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("click next: %v", err)
+	}
+	var afterNext string
+	_ = chromedp.Run(p.ctx, chromedp.Text(`main.viewer article header strong`, &afterNext, chromedp.ByQuery))
+	if afterNext == first || afterNext == "" {
+		t.Errorf("after Next: filename = %q (was %q); expected to advance", afterNext, first)
+	}
+
+	// Prev should bring us back.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`header.bar button[name='prevFile']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("click prev: %v", err)
+	}
+	var afterPrev string
+	_ = chromedp.Run(p.ctx, chromedp.Text(`main.viewer article header strong`, &afterPrev, chromedp.ByQuery))
+	if afterPrev != first {
+		t.Errorf("after Prev: filename = %q; expected to return to %q", afterPrev, first)
+	}
+}
+
+// TestE2E_EditModeLabel verifies the composer says "Editing comment on Lx"
+// after clicking Edit rather than the default "Comment on Lx".
+func TestE2E_EditModeLabel(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "original body", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+		chromedp.Click(`button[name='editComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.composer`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("seed + edit: %v\nstderr: %s", err, p.stderr.String())
+	}
+	var label string
+	if err := chromedp.Run(p.ctx, chromedp.Text(`.composer strong`, &label, chromedp.ByQuery)); err != nil {
+		t.Fatalf("read composer label: %v", err)
+	}
+	if !strings.HasPrefix(label, "Editing") {
+		t.Errorf("composer label = %q, want prefix 'Editing'", label)
+	}
+}
+
+// TestE2E_FileFilter verifies the drawer search filter narrows the file list.
+func TestE2E_FileFilter(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	var initialCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('#files-drawer button.file-btn').length`, &initialCount),
+		chromedp.SendKeys(`#files-drawer input[name='filter']`, "fresh", chromedp.ByQuery),
+		chromedp.Sleep(500*time.Millisecond), // 200ms debounce + WS roundtrip
+	); err != nil {
+		t.Fatalf("type filter: %v", err)
+	}
+	var filteredCount int
+	_ = chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('#files-drawer button.file-btn').length`, &filteredCount),
+	)
+	if filteredCount >= initialCount {
+		t.Errorf("filter didn't reduce file count: before=%d after=%d", initialCount, filteredCount)
+	}
+	if filteredCount < 1 {
+		t.Errorf("filter eliminated all files; expected 'fresh.go' to match")
+	}
+}
+
+// TestE2E_MarkViewed verifies the viewed toggle flips and the row styles.
+func TestE2E_MarkViewed(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	var hasViewedClass bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`(//button[@name='toggleViewed'])[1]`, chromedp.BySearch),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(`!!document.querySelector('#files-drawer .file-row.is-viewed')`, &hasViewedClass),
+	); err != nil {
+		t.Fatalf("toggle viewed: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !hasViewedClass {
+		t.Errorf("no .is-viewed row after ToggleViewed")
+	}
+}
+
+// TestE2E_AllCommentsView verifies the comments pill toggles into an
+// all-comments overview, and JumpToComment returns to the diff with the
+// scroll-marker attribute set.
+func TestE2E_AllCommentsView(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "first", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+		// Open all-comments view via the pill.
+		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("open all-comments: %v\nstderr: %s", err, p.stderr.String())
+	}
+	var jumpHasScrollMarker bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='jumpToComment']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+		// JumpToComment sets ScrollToCommentID; the body picks up data-scroll-to-now
+		// briefly, but the embedded scroll JS removes it on first render. Check the
+		// inline comment is back on screen instead.
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('section.all-comments')`, &jumpHasScrollMarker),
+	); err != nil {
+		t.Fatalf("jump to comment: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if jumpHasScrollMarker {
+		t.Errorf("all-comments view still visible after jump")
+	}
+}
+
+// TestE2E_ResolveComment verifies the resolve button toggles the
+// Resolved flag on a comment, writes it to CSV with `resolved=true`, and
+// the comment renders muted. The Resolve button becomes "Reopen" after.
+func TestE2E_ResolveComment(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "needs resolving", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment: %v", err)
+	}
+
+	// Resolve. Resolved comments are hidden by default, so the inline-comment
+	// should disappear from the diff stream.
+	var stillVisibleAfterResolve bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.inline-comment button[name='toggleResolved']`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+		chromedp.Evaluate(`!!document.querySelector('.inline-comment')`, &stillVisibleAfterResolve),
+	); err != nil {
+		t.Fatalf("resolve: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if stillVisibleAfterResolve {
+		t.Error("resolved comment should be hidden by default; .inline-comment still present")
+	}
+
+	// CSV row should have resolved=true (col 7).
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected 1 row + header, got %d: %v", len(rows), rows)
+	}
+	if rows[1][7] != "true" {
+		t.Errorf("resolved column = %q, want 'true'", rows[1][7])
+	}
+
+	// Toggle "Show resolved" → the resolved comment reappears with is-resolved.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleShowResolved']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("toggle show resolved: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Button on the comment should now read "Reopen".
+	var btnText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Text(`.inline-comment button[name='toggleResolved']`, &btnText, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("read button text: %v", err)
+	}
+	if strings.TrimSpace(btnText) != "Reopen" {
+		t.Errorf("button text after resolve = %q, want 'Reopen'", btnText)
+	}
+
+	// Reopen — back to unresolved.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.inline-comment button[name='toggleResolved']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	rows = p.readCSV()
+	if rows[1][7] != "false" {
+		t.Errorf("resolved column after reopen = %q, want 'false'", rows[1][7])
+	}
+}
+
+// TestE2E_MobileOverflowMenu verifies that on a phone-sized viewport the
+// secondary chips (All comments, Show resolved) live behind the 3-dots
+// overflow menu rather than overflowing the toolbar. Tapping the
+// 3-dots opens the menu; tapping an entry fires the action and closes
+// the menu. Backdrop tap closes without firing anything.
+//
+// Why this test exists: the desktop inline-chip group caused horizontal
+// overflow on mobile (the "Show resolved" toggle was clipped by the
+// Hand off button). The 3-dots pattern keeps mobile chrome lean while
+// desktop keeps the chips inline for one-tap access.
+func TestE2E_MobileOverflowMenu(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 375, 812)
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(375, 812),
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`header.bar`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("mobile boot: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// 3-dots trigger must be visible on mobile; inline chip group must be hidden.
+	var triggerVisible, inlineVisible bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.more-trigger')).display !== 'none'`, &triggerVisible),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.toolbar-inline')).display === 'none'`, &inlineVisible),
+	); err != nil {
+		t.Fatalf("chrome visibility query: %v", err)
+	}
+	if !triggerVisible {
+		t.Error("3-dots overflow trigger should be visible on mobile (375px)")
+	}
+	if !inlineVisible {
+		t.Error("inline chip group should be hidden on mobile (only visible at >=900px)")
+	}
+
+	// Open the overflow menu — the menu always contains an info row even
+	// when no comments exist, so we don't need to add a comment first to
+	// verify the open/close behavior. Verify menu opens, contains the
+	// expected role=menu element, and that backdrop tap closes it.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.more-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.more-menu.is-open`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("open overflow menu: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Backdrop tap closes the menu (CloseMoreMenu action).
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.more-menu-backdrop.is-open`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond),
+	); err != nil {
+		t.Fatalf("close via backdrop: %v\nstderr: %s", err, p.stderr.String())
+	}
+	var menuStillOpen bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.more-menu').classList.contains('is-open')`, &menuStillOpen),
+	); err != nil {
+		t.Fatalf("menu state query: %v", err)
+	}
+	if menuStillOpen {
+		t.Error("menu should close when backdrop is tapped")
+	}
+}
+
+// TestE2E_MobileScrollBounds verifies horizontal page overflow is
+// clamped (no chrome bleed past the viewport) while leaving vertical
+// scroll free. body must NOT be `overflow-y: hidden` — that breaks
+// touch scrolling on nested overflow:auto containers in iOS Safari.
+// main.viewer is the y-scroll container and gets `overscroll-behavior:
+// contain` to keep rubber-band scoped to itself.
+func TestE2E_MobileScrollBounds(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 375, 812)
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(375, 812),
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`header.bar`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("mobile boot: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	var bodyOverflowY, bodyOverflowX, viewerOverflowY, viewerOverscroll string
+	var pageScrollW, pageClientW int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`getComputedStyle(document.body).overflowY`, &bodyOverflowY),
+		chromedp.Evaluate(`getComputedStyle(document.body).overflowX`, &bodyOverflowX),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('main.viewer')).overflowY`, &viewerOverflowY),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('main.viewer')).overscrollBehavior`, &viewerOverscroll),
+		chromedp.Evaluate(`document.documentElement.scrollWidth`, &pageScrollW),
+		chromedp.Evaluate(`document.documentElement.clientWidth`, &pageClientW),
+	); err != nil {
+		t.Fatalf("scroll bounds query: %v", err)
+	}
+	if bodyOverflowX != "hidden" {
+		t.Errorf("body overflow-x = %q, want 'hidden' (clamp horizontal)", bodyOverflowX)
+	}
+	if bodyOverflowY == "hidden" {
+		t.Errorf("body overflow-y = %q; must NOT be 'hidden' — that breaks touch scrolling on nested overflow:auto in iOS Safari", bodyOverflowY)
+	}
+	if viewerOverflowY != "auto" && viewerOverflowY != "scroll" {
+		t.Errorf("main.viewer overflow-y = %q, want 'auto' or 'scroll' (it owns y-scroll)", viewerOverflowY)
+	}
+	if viewerOverscroll != "contain" {
+		t.Errorf("main.viewer overscroll-behavior = %q, want 'contain' (scope rubber-band)", viewerOverscroll)
+	}
+	if pageScrollW > pageClientW {
+		t.Errorf("page horizontal scroll extent %d > viewport width %d — chrome is overflowing", pageScrollW, pageClientW)
+	}
+}
+
+// TestE2E_UndoDelete verifies the undo-toast appears after a delete and
+// restores the comment when clicked.
+func TestE2E_UndoDelete(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "to be deleted", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment: %v", err)
+	}
+
+	// Delete it (via the dialog).
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('dialog[id^="confirm-delete-"]').showModal()`, nil),
+		chromedp.WaitVisible(`dialog[id^='confirm-delete-'][open] button[name='deleteComment']`, chromedp.ByQuery),
+		chromedp.Click(`dialog[id^='confirm-delete-'][open] button[name='deleteComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.undo-toast`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("delete + see toast: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// CSV should be empty (header only).
+	rows := p.readCSV()
+	if len(rows) != 1 {
+		t.Errorf("post-delete CSV: got %d rows, want 1 (header only)", len(rows))
+	}
+
+	// Click Undo.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.undo-toast button[name='undoDelete']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("click undo: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rows = p.readCSV()
+	if len(rows) != 2 {
+		t.Errorf("post-undo CSV: got %d rows, want 2 (header + 1)", len(rows))
+	}
+	if len(rows) >= 2 && !strings.Contains(rows[1][5], "to be deleted") {
+		t.Errorf("post-undo CSV body = %q, want 'to be deleted'", rows[1][5])
+	}
+}

@@ -14,9 +14,12 @@ const (
 	ColSide      = "side"
 	ColBody      = "body"
 	ColCreatedAt = "created_at"
+	// `resolved` is "true" or "false". The skill should act only on
+	// unresolved comments; resolved ones are kept as historical record.
+	ColResolved = "resolved"
 )
 
 // Header is the row written before any data. Position-stable.
 var Header = []string{
-	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt,
+	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
 }

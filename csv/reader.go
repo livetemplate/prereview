@@ -25,7 +25,7 @@ func Read(path string) ([]Row, error) {
 	defer f.Close()
 
 	r := stdcsv.NewReader(f)
-	r.FieldsPerRecord = len(Header) // strict: each row must match the header column count
+	r.FieldsPerRecord = -1 // variable: tolerate 7-col legacy + 8-col current schema
 
 	// Discard header.
 	if _, err := r.Read(); err != nil {
@@ -57,7 +57,9 @@ func Read(path string) ([]Row, error) {
 }
 
 func recordToRow(rec []string) (Row, bool) {
-	if len(rec) != len(Header) {
+	// Accept both 7-column (pre-resolve schema) and 8-column (current) rows
+	// so old CSVs round-trip cleanly. Missing resolved field defaults to false.
+	if len(rec) != 7 && len(rec) != 8 {
 		return Row{}, false
 	}
 	from, err := strconv.Atoi(rec[2])
@@ -72,6 +74,10 @@ func recordToRow(rec []string) (Row, bool) {
 	if err != nil {
 		return Row{}, false
 	}
+	resolved := false
+	if len(rec) == 8 {
+		resolved = rec[7] == "true"
+	}
 	return Row{
 		ID:        rec[0],
 		File:      rec[1],
@@ -80,5 +86,6 @@ func recordToRow(rec []string) (Row, bool) {
 		Side:      rec[4],
 		Body:      rec[5],
 		CreatedAt: created,
+		Resolved:  resolved,
 	}, true
 }

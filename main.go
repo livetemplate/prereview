@@ -89,6 +89,7 @@ func run(repo, base, host string, port int, skillMode bool) error {
 			Side:     r.Side,
 			Body:     r.Body,
 			Created:  r.CreatedAt,
+			Resolved: r.Resolved,
 		})
 	}
 

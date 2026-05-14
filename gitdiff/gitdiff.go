@@ -8,7 +8,10 @@ package gitdiff
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +20,8 @@ type FileEntry struct {
 	Path         string // post-rename / current path
 	Status       string // "A","M","D","R","C","T","U"
 	Renamed      string // pre-rename path for R/C; empty otherwise
+	Added        int    // lines added vs base; -1 means "binary / unknown"
+	Deleted      int    // lines deleted vs base; -1 means "binary / unknown"
 	CommentCount int    // populated by the controller, not by gitdiff
 }
 
@@ -37,16 +42,96 @@ func ListFiles(repo, base string) ([]FileEntry, error) {
 	}
 	entries := parseNameStatus(out)
 
+	// Numstat for added/deleted line counts on tracked changes.
+	if statOut, err := runGit(repo, "diff", "--numstat", "-M", base); err == nil {
+		stats := parseNumstat(statOut)
+		for i := range entries {
+			if s, ok := stats[entries[i].Path]; ok {
+				entries[i].Added, entries[i].Deleted = s[0], s[1]
+			}
+		}
+	}
+
 	if isWorkingTreeBase(repo, base) {
 		untracked, err := listUntracked(repo)
 		if err != nil {
 			return nil, err
 		}
 		for _, path := range untracked {
-			entries = append(entries, FileEntry{Path: path, Status: "A"})
+			e := FileEntry{Path: path, Status: "A"}
+			// Untracked files don't show up in `git diff --numstat`; count
+			// lines from the working-tree file directly.
+			if n, ok := countLines(filepath.Join(repo, path)); ok {
+				e.Added = n
+			}
+			entries = append(entries, e)
 		}
 	}
 	return entries, nil
+}
+
+// parseNumstat parses `git diff --numstat -M` output. Each row is:
+//
+//	<added>\t<deleted>\t<path>
+//
+// where added/deleted are either decimal integers or `-` for binary files.
+// Returns map[path] = [added, deleted]; uses -1 for the `-` (binary) case.
+func parseNumstat(raw []byte) map[string][2]int {
+	out := map[string][2]int{}
+	for line := range strings.SplitSeq(strings.TrimRight(string(raw), "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		add := parseNumstatField(parts[0])
+		del := parseNumstatField(parts[1])
+		// For renames, --numstat emits "{old => new}" or "old\0new"; the
+		// path may contain a "=>" segment. Strip to the post-rename path
+		// (everything after the last "=> " token, then trim "}").
+		path := parts[2]
+		if idx := strings.Index(path, "=> "); idx >= 0 {
+			path = strings.TrimSuffix(path[idx+3:], "}")
+			path = strings.TrimSpace(path)
+		}
+		out[path] = [2]int{add, del}
+	}
+	return out
+}
+
+func parseNumstatField(s string) int {
+	if s == "-" {
+		return -1 // binary
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func countLines(path string) (int, bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, false
+	}
+	defer f.Close()
+	buf := make([]byte, 64*1024)
+	n := 0
+	for {
+		k, err := f.Read(buf)
+		for i := range k {
+			if buf[i] == '\n' {
+				n++
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return n, true
 }
 
 // isWorkingTreeBase reports whether base resolves to HEAD — in which case

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/livetemplate/prereview/gitdiff"
@@ -56,6 +57,109 @@ type PrereviewState struct {
 	// a "Server stopping…" banner; ~250ms later the HTTP server actually
 	// shuts down (giving the framework time to flush the render).
 	Quitting bool `json:"quitting"`
+
+	// EditingCommentID is set when the user has tapped Edit on an existing
+	// comment. The composer label changes to "Editing comment on L28"
+	// instead of "Comment on L28" so it's clear the next save replaces
+	// rather than appends. Cleared by AddComment, ClearSelection.
+	EditingCommentID string `json:"editing_comment_id"`
+
+	// LastDeletedComment holds the most recently deleted comment so the
+	// user can undo. Cleared by ANY other mutation (add, edit, another
+	// delete, hand off, quit) so the undo affordance can't surprise the
+	// user later with state from minutes ago.
+	LastDeletedComment *Comment `json:"last_deleted_comment"`
+
+	// ViewedFiles is a per-session set of files the user has marked as
+	// "reviewed" (GitHub PR convention). Persisted so the state survives
+	// browser refresh; not written to CSV (this is UX state, not a comment).
+	ViewedFiles map[string]bool `json:"viewed_files" lvt:"persist"`
+
+	// FileFilter is the case-insensitive substring filter for the file
+	// drawer. Persisted so a refresh doesn't drop the filter.
+	FileFilter string `json:"file_filter" lvt:"persist"`
+
+	// ShowAllComments toggles the all-comments overview pane (replaces the
+	// diff viewer). Not persisted — closing/reopening the browser starts
+	// back in the diff view.
+	ShowAllComments bool `json:"show_all_comments"`
+
+	// ScrollToCommentID, when non-empty for one render, drives the
+	// `lvt-fx:scroll="into-view"` directive on the matching inline-comment.
+	// Set by JumpToComment; the framework's one-shot guard
+	// (data-lvt-iv-done) prevents repeated scrolls on subsequent renders.
+	ScrollToCommentID string `json:"scroll_to_comment_id"`
+
+	// ShowResolved, when true, includes resolved comments in the inline
+	// comment stream + all-comments view. Default false so the viewer
+	// focuses on what's still actionable. Persisted across reconnects.
+	ShowResolved bool `json:"show_resolved" lvt:"persist"`
+
+	// MoreMenuOpen drives the 3-dots overflow menu in the top bar where
+	// secondary controls (All comments, Show resolved) live on narrow
+	// viewports. Not persisted — closing across a reconnect is the right
+	// default; nobody expects an overflow menu to survive a refresh.
+	MoreMenuOpen bool `json:"more_menu_open"`
+}
+
+// VisibleComments returns Comments filtered by ShowResolved. Zero-arg so
+// the framework eagerly evaluates and the template iterates the filtered
+// list directly.
+func (s PrereviewState) VisibleComments() []Comment {
+	if s.ShowResolved {
+		return s.Comments
+	}
+	out := make([]Comment, 0, len(s.Comments))
+	for _, c := range s.Comments {
+		if !c.Resolved {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// ResolvedCount returns how many of the current comments are resolved —
+// useful for "(N resolved hidden)" status copy.
+func (s PrereviewState) ResolvedCount() int {
+	n := 0
+	for _, c := range s.Comments {
+		if c.Resolved {
+			n++
+		}
+	}
+	return n
+}
+
+// FilteredFiles returns Files filtered by FileFilter (case-insensitive
+// substring match against path). Zero-arg so the framework pre-computes it
+// once per render and the template can iterate `$.FilteredFiles`.
+func (s PrereviewState) FilteredFiles() []gitdiff.FileEntry {
+	if strings.TrimSpace(s.FileFilter) == "" {
+		return s.Files
+	}
+	q := strings.ToLower(strings.TrimSpace(s.FileFilter))
+	out := make([]gitdiff.FileEntry, 0, len(s.Files))
+	for _, f := range s.Files {
+		if strings.Contains(strings.ToLower(f.Path), q) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// ViewedCount returns the number of files in state.Files marked as viewed.
+// Zero-arg so the template can show "N of M reviewed" without computing.
+func (s PrereviewState) ViewedCount() int {
+	if len(s.ViewedFiles) == 0 {
+		return 0
+	}
+	n := 0
+	for _, f := range s.Files {
+		if s.ViewedFiles[f.Path] {
+			n++
+		}
+	}
+	return n
 }
 
 // Comment is one row in the CSV output (and one entry in state).
@@ -67,6 +171,9 @@ type Comment struct {
 	Side     string    `json:"side"`
 	Body     string    `json:"body"`
 	Created  time.Time `json:"created"`
+	// Resolved marks the comment as "addressed; keep as history". The skill
+	// should act only on unresolved comments. Toggled via ResolveComment.
+	Resolved bool `json:"resolved"`
 }
 
 // LineSpan returns "L42" for single-line and "L42-L48" for ranges.
@@ -93,9 +200,8 @@ func (s PrereviewState) SelectionEmpty() bool { return s.SelectionAnchor == 0 }
 // for the same reason as SelectedLines: the livetemplate framework only
 // pre-computes zero-arg methods into the data map.
 //
-// Comments restrict to the currently-selected file because the diff viewer
-// only shows one file at a time — including comments for other files would
-// be wasted work.
+// Restricted to the currently-selected file. Resolved comments are filtered
+// out when ShowResolved is false so the diff stays focused on open issues.
 func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 	if s.SelectedFile == "" {
 		return nil
@@ -103,6 +209,9 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 	out := make(map[int][]Comment)
 	for _, c := range s.Comments {
 		if c.File != s.SelectedFile {
+			continue
+		}
+		if c.Resolved && !s.ShowResolved {
 			continue
 		}
 		out[c.ToLine] = append(out[c.ToLine], c)

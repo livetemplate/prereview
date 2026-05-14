@@ -49,7 +49,7 @@ cat "$csv_path"
 **Columns** (load-bearing — order is the contract):
 
 ```
-id,file,from_line,to_line,side,body,created_at
+id,file,from_line,to_line,side,body,created_at,resolved
 ```
 
 - `id`: opaque per-comment identifier
@@ -57,12 +57,21 @@ id,file,from_line,to_line,side,body,created_at
 - `side`: `new` | `old` (which side of the diff the line is on)
 - `body`: RFC-4180 quoted; preserves newlines
 - `created_at`: RFC-3339 UTC
+- `resolved`: `true` | `false` — see "Resolved comments" below
 
 Multi-line bodies use standard CSV quoting; use `encoding/csv` or any RFC-4180-compliant parser.
 
+### Resolved comments
+
+A comment marked `resolved=true` is one the human reviewer has already
+declared addressed (e.g., they fixed it themselves, or it no longer
+applies). **The skill should skip resolved rows** — treat them as
+historical context, not actionable directives. Only act on rows with
+`resolved=false`.
+
 ### 5. Act on the comments
 
-Process each row as a directive: edit the named file at the given lines per the comment body. After all comments are processed, optionally clean up:
+Process each row where `resolved=false` as a directive: edit the named file at the given lines per the comment body. Skip rows with `resolved=true` — those have already been addressed by the human and are kept as historical record. After all unresolved comments are processed, optionally clean up:
 
 ```bash
 kill %1                 # stop the background prereview server

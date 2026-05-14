@@ -60,21 +60,20 @@ func main() {
 			chromedp.Sleep(300*time.Millisecond),
 			chromedp.Click(`.hamburger`, chromedp.ByQuery),
 			chromedp.Sleep(500*time.Millisecond),
-			chromedp.Click(`(//button[@name='selectFile'])[5]`, chromedp.BySearch),
-			chromedp.Sleep(700*time.Millisecond),
-			chromedp.Click(`.hamburger`, chromedp.ByQuery),
+			chromedp.Click(`//button[@name='selectFile' and contains(., 'prereview.tmpl')]`, chromedp.BySearch),
 			chromedp.Sleep(700*time.Millisecond),
 			chromedp.Evaluate(`(() => {
-				const drawer = document.querySelector('#files-drawer');
-				const btns = document.querySelectorAll('#files-drawer button.file-btn');
-				const selected = Array.from(btns).find(b => b.className.includes('is-selected'));
+				const ic = document.querySelector('.inline-comment');
+				if (ic) ic.scrollIntoView({block:'center'});
+			})()`, nil),
+			chromedp.Sleep(300*time.Millisecond),
+			chromedp.Evaluate(`(() => {
+				const ic = document.querySelector('.inline-comment');
+				const actions = ic ? ic.querySelector('.ic-actions') : null;
 				return JSON.stringify({
-					drawer_class: drawer.className,
-					drawer_transform: getComputedStyle(drawer).transform,
-					drawer_rect: drawer.getBoundingClientRect(),
-					selected_index: Array.from(btns).indexOf(selected),
-					selected_text: selected ? selected.textContent.trim().slice(0, 60) : null,
-					selected_rect: selected ? selected.getBoundingClientRect() : null,
+					found_inline_comment: !!ic,
+					ic_outer: ic ? ic.outerHTML : null,
+					actions_html: actions ? actions.innerHTML.slice(0, 500) : null,
 				}, null, 2);
 			})()`, &dump),
 		); err != nil {
@@ -93,6 +92,11 @@ func main() {
 		setup []chromedp.Action
 	}{
 		{"iphone-closed", 375, 812, nil},
+		{"iphone-overflow-menu-closed", 375, 812, nil},
+		{"iphone-overflow-menu-open", 375, 812, []chromedp.Action{
+			chromedp.Click(`.more-trigger`, chromedp.ByQuery),
+			chromedp.Sleep(300 * time.Millisecond),
+		}},
 		{"iphone-drawer-open", 375, 812, []chromedp.Action{
 			chromedp.Click(`.hamburger`, chromedp.ByQuery),
 			chromedp.Sleep(400 * time.Millisecond),
@@ -132,6 +136,16 @@ func main() {
 			chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
 			chromedp.Click(`(//button[@name='selectFile'])[7]`, chromedp.BySearch),
 			chromedp.Sleep(400 * time.Millisecond),
+		}},
+		{"iphone-sticky-gutter", 375, 812, []chromedp.Action{
+			chromedp.Click(`.hamburger`, chromedp.ByQuery),
+			chromedp.Sleep(200 * time.Millisecond),
+			chromedp.Click(`(//button[@name='selectFile'])[7]`, chromedp.BySearch),
+			chromedp.Sleep(400 * time.Millisecond),
+			// Scroll the .code container horizontally by 200px so the gutter
+			// must stay sticky on the left.
+			chromedp.Evaluate(`document.querySelector('.code').scrollLeft = 200`, nil),
+			chromedp.Sleep(300 * time.Millisecond),
 		}},
 		{"iphone-resumed-comment", 375, 812, []chromedp.Action{
 			chromedp.Click(`.hamburger`, chromedp.ByQuery),

@@ -21,6 +21,7 @@ type Row struct {
 	Side      string
 	Body      string
 	CreatedAt time.Time
+	Resolved  bool
 }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
@@ -113,6 +114,10 @@ func (w *Writer) Write(rows []Row) error {
 }
 
 func rowToRecord(r Row) []string {
+	resolved := "false"
+	if r.Resolved {
+		resolved = "true"
+	}
 	return []string{
 		r.ID,
 		r.File,
@@ -121,5 +126,6 @@ func rowToRecord(r Row) []string {
 		r.Side,
 		r.Body,
 		r.CreatedAt.UTC().Format(time.RFC3339),
+		resolved,
 	}
 }

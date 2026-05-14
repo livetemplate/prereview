@@ -85,9 +85,9 @@ func TestListFiles_ModifyAddDelete(t *testing.T) {
 	sort.Slice(got, func(i, j int) bool { return got[i].Path < got[j].Path })
 
 	want := []FileEntry{
-		{Path: "brand_new.go", Status: "A"},
-		{Path: "remove.go", Status: "D"},
-		{Path: "sub/m.go", Status: "M"},
+		{Path: "brand_new.go", Status: "A", Added: 1, Deleted: 0},
+		{Path: "remove.go", Status: "D", Added: 0, Deleted: 1},
+		{Path: "sub/m.go", Status: "M", Added: 1, Deleted: 0},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d entries, want %d: %+v", len(got), len(want), got)
