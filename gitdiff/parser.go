@@ -50,9 +50,37 @@ func LoadDiff(repo, base, path string) (*FileDiff, error) {
 		if isWorkingTreeBase(repo, base) && !isTracked(repo, base, path) {
 			return loadUntrackedAsAdded(repo, path)
 		}
-		return &FileDiff{Path: path, Note: "no changes"}, nil
+		// Unchanged vs base — render the file plainly so reviewers can
+		// still read and comment on it. Every line is "ctx", so neither
+		// the diff overlay nor file-view mode shows any add/del coloring.
+		return loadFileAsCtx(repo, path)
 	}
 	return parseUnifiedDiff(path, out)
+}
+
+// loadFileAsCtx reads the working-tree file and emits every line as a
+// context DiffLine. Used when LoadDiff finds no changes vs base — the
+// reviewer still gets to see and comment on the file. Same content shape
+// as loadUntrackedAsAdded but Kind="ctx" so the diff overlay paints
+// nothing.
+func loadFileAsCtx(repo, path string) (*FileDiff, error) {
+	full := filepath.Join(repo, path)
+	data, err := os.ReadFile(full)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	if bytes.IndexByte(data, 0x00) >= 0 {
+		return &FileDiff{Path: path, IsBinary: true, Note: "binary file"}, nil
+	}
+	fd := &FileDiff{Path: path}
+	content := strings.TrimSuffix(string(data), "\n")
+	if content == "" {
+		return fd, nil
+	}
+	for i, line := range strings.Split(content, "\n") {
+		fd.Lines = append(fd.Lines, DiffLine{OldNum: i + 1, NewNum: i + 1, Kind: "ctx", Content: line})
+	}
+	return fd, nil
 }
 
 // isTracked reports whether path exists in the tree at base.

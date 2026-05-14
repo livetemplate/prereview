@@ -76,6 +76,11 @@ header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: e
 .chip.resolved.is-on {
   background: var(--pr-add-bg); --pico-color: var(--pr-add); color: var(--pico-color); border-color: var(--pr-add);
 }
+/* View chip: distinct amber tint when File view is active so users
+   can tell at a glance the diff overlay is off. */
+.chip.view-chip.is-on {
+  background: #fef3c7; --pico-color: #92400e; color: var(--pico-color); border-color: #d97706;
+}
 
 /* 3-dots overflow menu trigger — mobile only. The menu itself uses the
    same state-driven open/close pattern as #files-drawer: a CSS class
@@ -151,25 +156,6 @@ header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: e
   padding: 0.5rem 0.75rem; background: var(--pr-del-bg); color: var(--pr-del);
   border-bottom: 1px solid var(--pr-del); font-size: 0.85rem; text-align: center;
   font-weight: 600;
-}
-/* Auto-fallback banner — explains why we're showing commit-level
-   changes instead of an empty "Nothing to review". Soft yellow,
-   dismissable. The button is inline and unstyled-looking on purpose
-   (no pill shape) so it doesn't compete with primary actions. */
-.banner-fallback {
-  padding: 0.4rem 0.6rem; background: #fff8d8; color: #5a4500;
-  border-bottom: 1px solid #e6d488; font-size: 0.8rem;
-  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-}
-.banner-fallback .msg { flex: 1; min-width: 0; }
-.banner-fallback code { font-size: 0.75rem; padding: 0 0.25rem;
-  background: rgba(0,0,0,.04); border-radius: 3px; }
-.banner-fallback form { margin: 0; }
-.banner-fallback .dismiss-btn {
-  margin: 0; padding: 0.15rem 0.45rem; min-height: 24px;
-  background: transparent; border: 1px solid #e6d488;
-  --pico-color: #5a4500; color: var(--pico-color);
-  font-size: 0.72rem; font-weight: 600; border-radius: 3px;
 }
 /* Composer hint shown between first-click and second-click on a range. */
 .composer .selection-hint {
@@ -256,16 +242,21 @@ dialog#files-drawer .drawer-base {
 }
 dialog#files-drawer .drawer-base form { margin: 0; display: flex; gap: 0.3rem; align-items: center; }
 dialog#files-drawer .drawer-base label {
+  flex: 0 0 auto;
   font-weight: 600; color: var(--pico-muted-color); margin: 0;
   font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
 }
 dialog#files-drawer .drawer-base input {
-  flex: 1; min-width: 0; margin: 0;
-  padding: 0.25rem 0.5rem; font-size: 0.8rem; min-height: 28px;
+  flex: 1 1 auto; min-width: 0; margin: 0; width: auto;
+  padding: 0.3rem 0.5rem; font-size: 0.85rem; min-height: 32px;
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
+/* Pico v2 sets `button { width: 100% }` so unconstrained buttons in a
+   flex row stretch. Pin the Apply button to content width and reset
+   the inverse-color override so the label is readable. */
 dialog#files-drawer .drawer-base .base-apply {
-  margin: 0; padding: 0.25rem 0.55rem; font-size: 0.75rem; min-height: 28px;
+  flex: 0 0 auto; width: auto;
+  margin: 0; padding: 0.3rem 0.65rem; font-size: 0.78rem; min-height: 32px;
   --pico-color: var(--pico-h1-color); color: var(--pico-color);
   background: var(--pico-card-sectioning-background-color);
   border: 1px solid var(--pico-muted-border-color);
@@ -292,17 +283,17 @@ dialog#files-drawer .drawer-search input::-webkit-search-results-decoration {
   -webkit-appearance: none;
   display: none;
 }
-dialog#files-drawer .drawer-body { flex: 1; overflow-y: auto; padding: 0.5rem; }
-dialog#files-drawer .file-row { display: flex; gap: 0.2rem; align-items: stretch; }
+dialog#files-drawer .drawer-body { flex: 1; overflow-y: auto; padding: 0.4rem 0.4rem 0.5rem; }
+dialog#files-drawer .file-row { display: flex; gap: 0.25rem; align-items: stretch; }
 dialog#files-drawer .file-select-form { flex: 1; margin: 0; min-width: 0; }
 dialog#files-drawer .file-viewed-form { margin: 0; }
 dialog#files-drawer .viewed-toggle {
   margin: 0; padding: 0 !important;
-  min-width: 40px; min-height: 40px;
-  background: none; border: 1px solid var(--pico-muted-border-color); border-radius: 6px;
+  min-width: 28px; min-height: 28px;
+  background: none; border: 1px solid var(--pico-muted-border-color); border-radius: 4px;
   color: var(--pico-muted-color); display: inline-flex; align-items: center; justify-content: center;
 }
-dialog#files-drawer .viewed-toggle svg { width: 20px; height: 20px; display: block; pointer-events: none; }
+dialog#files-drawer .viewed-toggle svg { width: 16px; height: 16px; display: block; pointer-events: none; }
 dialog#files-drawer .file-row.is-viewed .file-btn { opacity: 0.5; text-decoration: line-through; }
 dialog#files-drawer .file-row.is-viewed .viewed-toggle { color: #166534; border-color: #166534; background: #dcfce7; }
 dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: #166534; }
@@ -338,19 +329,22 @@ dialog#files-drawer ul { list-style: none; padding: 0; margin: 0; }
 dialog#files-drawer li { margin: 0 0 0.15rem 0; }
 dialog#files-drawer button.file-btn {
   width: 100%; text-align: left; margin: 0;
-  padding: 0.5rem 0.6rem; font-size: 0.9rem;
-  line-height: 1.3;
-  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.55rem; font-size: 0.82rem;
+  line-height: 1.3; min-height: 28px;
+  display: flex; align-items: center; gap: 0.4rem;
 }
 dialog#files-drawer button.file-btn .file-label {
   flex: 1; min-width: 0;
-  word-break: break-all;
+  /* Ellipsis instead of break-all so long paths like
+     "cmd/screenshot/main.go" don't wrap mid-character into "g\no".
+     The button's title attribute carries the full path on hover. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-dialog#files-drawer button.file-btn .file-meta { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.4rem; }
+dialog#files-drawer button.file-btn .file-meta { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; }
 dialog#files-drawer button.file-btn .file-count {
   margin: 0;
-  padding: 0.05rem 0.4rem;
-  font-size: 0.75rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.7rem;
   line-height: 1.3;
 }
 dialog#files-drawer button.file-btn .diff-stats {
@@ -359,9 +353,25 @@ dialog#files-drawer button.file-btn .diff-stats {
 }
 dialog#files-drawer button.file-btn .diff-stats .add { color: #166534; margin-right: 0.2rem; }
 dialog#files-drawer button.file-btn .diff-stats .del { color: #991b1b; }
-/* Selected-file highlight. Pico's theme-aware variables resolve to dark
-   colors that fight our dark status-A/M/D text — so we hardcode a light
-   cyan tint and a strong primary border. Status text colors stay readable. */
+
+/* Status badges — colored pills instead of dark-text-in-brackets so the
+   user can scan diff status at a glance. Slot is fixed-width (~18px) so
+   filenames align across rows regardless of which letter the file has. */
+.status-badge {
+  display: inline-block; flex-shrink: 0;
+  min-width: 18px; padding: 0 4px; margin-right: 0.35rem;
+  border-radius: 3px; font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.03em; text-align: center; line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  vertical-align: 1px;
+}
+.status-badge.A { background: #dcfce7; color: #166534; }
+.status-badge.M { background: #fef3c7; color: #92400e; }
+.status-badge.D { background: #fee2e2; color: #991b1b; }
+.status-badge.R { background: #dbeafe; color: #1e40af; }
+.status-badge.C { background: #e0e7ff; color: #3730a3; }
+.status-badge.T { background: #f3e8ff; color: #6b21a8; }
+
 /* Selected file: light blue tint + strong left accent + bold weight.
    The bg color (#dbeafe, tailwind blue-100) is light enough that
    dark status-A/M/D text colors stay readable. */
@@ -369,7 +379,7 @@ dialog#files-drawer button.file-btn.is-selected {
   background: #dbeafe;
   border: 1px solid #93c5fd;
   border-left: 4px solid #1e40af;
-  padding-left: calc(0.6rem - 3px);
+  padding-left: calc(0.55rem - 3px);
   font-weight: 600;
 }
 dialog#files-drawer form { margin: 0; }
@@ -528,11 +538,8 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   color: var(--pico-muted-color);
 }
 
-/* File status badges in the drawer */
-.status-A { color: #1f4e1f; }
-.status-M { color: #5a4500; }
-.status-D { color: #4e1f1f; }
-.status-R { color: #1f3a4e; }
+/* Legacy status-text rules removed — diff status is now carried by the
+   colored .status-badge pill, not a class on the row. */
 
 /* Empty states */
 .empty { color: var(--pico-muted-color); padding: 2rem; text-align: center; }
@@ -585,6 +592,13 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   .toolbar-inline { display: inline-flex; }
   .more-trigger { display: none; }
   .more-menu, .more-menu-backdrop { display: none !important; }
+  /* Pico defaults buttons to width:100% so they fill mobile forms.
+     On desktop the composer becomes a card next to the diff — full-
+     width Save/Cancel look comically large. Pin them to content size
+     and right-align inside their flex containers. */
+  .composer .save-btn,
+  .composer .cancel-btn { width: auto; flex: 0 0 auto; }
+  .composer .composer-cancel { justify-content: flex-end; }
 }
 
 /* Anchor the empty-state to the viewer center so the user can't scroll
@@ -605,7 +619,7 @@ main.viewer { overscroll-behavior: contain; }
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
   </form>
   <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}<small>All comments ({{len .Comments}})</small>{{else if .CurrentDiff}}{{.CurrentDiff.Path}}{{else}}<small>Pick a file from {{len .Files}} changed</small>{{end}}</span>
+    <span class="title-main">{{if .ShowAllComments}}<small>All comments ({{len .Comments}})</small>{{else if .CurrentDiff}}{{.CurrentDiff.Path}}{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}</span>
   </div>
   {{/* Desktop-only inline chip group. On mobile these same actions live
        in the 3-dots overflow menu below — single source of truth, just
@@ -711,15 +725,6 @@ main.viewer { overscroll-behavior: contain; }
 </div>
 {{end}}
 
-{{if and .BaseAutoFallback (not .Quitting)}}
-<div class="banner-fallback" role="status">
-  <span class="msg">No working-tree changes — showing last commit (<code>{{.Base}}</code>). Change the base in the file drawer to compare against something else.</span>
-  <form method="POST">
-    <button type="submit" name="dismissBaseFallback" class="dismiss-btn" aria-label="Dismiss banner">Got it</button>
-  </form>
-</div>
-{{end}}
-
 {{if .DoneWritten}}
 <div class="toast" role="status">
   <span class="toast-msg">✓ Saved to <code>.prereview/{{.CSVBasename}}</code></span>
@@ -775,8 +780,8 @@ main.viewer { overscroll-behavior: contain; }
         <div class="file-row{{if index $.ViewedFiles .Path}} is-viewed{{end}}">
           <form method="POST" class="file-select-form">
             <input type="hidden" name="path" value="{{.Path}}">
-            <button type="submit" name="selectFile" class="file-btn outline contrast status-{{.Status}}{{if eq .Path $.SelectedFile}} is-selected{{end}}">
-              <span class="file-label"><small>[{{.Status}}]</small> {{.Path}}</span>
+            <button type="submit" name="selectFile" class="file-btn outline contrast{{if eq .Path $.SelectedFile}} is-selected{{end}}" title="{{.Path}}">
+              {{if .Status}}<span class="status-badge {{.Status}}">{{.Status}}</span>{{end}}<span class="file-label">{{.Path}}</span>
               <span class="file-meta">
                 {{if or (gt .Added 0) (gt .Deleted 0)}}<small class="diff-stats">{{if gt .Added 0}}<span class="add">+{{.Added}}</span>{{end}}{{if gt .Deleted 0}}<span class="del">-{{.Deleted}}</span>{{end}}</small>{{end}}
                 {{if gt .CommentCount 0}}<mark class="file-count">{{.CommentCount}}</mark>{{end}}
@@ -796,7 +801,7 @@ main.viewer { overscroll-behavior: contain; }
       {{end}}
     </ul>
     {{else}}
-    <p class="empty"><small>No changes vs <code>{{.Base}}</code>.</small></p>
+    <p class="empty"><small>No files in this repository.</small></p>
     {{end}}
   </div>
 </dialog>
@@ -849,9 +854,8 @@ main.viewer { overscroll-behavior: contain; }
   <p class="empty">Pick a file from the list.</p>
   {{else}}
   <div class="empty empty-diff">
-    <h3>Nothing to review</h3>
-    <p>No changes vs <code>{{.Base}}</code>.</p>
-    <p><small>Try editing some files in the repo, or pass <code>--base &lt;branch&gt;</code> for a wider diff range.</small></p>
+    <h3>No files in this repository</h3>
+    <p><small>Add some files and refresh, or relaunch prereview pointed at a different repo.</small></p>
   </div>
   {{end}}
 {{end}}

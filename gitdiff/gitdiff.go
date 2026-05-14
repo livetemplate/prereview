@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -25,49 +26,121 @@ type FileEntry struct {
 	CommentCount int    // populated by the controller, not by gitdiff
 }
 
-// ListFiles enumerates files that differ between base and the working tree.
+// ListFiles enumerates every file currently in the working tree
+// (tracked + untracked-non-ignored), annotated with diff information vs
+// base where applicable.
 //
-// base may be "HEAD" (working tree vs last commit), a branch name
-// ("main", "origin/main"), or any revision spec git accepts.
+// This is the foundation of "show all files; diff is an overlay":
+// prereview now always lets the reviewer browse the whole repo, with
+// diff metadata layered on top of the files that happen to differ from
+// base. Files unchanged vs base appear in the list with Status="",
+// Added=0, Deleted=0 — the template renders them without a diff badge.
 //
-// Uses `git diff --name-status -M` so renames surface as a single 'R' entry
-// rather than a delete+add pair. Untracked files are surfaced as 'A' entries
-// — without this, `git diff` would silently omit them and reviewers would
-// miss freshly-generated code that hasn't been `git add`-ed yet, which is
-// the dominant prereview use case.
+// Deleted files (present in base, absent in the working tree) are
+// intentionally omitted — they don't exist in the repo "right now".
+// Reviewers who care about deletions can flip the base or read git
+// history directly.
+//
+// base may be "HEAD", a branch name, or any revision spec git accepts.
+// If base is empty, diff annotation is skipped and every entry is bare.
 func ListFiles(repo, base string) ([]FileEntry, error) {
-	out, err := runGit(repo, "diff", "--name-status", "-M", base)
+	// 1. All tracked working-tree files via ls-files. This is the source
+	//    of truth for "what's in the repo right now"; --name-status would
+	//    miss any file that happens to match base exactly.
+	trackedOut, err := runGit(repo, "ls-files")
 	if err != nil {
 		return nil, err
 	}
-	entries := parseNameStatus(out)
+	seen := map[string]struct{}{}
+	var entries []FileEntry
+	for line := range strings.SplitSeq(strings.TrimRight(string(trackedOut), "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		if _, ok := seen[line]; ok {
+			continue
+		}
+		// Skip files that are tracked in the index but absent from the
+		// working tree (`git rm` not yet run, or just `rm`-ed). They
+		// don't exist "in the repo right now", so they shouldn't show
+		// up in the all-files view.
+		if _, err := os.Stat(filepath.Join(repo, line)); err != nil {
+			continue
+		}
+		seen[line] = struct{}{}
+		entries = append(entries, FileEntry{Path: line})
+	}
 
-	// Numstat for added/deleted line counts on tracked changes.
-	if statOut, err := runGit(repo, "diff", "--numstat", "-M", base); err == nil {
-		stats := parseNumstat(statOut)
-		for i := range entries {
-			if s, ok := stats[entries[i].Path]; ok {
-				entries[i].Added, entries[i].Deleted = s[0], s[1]
+	// 2. Untracked-non-ignored files — treat as "A" since they're new
+	//    relative to any base. (If the user picks a future base that
+	//    contains the file, the name-status pass below would correct
+	//    this, but in practice untracked-relative-to-anything is "A".)
+	untracked, err := listUntracked(repo)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range untracked {
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		entries = append(entries, FileEntry{Path: p, Status: "A"})
+	}
+
+	// 3. Overlay diff metadata if a base is supplied. Status from
+	//    --name-status, line counts from --numstat. Files without a diff
+	//    entry keep Status="" / Added=0 / Deleted=0, which the template
+	//    renders as a plain row (no badge).
+	if strings.TrimSpace(base) != "" {
+		if nsOut, err := runGit(repo, "diff", "--name-status", "-M", base); err == nil {
+			for _, s := range parseNameStatus(nsOut) {
+				for i := range entries {
+					if entries[i].Path == s.Path {
+						entries[i].Status = s.Status
+						entries[i].Renamed = s.Renamed
+						break
+					}
+				}
+			}
+		}
+		if numOut, err := runGit(repo, "diff", "--numstat", "-M", base); err == nil {
+			stats := parseNumstat(numOut)
+			for i := range entries {
+				if s, ok := stats[entries[i].Path]; ok {
+					entries[i].Added, entries[i].Deleted = s[0], s[1]
+				}
 			}
 		}
 	}
 
-	if isWorkingTreeBase(repo, base) {
-		untracked, err := listUntracked(repo)
-		if err != nil {
-			return nil, err
-		}
-		for _, path := range untracked {
-			e := FileEntry{Path: path, Status: "A"}
-			// Untracked files don't show up in `git diff --numstat`; count
-			// lines from the working-tree file directly.
-			if n, ok := countLines(filepath.Join(repo, path)); ok {
-				e.Added = n
+	// 4. For files we tagged "A" from the untracked pass that didn't
+	//    pick up numstat data (they're not in `git diff --numstat`),
+	//    count working-tree lines directly so the +N badge still appears.
+	for i := range entries {
+		if entries[i].Status == "A" && entries[i].Added == 0 && entries[i].Deleted == 0 {
+			if n, ok := countLines(filepath.Join(repo, entries[i].Path)); ok {
+				entries[i].Added = n
 			}
-			entries = append(entries, e)
 		}
 	}
+
+	// 5. Stable alphabetical order so the drawer doesn't reshuffle on
+	//    every base swap.
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
 	return entries, nil
+}
+
+// ChangedCount returns how many entries have a non-empty Status — i.e.
+// how many of these files differ from the active base. Useful for the
+// drawer header ("N files · M changed").
+func ChangedCount(entries []FileEntry) int {
+	n := 0
+	for _, e := range entries {
+		if e.Status != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // parseNumstat parses `git diff --numstat -M` output. Each row is:

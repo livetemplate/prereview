@@ -82,8 +82,8 @@ func setupFixtureRepo(t *testing.T) string {
 }
 
 // setupFixtureRepoClean builds a fixture with two commits and a clean
-// working tree — used to exercise the BaseAutoFallback path (Mount
-// promotes Base from HEAD to HEAD~1 when there's nothing to review).
+// working tree — used to verify the all-files pivot (every tracked
+// file shows up in the drawer regardless of `git diff HEAD` output).
 func setupFixtureRepoClean(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -1030,57 +1030,50 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	}
 }
 
-// TestE2E_BaseAutoFallback verifies that booting with a clean working
-// tree (no diff vs HEAD) auto-promotes Base from HEAD to HEAD~1 and
-// surfaces the banner. Without this, the user would land on an empty
-// "Nothing to review" page even though there are recent commits to look
-// at — common standalone-mode scenario.
-func TestE2E_BaseAutoFallback(t *testing.T) {
+// TestE2E_AllFilesOnCleanTree verifies the "diff as overlay" pivot:
+// a repo with no working-tree changes still shows every tracked file
+// in the drawer, not an empty "Nothing to review" page. Files without
+// changes vs base render plainly when selected (every line is "ctx",
+// no add/del coloring).
+func TestE2E_AllFilesOnCleanTree(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureRepoClean(t), 1200, 800)
+	p.waitReady()
 
-	// Boot — give the framework time to hydrate. We don't use WaitVisible
-	// for the banner because chromedp.WaitVisible can hang on elements
-	// nested in a dialog on first-render even though querySelector finds
-	// them; use a polling Evaluate instead.
-	var bannerPresent bool
-	var baseValue string
+	// Clean-tree fixture commits alpha.go and beta.go — both should be
+	// listed in the drawer even though `git diff HEAD` is empty.
 	var fileBtnCount int
+	var hasAlpha, hasBeta bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.EmulateViewport(1200, 800),
-		chromedp.Navigate(p.url),
-		chromedp.Sleep(1500*time.Millisecond),
-		chromedp.Evaluate(`!!document.querySelector('.banner-fallback')`, &bannerPresent),
-		chromedp.Evaluate(`(document.querySelector('#base-input') || {value:""}).value`, &baseValue),
 		chromedp.Evaluate(`document.querySelectorAll('button.file-btn').length`, &fileBtnCount),
+		chromedp.Evaluate(`!!Array.from(document.querySelectorAll('button.file-btn')).find(b => b.textContent.includes('alpha.go'))`, &hasAlpha),
+		chromedp.Evaluate(`!!Array.from(document.querySelectorAll('button.file-btn')).find(b => b.textContent.includes('beta.go'))`, &hasBeta),
 	); err != nil {
-		t.Fatalf("boot: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("file list query: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if !bannerPresent {
-		t.Error("auto-fallback banner should be present after booting on a clean working tree")
+	if fileBtnCount < 2 {
+		t.Errorf("clean tree should still expose tracked files; got %d file buttons", fileBtnCount)
 	}
-	if baseValue != "HEAD~1" {
-		t.Errorf("base input after auto-fallback = %q, want %q", baseValue, "HEAD~1")
-	}
-	if fileBtnCount == 0 {
-		t.Error("clean-tree fixture should expose the last commit's files via auto-fallback; got 0 file buttons")
+	if !hasAlpha || !hasBeta {
+		t.Errorf("expected both alpha.go and beta.go in drawer; hasAlpha=%v hasBeta=%v", hasAlpha, hasBeta)
 	}
 
-	// Dismiss the banner — banner disappears, base stays as-is.
-	var bannerAfterDismiss bool
-	var baseAfterDismiss string
+	// Selecting an unchanged file should render it with ctx-only lines
+	// (no add/del classes anywhere in .code), since there's no diff to overlay.
+	var addClassCount, delClassCount, ctxClassCount int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.banner-fallback button[name='dismissBaseFallback']`, chromedp.ByQuery),
-		chromedp.Sleep(300*time.Millisecond),
-		chromedp.Evaluate(`!!document.querySelector('.banner-fallback')`, &bannerAfterDismiss),
-		chromedp.Evaluate(`(document.querySelector('#base-input') || {value:""}).value`, &baseAfterDismiss),
+		chromedp.Click(`//button[@name='selectFile' and contains(., 'alpha.go')]`, chromedp.BySearch),
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='alpha.go']`, chromedp.BySearch),
+		chromedp.Evaluate(`document.querySelectorAll('.code button.line.add').length`, &addClassCount),
+		chromedp.Evaluate(`document.querySelectorAll('.code button.line.del').length`, &delClassCount),
+		chromedp.Evaluate(`document.querySelectorAll('.code button.line.ctx').length`, &ctxClassCount),
 	); err != nil {
-		t.Fatalf("dismiss banner: %v", err)
+		t.Fatalf("select unchanged file: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if bannerAfterDismiss {
-		t.Error("banner should be gone after dismiss")
+	if addClassCount != 0 || delClassCount != 0 {
+		t.Errorf("unchanged file should have zero add/del lines; got add=%d del=%d", addClassCount, delClassCount)
 	}
-	if baseAfterDismiss != "HEAD~1" {
-		t.Errorf("dismiss should not change base; got %q", baseAfterDismiss)
+	if ctxClassCount == 0 {
+		t.Errorf("unchanged file should render its content as ctx lines; got 0")
 	}
 }
 

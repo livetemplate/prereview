@@ -82,11 +82,15 @@ func TestListFiles_ModifyAddDelete(t *testing.T) {
 		t.Fatalf("ListFiles: %v", err)
 	}
 
+	// All-files semantics: every file in the working tree shows up,
+	// regardless of diff status. keep.go is unchanged (Status=""),
+	// brand_new.go and sub/m.go reflect their diff states, remove.go
+	// is omitted because it no longer exists in the working tree.
 	sort.Slice(got, func(i, j int) bool { return got[i].Path < got[j].Path })
 
 	want := []FileEntry{
 		{Path: "brand_new.go", Status: "A", Added: 1, Deleted: 0},
-		{Path: "remove.go", Status: "D", Added: 0, Deleted: 1},
+		{Path: "keep.go", Status: "", Added: 0, Deleted: 0},
 		{Path: "sub/m.go", Status: "M", Added: 1, Deleted: 0},
 	}
 	if len(got) != len(want) {
@@ -224,18 +228,33 @@ func TestLoadDiff_DeletedFile_AllDelLines(t *testing.T) {
 	}
 }
 
-func TestLoadDiff_UnchangedFile_EmptyLines(t *testing.T) {
+// TestLoadDiff_UnchangedFile_RendersAsCtx verifies the "diff is an
+// overlay" pivot: when a file matches base exactly, LoadDiff still
+// returns the file content rendered as ctx-only lines so the reviewer
+// can read and comment on it. (Previously this returned 0 lines + Note
+// "no changes", and the viewer rendered an "empty file" placeholder.)
+func TestLoadDiff_UnchangedFile_RendersAsCtx(t *testing.T) {
 	repo := fixtureRepo(t, map[string]string{"steady.txt": "same\n"})
 
 	fd, err := LoadDiff(repo, "HEAD", "steady.txt")
 	if err != nil {
 		t.Fatalf("LoadDiff: %v", err)
 	}
-	if len(fd.Lines) != 0 {
-		t.Errorf("unchanged file produced %d lines, want 0: %+v", len(fd.Lines), fd.Lines)
+	if len(fd.Lines) != 1 {
+		t.Fatalf("unchanged file produced %d lines, want 1: %+v", len(fd.Lines), fd.Lines)
 	}
-	if fd.Note != "no changes" {
-		t.Errorf("note = %q, want %q", fd.Note, "no changes")
+	ln := fd.Lines[0]
+	if ln.Kind != "ctx" {
+		t.Errorf("unchanged line Kind = %q, want %q", ln.Kind, "ctx")
+	}
+	if ln.OldNum != 1 || ln.NewNum != 1 {
+		t.Errorf("unchanged line numbering = old:%d new:%d, want old:1 new:1", ln.OldNum, ln.NewNum)
+	}
+	if ln.Content != "same" {
+		t.Errorf("unchanged line content = %q, want %q", ln.Content, "same")
+	}
+	if fd.Note != "" {
+		t.Errorf("note = %q, want empty (no special note for unchanged file)", fd.Note)
 	}
 }
 

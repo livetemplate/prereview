@@ -176,6 +176,57 @@ func main() {
 			chromedp.Sleep(200 * time.Millisecond),
 		}},
 		{"laptop", 1280, 800, nil},
+		{"laptop-file-selected", 1280, 800, []chromedp.Action{
+			chromedp.Click(`(//button[@name='selectFile'])[1]`, chromedp.BySearch),
+			chromedp.Sleep(500 * time.Millisecond),
+		}},
+		{"laptop-unchanged-file", 1280, 800, []chromedp.Action{
+			// Pick a file without a diff status (no [M]/[A] badge). The
+			// drawer is sorted alphabetically, so we filter to "history" — a
+			// known-unchanged file in the prereview repo's working tree.
+			chromedp.SendKeys(`#files-drawer input[name='filter']`, "history", chromedp.ByQuery),
+			chromedp.Sleep(400 * time.Millisecond),
+			chromedp.Click(`(//button[@name='selectFile'])[1]`, chromedp.BySearch),
+			chromedp.Sleep(500 * time.Millisecond),
+		}},
+		{"laptop-file-view-on", 1280, 800, []chromedp.Action{
+			chromedp.Click(`(//button[@name='selectFile'])[1]`, chromedp.BySearch),
+			chromedp.Sleep(400 * time.Millisecond),
+			chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+			chromedp.Sleep(400 * time.Millisecond),
+		}},
+		{"laptop-composer-typing", 1280, 800, []chromedp.Action{
+			chromedp.Click(`(//button[@name='selectFile'])[1]`, chromedp.BySearch),
+			chromedp.Sleep(400 * time.Millisecond),
+			chromedp.Evaluate(`(() => {
+				const b = document.querySelector('.code button.line');
+				if (b) b.click();
+			})()`, nil),
+			chromedp.Sleep(300 * time.Millisecond),
+			chromedp.SendKeys(`.composer textarea`, "this could be simpler", chromedp.ByQuery),
+			chromedp.Sleep(200 * time.Millisecond),
+		}},
+		{"laptop-base-picker-error", 1280, 800, []chromedp.Action{
+			chromedp.SendKeys(`#base-input`, "definitely-not-a-ref", chromedp.ByQuery),
+			chromedp.Click(`button[name='setBase']`, chromedp.ByQuery),
+			chromedp.Sleep(400 * time.Millisecond),
+		}},
+		{"laptop-base-picker-head1", 1280, 800, []chromedp.Action{
+			chromedp.Evaluate(`document.querySelector('#base-input').value = ''`, nil),
+			chromedp.SendKeys(`#base-input`, "HEAD~1", chromedp.ByQuery),
+			chromedp.Click(`button[name='setBase']`, chromedp.ByQuery),
+			chromedp.Sleep(500 * time.Millisecond),
+		}},
+		{"laptop-all-comments-view", 1280, 800, []chromedp.Action{
+			// Open the inline comments-pill (only renders when there are
+			// existing comments — the repo's prereview.tmpl has a real one).
+			chromedp.Sleep(400 * time.Millisecond),
+			chromedp.Evaluate(`(() => {
+				const b = document.querySelector('.toolbar-inline button[name="toggleCommentList"]');
+				if (b) b.click();
+			})()`, nil),
+			chromedp.Sleep(500 * time.Millisecond),
+		}},
 		// NOTE: mutating scenarios (clicking Done, adding comments, opening
 		// delete dialog) are intentionally omitted — they overwrite the live
 		// repo's .prereview/comments.csv. Enable them only against a throwaway

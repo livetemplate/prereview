@@ -60,22 +60,6 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	if err != nil {
 		return state, fmt.Errorf("list files: %w", err)
 	}
-
-	// Auto-fallback: if base is HEAD (working tree) and there's nothing
-	// to review, promote to HEAD~1 so the user sees the latest commit on
-	// the current branch instead of an empty "Nothing to review" page.
-	// Only fires when base is exactly HEAD — if the user explicitly
-	// picked something else, an empty result is their choice, not a
-	// reason to silently swap refs underneath them.
-	if len(files) == 0 && state.Base == "HEAD" {
-		fallback, fbErr := gitdiff.ListFiles(c.RepoPath, "HEAD~1")
-		if fbErr == nil && len(fallback) > 0 {
-			state.Base = "HEAD~1"
-			state.BaseAutoFallback = true
-			files = fallback
-		}
-	}
-
 	state.Files = files
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	state.CSVPath = c.CSVPath
@@ -106,9 +90,9 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 // surface as state.BaseError without mutating state.Base, so the user's
 // previous good base remains active.
 //
-// On success, clears BaseAutoFallback (this is an explicit user choice
-// now) and rebuilds the file list. If the previously selected file no
-// longer exists in the new diff range, SelectedFile is cleared.
+// On success, rebuilds the file list against the new base. If the
+// previously selected file no longer exists in the new file list,
+// SelectedFile is cleared.
 func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	ref := strings.TrimSpace(ctx.GetString("ref"))
 	if ref == "" {
@@ -121,7 +105,6 @@ func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Co
 	}
 	state.Base = ref
 	state.BaseError = ""
-	state.BaseAutoFallback = false
 
 	files, err := gitdiff.ListFiles(c.RepoPath, state.Base)
 	if err != nil {
@@ -146,14 +129,6 @@ func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Co
 			state.CurrentDiff = diff
 		}
 	}
-	return state, nil
-}
-
-// DismissBaseFallback hides the auto-fallback banner without changing
-// the base. The user has acknowledged that we're showing HEAD~1; no
-// need to keep the banner around.
-func (c *PrereviewController) DismissBaseFallback(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.BaseAutoFallback = false
 	return state, nil
 }
 
