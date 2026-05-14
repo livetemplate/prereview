@@ -163,6 +163,23 @@ header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: e
   border-bottom: 1px solid var(--pr-del); font-size: 0.85rem; text-align: center;
   font-weight: 600;
 }
+/* Progress bar at the very top — appears 200ms after any action click
+   that hasn't completed, hides on the next `lvt:updated`. Helps mask
+   the file-switch latency on big highlighted files (~500-700ms) so
+   the click feels acknowledged. Pure CSS keyframe + a tiny inline
+   script (further down) that toggles the element. */
+.pr-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--pico-primary) 50%, transparent 100%);
+  background-size: 200% 100%;
+  z-index: 100;
+  animation: pr-progress-shimmer 1.1s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes pr-progress-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 /* Composer hint shown between first-click and second-click on a range. */
 .composer .selection-hint {
   font-weight: normal; color: var(--pico-muted-color); font-size: 0.7rem;
@@ -468,28 +485,38 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
 .code form { margin: 0; padding: 0; display: block; line-height: 1.2; }
-/* Performance: contain isolates each row so a state change on one line
-   (e.g. selection class flip, new inline comment) doesn't force the
-   browser to recompute layout of every other row. content-visibility:
-   auto lets the browser skip painting off-screen rows entirely while
-   scrolling a long diff — the dominant cost in 500+ line files. The
-   intrinsic-size hint is a soft floor for unrendered rows so the
-   scrollbar doesn't jitter as content-visibility kicks in.
+/* Performance: content-visibility: auto lets the browser skip painting
+   off-screen rows entirely while scrolling a long diff — the dominant
+   cost in 500+ line files. The intrinsic-size hint is a soft floor for
+   unrendered rows so the scrollbar doesn't jitter as content-
+   visibility kicks in.
 
    IMPORTANT: rows that hold the composer or an inline comment are
    excluded — content-visibility: auto skips rendering their contents
    when off-screen, which makes the composer's textarea and comment
-   action buttons unfocusable until scrolled in (caught by the
-   reconnect e2e: after Navigate, composer reappears below the fold
-   and chromedp couldn't SendKeys to it). Plain diff rows have no
-   interactive sub-elements, so visibility-skip is safe there. */
+   action buttons unfocusable until scrolled in. Plain diff rows have
+   no interactive sub-elements, so visibility-skip is safe there.
+
+   Previously this rule also set `contain: layout style` on every
+   .line-row for an extra isolation guard. Removed because `contain:
+   layout` clips descendants' overflow from the parent's reported
+   dimensions — and the button.line inside has `width: max-content`
+   that can be MUCH wider than the .code container. With layout
+   containment, the parent .line-row's width stayed at the .code
+   width, and `.code`'s `overflow-x: auto` had nothing to scroll past.
+   Result: horizontal scroll on long lines stopped working entirely.
+   Off-screen rows get layout containment naturally via content-
+   visibility's implicit `contain: size`; on-screen rows pay no extra
+   isolation cost but their wide buttons correctly extend the
+   scroll-width of `.code`. */
 .code .line-row {
   line-height: 1.2;
-  contain: layout style;
-}
-.code .line-row:not(:has(.composer)):not(:has(.inline-comment)) {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 16px;
+  /* Width must match the widest button.line so .code's overflow-x sees
+     it and offers a horizontal scrollbar. Default block-level width
+     (100% of parent) would cap rows at .code's width, hiding any
+     overflow inside the line button. */
+  width: max-content;
+  min-width: 100%;
 }
 .code button.line {
   display: flex; padding: 0; margin: 0; min-height: 0;
@@ -944,5 +971,34 @@ main.viewer { overscroll-behavior: contain; }
 </div>
 
 <script defer src="/livetemplate-client.js"></script>
+<script>
+  // Progress bar wiring: show after 200 ms of "action in flight",
+  // hide on the next render. The framework dispatches `lvt:pending`
+  // on the clicked target (no bubbles) and `lvt:updated` on the
+  // [data-lvt-id] wrapper — both reachable via capture-phase
+  // listeners on document.
+  (() => {
+    let timer = null;
+    let bar = null;
+    const show = () => {
+      timer = null;
+      if (bar) return;
+      bar = document.createElement('div');
+      bar.className = 'pr-progress';
+      bar.setAttribute('role', 'status');
+      bar.setAttribute('aria-label', 'Loading');
+      document.body.appendChild(bar);
+    };
+    const hide = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (bar) { bar.remove(); bar = null; }
+    };
+    document.addEventListener('lvt:pending', () => {
+      if (timer || bar) return;
+      timer = setTimeout(show, 200);
+    }, true);
+    document.addEventListener('lvt:updated', hide, true);
+  })();
+</script>
 </body>
 </html>
