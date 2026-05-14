@@ -419,7 +419,9 @@ func (p *runningPrereview) clickFile(path string) {
 // clickLine selects the diff line identified by old/new line numbers.
 // Pass (0, N) for an add at new=N, (N, 0) for a del at old=N, (N, N) for a
 // ctx line. The function disambiguates same-numbered del/add pairs by
-// matching the hidden form's side input.
+// matching the button's data-side attribute (data-line / data-side now
+// live on the button itself — the wrapping form was removed to cut DOM
+// nodes per line in half).
 func (p *runningPrereview) clickLine(oldNum, newNum int) {
 	p.t.Helper()
 	var displayLine int
@@ -434,20 +436,14 @@ func (p *runningPrereview) clickLine(oldNum, newNum int) {
 	default:
 		p.t.Fatalf("clickLine: ambiguous old=%d new=%d", oldNum, newNum)
 	}
+	sel := fmt.Sprintf(`.code button.line[data-line="%d"][data-side="%s"]`, displayLine, side)
 	js := fmt.Sprintf(`
 		(() => {
-			const buttons = document.querySelectorAll('.code button.line');
-			for (const b of buttons) {
-				const form = b.parentElement;
-				const lineInput = form.querySelector('input[name="line"]');
-				const sideInput = form.querySelector('input[name="side"]');
-				if (lineInput && lineInput.value === "%d" && sideInput && sideInput.value === %q) {
-					b.click();
-					return true;
-				}
-			}
-			return false;
-		})()`, displayLine, side)
+			const b = document.querySelector(%q);
+			if (!b) return false;
+			b.click();
+			return true;
+		})()`, sel)
 	var clicked bool
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(js, &clicked)); err != nil {
 		p.t.Fatalf("clickLine eval: %v", err)
