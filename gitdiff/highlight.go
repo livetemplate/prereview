@@ -71,11 +71,23 @@ var HighlightCSS = func() string {
 // lexerFor returns a Coalesce-wrapped lexer matched against `filename`,
 // caching the result so repeat calls for the same path skip the
 // pattern-match + wrap overhead.
+//
+// Includes hand-rolled overrides for extensions chroma's registry
+// doesn't natively map:
+//   - .tmpl → "Go HTML Template" (chroma registers it without any
+//     filename patterns, so `Match()` returns nil for *.tmpl by default;
+//     prereview's templates and most projects' .tmpl files are
+//     html-with-go-template, so we point them there).
 func lexerFor(filename string) chroma.Lexer {
 	if v, ok := lexerCache.Load(filename); ok {
 		return v.(chroma.Lexer)
 	}
 	lx := lexers.Match(filename)
+	if lx == nil {
+		if strings.HasSuffix(filename, ".tmpl") {
+			lx = lexers.Get("Go HTML Template")
+		}
+	}
 	if lx == nil {
 		lx = lexers.Fallback
 	}
