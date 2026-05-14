@@ -152,6 +152,25 @@ header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: e
   border-bottom: 1px solid var(--pr-del); font-size: 0.85rem; text-align: center;
   font-weight: 600;
 }
+/* Auto-fallback banner — explains why we're showing commit-level
+   changes instead of an empty "Nothing to review". Soft yellow,
+   dismissable. The button is inline and unstyled-looking on purpose
+   (no pill shape) so it doesn't compete with primary actions. */
+.banner-fallback {
+  padding: 0.4rem 0.6rem; background: #fff8d8; color: #5a4500;
+  border-bottom: 1px solid #e6d488; font-size: 0.8rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+}
+.banner-fallback .msg { flex: 1; min-width: 0; }
+.banner-fallback code { font-size: 0.75rem; padding: 0 0.25rem;
+  background: rgba(0,0,0,.04); border-radius: 3px; }
+.banner-fallback form { margin: 0; }
+.banner-fallback .dismiss-btn {
+  margin: 0; padding: 0.15rem 0.45rem; min-height: 24px;
+  background: transparent; border: 1px solid #e6d488;
+  --pico-color: #5a4500; color: var(--pico-color);
+  font-size: 0.72rem; font-weight: 600; border-radius: 3px;
+}
 /* Composer hint shown between first-click and second-click on a range. */
 .composer .selection-hint {
   font-weight: normal; color: var(--pico-muted-color); font-size: 0.7rem;
@@ -227,6 +246,35 @@ dialog#files-drawer .close-btn {
   background: none; border: 1px solid transparent; color: var(--pico-muted-color);
 }
 dialog#files-drawer .close-btn:hover { border-color: var(--pico-muted-border-color); }
+/* Base picker — lets the user swap the comparison ref at runtime
+   (HEAD, HEAD~1, main, abc1234, …). Lives right under .drawer-head so
+   it's contextually near the file count it produces. The text input
+   uses lvt-form:preserve so partial typing survives re-renders. */
+dialog#files-drawer .drawer-base {
+  padding: 0.3rem 0.5rem 0.35rem; border-bottom: 1px solid var(--pico-muted-border-color);
+  font-size: 0.75rem;
+}
+dialog#files-drawer .drawer-base form { margin: 0; display: flex; gap: 0.3rem; align-items: center; }
+dialog#files-drawer .drawer-base label {
+  font-weight: 600; color: var(--pico-muted-color); margin: 0;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+dialog#files-drawer .drawer-base input {
+  flex: 1; min-width: 0; margin: 0;
+  padding: 0.25rem 0.5rem; font-size: 0.8rem; min-height: 28px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+dialog#files-drawer .drawer-base .base-apply {
+  margin: 0; padding: 0.25rem 0.55rem; font-size: 0.75rem; min-height: 28px;
+  --pico-color: var(--pico-h1-color); color: var(--pico-color);
+  background: var(--pico-card-sectioning-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+}
+dialog#files-drawer .drawer-base .base-error {
+  margin: 0.25rem 0 0; padding: 0.2rem 0.4rem; font-size: 0.7rem;
+  color: var(--pr-del); background: var(--pr-del-bg);
+  border-left: 2px solid var(--pr-del); border-radius: 2px;
+}
 dialog#files-drawer .drawer-search {
   padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
 }
@@ -663,6 +711,15 @@ main.viewer { overscroll-behavior: contain; }
 </div>
 {{end}}
 
+{{if and .BaseAutoFallback (not .Quitting)}}
+<div class="banner-fallback" role="status">
+  <span class="msg">No working-tree changes — showing last commit (<code>{{.Base}}</code>). Change the base in the file drawer to compare against something else.</span>
+  <form method="POST">
+    <button type="submit" name="dismissBaseFallback" class="dismiss-btn" aria-label="Dismiss banner">Got it</button>
+  </form>
+</div>
+{{end}}
+
 {{if .DoneWritten}}
 <div class="toast" role="status">
   <span class="toast-msg">✓ Saved to <code>.prereview/{{.CSVBasename}}</code></span>
@@ -686,6 +743,21 @@ main.viewer { overscroll-behavior: contain; }
     <form method="POST">
       <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
     </form>
+  </div>
+  {{/* Base picker — type any ref git would resolve. Hitting Enter
+       submits the form, which routes to SetBase. lvt-form:preserve
+       keeps the typed value across re-renders; if validation fails,
+       state.BaseError surfaces below the input. */}}
+  <div class="drawer-base">
+    <form method="POST" lvt-form:preserve>
+      <label for="base-input">Base</label>
+      <input id="base-input" type="text" name="ref" value="{{.Base}}"
+             placeholder="HEAD"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             enterkeyhint="go">
+      <button type="submit" name="setBase" class="base-apply">Apply</button>
+    </form>
+    {{if .BaseError}}<div class="base-error" role="alert">{{.BaseError}}</div>{{end}}
   </div>
   <div class="drawer-search">
     <form method="POST" lvt-form:preserve>

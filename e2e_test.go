@@ -67,9 +67,39 @@ func setupFixtureRepo(t *testing.T) string {
 	runCmd(t, dir, "git", "add", "-A")
 	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
 
+	// Second commit so HEAD~1 resolves — exercised by the base-picker test
+	// and by the auto-fallback path in Mount. Adds a new file that's
+	// committed-only (not in the working-tree diff vs HEAD), so existing
+	// tests that count working-tree files are unaffected.
+	mustWrite(t, dir, "history.go", "package history\n\nfunc Old() {}\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "history")
+
 	// Mutations: modify edited.go, add brand-new untracked file.
 	mustWrite(t, dir, "edited.go", "package edited\n\nfunc Hello() string {\n\treturn \"hello world\"\n}\n")
 	mustWrite(t, dir, "fresh.go", "package fresh\n\nfunc New() {}\n")
+	return dir
+}
+
+// setupFixtureRepoClean builds a fixture with two commits and a clean
+// working tree — used to exercise the BaseAutoFallback path (Mount
+// promotes Base from HEAD to HEAD~1 when there's nothing to review).
+func setupFixtureRepoClean(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+
+	mustWrite(t, dir, "alpha.go", "package alpha\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+
+	mustWrite(t, dir, "beta.go", "package beta\n\nfunc B() {}\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "add beta")
+	// No working-tree mutations — `git diff HEAD` is empty.
 	return dir
 }
 
@@ -311,6 +341,14 @@ type runningPrereview struct {
 // at/below 900px it renders mobile mode (drawer overlay).
 // Pass extraArgs to enable --skill for tests asserting handoff/DONE behavior.
 func bootChromeAgainstPrereview(t *testing.T, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
+	return bootChromeAgainstRepo(t, setupFixtureRepo(t), viewportW, viewportH, extraArgs...)
+}
+
+// bootChromeAgainstRepo is the underlying helper that boots prereview
+// against a caller-supplied repo path. Pass the result of
+// setupFixtureRepo (working-tree mutations) or setupFixtureRepoClean
+// (no mutations) depending on what scenario the test exercises.
+func bootChromeAgainstRepo(t *testing.T, repo string, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
 	t.Helper()
 	chromium := findChromium(t)
 	binary := filepath.Join(t.TempDir(), "prereview")
@@ -318,7 +356,6 @@ func bootChromeAgainstPrereview(t *testing.T, viewportW, viewportH int, extraArg
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
-	repo := setupFixtureRepo(t)
 	url, srv, stderr := startPrereview(t, binary, repo, extraArgs...)
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
@@ -990,6 +1027,115 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	}
 	if delFinal == 0 {
 		t.Error("del lines should reappear after toggling back to diff mode")
+	}
+}
+
+// TestE2E_BaseAutoFallback verifies that booting with a clean working
+// tree (no diff vs HEAD) auto-promotes Base from HEAD to HEAD~1 and
+// surfaces the banner. Without this, the user would land on an empty
+// "Nothing to review" page even though there are recent commits to look
+// at — common standalone-mode scenario.
+func TestE2E_BaseAutoFallback(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoClean(t), 1200, 800)
+
+	// Boot — give the framework time to hydrate. We don't use WaitVisible
+	// for the banner because chromedp.WaitVisible can hang on elements
+	// nested in a dialog on first-render even though querySelector finds
+	// them; use a polling Evaluate instead.
+	var bannerPresent bool
+	var baseValue string
+	var fileBtnCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(p.url),
+		chromedp.Sleep(1500*time.Millisecond),
+		chromedp.Evaluate(`!!document.querySelector('.banner-fallback')`, &bannerPresent),
+		chromedp.Evaluate(`(document.querySelector('#base-input') || {value:""}).value`, &baseValue),
+		chromedp.Evaluate(`document.querySelectorAll('button.file-btn').length`, &fileBtnCount),
+	); err != nil {
+		t.Fatalf("boot: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !bannerPresent {
+		t.Error("auto-fallback banner should be present after booting on a clean working tree")
+	}
+	if baseValue != "HEAD~1" {
+		t.Errorf("base input after auto-fallback = %q, want %q", baseValue, "HEAD~1")
+	}
+	if fileBtnCount == 0 {
+		t.Error("clean-tree fixture should expose the last commit's files via auto-fallback; got 0 file buttons")
+	}
+
+	// Dismiss the banner — banner disappears, base stays as-is.
+	var bannerAfterDismiss bool
+	var baseAfterDismiss string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.banner-fallback button[name='dismissBaseFallback']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(`!!document.querySelector('.banner-fallback')`, &bannerAfterDismiss),
+		chromedp.Evaluate(`(document.querySelector('#base-input') || {value:""}).value`, &baseAfterDismiss),
+	); err != nil {
+		t.Fatalf("dismiss banner: %v", err)
+	}
+	if bannerAfterDismiss {
+		t.Error("banner should be gone after dismiss")
+	}
+	if baseAfterDismiss != "HEAD~1" {
+		t.Errorf("dismiss should not change base; got %q", baseAfterDismiss)
+	}
+}
+
+// TestE2E_BasePickerSwap verifies the runtime base-picker: typing a
+// new ref into the drawer-base input and submitting updates state.Base
+// and re-lists files against the new ref. Also covers the invalid-ref
+// path: a non-existent ref surfaces BaseError without mutating Base.
+//
+// Fixture: edited.go and fresh.go are working-tree changes vs HEAD.
+// After SetBase("HEAD~1"), the same diff is computed against the
+// previous commit — the files visible may differ but the list should
+// be non-empty for our fixture (the test repo has commits).
+func TestE2E_BasePickerSwap(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	// Invalid ref: BaseError surfaces, Base unchanged.
+	var baseAfterBad, errAfterBad string
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`#base-input`, "definitely-not-a-ref-xyz", chromedp.ByQuery),
+		chromedp.Click(`button[name='setBase']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.base-error`, chromedp.ByQuery),
+		chromedp.Value(`#base-input`, &baseAfterBad, chromedp.ByQuery),
+		chromedp.Text(`.base-error`, &errAfterBad, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("invalid ref submit: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !strings.Contains(errAfterBad, "Unknown ref") {
+		t.Errorf("invalid-ref error = %q, want substring 'Unknown ref'", errAfterBad)
+	}
+
+	// Clear input, then submit a valid ref (HEAD~1). State.Base flips,
+	// error clears, files re-list.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('#base-input').value = ''`, nil),
+		chromedp.SendKeys(`#base-input`, "HEAD~1", chromedp.ByQuery),
+		chromedp.Click(`button[name='setBase']`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("valid ref submit: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	var baseFinal string
+	var errorPresent bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Value(`#base-input`, &baseFinal, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.base-error')`, &errorPresent),
+	); err != nil {
+		t.Fatalf("post-swap query: %v", err)
+	}
+	if baseFinal != "HEAD~1" {
+		t.Errorf("base input after valid swap = %q, want %q", baseFinal, "HEAD~1")
+	}
+	if errorPresent {
+		t.Error(".base-error should be cleared after a successful SetBase")
 	}
 }
 

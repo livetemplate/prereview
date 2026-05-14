@@ -134,6 +134,31 @@ func countLines(path string) (int, bool) {
 	return n, true
 }
 
+// IsValidRef reports whether `ref` resolves to a commit in this repo.
+// Used by the runtime base picker to validate user-typed refs before
+// swapping state.Base. Treats both branch names and commit-ish refs
+// (HEAD~3, abc1234) uniformly via `git rev-parse --verify`.
+func IsValidRef(repo, ref string) bool {
+	if strings.TrimSpace(ref) == "" {
+		return false
+	}
+	_, err := runGit(repo, "rev-parse", "--verify", ref)
+	return err == nil
+}
+
+// CurrentBranch returns the short name of the checked-out branch
+// (e.g. "main", "feature/foo"). Returns "HEAD" in a detached state
+// (which is what `git rev-parse --abbrev-ref HEAD` emits there).
+// Errors return an empty string — callers should display "current
+// branch" or similar generic copy when the result is blank.
+func CurrentBranch(repo string) string {
+	out, err := runGit(repo, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // isWorkingTreeBase reports whether base resolves to HEAD — in which case
 // untracked files in the working tree should also count as changes.
 func isWorkingTreeBase(repo, base string) bool {

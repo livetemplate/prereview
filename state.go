@@ -108,6 +108,23 @@ type PrereviewState struct {
 	// as a per-user preference. Defaults false (diff is the primary
 	// reviewing mode).
 	FileView bool `json:"file_view" lvt:"persist"`
+
+	// BaseAutoFallback is set true on the Mount that auto-promotes
+	// Base from "HEAD" (working tree) to "HEAD~1" (latest commit)
+	// because the working tree was clean. Drives a banner so the user
+	// understands why they're seeing commit-level changes.
+	//
+	// Persisted so the banner survives the initial HTTP render → WS
+	// reconnect handoff (without persistence, the second Mount sees
+	// Base="HEAD~1" already and the fallback condition doesn't fire,
+	// so the banner would blink off after ~50ms). Cleared by the user
+	// via DismissBaseFallback or SetBase.
+	BaseAutoFallback bool `json:"base_auto_fallback" lvt:"persist"`
+
+	// BaseError holds a validation message when the user submits a ref
+	// that doesn't resolve via `git rev-parse`. Cleared on the next
+	// successful SetBase. Renders inline near the picker.
+	BaseError string `json:"base_error"`
 }
 
 // VisibleComments returns Comments filtered by ShowResolved. Zero-arg so

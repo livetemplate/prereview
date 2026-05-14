@@ -50,10 +50,32 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// a session-storage reconnect.
 	state.SkillMode = c.SkillMode
 
-	files, err := gitdiff.ListFiles(c.RepoPath, c.Base)
+	// First connect: hydrate state.Base from the CLI flag. Subsequent
+	// reconnects keep the user's choice (state.Base is lvt:persist).
+	if state.Base == "" {
+		state.Base = c.Base
+	}
+
+	files, err := gitdiff.ListFiles(c.RepoPath, state.Base)
 	if err != nil {
 		return state, fmt.Errorf("list files: %w", err)
 	}
+
+	// Auto-fallback: if base is HEAD (working tree) and there's nothing
+	// to review, promote to HEAD~1 so the user sees the latest commit on
+	// the current branch instead of an empty "Nothing to review" page.
+	// Only fires when base is exactly HEAD — if the user explicitly
+	// picked something else, an empty result is their choice, not a
+	// reason to silently swap refs underneath them.
+	if len(files) == 0 && state.Base == "HEAD" {
+		fallback, fbErr := gitdiff.ListFiles(c.RepoPath, "HEAD~1")
+		if fbErr == nil && len(fallback) > 0 {
+			state.Base = "HEAD~1"
+			state.BaseAutoFallback = true
+			files = fallback
+		}
+	}
+
 	state.Files = files
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	state.CSVPath = c.CSVPath
@@ -67,7 +89,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 			state.SelectedFile = ""
 			state.CurrentDiff = nil
 		} else {
-			diff, err := gitdiff.LoadDiff(c.RepoPath, c.Base, state.SelectedFile)
+			diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, state.SelectedFile)
 			if err != nil {
 				slog.Warn("load diff in mount", "path", state.SelectedFile, "err", err)
 				state.CurrentDiff = nil
@@ -76,6 +98,62 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 			}
 		}
 	}
+	return state, nil
+}
+
+// SetBase changes the comparison ref. Accepts any string git rev-parse
+// would resolve — branch names, HEAD~N, commit SHAs, tags. Invalid refs
+// surface as state.BaseError without mutating state.Base, so the user's
+// previous good base remains active.
+//
+// On success, clears BaseAutoFallback (this is an explicit user choice
+// now) and rebuilds the file list. If the previously selected file no
+// longer exists in the new diff range, SelectedFile is cleared.
+func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	ref := strings.TrimSpace(ctx.GetString("ref"))
+	if ref == "" {
+		state.BaseError = "Type a ref (HEAD, HEAD~1, main, …)"
+		return state, nil
+	}
+	if !gitdiff.IsValidRef(c.RepoPath, ref) {
+		state.BaseError = fmt.Sprintf("Unknown ref: %q", ref)
+		return state, nil
+	}
+	state.Base = ref
+	state.BaseError = ""
+	state.BaseAutoFallback = false
+
+	files, err := gitdiff.ListFiles(c.RepoPath, state.Base)
+	if err != nil {
+		return state, fmt.Errorf("list files for base %q: %w", ref, err)
+	}
+	state.Files = annotateCommentCounts(files, state.Comments)
+
+	// If the previously selected file isn't in the new diff range, reset
+	// so we don't render a stale viewer. Drawer reopens so the user can
+	// pick from the new file list.
+	if state.SelectedFile != "" && !fileInList(state.Files, state.SelectedFile) {
+		state.SelectedFile = ""
+		state.CurrentDiff = nil
+		state.FileDrawerOpen = true
+	} else if state.SelectedFile != "" {
+		// Same file is still in the diff — reload it against the new base.
+		diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, state.SelectedFile)
+		if err != nil {
+			slog.Warn("reload diff after SetBase", "path", state.SelectedFile, "err", err)
+			state.CurrentDiff = nil
+		} else {
+			state.CurrentDiff = diff
+		}
+	}
+	return state, nil
+}
+
+// DismissBaseFallback hides the auto-fallback banner without changing
+// the base. The user has acknowledged that we're showing HEAD~1; no
+// need to keep the banner around.
+func (c *PrereviewController) DismissBaseFallback(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.BaseAutoFallback = false
 	return state, nil
 }
 
@@ -88,7 +166,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	if path == "" {
 		return state, fmt.Errorf("selectFile: missing path")
 	}
-	diff, err := gitdiff.LoadDiff(c.RepoPath, c.Base, path)
+	diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, path)
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
 	}
@@ -136,7 +214,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	// Wrap. (-1+1)%n = 0 (lands on first file when nothing selected and Next).
 	next = ((next % n) + n) % n
 	path := state.Files[next].Path
-	diff, err := gitdiff.LoadDiff(c.RepoPath, c.Base, path)
+	diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, path)
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
 	}
@@ -243,7 +321,7 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	}
 	cm := state.Comments[idx]
 	if cm.File != state.SelectedFile {
-		diff, err := gitdiff.LoadDiff(c.RepoPath, c.Base, cm.File)
+		diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, cm.File)
 		if err != nil {
 			return state, fmt.Errorf("load diff: %w", err)
 		}
@@ -395,7 +473,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	cm := state.Comments[idx]
 	state.SelectedFile = cm.File
 	// Reload diff for the comment's file in case we're on a different one.
-	diff, err := gitdiff.LoadDiff(c.RepoPath, c.Base, cm.File)
+	diff, err := gitdiff.LoadDiff(c.RepoPath, state.Base, cm.File)
 	if err == nil {
 		state.CurrentDiff = diff
 	}
