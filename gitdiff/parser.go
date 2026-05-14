@@ -79,17 +79,6 @@ func LoadDiff(repo, base, path string) (*FileDiff, error) {
 	return fd, nil
 }
 
-// highlightLineThreshold caps the file size we'll highlight inline.
-// Beyond this, the per-line span overhead (5-10x DOM nodes per line)
-// dominates client-side diff-apply + paint time; for a 1500-line file
-// that's ~500-700 ms perceived latency on first load. Files larger
-// than the threshold render as plain text — readable and snappy.
-//
-// 500 lines was picked empirically from local measurements: below it
-// the file-switch round-trip stays under ~400ms end-to-end; above it
-// the perceived latency creeps past 600ms.
-const highlightLineThreshold = 500
-
 // highlightLines fills DiffLine.HighlightedContent for each non-binary
 // line in the diff. Runs after parsing/loading so all three paths
 // (parseUnifiedDiff, loadFileAsCtx, loadUntrackedAsAdded) get
@@ -97,13 +86,8 @@ const highlightLineThreshold = 500
 //
 // Uses the bulk HighlightLines helper so the chroma tokenizer
 // initialises once for the whole file rather than once per line.
-// Skipped entirely for files past highlightLineThreshold so the
-// extra HTML weight doesn't dominate file-switch latency.
 func highlightLines(fd *FileDiff) {
 	if fd == nil || fd.IsBinary || len(fd.Lines) == 0 {
-		return
-	}
-	if len(fd.Lines) > highlightLineThreshold {
 		return
 	}
 	contents := make([]string, len(fd.Lines))
