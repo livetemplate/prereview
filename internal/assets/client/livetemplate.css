@@ -1,0 +1,106 @@
+/**
+ * LiveTemplate CSS Custom Property Defaults
+ *
+ * These custom properties configure lvt-fx:* directives.
+ * Override them in your own stylesheets to customize behavior.
+ *
+ * Duration values should include the "ms" unit so the variable remains
+ * a valid CSS time value and can be used directly in animation/transition
+ * properties. The directives parse these with parseInt which strips the
+ * unit, so both forms work, but "500ms" is the recommended form.
+ *
+ * Usage:
+ *   [lvt-fx\:scroll]    { --lvt-scroll-behavior: smooth; }
+ *   [lvt-fx\:highlight] { --lvt-highlight-color: yellow; --lvt-highlight-duration: 1000ms; }
+ *   [lvt-fx\:animate]   { --lvt-animate-duration: 500ms; }
+ */
+
+:root {
+  /* Scroll directive defaults */
+  --lvt-scroll-behavior: auto;
+  --lvt-scroll-threshold: 100;
+
+  /* Highlight directive defaults */
+  --lvt-highlight-duration: 500ms;
+  --lvt-highlight-color: #ffc107;
+
+  /* Animate directive defaults — includes unit so the var can be used
+     directly in CSS animation/transition properties. The TS directive
+     reads it with parseInt() which strips the unit, so the shorthand
+     construction still works. */
+  --lvt-animate-duration: 500ms;
+}
+
+/* Flash messages from {{.lvt.FlashTag "key"}} render as <output data-flash>.
+   Pico defaults <output> to inline with no spacing; give it breathing room
+   from preceding form controls. */
+output[data-flash] {
+  display: block;
+  margin-top: 1rem;
+  padding: 0.5rem 0;
+}
+
+/* === Layout === */
+
+/* Narrow container for focused, single-purpose apps.
+   Overrides Pico's breakpoint-based max-width values. */
+.container {
+  max-width: 640px;
+}
+
+/* === Utility Classes === */
+
+/* Compact buttons/inputs for inline use in tables and toolbars */
+.compact {
+  --pico-form-element-spacing-vertical: 0.25rem;
+  --pico-form-element-spacing-horizontal: 0.5rem;
+  font-size: 0.875rem;
+  width: auto;
+}
+
+/* Visually hidden but accessible to screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Zero-margin form for embedding in tables/toolbars */
+.inline {
+  margin: 0;
+}
+
+/* === Chat / Message List === */
+
+/* Scrollable message container */
+.messages {
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: 1rem;
+  height: 400px;
+  overflow-y: auto;
+  background: var(--pico-card-background-color);
+  margin-bottom: 1rem;
+}
+
+/* Individual message card */
+.message {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border-radius: var(--pico-border-radius);
+  border-left: 3px solid var(--pico-muted-border-color);
+  background: var(--pico-background-color);
+}
+
+/* Own message highlight */
+.message.mine {
+  background: var(--pico-primary-background);
+  border-left-color: var(--pico-primary);
+}

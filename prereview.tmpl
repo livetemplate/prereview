@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>prereview · {{.RepoPath}}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<link rel="stylesheet" href="/livetemplate.css">
+<style>
+:root { --pr-add: #1f4e1f; --pr-del: #4e1f1f; --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9; }
+html, body { height: 100%; }
+body { padding: 0; }
+header.bar { padding: 0.5rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color); display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+header.bar hgroup { margin: 0; }
+main.split { display: grid; grid-template-columns: 320px 1fr; gap: 0; height: calc(100vh - 56px); }
+aside.files { overflow: auto; border-right: 1px solid var(--pico-muted-border-color); padding: 0.5rem; }
+aside.files ul { list-style: none; padding: 0; margin: 0; }
+aside.files li { margin: 0; }
+aside.files button { width: 100%; text-align: left; margin: 0; padding: 0.25rem 0.5rem; font-size: 0.85rem; word-break: break-all; }
+aside.files form { margin: 0; }
+section.viewer { overflow: auto; padding: 1rem; }
+pre.code { background: var(--pico-card-background-color); border-radius: 4px; padding: 0; margin: 0; overflow: auto; font-size: 0.85rem; line-height: 1.4; }
+pre.code .line { display: flex; padding: 0 0.5rem; }
+pre.code .line.add { background: var(--pr-add-bg); color: var(--pr-add); }
+pre.code .line.del { background: var(--pr-del-bg); color: var(--pr-del); }
+pre.code .gutter { flex: 0 0 6ch; color: var(--pico-muted-color); user-select: none; text-align: right; padding-right: 0.5rem; }
+pre.code .content { white-space: pre; flex: 1; }
+.status-A { color: #1f4e1f; }
+.status-M { color: #5a4500; }
+.status-D { color: #4e1f1f; }
+.status-R { color: #1f3a4e; }
+.empty { color: var(--pico-muted-color); padding: 2rem; text-align: center; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <hgroup>
+    <strong>prereview</strong>
+    <small>{{.RepoPath}} · base {{.Base}}{{if .StartedAt}} · {{.StartedAt}}{{end}}</small>
+  </hgroup>
+  <small>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>
+</header>
+
+<main class="split">
+  <aside class="files">
+    {{if .Files}}
+    <ul>
+      {{range .Files}}
+      <li data-key="{{.Path}}">
+        <form method="POST">
+          <input type="hidden" name="path" value="{{.Path}}">
+          <button type="submit" name="selectFile" class="status-{{.Status}}{{if eq .Path $.SelectedFile}} secondary{{else}} outline contrast{{end}}">
+            <small>[{{.Status}}]</small> {{.Path}}{{if gt .CommentCount 0}} <mark>{{.CommentCount}}</mark>{{end}}
+          </button>
+        </form>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="empty"><small>No changes vs <code>{{.Base}}</code>.</small></p>
+    {{end}}
+  </aside>
+
+  <section class="viewer">
+    {{with .CurrentDiff}}
+    <article>
+      <header>
+        <strong>{{.Path}}</strong>
+        {{if .Note}}<small> — {{.Note}}</small>{{end}}
+      </header>
+      {{if .IsBinary}}
+      <p class="empty">Binary file — cannot display.</p>
+      {{else if .Lines}}
+      <pre class="code"><code>{{range .Lines}}<span class="line {{.Kind}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter">{{if .OldNum}}{{.OldNum}}{{else}}·{{end}} {{if .NewNum}}{{.NewNum}}{{else}}·{{end}}</span><span class="content">{{.Content}}</span></span>
+{{end}}</code></pre>
+      {{else}}
+      <p class="empty"><small>No diff content.</small></p>
+      {{end}}
+    </article>
+    {{else}}
+    <p class="empty">Pick a file on the left.</p>
+    {{end}}
+  </section>
+</main>
+
+<script defer src="/livetemplate-client.js"></script>
+</body>
+</html>

@@ -14,15 +14,15 @@ Authoritative plan: `~/.claude/plans/prereview-webapp-to-add-elegant-gosling.md`
 - [x] `gitdiff/parser_test.go` — 8 golden tests against an in-test fixture repo
 - [x] `go test ./gitdiff/...` green (8/8)
 
-### Session 2 — rendering + navigation (no comments)
-- [ ] `internal/assets/assets.go` with `//go:embed client/*`
-- [ ] `make sync-client` succeeds and writes JS into `internal/assets/client/`
-- [ ] `main.go` — flag parsing, bind 127.0.0.1, random port if not set, `READY <url>` on stdout, graceful shutdown on SIGINT/SIGTERM
-- [ ] `state.go` compiles
-- [ ] `controller.go` `Mount` + `SelectFile`
-- [ ] `prereview.tmpl` two-pane layout, diff line coloring via classes
-- [ ] Chromedp test: opens UI, clicks first file, asserts diff lines render with `line-add`/`line-del`/`line-ctx` classes
-- [ ] No console errors in chromedp
+### Session 2 — rendering + navigation (no comments) ✅
+- [x] `internal/assets/assets.go` with `//go:embed client/*` (JS + CSS)
+- [x] `make sync-client` succeeds and writes JS+CSS into `internal/assets/client/`
+- [x] `main.go` — flag parsing, bind 127.0.0.1, random port (port=0), `READY <url>` on stdout, graceful shutdown on SIGINT/SIGTERM
+- [x] `state.go` compiles
+- [x] `controller.go` `Mount` + `SelectFile`
+- [x] `prereview.tmpl` two-pane layout, diff line coloring via classes (`line.add`, `line.del`, `line.ctx`)
+- [x] Chromedp test (`e2e_test.go`, build tag `browser`): opens UI, clicks edited file, asserts add+del+ctx; clicks untracked file, asserts all-add
+- [x] No console errors in chromedp run
 
 ### Session 3 — comments + selection + CSV
 - [ ] `helpers.go` `selectionContains` template func registered
