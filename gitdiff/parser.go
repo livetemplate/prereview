@@ -41,13 +41,30 @@ type DiffLine struct {
 	HighlightedContent template.HTML
 }
 
+// maxRenderableFileBytes caps the working-tree file size we'll send to
+// the diff viewer. Beyond this, the diff is replaced with a "file too
+// large" placeholder — reviewing megabytes of code in the browser is
+// pointless and the page-render cost blows up. 1 MB is generous for
+// hand-written source; minified bundles and binary blobs hit the cap.
+const maxRenderableFileBytes = 1 << 20 // 1 MB
+
 // LoadDiff returns the full-file diff for one path against base.
 //
 // Uses `git diff --no-color -U999999` so every line of the file appears
 // (additions, deletions, context). For files that are pure additions (A) or
 // pure deletions (D) git produces a diff against /dev/null, which the parser
 // handles naturally — every line is "add" or "del" respectively.
+//
+// Files larger than maxRenderableFileBytes short-circuit with a Note
+// instead of loading content — the viewer renders the note and skips
+// the per-line markup entirely.
 func LoadDiff(repo, base, path string) (*FileDiff, error) {
+	if st, err := os.Stat(filepath.Join(repo, path)); err == nil && st.Size() > maxRenderableFileBytes {
+		return &FileDiff{
+			Path: path,
+			Note: fmt.Sprintf("file too large to review (%.1f MB)", float64(st.Size())/(1<<20)),
+		}, nil
+	}
 	out, err := runGit(repo,
 		"diff", "--no-color", "-U999999", "-M", "--no-ext-diff",
 		base, "--", path,
