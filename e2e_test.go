@@ -837,6 +837,59 @@ func TestE2E_EditCancelPreservesComment(t *testing.T) {
 	}
 }
 
+// TestE2E_EditSurvivesReconnect simulates the iPhone-Safari pattern of
+// dropping the WebSocket on tab/app switch: open Edit, force a fresh
+// Navigate (which closes the WS and opens a new one), then click Save.
+// The comment should still be updated in place, not appended as a new
+// row. Regression test for EditingCommentID not being lvt:persist.
+func TestE2E_EditSurvivesReconnect(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "original", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("seed: %v\nstderr: %s", err, p.stderr.String())
+	}
+	rowsBefore := p.readCSV()
+	if len(rowsBefore) != 2 {
+		t.Fatalf("after seed: expected 1 row + header, got %d", len(rowsBefore))
+	}
+	originalID := rowsBefore[1][0]
+
+	// Open Edit, then force a reconnect by navigating to the same URL
+	// fresh — that closes the WS and opens a new session. With
+	// EditingCommentID persisted, the composer reopens still in edit
+	// mode; Save then updates in place.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='editComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.composer textarea').value = ''`, nil),
+		chromedp.SendKeys(`.composer textarea`, "edited after reconnect", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("edit + reconnect + save: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rowsAfter := p.readCSV()
+	if len(rowsAfter) != 2 {
+		t.Errorf("post-reconnect save should still be in-place; got %d rows: %v", len(rowsAfter), rowsAfter)
+	}
+	if rowsAfter[1][0] != originalID {
+		t.Errorf("comment ID changed across reconnect-edit: was %q, now %q", originalID, rowsAfter[1][0])
+	}
+	if rowsAfter[1][5] != "edited after reconnect" {
+		t.Errorf("comment body after update = %q, want %q", rowsAfter[1][5], "edited after reconnect")
+	}
+}
+
 // TestE2E_EditSaveUpdatesInPlace verifies that an edit that's saved
 // (Update via Save) keeps the same ID and updates the body in place —
 // the audit trail (Created timestamp, position) survives.

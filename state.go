@@ -62,7 +62,11 @@ type PrereviewState struct {
 	// comment. The composer label changes to "Editing comment on L28"
 	// instead of "Comment on L28" so it's clear the next save replaces
 	// rather than appends. Cleared by AddComment, ClearSelection.
-	EditingCommentID string `json:"editing_comment_id"`
+	// Persisted so the edit mode survives a WebSocket reconnect — iPhone
+	// Safari drops the WS aggressively on tab/app switch. Without persist,
+	// AddComment would see EditingCommentID="" after the reconnect and
+	// append a new comment instead of updating in place.
+	EditingCommentID string `json:"editing_comment_id" lvt:"persist"`
 
 	// LastDeletedComment holds the most recently deleted comment so the
 	// user can undo. Cleared by ANY other mutation (add, edit, another
