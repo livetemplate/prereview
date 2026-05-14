@@ -56,6 +56,20 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 		state.Base = c.Base
 	}
 
+	// Populate the base-picker dropdown choices fresh each Mount so
+	// newly created branches appear without restarting the server.
+	// The current state.Base is prepended if it's not a preset/branch
+	// (e.g., a typed commit SHA) so the select still shows what we're
+	// currently comparing against.
+	choices := []string{"HEAD", "HEAD~1", "HEAD~5"}
+	for _, b := range gitdiff.ListBranches(c.RepoPath) {
+		choices = append(choices, b)
+	}
+	if !slices.Contains(choices, state.Base) {
+		choices = append([]string{state.Base}, choices...)
+	}
+	state.BaseChoices = choices
+
 	files, err := gitdiff.ListFiles(c.RepoPath, state.Base)
 	if err != nil {
 		return state, fmt.Errorf("list files: %w", err)

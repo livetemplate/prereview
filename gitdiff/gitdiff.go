@@ -219,6 +219,25 @@ func IsValidRef(repo, ref string) bool {
 	return err == nil
 }
 
+// ListBranches returns the short names of every local branch in the
+// repo, sorted alphabetically. Used to populate the base-picker
+// dropdown — `git for-each-ref` runs in microseconds even on big
+// repos, so calling it from every Mount is fine.
+func ListBranches(repo string) []string {
+	out, err := runGit(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/")
+	if err != nil {
+		return nil
+	}
+	var branches []string
+	for line := range strings.SplitSeq(strings.TrimRight(string(out), "\n"), "\n") {
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+	sort.Strings(branches)
+	return branches
+}
+
 // CurrentBranch returns the short name of the checked-out branch
 // (e.g. "main", "feature/foo"). Returns "HEAD" in a detached state
 // (which is what `git rev-parse --abbrev-ref HEAD` emits there).

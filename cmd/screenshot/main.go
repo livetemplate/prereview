@@ -207,14 +207,17 @@ func main() {
 			chromedp.Sleep(200 * time.Millisecond),
 		}},
 		{"laptop-base-picker-error", 1280, 800, []chromedp.Action{
-			chromedp.SendKeys(`#base-input`, "definitely-not-a-ref", chromedp.ByQuery),
-			chromedp.Click(`button[name='setBase']`, chromedp.ByQuery),
+			chromedp.Click(`.base-custom summary`, chromedp.ByQuery),
+			chromedp.SendKeys(`#base-custom-input`, "definitely-not-a-ref", chromedp.ByQuery),
+			chromedp.Click(`.base-custom button[name='setBase']`, chromedp.ByQuery),
 			chromedp.Sleep(400 * time.Millisecond),
 		}},
 		{"laptop-base-picker-head1", 1280, 800, []chromedp.Action{
-			chromedp.Evaluate(`document.querySelector('#base-input').value = ''`, nil),
-			chromedp.SendKeys(`#base-input`, "HEAD~1", chromedp.ByQuery),
-			chromedp.Click(`button[name='setBase']`, chromedp.ByQuery),
+			chromedp.Evaluate(`(() => {
+				const s = document.querySelector('#base-input');
+				s.value = "HEAD~1";
+				s.dispatchEvent(new Event("change", {bubbles: true}));
+			})()`, nil),
 			chromedp.Sleep(500 * time.Millisecond),
 		}},
 		{"laptop-all-comments-view", 1280, 800, []chromedp.Action{

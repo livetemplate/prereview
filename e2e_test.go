@@ -870,6 +870,12 @@ func TestE2E_EditSurvivesReconnect(t *testing.T) {
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 		chromedp.Navigate(p.url),
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		// After Navigate the composer is re-rendered at its persisted
+		// line, but the browser scrolled to top — the composer may be
+		// below the fold. Scroll it into view + small settle delay so
+		// SendKeys can focus the textarea reliably.
+		chromedp.Evaluate(`document.querySelector('.composer').scrollIntoView({block: "center"})`, nil),
+		chromedp.Sleep(200*time.Millisecond),
 		chromedp.Evaluate(`document.querySelector('.composer textarea').value = ''`, nil),
 		chromedp.SendKeys(`.composer textarea`, "edited after reconnect", chromedp.ByQuery),
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
@@ -1231,58 +1237,64 @@ func TestE2E_AllFilesOnCleanTree(t *testing.T) {
 	}
 }
 
-// TestE2E_BasePickerSwap verifies the runtime base-picker: typing a
-// new ref into the drawer-base input and submitting updates state.Base
-// and re-lists files against the new ref. Also covers the invalid-ref
-// path: a non-existent ref surfaces BaseError without mutating Base.
+// TestE2E_BasePickerSwap verifies the runtime base picker:
 //
-// Fixture: edited.go and fresh.go are working-tree changes vs HEAD.
-// After SetBase("HEAD~1"), the same diff is computed against the
-// previous commit — the files visible may differ but the list should
-// be non-empty for our fixture (the test repo has commits).
+//  1. Selecting an option from the dropdown (#base-input) auto-submits
+//     via lvt-on:change="setBase" and updates state.Base.
+//  2. The custom-ref disclosure (a <details> with a freeform input)
+//     accepts arbitrary refs for cases the dropdown doesn't list,
+//     and invalid refs surface BaseError without mutating state.Base.
 func TestE2E_BasePickerSwap(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 	p.waitReady()
 
-	// Invalid ref: BaseError surfaces, Base unchanged.
-	var baseAfterBad, errAfterBad string
+	// Dropdown swap: select HEAD~1, expect change event to fire SetBase
+	// and the select value to reflect the chosen option.
 	if err := chromedp.Run(p.ctx,
-		chromedp.SendKeys(`#base-input`, "definitely-not-a-ref-xyz", chromedp.ByQuery),
-		chromedp.Click(`button[name='setBase']`, chromedp.ByQuery),
+		chromedp.Evaluate(`(() => {
+			const s = document.querySelector('#base-input');
+			s.value = "HEAD~1";
+			s.dispatchEvent(new Event("change", {bubbles: true}));
+		})()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("dropdown swap: %v\nstderr: %s", err, p.stderr.String())
+	}
+	var baseAfterSwap string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Value(`#base-input`, &baseAfterSwap, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("read select value: %v", err)
+	}
+	if baseAfterSwap != "HEAD~1" {
+		t.Errorf("base after dropdown swap = %q, want %q", baseAfterSwap, "HEAD~1")
+	}
+
+	// Custom-ref disclosure: open <details>, type an invalid ref, submit.
+	// BaseError surfaces, dropdown value stays at the previous successful
+	// base (HEAD~1).
+	var errAfterBad string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.base-custom summary`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#base-custom-input`, chromedp.ByQuery),
+		chromedp.SendKeys(`#base-custom-input`, "definitely-not-a-ref-xyz", chromedp.ByQuery),
+		chromedp.Click(`.base-custom button[name='setBase']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.base-error`, chromedp.ByQuery),
-		chromedp.Value(`#base-input`, &baseAfterBad, chromedp.ByQuery),
 		chromedp.Text(`.base-error`, &errAfterBad, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("invalid ref submit: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("invalid custom ref: %v\nstderr: %s", err, p.stderr.String())
 	}
 	if !strings.Contains(errAfterBad, "Unknown ref") {
 		t.Errorf("invalid-ref error = %q, want substring 'Unknown ref'", errAfterBad)
 	}
-
-	// Clear input, then submit a valid ref (HEAD~1). State.Base flips,
-	// error clears, files re-list.
+	var baseAfterBad string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelector('#base-input').value = ''`, nil),
-		chromedp.SendKeys(`#base-input`, "HEAD~1", chromedp.ByQuery),
-		chromedp.Click(`button[name='setBase']`, chromedp.ByQuery),
-		chromedp.Sleep(400*time.Millisecond),
+		chromedp.Value(`#base-input`, &baseAfterBad, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("valid ref submit: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("read select after bad ref: %v", err)
 	}
-
-	var baseFinal string
-	var errorPresent bool
-	if err := chromedp.Run(p.ctx,
-		chromedp.Value(`#base-input`, &baseFinal, chromedp.ByQuery),
-		chromedp.Evaluate(`!!document.querySelector('.base-error')`, &errorPresent),
-	); err != nil {
-		t.Fatalf("post-swap query: %v", err)
-	}
-	if baseFinal != "HEAD~1" {
-		t.Errorf("base input after valid swap = %q, want %q", baseFinal, "HEAD~1")
-	}
-	if errorPresent {
-		t.Error(".base-error should be cleared after a successful SetBase")
+	if baseAfterBad != "HEAD~1" {
+		t.Errorf("bad ref shouldn't change Base; got %q, want %q", baseAfterBad, "HEAD~1")
 	}
 }
 

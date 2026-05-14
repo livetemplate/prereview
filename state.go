@@ -117,6 +117,14 @@ type PrereviewState struct {
 	// that doesn't resolve via `git rev-parse`. Cleared on the next
 	// successful SetBase. Renders inline near the picker.
 	BaseError string `json:"base_error"`
+
+	// BaseChoices populates the base-picker dropdown. Computed in
+	// Mount: ["HEAD", "HEAD~1", "HEAD~5", <local branches…>] plus the
+	// current state.Base if it isn't already in the list (so custom
+	// refs typed via the freeform fallback still appear as the
+	// selected option). Not persisted — recomputed each Mount so newly
+	// created branches show up without a process restart.
+	BaseChoices []string `json:"base_choices"`
 }
 
 // VisibleComments returns Comments filtered by ShowResolved. Zero-arg so
