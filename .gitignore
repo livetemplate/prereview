@@ -1,6 +1,10 @@
 /prereview
 /bin/
-internal/assets/client/*.js
 .prereview/
 *.out
 *.test
+
+# NOTE: internal/assets/client/ holds vendored copies of the livetemplate
+# client bundle (JS + CSS) refreshed via `make sync-client`. They ARE
+# committed so `go install github.com/livetemplate/prereview@latest`
+# works without a Makefile invocation — mirrors tinkerdown's approach.
