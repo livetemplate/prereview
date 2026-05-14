@@ -166,8 +166,10 @@ func TestLoadDiff_ModifiedFile_FullFileContent(t *testing.T) {
 		t.Fatalf("got %d lines, want %d:\n%+v", len(fd.Lines), len(want), fd.Lines)
 	}
 	for i, w := range want {
-		if fd.Lines[i] != w {
-			t.Errorf("line %d: got %+v, want %+v", i, fd.Lines[i], w)
+		got := fd.Lines[i]
+		got.HighlightedContent = "" // ignore — covered by highlight tests
+		if got != w {
+			t.Errorf("line %d: got %+v, want %+v", i, got, w)
 		}
 	}
 }

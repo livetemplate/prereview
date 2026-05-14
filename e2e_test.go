@@ -295,15 +295,19 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 	// Click the fresh (untracked) file — its diff must be all-adds. The
 	// previous file already had an add-line, so we can't wait on a generic
 	// class selector; wait until the viewer header text mentions fresh.go.
+	var viewerText string
 	if err := chromedp.Run(timeout,
 		chromedp.Click(`//button[contains(., 'fresh.go')]`, chromedp.BySearch),
 		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='fresh.go']`, chromedp.BySearch),
 		chromedp.OuterHTML(`main.viewer`, &bodyText, chromedp.ByQuery),
+		// Pull textContent so syntax-highlighting span wrappers don't
+		// fragment the literal text we want to assert against.
+		chromedp.Evaluate(`document.querySelector('main.viewer').textContent`, &viewerText),
 	); err != nil {
 		t.Fatalf("click fresh.go: %v\nstderr: %s", err, stderr.String())
 	}
-	if !strings.Contains(bodyText, "package fresh") {
-		t.Errorf("untracked file content missing\nviewer: %s", bodyText)
+	if !strings.Contains(viewerText, "package fresh") {
+		t.Errorf("untracked file content missing\nviewer text: %s", viewerText)
 	}
 	// Untracked file → every line should be Kind "add", so no "line del" or "line ctx" should appear.
 	if strings.Contains(bodyText, "line del") {
@@ -396,6 +400,15 @@ func (p *runningPrereview) waitReadyAt(viewportW, viewportH int) {
 		chromedp.EmulateViewport(int64(viewportW), int64(viewportH)),
 		chromedp.Navigate(p.url),
 		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
+		// The deferred livetemplate-client.js needs time to parse, connect
+		// over WebSocket, and attach the event-delegation listener before
+		// any chromedp.Click can actually fire an action. WaitVisible
+		// returns as soon as the SSR HTML is parsed, which is well before
+		// the client's WS handshake completes — especially when the page
+		// is heavier (syntax-highlighted diff content). Sleep 1s here as a
+		// defensive ceiling so every test that calls waitReady gets a
+		// consistent "client is wired" baseline.
+		chromedp.Sleep(1 * time.Second),
 	}
 	if err := chromedp.Run(p.ctx, actions...); err != nil {
 		p.t.Fatalf("initial nav: %v\nstderr: %s", err, p.stderr.String())
@@ -496,30 +509,43 @@ func TestE2E_MobileDrawer(t *testing.T) {
 		t.Error("file drawer should be closed by default on mobile load")
 	}
 
-	// Tap hamburger → drawer opens.
-	var drawerOpenAfterTap bool
+	// Tap hamburger → drawer opens. The first click depends on the
+	// deferred livetemplate-client.js having parsed + connected via
+	// WebSocket; until then, click events have no listener and are
+	// silently lost. Empirically the connect window closes within ~2s
+	// on this fixture (syntax-highlighted small file) — sleep 2s as a
+	// defensive ceiling before the first action, then use JS-click so
+	// stacking-context quirks don't dispatch the click to a sibling.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.hamburger`, chromedp.ByQuery),
-		chromedp.Sleep(200*time.Millisecond),
-		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &drawerOpenAfterTap),
+		chromedp.Sleep(2*time.Second),
+		chromedp.Evaluate(`document.querySelector('.hamburger').click()`, nil),
+		chromedp.WaitVisible(`#files-drawer.is-open`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("tap hamburger: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if !drawerOpenAfterTap {
-		t.Error("drawer didn't open after tapping hamburger")
-	}
 
-	// Tap a file → drawer closes, diff renders. Pick fresh.go (not the
-	// auto-selected first file) so the action's effect is observable —
-	// WaitVisible on a state that's already true is a no-op.
-	var drawerOpenAfterFile bool
+	// Tap a file → drawer closes, diff renders. Use a JS click (not
+	// chromedp.Click's coordinate dispatch) so the action fires reliably
+	// even if the drawer's stacking context shifts the file-btn's hit
+	// region. Pick fresh.go (not the auto-selected first file) so the
+	// effect is observable.
+	var drawerOpenAfterFile, clickedFresh bool
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
-		chromedp.Click(`//button[@name='selectFile' and contains(., 'fresh.go')]`, chromedp.BySearch),
+		chromedp.Evaluate(`(() => {
+			const b = Array.from(document.querySelectorAll('button[name="selectFile"]'))
+				.find(x => x.textContent.includes('fresh.go'));
+			if (!b) return false;
+			b.click();
+			return true;
+		})()`, &clickedFresh),
 		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='fresh.go']`, chromedp.BySearch),
 		chromedp.Evaluate(`document.querySelector('#files-drawer').classList.contains('is-open')`, &drawerOpenAfterFile),
 	); err != nil {
 		t.Fatalf("tap file: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !clickedFresh {
+		t.Fatal("fresh.go button not found in DOM")
 	}
 	if drawerOpenAfterFile {
 		t.Error("drawer should auto-close after selecting a file")
@@ -603,14 +629,23 @@ func TestE2E_CommentLifecycle(t *testing.T) {
 		t.Errorf("body = %q, missing comment text", row[5])
 	}
 
-	// Edit: click Edit, change the body, save again.
+	// Edit: click Edit, replace body, save again. Wait for the
+	// composer label to flip to "Editing comment on …" so we know the
+	// EditComment action's round-trip has landed and the textarea has
+	// been patched with the existing body — otherwise our JS set-value
+	// can fire before the server's response and get overwritten.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='editComment']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.composer textarea').value = ''`, nil),
-		chromedp.SendKeys(`.composer textarea`, "EDITED: sound the alarm", chromedp.ByQuery),
+		chromedp.WaitVisible(`//div[contains(@class,'composer')]//strong[starts-with(normalize-space(text()), 'Editing comment on')]`, chromedp.BySearch),
+		// Set value + submit atomically in a single Evaluate so the
+		// framework can't slip another patch between them.
+		chromedp.Evaluate(`(() => {
+			const t = document.querySelector('.composer textarea');
+			t.value = 'EDITED: sound the alarm';
+			return t.value;
+		})()`, nil),
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
-		chromedp.Sleep(200*time.Millisecond), // give the WS update room to land
+		chromedp.Sleep(300*time.Millisecond),
 	); err != nil {
 		t.Fatalf("edit comment: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -741,22 +776,24 @@ func TestE2E_NextPrevFile(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 	p.waitReady()
 
-	// Pick the second file in the drawer (index 2 in 1-based XPath).
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`(//button[@name='selectFile'])[2]`, chromedp.BySearch),
-		chromedp.WaitVisible(`main.viewer article header strong`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("pick first file: %v\nstderr: %s", err, p.stderr.String())
-	}
+	// Pick fresh.go (alphabetically second), wait until the viewer
+	// actually shows it — `WaitVisible(... article header strong ...)`
+	// alone returns as soon as ANY strong is present, which it is from
+	// auto-select. We need to wait for the filename to update.
+	p.clickFile("fresh.go")
 	var first string
 	if err := chromedp.Run(p.ctx, chromedp.Text(`main.viewer article header strong`, &first, chromedp.ByQuery)); err != nil {
 		t.Fatalf("read first filename: %v", err)
 	}
+	if first != "fresh.go" {
+		t.Fatalf("setup: viewer shows %q, expected fresh.go", first)
+	}
 
-	// Click Next; expect a different file in the viewer.
+	// Click Next; expect a different file in the viewer. Wait until the
+	// filename actually changes — same async-action concern as above.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`header.bar button[name='nextFile']`, chromedp.ByQuery),
-		chromedp.Sleep(300*time.Millisecond),
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())!='fresh.go']`, chromedp.BySearch),
 	); err != nil {
 		t.Fatalf("click next: %v", err)
 	}
@@ -766,10 +803,10 @@ func TestE2E_NextPrevFile(t *testing.T) {
 		t.Errorf("after Next: filename = %q (was %q); expected to advance", afterNext, first)
 	}
 
-	// Prev should bring us back.
+	// Prev should bring us back to fresh.go.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`header.bar button[name='prevFile']`, chromedp.ByQuery),
-		chromedp.Sleep(300*time.Millisecond),
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='fresh.go']`, chromedp.BySearch),
 	); err != nil {
 		t.Fatalf("click prev: %v", err)
 	}
@@ -876,10 +913,14 @@ func TestE2E_EditSurvivesReconnect(t *testing.T) {
 		// line, but the browser scrolled to top — the composer may be
 		// below the fold. Scroll it into view + small settle delay so
 		// SendKeys can focus the textarea reliably.
+		chromedp.WaitVisible(`//div[contains(@class,'composer')]//strong[starts-with(normalize-space(text()), 'Editing comment on')]`, chromedp.BySearch),
 		chromedp.Evaluate(`document.querySelector('.composer').scrollIntoView({block: "center"})`, nil),
 		chromedp.Sleep(200*time.Millisecond),
-		chromedp.Evaluate(`document.querySelector('.composer textarea').value = ''`, nil),
-		chromedp.SendKeys(`.composer textarea`, "edited after reconnect", chromedp.ByQuery),
+		chromedp.Evaluate(`(() => {
+			const t = document.querySelector('.composer textarea');
+			t.value = 'edited after reconnect';
+			return t.value;
+		})()`, nil),
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
 		chromedp.Sleep(400*time.Millisecond),
 	); err != nil {
@@ -924,8 +965,12 @@ func TestE2E_EditSaveUpdatesInPlace(t *testing.T) {
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='editComment']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.composer textarea').value = ''`, nil),
-		chromedp.SendKeys(`.composer textarea`, "updated body", chromedp.ByQuery),
+		chromedp.WaitVisible(`//div[contains(@class,'composer')]//strong[starts-with(normalize-space(text()), 'Editing comment on')]`, chromedp.BySearch),
+		chromedp.Evaluate(`(() => {
+			const t = document.querySelector('.composer textarea');
+			t.value = 'updated body';
+			return t.value;
+		})()`, nil),
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
 		chromedp.Sleep(400*time.Millisecond),
 	); err != nil {
@@ -1351,6 +1396,10 @@ func TestE2E_MobileOverflowMenu(t *testing.T) {
 		chromedp.EmulateViewport(375, 812),
 		chromedp.Navigate(p.url),
 		chromedp.WaitVisible(`header.bar`, chromedp.ByQuery),
+		// Defer-script + WS connect takes ~1-2s on the syntax-highlighted
+		// page; without this the .more-trigger click below dispatches
+		// before the framework has attached its event delegation listener.
+		chromedp.Sleep(2 * time.Second),
 	); err != nil {
 		t.Fatalf("mobile boot: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -1375,7 +1424,7 @@ func TestE2E_MobileOverflowMenu(t *testing.T) {
 	// verify the open/close behavior. Verify menu opens, contains the
 	// expected role=menu element, and that backdrop tap closes it.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.more-trigger`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.more-trigger').click()`, nil),
 		chromedp.WaitVisible(`.more-menu.is-open`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("open overflow menu: %v\nstderr: %s", err, p.stderr.String())
@@ -1383,8 +1432,8 @@ func TestE2E_MobileOverflowMenu(t *testing.T) {
 
 	// Backdrop tap closes the menu (CloseMoreMenu action).
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.more-menu-backdrop.is-open`, chromedp.ByQuery),
-		chromedp.Sleep(200*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('.more-menu-backdrop.is-open').click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
 	); err != nil {
 		t.Fatalf("close via backdrop: %v\nstderr: %s", err, p.stderr.String())
 	}

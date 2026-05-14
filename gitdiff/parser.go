@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,6 +27,11 @@ type DiffLine struct {
 	NewNum  int    // 0 when the line doesn't exist on the new side
 	Kind    string // "add" | "del" | "ctx"
 	Content string // raw line text, no leading +/-/space, no trailing \n
+	// HighlightedContent is Content rendered as syntax-highlighted HTML
+	// spans via chroma. Templates render this instead of Content; the
+	// raw Content stays around for CSV exports and other consumers that
+	// don't want HTML markup.
+	HighlightedContent template.HTML
 }
 
 // LoadDiff returns the full-file diff for one path against base.
@@ -48,14 +54,42 @@ func LoadDiff(repo, base, path string) (*FileDiff, error) {
 		// those). Disambiguate by checking whether the file is tracked in
 		// base. If it isn't, treat working-tree content as a pure addition.
 		if isWorkingTreeBase(repo, base) && !isTracked(repo, base, path) {
-			return loadUntrackedAsAdded(repo, path)
+			fd, err := loadUntrackedAsAdded(repo, path)
+			if err != nil {
+				return nil, err
+			}
+			highlightLines(fd)
+			return fd, nil
 		}
 		// Unchanged vs base — render the file plainly so reviewers can
 		// still read and comment on it. Every line is "ctx", so neither
 		// the diff overlay nor file-view mode shows any add/del coloring.
-		return loadFileAsCtx(repo, path)
+		fd, err := loadFileAsCtx(repo, path)
+		if err != nil {
+			return nil, err
+		}
+		highlightLines(fd)
+		return fd, nil
 	}
-	return parseUnifiedDiff(path, out)
+	fd, err := parseUnifiedDiff(path, out)
+	if err != nil {
+		return nil, err
+	}
+	highlightLines(fd)
+	return fd, nil
+}
+
+// highlightLines fills DiffLine.HighlightedContent for each non-binary
+// line in the diff. Runs after parsing/loading so all three paths
+// (parseUnifiedDiff, loadFileAsCtx, loadUntrackedAsAdded) get
+// highlighting uniformly.
+func highlightLines(fd *FileDiff) {
+	if fd == nil || fd.IsBinary {
+		return
+	}
+	for i := range fd.Lines {
+		fd.Lines[i].HighlightedContent = HighlightLine(fd.Path, fd.Lines[i].Content)
+	}
 }
 
 // loadFileAsCtx reads the working-tree file and emits every line as a

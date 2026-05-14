@@ -19,6 +19,7 @@ import (
 
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/assets"
 )
 
@@ -135,6 +136,7 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	mux.Handle("/", tmpl.Handle(controller, livetemplate.AsState(initial)))
 	mux.HandleFunc("/livetemplate-client.js", serveBytes("application/javascript", assets.ClientJS()))
 	mux.HandleFunc("/livetemplate.css", serveBytes("text/css", assets.ClientCSS()))
+	mux.HandleFunc("/syntax.css", serveBytes("text/css", []byte(gitdiff.HighlightCSS)))
 
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	ln, err := net.Listen("tcp", addr)
