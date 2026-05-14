@@ -218,6 +218,15 @@ func (c *PrereviewController) CloseMoreMenu(state PrereviewState, ctx *livetempl
 	return state, nil
 }
 
+// ToggleFileView flips between diff-overlay mode (default) and plain
+// file-view mode. See PrereviewState.FileView. Closes the overflow
+// menu so the effect on the diff is immediately visible.
+func (c *PrereviewController) ToggleFileView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FileView = !state.FileView
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
 // JumpToComment closes the all-comments view, selects the comment's
 // file, and sets ScrollToCommentID so the framework's
 // `lvt-fx:scroll="into-view"` directive on the matching inline comment

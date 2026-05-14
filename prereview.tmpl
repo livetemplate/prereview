@@ -394,6 +394,15 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    file list already signals the file-level state. Drop the noise. */
 .code.pure-add button.line.add { background: none; color: inherit; }
 .code.pure-del button.line.del { background: none; color: inherit; }
+/* File view mode — same effect as pure-add/pure-del but applied unconditionally,
+   plus deleted lines disappear (they don't exist in the working-tree file).
+   The :has() pseudo hides the whole .line-row (button + any inline comments
+   anchored to that del line), which is correct: a comment on a deleted line
+   has no anchor in file-view mode. Switching back to diff view restores them. */
+.code.file-view button.line.add,
+.code.file-view button.line.del { background: none; color: inherit; }
+.code.file-view .line-row:has(button.line.del) { display: none; }
+.code.file-view .gutter-mark { display: none; }
 .code button.line.selected { background: var(--pr-sel-bg) !important; outline: 1px solid var(--pico-primary); outline-offset: -1px; }
 .code .gutter {
   flex: 0 0 5.5ch; color: var(--pico-muted-color); user-select: none;
@@ -555,6 +564,9 @@ main.viewer { overscroll-behavior: contain; }
        presented in the layout that fits. */}}
   <div class="toolbar-inline">
     <small class="auto-saved-long">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed</small>
+    {{if .CurrentDiff}}
+    <form method="POST"><button type="submit" name="toggleFileView" class="chip view-chip{{if .FileView}} is-on{{end}}" title="{{if .FileView}}Show diff overlay{{else}}Hide diff overlay — view file as-is{{end}}">{{if .FileView}}File{{else}}Diff{{end}}</button></form>
+    {{end}}
     {{if gt (len .Comments) 0}}
     <form method="POST"><button type="submit" name="toggleCommentList" class="chip" title="View all comments">{{len .Comments}} 💬</button></form>
     {{end}}
@@ -600,6 +612,22 @@ main.viewer { overscroll-behavior: contain; }
 <div class="more-menu-backdrop{{if .MoreMenuOpen}} is-open{{end}}" lvt-on:click="closeMoreMenu" aria-hidden="true"></div>
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
   <div class="menu-info">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
+  {{if .CurrentDiff}}
+  <form method="POST">
+    <button type="submit" name="toggleFileView" class="menu-item{{if .FileView}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">
+        {{if .FileView}}
+        {{/* Diff icon (split rectangles with plus/minus) — shown when current view is plain file. */}}
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 4h7v16H4zM13 4h7v16h-7z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M6 11h3M6 13h3M16 9v6M14 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{else}}
+        {{/* File icon (document) — shown when current view is diff. */}}
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>
+        {{end}}
+      </span>
+      <span class="menu-label">{{if .FileView}}Show diff{{else}}View file{{end}}</span>
+    </button>
+  </form>
+  {{end}}
   {{if gt (len .Comments) 0}}
   <form method="POST">
     <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem">
@@ -738,7 +766,7 @@ main.viewer { overscroll-behavior: contain; }
   {{if .IsBinary}}
   <p class="empty">Binary file — cannot display.</p>
   {{else if .Lines}}
-  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}">{{range .Lines}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><form method="POST"><input type="hidden" name="line" value="{{$ln}}"><input type="hidden" name="side" value="{{if eq .Kind "del"}}old{{else}}new{{end}}"><button type="submit" name="selectLine" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} {{$ln}}</span><span class="content">{{.Content}}</span></button></form>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea><div class="c-actions"><button type="submit" name="addComment" class="save-btn">Save</button></div></form><form method="POST" class="composer-cancel"><button type="submit" name="clearSelection" class="cancel-btn">Cancel</button></form></div>{{end}}</div>
+  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}">{{range .Lines}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><form method="POST"><input type="hidden" name="line" value="{{$ln}}"><input type="hidden" name="side" value="{{if eq .Kind "del"}}old{{else}}new{{end}}"><button type="submit" name="selectLine" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content">{{.Content}}</span></button></form>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea><div class="c-actions"><button type="submit" name="addComment" class="save-btn">Save</button></div></form><form method="POST" class="composer-cancel"><button type="submit" name="clearSelection" class="cancel-btn">Cancel</button></form></div>{{end}}</div>
 {{end}}</div>
   {{else}}
   <p class="empty"><small>No diff content.</small></p>

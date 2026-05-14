@@ -100,6 +100,14 @@ type PrereviewState struct {
 	// viewports. Not persisted — closing across a reconnect is the right
 	// default; nobody expects an overflow menu to survive a refresh.
 	MoreMenuOpen bool `json:"more_menu_open"`
+
+	// FileView, when true, turns off the diff overlay: deleted lines are
+	// hidden, +/- gutter markers disappear, and add/del row coloring is
+	// dropped. The user sees the file as it currently exists in the
+	// working tree. Equivalent to GitHub's "View file" toggle. Persisted
+	// as a per-user preference. Defaults false (diff is the primary
+	// reviewing mode).
+	FileView bool `json:"file_view" lvt:"persist"`
 }
 
 // VisibleComments returns Comments filtered by ShowResolved. Zero-arg so

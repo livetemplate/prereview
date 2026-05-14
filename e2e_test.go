@@ -922,6 +922,77 @@ func TestE2E_ResolveComment(t *testing.T) {
 	}
 }
 
+// TestE2E_FileViewToggle verifies the View file switch turns off the
+// diff overlay: deleted lines disappear and the .code container gains
+// the .file-view class. Toggling back restores diff mode. Driven via
+// the desktop inline chip (1200px viewport); the mobile overflow-menu
+// variant shares the same toggleFileView action so it isn't separately
+// covered here.
+//
+// Fixture: edited.go has one del line (`return "hi"`) and one add line
+// (`return "hello world"`), so we can assert "at least 1 del row
+// visible in diff mode; 0 del rows visible in file mode".
+func TestE2E_FileViewToggle(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+
+	delRowsVisible := `Array.from(document.querySelectorAll('.line-row'))
+		.filter(r => r.querySelector('button.line.del') && getComputedStyle(r).display !== 'none').length`
+
+	// Diff mode default: .code lacks .file-view; del lines are visible.
+	var fvBefore bool
+	var delBefore int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvBefore),
+		chromedp.Evaluate(delRowsVisible, &delBefore),
+	); err != nil {
+		t.Fatalf("diff-mode query: %v", err)
+	}
+	if fvBefore {
+		t.Error("default state should be diff mode (.code must not have .file-view class)")
+	}
+	if delBefore == 0 {
+		t.Fatalf("fixture should have at least 1 visible del line in diff mode; got 0")
+	}
+
+	// Toggle to file view via the desktop chip in .toolbar-inline.
+	var fvAfter bool
+	var delAfter int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvAfter),
+		chromedp.Evaluate(delRowsVisible, &delAfter),
+	); err != nil {
+		t.Fatalf("toggle to file view: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !fvAfter {
+		t.Error(".file-view class should be applied after toggleFileView")
+	}
+	if delAfter != 0 {
+		t.Errorf("file view should hide all del .line-rows; %d still visible", delAfter)
+	}
+
+	// Toggle back to diff mode — del lines should reappear, class removed.
+	var fvFinal bool
+	var delFinal int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvFinal),
+		chromedp.Evaluate(delRowsVisible, &delFinal),
+	); err != nil {
+		t.Fatalf("toggle back: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if fvFinal {
+		t.Error("second toggle should revert to diff mode (.file-view removed)")
+	}
+	if delFinal == 0 {
+		t.Error("del lines should reappear after toggling back to diff mode")
+	}
+}
+
 // TestE2E_MobileOverflowMenu verifies that on a phone-sized viewport the
 // secondary chips (All comments, Show resolved) live behind the 3-dots
 // overflow menu rather than overflowing the toolbar. Tapping the
