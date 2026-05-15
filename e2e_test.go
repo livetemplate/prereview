@@ -1794,7 +1794,7 @@ func TestE2E_MobileOverflowMenu(t *testing.T) {
 		// Defer-script + WS connect takes ~1-2s on the syntax-highlighted
 		// page; without this the .more-trigger click below dispatches
 		// before the framework has attached its event delegation listener.
-		chromedp.Sleep(2 * time.Second),
+		chromedp.Sleep(2*time.Second),
 	); err != nil {
 		t.Fatalf("mobile boot: %v\nstderr: %s", err, p.stderr.String())
 	}

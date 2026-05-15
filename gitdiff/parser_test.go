@@ -284,7 +284,7 @@ func TestLoadDiff_BinaryFile(t *testing.T) {
 
 func TestParseHunkHeader(t *testing.T) {
 	cases := []struct {
-		in            string
+		in               string
 		wantOld, wantNew int
 	}{
 		{"@@ -1,3 +1,4 @@", 1, 1},
