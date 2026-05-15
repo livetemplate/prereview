@@ -105,6 +105,12 @@ func run(repo, base, host string, port int, skillMode bool) error {
 
 	tmpl, err := livetemplate.New("prereview",
 		livetemplate.WithParseFiles(tmplFile),
+		// Diff payloads are large, highly repetitive HTML (1000+
+		// `<div class="line-row"><button…` rows). permessage-deflate
+		// compresses that ~10x on the wire — the dominant win for the
+		// iPhone-over-Tailscale path where transfer time, not localhost
+		// render, is the file-switch bottleneck.
+		livetemplate.WithWebSocketCompression(),
 	)
 	if err != nil {
 		return fmt.Errorf("livetemplate.New: %w", err)
