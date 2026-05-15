@@ -154,6 +154,16 @@ func HighlightLines(filename string, contents []string) []template.HTML {
 			// in the per-line array stable.
 			continue
 		}
+		// Pathologically long lines (minified bundles, one-liner config,
+		// the giant template-loop line in prereview.tmpl) tokenise into
+		// hundreds of spans. That span-soup is the dominant cost in both
+		// HTML weight and client paint. Past maxHighlightLineChars,
+		// render the line as a single escaped string — still readable,
+		// no color, but the page stays light.
+		if len(contents[i]) > maxHighlightLineChars {
+			out[i] = template.HTML(htmlpkg.EscapeString(contents[i]))
+			continue
+		}
 		var buf bytes.Buffer
 		if err := chromaFormatter.Format(&buf, chromaStyle, chroma.Literator(group...)); err != nil {
 			out[i] = template.HTML(htmlpkg.EscapeString(contents[i]))
@@ -165,6 +175,12 @@ func HighlightLines(filename string, contents []string) []template.HTML {
 	}
 	return out
 }
+
+// maxHighlightLineChars caps per-line highlighting. A single line over
+// this length skips chroma and renders escaped-plain. Tuned so normal
+// source (even long ones) keeps color while minified/one-liner lines
+// don't blow up the span count.
+const maxHighlightLineChars = 1000
 
 func escapeAll(contents []string) []template.HTML {
 	out := make([]template.HTML, len(contents))
