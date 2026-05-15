@@ -10,11 +10,59 @@ for the reactive web layer — pure Go binary, no JS runtime needed.
 
 ## Install
 
+### Binary
+
 ```bash
 go install github.com/livetemplate/prereview@latest
 ```
 
 This puts `prereview` on your `$PATH`.
+
+### Claude Code skill (optional, for the LLM-driven flow)
+
+The skill lets Claude Code launch and drive a review session for you —
+just say *"review my changes"* or `/prereview` instead of running the
+binary by hand. It's a single Markdown file you copy into a skills
+directory Claude Code scans.
+
+Personal (available in every repo) — from a clone of this repo:
+
+```bash
+mkdir -p ~/.claude/skills/prereview
+cp skill/SKILL.md ~/.claude/skills/prereview/SKILL.md
+```
+
+Or fetch it directly (once the repo is published):
+
+```bash
+mkdir -p ~/.claude/skills/prereview
+curl -fsSL https://raw.githubusercontent.com/livetemplate/prereview/main/skill/SKILL.md \
+  -o ~/.claude/skills/prereview/SKILL.md
+```
+
+Project-scoped (commit it so everyone who clones the repo gets it):
+
+```bash
+mkdir -p .claude/skills/prereview
+cp skill/SKILL.md .claude/skills/prereview/SKILL.md
+```
+
+> **The filename must be exactly `SKILL.md` — uppercase, case-sensitive.**
+> A lowercase `skill.md` is silently ignored and the skill never
+> registers. This is the single most common install mistake.
+
+Requirements & notes:
+
+- The skill shells out to the `prereview` binary, so install the binary
+  (above) first and keep it on `$PATH`.
+- Invoke it with `/prereview`, or natural-language triggers like
+  *"review my changes"* / *"per-line code review"*.
+- New or renamed skills are normally picked up within the running
+  session; if `/prereview` reports "unknown skill", run `/reload` or
+  restart Claude Code (discovery is primarily a startup scan).
+- `skill/reference.md` is supplementary (full CSV schema + filesystem
+  contract). The skill works without it, but copy it alongside
+  `SKILL.md` if you want Claude to have the deep reference handy.
 
 ## Quick start
 
@@ -33,14 +81,20 @@ tap another to extend the selection, type a comment, save. Click
 
 ### Skill mode (LLM-driven)
 
+With the [Claude Code skill installed](#claude-code-skill-optional-for-the-llm-driven-flow),
+just ask Claude to *"review my changes"* (or run `/prereview`). Claude
+launches the session, hands you the URL, waits for your hand-off, then
+reads and acts on your comments — you don't run anything by hand.
+
+Equivalent manual invocation (what the skill runs for you):
+
 ```bash
 prereview --skill --repo "$(pwd)" --base HEAD &
 ```
 
-The UI now shows **"Hand off → Claude"** instead of **"Quit"**. When
-the user clicks it, `.prereview/DONE` is written with the path to the
-CSV. The skill polls for that file, reads the CSV, and acts on the
-comments.
+The UI shows **"Hand off → Claude"** instead of **"Quit"**. When you
+click it, `.prereview/DONE` is written with the path to the CSV; the
+skill polls for that file, reads the CSV, and acts on the comments.
 
 See [skill/SKILL.md](skill/SKILL.md) for the LLM-side integration and
 [skill/reference.md](skill/reference.md) for the full schema +
@@ -68,12 +122,22 @@ filesystem reference.
 - **All-comments overview.** The `💬 N` chip in the top bar (desktop)
   or the overflow menu (mobile) jumps to a list view of every comment
   across all files; tap a comment to jump back to its source line.
-- **View file mode.** Toggle "Diff" → "File" (in the overflow menu)
-  to hide the diff overlay and read the file as it currently exists.
-  Useful when the diff noise gets in the way.
+- **Diff vs File.** Toggle "Diff" → "File" (overflow menu on mobile,
+  chip on desktop). **Diff** shows only the changed hunks — changed
+  lines plus 3 lines of context, with long unchanged runs collapsed to
+  a "··· N unchanged lines ···" marker (an unchanged file has no diff,
+  so it shows whole). **File** shows the entire current file with no
+  diff at all — no add/del coloring, deletions omitted. Line numbers
+  are identical in both modes, so a comment made in one resolves in
+  the other.
 - **Base picker.** The file drawer has a base dropdown (HEAD / HEAD~1
   / HEAD~5 / each local branch) plus a "Custom ref…" expandable for
   arbitrary refs.
+- **File scope.** The drawer defaults to *changed files only* (vs the
+  base) — the right default on a large repo. A "Changed N · show all M"
+  toggle switches to the full tracked-file list when you want to
+  comment on something that didn't change. On a clean tree (nothing
+  changed) it auto-shows everything and the toggle is hidden.
 
 ## Output
 

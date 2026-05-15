@@ -83,6 +83,14 @@ type PrereviewState struct {
 	// drawer. Persisted so a refresh doesn't drop the filter.
 	FileFilter string `json:"file_filter" lvt:"persist"`
 
+	// ShowAllFiles controls the drawer scope. Default (false) lists
+	// only files that differ from the base — the common review case,
+	// and the only sane default on a large repo. When there are zero
+	// changed files (clean tree) the scope falls back to all so the
+	// list isn't empty. true forces the full tracked-file list so the
+	// user can comment on unchanged files too.
+	ShowAllFiles bool `json:"show_all_files" lvt:"persist"`
+
 	// ShowAllComments toggles the all-comments overview pane (replaces the
 	// diff viewer). Not persisted — closing/reopening the browser starts
 	// back in the diff view.
@@ -155,16 +163,78 @@ func (s PrereviewState) ResolvedCount() int {
 	return n
 }
 
-// FilteredFiles returns Files filtered by FileFilter (case-insensitive
-// substring match against path). Zero-arg so the framework pre-computes it
-// once per render and the template can iterate `$.FilteredFiles`.
-func (s PrereviewState) FilteredFiles() []gitdiff.FileEntry {
-	if strings.TrimSpace(s.FileFilter) == "" {
+// scopedFiles applies the changed-only / all-files scope, independent
+// of the search filter. Default is changed-only; if no file differs
+// from the base (clean tree) it falls back to all so the list is never
+// pointlessly empty. ShowAllFiles forces the full list. Used by the
+// drawer (via FilteredFiles), Mount auto-select, and Next/PrevFile so
+// navigation stays consistent with what the drawer shows.
+func (s PrereviewState) scopedFiles() []gitdiff.FileEntry {
+	if s.ShowAllFiles || gitdiff.ChangedCount(s.Files) == 0 {
 		return s.Files
 	}
-	q := strings.ToLower(strings.TrimSpace(s.FileFilter))
 	out := make([]gitdiff.FileEntry, 0, len(s.Files))
 	for _, f := range s.Files {
+		if f.Status != "" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// ChangedFilesCount is how many files differ from the base. Zero-arg
+// so the template can label the scope toggle without computing.
+func (s PrereviewState) ChangedFilesCount() int {
+	return gitdiff.ChangedCount(s.Files)
+}
+
+// VisibleLines is the line set the viewer renders for the selected
+// file, per the current mode:
+//
+//   - File view  (FileView == true): the entire current working-tree
+//     file — every line that exists on the new side (add + ctx),
+//     deletions excluded since they aren't in the file anymore. No
+//     diff, no folds.
+//   - Diff view  (FileView == false): a real diff — only changed
+//     lines plus 3 lines of context, long unchanged gaps replaced by
+//     fold markers (see gitdiff.CollapseToHunks). An unchanged file
+//     has no diff, so CollapseToHunks returns it whole.
+//
+// Zero-arg so the framework pre-computes it once per render and the
+// template ranges `$.VisibleLines`. Line numbers are identical across
+// modes, so comments anchored in one mode resolve in the other.
+func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
+	if s.CurrentDiff == nil {
+		return nil
+	}
+	if s.FileView {
+		out := make([]gitdiff.DiffLine, 0, len(s.CurrentDiff.Lines))
+		for _, l := range s.CurrentDiff.Lines {
+			if l.NewNum > 0 { // exists in the working-tree file
+				out = append(out, l)
+			}
+		}
+		return out
+	}
+	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines)
+}
+
+// diffContextLines is how many unchanged lines flank each change in
+// Diff view (git's default).
+const diffContextLines = 3
+
+// FilteredFiles returns the scoped files (see scopedFiles) further
+// narrowed by FileFilter (case-insensitive substring match against
+// path). Zero-arg so the framework pre-computes it once per render and
+// the template can iterate `$.FilteredFiles`.
+func (s PrereviewState) FilteredFiles() []gitdiff.FileEntry {
+	files := s.scopedFiles()
+	if strings.TrimSpace(s.FileFilter) == "" {
+		return files
+	}
+	q := strings.ToLower(strings.TrimSpace(s.FileFilter))
+	out := make([]gitdiff.FileEntry, 0, len(files))
+	for _, f := range files {
 		if strings.Contains(strings.ToLower(f.Path), q) {
 			out = append(out, f)
 		}

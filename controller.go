@@ -135,8 +135,12 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// Auto-select the first file when nothing is selected — happens on
 	// initial connect and after the gone-file reset above. Saves the
 	// user a tap and avoids landing on the empty "Pick a file" state.
-	if state.SelectedFile == "" && len(state.Files) > 0 {
-		state.SelectedFile = state.Files[0].Path
+	// Pick from the scoped list so we don't land on an unchanged file
+	// that the (default changed-only) drawer isn't even showing.
+	if state.SelectedFile == "" {
+		if scoped := state.scopedFiles(); len(scoped) > 0 {
+			state.SelectedFile = scoped[0].Path
+		}
 	}
 
 	// Eager-load the diff for the selected file so the right pane is
@@ -242,21 +246,22 @@ func (c *PrereviewController) PrevFile(state PrereviewState, ctx *livetemplate.C
 }
 
 func (c *PrereviewController) stepFile(state PrereviewState, delta int) (PrereviewState, error) {
-	if len(state.Files) == 0 {
+	files := state.scopedFiles()
+	if len(files) == 0 {
 		return state, nil
 	}
 	cur := -1
-	for i, f := range state.Files {
+	for i, f := range files {
 		if f.Path == state.SelectedFile {
 			cur = i
 			break
 		}
 	}
 	next := cur + delta
-	n := len(state.Files)
+	n := len(files)
 	// Wrap. (-1+1)%n = 0 (lands on first file when nothing selected and Next).
 	next = ((next % n) + n) % n
-	path := state.Files[next].Path
+	path := files[next].Path
 	diff, err := c.loadDiffCached(state.Base, path)
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
@@ -345,6 +350,14 @@ func (c *PrereviewController) CloseMoreMenu(state PrereviewState, ctx *livetempl
 func (c *PrereviewController) ToggleFileView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.FileView = !state.FileView
 	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// ToggleFileScope flips the drawer file list between changed-only
+// (default) and all tracked files. See PrereviewState.ShowAllFiles and
+// scopedFiles. Lives in the drawer, so no overflow-menu interaction.
+func (c *PrereviewController) ToggleFileScope(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.ShowAllFiles = !state.ShowAllFiles
 	return state, nil
 }
 

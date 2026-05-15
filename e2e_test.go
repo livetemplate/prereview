@@ -1096,6 +1096,95 @@ func TestE2E_FileFilter(t *testing.T) {
 	}
 }
 
+// TestE2E_FileScopeToggle verifies the changed-only default and the
+// All<->Changed toggle. The fixture has 2 changed files (edited.go M,
+// fresh.go A) and 2 unchanged (keep.go, history.go).
+func TestE2E_FileScopeToggle(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	var defCount int
+	var keepShownDefault, toggleVisible bool
+	var toggleText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('#files-drawer button.file-btn').length`, &defCount),
+		chromedp.Evaluate(`!!document.querySelector('#files-drawer button.file-btn[title="keep.go"]')`, &keepShownDefault),
+		chromedp.Evaluate(`!!document.querySelector('#files-drawer button[name="toggleFileScope"]')`, &toggleVisible),
+		chromedp.Evaluate(`(document.querySelector('#files-drawer button[name="toggleFileScope"]')||{}).textContent||''`, &toggleText),
+	); err != nil {
+		t.Fatalf("read default scope: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if defCount != 2 {
+		t.Errorf("default (changed-only): got %d files, want 2 (edited.go, fresh.go)", defCount)
+	}
+	if keepShownDefault {
+		t.Error("default scope should hide unchanged keep.go")
+	}
+	if !toggleVisible {
+		t.Fatal("scope toggle should be visible when changed<total and changed>0")
+	}
+	if !strings.Contains(toggleText, "Changed 2") {
+		t.Errorf("toggle label = %q, want it to mention 'Changed 2'", strings.TrimSpace(toggleText))
+	}
+
+	// Toggle -> all files.
+	var allCount int
+	var keepShownAll bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`#files-drawer button[name="toggleFileScope"]`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+		chromedp.Evaluate(`document.querySelectorAll('#files-drawer button.file-btn').length`, &allCount),
+		chromedp.Evaluate(`!!document.querySelector('#files-drawer button.file-btn[title="keep.go"]')`, &keepShownAll),
+		chromedp.Evaluate(`(document.querySelector('#files-drawer button[name="toggleFileScope"]')||{}).textContent||''`, &toggleText),
+	); err != nil {
+		t.Fatalf("toggle to all: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if allCount != 4 {
+		t.Errorf("all-files: got %d files, want 4", allCount)
+	}
+	if !keepShownAll {
+		t.Error("all-files scope should show unchanged keep.go")
+	}
+	if !strings.Contains(toggleText, "All 4") {
+		t.Errorf("toggle label after switch = %q, want it to mention 'All 4'", strings.TrimSpace(toggleText))
+	}
+
+	// Toggle back -> changed only.
+	var backCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`#files-drawer button[name="toggleFileScope"]`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+		chromedp.Evaluate(`document.querySelectorAll('#files-drawer button.file-btn').length`, &backCount),
+	); err != nil {
+		t.Fatalf("toggle back: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if backCount != 2 {
+		t.Errorf("after toggling back: got %d files, want 2", backCount)
+	}
+}
+
+// TestE2E_FileScopeToggleHiddenOnCleanTree verifies the toggle is
+// absent when there are no changed files (clean tree falls back to
+// all-files; nothing to switch between).
+func TestE2E_FileScopeToggleHiddenOnCleanTree(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoClean(t), 1200, 800)
+	p.waitReady()
+	var toggleVisible bool
+	var fileCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`!!document.querySelector('#files-drawer button[name="toggleFileScope"]')`, &toggleVisible),
+		chromedp.Evaluate(`document.querySelectorAll('#files-drawer button.file-btn').length`, &fileCount),
+	); err != nil {
+		t.Fatalf("read clean-tree scope: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if toggleVisible {
+		t.Error("scope toggle should be hidden on a clean tree (0 changed files)")
+	}
+	if fileCount < 2 {
+		t.Errorf("clean tree should fall back to all files; got %d", fileCount)
+	}
+}
+
 // TestE2E_MarkViewed verifies the viewed toggle flips and the row styles.
 func TestE2E_MarkViewed(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
@@ -1290,6 +1379,111 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	}
 	if delFinal == 0 {
 		t.Error("del lines should reappear after toggling back to diff mode")
+	}
+}
+
+// setupFixtureRepoBigDiff commits a 40-line file then changes one line
+// in the middle, so Diff view must fold the long unchanged runs and
+// File view shows the whole file. big.go is the only file => the scope
+// toggle is hidden and it auto-selects.
+func setupFixtureRepoBigDiff(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+
+	var b strings.Builder
+	for i := 1; i <= 40; i++ {
+		fmt.Fprintf(&b, "line %d\n", i)
+	}
+	mustWrite(t, dir, "big.go", b.String())
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed big")
+
+	// Change exactly one line in the middle.
+	b.Reset()
+	for i := 1; i <= 40; i++ {
+		if i == 20 {
+			fmt.Fprintf(&b, "line %d CHANGED\n", i)
+		} else {
+			fmt.Fprintf(&b, "line %d\n", i)
+		}
+	}
+	mustWrite(t, dir, "big.go", b.String())
+	return dir
+}
+
+// TestE2E_DiffFoldVsFullFile exercises the new Diff/File semantics:
+// Diff view = collapsed hunks with fold markers; File view = the whole
+// file, no folds, no deletions.
+func TestE2E_DiffFoldVsFullFile(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoBigDiff(t), 1200, 800)
+	p.waitReady()
+
+	lineBtns := `document.querySelectorAll('.code button.line').length`
+	foldRows := `document.querySelectorAll('.code .fold-row').length`
+	delRows := `document.querySelectorAll('.code button.line.del').length`
+
+	// Diff view (default): folded — only a few real lines, >=1 fold.
+	var diffBtns, diffFolds int
+	var foldText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.code button.line`, chromedp.ByQuery),
+		chromedp.Evaluate(lineBtns, &diffBtns),
+		chromedp.Evaluate(foldRows, &diffFolds),
+		chromedp.Evaluate(`(document.querySelector('.code .fold-label')||{}).textContent||''`, &foldText),
+	); err != nil {
+		t.Fatalf("diff-view query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if diffFolds < 1 {
+		t.Errorf("Diff view should fold long unchanged runs; got %d fold rows", diffFolds)
+	}
+	if diffBtns >= 40 || diffBtns > 15 {
+		t.Errorf("Diff view should show only the hunk (~8 lines), got %d line buttons", diffBtns)
+	}
+	if !strings.Contains(foldText, "unchanged line") {
+		t.Errorf("fold label = %q, want it to mention unchanged lines", strings.TrimSpace(foldText))
+	}
+
+	// Toggle to File view: whole file, no folds, no del.
+	var fileBtns, fileFolds, fileDels int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond),
+		chromedp.Evaluate(lineBtns, &fileBtns),
+		chromedp.Evaluate(foldRows, &fileFolds),
+		chromedp.Evaluate(delRows, &fileDels),
+	); err != nil {
+		t.Fatalf("toggle to file view: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if fileFolds != 0 {
+		t.Errorf("File view must not fold; got %d fold rows", fileFolds)
+	}
+	if fileBtns != 40 {
+		t.Errorf("File view should show all 40 lines, got %d", fileBtns)
+	}
+	if fileDels != 0 {
+		t.Errorf("File view excludes deleted lines; got %d del rows", fileDels)
+	}
+
+	// Toggle back to Diff view: folds return.
+	var backBtns, backFolds int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Sleep(250*time.Millisecond),
+		chromedp.Evaluate(lineBtns, &backBtns),
+		chromedp.Evaluate(foldRows, &backFolds),
+	); err != nil {
+		t.Fatalf("toggle back: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if backFolds < 1 {
+		t.Errorf("Diff view folds should return after toggling back; got %d", backFolds)
+	}
+	if backBtns >= 40 {
+		t.Errorf("Diff view should re-collapse; got %d line buttons", backBtns)
 	}
 }
 
