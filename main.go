@@ -47,10 +47,35 @@ func main() {
 	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	doInstallSkill := flag.Bool("install-skill", false, "install the Claude Code skill into ~/.claude/skills/prereview/ and exit")
+	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
+	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(version)
+		return
+	}
+
+	if *doUpdate {
+		exe, err := resolveExecutablePath()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		cacheDir, _ := os.UserCacheDir()
+		newTag, err := selfUpdate(context.Background(), version, exe,
+			githubAPIBase, &http.Client{Timeout: 120 * time.Second}, cacheDir, true)
+		switch {
+		case err == nil:
+			fmt.Printf("Updated prereview %s → %s. Restart prereview to use the new version.\n", version, newTag)
+		case errors.Is(err, errAlreadyCurrent):
+			fmt.Printf("prereview %s is already the latest version.\n", version)
+		case errors.Is(err, errDevBuild), errors.Is(err, errGoBuildCache), errors.Is(err, errUnwritable):
+			fmt.Println(err)
+		default:
+			slog.Error("update failed", "err", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -71,9 +96,49 @@ func main() {
 		return
 	}
 
+	if shouldAutoUpdate(version, *noUpdate) {
+		maybeAutoUpdate()
+	}
+
 	if err := run(*repo, *base, *host, *port, *skill); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
+	}
+}
+
+// maybeAutoUpdate runs the throttled on-run update check. On a newer
+// release it replaces the binary and re-execs into it (this never
+// returns on success). Every non-update outcome is non-fatal: the
+// review server must always start regardless of network state. Expected
+// "no update" sentinels are silent; a checksum mismatch is the one
+// signal worth surfacing (corrupt CDN or tampering); transport errors
+// are debug-only noise.
+func maybeAutoUpdate() {
+	exe, err := resolveExecutablePath()
+	if err != nil {
+		slog.Debug("auto-update: resolve executable", "err", err)
+		return
+	}
+	cacheDir, _ := os.UserCacheDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
+	defer cancel()
+
+	newTag, err := selfUpdate(ctx, version, exe, githubAPIBase,
+		&http.Client{Timeout: 120 * time.Second}, cacheDir, false)
+	switch {
+	case err == nil && newTag != "":
+		fmt.Fprintf(os.Stderr, "prereview: updated %s → %s, restarting…\n", version, newTag)
+		if rerr := reexec(exe, newTag); rerr != nil {
+			slog.Warn("re-exec after update failed; continuing on current version", "err", rerr)
+		}
+	case errors.Is(err, errDevBuild), errors.Is(err, errGoBuildCache),
+		errors.Is(err, errAlreadyCurrent), errors.Is(err, errThrottled),
+		errors.Is(err, errUnwritable):
+		// Expected steady-state outcomes — stay silent.
+	case errors.Is(err, errChecksumMismatch):
+		slog.Warn("auto-update aborted: release checksum mismatch", "err", err)
+	default:
+		slog.Debug("auto-update check failed", "err", err)
 	}
 }
 
