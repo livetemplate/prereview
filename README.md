@@ -22,25 +22,24 @@ This puts `prereview` on your `$PATH`.
 
 The skill lets Claude Code launch and drive a review session for you —
 just say *"review my changes"* or `/prereview` instead of running the
-binary by hand. It's a single Markdown file you copy into a skills
-directory Claude Code scans.
+binary by hand.
 
-Personal (available in every repo) — from a clone of this repo:
-
-```bash
-mkdir -p ~/.claude/skills/prereview
-cp skill/SKILL.md ~/.claude/skills/prereview/SKILL.md
-```
-
-Or fetch it directly (once the repo is published):
+**Install it with one command** (the binary embeds the skill):
 
 ```bash
-mkdir -p ~/.claude/skills/prereview
-curl -fsSL https://raw.githubusercontent.com/livetemplate/prereview/main/skill/SKILL.md \
-  -o ~/.claude/skills/prereview/SKILL.md
+prereview --install-skill
+# → Installed prereview skill → ~/.claude/skills/prereview/SKILL.md
 ```
 
-Project-scoped (commit it so everyone who clones the repo gets it):
+That writes `~/.claude/skills/prereview/SKILL.md` (+ `reference.md`),
+available in every repo. Re-run after upgrading the binary to refresh
+the skill.
+
+<details>
+<summary>Manual install (project-scoped, or without the binary)</summary>
+
+From a clone, copy it yourself — e.g. project-scoped so it ships with
+the repo for everyone who clones it:
 
 ```bash
 mkdir -p .claude/skills/prereview
@@ -49,7 +48,10 @@ cp skill/SKILL.md .claude/skills/prereview/SKILL.md
 
 > **The filename must be exactly `SKILL.md` — uppercase, case-sensitive.**
 > A lowercase `skill.md` is silently ignored and the skill never
-> registers. This is the single most common install mistake.
+> registers. `--install-skill` gets this right for you; only a hazard
+> if you copy by hand.
+
+</details>
 
 Requirements & notes:
 

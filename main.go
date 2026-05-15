@@ -26,6 +26,16 @@ import (
 //go:embed prereview.tmpl
 var prereviewTemplate string
 
+// Skill files embedded so `prereview --install-skill` can drop them
+// into ~/.claude/skills/prereview/ without the user hand-copying (and
+// fat-fingering the case-sensitive SKILL.md filename).
+//
+//go:embed skill/SKILL.md
+var skillMD string
+
+//go:embed skill/reference.md
+var skillReferenceMD string
+
 // Version set via -ldflags at build time.
 var version = "dev"
 
@@ -36,10 +46,28 @@ func main() {
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on (default 127.0.0.1, localhost-only)")
 	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	doInstallSkill := flag.Bool("install-skill", false, "install the Claude Code skill into ~/.claude/skills/prereview/ and exit")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(version)
+		return
+	}
+
+	if *doInstallSkill {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			slog.Error("install skill: resolve home", "err", err)
+			os.Exit(1)
+		}
+		path, err := installSkill(home)
+		if err != nil {
+			slog.Error("install skill", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Installed prereview skill → %s\n", path)
+		fmt.Println("Invoke it in Claude Code with /prereview (or just \"review my changes\").")
+		fmt.Println("If Claude reports it as unknown, run /reload or restart the session.")
 		return
 	}
 
@@ -188,6 +216,28 @@ func run(repo, base, host string, port int, skillMode bool) error {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil
+}
+
+// installSkill writes the embedded skill files into
+// <home>/.claude/skills/prereview/ and returns the SKILL.md path.
+// Overwrites existing files so re-running upgrades the skill. The
+// filename is the case-sensitive uppercase SKILL.md on purpose — a
+// lowercase skill.md is silently ignored by Claude Code, the exact
+// trap this command exists to prevent users from hitting.
+func installSkill(home string) (string, error) {
+	dir := filepath.Join(home, ".claude", "skills", "prereview")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	skillPath := filepath.Join(dir, "SKILL.md")
+	if err := os.WriteFile(skillPath, []byte(skillMD), 0o644); err != nil {
+		return "", fmt.Errorf("write %s: %w", skillPath, err)
+	}
+	refPath := filepath.Join(dir, "reference.md")
+	if err := os.WriteFile(refPath, []byte(skillReferenceMD), 0o644); err != nil {
+		return "", fmt.Errorf("write %s: %w", refPath, err)
+	}
+	return skillPath, nil
 }
 
 // writeTempTemplate stages the embedded template to a deterministic temp
