@@ -238,6 +238,27 @@ func ListBranches(repo string) []string {
 	return branches
 }
 
+// ListRemoteBranches returns the short names of every remote-tracking
+// branch (e.g. "origin/main"), sorted. The symbolic "<remote>/HEAD"
+// entries are skipped — they're aliases, not useful review bases.
+// Lets the base picker offer "review since I branched off origin/main"
+// without a freeform input.
+func ListRemoteBranches(repo string) []string {
+	out, err := runGit(repo, "for-each-ref", "--format=%(refname:short)", "refs/remotes/")
+	if err != nil {
+		return nil
+	}
+	var branches []string
+	for line := range strings.SplitSeq(strings.TrimRight(string(out), "\n"), "\n") {
+		if line == "" || strings.HasSuffix(line, "/HEAD") {
+			continue
+		}
+		branches = append(branches, line)
+	}
+	sort.Strings(branches)
+	return branches
+}
+
 // CurrentBranch returns the short name of the checked-out branch
 // (e.g. "main", "feature/foo"). Returns "HEAD" in a detached state
 // (which is what `git rev-parse --abbrev-ref HEAD` emits there).

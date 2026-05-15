@@ -138,9 +138,10 @@ filesystem reference.
   raw view and the CSV exactly like a line comment. A "Rendered" ⇄
   "Raw" toggle switches to the source line view. Raw HTML embedded in
   the Markdown is not rendered (safe for untrusted repos).
-- **Base picker.** The file drawer has a base dropdown (HEAD / HEAD~1
-  / HEAD~5 / each local branch) plus a "Custom ref…" expandable for
-  arbitrary refs.
+- **Base picker.** The file drawer has a base dropdown listing
+  `HEAD~1/3/5/10`, every local branch, and every remote-tracking
+  branch (e.g. `origin/main`). For anything more exotic (a specific
+  commit SHA, a tag), pass it once at launch with `--base`.
 - **File scope.** The drawer defaults to *changed files only* (vs the
   base) — the right default on a large repo. A "Changed N · show all M"
   toggle switches to the full tracked-file list when you want to

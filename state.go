@@ -127,11 +127,6 @@ type PrereviewState struct {
 	// see the source lines. Non-Markdown files ignore this.
 	RawMarkdown bool `json:"raw_markdown" lvt:"persist"`
 
-	// BaseError holds a validation message when the user submits a ref
-	// that doesn't resolve via `git rev-parse`. Cleared on the next
-	// successful SetBase. Renders inline near the picker.
-	BaseError string `json:"base_error"`
-
 	// BaseChoices populates the base-picker dropdown. Computed in
 	// Mount: ["HEAD", "HEAD~1", "HEAD~5", <local branches…>] plus the
 	// current state.Base if it isn't already in the list (so custom

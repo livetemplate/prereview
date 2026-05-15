@@ -1731,31 +1731,47 @@ func TestE2E_BasePickerSwap(t *testing.T) {
 		t.Errorf("base after dropdown swap = %q, want %q", baseAfterSwap, "HEAD~1")
 	}
 
-	// Custom-ref disclosure: open <details>, type an invalid ref, submit.
-	// BaseError surfaces, dropdown value stays at the previous successful
-	// base (HEAD~1).
-	var errAfterBad string
+	// The freeform "Custom ref…" input and the BaseError surface were
+	// removed — the dropdown is the only base control now.
+	var hasCustom, hasErr bool
+	var optsJSON string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.base-custom summary`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#base-custom-input`, chromedp.ByQuery),
-		chromedp.SendKeys(`#base-custom-input`, "definitely-not-a-ref-xyz", chromedp.ByQuery),
-		chromedp.Click(`.base-custom button[name='setBase']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.base-error`, chromedp.ByQuery),
-		chromedp.Text(`.base-error`, &errAfterBad, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.base-custom, #base-custom-input')`, &hasCustom),
+		chromedp.Evaluate(`!!document.querySelector('.base-error')`, &hasErr),
+		chromedp.Evaluate(`JSON.stringify([...document.querySelectorAll('#base-input option')].map(o=>o.value))`, &optsJSON),
 	); err != nil {
-		t.Fatalf("invalid custom ref: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("inspect base picker: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if !strings.Contains(errAfterBad, "Unknown ref") {
-		t.Errorf("invalid-ref error = %q, want substring 'Unknown ref'", errAfterBad)
+	if hasCustom {
+		t.Error("custom-ref input should be gone")
 	}
-	var baseAfterBad string
+	if hasErr {
+		t.Error("base-error surface should be gone")
+	}
+	// Dropdown must offer the expanded HEAD~N presets and the fixture's
+	// local branch. (Fixtures are local-only `git init` repos, so there
+	// are no remote-tracking entries to assert.)
+	for _, want := range []string{"HEAD", "HEAD~1", "HEAD~3", "HEAD~5", "HEAD~10", "main"} {
+		if !strings.Contains(optsJSON, `"`+want+`"`) {
+			t.Errorf("base dropdown missing %q; options=%s", want, optsJSON)
+		}
+	}
+
+	// A second dropdown swap still works (HEAD~1 -> HEAD~5).
+	var baseAfterSecond string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Value(`#base-input`, &baseAfterBad, chromedp.ByQuery),
+		chromedp.Evaluate(`(() => {
+			const s = document.querySelector('#base-input');
+			s.value = "HEAD~5";
+			s.dispatchEvent(new Event("change", {bubbles: true}));
+		})()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+		chromedp.Value(`#base-input`, &baseAfterSecond, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("read select after bad ref: %v", err)
+		t.Fatalf("second dropdown swap: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if baseAfterBad != "HEAD~1" {
-		t.Errorf("bad ref shouldn't change Base; got %q, want %q", baseAfterBad, "HEAD~1")
+	if baseAfterSecond != "HEAD~5" {
+		t.Errorf("base after second swap = %q, want HEAD~5", baseAfterSecond)
 	}
 }
 

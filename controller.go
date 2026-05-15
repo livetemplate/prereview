@@ -107,10 +107,10 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// The current state.Base is prepended if it's not a preset/branch
 	// (e.g., a typed commit SHA) so the select still shows what we're
 	// currently comparing against.
-	choices := []string{"HEAD", "HEAD~1", "HEAD~5"}
-	for _, b := range gitdiff.ListBranches(c.RepoPath) {
-		choices = append(choices, b)
-	}
+	choices := []string{"HEAD", "HEAD~1", "HEAD~3", "HEAD~5", "HEAD~10"}
+	choices = append(choices, gitdiff.ListBranches(c.RepoPath)...)
+	choices = append(choices, gitdiff.ListRemoteBranches(c.RepoPath)...)
+	choices = uniqueStrings(choices)
 	if !slices.Contains(choices, state.Base) {
 		choices = append([]string{state.Base}, choices...)
 	}
@@ -157,26 +157,21 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	return state, nil
 }
 
-// SetBase changes the comparison ref. Accepts any string git rev-parse
-// would resolve — branch names, HEAD~N, commit SHAs, tags. Invalid refs
-// surface as state.BaseError without mutating state.Base, so the user's
-// previous good base remains active.
+// SetBase changes the comparison ref. The picker is a dropdown of refs
+// we enumerated this Mount (HEAD~N presets + local/remote branches), so
+// the value is already a valid ref. The rev-parse check stays as cheap
+// defense against a race (a branch deleted between Mount and select);
+// on a miss we just no-op and keep the current base.
 //
 // On success, rebuilds the file list against the new base. If the
 // previously selected file no longer exists in the new file list,
 // SelectedFile is cleared.
 func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	ref := strings.TrimSpace(ctx.GetString("ref"))
-	if ref == "" {
-		state.BaseError = "Type a ref (HEAD, HEAD~1, main, …)"
-		return state, nil
-	}
-	if !gitdiff.IsValidRef(c.RepoPath, ref) {
-		state.BaseError = fmt.Sprintf("Unknown ref: %q", ref)
+	if ref == "" || !gitdiff.IsValidRef(c.RepoPath, ref) {
 		return state, nil
 	}
 	state.Base = ref
-	state.BaseError = ""
 
 	files, err := gitdiff.ListFiles(c.RepoPath, state.Base)
 	if err != nil {
@@ -765,6 +760,22 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 }
 
 // fileInList reports whether path appears among entries.
+// uniqueStrings returns s with duplicates removed, preserving first-seen
+// order. Used to dedupe base-picker choices (a branch can coincide with
+// a HEAD~N preset, or a local and remote branch share a short name).
+func uniqueStrings(s []string) []string {
+	seen := make(map[string]struct{}, len(s))
+	out := make([]string, 0, len(s))
+	for _, v := range s {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
 func fileInList(entries []gitdiff.FileEntry, path string) bool {
 	for _, e := range entries {
 		if e.Path == path {
