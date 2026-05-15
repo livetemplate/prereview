@@ -24,6 +24,17 @@ type FileDiff struct {
 	// container's scrollable extent — expensive on big files (950+
 	// rows) and the dominant cost in perceived vertical-scroll lag.
 	MaxLineChars int
+	// MarkdownBlocks is the rendered-Markdown view of the current
+	// (new-side) file: top-level blocks tagged with their source line
+	// range. Populated only for .md/.markdown paths; nil otherwise.
+	// Computed once per load and cached with the FileDiff.
+	MarkdownBlocks []MarkdownBlock
+}
+
+// IsMarkdownPath reports whether path is a Markdown file by extension.
+func IsMarkdownPath(path string) bool {
+	p := strings.ToLower(path)
+	return strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".markdown")
 }
 
 // DiffLine is one rendered line in the viewer. Exactly one of OldNum / NewNum
@@ -138,6 +149,22 @@ func highlightLines(fd *FileDiff) {
 		}
 	}
 	fd.MaxLineChars = maxChars
+	// Rendered-Markdown view: reconstruct the new-side (current) file
+	// from the diff lines and render its blocks. Done here (the uniform
+	// post-load hook) so every load path gets it and it's cached with
+	// the FileDiff. Files >1MB never reach here (LoadDiff short-circuits
+	// earlier), so goldmark cost is bounded; unaffected by the
+	// highlight byte cap below since rendering is cheap.
+	if IsMarkdownPath(fd.Path) {
+		var src strings.Builder
+		for i := range fd.Lines {
+			if fd.Lines[i].NewNum > 0 {
+				src.WriteString(fd.Lines[i].Content)
+				src.WriteByte('\n')
+			}
+		}
+		fd.MarkdownBlocks = RenderMarkdownBlocks([]byte(src.String()))
+	}
 	if totalBytes > maxHighlightTotalBytes {
 		// Too big to highlight cheaply — leave HighlightedContent empty;
 		// the template falls back to the raw Content. Scroll-width

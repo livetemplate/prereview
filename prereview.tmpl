@@ -648,6 +648,42 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   flex: 1; min-width: 0; padding-left: 0.35rem; min-height: 1em;
 }
 
+/* Rendered-Markdown view. Each .md-block is a click target that
+   selects its source line range (SelectBlock). The rendered HTML
+   lives in .md-rendered; inline comment cards / the composer are
+   siblings inside .md-block so they sit BELOW the block, not inside
+   the clickable area. */
+.md-view { padding: 0.6rem 0.8rem 2rem; max-width: 60rem; }
+.md-block { margin: 0 0 0.2rem; border-radius: 6px; }
+.md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
+.md-rendered {
+  cursor: pointer; padding: 0.15rem 0.4rem; border-radius: 6px;
+  border: 1px solid transparent;
+}
+.md-rendered:hover { background: var(--pico-card-sectioning-background-color); border-color: var(--pico-muted-border-color); }
+/* Tighten Pico's default block spacing inside rendered Markdown so a
+   doc reads as one flow rather than widely-spaced cards, and make code
+   wrap instead of forcing horizontal scroll (consistent with the diff
+   viewer). Scoped to .md-rendered so it can't leak to app chrome. */
+.md-rendered > :first-child { margin-top: 0; }
+.md-rendered > :last-child { margin-bottom: 0; }
+.md-rendered :is(h1,h2,h3,h4,h5,h6) { margin: 0.6em 0 0.3em; line-height: 1.25; }
+.md-rendered p, .md-rendered ul, .md-rendered ol, .md-rendered blockquote, .md-rendered table { margin: 0.4em 0; }
+.md-rendered pre {
+  background: var(--pico-card-sectioning-background-color);
+  padding: 0.5rem 0.6rem; border-radius: 6px; overflow-x: auto;
+  font-size: 0.85em;
+}
+.md-rendered code { word-break: break-word; }
+.md-rendered pre code { word-break: normal; }
+.md-rendered img { max-width: 100%; height: auto; }
+.md-rendered blockquote {
+  border-left: 3px solid var(--pico-muted-border-color);
+  padding-left: 0.7rem; color: var(--pico-muted-color);
+}
+.md-rendered table { display: block; overflow-x: auto; border-collapse: collapse; }
+.md-rendered th, .md-rendered td { border: 1px solid var(--pico-muted-border-color); padding: 0.2rem 0.45rem; }
+
 /* Inline comment cards — between the diff lines */
 .inline-comment {
   margin: 0.25rem 0.4rem; padding: 0.35rem 0.5rem;
@@ -820,7 +856,8 @@ main.viewer { overscroll-behavior: contain; }
   <div class="toolbar-inline">
     <small class="auto-saved-long">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed</small>
     {{if .CurrentDiff}}
-    <form method="POST"><button type="submit" name="toggleFileView" class="chip view-chip{{if .FileView}} is-on{{end}}" title="{{if .FileView}}Show diff overlay{{else}}Hide diff overlay — view file as-is{{end}}">{{if .FileView}}File{{else}}Diff{{end}}</button></form>
+    {{if .IsMarkdown}}<form method="POST"><button type="submit" name="toggleRawMarkdown" class="chip view-chip{{if not .RawMarkdown}} is-on{{end}}" title="{{if .RawMarkdown}}Show rendered Markdown{{else}}Show raw Markdown source{{end}}">{{if .RawMarkdown}}Raw{{else}}Rendered{{end}}</button></form>{{end}}
+    {{if not .ShowRenderedMarkdown}}<form method="POST"><button type="submit" name="toggleFileView" class="chip view-chip{{if .FileView}} is-on{{end}}" title="{{if .FileView}}Show diff overlay{{else}}Hide diff overlay — view file as-is{{end}}">{{if .FileView}}File{{else}}Diff{{end}}</button></form>{{end}}
     {{end}}
     {{if gt (len .Comments) 0}}
     <form method="POST"><button type="submit" name="toggleCommentList" class="chip" title="View all comments">{{len .Comments}} 💬</button></form>
@@ -868,6 +905,21 @@ main.viewer { overscroll-behavior: contain; }
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
   <div class="menu-info">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
   {{if .CurrentDiff}}
+  {{if .IsMarkdown}}
+  <form method="POST">
+    <button type="submit" name="toggleRawMarkdown" class="menu-item{{if not .RawMarkdown}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">
+        {{if .RawMarkdown}}
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{else}}
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M9 9h4M9 12h6M9 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{end}}
+      </span>
+      <span class="menu-label">{{if .RawMarkdown}}Render Markdown{{else}}View raw source{{end}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{if not .ShowRenderedMarkdown}}
   <form method="POST">
     <button type="submit" name="toggleFileView" class="menu-item{{if .FileView}} is-on{{end}}" role="menuitem">
       <span class="menu-icon">
@@ -882,6 +934,7 @@ main.viewer { overscroll-behavior: contain; }
       <span class="menu-label">{{if .FileView}}Show diff{{else}}View file{{end}}</span>
     </button>
   </form>
+  {{end}}
   {{end}}
   {{if gt (len .Comments) 0}}
   <form method="POST">
@@ -1063,6 +1116,15 @@ main.viewer { overscroll-behavior: contain; }
   </header>
   {{if .IsBinary}}
   <p class="empty">Binary file — cannot display.</p>
+  {{else if $.ShowRenderedMarkdown}}
+  {{/* Rendered-Markdown view. Each top-level block is one clickable
+       unit carrying its REAL source line range (data-from/data-to);
+       SelectBlock turns that into the normal line-anchored selection,
+       so a comment made here round-trips with the raw line view and
+       the CSV — nothing is renumbered. Comments/composer interleave
+       by source line the same way the line view does, just matched to
+       a block's [StartLine,EndLine] span. */}}
+  <div class="md-view" data-key="md-{{.Path}}">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="MB-{{$bs}}-{{$be}}"><div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>{{end}}</div>
   {{else if .Lines}}
   {{/* data-key by path is load-bearing, NOT just a scroll-reset hack:
        per-row keys are "L<old>-<new>" which COLLIDE across files

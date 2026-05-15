@@ -361,6 +361,15 @@ func (c *PrereviewController) ToggleFileScope(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// ToggleRawMarkdown flips a Markdown file between the rendered view
+// (default) and the raw line view. Closes the overflow menu so the
+// effect is immediately visible on mobile.
+func (c *PrereviewController) ToggleRawMarkdown(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.RawMarkdown = !state.RawMarkdown
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
 // JumpToComment closes the all-comments view, selects the comment's
 // file, and sets ScrollToCommentID so the framework's
 // `lvt-fx:scroll="into-view"` directive on the matching inline comment
@@ -439,6 +448,24 @@ func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate
 		state.SelectionEnd = n
 		state.SelectionSide = side
 	}
+	return state, nil
+}
+
+// SelectBlock selects a whole rendered-Markdown block in one click.
+// A block IS a range, so unlike SelectLine's two-click anchor/extend,
+// this sets the full source line span at once (data-from/data-to are
+// the block's real source lines). The existing composer/AddComment
+// flow then anchors the comment to those lines, so it round-trips
+// with the raw view and the CSV unchanged.
+func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	from := ctx.GetInt("from")
+	to := ctx.GetInt("to")
+	if from <= 0 || to < from {
+		return state, fmt.Errorf("selectBlock: invalid range from=%d to=%d", from, to)
+	}
+	state.SelectionAnchor = from
+	state.SelectionEnd = to
+	state.SelectionSide = "new"
 	return state, nil
 }
 

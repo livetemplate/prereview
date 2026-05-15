@@ -130,6 +130,14 @@ filesystem reference.
   diff at all — no add/del coloring, deletions omitted. Line numbers
   are identical in both modes, so a comment made in one resolves in
   the other.
+- **Markdown renders by default.** `.md`/`.markdown` files show
+  formatted (headings, lists, code, tables) instead of raw lines.
+  You can still comment: tap a rendered block (heading, paragraph,
+  list, code fence…) and it selects that block's *source* line range —
+  the comment anchors to real line numbers, so it round-trips with the
+  raw view and the CSV exactly like a line comment. A "Rendered" ⇄
+  "Raw" toggle switches to the source line view. Raw HTML embedded in
+  the Markdown is not rendered (safe for untrusted repos).
 - **Base picker.** The file drawer has a base dropdown (HEAD / HEAD~1
   / HEAD~5 / each local branch) plus a "Custom ref…" expandable for
   arbitrary refs.

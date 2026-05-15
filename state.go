@@ -121,6 +121,12 @@ type PrereviewState struct {
 	// reviewing mode).
 	FileView bool `json:"file_view" lvt:"persist"`
 
+	// RawMarkdown shows a .md/.markdown file as the raw line view
+	// instead of the rendered default. Persisted per-user. Defaults
+	// false: Markdown renders by default; the user toggles to raw to
+	// see the source lines. Non-Markdown files ignore this.
+	RawMarkdown bool `json:"raw_markdown" lvt:"persist"`
+
 	// BaseError holds a validation message when the user submits a ref
 	// that doesn't resolve via `git rev-parse`. Cleared on the next
 	// successful SetBase. Renders inline near the picker.
@@ -223,6 +229,29 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 // Diff view (git's default).
 const diffContextLines = 3
 
+// IsMarkdown reports whether the selected file is Markdown.
+func (s PrereviewState) IsMarkdown() bool {
+	return s.CurrentDiff != nil && gitdiff.IsMarkdownPath(s.CurrentDiff.Path)
+}
+
+// ShowRenderedMarkdown is true when the viewer should show the
+// rendered-Markdown blocks instead of the line view: a Markdown file,
+// not toggled to raw, with at least one rendered block. Zero-arg so
+// the template can branch on `$.ShowRenderedMarkdown`.
+func (s PrereviewState) ShowRenderedMarkdown() bool {
+	return s.IsMarkdown() && !s.RawMarkdown && len(s.CurrentDiff.MarkdownBlocks) > 0
+}
+
+// RenderedMarkdown is the block list for the rendered view (nil unless
+// ShowRenderedMarkdown). Each block carries its real source line range
+// so comments stay line-accurate across rendered and raw views.
+func (s PrereviewState) RenderedMarkdown() []gitdiff.MarkdownBlock {
+	if !s.ShowRenderedMarkdown() {
+		return nil
+	}
+	return s.CurrentDiff.MarkdownBlocks
+}
+
 // FilteredFiles returns the scoped files (see scopedFiles) further
 // narrowed by FileFilter (case-insensitive substring match against
 // path). Zero-arg so the framework pre-computes it once per render and
@@ -310,6 +339,28 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 			continue
 		}
 		out[c.ToLine] = append(out[c.ToLine], c)
+	}
+	return out
+}
+
+// FileComments returns the selected file's visible comments (honoring
+// ShowResolved) as a flat slice. Zero-arg so the rendered-Markdown
+// view can, per block, show the comments whose ToLine falls in that
+// block's source range — the line-view path uses CommentsByEndLine
+// (exact-line map) instead.
+func (s PrereviewState) FileComments() []Comment {
+	if s.SelectedFile == "" {
+		return nil
+	}
+	var out []Comment
+	for _, c := range s.Comments {
+		if c.File != s.SelectedFile {
+			continue
+		}
+		if c.Resolved && !s.ShowResolved {
+			continue
+		}
+		out = append(out, c)
 	}
 	return out
 }

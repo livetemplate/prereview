@@ -1487,6 +1487,135 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	}
 }
 
+// setupFixtureRepoMarkdown commits a small Markdown doc then edits one
+// line so it's the single changed file (auto-selected, scope toggle
+// hidden). Blocks: h1=line1, paragraph=line3, list=lines5-6,
+// code-fence=lines8-10.
+func setupFixtureRepoMarkdown(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+
+	const base = "# Doc Title\n\nIntro paragraph here.\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n"
+	mustWrite(t, dir, "docs.md", base)
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed docs")
+
+	// Edit the paragraph line so docs.md is a changed file.
+	mustWrite(t, dir, "docs.md", "# Doc Title\n\nIntro paragraph here. EDITED\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n")
+	return dir
+}
+
+// TestE2E_MarkdownRenderAndComment covers: Markdown renders by default;
+// raw <script> is not passed through; clicking a rendered block opens
+// the composer and the saved comment anchors to that block's real
+// source lines; the comment round-trips between rendered and raw.
+func TestE2E_MarkdownRenderAndComment(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdown(t), 1200, 800)
+	p.waitReady()
+
+	// Rendered by default.
+	var hasMdView, hasH1, hasRawChip, hasDiffChip bool
+	var scriptCount, lineBtns int
+	var h1Text, chipText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView),
+		chromedp.Evaluate(`!!document.querySelector('.md-rendered h1')`, &hasH1),
+		chromedp.Evaluate(`(document.querySelector('.md-rendered h1')||{}).textContent||''`, &h1Text),
+		chromedp.Evaluate(`document.querySelectorAll('.md-rendered script').length`, &scriptCount),
+		chromedp.Evaluate(`document.querySelectorAll('.code button.line').length`, &lineBtns),
+		chromedp.Evaluate(`!!document.querySelector('button[name="toggleRawMarkdown"]')`, &hasRawChip),
+		chromedp.Evaluate(`(document.querySelector('button[name="toggleRawMarkdown"]')||{}).textContent||''`, &chipText),
+		chromedp.Evaluate(`!!document.querySelector('button[name="toggleFileView"]')`, &hasDiffChip),
+	); err != nil {
+		t.Fatalf("render-default query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !hasMdView || !hasH1 {
+		t.Fatalf("Markdown should render by default (md-view=%v h1=%v)", hasMdView, hasH1)
+	}
+	if !strings.Contains(h1Text, "Doc Title") {
+		t.Errorf("h1 = %q, want 'Doc Title'", h1Text)
+	}
+	if scriptCount != 0 {
+		t.Errorf("raw <script> must not render; got %d", scriptCount)
+	}
+	if lineBtns != 0 {
+		t.Errorf("rendered view must not show the line viewer; got %d line buttons", lineBtns)
+	}
+	if !hasRawChip || !strings.Contains(chipText, "Rendered") {
+		t.Errorf("expected a 'Rendered' toggle chip; got present=%v text=%q", hasRawChip, chipText)
+	}
+	if hasDiffChip {
+		t.Error("Diff/File chip should be hidden while rendered Markdown is shown")
+	}
+
+	// Click the first rendered block (the h1, source line 1) and comment.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.md-block .md-rendered').click()`, nil),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "heading needs work", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.md-block .inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("comment on rendered block: %v\nstderr: %s", err, p.stderr.String())
+	}
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected header + 1 row, got %d: %v", len(rows), rows)
+	}
+	r := rows[1]
+	if r[1] != "docs.md" {
+		t.Errorf("file = %q, want docs.md", r[1])
+	}
+	if r[2] != "1" || r[3] != "1" {
+		t.Errorf("from/to = %q/%q, want 1/1 (the h1 block's source line)", r[2], r[3])
+	}
+	if !strings.Contains(r[5], "heading needs work") {
+		t.Errorf("body = %q, missing comment text", r[5])
+	}
+
+	// Toggle to raw: line view appears, comment round-trips to line 1.
+	var rawHasMdView bool
+	var rawLineBtns int
+	var rawHasComment bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Sleep(350*time.Millisecond),
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &rawHasMdView),
+		chromedp.Evaluate(`document.querySelectorAll('.code button.line').length`, &rawLineBtns),
+		chromedp.Evaluate(`!!document.querySelector('.code .inline-comment')`, &rawHasComment),
+	); err != nil {
+		t.Fatalf("toggle to raw: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if rawHasMdView {
+		t.Error("raw mode should not show .md-view")
+	}
+	if rawLineBtns == 0 {
+		t.Error("raw mode should show the line viewer")
+	}
+	if !rawHasComment {
+		t.Error("the comment made in rendered mode should appear in raw mode (same source line)")
+	}
+
+	// Toggle back to rendered: comment shows under its block again.
+	var backHasMdView, backHasComment bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &backHasMdView),
+		chromedp.Evaluate(`!!document.querySelector('.md-block .inline-comment')`, &backHasComment),
+	); err != nil {
+		t.Fatalf("toggle back to rendered: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !backHasMdView || !backHasComment {
+		t.Errorf("rendered mode should show the comment under its block (mdView=%v comment=%v)", backHasMdView, backHasComment)
+	}
+}
+
 // TestE2E_AutoSelectFirstFile verifies that landing on the page with
 // no SelectedFile (initial connect) auto-loads the diff for the first
 // file in the drawer, so the right pane is populated on first paint
