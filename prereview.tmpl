@@ -42,7 +42,26 @@ html, body { height: 100%; margin: 0; font-size: 14px; overflow-x: hidden; }
    sticky file-head detaches from the viewer (file-head ends up under the
    top bar, defeating the point of sticky positioning). */
 body { padding: 0; display: flex; flex-direction: column; height: 100dvh; }
-.layout { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* livetemplate wraps the entire page content in an unstyled
+   data-lvt-id block. As a normal block it broke the flex chain:
+   .layout (flex:1) sized against this content-height wrapper instead
+   of the 100dvh page body, so .layout/main.viewer grew to the full
+   diff height (~12000px) and nothing scrolled ("scroll locked on
+   desktop").
+
+   Fix: display:contents removes the wrapper's box entirely (the DOM
+   node stays for livetemplate's delegation/morphdom). header.bar +
+   .layout then become DIRECT flex children of the 100dvh body, so
+   .layout's flex:1 binds to the body height and main.viewer becomes
+   the scroll viewport. We deliberately do NOT make the wrapper a
+   flex container: doing so created a new flex formatting context
+   whose default min-width:auto (= min-content of the widest code
+   line) made .layout overflow the viewport horizontally — a bug that
+   reproduced in Safari and Chrome device mode. display:contents has
+   no box, so there is no such context and the horizontal axis
+   behaves exactly as it did before this rule existed. */
+body > [data-lvt-id] { display: contents; }
+.layout { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 
 /* Top bar — sticky on mobile, becomes header row on desktop */
 header.bar {
@@ -451,7 +470,15 @@ dialog#files-drawer form { margin: 0; }
    button.line inside .code doesn't push article past the viewer's width.
    Without this, the file-head inherits the wider article width and gets
    clipped at the left edge of the viewport (negative x). */
-main.viewer { flex: 1; overflow-y: auto; padding: 0; min-width: 0; }
+/* min-height: 0 is load-bearing: a flex item's default min-height is
+   `auto` (= its content's min-content height). Without overriding it,
+   `flex: 1` can't shrink main.viewer below the full diff height, so it
+   grows to ~12000px, overflow-y:auto has nothing to scroll, and the
+   page becomes one giant unscrollable column (the "scroll locked on
+   desktop" + "janky vertical" regression). .layout already sets
+   min-height:0; main.viewer needs it too for the flex chain to bound
+   the scroll viewport to the actual screen. */
+main.viewer { flex: 1; min-height: 0; overflow-y: auto; padding: 0; min-width: 0; }
 main.viewer > article { margin: 0; padding: 0; min-width: 0; max-width: 100%; }
 /* `main.viewer > article > header` beats Pico's `article > header` rules
    so our explicit padding isn't dropped — the filename would otherwise
@@ -480,7 +507,13 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    stack with per-line <button> blocks. */
 .code {
   background: var(--pico-card-background-color);
-  padding: 0; margin: 0; overflow-x: auto;
+  /* Lines WRAP (see .code .content) instead of scrolling horizontally.
+     A focusable button.line wider than this container made mobile
+     Safari/Chrome device-mode scroll .code sideways on focus, leaving
+     every line (and the inline composer) clipped on the left. Wrapping
+     removes horizontal scroll entirely, so that whole class of bug
+     (offset/truncated content) cannot occur. */
+  padding: 0; margin: 0; overflow-x: hidden;
   font-size: 0.8rem; line-height: 1.2;
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
@@ -511,37 +544,24 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    scroll-width of `.code`. */
 .code .line-row {
   line-height: 1.2;
-  /* Rows are NOT forced to the diff's max width. Previously every row
-     got `min-width: var(--diff-min-width)` so .code's overflow-x saw
-     the full extent — but that made all 1000+ rows as wide as the
-     single widest line (often 20000px+ for one pathological line),
-     bloating paint/composite on scroll. Instead a single 0-height
-     `.code-sentinel` element (rendered once after the rows) carries
-     that width; .code's scrollWidth comes from the sentinel while
-     each row stays its natural content width. The wide line's button
-     still overflows its row visibly and scrolls into view because
-     .code is the scroll container and the sentinel keeps the scroll
-     extent open. */
   min-width: 100%;
 }
 .code .line-row:not(:has(.composer)):not(:has(.inline-comment)) {
   content-visibility: auto;
   contain-intrinsic-size: auto 16px;
 }
-/* Zero-height spacer pinned to the diff's known pixel width. This,
-   not the rows, is what gives .code its horizontal scroll extent. */
-.code .code-sentinel {
-  height: 0; overflow: hidden;
-  width: var(--diff-min-width, 100%);
-}
+/* Legacy horizontal-scroll-extent spacer. Lines wrap now, so .code
+   has no horizontal scroll and this must contribute no width. */
+.code .code-sentinel { display: none; }
 .code button.line {
   display: flex; padding: 0; margin: 0; min-height: 0;
-  /* Line sizes to its content but never narrower than the viewer width.
-     This way .code's horizontal scrollable extent = widest line (not
-     viewer width), so the scrollbar clamps to actual content. */
-  width: max-content; min-width: 100%;
+  /* Exactly the container width — never wider. A focusable element
+     wider than .code is what let mobile browsers scroll .code
+     sideways on focus. width:100% + wrapping content keeps the
+     focusable box inside the viewport. */
+  width: 100%;
   border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
-  text-align: left; align-items: baseline; line-height: 1.2;
+  text-align: left; align-items: flex-start; line-height: 1.2;
 }
 .code button.line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
 .code button.line.add { background: var(--pr-add-bg); color: var(--pr-add); }
@@ -565,13 +585,18 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   flex: 0 0 5.5ch; color: var(--pico-muted-color); user-select: none;
   text-align: right; padding-right: 0.4rem; font-size: 0.75rem;
   white-space: nowrap;
-  /* Stick to the left of the scrollable .code container so the line
-     numbers stay visible while the content scrolls horizontally. */
   position: sticky; left: 0; z-index: 1;
   background: var(--pico-card-background-color);
   border-right: 1px solid var(--pico-muted-border-color);
 }
-.code .content { white-space: pre; flex: 1; padding-left: 0.35rem; min-height: 1em; }
+.code .content {
+  /* pre-wrap keeps indentation/whitespace but wraps long lines;
+     overflow-wrap:anywhere breaks unbreakable tokens (URLs, long
+     strings) so they can't overflow. min-width:0 lets this flex
+     child shrink so wrapping actually engages. */
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  flex: 1; min-width: 0; padding-left: 0.35rem; min-height: 1em;
+}
 
 /* Inline comment cards — between the diff lines */
 .inline-comment {
