@@ -103,6 +103,16 @@ func LoadDiff(repo, base, path string) (*FileDiff, error) {
 	return fd, nil
 }
 
+// maxHighlightTotalBytes caps the total plain content we'll syntax-
+// highlight for a file. Chroma inflates source ~5x in HTML
+// (`<span class="kn">` per token); past this the highlighted payload
+// + client parse/diff-apply dominates file-switch latency. 40 KB of
+// plain source covers the vast majority of hand-written files; only
+// genuinely huge ones (prereview.tmpl at 52 KB, vendored bundles,
+// generated code) fall back to plain text. Computing MaxLineChars
+// still happens so horizontal scroll-width stays correct.
+const maxHighlightTotalBytes = 40 << 10 // 40 KB
+
 // highlightLines fills DiffLine.HighlightedContent for each non-binary
 // line in the diff and computes fd.MaxLineChars. Runs after
 // parsing/loading so all three paths (parseUnifiedDiff, loadFileAsCtx,
@@ -110,19 +120,30 @@ func LoadDiff(repo, base, path string) (*FileDiff, error) {
 //
 // Uses the bulk HighlightLines helper so the chroma tokenizer
 // initialises once for the whole file rather than once per line.
+// Skips highlighting entirely when total content exceeds
+// maxHighlightTotalBytes — the plain-text fallback in the template
+// renders Content directly, keeping huge-file load fast.
 func highlightLines(fd *FileDiff) {
 	if fd == nil || fd.IsBinary || len(fd.Lines) == 0 {
 		return
 	}
 	contents := make([]string, len(fd.Lines))
 	maxChars := 0
+	totalBytes := 0
 	for i := range fd.Lines {
 		contents[i] = fd.Lines[i].Content
+		totalBytes += len(fd.Lines[i].Content)
 		if n := len(fd.Lines[i].Content); n > maxChars {
 			maxChars = n
 		}
 	}
 	fd.MaxLineChars = maxChars
+	if totalBytes > maxHighlightTotalBytes {
+		// Too big to highlight cheaply — leave HighlightedContent empty;
+		// the template falls back to the raw Content. Scroll-width
+		// (MaxLineChars) is already set above.
+		return
+	}
 	highlighted := HighlightLines(fd.Path, contents)
 	for i := range fd.Lines {
 		if i < len(highlighted) {
