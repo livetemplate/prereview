@@ -106,6 +106,20 @@ header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: e
 .chip.view-chip.is-on {
   background: #fef3c7; --pico-color: #92400e; color: var(--pico-color); border-color: #d97706;
 }
+/* Pico's `button:hover` re-sets --pico-color to its inverse (white),
+   which made the chip label vanish on hover (light text on the chip's
+   light background). Re-assert the readable color per state on hover
+   and add a subtle affordance via the border. */
+.chip:hover, .chip:focus-visible {
+  --pico-color: var(--pico-h1-color); color: var(--pico-color);
+  border-color: var(--pico-primary); background: var(--pico-card-sectioning-background-color);
+}
+.chip.resolved.is-on:hover, .chip.resolved.is-on:focus-visible {
+  --pico-color: var(--pr-add); color: var(--pico-color); background: var(--pr-add-bg);
+}
+.chip.view-chip.is-on:hover, .chip.view-chip.is-on:focus-visible {
+  --pico-color: #92400e; color: var(--pico-color); background: #fef3c7;
+}
 
 /* 3-dots overflow menu trigger — mobile only. The menu itself uses the
    same state-driven open/close pattern as #files-drawer: a CSS class
@@ -651,13 +665,17 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   min-height: 3rem; margin: 0.25rem 0; font-size: 16px; width: 100%;
   padding: 0.35rem 0.45rem; line-height: 1.4;
 }
-.composer .composer-add { margin: 0; display: flex; flex-direction: column; }
-.composer .composer-cancel { margin: 0.3rem 0 0 0; display: flex; }
-.composer .c-actions { display: flex; gap: 0.3rem; justify-content: flex-end; align-items: center; }
+.composer .composer-add { margin: 0; display: block; }
+/* Save and Cancel submit different actions so they must live in
+   separate <form>s. They're associated to their forms via the HTML
+   `form=` attribute and share one .c-actions row so they sit on the
+   same horizontal level. composer-cancel is just a submit target. */
+.composer .composer-cancel { display: none; }
+.composer .c-actions { display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.4rem; }
 .composer .save-btn { margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 30px; }
 .composer .cancel-btn {
   margin: 0; padding: 0.3rem 0.7rem; font-size: 0.78rem; min-height: 28px;
-  flex: 1;
+  flex: 0 0 auto;
   background: none; border: 1px solid var(--pico-muted-border-color);
   color: var(--pico-muted-color);
 }
@@ -711,18 +729,33 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   }
   main.viewer { flex: 1; padding: 0; min-width: 0; }
   .composer { position: static; box-shadow: none; }
-  .code { font-size: 0.85rem; }
+  /* Desktop has the space — the mobile sizes are cramped on a large
+     screen. Bump the code and the chrome up to comfortable reading. */
+  .code { font-size: 0.95rem; line-height: 1.45; }
+  .code .gutter { font-size: 0.85rem; }
+  main.viewer > article > header.file-head strong { font-size: 1.05rem; }
+  main.viewer > article > header.file-head small { font-size: 0.85rem; }
+  /* The filename already headlines the diff (.file-head) and the
+     all-comments view (.ac-head). Showing it again in the top bar is
+     pure duplication on desktop — drop just the filename, keep the
+     "pick a file" / "all comments" prompts. */
+  header.bar .title-file { display: none; }
+  /* Toolbar controls: mobile icon/text sizes look tiny on desktop. */
+  header.bar button { padding: 0.4rem 0.75rem; font-size: 0.9rem; min-height: 38px; }
+  header.bar .nav-prev button, header.bar .nav-next button { min-width: 38px; min-height: 38px; }
+  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 20px; height: 20px; }
+  .chip { font-size: 0.9rem; padding: 0.4rem 0.8rem; }
+  .toolbar-inline { gap: 0.55rem; }
+  .toolbar-inline .auto-saved-long { font-size: 0.9rem; }
   /* Desktop has room — render chips inline and hide the overflow menu. */
   .toolbar-inline { display: inline-flex; }
   .more-trigger { display: none; }
   .more-menu, .more-menu-backdrop { display: none !important; }
   /* Pico defaults buttons to width:100% so they fill mobile forms.
      On desktop the composer becomes a card next to the diff — full-
-     width Save/Cancel look comically large. Pin them to content size
-     and right-align inside their flex containers. */
+     width Save/Cancel look comically large. Pin them to content size. */
   .composer .save-btn,
   .composer .cancel-btn { width: auto; flex: 0 0 auto; }
-  .composer .composer-cancel { justify-content: flex-end; }
 }
 
 /* Anchor the empty-state to the viewer center so the user can't scroll
@@ -743,7 +776,7 @@ main.viewer { overscroll-behavior: contain; }
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
   </form>
   <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}<small>All comments ({{len .Comments}})</small>{{else if .CurrentDiff}}{{.CurrentDiff.Path}}{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}</span>
+    <span class="title-main">{{if .ShowAllComments}}<small>All comments ({{len .Comments}})</small>{{else if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}</span>
   </div>
   {{/* Desktop-only inline chip group. On mobile these same actions live
        in the 3-dots overflow menu below — single source of truth, just
@@ -992,7 +1025,7 @@ main.viewer { overscroll-behavior: contain; }
        Measured: this costs no extra bandwidth — livetemplate resends
        {{range}} statics on a full content swap regardless of the key.
        Bonus: a fresh element also starts at scroll (0,0). */}}
-  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range .Lines}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea><div class="c-actions"><button type="submit" name="addComment" class="save-btn">Save</button></div></form><form method="POST" class="composer-cancel"><button type="submit" name="clearSelection" class="cancel-btn">Cancel</button></form></div>{{end}}</div>
+  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range .Lines}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>
 {{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
