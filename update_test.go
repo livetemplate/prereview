@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // releaseArchive builds a real release archive for the running platform
@@ -255,6 +256,44 @@ func TestSelfUpdate_Throttled(t *testing.T) {
 	}
 	if hits.Load() != 1 {
 		t.Errorf("forced run should query once; hits = %d", hits.Load())
+	}
+}
+
+// TestSelfUpdate_NotThrottledAfterInterval pins that once the cache is
+// older than checkInterval, a normal (force=false) run re-checks
+// GitHub instead of short-circuiting — i.e. the throttle window is
+// honoured and bounded by checkInterval (referenced directly so this
+// test tracks any future change to the interval).
+func TestSelfUpdate_NotThrottledAfterInterval(t *testing.T) {
+	srv, hits, _, _ := releaseServer(t, "v9.9.9", "new", serverOpts{})
+	target := filepath.Join(t.TempDir(), "prereview")
+	seedFile(t, target, "old")
+	cacheDir := t.TempDir()
+
+	// Write a cache stamped older than the throttle window.
+	stale, err := json.Marshal(updateCache{
+		CheckedAt: time.Now().Add(-2 * checkInterval),
+		Latest:    "v0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("marshal cache: %v", err)
+	}
+	p := updateCachePath(cacheDir)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatalf("mkdir cache: %v", err)
+	}
+	if err := os.WriteFile(p, stale, 0o644); err != nil {
+		t.Fatalf("write stale cache: %v", err)
+	}
+
+	// current == server tag → it must have actually queried GitHub
+	// (errAlreadyCurrent), proving the stale cache did NOT throttle.
+	_, err = selfUpdate(context.Background(), "9.9.9", target, srv.URL, srv.Client(), cacheDir, false)
+	if !errors.Is(err, errAlreadyCurrent) {
+		t.Fatalf("stale cache must not throttle; err = %v, want errAlreadyCurrent", err)
+	}
+	if hits.Load() != 1 {
+		t.Errorf("expected one GitHub query after the interval elapsed; hits = %d", hits.Load())
 	}
 }
 

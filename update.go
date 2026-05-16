@@ -32,7 +32,7 @@ var (
 	errDevBuild         = errors.New("not a released build (version is \"dev\"); install a release from https://github.com/livetemplate/prereview/releases or via `go install github.com/livetemplate/prereview@latest`")
 	errGoBuildCache     = errors.New("running from the go build cache (go run); self-update is only for installed release binaries")
 	errAlreadyCurrent   = errors.New("already on the latest version")
-	errThrottled        = errors.New("update check skipped (already checked within the last 24h)")
+	errThrottled        = errors.New("update check skipped (already checked within the last hour)")
 	errUnwritable       = errors.New("the prereview binary is not writable; reinstall it somewhere you own or run with elevated permissions")
 	errChecksumMismatch = errors.New("checksum mismatch: the downloaded archive is corrupt or has been tampered with")
 )
@@ -40,7 +40,7 @@ var (
 const (
 	githubAPIBase  = "https://api.github.com"
 	updateRepoPath = "/repos/livetemplate/prereview/releases/latest"
-	checkInterval  = 24 * time.Hour
+	checkInterval  = 1 * time.Hour
 	checksumsName  = "checksums.txt"
 )
 
@@ -397,7 +397,7 @@ func openArchiveBinary(archivePath, archiveBase string) (io.Reader, func(), erro
 }
 
 // selfUpdate is the single orchestrator used by both `--update`
-// (force=true, bypasses the 24h throttle) and the on-run check
+// (force=true, bypasses the 1h throttle) and the on-run check
 // (force=false). On success it returns the new tag and nil; the
 // "expected non-update" outcomes are returned as sentinel errors so the
 // caller can decide whether to surface or silently ignore them.
@@ -430,7 +430,7 @@ func selfUpdate(ctx context.Context, current, targetPath, apiBase string, client
 	if err := performUpdate(ctx, client, archiveURL, checksumsURL, targetPath); err != nil {
 		// Do NOT write the cache on a failed download — otherwise a
 		// transient CDN/timeout/checksum failure would throttle retries
-		// for 24h, stranding the user on the old binary.
+		// for an hour, stranding the user on the old binary.
 		return "", err
 	}
 	_ = writeUpdateCache(cacheDir, tag)
