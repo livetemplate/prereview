@@ -19,6 +19,7 @@ type PrereviewState struct {
 	Base      string `json:"base"       lvt:"persist"`
 	StartedAt string `json:"started_at" lvt:"persist"`
 	CSVPath   string `json:"csv_path"   lvt:"persist"`
+	Version   string `json:"version"    lvt:"persist"`
 
 	// File navigation.
 	Files        []gitdiff.FileEntry `json:"files"`

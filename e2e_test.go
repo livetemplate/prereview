@@ -818,6 +818,66 @@ func TestE2E_ToastAutoDismiss(t *testing.T) {
 	mu.Unlock()
 }
 
+// TestE2E_Footer verifies the page footer shows the build version and
+// a "built with livetemplate" link to the livetemplate GitHub repo.
+func TestE2E_Footer(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		if e, ok := ev.(*cdpruntime.EventConsoleAPICalled); ok {
+			mu.Lock()
+			consoleLines = append(consoleLines, string(e.Type))
+			mu.Unlock()
+		}
+	})
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`footer.app-footer`, &html, chromedp.ByQuery))
+		return fmt.Sprintf("\n--- server ---\n%s\n--- footer html ---\n%s", p.stderr.String(), html)
+	}
+
+	p.waitReady()
+
+	var hasFooter bool
+	var footerText, linkHref, linkTarget, linkRel string
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`footer.app-footer`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('footer.app-footer')`, &hasFooter),
+		chromedp.Evaluate(`(document.querySelector('footer.app-footer')||{}).textContent||''`, &footerText),
+		chromedp.Evaluate(`(document.querySelector('footer.app-footer a')||{}).href||''`, &linkHref),
+		chromedp.Evaluate(`(document.querySelector('footer.app-footer a')||{}).target||''`, &linkTarget),
+		chromedp.Evaluate(`(document.querySelector('footer.app-footer a')||{}).rel||''`, &linkRel),
+	); err != nil {
+		t.Fatalf("footer query: %v%s", err, diag())
+	}
+	if !hasFooter {
+		t.Fatalf("footer.app-footer should be present%s", diag())
+	}
+	// e2e builds with plain `go build` (no -ldflags), so version == "dev".
+	if !strings.Contains(footerText, "prereview (dev)") {
+		t.Errorf("footer text = %q, want it to show the version (prereview (dev))%s", footerText, diag())
+	}
+	if !strings.Contains(footerText, "built with livetemplate") {
+		t.Errorf("footer text = %q, want 'built with livetemplate'%s", footerText, diag())
+	}
+	if linkHref != "https://github.com/livetemplate/livetemplate" {
+		t.Errorf("livetemplate link href = %q, want the livetemplate GitHub URL%s", linkHref, diag())
+	}
+	if linkTarget != "_blank" || !strings.Contains(linkRel, "noopener") {
+		t.Errorf("link should open in a new tab safely; target=%q rel=%q%s", linkTarget, linkRel, diag())
+	}
+
+	mu.Lock()
+	for _, l := range consoleLines {
+		if strings.Contains(strings.ToLower(l), "error") {
+			t.Errorf("browser console error: %s", l)
+		}
+	}
+	mu.Unlock()
+}
+
 // TestE2E_QuitShutsServer verifies that in standalone mode the top-bar
 // button is "Quit" and clicking it gracefully shuts the server down —
 // no DONE marker, subsequent HTTP requests fail.

@@ -20,10 +20,13 @@ import (
 type PrereviewController struct {
 	// RepoPath, Base, CSVPath, DonePath are set once by main.go and are
 	// read-only. CSVWriter is a goroutine-safe serializer over CSVPath.
-	RepoPath  string
-	Base      string
-	CSVPath   string
-	DonePath  string
+	RepoPath string
+	Base     string
+	CSVPath  string
+	DonePath string
+	// Version is the build version (main.version; "dev" for source
+	// builds) surfaced into state for the footer.
+	Version   string
 	CSVWriter *csv.Writer
 
 	// SkillMode is true when prereview is launched via `--skill` (the
@@ -166,6 +169,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	state.Files = files
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	state.CSVPath = c.CSVPath
+	state.Version = c.Version
 
 	// If the previously-selected file disappeared (working tree edits,
 	// branch swap), reset before the auto-select block fires so we pick

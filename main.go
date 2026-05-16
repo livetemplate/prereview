@@ -218,6 +218,7 @@ func run(repo, base, host string, port int, skillMode bool) error {
 		Base:        base,
 		CSVPath:     csvPath,
 		DonePath:    donePath,
+		Version:     version,
 		CSVWriter:   csvWriter,
 		SkillMode:   skillMode,
 		ShutdownReq: shutdownReq,
