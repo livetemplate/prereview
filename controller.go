@@ -71,10 +71,9 @@ func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDi
 	return diff, nil
 }
 
-// relocateSelected re-anchors the selected file's comments against the
-// freshly-loaded CurrentDiff and self-heals the CSV on a confident
-// shift. Best-effort: a persist failure is logged, not fatal — the
-// in-memory shift still renders correctly for this session.
+// relocateSelected re-anchors the selected file's comments against
+// CurrentDiff and self-heals the CSV. Best-effort: a persist error is
+// logged, not fatal.
 func (c *PrereviewController) relocateSelected(state *PrereviewState) {
 	if state.CurrentDiff == nil || state.SelectedFile == "" {
 		return
