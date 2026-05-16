@@ -580,6 +580,10 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	state.DraftBody = cm.Body
 	state.EditingCommentID = cm.ID
 	state.LastDeletedComment = nil
+	// The composer only renders in the diff branch; when Edit is invoked
+	// from the all-comments view this drops back into the file so the
+	// edit composer is actually visible (no-op when already in the diff).
+	state.ShowAllComments = false
 	return state, nil
 }
 

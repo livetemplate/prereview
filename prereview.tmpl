@@ -392,6 +392,16 @@ dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: #166534; }
 .all-comments .ac-item.is-resolved .ac-body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
 .all-comments .ac-where { font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.25rem; }
 .all-comments .ac-body { white-space: pre-wrap; word-break: break-word; }
+/* Per-item edit/resolve/delete row — mirrors .inline-comment
+   .ic-actions (that selector is descendant-scoped so it can't be
+   reused here). flex-wrap keeps the three buttons usable on a narrow
+   iPhone screen. */
+.all-comments .ac-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+.all-comments .ac-actions button {
+  padding: 0.15rem 0.5rem; font-size: 0.72rem; margin: 0;
+  min-height: 26px; min-width: auto; line-height: 1.2;
+}
+.all-comments .ac-actions form { margin: 0; }
 dialog#files-drawer ul { list-style: none; padding: 0; margin: 0; }
 dialog#files-drawer li { margin: 0 0 0.15rem 0; }
 dialog#files-drawer button.file-btn {
@@ -1061,6 +1071,12 @@ main.viewer { overscroll-behavior: contain; }
           <div class="ac-body">{{.Body}}</div>
         </button>
       </form>
+      <div class="ac-actions">
+        <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>
+        {{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}
+        <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
+        <dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog>
+      </div>
     </li>
     {{end}}
   </ul>

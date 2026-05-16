@@ -1240,6 +1240,173 @@ func TestE2E_AllCommentsView(t *testing.T) {
 	}
 }
 
+// TestE2E_AllCommentsActions verifies the all-comments view items now
+// carry edit/resolve/delete, that they operate by global comment ID,
+// and the cross-view seam: clicking Edit in the list must drop back
+// into the file's diff view so the (diff-branch-only) composer is
+// actually visible. Captures console/server/ws/HTML for debuggability.
+func TestE2E_AllCommentsActions(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network domain: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`main`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server stderr ---\n%s\n--- console ---\n%s\n--- ws frames ---\n%s\n--- rendered html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.waitReady()
+	p.clickFile("edited.go")
+
+	// Two comments on the same line so the all-comments list has two
+	// distinguishable items (avoids depending on a second selectable
+	// line existing in the fixture).
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "alpha-cmt", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment alpha: %v%s", err, diag())
+	}
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "beta-cmt", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.Sleep(250*time.Millisecond),
+	); err != nil {
+		t.Fatalf("add comment beta: %v%s", err, diag())
+	}
+
+	// Open the all-comments view; assert each item carries the three
+	// new actions.
+	var items, withResolve, withEdit, withDelete int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item').length`, &items),
+		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item button[name="toggleResolved"]').length`, &withResolve),
+		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item button[name="editComment"]').length`, &withEdit),
+		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item button[command="show-modal"]').length`, &withDelete),
+	); err != nil {
+		t.Fatalf("open all-comments: %v%s", err, diag())
+	}
+	if items != 2 {
+		t.Fatalf("want 2 all-comments items, got %d%s", items, diag())
+	}
+	if withResolve != 2 || withEdit != 2 || withDelete != 2 {
+		t.Fatalf("each item needs resolve/edit/delete; got resolve=%d edit=%d delete=%d%s", withResolve, withEdit, withDelete, diag())
+	}
+
+	// Seam: Edit on the alpha item must close the all-comments view AND
+	// surface the "Editing comment on" composer (which only renders in
+	// the diff branch). This pins the EditComment ShowAllComments=false
+	// fix — without it the composer would stay hidden.
+	var clicked bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{const li=[...document.querySelectorAll('section.all-comments .ac-item')].find(x=>x.textContent.includes('alpha-cmt')); if(li){li.querySelector('button[name="editComment"]').click();return true;} return false;})()`, &clicked),
+	); err != nil || !clicked {
+		t.Fatalf("click Edit on alpha item: err=%v clicked=%v%s", err, clicked, diag())
+	}
+	var allCommentsGone bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`//div[contains(@class,'composer')]//strong[starts-with(normalize-space(text()), 'Editing comment on')]`, chromedp.BySearch),
+		chromedp.Evaluate(`!document.querySelector('section.all-comments')`, &allCommentsGone),
+	); err != nil {
+		t.Fatalf("edit-from-list should open the composer in the diff view: %v%s", err, diag())
+	}
+	if !allCommentsGone {
+		t.Errorf("all-comments view must close when Edit is clicked from it%s", diag())
+	}
+
+	// Cancel the edit, go back to the list.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='clearSelection']`, chromedp.ByQuery),
+		chromedp.Sleep(150*time.Millisecond),
+		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("cancel edit + reopen list: %v%s", err, diag())
+	}
+
+	// Delete the beta comment from the list via its own dialog.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{const li=[...document.querySelectorAll('section.all-comments .ac-item')].find(x=>x.textContent.includes('beta-cmt')); if(li){li.querySelector('dialog').showModal();return true;} return false;})()`, &clicked),
+		chromedp.WaitVisible(`dialog[id^='confirm-delete-'][open] button[name='deleteComment']`, chromedp.ByQuery),
+		chromedp.Click(`dialog[id^='confirm-delete-'][open] button[name='deleteComment']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("delete beta from list: %v%s", err, diag())
+	}
+	rows := p.readCSV()
+	if len(rows) != 2 { // header + alpha only
+		t.Fatalf("after delete want header+1 row, got %d: %v%s", len(rows), rows, diag())
+	}
+	if !strings.Contains(rows[1][5], "alpha-cmt") {
+		t.Errorf("surviving comment body = %q, want alpha-cmt%s", rows[1][5], diag())
+	}
+
+	// Resolve the remaining alpha comment from the list. Resolved
+	// comments are hidden by default → the item disappears and the CSV
+	// resolved column flips true.
+	var itemsAfterResolve int
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`section.all-comments .ac-item button[name='toggleResolved']`, chromedp.ByQuery),
+		chromedp.Click(`section.all-comments .ac-item button[name='toggleResolved']`, chromedp.ByQuery),
+		chromedp.Sleep(350*time.Millisecond),
+		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item').length`, &itemsAfterResolve),
+	); err != nil {
+		t.Fatalf("resolve alpha from list: %v%s", err, diag())
+	}
+	if itemsAfterResolve != 0 {
+		t.Errorf("resolved comment should be hidden by default; %d items still shown%s", itemsAfterResolve, diag())
+	}
+	rows = p.readCSV()
+	if len(rows) != 2 || rows[1][7] != "true" {
+		t.Errorf("alpha CSV resolved col = want 'true'; rows=%v%s", rows, diag())
+	}
+
+	mu.Lock()
+	for _, line := range consoleLines {
+		if strings.Contains(strings.ToLower(line), "error") {
+			t.Errorf("browser console error: %s", line)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}
+
 // TestE2E_ResolveComment verifies the resolve button toggles the
 // Resolved flag on a comment, writes it to CSV with `resolved=true`, and
 // the comment renders muted. The Resolve button becomes "Reopen" after.
