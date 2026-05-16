@@ -80,6 +80,53 @@ func TestRenderMarkdownBlocks_RawHTMLNotPassedThrough(t *testing.T) {
 	}
 }
 
+// TestRenderMarkdownBlocks_GFMTable pins two things at once: (1) GFM
+// tables render to real <table>/<th>/<td> (the bug: goldmark defaults
+// omit the table extension, so the pipe syntax leaked as literal text),
+// and (2) the table block still anchors to its true SOURCE line span so
+// rendered-Markdown comments round-trip. goldmark implements tables as a
+// paragraph transformer where only the cells carry Lines(); this asserts
+// segmentSpan's union still brackets the whole table and the table does
+// not bleed into the trailing paragraph.
+func TestRenderMarkdownBlocks_GFMTable(t *testing.T) {
+	// 1: before
+	// 2: (blank)
+	// 3: | Col A | Col B |
+	// 4: |-------|-------|
+	// 5: | a1 | b1 |
+	// 6: | a2 | b2 |
+	// 7: (blank)
+	// 8: after
+	src := "before\n\n| Col A | Col B |\n|-------|-------|\n| a1 | b1 |\n| a2 | b2 |\n\nafter\n"
+	blocks := RenderMarkdownBlocks([]byte(src))
+	if len(blocks) != 3 {
+		t.Fatalf("got %d blocks, want 3 (para, table, para)", len(blocks))
+	}
+
+	tbl := blocks[1]
+	for _, want := range []string{"<table", "<th", "Col A", "<td", "a1", "b2"} {
+		if !strings.Contains(string(tbl.HTML), want) {
+			t.Errorf("table HTML missing %q; got: %q", want, tbl.HTML)
+		}
+	}
+	if strings.Contains(string(tbl.HTML), "|---") || strings.Contains(string(tbl.HTML), "| Col A |") {
+		t.Errorf("raw pipe table syntax leaked into HTML: %q", tbl.HTML)
+	}
+
+	// Anchoring: the table block must start at the header row (3) and end
+	// at or beyond the last body row (6), and must not swallow the
+	// trailing paragraph.
+	if tbl.StartLine != 3 {
+		t.Errorf("table StartLine = %d, want 3 (header row)", tbl.StartLine)
+	}
+	if tbl.EndLine < 6 || tbl.EndLine > 7 {
+		t.Errorf("table EndLine = %d, want 6-7 (through last body row)", tbl.EndLine)
+	}
+	if after := blocks[2]; after.StartLine <= tbl.EndLine {
+		t.Errorf("trailing paragraph StartLine = %d, must be > table EndLine %d (table bled into it)", after.StartLine, tbl.EndLine)
+	}
+}
+
 func TestRenderMarkdownBlocks_Empty(t *testing.T) {
 	if RenderMarkdownBlocks(nil) != nil {
 		t.Error("nil src should yield nil")

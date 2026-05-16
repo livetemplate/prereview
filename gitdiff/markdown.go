@@ -6,6 +6,7 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -21,11 +22,14 @@ type MarkdownBlock struct {
 	EndLine   int
 }
 
-// mdRenderer uses goldmark's safe defaults: raw HTML in the source is
-// NOT passed through (no html.WithUnsafe), so untrusted repo content
-// can't inject <script>/onerror/etc. No separate sanitizer needed —
-// same choice the sibling modules (tinkerdown, devbox-dash) make.
-var mdRenderer = goldmark.New()
+// mdRenderer enables the GFM extension (tables, strikethrough,
+// autolinks, task-lists) so repo Markdown renders the way its authors
+// wrote it for GitHub. GFM does NOT enable html.WithUnsafe, so the safe
+// default still holds: raw HTML in the source is not passed through, so
+// untrusted repo content can't inject <script>/onerror/etc. No separate
+// sanitizer needed — same choice the sibling modules (tinkerdown,
+// devbox-dash) make.
+var mdRenderer = goldmark.New(goldmark.WithExtensions(extension.GFM))
 
 // RenderMarkdownBlocks parses src and returns each top-level block as
 // safe HTML tagged with its source line span. Empty input → nil.
