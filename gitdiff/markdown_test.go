@@ -15,11 +15,13 @@ func TestRenderMarkdownBlocks_LineRangesAndHTML(t *testing.T) {
 	// 7: - item two
 	src := "# Title\n\nfirst paragraph line\ncontinues here\n\n- item one\n- item two\n"
 	blocks := RenderMarkdownBlocks([]byte(src))
-	if len(blocks) != 3 {
-		t.Fatalf("got %d blocks, want 3 (heading, paragraph, list)", len(blocks))
+	// The 2-item list is descended one level → one block per item, so
+	// each list item is independently commentable.
+	if len(blocks) != 4 {
+		t.Fatalf("got %d blocks, want 4 (heading, paragraph, item, item)", len(blocks))
 	}
 
-	h, p, l := blocks[0], blocks[1], blocks[2]
+	h, p, l1, l2 := blocks[0], blocks[1], blocks[2], blocks[3]
 	if !strings.Contains(string(h.HTML), "<h1") || !strings.Contains(string(h.HTML), "Title") {
 		t.Errorf("heading HTML = %q, want an <h1>Title", h.HTML)
 	}
@@ -30,13 +32,19 @@ func TestRenderMarkdownBlocks_LineRangesAndHTML(t *testing.T) {
 		t.Errorf("paragraph HTML = %q, want a <p>", p.HTML)
 	}
 	if p.StartLine != 3 || p.EndLine != 4 {
-		t.Errorf("paragraph lines = %d-%d, want 3-4", p.StartLine, p.EndLine)
+		t.Errorf("paragraph lines = %d-%d, want 3-4 (multi-source-line prose stays one block)", p.StartLine, p.EndLine)
 	}
-	if !strings.Contains(string(l.HTML), "<li>") {
-		t.Errorf("list HTML = %q, want <li>", l.HTML)
+	if !strings.Contains(string(l1.HTML), "<li>") || !strings.Contains(string(l1.HTML), "item one") {
+		t.Errorf("list item 1 HTML = %q, want <li>item one", l1.HTML)
 	}
-	if l.StartLine != 6 || l.EndLine != 7 {
-		t.Errorf("list lines = %d-%d, want 6-7", l.StartLine, l.EndLine)
+	if l1.StartLine != 6 || l1.EndLine != 6 {
+		t.Errorf("list item 1 lines = %d-%d, want 6-6", l1.StartLine, l1.EndLine)
+	}
+	if !strings.Contains(string(l2.HTML), "item two") {
+		t.Errorf("list item 2 HTML = %q, want item two", l2.HTML)
+	}
+	if l2.StartLine != 7 || l2.EndLine != 7 {
+		t.Errorf("list item 2 lines = %d-%d, want 7-7", l2.StartLine, l2.EndLine)
 	}
 }
 
@@ -80,14 +88,12 @@ func TestRenderMarkdownBlocks_RawHTMLNotPassedThrough(t *testing.T) {
 	}
 }
 
-// TestRenderMarkdownBlocks_GFMTable pins two things at once: (1) GFM
-// tables render to real <table>/<th>/<td> (the bug: goldmark defaults
-// omit the table extension, so the pipe syntax leaked as literal text),
-// and (2) the table block still anchors to its true SOURCE line span so
-// rendered-Markdown comments round-trip. goldmark implements tables as a
-// paragraph transformer where only the cells carry Lines(); this asserts
-// segmentSpan's union still brackets the whole table and the table does
-// not bleed into the trailing paragraph.
+// TestRenderMarkdownBlocks_GFMTable pins the per-row contract: a GFM
+// table is descended one level so the header row and EACH body row are
+// independently-commentable blocks anchored to their own source line
+// (the whole point — comment on use-case row D, not the whole table).
+// It also pins that the pipe syntax never leaks as literal text and
+// that the trailing paragraph is not swallowed.
 func TestRenderMarkdownBlocks_GFMTable(t *testing.T) {
 	// 1: before
 	// 2: (blank)
@@ -99,31 +105,128 @@ func TestRenderMarkdownBlocks_GFMTable(t *testing.T) {
 	// 8: after
 	src := "before\n\n| Col A | Col B |\n|-------|-------|\n| a1 | b1 |\n| a2 | b2 |\n\nafter\n"
 	blocks := RenderMarkdownBlocks([]byte(src))
-	if len(blocks) != 3 {
-		t.Fatalf("got %d blocks, want 3 (para, table, para)", len(blocks))
+	// before(1) · header(3) · row(5) · row(6) · after(8)
+	if len(blocks) != 5 {
+		t.Fatalf("got %d blocks, want 5 (before, header, row, row, after); blocks=%+v", len(blocks), blocks)
 	}
 
-	tbl := blocks[1]
-	for _, want := range []string{"<table", "<th", "Col A", "<td", "a1", "b2"} {
-		if !strings.Contains(string(tbl.HTML), want) {
-			t.Errorf("table HTML missing %q; got: %q", want, tbl.HTML)
+	hdr, r1, r2, after := blocks[1], blocks[2], blocks[3], blocks[4]
+	if !strings.Contains(string(hdr.HTML), "<th") || !strings.Contains(string(hdr.HTML), "Col A") || !strings.Contains(string(hdr.HTML), "Col B") {
+		t.Errorf("header block HTML = %q, want <th>Col A/Col B", hdr.HTML)
+	}
+	if hdr.StartLine != 3 || hdr.EndLine != 3 {
+		t.Errorf("header lines = %d-%d, want 3-3", hdr.StartLine, hdr.EndLine)
+	}
+	for _, row := range []struct {
+		b              MarkdownBlock
+		a, bcell, want string
+		line           int
+	}{
+		{r1, "a1", "b1", "row 1", 5},
+		{r2, "a2", "b2", "row 2", 6},
+	} {
+		if !strings.Contains(string(row.b.HTML), "<td") || !strings.Contains(string(row.b.HTML), row.a) || !strings.Contains(string(row.b.HTML), row.bcell) {
+			t.Errorf("%s HTML = %q, want <td>%s/%s", row.want, row.b.HTML, row.a, row.bcell)
+		}
+		if !strings.Contains(string(row.b.HTML), `class="md-solo-table"`) {
+			t.Errorf("%s HTML = %q, want a wrapping <table class=\"md-solo-table\">", row.want, row.b.HTML)
+		}
+		if row.b.StartLine != row.line || row.b.EndLine != row.line {
+			t.Errorf("%s lines = %d-%d, want %d-%d (single source line)", row.want, row.b.StartLine, row.b.EndLine, row.line, row.line)
 		}
 	}
-	if strings.Contains(string(tbl.HTML), "|---") || strings.Contains(string(tbl.HTML), "| Col A |") {
-		t.Errorf("raw pipe table syntax leaked into HTML: %q", tbl.HTML)
+
+	for _, b := range blocks {
+		if strings.Contains(string(b.HTML), "|---") || strings.Contains(string(b.HTML), "| Col A |") {
+			t.Errorf("raw pipe table syntax leaked into HTML: %q", b.HTML)
+		}
+	}
+	if after.StartLine != 8 {
+		t.Errorf("trailing paragraph StartLine = %d, want 8 (table did not bleed)", after.StartLine)
+	}
+}
+
+// TestRenderMarkdownBlocks_ListPerItem pins that each list item is its
+// own commentable block with its own source line, numbering preserved.
+func TestRenderMarkdownBlocks_ListPerItem(t *testing.T) {
+	// 1: 1. first
+	// 2: 2. second
+	// 3: 3. third
+	src := "1. first\n2. second\n3. third\n"
+	blocks := RenderMarkdownBlocks([]byte(src))
+	if len(blocks) != 3 {
+		t.Fatalf("got %d blocks, want 3 (one per ordered item); blocks=%+v", len(blocks), blocks)
+	}
+	for i, want := range []struct {
+		text  string
+		start string
+		line  int
+	}{
+		{"first", `<ol start="1">`, 1},
+		{"second", `<ol start="2">`, 2},
+		{"third", `<ol start="3">`, 3},
+	} {
+		b := blocks[i]
+		if !strings.Contains(string(b.HTML), "<li>") || !strings.Contains(string(b.HTML), want.text) {
+			t.Errorf("item %d HTML = %q, want <li>%s", i+1, b.HTML, want.text)
+		}
+		if !strings.Contains(string(b.HTML), want.start) {
+			t.Errorf("item %d HTML = %q, want ordered wrapper %s (numbering preserved)", i+1, b.HTML, want.start)
+		}
+		if b.StartLine != want.line || b.EndLine != want.line {
+			t.Errorf("item %d lines = %d-%d, want %d-%d", i+1, b.StartLine, b.EndLine, want.line, want.line)
+		}
 	}
 
-	// Anchoring: the table block must start at the header row (3) and end
-	// at or beyond the last body row (6), and must not swallow the
-	// trailing paragraph.
-	if tbl.StartLine != 3 {
-		t.Errorf("table StartLine = %d, want 3 (header row)", tbl.StartLine)
+	// Unordered list → each item wrapped in <ul>, one block per item.
+	ub := RenderMarkdownBlocks([]byte("- a\n- b\n"))
+	if len(ub) != 2 {
+		t.Fatalf("unordered: got %d blocks, want 2", len(ub))
 	}
-	if tbl.EndLine < 6 || tbl.EndLine > 7 {
-		t.Errorf("table EndLine = %d, want 6-7 (through last body row)", tbl.EndLine)
+	for i, b := range ub {
+		if !strings.Contains(string(b.HTML), "<ul>") || !strings.Contains(string(b.HTML), "<li>") {
+			t.Errorf("unordered item %d HTML = %q, want <ul><li>", i+1, b.HTML)
+		}
 	}
-	if after := blocks[2]; after.StartLine <= tbl.EndLine {
-		t.Errorf("trailing paragraph StartLine = %d, must be > table EndLine %d (table bled into it)", after.StartLine, tbl.EndLine)
+}
+
+// TestRenderMarkdownBlocks_TablePerRow pins the header + per-body-row
+// split for a 3-row table and that every wrapped row is a valid,
+// single-<tr> table fragment (no unbalanced <tbody> leak).
+func TestRenderMarkdownBlocks_TablePerRow(t *testing.T) {
+	// 1: | # | Use case |
+	// 2: |---|----------|
+	// 3: | C | chat     |
+	// 4: | D | auth room |
+	src := "| # | Use case |\n|---|----------|\n| C | chat |\n| D | auth room |\n"
+	blocks := RenderMarkdownBlocks([]byte(src))
+	if len(blocks) != 3 {
+		t.Fatalf("got %d blocks, want 3 (header + 2 rows); blocks=%+v", len(blocks), blocks)
+	}
+	hdr, rowC, rowD := blocks[0], blocks[1], blocks[2]
+
+	if !strings.Contains(string(hdr.HTML), "<thead>") || !strings.Contains(string(hdr.HTML), "<th") {
+		t.Errorf("header HTML = %q, want <thead><th>", hdr.HTML)
+	}
+	if c := strings.Count(string(rowD.HTML), "<tr"); c != 1 {
+		t.Errorf("row D must contain exactly one <tr> (clean fragment), got %d in %q", c, rowD.HTML)
+	}
+	if strings.Contains(string(rowD.HTML), "<thead") || !strings.Contains(string(rowD.HTML), "<tbody>") {
+		t.Errorf("row D HTML = %q, want a <tbody> body row with no leaked <thead>", rowD.HTML)
+	}
+	if !strings.Contains(string(rowD.HTML), "auth room") {
+		t.Errorf("row D HTML = %q, want cell text 'auth room'", rowD.HTML)
+	}
+	// The whole point: row D anchors to its own source line (4), so a
+	// comment on it round-trips to raw view line 4 — not the table.
+	if rowD.StartLine != 4 || rowD.EndLine != 4 {
+		t.Errorf("row D lines = %d-%d, want 4-4", rowD.StartLine, rowD.EndLine)
+	}
+	if rowC.StartLine != 3 || rowC.EndLine != 3 {
+		t.Errorf("row C lines = %d-%d, want 3-3", rowC.StartLine, rowC.EndLine)
+	}
+	if hdr.StartLine != 1 {
+		t.Errorf("header StartLine = %d, want 1", hdr.StartLine)
 	}
 }
 

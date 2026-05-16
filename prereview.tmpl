@@ -644,6 +644,18 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
 }
 .md-rendered table { display: block; overflow-x: auto; border-collapse: collapse; }
 .md-rendered th, .md-rendered td { border: 1px solid var(--pico-muted-border-color); padding: 0.2rem 0.45rem; }
+/* Per-row solo tables: the rendered view splits a table into one block
+   per row so each row is independently commentable. Fixed layout + full
+   width gives every stacked one-row table identical column widths (same
+   column count), so the rows stay aligned and read as one contiguous
+   grid; zero margin/radius makes header+rows hug instead of looking
+   like separate cards. */
+.md-rendered table.md-solo-table {
+  display: table; width: 100%; table-layout: fixed; margin: 0;
+}
+.md-rendered table.md-solo-table th,
+.md-rendered table.md-solo-table td { word-break: break-word; vertical-align: top; }
+.md-block:has(.md-solo-table) { margin-bottom: 0; border-radius: 0; }
 
 /* Inline comment cards — between the diff lines */
 .inline-comment {

@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	cdpnetwork "github.com/chromedp/cdproto/network"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
@@ -1499,13 +1500,19 @@ func setupFixtureRepoMarkdown(t *testing.T) string {
 	runCmd(t, dir, "git", "config", "user.name", "Test")
 	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
 
-	const base = "# Doc Title\n\nIntro paragraph here.\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n"
+	// Lines: 1 h1 · 3 para · 5-6 list · 8-10 code · 12-15 GFM table
+	// (12 header, 14 row C, 15 row D). The table lets the per-row e2e
+	// click a single body row; h1 stays the first block so the existing
+	// whole-block test is unaffected.
+	const base = "# Doc Title\n\nIntro paragraph here.\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow |\n"
 	mustWrite(t, dir, "docs.md", base)
 	runCmd(t, dir, "git", "add", "-A")
 	runCmd(t, dir, "git", "commit", "-q", "-m", "seed docs")
 
-	// Edit the paragraph line so docs.md is a changed file.
-	mustWrite(t, dir, "docs.md", "# Doc Title\n\nIntro paragraph here. EDITED\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n")
+	// Edit the paragraph line (3) AND the row-D line (15) so docs.md is
+	// a changed file and row D falls inside a raw-view diff hunk (so the
+	// per-row comment round-trips visibly to the line viewer too).
+	mustWrite(t, dir, "docs.md", "# Doc Title\n\nIntro paragraph here. EDITED\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow EDITED |\n")
 	return dir
 }
 
@@ -1614,6 +1621,147 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	if !backHasMdView || !backHasComment {
 		t.Errorf("rendered mode should show the comment under its block (mdView=%v comment=%v)", backHasMdView, backHasComment)
 	}
+}
+
+// TestE2E_MarkdownPerRowComment pins the per-line (structural per-unit)
+// behaviour: clicking a SINGLE GFM table body row anchors the comment
+// to that row's own source line — not the whole table — and that it
+// round-trips to the raw line view and back under that specific row's
+// block. Captures browser console, server stderr, WebSocket frames and
+// rendered HTML so a failure can be diagnosed without a re-run.
+func TestE2E_MarkdownPerRowComment(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdown(t), 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network domain: %v", err)
+	}
+
+	// diag returns all four artifacts the project rule mandates so a
+	// failure is debuggable in place: server log, console, WS frames,
+	// and the live rendered HTML.
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`main`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server stderr ---\n%s\n--- console ---\n%s\n--- ws frames ---\n%s\n--- rendered html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.waitReady()
+
+	// Sanity: rendered by default, and the table rendered per row (the
+	// header row + each body row is its own .md-solo-table block).
+	var hasMdView bool
+	var soloTables int
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView),
+		chromedp.Evaluate(`document.querySelectorAll('.md-rendered table.md-solo-table').length`, &soloTables),
+	); err != nil {
+		t.Fatalf("render-default query: %v%s", err, diag())
+	}
+	if !hasMdView {
+		t.Fatalf("Markdown should render by default%s", diag())
+	}
+	// header + row C + row D = 3 solo-row tables.
+	if soloTables < 3 {
+		t.Fatalf("table should split into per-row blocks; got %d .md-solo-table (want >=3)%s", soloTables, diag())
+	}
+
+	// Click ONLY row D (unique cell text), comment, save.
+	var clicked bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{const el=[...document.querySelectorAll('.md-block .md-rendered')].find(e=>e.textContent.includes('authrow EDITED')); if(el){el.click();return true;} return false;})()`, &clicked),
+	); err != nil || !clicked {
+		t.Fatalf("could not click row D (.md-rendered with 'authrow EDITED'): err=%v clicked=%v%s", err, clicked, diag())
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "row D needs a fix", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.md-block .inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("comment on row D: %v%s", err, diag())
+	}
+
+	// The comment must anchor to row D's single source line (15) — not
+	// the table's whole span (12-15). This is the whole feature.
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected header + 1 row, got %d: %v%s", len(rows), rows, diag())
+	}
+	r := rows[1]
+	if r[1] != "docs.md" {
+		t.Errorf("file = %q, want docs.md", r[1])
+	}
+	if r[2] != "15" || r[3] != "15" {
+		t.Errorf("from/to = %q/%q, want 15/15 (row D's own source line, NOT the whole table)%s", r[2], r[3], diag())
+	}
+	if !strings.Contains(r[5], "row D needs a fix") {
+		t.Errorf("body = %q, missing comment text", r[5])
+	}
+
+	// Round-trip to raw line view: the comment shows on line 15.
+	var rawHasComment bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Sleep(350*time.Millisecond),
+		chromedp.Evaluate(`!!document.querySelector('.code .inline-comment')`, &rawHasComment),
+	); err != nil {
+		t.Fatalf("toggle to raw: %v%s", err, diag())
+	}
+	if !rawHasComment {
+		t.Errorf("row-D comment should round-trip to the raw line view%s", diag())
+	}
+
+	// Toggle back: the comment shows under the ROW D block specifically
+	// (the .md-block carrying the comment also contains row D's text),
+	// proving per-row anchoring rather than whole-table.
+	var underRowD bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`(()=>{const b=[...document.querySelectorAll('.md-block')].find(x=>x.querySelector('.inline-comment')); return b?b.textContent.includes('authrow EDITED'):false;})()`, &underRowD),
+	); err != nil {
+		t.Fatalf("toggle back to rendered: %v%s", err, diag())
+	}
+	if !underRowD {
+		t.Errorf("comment must render under row D's own block, not another row/the table%s", diag())
+	}
+
+	mu.Lock()
+	for _, line := range consoleLines {
+		if strings.Contains(strings.ToLower(line), "error") {
+			t.Errorf("browser console error: %s", line)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
 }
 
 // TestE2E_AutoSelectFirstFile verifies that landing on the page with
