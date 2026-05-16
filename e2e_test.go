@@ -733,6 +733,91 @@ func TestE2E_HandOffMarker(t *testing.T) {
 	}
 }
 
+// TestE2E_ToastAutoDismiss verifies the DONE "Saved" toast disappears
+// on its own ~5s after hand off, with NO manual dismiss click, and
+// that auto-dismiss is UI-only — the on-disk DONE marker (the skill's
+// signal) must survive. Captures console/server/ws/HTML.
+func TestE2E_ToastAutoDismiss(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server ---\n%s\n--- console ---\n%s\n--- ws ---\n%s\n--- html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.waitReady()
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.toast`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("hand off: %v%s", err, diag())
+	}
+
+	// DONE marker must exist right after hand off.
+	donePath := filepath.Join(p.repo, ".prereview", "DONE")
+	if _, err := os.Stat(donePath); err != nil {
+		t.Fatalf("DONE marker missing after hand off: %v%s", err, diag())
+	}
+
+	// Do NOT click dismiss. The toast must auto-dismiss ~5s later.
+	var toastGone bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Sleep(7*time.Second),
+		chromedp.Evaluate(`!document.querySelector('.toast')`, &toastGone),
+	); err != nil {
+		t.Fatalf("post-wait query: %v%s", err, diag())
+	}
+	if !toastGone {
+		t.Errorf("toast should auto-dismiss within ~5s without a manual click%s", diag())
+	}
+
+	// Auto-dismiss is UI-only: it clears DoneWritten but must NOT remove
+	// the DONE marker the skill polls for.
+	if _, err := os.Stat(donePath); err != nil {
+		t.Errorf("DONE marker must survive toast auto-dismiss, but it's gone: %v", err)
+	}
+
+	mu.Lock()
+	for _, l := range consoleLines {
+		if strings.Contains(strings.ToLower(l), "error") {
+			t.Errorf("browser console error: %s", l)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}
+
 // TestE2E_QuitShutsServer verifies that in standalone mode the top-bar
 // button is "Quit" and clicking it gracefully shuts the server down —
 // no DONE marker, subsequent HTTP requests fail.

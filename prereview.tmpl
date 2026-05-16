@@ -1247,6 +1247,34 @@ main.viewer { overscroll-behavior: contain; }
     if (document.readyState === 'complete') resetIfFileChanged();
     else window.addEventListener('load', resetIfFileChanged);
   })();
+
+  // Auto-dismiss the DONE "Saved" toast after 5s. We click the existing
+  // dismiss button rather than just hiding it: that submits the
+  // dismissBanner action so the server clears DoneWritten and the toast
+  // won't re-render on a later morphdom update. A single timer is armed
+  // while the toast is present and self-cancels if it's already gone
+  // (manual dismiss, or DoneWritten cleared by another action).
+  (() => {
+    let timer = null;
+    const arm = () => {
+      const toast = document.querySelector('.toast');
+      if (toast) {
+        if (timer === null) {
+          timer = setTimeout(() => {
+            timer = null;
+            const btn = document.querySelector('.toast .toast-dismiss');
+            if (btn) btn.click();
+          }, 5000);
+        }
+      } else if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    document.addEventListener('lvt:updated', arm, true);
+    if (document.readyState === 'complete') arm();
+    else window.addEventListener('load', arm);
+  })();
 </script>
 </body>
 </html>
