@@ -17,9 +17,19 @@ const (
 	// `resolved` is "true" or "false". The skill should act only on
 	// unresolved comments; resolved ones are kept as historical record.
 	ColResolved = "resolved"
+	// `anchor` is an opaque JSON blob (the content the comment was
+	// anchored to at creation time) used internally to re-locate a
+	// comment when the file changes. The skill must NOT parse it.
+	ColAnchor = "anchor"
+	// `anchor_status` is "ok" | "moved" | "outdated" (empty == "ok" for
+	// legacy rows). A flat scalar the skill filters exactly like
+	// `resolved`: treat `outdated` like `resolved=true` — the line
+	// numbers no longer point at the intended content.
+	ColAnchorStatus = "anchor_status"
 )
 
 // Header is the row written before any data. Position-stable.
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
+	ColAnchor, ColAnchorStatus,
 }

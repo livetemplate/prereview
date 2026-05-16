@@ -25,7 +25,7 @@ func Read(path string) ([]Row, error) {
 	defer f.Close()
 
 	r := stdcsv.NewReader(f)
-	r.FieldsPerRecord = -1 // variable: tolerate 7-col legacy + 8-col current schema
+	r.FieldsPerRecord = -1 // variable: tolerate 7/8/9-col legacy + 10-col current schema
 
 	// Discard header.
 	if _, err := r.Read(); err != nil {
@@ -57,9 +57,14 @@ func Read(path string) ([]Row, error) {
 }
 
 func recordToRow(rec []string) (Row, bool) {
-	// Accept both 7-column (pre-resolve schema) and 8-column (current) rows
-	// so old CSVs round-trip cleanly. Missing resolved field defaults to false.
-	if len(rec) != 7 && len(rec) != 8 {
+	// Accept 7-col (pre-resolve), 8-col (pre-anchor), 9-col (anchor, no
+	// status) and 10-col (current) rows so old CSVs round-trip cleanly.
+	// Missing resolved → false; missing anchor → ""; missing status → ""
+	// (the caller treats "" as "ok", i.e. legacy comments are assumed
+	// in place — no false "outdated" on pre-migration data).
+	switch len(rec) {
+	case 7, 8, 9, 10:
+	default:
 		return Row{}, false
 	}
 	from, err := strconv.Atoi(rec[2])
@@ -75,17 +80,27 @@ func recordToRow(rec []string) (Row, bool) {
 		return Row{}, false
 	}
 	resolved := false
-	if len(rec) == 8 {
+	if len(rec) >= 8 {
 		resolved = rec[7] == "true"
 	}
+	anchor := ""
+	if len(rec) >= 9 {
+		anchor = rec[8]
+	}
+	status := ""
+	if len(rec) >= 10 {
+		status = rec[9]
+	}
 	return Row{
-		ID:        rec[0],
-		File:      rec[1],
-		FromLine:  from,
-		ToLine:    to,
-		Side:      rec[4],
-		Body:      rec[5],
-		CreatedAt: created,
-		Resolved:  resolved,
+		ID:           rec[0],
+		File:         rec[1],
+		FromLine:     from,
+		ToLine:       to,
+		Side:         rec[4],
+		Body:         rec[5],
+		CreatedAt:    created,
+		Resolved:     resolved,
+		Anchor:       anchor,
+		AnchorStatus: status,
 	}, true
 }

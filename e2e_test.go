@@ -1655,6 +1655,238 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	}
 }
 
+// setupFixtureRepoReanchor commits a seed then writes the working-tree
+// doc the user "reviews" (one sentence per line so each is its own
+// block). The TARGET sentence is line 5.
+func setupFixtureRepoReanchor(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+	mustWrite(t, dir, "docs.md", "# Reanchor Fixture\n\nseed.\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+	// Working-tree v1 (what the reviewer sees). Lines: 1 h1, 3 ctx, 4
+	// ctx, 5 TARGET, 6 trailing.
+	mustWrite(t, dir, "docs.md", "# Reanchor Fixture\n\nFirst context sentence stays put.\nSecond context sentence also stable.\nTARGET sentence to anchor a comment on.\nTrailing sentence after the target.\n")
+	return dir
+}
+
+// clickMdBlock clicks the rendered-Markdown block whose text contains
+// phrase. Returns false if no such block.
+func clickMdBlock(p *runningPrereview, phrase string) bool {
+	var ok bool
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+		`(()=>{const e=[...document.querySelectorAll('.md-block .md-rendered')].find(x=>x.textContent.includes(`+jsStr(phrase)+`)); if(e){e.click();return true;} return false;})()`, &ok))
+	return ok
+}
+
+func jsStr(s string) string { return "\"" + strings.ReplaceAll(s, `"`, `\"`) + "\"" }
+
+// TestE2E_CommentReanchor_FollowsContent: comment on a sentence, then
+// the doc is rewritten inserting lines ABOVE it (simulating the Claude
+// edit loop). On reload the comment must auto-follow its content and
+// the CSV must self-heal with anchor_status=moved.
+func TestE2E_CommentReanchor_FollowsContent(t *testing.T) {
+	dir := setupFixtureRepoReanchor(t)
+	p := bootChromeAgainstRepo(t, dir, 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`main`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server ---\n%s\n--- console ---\n%s\n--- ws ---\n%s\n--- html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.waitReady()
+	p.clickFile("docs.md")
+	if !clickMdBlock(p, "TARGET sentence to anchor a comment on.") {
+		t.Fatalf("could not find the TARGET block%s", diag())
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "fix this sentence", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment on TARGET: %v%s", err, diag())
+	}
+	rows := p.readCSV()
+	if len(rows) != 2 || rows[1][2] != "5" || rows[1][3] != "5" {
+		t.Fatalf("initial CSV want from/to=5/5, got %v%s", rows, diag())
+	}
+	if rows[1][9] != "ok" {
+		t.Errorf("fresh comment anchor_status = %q, want ok", rows[1][9])
+	}
+
+	// The doc is rewritten: two sentences inserted ABOVE the TARGET.
+	if err := os.WriteFile(filepath.Join(dir, "docs.md"),
+		[]byte("# Reanchor Fixture\n\nFirst context sentence stays put.\nInserted sentence one.\nInserted sentence two.\nSecond context sentence also stable.\nTARGET sentence to anchor a comment on.\nTrailing sentence after the target.\n"),
+		0o644); err != nil {
+		t.Fatalf("rewrite doc: %v", err)
+	}
+
+	// Reload → Mount re-anchors the selected file and self-heals the CSV.
+	p.waitReady()
+	p.clickFile("docs.md")
+	if err := chromedp.Run(p.ctx, chromedp.Sleep(700*time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	rows = p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("after reload want 1 row, got %v%s", rows, diag())
+	}
+	if rows[1][2] != "7" || rows[1][3] != "7" {
+		t.Errorf("comment did not follow content: from/to = %s/%s, want 7/7%s", rows[1][2], rows[1][3], diag())
+	}
+	if rows[1][9] != "moved" {
+		t.Errorf("anchor_status = %q, want moved%s", rows[1][9], diag())
+	}
+	if !strings.Contains(rows[1][5], "fix this sentence") {
+		t.Errorf("body lost: %q", rows[1][5])
+	}
+	mu.Lock()
+	for _, l := range consoleLines {
+		if strings.Contains(strings.ToLower(l), "error") {
+			t.Errorf("browser console error: %s", l)
+		}
+	}
+	mu.Unlock()
+}
+
+// TestE2E_CommentReanchor_FlagsAndReattaches: comment on a sentence,
+// then that sentence's text is rewritten (content gone). On reload the
+// comment must be flagged outdated (ints untouched, original snippet
+// shown), and the Re-anchor flow must re-point it and clear the flag.
+func TestE2E_CommentReanchor_FlagsAndReattaches(t *testing.T) {
+	dir := setupFixtureRepoReanchor(t)
+	p := bootChromeAgainstRepo(t, dir, 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		if e, ok := ev.(*cdpruntime.EventConsoleAPICalled); ok {
+			mu.Lock()
+			consoleLines = append(consoleLines, string(e.Type))
+			mu.Unlock()
+		}
+	})
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`main`, &html, chromedp.ByQuery))
+		return fmt.Sprintf("\n--- server ---\n%s\n--- html ---\n%s", p.stderr.String(), html)
+	}
+
+	p.waitReady()
+	p.clickFile("docs.md")
+	if !clickMdBlock(p, "TARGET sentence to anchor a comment on.") {
+		t.Fatalf("could not find TARGET block%s", diag())
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "orphan me", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment: %v%s", err, diag())
+	}
+
+	// Rewrite the TARGET sentence's text (content gone, same line count).
+	if err := os.WriteFile(filepath.Join(dir, "docs.md"),
+		[]byte("# Reanchor Fixture\n\nFirst context sentence stays put.\nSecond context sentence also stable.\nCompletely different replacement line.\nTrailing sentence after the target.\n"),
+		0o644); err != nil {
+		t.Fatalf("rewrite doc: %v", err)
+	}
+
+	p.waitReady()
+	p.clickFile("docs.md")
+	var hasOutdatedBadge, snippetShown bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Sleep(700*time.Millisecond),
+		chromedp.Evaluate(`!!document.querySelector('.inline-comment.is-outdated .outdated-badge')`, &hasOutdatedBadge),
+		chromedp.Evaluate(`(()=>{const p=document.querySelector('.anchor-orig pre'); return !!p && p.textContent.includes('TARGET sentence to anchor a comment on.');})()`, &snippetShown),
+	); err != nil {
+		t.Fatalf("post-rewrite query: %v%s", err, diag())
+	}
+	rows := p.readCSV()
+	if len(rows) != 2 || rows[1][2] != "5" || rows[1][3] != "5" {
+		t.Fatalf("outdated comment ints must stay 5/5, got %v%s", rows, diag())
+	}
+	if rows[1][9] != "outdated" {
+		t.Errorf("anchor_status = %q, want outdated%s", rows[1][9], diag())
+	}
+	if !hasOutdatedBadge {
+		t.Errorf("expected an outdated badge on the comment%s", diag())
+	}
+	if !snippetShown {
+		t.Errorf("expected the original snippet shown%s", diag())
+	}
+
+	// Re-anchor: click Re-anchor, then pick a new line, then Save.
+	var reanchorClicked bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{const b=document.querySelector('.inline-comment.is-outdated button[name="reanchorComment"]'); if(b){b.click();return true;} return false;})()`, &reanchorClicked),
+	); err != nil || !reanchorClicked {
+		t.Fatalf("click Re-anchor: err=%v clicked=%v%s", err, reanchorClicked, diag())
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.reanchor-prompt`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("reanchor prompt should appear%s", diag())
+	}
+	if !clickMdBlock(p, "Trailing sentence after the target.") {
+		t.Fatalf("could not find the re-anchor target block%s", diag())
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`//div[contains(@class,'composer')]//strong[starts-with(normalize-space(text()), 'Re-anchoring comment to')]`, chromedp.BySearch),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.Sleep(500*time.Millisecond),
+	); err != nil {
+		t.Fatalf("save re-anchor: %v%s", err, diag())
+	}
+	rows = p.readCSV()
+	if len(rows) != 2 || rows[1][2] != "6" || rows[1][3] != "6" {
+		t.Errorf("re-anchored comment want from/to=6/6, got %v%s", rows, diag())
+	}
+	if rows[1][9] != "ok" {
+		t.Errorf("anchor_status after re-anchor = %q, want ok%s", rows[1][9], diag())
+	}
+	if !strings.Contains(rows[1][5], "orphan me") {
+		t.Errorf("body lost on re-anchor: %q", rows[1][5])
+	}
+}
+
 // setupFixtureRepoMarkdown commits a small Markdown doc then edits one
 // line so it's the single changed file (auto-selected, scope toggle
 // hidden). Blocks: h1=line1, paragraph=line3, list=lines5-6,

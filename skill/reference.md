@@ -61,8 +61,12 @@ File: `<repo>/.prereview/comments.csv`. RFC-4180 quoted; encoding is UTF-8.
 ### Header (load-bearing — column order is the contract)
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status
 ```
+
+Older CSVs may have 7–9 columns (pre-`resolved`, pre-`anchor`,
+pre-`anchor_status`); columns 0–7 are stable, so index by position and
+treat missing trailing columns as empty/default.
 
 ### Column details
 
@@ -76,6 +80,8 @@ id,file,from_line,to_line,side,body,created_at,resolved
 | `body` | string | `"Why no error wrap?"` | RFC-4180 quoted; newlines preserved inside the quoted string. |
 | `created_at` | RFC-3339 UTC | `2026-05-13T14:23:11Z` | Set once on comment creation; unchanged on edit. |
 | `resolved` | bool | `true`, `false` | Lowercase. `true` = human marked the comment as already addressed; **skip these as directives**. |
+| `anchor` | JSON string | `{"text":"…","before":[…],"after":[…]}` | **Internal — do not parse or act on.** The content fingerprint prereview uses to re-locate a comment when the doc changes. May be empty for legacy rows. |
+| `anchor_status` | enum | `ok`, `moved`, `outdated`, *(empty)* | `ok`/empty = line numbers are trustworthy. `moved` = the doc was edited and prereview already auto-corrected `from_line`/`to_line` to follow the content (still trustworthy). `outdated` = the anchored content changed or vanished and prereview could **not** confidently re-place it — `from_line`/`to_line` are stale. **Treat `outdated` like `resolved=true`: skip as a directive** (may still use as context). |
 
 ### Parsing example
 
@@ -86,7 +92,8 @@ hand-split on commas — `body` can contain commas, newlines, and quotes.
 r := csv.NewReader(f)
 rows, _ := r.ReadAll()  // rows[0] is the header
 for _, row := range rows[1:] {
-    if row[7] == "true" { continue } // skip resolved
+    if len(row) > 7 && row[7] == "true" { continue }      // skip resolved
+    if len(row) > 9 && row[9] == "outdated" { continue }  // skip stale-anchored
     file, from, to := row[1], row[2], row[3]
     body := row[5]
     // …act on it
@@ -133,3 +140,4 @@ pre-mutation or post-mutation state, never a torn write.
 - **Binary files** render as "Binary file — cannot display". The skill should treat binary file rows in the CSV (if any) as informational, not actionable.
 - **Very large files** (>1 MB) render with a "file too large to review" placeholder rather than the full content. Comments on those files are still accepted (anchored to line numbers the user knows), but the skill should be conservative — the diff context the LLM saw is just the placeholder.
 - **Resolved comments** stay in the CSV with `resolved=true`. The skill should skip them as directives but may include them as context (e.g., "the user has already addressed this similar concern").
+- **Comment re-anchoring.** prereview captures a content fingerprint when a comment is made. If the doc is edited afterwards (including by *you*, between writing the file and the user handing off), prereview re-locates each comment on the live file: it auto-corrects `from_line`/`to_line` and marks `anchor_status=moved` when it can do so confidently, or marks `anchor_status=outdated` (line numbers left stale) when it cannot. **The handed-off CSV is already re-anchored** (relocation runs on hand-off). So: trust `ok`/`moved` line numbers; treat `outdated` like resolved — don't act on its line numbers (the user must re-anchor it in the UI, or you may use its `body` as context only).

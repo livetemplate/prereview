@@ -701,6 +701,40 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   min-height: 26px; min-width: auto; line-height: 1.2;
 }
 .inline-comment .ic-actions form { margin: 0; }
+/* Anchor-status surface. moved = informational (auto-followed its
+   content); outdated = the anchored text changed/vanished and the
+   comment could not be confidently re-placed — it needs Re-anchor. */
+.inline-comment .moved-badge, .all-comments .moved-badge {
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.inline-comment .outdated-badge, .all-comments .outdated-badge {
+  background: var(--pr-del-bg); color: var(--pr-del);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.inline-comment.is-outdated { border-left: 3px solid var(--pr-del); }
+.anchor-orig { margin: 0.25rem 0 0; font-size: 0.72rem; color: var(--pico-muted-color); }
+.anchor-orig summary { cursor: pointer; }
+.anchor-orig pre {
+  white-space: pre-wrap; word-break: break-word; margin: 0.2rem 0 0;
+  background: var(--pico-card-sectioning-background-color);
+  padding: 0.3rem 0.45rem; border-radius: 4px; font-size: 0.72rem;
+}
+.chip.outdated { background: var(--pr-del-bg); color: var(--pr-del); border-color: var(--pr-del); }
+.reanchor-prompt {
+  position: sticky; bottom: 0;
+  margin: 0.4rem 0.4rem 0.2rem; padding: 0.4rem 0.6rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  background: var(--pr-del-bg); color: var(--pr-del);
+  border: 1px solid var(--pr-del); border-radius: 4px;
+  font-size: 0.8rem; box-shadow: 0 -2px 8px rgba(0,0,0,.08); z-index: 8;
+}
+.reanchor-prompt .undo-btn {
+  margin: 0; padding: 0.2rem 0.7rem; font-size: 0.78rem;
+  background: var(--pico-primary); color: var(--pico-primary-inverse); border: 0;
+}
 
 /* Inline composer — sticky on mobile, static on desktop. Save and Cancel
    live in separate <form> elements (siblings, not nested) so Cancel can't
@@ -847,6 +881,9 @@ main.viewer { overscroll-behavior: contain; }
     {{end}}
     {{if gt .ResolvedCount 0}}
     <form method="POST"><button type="submit" name="toggleShowResolved" class="chip resolved{{if .ShowResolved}} is-on{{end}}" title="{{if .ShowResolved}}Hide{{else}}Show{{end}} {{.ResolvedCount}} resolved">{{if .ShowResolved}}✓{{else}}○{{end}} {{.ResolvedCount}} resolved</button></form>
+    {{end}}
+    {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
+    <form method="POST"><button type="submit" name="toggleCommentList" class="chip outdated" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">⚠ {{.OutdatedCount}} outdated</button></form>
     {{end}}
   </div>
   {{if gt (len .Files) 1}}
@@ -1067,13 +1104,15 @@ main.viewer { overscroll-behavior: contain; }
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}</div>
+          <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}</div>
           <div class="ac-body">{{.Body}}</div>
         </button>
       </form>
+      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
       <div class="ac-actions">
         <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>
-        {{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}
+        {{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}
+        {{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}
         <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
         <dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog>
       </div>
@@ -1101,7 +1140,7 @@ main.viewer { overscroll-behavior: contain; }
        the CSV — nothing is renumbered. Comments/composer interleave
        by source line the same way the line view does, just matched to
        a block's [StartLine,EndLine] span. */}}
-  <div class="md-view" data-key="md-{{.Path}}">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="MB-{{$bs}}-{{$be}}"><div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>{{end}}</div>
+  <div class="md-view" data-key="md-{{.Path}}">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="MB-{{$bs}}-{{$be}}"><div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>{{end}}</div>
   {{else if .Lines}}
   {{/* data-key by path is load-bearing, NOT just a scroll-reset hack:
        per-row keys are "L<old>-<new>" which COLLIDE across files
@@ -1113,7 +1152,7 @@ main.viewer { overscroll-behavior: contain; }
        Measured: this costs no extra bandwidth — livetemplate resends
        {{range}} statics on a full content swap regardless of the key.
        Bonus: a fresh element also starts at scroll (0,0). */}}
-  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>
+  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>
 {{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
@@ -1136,6 +1175,15 @@ main.viewer { overscroll-behavior: contain; }
   <span>Comment on <code>{{.LastDeletedComment.File}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
   <form method="POST" style="margin:0;display:inline">
     <button type="submit" name="undoDelete" class="undo-btn">Undo</button>
+  </form>
+</div>
+{{end}}
+
+{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
+<div class="reanchor-prompt" role="status">
+  <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
+  <form method="POST" style="margin:0;display:inline">
+    <button type="submit" name="clearSelection" class="undo-btn">Cancel</button>
   </form>
 </div>
 {{end}}

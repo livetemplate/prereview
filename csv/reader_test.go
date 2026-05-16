@@ -103,3 +103,74 @@ func TestRead_SkipsMalformedRow(t *testing.T) {
 		t.Errorf("got IDs %s, %s — want 'good', 'good2'", got[0].ID, got[1].ID)
 	}
 }
+
+// TestRead_BackCompatColumnCounts pins that 7/8/9/10-column rows all
+// load with correct defaults so older CSVs round-trip after the anchor
+// migration (no false "outdated" on pre-migration data — empty status).
+func TestRead_BackCompatColumnCounts(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "comments.csv")
+	content := strings.Join([]string{
+		"id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status",
+		`c7,a.go,1,1,new,seven,2026-05-14T10:00:00Z`,                              // 7 cols
+		`c8,a.go,2,2,new,eight,2026-05-14T10:00:00Z,true`,                         // 8 cols
+		`c9,a.go,3,3,new,nine,2026-05-14T10:00:00Z,false,"{""text"":""x""}"`,      // 9 cols
+		`c10,a.go,4,4,new,ten,2026-05-14T10:00:00Z,true,"{""text"":""y""}",moved`, // 10 cols
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := Read(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("got %d rows, want 4: %+v", len(got), got)
+	}
+	// 7-col: resolved false, no anchor, no status.
+	if got[0].Resolved || got[0].Anchor != "" || got[0].AnchorStatus != "" {
+		t.Errorf("7-col defaults wrong: %+v", got[0])
+	}
+	// 8-col: resolved parsed, still no anchor/status.
+	if !got[1].Resolved || got[1].Anchor != "" || got[1].AnchorStatus != "" {
+		t.Errorf("8-col defaults wrong: %+v", got[1])
+	}
+	// 9-col: anchor present, status still empty.
+	if got[2].Anchor != `{"text":"x"}` || got[2].AnchorStatus != "" {
+		t.Errorf("9-col anchor/status wrong: %+v", got[2])
+	}
+	// 10-col: full.
+	if !got[3].Resolved || got[3].Anchor != `{"text":"y"}` || got[3].AnchorStatus != "moved" {
+		t.Errorf("10-col full row wrong: %+v", got[3])
+	}
+}
+
+// TestRead_AnchorRoundTrip pins that an anchor JSON blob containing the
+// CSV-hostile characters (newline, comma, double-quote) survives a
+// Writer→Read round-trip byte-for-byte alongside the status column.
+func TestRead_AnchorRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	w := NewWriter(filepath.Join(dir, "comments.csv"))
+	anchor := `{"text":"line one\nline, two \"q\"","hash":"abc"}`
+	in := []Row{{
+		ID: "A", File: "d.md", FromLine: 5, ToLine: 7, Side: "new",
+		Body: "b", CreatedAt: time.Unix(0, 0).UTC(),
+		Anchor: anchor, AnchorStatus: "outdated",
+	}}
+	if err := w.Write(in); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := Read(w.Path())
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d rows, want 1", len(got))
+	}
+	if got[0].Anchor != anchor {
+		t.Errorf("anchor round-trip mismatch:\ngot:  %q\nwant: %q", got[0].Anchor, anchor)
+	}
+	if got[0].AnchorStatus != "outdated" {
+		t.Errorf("anchor_status = %q, want outdated", got[0].AnchorStatus)
+	}
+}

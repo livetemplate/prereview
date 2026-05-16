@@ -40,9 +40,9 @@ func TestWriter_HeaderAndRows(t *testing.T) {
 
 	got := readCSV(t, w.Path())
 	want := [][]string{
-		{"id", "file", "from_line", "to_line", "side", "body", "created_at", "resolved"},
-		{"01A", "main.go", "10", "12", "new", "extract this", "2026-05-14T10:00:00Z", "false"},
-		{"01B", "x.go", "1", "1", "old", "remove?", "2026-05-14T10:00:00Z", "false"},
+		{"id", "file", "from_line", "to_line", "side", "body", "created_at", "resolved", "anchor", "anchor_status"},
+		{"01A", "main.go", "10", "12", "new", "extract this", "2026-05-14T10:00:00Z", "false", "", ""},
+		{"01B", "x.go", "1", "1", "old", "remove?", "2026-05-14T10:00:00Z", "false", "", ""},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d rows, want %d: %v", len(got), len(want), got)

@@ -71,6 +71,50 @@ func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDi
 	return diff, nil
 }
 
+// relocateSelected re-anchors the selected file's comments against the
+// freshly-loaded CurrentDiff and self-heals the CSV on a confident
+// shift. Best-effort: a persist failure is logged, not fatal — the
+// in-memory shift still renders correctly for this session.
+func (c *PrereviewController) relocateSelected(state *PrereviewState) {
+	if state.CurrentDiff == nil || state.SelectedFile == "" {
+		return
+	}
+	if relocateComments(state.Comments, state.SelectedFile, state.CurrentDiff) {
+		if err := c.persist(state.Comments); err != nil {
+			slog.Warn("self-heal persist (selected file)", "err", err)
+		}
+	}
+}
+
+// relocateAll re-anchors every commented file (loading each diff via
+// the per-file cache) and self-heals the CSV once if anything changed.
+// Used where the CSV / all-comments overview must be accurate even for
+// files the user never opened this session: the skill handoff and
+// opening the all-comments view.
+func (c *PrereviewController) relocateAll(state *PrereviewState) {
+	seen := map[string]bool{}
+	anyChanged := false
+	for _, cm := range state.Comments {
+		if cm.Resolved || cm.Anchor.Empty() || seen[cm.File] {
+			continue
+		}
+		seen[cm.File] = true
+		diff, err := c.loadDiffCached(state.Base, cm.File)
+		if err != nil {
+			slog.Warn("relocateAll: load diff", "file", cm.File, "err", err)
+			continue
+		}
+		if relocateComments(state.Comments, cm.File, diff) {
+			anyChanged = true
+		}
+	}
+	if anyChanged {
+		if err := c.persist(state.Comments); err != nil {
+			slog.Warn("self-heal persist (all files)", "err", err)
+		}
+	}
+}
+
 // fileMtime returns the file's mtime or the zero time if it can't be
 // stat'd. Used as the cache-invalidation hash for diffCache.
 func fileMtime(full string) time.Time {
@@ -154,6 +198,10 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 			state.CurrentDiff = diff
 		}
 	}
+	// Re-anchor the selected file's comments against the just-loaded
+	// (live working-tree) diff so a doc edited since the comment was
+	// made shows the comment on its content, not a stale line.
+	c.relocateSelected(&state)
 	return state, nil
 }
 
@@ -218,6 +266,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
 	state.FileDrawerOpen = false
+	c.relocateSelected(&state)
 	return state, nil
 }
 
@@ -268,6 +317,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	state.SelectionSide = ""
 	state.LastDeletedComment = nil
 	state.EditingCommentID = ""
+	c.relocateSelected(&state)
 	return state, nil
 }
 
@@ -309,6 +359,11 @@ func (c *PrereviewController) SetFileFilter(state PrereviewState, ctx *livetempl
 func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.ShowAllComments = !state.ShowAllComments
 	state.MoreMenuOpen = false
+	// Opening the overview must show accurate badges/snippets for every
+	// commented file, including ones never opened this session.
+	if state.ShowAllComments {
+		c.relocateAll(&state)
+	}
 	return state, nil
 }
 
@@ -472,6 +527,7 @@ func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemp
 	state.SelectionSide = ""
 	state.DraftBody = ""
 	state.EditingCommentID = ""
+	state.ReanchorCommentID = ""
 	return state, nil
 }
 
@@ -501,6 +557,40 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 		from, to = to, from
 	}
 
+	// Re-anchor mode: the user picked a NEW location for an outdated
+	// comment. Re-point it and re-capture its anchor at the chosen
+	// range; this is the sanctioned move path (Edit is hidden for
+	// outdated comments). Self-contained: own persist + reset.
+	if state.ReanchorCommentID != "" {
+		idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == state.ReanchorCommentID })
+		if idx >= 0 {
+			prev := state.Comments[idx]
+			state.Comments[idx].Body = body
+			state.Comments[idx].FromLine = from
+			state.Comments[idx].ToLine = to
+			state.Comments[idx].Side = state.SelectionSide
+			state.Comments[idx].Anchor = captureAnchor(state.CurrentDiff, from, to, state.SelectionSide)
+			state.Comments[idx].AnchorStatus = anchorOK
+			if err := c.persist(state.Comments); err != nil {
+				state.Comments[idx] = prev
+				return state, fmt.Errorf("persist re-anchor: %w", err)
+			}
+			state.SelectionAnchor = 0
+			state.SelectionEnd = 0
+			state.SelectionSide = ""
+			state.DraftBody = ""
+			state.ReanchorCommentID = ""
+			state.EditingCommentID = ""
+			state.LastDeletedComment = nil
+			state.LastSaved = time.Now().Format("15:04:05")
+			state.Files = annotateCommentCounts(state.Files, state.Comments)
+			return state, nil
+		}
+		// Comment vanished (session race) — drop the flag and fall
+		// through to the normal add path rather than lose the body.
+		state.ReanchorCommentID = ""
+	}
+
 	// Edit-mode: state.EditingCommentID was set by EditComment when the
 	// user clicked Edit on an existing comment. Update that comment in
 	// place rather than appending a new one. ID, Created, and Resolved
@@ -516,21 +606,36 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 		if idx >= 0 {
 			prev := state.Comments[idx]
 			state.Comments[idx].Body = body
-			state.Comments[idx].FromLine = from
-			state.Comments[idx].ToLine = to
-			state.Comments[idx].Side = state.SelectionSide
+			if prev.AnchorStatus == anchorOutdated {
+				// The stored range points at unrelated content (the
+				// original is gone). Re-capturing here would silently
+				// re-anchor the comment to whatever now sits there and
+				// stamp it ok. Only the body changes; the user must use
+				// Re-anchor (not Edit) to re-place it. The UI also hides
+				// Edit for outdated comments — this is defense in depth.
+			} else {
+				state.Comments[idx].FromLine = from
+				state.Comments[idx].ToLine = to
+				state.Comments[idx].Side = state.SelectionSide
+				// Re-capture at the (possibly new) range — else a later
+				// relocate would drag the edited comment back.
+				state.Comments[idx].Anchor = captureAnchor(state.CurrentDiff, from, to, state.SelectionSide)
+				state.Comments[idx].AnchorStatus = anchorOK
+			}
 			rollback = func() { state.Comments[idx] = prev }
 		}
 	}
 	if rollback == nil {
 		cm := Comment{
-			ID:       newCommentID(),
-			File:     state.SelectedFile,
-			FromLine: from,
-			ToLine:   to,
-			Side:     state.SelectionSide,
-			Body:     body,
-			Created:  time.Now().UTC(),
+			ID:           newCommentID(),
+			File:         state.SelectedFile,
+			FromLine:     from,
+			ToLine:       to,
+			Side:         state.SelectionSide,
+			Body:         body,
+			Created:      time.Now().UTC(),
+			Anchor:       captureAnchor(state.CurrentDiff, from, to, state.SelectionSide),
+			AnchorStatus: anchorOK,
 		}
 		state.Comments = append(state.Comments, cm)
 		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
@@ -583,6 +688,40 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	// The composer only renders in the diff branch; when Edit is invoked
 	// from the all-comments view this drops back into the file so the
 	// edit composer is actually visible (no-op when already in the diff).
+	state.ShowAllComments = false
+	return state, nil
+}
+
+// ReanchorComment starts re-placing an outdated comment: it jumps to
+// the comment's file and arms ReanchorCommentID, but deliberately does
+// NOT pre-seed the (stale) line selection — the user must pick the new
+// location. The body is preserved in the composer. The next Save
+// (AddComment, ReanchorCommentID branch) re-points the comment and
+// re-captures its content anchor. This is the only sanctioned way to
+// move an outdated comment; Edit is hidden for outdated comments
+// precisely so it can't silently re-anchor against stale content.
+func (c *PrereviewController) ReanchorComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("reanchorComment: missing id")
+	}
+	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
+	if idx < 0 {
+		return state, fmt.Errorf("reanchorComment: id %s not found", id)
+	}
+	cm := state.Comments[idx]
+	state.SelectedFile = cm.File
+	if diff, err := c.loadDiffCached(state.Base, cm.File); err == nil {
+		state.CurrentDiff = diff
+	}
+	// No pre-seeded selection — the whole point is to choose a new spot.
+	state.SelectionAnchor = 0
+	state.SelectionEnd = 0
+	state.SelectionSide = cm.Side
+	state.DraftBody = cm.Body
+	state.ReanchorCommentID = cm.ID
+	state.EditingCommentID = ""
+	state.LastDeletedComment = nil
 	state.ShowAllComments = false
 	return state, nil
 }
@@ -660,6 +799,10 @@ func (c *PrereviewController) UndoDelete(state PrereviewState, ctx *livetemplate
 //
 // Server keeps running afterwards so the user can keep editing.
 func (c *PrereviewController) HandOff(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	// The CSV only becomes a contract at handoff. Re-anchor every
+	// commented file first so the skill gets accurate line numbers (and
+	// an explicit anchor_status=outdated where it cannot be trusted).
+	c.relocateAll(&state)
 	if err := c.persist(state.Comments); err != nil {
 		return state, fmt.Errorf("final csv write: %w", err)
 	}
@@ -699,14 +842,16 @@ func (c *PrereviewController) persist(comments []Comment) error {
 	rows := make([]csv.Row, 0, len(comments))
 	for _, cm := range comments {
 		rows = append(rows, csv.Row{
-			ID:        cm.ID,
-			File:      cm.File,
-			FromLine:  cm.FromLine,
-			ToLine:    cm.ToLine,
-			Side:      cm.Side,
-			Body:      cm.Body,
-			CreatedAt: cm.Created,
-			Resolved:  cm.Resolved,
+			ID:           cm.ID,
+			File:         cm.File,
+			FromLine:     cm.FromLine,
+			ToLine:       cm.ToLine,
+			Side:         cm.Side,
+			Body:         cm.Body,
+			CreatedAt:    cm.Created,
+			Resolved:     cm.Resolved,
+			Anchor:       cm.Anchor.JSON(),
+			AnchorStatus: cm.AnchorStatus,
 		})
 	}
 	return c.CSVWriter.Write(rows)
@@ -758,6 +903,7 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 		out = append(out, Comment{
 			ID: r.ID, File: r.File, FromLine: r.FromLine, ToLine: r.ToLine,
 			Side: r.Side, Body: r.Body, Created: r.CreatedAt, Resolved: r.Resolved,
+			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus,
 		})
 	}
 	return out

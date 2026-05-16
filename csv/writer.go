@@ -22,6 +22,11 @@ type Row struct {
 	Body      string
 	CreatedAt time.Time
 	Resolved  bool
+	// Anchor is an opaque JSON string (the main package owns its shape);
+	// the csv package stays free of main-package types. AnchorStatus is
+	// "ok" | "moved" | "outdated".
+	Anchor       string
+	AnchorStatus string
 }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
@@ -127,5 +132,7 @@ func rowToRecord(r Row) []string {
 		r.Body,
 		r.CreatedAt.UTC().Format(time.RFC3339),
 		resolved,
+		r.Anchor,
+		r.AnchorStatus,
 	}
 }

@@ -68,6 +68,14 @@ type PrereviewState struct {
 	// append a new comment instead of updating in place.
 	EditingCommentID string `json:"editing_comment_id" lvt:"persist"`
 
+	// ReanchorCommentID is set when the user taps "Re-anchor here" on an
+	// outdated comment. The next line/range they select + Save re-points
+	// that comment (and re-captures its content anchor) instead of
+	// appending. Mutually exclusive with EditingCommentID. Persisted for
+	// the same reconnect-resilience reason. Cleared by AddComment /
+	// ClearSelection.
+	ReanchorCommentID string `json:"reanchor_comment_id" lvt:"persist"`
+
 	// LastDeletedComment holds the most recently deleted comment so the
 	// user can undo. Cleared by ANY other mutation (add, edit, another
 	// delete, hand off, quit) so the undo affordance can't surprise the
@@ -158,6 +166,20 @@ func (s PrereviewState) ResolvedCount() int {
 	n := 0
 	for _, c := range s.Comments {
 		if c.Resolved {
+			n++
+		}
+	}
+	return n
+}
+
+// OutdatedCount returns how many non-resolved comments could not be
+// confidently re-anchored (their line numbers no longer point at the
+// intended content) — drives the header "N need re-anchoring" hint so
+// drift is discoverable without opening every file.
+func (s PrereviewState) OutdatedCount() int {
+	n := 0
+	for _, c := range s.Comments {
+		if !c.Resolved && c.AnchorOutdated() {
 			n++
 		}
 	}
@@ -293,7 +315,22 @@ type Comment struct {
 	// Resolved marks the comment as "addressed; keep as history". The skill
 	// should act only on unresolved comments. Toggled via ResolveComment.
 	Resolved bool `json:"resolved"`
+	// Anchor is the content fingerprint captured at create/edit time so
+	// the comment can be re-located when the file changes (see anchor.go).
+	// AnchorStatus is "ok" | "moved" | "outdated" (empty == ok for
+	// legacy pre-migration comments).
+	Anchor       CommentAnchor `json:"anchor"`
+	AnchorStatus string        `json:"anchor_status"`
 }
+
+// AnchorOutdated reports that re-location could not confidently place
+// the comment — its line numbers no longer point at the intended
+// content and a human (or the skill) must re-anchor or resolve it.
+func (c Comment) AnchorOutdated() bool { return c.AnchorStatus == anchorOutdated }
+
+// AnchorMoved reports that the comment was auto-shifted to follow its
+// content after the file changed (purely informational in the UI).
+func (c Comment) AnchorMoved() bool { return c.AnchorStatus == anchorMoved }
 
 // LineSpan returns "L42" for single-line and "L42-L48" for ranges.
 // Method on Comment so the template can call {{.LineSpan}} on each entry.
