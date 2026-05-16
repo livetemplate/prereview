@@ -15,24 +15,31 @@ func TestRenderMarkdownBlocks_LineRangesAndHTML(t *testing.T) {
 	// 7: - item two
 	src := "# Title\n\nfirst paragraph line\ncontinues here\n\n- item one\n- item two\n"
 	blocks := RenderMarkdownBlocks([]byte(src))
-	// The 2-item list is descended one level → one block per item, so
-	// each list item is independently commentable.
-	if len(blocks) != 4 {
-		t.Fatalf("got %d blocks, want 4 (heading, paragraph, item, item)", len(blocks))
+	// heading(1) · prose line(3) · prose line(4) · item(6) · item(7):
+	// the 2-line paragraph splits per source line and the 2-item list
+	// splits per item, so every line is independently commentable.
+	if len(blocks) != 5 {
+		t.Fatalf("got %d blocks, want 5 (heading, 2 prose lines, 2 items); blocks=%+v", len(blocks), blocks)
 	}
 
-	h, p, l1, l2 := blocks[0], blocks[1], blocks[2], blocks[3]
+	h, p1, p2, l1, l2 := blocks[0], blocks[1], blocks[2], blocks[3], blocks[4]
 	if !strings.Contains(string(h.HTML), "<h1") || !strings.Contains(string(h.HTML), "Title") {
 		t.Errorf("heading HTML = %q, want an <h1>Title", h.HTML)
 	}
 	if h.StartLine != 1 || h.EndLine != 1 {
 		t.Errorf("heading lines = %d-%d, want 1-1", h.StartLine, h.EndLine)
 	}
-	if !strings.Contains(string(p.HTML), "<p>") {
-		t.Errorf("paragraph HTML = %q, want a <p>", p.HTML)
+	if !strings.Contains(string(p1.HTML), "<p>") || !strings.Contains(string(p1.HTML), "first paragraph line") {
+		t.Errorf("prose line 1 HTML = %q, want <p>first paragraph line", p1.HTML)
 	}
-	if p.StartLine != 3 || p.EndLine != 4 {
-		t.Errorf("paragraph lines = %d-%d, want 3-4 (multi-source-line prose stays one block)", p.StartLine, p.EndLine)
+	if p1.StartLine != 3 || p1.EndLine != 3 {
+		t.Errorf("prose line 1 = %d-%d, want 3-3 (paragraph split per source line)", p1.StartLine, p1.EndLine)
+	}
+	if !strings.Contains(string(p2.HTML), "continues here") {
+		t.Errorf("prose line 2 HTML = %q, want 'continues here'", p2.HTML)
+	}
+	if p2.StartLine != 4 || p2.EndLine != 4 {
+		t.Errorf("prose line 2 = %d-%d, want 4-4", p2.StartLine, p2.EndLine)
 	}
 	if !strings.Contains(string(l1.HTML), "<li>") || !strings.Contains(string(l1.HTML), "item one") {
 		t.Errorf("list item 1 HTML = %q, want <li>item one", l1.HTML)
@@ -227,6 +234,56 @@ func TestRenderMarkdownBlocks_TablePerRow(t *testing.T) {
 	}
 	if hdr.StartLine != 1 {
 		t.Errorf("header StartLine = %d, want 1", hdr.StartLine)
+	}
+}
+
+// TestRenderMarkdownBlocks_ProsePerLine pins that a paragraph authored
+// one-sentence-per-line splits into one block per source line (so a
+// comment targets a single prose line, not the whole 15-line range),
+// inline formatting survives per line, and a continuation line that
+// would misfire a block rule standalone falls back to safe escaped
+// text on its own line.
+func TestRenderMarkdownBlocks_ProsePerLine(t *testing.T) {
+	// 1: intro **bold** and `code`
+	// 2: 3) a & b paren-ordered     (start!=1 → stays a paragraph line)
+	// 3: tail plain line
+	src := "intro **bold** and `code`\n3) a & b paren-ordered\ntail plain line\n"
+	blocks := RenderMarkdownBlocks([]byte(src))
+	if len(blocks) != 3 {
+		t.Fatalf("got %d blocks, want 3 (one per source line); blocks=%+v", len(blocks), blocks)
+	}
+
+	b0, b1, b2 := blocks[0], blocks[1], blocks[2]
+	if !strings.Contains(string(b0.HTML), "<strong>bold</strong>") || !strings.Contains(string(b0.HTML), "<code>code</code>") {
+		t.Errorf("line 1 HTML = %q, want inline bold+code preserved", b0.HTML)
+	}
+	if b0.StartLine != 1 || b0.EndLine != 1 {
+		t.Errorf("line 1 = %d-%d, want 1-1", b0.StartLine, b0.EndLine)
+	}
+
+	// Misfire guard: `3) …` renders as <ol> standalone → fallback to
+	// HTML-escaped text in a <p>, anchored to its own line.
+	if strings.Contains(string(b1.HTML), "<ol") || strings.Contains(string(b1.HTML), "<li>") {
+		t.Errorf("line 2 must NOT misfire as a list; got %q", b1.HTML)
+	}
+	if !strings.HasPrefix(string(b1.HTML), "<p>") || !strings.Contains(string(b1.HTML), "3) a &amp; b paren-ordered") {
+		t.Errorf("line 2 HTML = %q, want escaped literal text in a <p>", b1.HTML)
+	}
+	if b1.StartLine != 2 || b1.EndLine != 2 {
+		t.Errorf("line 2 = %d-%d, want 2-2", b1.StartLine, b1.EndLine)
+	}
+
+	if !strings.Contains(string(b2.HTML), "tail plain line") || b2.StartLine != 3 || b2.EndLine != 3 {
+		t.Errorf("line 3 = %q @ %d-%d, want 'tail plain line' @ 3-3", b2.HTML, b2.StartLine, b2.EndLine)
+	}
+
+	// A single-source-line paragraph stays exactly one block.
+	one := RenderMarkdownBlocks([]byte("just one sentence here\n"))
+	if len(one) != 1 || one[0].StartLine != 1 || one[0].EndLine != 1 {
+		t.Fatalf("single-line paragraph: got %+v, want 1 block @ 1-1", one)
+	}
+	if !strings.Contains(string(one[0].HTML), "<p>just one sentence here</p>") {
+		t.Errorf("single-line paragraph HTML = %q", one[0].HTML)
 	}
 }
 

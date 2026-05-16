@@ -1500,19 +1500,20 @@ func setupFixtureRepoMarkdown(t *testing.T) string {
 	runCmd(t, dir, "git", "config", "user.name", "Test")
 	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
 
-	// Lines: 1 h1 · 3 para · 5-6 list · 8-10 code · 12-15 GFM table
-	// (12 header, 14 row C, 15 row D). The table lets the per-row e2e
-	// click a single body row; h1 stays the first block so the existing
+	// Lines: 1 h1 · 3-5 one-sentence-per-line prose paragraph · 7-8
+	// list · 10-12 code · 14-17 GFM table (14 header, 16 row C, 17 row
+	// D). The 3-line paragraph exercises prose-per-line; the table
+	// exercises per-row; h1 stays the first block so the existing
 	// whole-block test is unaffected.
-	const base = "# Doc Title\n\nIntro paragraph here.\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow |\n"
+	const base = "# Doc Title\n\nIntro one clause here\nsecond clause continues\nthird clause ends\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow |\n"
 	mustWrite(t, dir, "docs.md", base)
 	runCmd(t, dir, "git", "add", "-A")
 	runCmd(t, dir, "git", "commit", "-q", "-m", "seed docs")
 
-	// Edit the paragraph line (3) AND the row-D line (15) so docs.md is
-	// a changed file and row D falls inside a raw-view diff hunk (so the
-	// per-row comment round-trips visibly to the line viewer too).
-	mustWrite(t, dir, "docs.md", "# Doc Title\n\nIntro paragraph here. EDITED\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow EDITED |\n")
+	// Edit a prose line (4) AND the row-D line (17) so docs.md is a
+	// changed file and both fall inside raw-view diff hunks (so the
+	// per-line comments round-trip visibly to the line viewer too).
+	mustWrite(t, dir, "docs.md", "# Doc Title\n\nIntro one clause here\nsecond clause EDITED\nthird clause ends\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow EDITED |\n")
 	return dir
 }
 
@@ -1719,8 +1720,8 @@ func TestE2E_MarkdownPerRowComment(t *testing.T) {
 	if r[1] != "docs.md" {
 		t.Errorf("file = %q, want docs.md", r[1])
 	}
-	if r[2] != "15" || r[3] != "15" {
-		t.Errorf("from/to = %q/%q, want 15/15 (row D's own source line, NOT the whole table)%s", r[2], r[3], diag())
+	if r[2] != "17" || r[3] != "17" {
+		t.Errorf("from/to = %q/%q, want 17/17 (row D's own source line, NOT the whole table)%s", r[2], r[3], diag())
 	}
 	if !strings.Contains(r[5], "row D needs a fix") {
 		t.Errorf("body = %q, missing comment text", r[5])
@@ -1752,6 +1753,103 @@ func TestE2E_MarkdownPerRowComment(t *testing.T) {
 	}
 	if !underRowD {
 		t.Errorf("comment must render under row D's own block, not another row/the table%s", diag())
+	}
+
+	mu.Lock()
+	for _, line := range consoleLines {
+		if strings.Contains(strings.ToLower(line), "error") {
+			t.Errorf("browser console error: %s", line)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}
+
+// TestE2E_MarkdownProsePerLine pins the fix for the user-reported
+// "some places still a range": a one-sentence-per-line paragraph
+// (L3-L5) must split into one block per source line so tapping a
+// single prose line composes a single-line comment (e.g. "L5"), never
+// a multi-line range like "L3-L5".
+func TestE2E_MarkdownProsePerLine(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdown(t), 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network domain: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`main`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server stderr ---\n%s\n--- console ---\n%s\n--- ws frames ---\n%s\n--- rendered html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.waitReady()
+
+	// The 3-clause paragraph (source lines 3-5) must be 3 distinct
+	// blocks: the block holding clause 1 must NOT also hold clause 3.
+	var hasMdView, clause1HasClause3 bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView),
+		chromedp.Evaluate(`(()=>{const e=[...document.querySelectorAll('.md-block .md-rendered')].find(x=>x.textContent.includes('Intro one clause here')); return e?e.textContent.includes('third clause ends'):true;})()`, &clause1HasClause3),
+	); err != nil {
+		t.Fatalf("prose-split query: %v%s", err, diag())
+	}
+	if !hasMdView {
+		t.Fatalf("Markdown should render by default%s", diag())
+	}
+	if clause1HasClause3 {
+		t.Fatalf("the one-sentence-per-line paragraph was NOT split: the clause-1 block also contains clause 3 (still one big block)%s", diag())
+	}
+
+	// Tap ONLY the clause-3 line (source line 5) and assert the
+	// composer is scoped to that single line, not a range.
+	var clicked bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{const el=[...document.querySelectorAll('.md-block .md-rendered')].find(e=>e.textContent.includes('third clause ends')); if(el){el.click();return true;} return false;})()`, &clicked),
+	); err != nil || !clicked {
+		t.Fatalf("could not click the clause-3 prose line: err=%v clicked=%v%s", err, clicked, diag())
+	}
+	var composerText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.Evaluate(`(document.querySelector('.composer')||{}).textContent||''`, &composerText),
+	); err != nil {
+		t.Fatalf("composer for prose line: %v%s", err, diag())
+	}
+	// clause 3 is source line 5 → label must be the single line "L5",
+	// not a range ("L3-L5" / any "-L").
+	if !strings.Contains(composerText, "L5") {
+		t.Errorf("composer label = %q, want it scoped to single line L5%s", composerText, diag())
+	}
+	if strings.Contains(composerText, "-L") || strings.Contains(composerText, "L3") || strings.Contains(composerText, "L4") {
+		t.Errorf("composer label = %q, must NOT be a multi-line range (this was the bug)%s", composerText, diag())
 	}
 
 	mu.Lock()

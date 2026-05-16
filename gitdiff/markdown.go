@@ -2,6 +2,7 @@ package gitdiff
 
 import (
 	"bytes"
+	"html"
 	"html/template"
 	"strconv"
 	"strings"
@@ -20,13 +21,15 @@ import (
 // round-trips with the raw line view and the CSV — nothing is
 // renumbered.
 //
-// Most top-level Markdown nodes (heading, paragraph, code fence,
-// blockquote, …) are one block. Two container types are descended ONE
-// level so review comments can target a single line of structured
-// content: a list yields one block per list item, and a table yields
-// one block for the header row plus one per body row. A multi-source-
-// line prose paragraph stays a single block — reflowed prose has no
-// per-source-line visual anchor.
+// Single-line nodes (heading, code fence, blockquote, …) are one
+// block. Containers are descended ONE level so review comments can
+// target a single line: a list yields one block per list item, a table
+// one block for the header row plus one per body row, and a paragraph
+// that spans multiple SOURCE lines yields one block per source line
+// (these docs are authored one-sentence-per-line, which CommonMark
+// soft-wraps into a single paragraph — splitting restores per-line
+// commenting). An inline span that crosses a soft line-break degrades
+// to literal text on that one line; it never produces invalid HTML.
 type MarkdownBlock struct {
 	HTML      template.HTML
 	StartLine int
@@ -106,6 +109,23 @@ func RenderMarkdownBlocks(src []byte) []MarkdownBlock {
 				// injecting unbalanced table HTML into the page.
 				emit(n, renderNode(n))
 			}
+		case ast.KindParagraph:
+			ls := n.Lines()
+			if ls == nil || ls.Len() <= 1 {
+				emit(n, renderNode(n)) // single source line — one block
+				break
+			}
+			for i := 0; i < ls.Len(); i++ {
+				seg := ls.At(i)
+				if h := renderProseLine(src[seg.Start:seg.Stop]); h != "" {
+					ln := lineAt(seg.Start)
+					out = append(out, MarkdownBlock{
+						HTML:      template.HTML(h), //nolint:gosec // single <p> of goldmark safe-mode output, else HTML-escaped text
+						StartLine: ln,
+						EndLine:   ln,
+					})
+				}
+			}
 		default:
 			emit(n, renderNode(n))
 		}
@@ -124,6 +144,29 @@ func wrapListItem(lst *ast.List, itemHTML string, ordinal int) string {
 		return `<ol start="` + strconv.Itoa(ordinal) + `">` + itemHTML + `</ol>`
 	}
 	return `<ul>` + itemHTML + `</ul>`
+}
+
+// renderProseLine renders ONE source line of a paragraph as its own
+// <p> block. Leading indentation is trimmed so a continuation line
+// can't misfire as an indented code block. goldmark still applies
+// block rules to a lone line, so a line that begins like a list/quote
+// (`2.`, `3)`, `>`) would render as <ol>/<blockquote>; we accept the
+// render only when it is a single <p>…</p>, otherwise we emit the
+// HTML-escaped raw text in a <p> (correct + line-anchored; inline
+// markup is lost only for that rare pathological line). Empty → "".
+func renderProseLine(raw []byte) string {
+	trimmed := bytes.TrimLeft(raw, " \t")
+	if len(bytes.TrimSpace(trimmed)) == 0 {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := mdRenderer.Convert(trimmed, &buf); err == nil {
+		h := string(bytes.TrimSpace(buf.Bytes()))
+		if strings.HasPrefix(h, "<p>") && strings.HasSuffix(h, "</p>") {
+			return h
+		}
+	}
+	return "<p>" + html.EscapeString(string(bytes.TrimSpace(raw))) + "</p>"
 }
 
 type rowBlock struct {
