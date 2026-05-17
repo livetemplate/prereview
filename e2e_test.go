@@ -2406,6 +2406,143 @@ func TestE2E_MarkdownProsePerLine(t *testing.T) {
 	mu.Unlock()
 }
 
+// setupFixtureRepoHardWrap commits a seed then writes a hard-wrapped
+// (~80-col, lines break mid-sentence) Markdown doc as the single
+// changed file — the exact shape the user reported on the
+// broadcast-action proposal. Lines: 1 h1, 3-5 one paragraph wrapped
+// mid-sentence (line 3 ends "naming," with no terminal punctuation).
+func setupFixtureRepoHardWrap(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+	mustWrite(t, dir, "docs.md", "# Hardwrap Doc\n\nseed.\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+	mustWrite(t, dir, "docs.md",
+		"# Hardwrap Doc\n\n"+
+			"**The design:** a single primitive — a named topic, with classic publish/subscribe naming,\n"+
+			"where per-identity targeting is a topic derived from the identity. This is the `Phoenix.PubSub`\n"+
+			"model. Per-connection state is the default; nothing fans out unless you `Publish`.\n")
+	return dir
+}
+
+// TestE2E_MarkdownHardWrapReflow pins the fix for the user-reported
+// "unnecessary line breaks in the same sentence": a hard-wrapped
+// paragraph renders as ONE rendered block (a sentence never breaks
+// across visual lines), the inline code span that straddles a wrap
+// survives, and the block stays commentable at its full paragraph
+// source span. Captures console, server stderr, WS frames and HTML.
+func TestE2E_MarkdownHardWrapReflow(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoHardWrap(t), 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network domain: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`main`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server stderr ---\n%s\n--- console ---\n%s\n--- ws frames ---\n%s\n--- rendered html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.waitReady()
+
+	// Exactly one rendered block holds the whole hard-wrapped paragraph;
+	// the previously mid-sentence-broken boundary is contiguous in it.
+	var hasMdView bool
+	var paraBlocks int
+	var blockText, blockHTML string
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView),
+		chromedp.Evaluate(`[...document.querySelectorAll('.md-block .md-rendered')].filter(e=>e.textContent.includes('a single primitive')).length`, &paraBlocks),
+		chromedp.Evaluate(`(()=>{const e=[...document.querySelectorAll('.md-block .md-rendered')].find(x=>x.textContent.includes('a single primitive')); return e?e.textContent:'';})()`, &blockText),
+		chromedp.Evaluate(`(()=>{const e=[...document.querySelectorAll('.md-block .md-rendered')].find(x=>x.textContent.includes('a single primitive')); return e?e.innerHTML:'';})()`, &blockHTML),
+	); err != nil {
+		t.Fatalf("hard-wrap render query: %v%s", err, diag())
+	}
+	if !hasMdView {
+		t.Fatalf("Markdown should render by default%s", diag())
+	}
+	if paraBlocks != 1 {
+		t.Fatalf("hard-wrapped paragraph must be ONE block, got %d (a per-line split would give 3 — the reported bug)%s", paraBlocks, diag())
+	}
+	if !strings.Contains(blockText, "publish/subscribe naming,") ||
+		!strings.Contains(blockText, "where per-identity targeting") ||
+		!strings.Contains(blockText, "Per-connection state is the default") {
+		t.Fatalf("the sentence must be contiguous in one block; block text = %q%s", blockText, diag())
+	}
+	if !strings.Contains(blockHTML, "<code>Phoenix.PubSub</code>") {
+		t.Errorf("code span straddling the wrap was not preserved; block HTML = %q%s", blockHTML, diag())
+	}
+
+	// Still commentable: clicking the reflowed block anchors a comment
+	// to the FULL paragraph source span (lines 3-5).
+	if !clickMdBlock(p, "a single primitive") {
+		t.Fatalf("could not click the reflowed paragraph block%s", diag())
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "tighten this paragraph", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.md-block .inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("comment on reflowed block: %v%s", err, diag())
+	}
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected header + 1 row, got %d: %v%s", len(rows), rows, diag())
+	}
+	r := rows[1]
+	if r[1] != "docs.md" {
+		t.Errorf("file = %q, want docs.md", r[1])
+	}
+	if r[2] != "3" || r[3] != "5" {
+		t.Errorf("from/to = %q/%q, want 3/5 (full hard-wrapped paragraph span)%s", r[2], r[3], diag())
+	}
+	if !strings.Contains(r[5], "tighten this paragraph") {
+		t.Errorf("body = %q, missing comment text", r[5])
+	}
+
+	mu.Lock()
+	for _, line := range consoleLines {
+		if strings.Contains(strings.ToLower(line), "error") {
+			t.Errorf("browser console error: %s", line)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}
+
 // TestE2E_AutoSelectFirstFile verifies that landing on the page with
 // no SelectedFile (initial connect) auto-loads the diff for the first
 // file in the drawer, so the right pane is populated on first paint
