@@ -24,12 +24,18 @@ import (
 // Single-line nodes (heading, code fence, blockquote, …) are one
 // block. Containers are descended ONE level so review comments can
 // target a single line: a list yields one block per list item, a table
-// one block for the header row plus one per body row, and a paragraph
-// that spans multiple SOURCE lines yields one block per source line
-// (these docs are authored one-sentence-per-line, which CommonMark
-// soft-wraps into a single paragraph — splitting restores per-line
-// commenting). An inline span that crosses a soft line-break degrades
-// to literal text on that one line; it never produces invalid HTML.
+// one block for the header row plus one per body row. A paragraph that
+// spans multiple SOURCE lines is split into one block per source line
+// ONLY when it is authored one-sentence-per-line (every line except
+// possibly the last ends a sentence) — CommonMark soft-wraps such a
+// paragraph into one <p>, and splitting restores per-line commenting.
+// A hard-wrapped paragraph (lines break mid-sentence) instead renders
+// as a single reflowed CommonMark paragraph, so a sentence is never
+// broken across visual lines; it stays commentable at paragraph
+// granularity (its wrap points are arbitrary, so per-line comments
+// there would be meaningless). An inline span that crosses a soft
+// line-break degrades to literal text on that one line; it never
+// produces invalid HTML.
 type MarkdownBlock struct {
 	HTML      template.HTML
 	StartLine int
@@ -115,6 +121,14 @@ func RenderMarkdownBlocks(src []byte) []MarkdownBlock {
 				emit(n, renderNode(n)) // single source line — one block
 				break
 			}
+			if !oneSentencePerLine(ls, src) {
+				// Hard-wrapped prose: lines break mid-sentence, so
+				// per-line splitting would visually break a sentence.
+				// Render as one reflowed CommonMark paragraph instead;
+				// still commentable at paragraph granularity.
+				emit(n, renderNode(n))
+				break
+			}
 			for i := 0; i < ls.Len(); i++ {
 				seg := ls.At(i)
 				if h := renderProseLine(src[seg.Start:seg.Stop]); h != "" {
@@ -144,6 +158,45 @@ func wrapListItem(lst *ast.List, itemHTML string, ordinal int) string {
 		return `<ol start="` + strconv.Itoa(ordinal) + `">` + itemHTML + `</ol>`
 	}
 	return `<ul>` + itemHTML + `</ul>`
+}
+
+// oneSentencePerLine reports whether every line of a multi-line
+// paragraph except the last ends a sentence. True ⇒ the author wrote
+// one sentence per line (CommonMark soft-wrapped them into a single
+// paragraph) so per-source-line splitting is safe and restores per-line
+// commenting; false ⇒ the paragraph is hard-wrapped (a line breaks
+// mid-sentence) and must render as one reflowed paragraph so a sentence
+// is never split across visual lines. The last line is ignored: a
+// paragraph can end anywhere, so its punctuation carries no signal.
+func oneSentencePerLine(ls *text.Segments, src []byte) bool {
+	for i := 0; i < ls.Len()-1; i++ {
+		seg := ls.At(i)
+		if !endsSentence(src[seg.Start:seg.Stop]) {
+			return false
+		}
+	}
+	return true
+}
+
+// endsSentence reports whether line, after trimming trailing whitespace
+// and trailing inline-close markers (code backticks, emphasis `*_`,
+// quotes and brackets `"')]}`), ends in sentence-terminal punctuation
+// (. ! ?). `:` `;` `,` and em-dash are deliberately NOT terminal — a
+// line ending in one of those is a hard-wrap continuation, not a
+// sentence boundary.
+func endsSentence(line []byte) bool {
+	s := bytes.TrimRight(line, " \t\r\n")
+	s = bytes.TrimRight(s, "`*_\"')]}")
+	s = bytes.TrimRight(s, " \t")
+	if len(s) == 0 {
+		return false
+	}
+	switch s[len(s)-1] {
+	case '.', '!', '?':
+		return true
+	default:
+		return false
+	}
 }
 
 // renderProseLine renders ONE source line of a paragraph as its own

@@ -8,12 +8,12 @@ import (
 func TestRenderMarkdownBlocks_LineRangesAndHTML(t *testing.T) {
 	// 1: # Title
 	// 2: (blank)
-	// 3: first paragraph line
-	// 4: continues here
+	// 3: first paragraph line.   (one sentence per line → splits per line)
+	// 4: continues here.
 	// 5: (blank)
 	// 6: - item one
 	// 7: - item two
-	src := "# Title\n\nfirst paragraph line\ncontinues here\n\n- item one\n- item two\n"
+	src := "# Title\n\nfirst paragraph line.\ncontinues here.\n\n- item one\n- item two\n"
 	blocks := RenderMarkdownBlocks([]byte(src))
 	// heading(1) · prose line(3) · prose line(4) · item(6) · item(7):
 	// the 2-line paragraph splits per source line and the 2-item list
@@ -244,10 +244,10 @@ func TestRenderMarkdownBlocks_TablePerRow(t *testing.T) {
 // would misfire a block rule standalone falls back to safe escaped
 // text on its own line.
 func TestRenderMarkdownBlocks_ProsePerLine(t *testing.T) {
-	// 1: intro **bold** and `code`
-	// 2: 3) a & b paren-ordered     (start!=1 → stays a paragraph line)
-	// 3: tail plain line
-	src := "intro **bold** and `code`\n3) a & b paren-ordered\ntail plain line\n"
+	// 1: intro **bold** and `code`.
+	// 2: 3) a & b paren-ordered.    (start!=1 → stays a paragraph line)
+	// 3: tail plain line            (one sentence per line → splits per line)
+	src := "intro **bold** and `code`.\n3) a & b paren-ordered.\ntail plain line\n"
 	blocks := RenderMarkdownBlocks([]byte(src))
 	if len(blocks) != 3 {
 		t.Fatalf("got %d blocks, want 3 (one per source line); blocks=%+v", len(blocks), blocks)
@@ -293,5 +293,112 @@ func TestRenderMarkdownBlocks_Empty(t *testing.T) {
 	}
 	if RenderMarkdownBlocks([]byte("   \n\n")) != nil {
 		t.Error("blank src should yield nil")
+	}
+}
+
+// TestRenderMarkdownBlocks_HardWrapReflow pins that a hard-wrapped
+// paragraph (lines break mid-sentence) reflows into ONE CommonMark
+// paragraph block — a sentence is never split across visual lines —
+// while a one-sentence-per-line paragraph still splits per source line,
+// and a mixed document gets both behaviours.
+func TestRenderMarkdownBlocks_HardWrapReflow(t *testing.T) {
+	// Hard-wrapped at ~80 cols: line 1 ends "naming," (no terminal
+	// punctuation) → the whole paragraph must reflow into one block,
+	// not three, and the `Phoenix.PubSub` code span that straddled a
+	// wrap point must render as a single <code> (it would be lost on a
+	// per-line split). This is the exact shape the user reported.
+	// 1: **The design:** … publish/subscribe naming,
+	// 2: where … identity. This is the `Phoenix.PubSub`
+	// 3: model. … unless you `Publish`.
+	src := "**The design:** a single primitive — a named topic, with classic publish/subscribe naming,\n" +
+		"where per-identity targeting is a topic derived from the identity. This is the `Phoenix.PubSub`\n" +
+		"model. Per-connection state is the default; nothing fans out unless you `Publish`.\n"
+	blocks := RenderMarkdownBlocks([]byte(src))
+	if len(blocks) != 1 {
+		t.Fatalf("hard-wrapped paragraph: got %d blocks, want 1 reflowed block; blocks=%+v", len(blocks), blocks)
+	}
+	b := blocks[0]
+	if b.StartLine != 1 || b.EndLine != 3 {
+		t.Errorf("reflowed block lines = %d-%d, want 1-3 (full source span stays commentable)", b.StartLine, b.EndLine)
+	}
+	h := string(b.HTML)
+	if !strings.HasPrefix(h, "<p>") || !strings.HasSuffix(h, "</p>") {
+		t.Errorf("reflowed block must be a single <p>…</p>; got %q", h)
+	}
+	if !strings.Contains(h, "<strong>The design:</strong>") {
+		t.Errorf("inline bold lost; HTML = %q", h)
+	}
+	if !strings.Contains(h, "<code>Phoenix.PubSub</code>") || !strings.Contains(h, "<code>Publish</code>") {
+		t.Errorf("code spans across/at wrap boundary not preserved; HTML = %q", h)
+	}
+	// The previously mid-sentence-broken boundary is now in one block.
+	if !strings.Contains(h, "publish/subscribe naming,") || !strings.Contains(h, "where per-identity targeting") {
+		t.Errorf("sentence across the wrap not contiguous in one block; HTML = %q", h)
+	}
+
+	// One sentence per line → still one block per source line.
+	osl := RenderMarkdownBlocks([]byte("First sentence here.\nSecond sentence here.\nThird and last sentence.\n"))
+	if len(osl) != 3 {
+		t.Fatalf("one-sentence-per-line: got %d blocks, want 3; blocks=%+v", len(osl), osl)
+	}
+	for i, want := range []string{"First sentence", "Second sentence", "Third and last"} {
+		if osl[i].StartLine != i+1 || osl[i].EndLine != i+1 {
+			t.Errorf("osl block %d lines = %d-%d, want %d-%d", i, osl[i].StartLine, osl[i].EndLine, i+1, i+1)
+		}
+		if !strings.Contains(string(osl[i].HTML), want) {
+			t.Errorf("osl block %d HTML = %q, want %q", i, osl[i].HTML, want)
+		}
+	}
+
+	// Mixed: a one-sentence-per-line paragraph (2 lines → 2 blocks) and
+	// a hard-wrapped paragraph (2 lines → 1 reflowed block).
+	mix := RenderMarkdownBlocks([]byte(
+		"Standalone sentence one.\nStandalone sentence two.\n\n" +
+			"Hard wrapped paragraph that continues\nonto a second physical line here.\n"))
+	if len(mix) != 3 {
+		t.Fatalf("mixed doc: got %d blocks, want 3 (2 split + 1 reflowed); blocks=%+v", len(mix), mix)
+	}
+	if mix[0].StartLine != 1 || mix[0].EndLine != 1 || mix[1].StartLine != 2 || mix[1].EndLine != 2 {
+		t.Errorf("mixed: first paragraph must split per line; got %+v / %+v", mix[0], mix[1])
+	}
+	if mix[2].StartLine != 4 || mix[2].EndLine != 5 {
+		t.Errorf("mixed: hard-wrapped paragraph must be one block @ 4-5; got %+v", mix[2])
+	}
+	if !strings.Contains(string(mix[2].HTML), "Hard wrapped paragraph that continues") ||
+		!strings.Contains(string(mix[2].HTML), "onto a second physical line here.") {
+		t.Errorf("mixed: reflowed block must contain both source lines; got %q", mix[2].HTML)
+	}
+}
+
+// TestEndsSentence pins the terminal-punctuation rule that decides
+// one-sentence-per-line vs hard-wrapped: only . ! ? (after stripping
+// trailing whitespace and inline-close markers) end a sentence; , : ;
+// and em-dash, and a line ending in an inline code span, do not.
+func TestEndsSentence(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		want bool
+	}{
+		{"ends here.", true},
+		{"a question?", true},
+		{"excited!", true},
+		{"trailing spaces.   ", true},
+		{"ends with `code`.", true},
+		{`quoted sentence."`, true},
+		{"(a parenthetical.)", true},
+		{"bold sentence.**", true},
+		{"see Fig. 3.", true},
+		{"naming,", false},
+		{"ends in colon:", false},
+		{"ends in semicolon;", false},
+		{"em dash —", false},
+		{"This is the `Phoenix.PubSub`", false}, // the real reported line
+		{"v2.2.0", false},
+		{"   ", false},
+		{"", false},
+	} {
+		if got := endsSentence([]byte(tc.line)); got != tc.want {
+			t.Errorf("endsSentence(%q) = %v, want %v", tc.line, got, tc.want)
+		}
 	}
 }

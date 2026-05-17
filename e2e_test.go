@@ -2049,7 +2049,7 @@ func setupFixtureRepoMarkdown(t *testing.T) string {
 	// D). The 3-line paragraph exercises prose-per-line; the table
 	// exercises per-row; h1 stays the first block so the existing
 	// whole-block test is unaffected.
-	const base = "# Doc Title\n\nIntro one clause here\nsecond clause continues\nthird clause ends\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow |\n"
+	const base = "# Doc Title\n\nIntro clause one stands alone.\nSecond clause continues here.\nThird clause ends the paragraph.\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow |\n"
 	mustWrite(t, dir, "docs.md", base)
 	runCmd(t, dir, "git", "add", "-A")
 	runCmd(t, dir, "git", "commit", "-q", "-m", "seed docs")
@@ -2057,7 +2057,7 @@ func setupFixtureRepoMarkdown(t *testing.T) string {
 	// Edit a prose line (4) AND the row-D line (17) so docs.md is a
 	// changed file and both fall inside raw-view diff hunks (so the
 	// per-line comments round-trip visibly to the line viewer too).
-	mustWrite(t, dir, "docs.md", "# Doc Title\n\nIntro one clause here\nsecond clause EDITED\nthird clause ends\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow EDITED |\n")
+	mustWrite(t, dir, "docs.md", "# Doc Title\n\nIntro clause one stands alone.\nSecond clause EDITED here.\nThird clause ends the paragraph.\n\n- alpha\n- beta\n\n```go\nx := 1\n```\n\n| Use | Detail |\n|-----|--------|\n| C | chat |\n| D | authrow EDITED |\n")
 	return dir
 }
 
@@ -2361,7 +2361,7 @@ func TestE2E_MarkdownProsePerLine(t *testing.T) {
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView),
-		chromedp.Evaluate(`(()=>{const e=[...document.querySelectorAll('.md-block .md-rendered')].find(x=>x.textContent.includes('Intro one clause here')); return e?e.textContent.includes('third clause ends'):true;})()`, &clause1HasClause3),
+		chromedp.Evaluate(`(()=>{const e=[...document.querySelectorAll('.md-block .md-rendered')].find(x=>x.textContent.includes('Intro clause one')); return e?e.textContent.includes('Third clause ends'):true;})()`, &clause1HasClause3),
 	); err != nil {
 		t.Fatalf("prose-split query: %v%s", err, diag())
 	}
@@ -2376,7 +2376,7 @@ func TestE2E_MarkdownProsePerLine(t *testing.T) {
 	// composer is scoped to that single line, not a range.
 	var clicked bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`(()=>{const el=[...document.querySelectorAll('.md-block .md-rendered')].find(e=>e.textContent.includes('third clause ends')); if(el){el.click();return true;} return false;})()`, &clicked),
+		chromedp.Evaluate(`(()=>{const el=[...document.querySelectorAll('.md-block .md-rendered')].find(e=>e.textContent.includes('Third clause ends')); if(el){el.click();return true;} return false;})()`, &clicked),
 	); err != nil || !clicked {
 		t.Fatalf("could not click the clause-3 prose line: err=%v clicked=%v%s", err, clicked, diag())
 	}
