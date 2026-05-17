@@ -26,6 +26,24 @@ so the phone flow just works, without exposing anything publicly.
 > comments — works end-to-end and is in daily use. The UI is still
 > being polished; expect rough edges, not missing teeth.
 
+<p align="center">
+  <img src="docs/screenshot-review-desktop.png" alt="prereview on desktop in skill mode: a diff with a per-line comment being written and the Hand off to Claude button" width="860">
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-files-desktop.png" alt="Desktop file drawer with per-file diff stats" width="410">
+  &nbsp;
+  <img src="docs/screenshot-all-comments.png" alt="All-comments overview across files" width="410">
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-review-mobile.png" alt="Reviewing and commenting from a phone" width="220">
+  &nbsp;&nbsp;
+  <img src="docs/screenshot-drawer-mobile.png" alt="File drawer open on a phone" width="220">
+</p>
+
+<p align="center"><sub>Per-line review &amp; hand-off on desktop · the all-comments view · <b>the same flow from your phone</b></sub></p>
+
 ## Features
 
 - **Per-line & range comments on your working tree** — two-click range
