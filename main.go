@@ -237,6 +237,8 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	mux.HandleFunc("/livetemplate-client.js", serveBytes("application/javascript", assets.ClientJS()))
 	mux.HandleFunc("/livetemplate.css", serveBytes("text/css", assets.ClientCSS()))
 	mux.HandleFunc("/syntax.css", serveBytes("text/css", []byte(gitdiff.HighlightCSS)))
+	mux.HandleFunc("/fonts/jetbrains-mono-regular.woff2", serveBytes("font/woff2", assets.FontRegular()))
+	mux.HandleFunc("/fonts/jetbrains-mono-bold.woff2", serveBytes("font/woff2", assets.FontBold()))
 
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	ln, err := net.Listen("tcp", addr)

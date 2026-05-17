@@ -21,6 +21,26 @@
   --pr-sel-bg: #fff3a8;
   --pr-comment-bg: #eef4ff;
   --pr-comment-bd: #b9cdf0;
+  /* JetBrains Mono is the reading font for the whole app (the user
+     reviews prose docs and prefers a monospace measure). Pico v2
+     cascades everything through --pico-font-family, so overriding it
+     here is what actually wins inside articles/forms; body sets it too
+     as a belt-and-braces. ui-monospace fallback renders instantly
+     (font-display:swap) until the woff2 loads. */
+  --pico-font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Self-hosted (offline over Tailscale/devbox). Only 400 + 700 are
+   bundled — prose uses just those; other weights/italics synthesize. */
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-bold.woff2") format("woff2");
 }
 
 /* ===== Mobile-first base ===== */
@@ -41,7 +61,7 @@ html, body { height: 100%; margin: 0; font-size: 14px; overflow-x: hidden; }
    actual scroll container — without this, the window scrolls and the
    sticky file-head detaches from the viewer (file-head ends up under the
    top bar, defeating the point of sticky positioning). */
-body { padding: 0; display: flex; flex-direction: column; height: 100dvh; }
+body { padding: 0; display: flex; flex-direction: column; height: 100dvh; font-family: var(--pico-font-family); }
 /* livetemplate wraps the entire page content in an unstyled
    data-lvt-id block. As a normal block it broke the flex chain:
    .layout (flex:1) sized against this content-height wrapper instead
@@ -624,7 +644,11 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    lives in .md-rendered; inline comment cards / the composer are
    siblings inside .md-block so they sit BELOW the block, not inside
    the clickable area. */
-.md-view { padding: 0.6rem 0.8rem 2rem; max-width: 60rem; }
+/* Centered reading column. ch-based measure so it tracks the font:
+   ~100 JetBrains Mono chars uses the desktop width without becoming an
+   unreadably long line. margin-inline:auto balances the empty space
+   instead of letting prose hug the left edge. */
+.md-view { padding: 0.6rem 0.8rem 2rem; max-width: 100ch; margin-inline: auto; }
 .md-block { margin: 0 0 0.2rem; border-radius: 6px; }
 .md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
 .md-rendered {
@@ -645,8 +669,16 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   padding: 0.5rem 0.6rem; border-radius: 6px; overflow-x: auto;
   font-size: 0.85em;
 }
-.md-rendered code { word-break: break-word; }
-.md-rendered pre code { word-break: normal; }
+/* The whole app is now monospace, so an inline `code` span no longer
+   stands out by font alone — give it a subtle tint + padding so e.g.
+   `Phoenix.PubSub` stays visually distinct from prose. Not applied to
+   `pre code`: the <pre> already carries its own block background. */
+.md-rendered code {
+  word-break: break-word;
+  background: var(--pico-code-background-color, var(--pico-card-sectioning-background-color));
+  padding: 0.05em 0.3em; border-radius: 3px;
+}
+.md-rendered pre code { word-break: normal; background: none; padding: 0; }
 .md-rendered img { max-width: 100%; height: auto; }
 .md-rendered blockquote {
   border-left: 3px solid var(--pico-muted-border-color);
@@ -822,6 +854,9 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
      screen. Bump the code and the chrome up to comfortable reading. */
   .code { font-size: 0.95rem; line-height: 1.45; }
   .code .gutter { font-size: 0.85rem; }
+  /* The rendered-Markdown reading surface is the primary desktop view
+     (proposal docs). Bump it well past the cramped 14px mobile base. */
+  .md-rendered { font-size: 1.2rem; line-height: 1.7; }
   main.viewer > article > header.file-head strong { font-size: 1.05rem; }
   main.viewer > article > header.file-head small { font-size: 0.85rem; }
   /* The filename already headlines the diff (.file-head) and the
@@ -1196,10 +1231,10 @@ main.viewer { overscroll-behavior: contain; }
 </div>
 {{end}}
 </main>
+</div>
 <footer class="app-footer" role="contentinfo">
   prereview {{if eq .Version "dev"}}(dev){{else}}v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
 </footer>
-</div>
 
 <script defer src="/livetemplate-client.js"></script>
 <script>

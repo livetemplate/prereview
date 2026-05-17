@@ -869,12 +869,153 @@ func TestE2E_Footer(t *testing.T) {
 		t.Errorf("link should open in a new tab safely; target=%q rel=%q%s", linkTarget, linkRel, diag())
 	}
 
+	// Layout: the footer must be a SIBLING of .layout (full-width strip
+	// at the page bottom), NOT a descendant of it. On desktop .layout is
+	// flex-direction:row, so a footer inside it renders as a narrow third
+	// column to the right of the viewer — the reported bug.
+	var footerInLayout, fullWidth, atBottom bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.layout').contains(document.querySelector('footer.app-footer'))`, &footerInLayout),
+		chromedp.Evaluate(`(()=>{const f=document.querySelector('footer.app-footer').getBoundingClientRect();return f.width>=window.innerWidth-2;})()`, &fullWidth),
+		chromedp.Evaluate(`(()=>{const f=document.querySelector('footer.app-footer').getBoundingClientRect(),l=document.querySelector('.layout').getBoundingClientRect();return Math.abs(f.bottom-window.innerHeight)<=2 && f.top>=l.bottom-2;})()`, &atBottom),
+	); err != nil {
+		t.Fatalf("footer layout query: %v%s", err, diag())
+	}
+	if footerInLayout {
+		t.Errorf("footer must NOT be inside .layout (would render as a desktop right column)%s", diag())
+	}
+	if !fullWidth {
+		t.Errorf("footer must span the full viewport width%s", diag())
+	}
+	if !atBottom {
+		t.Errorf("footer must sit at the page bottom below the .layout row%s", diag())
+	}
+
 	mu.Lock()
 	for _, l := range consoleLines {
 		if strings.Contains(strings.ToLower(l), "error") {
 			t.Errorf("browser console error: %s", l)
 		}
 	}
+	mu.Unlock()
+}
+
+// TestE2E_DesktopReadingSurface pins the desktop reading fixes: the
+// self-hosted JetBrains Mono webfont actually loads (200 + applied as
+// the computed family), the rendered-Markdown prose is bumped well
+// past the cramped 14px mobile base, and the reading column uses the
+// available width centered (no longer a narrow left-hugging 60rem).
+func TestE2E_DesktopReadingSurface(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdown(t), 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames, netResponses []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		case *cdpnetwork.EventResponseReceived:
+			netResponses = append(netResponses, fmt.Sprintf("%d %s", e.Response.Status, e.Response.URL))
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network domain: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`main`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server stderr ---\n%s\n--- console ---\n%s\n--- net ---\n%s\n--- ws frames ---\n%s\n--- rendered html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(netResponses, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.waitReady()
+
+	// JetBrains Mono actually loaded (woff2 fetched + decoded), applied
+	// as the computed family, and the desktop prose size is comfortable.
+	var fontLoaded bool
+	var renderedFamily string
+	var proseFontPx float64
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.md-rendered`, chromedp.ByQuery),
+		chromedp.Evaluate(`(async()=>{await document.fonts.ready;return document.fonts.check('1em "JetBrains Mono"');})()`, &fontLoaded,
+			func(ep *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams { return ep.WithAwaitPromise(true) }),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.md-rendered')).fontFamily`, &renderedFamily),
+		chromedp.Evaluate(`parseFloat(getComputedStyle(document.querySelector('.md-rendered')).fontSize)`, &proseFontPx),
+	); err != nil {
+		t.Fatalf("font/prose query: %v%s", err, diag())
+	}
+	if !fontLoaded {
+		t.Errorf("document.fonts.check failed — JetBrains Mono did not load%s", diag())
+	}
+	if !strings.Contains(renderedFamily, "JetBrains Mono") {
+		t.Errorf("rendered Markdown computed font-family = %q, want it to start with \"JetBrains Mono\"%s", renderedFamily, diag())
+	}
+	if proseFontPx < 16 {
+		t.Errorf("desktop prose font-size = %.1fpx, want >=16 (was a cramped 14)%s", proseFontPx, diag())
+	}
+
+	// The woff2 was served by our own route with a 200 (self-hosted, no
+	// CDN). At least the Regular face is requested for the prose.
+	mu.Lock()
+	var fontOK bool
+	for _, r := range netResponses {
+		if strings.Contains(r, "/fonts/jetbrains-mono-") && strings.HasPrefix(r, "200 ") {
+			fontOK = true
+			break
+		}
+	}
+	mu.Unlock()
+	if !fontOK {
+		t.Errorf("expected a 200 for a /fonts/jetbrains-mono-*.woff2 route%s", diag())
+	}
+
+	// Reading column: no longer the narrow left-hugging 60rem. It now
+	// uses the viewer width and is balanced (symmetric side gaps), so a
+	// huge empty right region can't reappear.
+	var maxWidth string
+	var symmetric, usesWidth bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.md-view')).maxWidth`, &maxWidth),
+		chromedp.Evaluate(`(()=>{const m=document.querySelector('.md-view').getBoundingClientRect(),v=document.querySelector('main.viewer').getBoundingClientRect();return Math.abs((m.left-v.left)-(v.right-m.right))<=24;})()`, &symmetric),
+		chromedp.Evaluate(`(()=>{const m=document.querySelector('.md-view').getBoundingClientRect(),v=document.querySelector('main.viewer').getBoundingClientRect();return m.width>=v.width*0.85;})()`, &usesWidth),
+	); err != nil {
+		t.Fatalf("md-view geometry query: %v%s", err, diag())
+	}
+	if maxWidth == "60rem" {
+		t.Errorf("md-view max-width is still the old 60rem%s", diag())
+	}
+	if !symmetric {
+		t.Errorf("md-view is not horizontally balanced — it hugs one side (the reported bug)%s", diag())
+	}
+	if !usesWidth {
+		t.Errorf("md-view does not use the available reading width%s", diag())
+	}
+
+	mu.Lock()
+	for _, line := range consoleLines {
+		if strings.Contains(strings.ToLower(line), "error") {
+			t.Errorf("browser console error: %s", line)
+		}
+	}
+	t.Logf("captured %d console, %d ws, %d net", len(consoleLines), len(wsFrames), len(netResponses))
 	mu.Unlock()
 }
 
