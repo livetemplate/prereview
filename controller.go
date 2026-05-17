@@ -24,6 +24,15 @@ type PrereviewController struct {
 	Base     string
 	CSVPath  string
 	DonePath string
+
+	// NoGit is true when --repo was a single file or a directory with no
+	// .git: the file list and per-file diff are synthesized from the
+	// filesystem (gitdiff.ListFilesNoGit / LoadDiffNoGit) instead of git,
+	// the base picker is suppressed, and Base is unused. SingleFile, when
+	// non-empty (single-file mode), is the only reviewable file —
+	// RepoPath is its parent directory.
+	NoGit      bool
+	SingleFile string
 	// Version is the build version (main.version; "dev" for source
 	// builds) surfaced into state for the footer.
 	Version   string
@@ -66,7 +75,13 @@ func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDi
 			return cd.diff, nil
 		}
 	}
-	diff, err := gitdiff.LoadDiff(c.RepoPath, base, path)
+	var diff *gitdiff.FileDiff
+	var err error
+	if c.NoGit {
+		diff, err = gitdiff.LoadDiffNoGit(c.RepoPath, path)
+	} else {
+		diff, err = gitdiff.LoadDiff(c.RepoPath, base, path)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -142,27 +157,41 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// a session-storage reconnect.
 	state.SkillMode = c.SkillMode
 
+	// NoGit is mirror-only too (controller is source of truth): the
+	// template hides the base picker and the diff/file-view affordances
+	// stay diff-free when there's no git base.
+	state.NoGit = c.NoGit
+
 	// First connect: hydrate state.Base from the CLI flag. Subsequent
 	// reconnects keep the user's choice (state.Base is lvt:persist).
 	if state.Base == "" {
 		state.Base = c.Base
 	}
 
-	// Populate the base-picker dropdown choices fresh each Mount so
-	// newly created branches appear without restarting the server.
-	// The current state.Base is prepended if it's not a preset/branch
-	// (e.g., a typed commit SHA) so the select still shows what we're
-	// currently comparing against.
-	choices := []string{"HEAD", "HEAD~1", "HEAD~3", "HEAD~5", "HEAD~10"}
-	choices = append(choices, gitdiff.ListBranches(c.RepoPath)...)
-	choices = append(choices, gitdiff.ListRemoteBranches(c.RepoPath)...)
-	choices = uniqueStrings(choices)
-	if !slices.Contains(choices, state.Base) {
-		choices = append([]string{state.Base}, choices...)
-	}
-	state.BaseChoices = choices
+	var files []gitdiff.FileEntry
+	var err error
+	if c.NoGit {
+		// No git base ⇒ no refs to pick and no diff to compute. The file
+		// list is the filesystem; every file is wholly "new".
+		state.BaseChoices = nil
+		files, err = gitdiff.ListFilesNoGit(c.RepoPath, c.SingleFile)
+	} else {
+		// Populate the base-picker dropdown choices fresh each Mount so
+		// newly created branches appear without restarting the server.
+		// The current state.Base is prepended if it's not a preset/branch
+		// (e.g., a typed commit SHA) so the select still shows what we're
+		// currently comparing against.
+		choices := []string{"HEAD", "HEAD~1", "HEAD~3", "HEAD~5", "HEAD~10"}
+		choices = append(choices, gitdiff.ListBranches(c.RepoPath)...)
+		choices = append(choices, gitdiff.ListRemoteBranches(c.RepoPath)...)
+		choices = uniqueStrings(choices)
+		if !slices.Contains(choices, state.Base) {
+			choices = append([]string{state.Base}, choices...)
+		}
+		state.BaseChoices = choices
 
-	files, err := gitdiff.ListFiles(c.RepoPath, state.Base)
+		files, err = gitdiff.ListFiles(c.RepoPath, state.Base)
+	}
 	if err != nil {
 		return state, fmt.Errorf("list files: %w", err)
 	}
@@ -218,6 +247,11 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 // previously selected file no longer exists in the new file list,
 // SelectedFile is cleared.
 func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if c.NoGit {
+		// No refs in no-git mode; the picker is hidden. Guard anyway so a
+		// stale persisted client can't shell git for a meaningless ref.
+		return state, nil
+	}
 	ref := strings.TrimSpace(ctx.GetString("ref"))
 	if ref == "" || !gitdiff.IsValidRef(c.RepoPath, ref) {
 		return state, nil

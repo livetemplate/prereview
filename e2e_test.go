@@ -3036,3 +3036,210 @@ func TestE2E_UndoDelete(t *testing.T) {
 		t.Errorf("post-undo CSV body = %q, want 'to be deleted'", rows[1][5])
 	}
 }
+
+// setupNoGitPlanDir creates a NON-git temp directory holding a
+// one-sentence-per-line Markdown plan plus a sibling note — the exact
+// shape of the user's core case: reviewing a Claude plan that lives
+// outside any git repo. No `git init`; prereview must synthesize the
+// file list and an all-added diff from the filesystem alone.
+func setupNoGitPlanDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	mustWrite(t, dir, "plan.md",
+		"# Migration Plan\n\n"+
+			"The first phase introduces the adapter layer.\n"+
+			"The second phase migrates the legacy callers.\n"+
+			"The third phase deletes the old shim entirely.\n")
+	mustWrite(t, dir, "notes.txt", "loose sibling note\n")
+	return dir
+}
+
+// readCSVRowsAt reads <csvDir>/.prereview/comments.csv (header included).
+// Single-file review puts .prereview/ in the file's PARENT dir, so the
+// harness's p.readCSV (which joins p.repo) can't be used there.
+func readCSVRowsAt(t *testing.T, csvDir string) [][]string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(csvDir, ".prereview", "comments.csv"))
+	if err != nil {
+		t.Fatalf("read csv in %s: %v", csvDir, err)
+	}
+	rows, err := stdcsv.NewReader(strings.NewReader(string(data))).ReadAll()
+	if err != nil {
+		t.Fatalf("parse csv: %v", err)
+	}
+	return rows
+}
+
+// TestE2E_NoGitSingleFile is the core "review a Claude plan" scenario:
+// --repo points at a single Markdown file in a NON-git directory. It
+// asserts (1) the file is reviewable with the base picker hidden (no
+// refs exist), (2) Markdown renders, (3) a comment persists to
+// .prereview/ in the file's PARENT directory, and (4) the git-free
+// re-anchor engine still follows the sentence after the file is
+// rewritten (an LLM editing the plan before hand-off) — CSV self-heals
+// with anchor_status=moved. Captures console + server stderr + WS
+// frames + rendered HTML for diagnosis.
+func TestE2E_NoGitSingleFile(t *testing.T) {
+	dir := setupNoGitPlanDir(t)
+	planFile := filepath.Join(dir, "plan.md")
+	p := bootChromeAgainstRepo(t, planFile, 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network domain: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`main`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server stderr ---\n%s\n--- console ---\n%s\n--- ws frames ---\n%s\n--- rendered html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.waitReady()
+
+	// Base picker must be absent (no git refs), Markdown must render, and
+	// the sole file is listed.
+	var hasBasePicker, hasMdView bool
+	var fileBtns int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`!!document.querySelector('.drawer-base')`, &hasBasePicker),
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView),
+		chromedp.Evaluate(`document.querySelectorAll('#files-drawer button.file-btn').length`, &fileBtns),
+	); err != nil {
+		t.Fatalf("initial no-git query: %v%s", err, diag())
+	}
+	if hasBasePicker {
+		t.Errorf("base picker must be hidden in no-git mode%s", diag())
+	}
+	if !hasMdView {
+		t.Errorf("Markdown should render for a loose .md file%s", diag())
+	}
+	if fileBtns != 1 {
+		t.Errorf("file buttons = %d, want 1 (single-file review)%s", fileBtns, diag())
+	}
+
+	// Comment on the second sentence (source line 4).
+	var clicked bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{const el=[...document.querySelectorAll('.md-block .md-rendered')].find(e=>e.textContent.includes('second phase migrates')); if(el){el.click();return true;} return false;})()`, &clicked),
+	); err != nil || !clicked {
+		t.Fatalf("click prose line: err=%v clicked=%v%s", err, clicked, diag())
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "tighten this phase's scope", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.Sleep(500*time.Millisecond),
+	); err != nil {
+		t.Fatalf("add comment: %v%s", err, diag())
+	}
+
+	rows := readCSVRowsAt(t, dir) // .prereview is in the file's PARENT dir
+	if len(rows) != 2 {
+		t.Fatalf("want header + 1 row, got %d: %v%s", len(rows), rows, diag())
+	}
+	row := rows[1]
+	if row[1] != "plan.md" {
+		t.Errorf("file col = %q, want plan.md (basename, relative to review root)", row[1])
+	}
+	if row[2] != "4" || row[3] != "4" {
+		t.Errorf("from/to = %q/%q, want 4/4 (the 'second phase' sentence)", row[2], row[3])
+	}
+	if !strings.Contains(row[5], "tighten this phase") {
+		t.Errorf("body = %q, missing comment text", row[5])
+	}
+
+	// Killer use case: an LLM rewrites the plan (2 lines inserted above
+	// the commented sentence) BEFORE the user hands off. The git-free
+	// re-anchor engine must follow the sentence on reload and self-heal
+	// the CSV — proving anchoring needs no git.
+	if err := os.WriteFile(planFile, []byte(
+		"# Migration Plan\n\n"+
+			"An extra overview line one.\n"+
+			"An extra overview line two.\n"+
+			"The first phase introduces the adapter layer.\n"+
+			"The second phase migrates the legacy callers.\n"+
+			"The third phase deletes the old shim entirely.\n"), 0o644); err != nil {
+		t.Fatalf("rewrite plan: %v", err)
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Sleep(700*time.Millisecond),
+	); err != nil {
+		t.Fatalf("reload after rewrite: %v%s", err, diag())
+	}
+	rows = readCSVRowsAt(t, dir)
+	if len(rows) != 2 {
+		t.Fatalf("post-rewrite: want header + 1 row, got %d: %v%s", len(rows), rows, diag())
+	}
+	row = rows[1]
+	if row[2] != "6" || row[3] != "6" {
+		t.Errorf("post-rewrite from/to = %q/%q, want 6/6 (sentence shifted down 2)%s", row[2], row[3], diag())
+	}
+	if row[9] != "moved" {
+		t.Errorf("post-rewrite anchor_status = %q, want \"moved\" (git-free self-heal)%s", row[9], diag())
+	}
+
+	mu.Lock()
+	for _, line := range consoleLines {
+		if strings.Contains(strings.ToLower(line), "error") {
+			t.Errorf("browser console error: %s", line)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}
+
+// TestE2E_NoGitDirWalk asserts that pointing --repo at a NON-git
+// directory reviews every file in it (recursively, here flat): both the
+// .md and the .txt show up, with the base picker hidden. The single-
+// file test above covers the comment + re-anchor flow; this one pins
+// the directory-walk producer and the no-git gate.
+func TestE2E_NoGitDirWalk(t *testing.T) {
+	dir := setupNoGitPlanDir(t)
+	p := bootChromeAgainstRepo(t, dir, 1200, 800)
+	p.waitReady()
+
+	var hasBasePicker bool
+	var names []string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`!!document.querySelector('.drawer-base')`, &hasBasePicker),
+		chromedp.Evaluate(`[...document.querySelectorAll('#files-drawer button.file-btn')].map(b=>b.textContent.trim())`, &names),
+	); err != nil {
+		t.Fatalf("dir-walk query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if hasBasePicker {
+		t.Errorf("base picker must be hidden for a non-git directory")
+	}
+	joined := strings.Join(names, " | ")
+	if !strings.Contains(joined, "plan.md") || !strings.Contains(joined, "notes.txt") {
+		t.Errorf("file buttons = %q, want both plan.md and notes.txt listed", joined)
+	}
+}

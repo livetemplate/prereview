@@ -1089,6 +1089,9 @@ main.viewer { overscroll-behavior: contain; }
        immediately via lvt-on:change. The old freeform "Custom ref…"
        input was dropped — the enumerated presets cover the real
        cases (incl. origin/main) without the text-input friction. */}}
+  {{/* No git base ⇒ no refs to compare against; hide the picker
+       entirely (single-file / non-git-directory review). */}}
+  {{if not .NoGit}}
   <div class="drawer-base">
     <form method="POST" class="base-select-form">
       <label for="base-input">Base</label>
@@ -1099,6 +1102,7 @@ main.viewer { overscroll-behavior: contain; }
       </select>
     </form>
   </div>
+  {{end}}
   <div class="drawer-search">
     <form method="POST" lvt-form:preserve>
       <input type="text" name="filter" placeholder="Filter files…" value="{{.FileFilter}}"

@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -147,9 +146,14 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
 	}
-	if err := assertGitRepo(absRepo); err != nil {
+	tgt, err := resolveTarget(absRepo)
+	if err != nil {
 		return err
 	}
+	// Normalize: RepoPath is always a directory from here on, so the
+	// .prereview/ store and every filepath.Join(absRepo, relPath) stay
+	// valid whether --repo was a repo, a loose dir, or a single file.
+	absRepo = tgt.RepoPath
 
 	// .prereview/ holds the CSV and the DONE marker. Create it eagerly so
 	// the skill's polling loop has a stable directory to watch.
@@ -216,6 +220,8 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	controller := &PrereviewController{
 		RepoPath:    absRepo,
 		Base:        base,
+		NoGit:       tgt.NoGit,
+		SingleFile:  tgt.SingleFile,
 		CSVPath:     csvPath,
 		DonePath:    donePath,
 		Version:     version,
@@ -226,6 +232,7 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	initial := &PrereviewState{
 		RepoPath:  absRepo,
 		Base:      base,
+		NoGit:     tgt.NoGit,
 		StartedAt: startedAt.Format("2006-01-02 15:04:05"),
 		CSVPath:   csvPath,
 		Comments:  initialComments,
@@ -254,7 +261,12 @@ func run(repo, base, host string, port int, skillMode bool) error {
 
 	url := fmt.Sprintf("http://%s:%d", host, actual.Port)
 	fmt.Printf("READY %s\n", url)
-	slog.Info("prereview started", "url", url, "repo", absRepo, "base", base)
+	// Print the resolved review directory so the skill can poll
+	// <dir>/.prereview/DONE even when --repo was a single file (RepoPath
+	// is normalized to the file's parent). For a git repo this equals the
+	// --repo argument, so the existing skill contract is unchanged.
+	fmt.Printf("REPO %s\n", absRepo)
+	slog.Info("prereview started", "url", url, "repo", absRepo, "base", base, "noGit", tgt.NoGit)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -335,23 +347,51 @@ func serveBytes(contentType string, body []byte) http.HandlerFunc {
 	}
 }
 
-// assertGitRepo verifies path looks like a git repo. We don't bail on
-// non-existent .git/ — git diff itself will produce a clear error and the
-// user can pass --repo correctly.
-func assertGitRepo(path string) error {
-	info, err := os.Stat(path)
+// reviewTarget is the classified --repo argument after normalization.
+// RepoPath is ALWAYS a directory: the comment store and DONE marker live
+// at RepoPath/.prereview/, and every downstream filepath.Join(RepoPath,
+// relPath) stays valid. SingleFile, when non-empty, is the only
+// reviewable file (its basename, relative to RepoPath). NoGit is true
+// whenever the target isn't backed by a git repo — the file list and
+// per-file diff are then synthesized from the filesystem instead of git.
+type reviewTarget struct {
+	RepoPath   string
+	SingleFile string
+	NoGit      bool
+}
+
+// resolveTarget classifies an absolute --repo path:
+//
+//   - a file              → no-git, review just that file
+//     (RepoPath = its parent dir, SingleFile = its basename)
+//   - a directory with .git  → git mode (unchanged behaviour)
+//   - a directory without .git → no-git, review the whole tree
+//
+// It deliberately does NOT walk up to find an ancestor .git: a mistyped
+// path silently resolving to some parent repo is a worse failure than a
+// clear "review exactly what you pointed at" contract. A stat error
+// (missing path, permission) is fatal — same as the old assertGitRepo.
+func resolveTarget(absPath string) (reviewTarget, error) {
+	info, err := os.Stat(absPath)
 	if err != nil {
-		return fmt.Errorf("repo %q: %w", path, err)
+		return reviewTarget{}, fmt.Errorf("repo %q: %w", absPath, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("repo %q is not a directory", path)
+		return reviewTarget{
+			RepoPath:   filepath.Dir(absPath),
+			SingleFile: filepath.Base(absPath),
+			NoGit:      true,
+		}, nil
 	}
-	dotGit := filepath.Join(path, ".git")
-	if _, err := os.Stat(dotGit); err != nil {
-		// Allow worktrees where .git is a file, not a directory.
-		if errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "is a directory") {
-			return fmt.Errorf("repo %q does not contain a .git entry (pass --repo /path/to/repo)", path)
-		}
+	// .git may be a directory (normal repo) or a file (worktree/submodule);
+	// os.Stat succeeds for both, so err == nil ⇒ git mode. Only a genuine
+	// "not there" (ErrNotExist) drops to no-git; any other stat error keeps
+	// git mode so git itself surfaces the real problem (old assertGitRepo
+	// intent: don't pre-empt git's clearer error message).
+	if _, err := os.Stat(filepath.Join(absPath, ".git")); err == nil {
+		return reviewTarget{RepoPath: absPath}, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return reviewTarget{RepoPath: absPath}, nil
 	}
-	return nil
+	return reviewTarget{RepoPath: absPath, NoGit: true}, nil
 }

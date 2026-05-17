@@ -54,6 +54,12 @@ type PrereviewState struct {
 	// the controller is the source of truth; Mount refreshes it every connect.
 	SkillMode bool `json:"skill_mode"`
 
+	// NoGit is mirrored from the controller (set when --repo is a single
+	// file or a non-git directory) into state in Mount so the template
+	// can hide the base/branch picker — there are no refs to compare
+	// against. Not persisted; the controller is the source of truth.
+	NoGit bool `json:"no_git"`
+
 	// Quitting flips true when the user clicks Quit. The template renders
 	// a "Server stopping…" banner; ~250ms later the HTTP server actually
 	// shuts down (giving the framework time to flush the render).
