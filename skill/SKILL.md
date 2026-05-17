@@ -27,6 +27,15 @@ The `--skill` flag is critical — without it the UI shows a "Quit" button inste
 
 `--base` defaults to `HEAD` (working tree vs last commit). Pass `--base main` for branch-vs-base review, `--base HEAD~3` for last-3-commits review, etc.
 
+**Already running for this repo? Restart it fresh.** If a prereview `--skill` server is already running for this same repo (you launched one earlier this session, or the user re-invoked the skill), do **not** start a second one — duplicate servers fight over the same `.prereview/comments.csv`. Stop the existing one *for this repo* and relaunch:
+
+```bash
+pgrep -af "prereview --skill --repo $repo" | awk '{print $1}' | xargs -r kill
+rm -f "$repo/.prereview/DONE"
+```
+
+The `--repo $repo` match targets only this repo's server — unrelated prereview servers (a different repo, test leftovers) are left alone, and it avoids the `pkill -f prereview` self-match trap. Comments are auto-saved (and the current composer draft is persisted), so killing the running server loses nothing. Removing a stale `DONE` marker keeps the fresh server from looking already-handed-off.
+
 **Clean working tree → review the whole branch.** Before launching, if you did *not* set an explicit `--base` (so it would default to `HEAD`) and `git status --porcelain` is empty, the `HEAD` diff is empty and the session has nothing to review. In that case launch with the empty tree as the base so every file on the current branch appears as added and any line is commentable:
 
 ```bash
