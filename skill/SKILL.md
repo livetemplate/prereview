@@ -11,7 +11,7 @@ triggers:
 
 # prereview
 
-Launches a local web UI bound to `127.0.0.1` (or the configured host) so the user can leave per-line comments on the working-tree diff. The UI shows a **"Hand off → Claude"** button when launched with `--skill`; clicking it writes `.prereview/DONE` containing the path to the CSV. Poll for that file, then read the CSV.
+Launches a web UI for the user to leave per-line comments on the working-tree diff. Binding is automatic: `127.0.0.1` on a local machine, and — on a remote (SSH) box — this host's **Tailscale IP**, so the user can reach it from a phone over the tailnet without exposing it publicly (`--host` overrides). The UI shows a **"Hand off → Claude"** button when launched with `--skill`; clicking it writes `.prereview/DONE` containing the path to the CSV. Poll for that file, then read the CSV.
 
 ## Usage
 
@@ -20,7 +20,8 @@ Launches a local web UI bound to `127.0.0.1` (or the configured host) so the use
 ```bash
 cd <repo>
 prereview --skill --repo "$(pwd)" --base HEAD &
-# stdout: READY http://127.0.0.1:PORT
+# stdout: READY http://127.0.0.1:PORT          (or http://100.x.y.z:PORT on a remote box)
+#         ALT   http://host.tailnet.ts.net:PORT   (0+ extra reachable URLs; only on a tailnet)
 #         REPO  /abs/dir/whose/.prereview/holds/the/CSV+DONE
 ```
 
@@ -58,11 +59,17 @@ prereview --skill --repo "$repo" --base "$base" &
 
 An explicitly requested base (`--base main`, `HEAD~3`, a tag, …) is always honored as-is — never override it, even if its file list happens to be empty.
 
-### 2. Tell the user to review
+### 2. Tell the user to review — with a **clickable** link
 
-> "I've opened a review session at <url>. Click 'Hand off → Claude' when you're done and I'll read your comments."
+The first stdout line is `READY <url>` — the canonical, always-reachable URL (loopback locally; the Tailscale IP on a remote box). Zero or more `ALT <url>` lines may follow with friendlier equivalents, notably the MagicDNS hostname.
 
-Comments auto-save on every add/edit/delete — the user doesn't need to "save" before handing off.
+Present the URL as a **Markdown link**, never bare text. The user is frequently on the mobile Claude app, where a bare URL can't be tapped and copy-pasting is painful — a `[url](url)` link is one tap:
+
+> I've opened a review session — tap to open: **[http://100.x.y.z:PORT](http://100.x.y.z:PORT)**
+> (hostname: [http://host.tailnet.ts.net:PORT](http://host.tailnet.ts.net:PORT))
+> Click **"Hand off → Claude"** when you're done and I'll read your comments.
+
+When an `ALT` MagicDNS hostname is present, make **that** the headline link (stable and readable); otherwise use the `READY` URL. Always wrap as `[url](url)` — including any `ALT` you also surface. Comments auto-save on every add/edit/delete — the user doesn't need to "save" before handing off.
 
 ### 3. Poll for the DONE marker
 
@@ -139,4 +146,4 @@ rm <REPO>/.prereview/DONE   # so the next session starts fresh
 - The CSV at `.prereview/comments.csv` is the source of truth and is rewritten atomically on every change. Reading it at any time is safe.
 - Untracked files appear in the file list as added (`[A]`). Commenting on them works the same as on tracked files.
 - Non-git targets (single file or non-git directory) show every file as added (`[A]`) — there is no diff and no base. `--base` is ignored and the base picker is hidden; everything else (comments, CSV, re-anchoring, hand-off) works identically.
-- The server binds to `127.0.0.1` by default. Pass `--host 0.0.0.0` to expose it on the LAN (useful for Tailscale-via-phone testing).
+- Binding is automatic: `127.0.0.1` on a local machine; on a remote (SSH) box with no explicit `--host`, this host's **Tailscale IP**, so a phone on the tailnet can reach it without exposing the source diff on the public internet. **Do not pass `--host 0.0.0.0` as a "make it reachable" shortcut** — that binds every interface, including any public IP. If a remote box has no tailnet, prereview stays on `127.0.0.1` and prints a warning telling you to pass an explicit `--host` (e.g. a private LAN IP).

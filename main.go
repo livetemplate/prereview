@@ -42,13 +42,26 @@ func main() {
 	repo := flag.String("repo", ".", "absolute path to the git repository to review")
 	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit)")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
-	host := flag.String("host", "127.0.0.1", "host/IP to bind on (default 127.0.0.1, localhost-only)")
+	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
 	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	doInstallSkill := flag.Bool("install-skill", false, "install the Claude Code skill into ~/.claude/skills/prereview/ and exit")
 	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
 	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
 	flag.Parse()
+
+	// flag can't tell "user passed --host 127.0.0.1" from "default
+	// 127.0.0.1" by value alone, and that distinction is load-bearing:
+	// an explicit --host is an absolute operator override (we never
+	// auto-rebind over it), the default is just a starting point we may
+	// replace with the Tailscale IP on a remote box. flag.Visit only
+	// reports flags actually set on the command line.
+	explicitHost := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "host" {
+			explicitHost = true
+		}
+	})
 
 	if *showVersion {
 		fmt.Println(version)
@@ -99,7 +112,7 @@ func main() {
 		maybeAutoUpdate()
 	}
 
-	if err := run(*repo, *base, *host, *port, *skill); err != nil {
+	if err := run(*repo, *base, *host, explicitHost, *port, *skill); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -141,7 +154,7 @@ func maybeAutoUpdate() {
 	}
 }
 
-func run(repo, base, host string, port int, skillMode bool) error {
+func run(repo, base, host string, explicitHost bool, port int, skillMode bool) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -247,7 +260,18 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	mux.HandleFunc("/fonts/jetbrains-mono-regular.woff2", serveBytes("font/woff2", assets.FontRegular()))
 	mux.HandleFunc("/fonts/jetbrains-mono-bold.woff2", serveBytes("font/woff2", assets.FontBold()))
 
-	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	// Decide what to actually bind to. On a remote (SSH) box with no
+	// explicit --host, prefer this host's Tailscale IP: reachable from
+	// the user's phone over the tailnet, never exposed to the public
+	// internet the way --host 0.0.0.0 would. Locally, unchanged: the
+	// historical 127.0.0.1 default.
+	tsIP, magicDNS := tailscaleIPv4()
+	bindHost, warn := resolveBindHost(explicitHost, host, isRemoteBox(), tsIP)
+	if warn != "" {
+		fmt.Fprintf(os.Stderr, "prereview: %s\n", warn)
+	}
+
+	addr := net.JoinHostPort(bindHost, fmt.Sprintf("%d", port))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
@@ -259,14 +283,25 @@ func run(repo, base, host string, port int, skillMode bool) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	url := fmt.Sprintf("http://%s:%d", host, actual.Port)
+	url := fmt.Sprintf("http://%s:%d", bindHost, actual.Port)
+	// READY is the canonical, machine-parsed line: the skill and the e2e
+	// harness read the first `READY ` line and nothing else. It now
+	// already points at a reachable address — loopback locally, the
+	// Tailscale IP on a remote box — so the skill only has to render it
+	// as a clickable link.
 	fmt.Printf("READY %s\n", url)
+	// ALT lines are additive, human-facing alternatives the harness
+	// ignores by contract: chiefly the MagicDNS hostname, far nicer to
+	// tap on a phone than a 100.x octet string. Same format, one per line.
+	for _, alt := range altURLs(bindHost, tsIP, magicDNS, actual.Port) {
+		fmt.Printf("ALT %s\n", alt)
+	}
 	// Print the resolved review directory so the skill can poll
 	// <dir>/.prereview/DONE even when --repo was a single file (RepoPath
 	// is normalized to the file's parent). For a git repo this equals the
 	// --repo argument, so the existing skill contract is unchanged.
 	fmt.Printf("REPO %s\n", absRepo)
-	slog.Info("prereview started", "url", url, "repo", absRepo, "base", base, "noGit", tgt.NoGit)
+	slog.Info("prereview started", "url", url, "repo", absRepo, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

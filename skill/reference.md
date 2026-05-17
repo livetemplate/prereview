@@ -10,25 +10,33 @@ this file is the LLM's lookup for **what every value means**.
 | `--repo` | `.` | yes (for skill use) | Absolute path to review. Usually a git repository (`--repo "$(pwd)"`). May also be a **single file** or a **non-git directory** (e.g. a Claude plan) → no-git mode: no diff, no base, every line "new". When it's a single file the review root is the file's **parent** directory. |
 | `--base` | `HEAD` | no | Git base for diff comparison. `HEAD` = working tree vs last commit; `main` = branch-vs-trunk; `HEAD~3` = last-3-commits view; any rev-spec git accepts works. **Ignored in no-git mode** (single file / non-git dir — there is no base). |
 | `--port` | `0` | no | TCP port to listen on. `0` = OS-assigned (random free port — what the skill should normally use to avoid collisions). |
-| `--host` | `127.0.0.1` | no | Host/IP to bind on. Default localhost-only. `0.0.0.0` exposes on the LAN (useful for iPhone-over-Tailscale testing). |
+| `--host` | `127.0.0.1` | no | Host/IP to bind on. **Auto-resolved when not set explicitly:** a remote (SSH) box with a tailnet binds its Tailscale IP (phone-reachable, never public); a remote box with no tailnet stays `127.0.0.1` and prints a stderr warning; local stays `127.0.0.1` (unchanged). An explicit value is an absolute override and is never auto-rebound — avoid `0.0.0.0`, which exposes the source diff on every interface including any public IP. |
 | `--skill` | `false` | yes (for skill use) | Show the "Hand off → Claude" top-bar button (writes `.prereview/DONE` on click) instead of "Quit" (gracefully shuts down). Without `--skill`, no DONE marker is ever written and the skill's poll loop never terminates. |
 | `--version` | — | no | Print build version and exit. |
 
 ## stdout protocol
 
-On startup, prereview prints **two lines** to stdout:
+On startup, prereview prints these lines to stdout, in order:
 
 ```
 READY http://<host>:<port>
+ALT   http://<host>:<port>     (zero or more; only when on a tailnet)
 REPO  <absolute review-root directory>
 ```
 
-`READY` carries the URL. `REPO` is the directory whose `.prereview/`
-holds `comments.csv` and `DONE` — equal to the `--repo` argument for a
-git repo or non-git directory, and the file's **parent** directory for a
-single-file review. Poll and clean up relative to the `REPO` line, not
-the raw `--repo` argument. All other output is slog-formatted (timestamp
-+ level + key-value pairs) and goes to stderr.
+`READY` is the **first line** and carries the canonical, always-reachable
+URL (loopback locally; the Tailscale IP on a remote box). It is the only
+line the skill and the e2e harness machine-parse — match the literal
+prefix `READY ` and take the rest. Zero or more `ALT` lines follow with
+additional reachable forms (chiefly the MagicDNS hostname, friendlier to
+tap on a phone); they are purely additive and parsers may ignore them.
+`REPO` is the directory whose `.prereview/` holds `comments.csv` and
+`DONE` — equal to the `--repo` argument for a git repo or non-git
+directory, and the file's **parent** directory for a single-file review.
+Poll and clean up relative to the `REPO` line, not the raw `--repo`
+argument. All other output is slog-formatted (timestamp + level +
+key-value pairs) and goes to stderr — including the "remote box, no
+tailnet" fallback warning.
 
 If the bind fails or the path is invalid (missing, unreadable),
 prereview exits non-zero without printing `READY`.

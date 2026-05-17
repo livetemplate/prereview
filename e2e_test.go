@@ -130,7 +130,14 @@ func mustWrite(t *testing.T, dir, path, content string) {
 // Pass extraArgs to enable --skill mode for tests asserting Hand off behavior.
 func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (string, *exec.Cmd, *bytesBuf) {
 	t.Helper()
-	args := append([]string{"--repo", repo, "--base", "HEAD", "--port", "0"}, extraArgs...)
+	// --host 127.0.0.1 is explicit ON PURPOSE — do NOT delete as a
+	// "redundant default". It forces resolveBindHost's operator-override
+	// path so e2e stays hermetic: without it, on an SSH+tailnet machine
+	// (this dev box, or CI reached over SSH) the binary auto-rebinds to
+	// the Tailscale IP and every test starts depending on tailscaled
+	// being up. The flag default being 127.0.0.1 is irrelevant here —
+	// what matters is that the flag is *explicitly set*.
+	args := append([]string{"--repo", repo, "--base", "HEAD", "--port", "0", "--host", "127.0.0.1"}, extraArgs...)
 	cmd := exec.Command(binary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
