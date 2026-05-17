@@ -1009,6 +1009,37 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 		t.Errorf("md-view does not use the available reading width%s", diag())
 	}
 
+	// Issue 4: code must use the SAME font as prose. The Markdown code
+	// block and the raw diff view both resolve to JetBrains Mono now
+	// (Pico's separate --pico-font-family-monospace + every explicit
+	// declaration point at --jbm). Also the toolbar is bumped.
+	var mdCodeFam string
+	var btnFontPx float64
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.md-rendered code')).fontFamily`, &mdCodeFam),
+		chromedp.Evaluate(`parseFloat(getComputedStyle(document.querySelector('header.bar button')).fontSize)`, &btnFontPx),
+	); err != nil {
+		t.Fatalf("font-unify query: %v%s", err, diag())
+	}
+	if !strings.Contains(mdCodeFam, "JetBrains Mono") {
+		t.Errorf("Markdown code block font = %q, want JetBrains Mono (must match prose)%s", mdCodeFam, diag())
+	}
+	if btnFontPx < 15 {
+		t.Errorf("toolbar button font-size = %.1fpx, want >=15 (desktop bump)%s", btnFontPx, diag())
+	}
+
+	var codeFam string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code button.line`, chromedp.ByQuery),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.code .content')).fontFamily`, &codeFam),
+	); err != nil {
+		t.Fatalf("raw-view font query: %v%s", err, diag())
+	}
+	if !strings.Contains(codeFam, "JetBrains Mono") {
+		t.Errorf("raw diff/code view font = %q, want JetBrains Mono (must match Markdown)%s", codeFam, diag())
+	}
+
 	mu.Lock()
 	for _, line := range consoleLines {
 		if strings.Contains(strings.ToLower(line), "error") {

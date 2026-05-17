@@ -21,13 +21,18 @@
   --pr-sel-bg: #fff3a8;
   --pr-comment-bg: #eef4ff;
   --pr-comment-bd: #b9cdf0;
-  /* JetBrains Mono is the reading font for the whole app (the user
-     reviews prose docs and prefers a monospace measure). Pico v2
-     cascades everything through --pico-font-family, so overriding it
-     here is what actually wins inside articles/forms; body sets it too
-     as a belt-and-braces. ui-monospace fallback renders instantly
-     (font-display:swap) until the woff2 loads. */
-  --pico-font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* JetBrains Mono is the single reading font for the WHOLE app — prose
+     and code alike (the user reviews docs + diffs and wants them
+     identical). Pico v2 has TWO family vars: --pico-font-family (body,
+     articles, forms) and --pico-font-family-monospace (pre/code/kbd/
+     samp). BOTH must point at --jbm or the diff/code view renders in a
+     different mono than the rendered Markdown. Every explicit
+     font-family in this sheet also uses var(--jbm). ui-monospace
+     fallback renders instantly (font-display:swap) until the woff2
+     loads. */
+  --jbm: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --pico-font-family: var(--jbm);
+  --pico-font-family-monospace: var(--jbm);
 }
 
 /* Self-hosted (offline over Tailscale/devbox). Only 400 + 700 are
@@ -327,7 +332,7 @@ dialog#files-drawer .drawer-base label {
 dialog#files-drawer .drawer-base select {
   flex: 1 1 auto; min-width: 0; margin: 0; width: auto;
   padding: 0.3rem 0.5rem; font-size: 0.85rem; min-height: 32px;
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--jbm);
   background: var(--pico-form-element-background-color, white);
   border: 1px solid var(--pico-muted-border-color); border-radius: 4px;
 }
@@ -445,7 +450,7 @@ dialog#files-drawer button.file-btn .file-count {
   line-height: 1.3;
 }
 dialog#files-drawer button.file-btn .diff-stats {
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--jbm);
   font-size: 0.7rem; line-height: 1.3; white-space: nowrap;
 }
 dialog#files-drawer button.file-btn .diff-stats .add { color: #166534; margin-right: 0.2rem; }
@@ -459,7 +464,7 @@ dialog#files-drawer button.file-btn .diff-stats .del { color: #991b1b; }
   min-width: 18px; padding: 0 4px; margin-right: 0.35rem;
   border-radius: 3px; font-size: 0.62rem; font-weight: 700;
   letter-spacing: 0.03em; text-align: center; line-height: 1.6;
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--jbm);
   vertical-align: 1px;
 }
 .status-badge.A { background: #dcfce7; color: #166534; }
@@ -542,7 +547,7 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
      (offset/truncated content) cannot occur. */
   padding: 0; margin: 0; overflow-x: hidden;
   font-size: 0.8rem; line-height: 1.2;
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--jbm);
 }
 .code form { margin: 0; padding: 0; display: block; line-height: 1.2; }
 /* Performance: content-visibility: auto lets the browser skip painting
@@ -585,7 +590,7 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
 }
 .code .fold-row .fold-label {
   font-size: 0.7rem; color: var(--pico-muted-color);
-  font-family: ui-monospace, SFMono-Regular, monospace; letter-spacing: 0.04em;
+  font-family: var(--jbm); letter-spacing: 0.04em;
 }
 .code .line-row:not(:has(.composer)):not(:has(.inline-comment)) {
   content-visibility: auto;
@@ -645,10 +650,11 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    siblings inside .md-block so they sit BELOW the block, not inside
    the clickable area. */
 /* Centered reading column. ch-based measure so it tracks the font:
-   ~100 JetBrains Mono chars uses the desktop width without becoming an
-   unreadably long line. margin-inline:auto balances the empty space
-   instead of letting prose hug the left edge. */
-.md-view { padding: 0.6rem 0.8rem 2rem; max-width: 100ch; margin-inline: auto; }
+   ~110 JetBrains Mono chars — wide enough to use the desktop pane
+   (100ch still left a big right gap) without an unreadably long line.
+   margin-inline:auto balances the remaining space; the parent
+   main.viewer>article is max-width:100% so nothing else clamps it. */
+.md-view { padding: 0.6rem 1.2rem 2rem; max-width: 110ch; margin-inline: auto; }
 .md-block { margin: 0 0 0.2rem; border-radius: 6px; }
 .md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
 .md-rendered {
@@ -839,6 +845,12 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
 
 /* ===== Desktop overrides (>=900px) ===== */
 @media (min-width: 900px) {
+  /* The base is pinned to 14px for mobile density. That made every
+     rem-based size (toolbar, sidebar, chrome) miniature on a desktop
+     screen — the root cause of "still too small". Lift the base to
+     16px here so ALL rem sizing scales up coherently in one move; the
+     per-element bumps below are relative to this. */
+  html { font-size: 16px; }
   .hamburger { display: none; }
   .drawer-backdrop { display: none; }
   .layout { flex-direction: row; }
@@ -848,6 +860,16 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
     height: auto; align-self: stretch;
     flex-shrink: 0;
   }
+  /* Sidebar (file drawer) had NO desktop bump — the file list was the
+     mobile 0.85rem on a big screen. Lift it to ≈ body size; keep it a
+     touch below the toolbar (dense list vs chrome). */
+  dialog#files-drawer .drawer-head strong { font-size: 0.95rem; }
+  dialog#files-drawer .drawer-search input { font-size: 0.95rem; min-height: 36px; }
+  dialog#files-drawer .drawer-base { font-size: 0.9rem; }
+  dialog#files-drawer .drawer-base label { font-size: 0.8rem; }
+  dialog#files-drawer .drawer-base select { font-size: 0.95rem; min-height: 36px; }
+  dialog#files-drawer button.file-btn { font-size: 1rem; }
+  dialog#files-drawer button.file-btn .file-count { font-size: 0.85rem; }
   main.viewer { flex: 1; padding: 0; min-width: 0; }
   .composer { position: static; box-shadow: none; }
   /* Desktop has the space — the mobile sizes are cramped on a large
@@ -856,7 +878,7 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   .code .gutter { font-size: 0.85rem; }
   /* The rendered-Markdown reading surface is the primary desktop view
      (proposal docs). Bump it well past the cramped 14px mobile base. */
-  .md-rendered { font-size: 1.2rem; line-height: 1.7; }
+  .md-rendered { font-size: 1.25rem; line-height: 1.75; }
   main.viewer > article > header.file-head strong { font-size: 1.05rem; }
   main.viewer > article > header.file-head small { font-size: 0.85rem; }
   /* The filename already headlines the diff (.file-head) and the
@@ -864,13 +886,14 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
      pure duplication on desktop — drop just the filename, keep the
      "pick a file" / "all comments" prompts. */
   header.bar .title-file { display: none; }
-  /* Toolbar controls: mobile icon/text sizes look tiny on desktop. */
-  header.bar button { padding: 0.4rem 0.75rem; font-size: 0.9rem; min-height: 38px; }
-  header.bar .nav-prev button, header.bar .nav-next button { min-width: 38px; min-height: 38px; }
-  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 20px; height: 20px; }
-  .chip { font-size: 0.9rem; padding: 0.4rem 0.8rem; }
-  .toolbar-inline { gap: 0.55rem; }
-  .toolbar-inline .auto-saved-long { font-size: 0.9rem; }
+  /* Toolbar controls: 0.9rem/38px was still miniature on desktop —
+     match the 1rem body and a 44px touch target. */
+  header.bar button { padding: 0.5rem 0.9rem; font-size: 1rem; min-height: 44px; }
+  header.bar .nav-prev button, header.bar .nav-next button { min-width: 44px; min-height: 44px; }
+  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 22px; height: 22px; }
+  .chip { font-size: 1rem; padding: 0.5rem 0.95rem; }
+  .toolbar-inline { gap: 0.6rem; }
+  .toolbar-inline .auto-saved-long { font-size: 1rem; }
   /* Desktop has room — render chips inline and hide the overflow menu. */
   .toolbar-inline { display: inline-flex; }
   .more-trigger { display: none; }
