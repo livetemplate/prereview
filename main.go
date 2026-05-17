@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -43,13 +42,26 @@ func main() {
 	repo := flag.String("repo", ".", "absolute path to the git repository to review")
 	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit)")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
-	host := flag.String("host", "127.0.0.1", "host/IP to bind on (default 127.0.0.1, localhost-only)")
+	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
 	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	doInstallSkill := flag.Bool("install-skill", false, "install the Claude Code skill into ~/.claude/skills/prereview/ and exit")
 	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
 	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
 	flag.Parse()
+
+	// flag can't tell "user passed --host 127.0.0.1" from "default
+	// 127.0.0.1" by value alone, and that distinction is load-bearing:
+	// an explicit --host is an absolute operator override (we never
+	// auto-rebind over it), the default is just a starting point we may
+	// replace with the Tailscale IP on a remote box. flag.Visit only
+	// reports flags actually set on the command line.
+	explicitHost := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "host" {
+			explicitHost = true
+		}
+	})
 
 	if *showVersion {
 		fmt.Println(version)
@@ -100,7 +112,7 @@ func main() {
 		maybeAutoUpdate()
 	}
 
-	if err := run(*repo, *base, *host, *port, *skill); err != nil {
+	if err := run(*repo, *base, *host, explicitHost, *port, *skill); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -142,14 +154,19 @@ func maybeAutoUpdate() {
 	}
 }
 
-func run(repo, base, host string, port int, skillMode bool) error {
+func run(repo, base, host string, explicitHost bool, port int, skillMode bool) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
 	}
-	if err := assertGitRepo(absRepo); err != nil {
+	tgt, err := resolveTarget(absRepo)
+	if err != nil {
 		return err
 	}
+	// Normalize: RepoPath is always a directory from here on, so the
+	// .prereview/ store and every filepath.Join(absRepo, relPath) stay
+	// valid whether --repo was a repo, a loose dir, or a single file.
+	absRepo = tgt.RepoPath
 
 	// .prereview/ holds the CSV and the DONE marker. Create it eagerly so
 	// the skill's polling loop has a stable directory to watch.
@@ -216,6 +233,8 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	controller := &PrereviewController{
 		RepoPath:    absRepo,
 		Base:        base,
+		NoGit:       tgt.NoGit,
+		SingleFile:  tgt.SingleFile,
 		CSVPath:     csvPath,
 		DonePath:    donePath,
 		Version:     version,
@@ -226,6 +245,7 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	initial := &PrereviewState{
 		RepoPath:  absRepo,
 		Base:      base,
+		NoGit:     tgt.NoGit,
 		StartedAt: startedAt.Format("2006-01-02 15:04:05"),
 		CSVPath:   csvPath,
 		Comments:  initialComments,
@@ -240,7 +260,18 @@ func run(repo, base, host string, port int, skillMode bool) error {
 	mux.HandleFunc("/fonts/jetbrains-mono-regular.woff2", serveBytes("font/woff2", assets.FontRegular()))
 	mux.HandleFunc("/fonts/jetbrains-mono-bold.woff2", serveBytes("font/woff2", assets.FontBold()))
 
-	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	// Decide what to actually bind to. On a remote (SSH) box with no
+	// explicit --host, prefer this host's Tailscale IP: reachable from
+	// the user's phone over the tailnet, never exposed to the public
+	// internet the way --host 0.0.0.0 would. Locally, unchanged: the
+	// historical 127.0.0.1 default.
+	tsIP, magicDNS := tailscaleIPv4()
+	bindHost, warn := resolveBindHost(explicitHost, host, isRemoteBox(), tsIP)
+	if warn != "" {
+		fmt.Fprintf(os.Stderr, "prereview: %s\n", warn)
+	}
+
+	addr := net.JoinHostPort(bindHost, fmt.Sprintf("%d", port))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
@@ -252,9 +283,25 @@ func run(repo, base, host string, port int, skillMode bool) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	url := fmt.Sprintf("http://%s:%d", host, actual.Port)
+	url := fmt.Sprintf("http://%s:%d", bindHost, actual.Port)
+	// READY is the canonical, machine-parsed line: the skill and the e2e
+	// harness read the first `READY ` line and nothing else. It now
+	// already points at a reachable address — loopback locally, the
+	// Tailscale IP on a remote box — so the skill only has to render it
+	// as a clickable link.
 	fmt.Printf("READY %s\n", url)
-	slog.Info("prereview started", "url", url, "repo", absRepo, "base", base)
+	// ALT lines are additive, human-facing alternatives the harness
+	// ignores by contract: chiefly the MagicDNS hostname, far nicer to
+	// tap on a phone than a 100.x octet string. Same format, one per line.
+	for _, alt := range altURLs(bindHost, tsIP, magicDNS, actual.Port) {
+		fmt.Printf("ALT %s\n", alt)
+	}
+	// Print the resolved review directory so the skill can poll
+	// <dir>/.prereview/DONE even when --repo was a single file (RepoPath
+	// is normalized to the file's parent). For a git repo this equals the
+	// --repo argument, so the existing skill contract is unchanged.
+	fmt.Printf("REPO %s\n", absRepo)
+	slog.Info("prereview started", "url", url, "repo", absRepo, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -335,23 +382,51 @@ func serveBytes(contentType string, body []byte) http.HandlerFunc {
 	}
 }
 
-// assertGitRepo verifies path looks like a git repo. We don't bail on
-// non-existent .git/ — git diff itself will produce a clear error and the
-// user can pass --repo correctly.
-func assertGitRepo(path string) error {
-	info, err := os.Stat(path)
+// reviewTarget is the classified --repo argument after normalization.
+// RepoPath is ALWAYS a directory: the comment store and DONE marker live
+// at RepoPath/.prereview/, and every downstream filepath.Join(RepoPath,
+// relPath) stays valid. SingleFile, when non-empty, is the only
+// reviewable file (its basename, relative to RepoPath). NoGit is true
+// whenever the target isn't backed by a git repo — the file list and
+// per-file diff are then synthesized from the filesystem instead of git.
+type reviewTarget struct {
+	RepoPath   string
+	SingleFile string
+	NoGit      bool
+}
+
+// resolveTarget classifies an absolute --repo path:
+//
+//   - a file              → no-git, review just that file
+//     (RepoPath = its parent dir, SingleFile = its basename)
+//   - a directory with .git  → git mode (unchanged behaviour)
+//   - a directory without .git → no-git, review the whole tree
+//
+// It deliberately does NOT walk up to find an ancestor .git: a mistyped
+// path silently resolving to some parent repo is a worse failure than a
+// clear "review exactly what you pointed at" contract. A stat error
+// (missing path, permission) is fatal — same as the old assertGitRepo.
+func resolveTarget(absPath string) (reviewTarget, error) {
+	info, err := os.Stat(absPath)
 	if err != nil {
-		return fmt.Errorf("repo %q: %w", path, err)
+		return reviewTarget{}, fmt.Errorf("repo %q: %w", absPath, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("repo %q is not a directory", path)
+		return reviewTarget{
+			RepoPath:   filepath.Dir(absPath),
+			SingleFile: filepath.Base(absPath),
+			NoGit:      true,
+		}, nil
 	}
-	dotGit := filepath.Join(path, ".git")
-	if _, err := os.Stat(dotGit); err != nil {
-		// Allow worktrees where .git is a file, not a directory.
-		if errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "is a directory") {
-			return fmt.Errorf("repo %q does not contain a .git entry (pass --repo /path/to/repo)", path)
-		}
+	// .git may be a directory (normal repo) or a file (worktree/submodule);
+	// os.Stat succeeds for both, so err == nil ⇒ git mode. Only a genuine
+	// "not there" (ErrNotExist) drops to no-git; any other stat error keeps
+	// git mode so git itself surfaces the real problem (old assertGitRepo
+	// intent: don't pre-empt git's clearer error message).
+	if _, err := os.Stat(filepath.Join(absPath, ".git")); err == nil {
+		return reviewTarget{RepoPath: absPath}, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return reviewTarget{RepoPath: absPath}, nil
 	}
-	return nil
+	return reviewTarget{RepoPath: absPath, NoGit: true}, nil
 }

@@ -1,12 +1,61 @@
 # prereview
 
-**A local per-line code review webapp.** Run it in your repo, click on
-lines you want to change, leave comments. A CSV is written that an LLM
-(or you) can read and act on. No GitHub round-trip; no committed code
-required.
+**Review your own changes — per line — before you push, and hand the comments to an LLM to act on.**
 
-Built on [livetemplate](https://github.com/livetemplate/livetemplate)
-for the reactive web layer — pure Go binary, no JS runtime needed.
+<p align="center">
+  <img src="docs/screenshot-review-desktop.png" alt="prereview on desktop in skill mode: a diff with a per-line comment and the Hand off to Claude button" width="820">
+</p>
+
+A tiny local webapp for **per-line review of your working tree** — no
+commit, no PR, no GitHub round-trip. It ships as a
+[Claude Code](https://claude.com/claude-code) skill: `/prereview`
+launches a session on your current changes, you comment per line, hit
+**"Hand off → Claude"**, and Claude applies them. Run it on a remote
+dev box and it auto-binds your Tailscale address — review and hand off
+straight from the Claude mobile app, over the tailnet, before anything
+is pushed.
+
+> **Status:** core flow (review → hand-off → LLM applies) works
+> end-to-end and is in daily use; UI still being polished.
+
+<p align="center">
+  <img src="docs/screenshot-files-desktop.png" alt="Desktop file drawer with per-file diff stats" width="410">
+  &nbsp;
+  <img src="docs/screenshot-all-comments.png" alt="All-comments overview across files" width="410">
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-review-mobile.png" alt="Reviewing and commenting from a phone" width="220">
+  &nbsp;&nbsp;
+  <img src="docs/screenshot-drawer-mobile.png" alt="File drawer open on a phone" width="220">
+</p>
+
+<p align="center"><sub>Per-line review &amp; hand-off on desktop · the all-comments view · <b>the same flow from your phone</b></sub></p>
+
+## Features
+
+- **Per-line & range comments on your working tree** — two-click range
+  select; comment on any file (changed or not); a single file or a
+  non-git directory works too.
+- **The hand-off loop** — a **"Hand off → Claude"** button writes a
+  marker; the Claude Code skill polls it, reads the CSV, and applies
+  your comments. Review → hand-off → changes, without leaving the chat.
+- **Ships as a Claude Code skill** — `/prereview` (or *"review my
+  changes"*) launches a session scoped to your current changes;
+  `prereview --install-skill` installs it from the binary.
+- **Responsive, phone-friendly UI** — review from an iPhone via the
+  Claude mobile app + `/remote-control`, comment, hand off, push.
+- **Tailscale-aware binding** — on a remote (SSH) box it auto-binds
+  your tailnet address (reachable from your phone, never the public
+  internet); locally it stays on `127.0.0.1`. No `--host` juggling.
+- **Markdown renders, but comments by source line** — `.md` shows
+  formatted; tapping a rendered block selects its real line range, so
+  it round-trips with the raw view and the CSV.
+- **Diff or full-file view** — changed hunks with context, or the whole
+  file; line numbers match so a comment resolves across both.
+- **Durable, boring storage** — one RFC-4180 CSV, atomic writes
+  (tmp+fsync+rename). Survives restarts; resume where you left off.
+- **Single Go binary** — embeds every asset; no Node/npm, no JS runtime.
 
 ## Install
 
@@ -109,7 +158,7 @@ filesystem reference.
 | `--repo` | `.` | Path to the git repo to review |
 | `--base` | `HEAD` | Git ref to diff against (any rev-spec: `HEAD~1`, `main`, `origin/master`, commit SHA…) |
 | `--port` | `0` | TCP port; 0 = OS-assigned |
-| `--host` | `127.0.0.1` | Bind address. `0.0.0.0` exposes on LAN (handy for iPhone-over-Tailscale) |
+| `--host` | auto | Bind address. **Auto:** `127.0.0.1` locally; on a remote (SSH) box, this host's **Tailscale** IP — phone-reachable over the tailnet, never public. Pass an explicit value to override; avoid `0.0.0.0` (binds every interface, including any public IP) |
 | `--skill` | `false` | Show "Hand off → Claude" instead of "Quit"; writes `.prereview/DONE` on hand-off |
 | `--version` | — | Print build version |
 

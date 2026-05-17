@@ -59,6 +59,13 @@ type DiffLine struct {
 // hand-written source; minified bundles and binary blobs hit the cap.
 const maxRenderableFileBytes = 1 << 20 // 1 MB
 
+// tooLargeNote is the FileDiff.Note for a file over the render cap.
+// Shared by the git (LoadDiff) and no-git (LoadDiffNoGit) paths so the
+// wording can't drift between them.
+func tooLargeNote(size int64) string {
+	return fmt.Sprintf("file too large to review (%.1f MB)", float64(size)/(1<<20))
+}
+
 // LoadDiff returns the full-file diff for one path against base.
 //
 // Uses `git diff --no-color -U999999` so every line of the file appears
@@ -71,10 +78,7 @@ const maxRenderableFileBytes = 1 << 20 // 1 MB
 // the per-line markup entirely.
 func LoadDiff(repo, base, path string) (*FileDiff, error) {
 	if st, err := os.Stat(filepath.Join(repo, path)); err == nil && st.Size() > maxRenderableFileBytes {
-		return &FileDiff{
-			Path: path,
-			Note: fmt.Sprintf("file too large to review (%.1f MB)", float64(st.Size())/(1<<20)),
-		}, nil
+		return &FileDiff{Path: path, Note: tooLargeNote(st.Size())}, nil
 	}
 	out, err := runGit(repo,
 		"diff", "--no-color", "-U999999", "-M", "--no-ext-diff",
