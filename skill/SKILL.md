@@ -27,6 +27,16 @@ The `--skill` flag is critical — without it the UI shows a "Quit" button inste
 
 `--base` defaults to `HEAD` (working tree vs last commit). Pass `--base main` for branch-vs-base review, `--base HEAD~3` for last-3-commits review, etc.
 
+**Clean working tree → review the whole branch.** Before launching, if you did *not* set an explicit `--base` (so it would default to `HEAD`) and `git status --porcelain` is empty, the `HEAD` diff is empty and the session has nothing to review. In that case launch with the empty tree as the base so every file on the current branch appears as added and any line is commentable:
+
+```bash
+base=HEAD
+[ -z "$(git -C "$repo" status --porcelain)" ] && base="$(git -C "$repo" hash-object -t tree /dev/null)"
+prereview --skill --repo "$repo" --base "$base" &
+```
+
+An explicitly requested base (`--base main`, `HEAD~3`, a tag, …) is always honored as-is — never override it, even if its file list happens to be empty.
+
 ### 2. Tell the user to review
 
 > "I've opened a review session at <url>. Click 'Hand off → Claude' when you're done and I'll read your comments."
