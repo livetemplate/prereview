@@ -2,38 +2,21 @@
 
 **Review your own changes — per line — before you push, and hand the comments to an LLM to act on.**
 
-prereview is a tiny local webapp for per-line review of your *working
-tree*. Run it in a repo (or point it at a single file or a non-git
-directory), open the URL, tap the lines you want changed, and leave
-comments. No commit, no PR, no GitHub round-trip.
-
-**Review a remote box from your phone.** Your code usually lives on a
-dev box — a server, a cloud VM, a machine on your tailnet — not the
-laptop in front of you. Run prereview *there*: on a remote (SSH) box it
-auto-binds that host's Tailscale address (never the public internet),
-so the review URL opens straight from the Claude mobile app over the
-tailnet. Pair it with `/remote-control` to comment per line and hand
-off to Claude from your phone — *before anything is committed or
-pushed*. No SSH-from-a-laptop, no desk required.
-
-The point is the **hand-off loop**. prereview ships as a
-[Claude Code](https://claude.com/claude-code) skill: say *"review my
-changes"* (or `/prereview`) and Claude launches a session scoped to
-your current changes and hands you a link. You leave comments, hit
-**"Hand off → Claude"**, and Claude reads every comment and applies it.
-You never run anything by hand.
-
-Pure Go single binary built on
-[livetemplate](https://github.com/livetemplate/livetemplate) — no JS
-runtime, no Node.
-
-> **Status:** the core flow — review → hand-off → LLM applies the
-> comments — works end-to-end and is in daily use. The UI is still
-> being polished; expect rough edges, not missing teeth.
-
 <p align="center">
-  <img src="docs/screenshot-review-desktop.png" alt="prereview on desktop in skill mode: a diff with a per-line comment being written and the Hand off to Claude button" width="860">
+  <img src="docs/screenshot-review-desktop.png" alt="prereview on desktop in skill mode: a diff with a per-line comment and the Hand off to Claude button" width="820">
 </p>
+
+A tiny local webapp for **per-line review of your working tree** — no
+commit, no PR, no GitHub round-trip. It ships as a
+[Claude Code](https://claude.com/claude-code) skill: `/prereview`
+launches a session on your current changes, you comment per line, hit
+**"Hand off → Claude"**, and Claude applies them. Run it on a remote
+dev box and it auto-binds your Tailscale address — review and hand off
+straight from the Claude mobile app, over the tailnet, before anything
+is pushed.
+
+> **Status:** core flow (review → hand-off → LLM applies) works
+> end-to-end and is in daily use; UI still being polished.
 
 <p align="center">
   <img src="docs/screenshot-files-desktop.png" alt="Desktop file drawer with per-file diff stats" width="410">
