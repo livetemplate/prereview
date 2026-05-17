@@ -1,12 +1,55 @@
 # prereview
 
-**A local per-line code review webapp.** Run it in your repo, click on
-lines you want to change, leave comments. A CSV is written that an LLM
-(or you) can read and act on. No GitHub round-trip; no committed code
-required.
+**Review your own changes — per line — before you push, and hand the comments to an LLM to act on.**
 
-Built on [livetemplate](https://github.com/livetemplate/livetemplate)
-for the reactive web layer — pure Go binary, no JS runtime needed.
+prereview is a tiny local webapp for per-line review of your *working
+tree*. Run it in a repo (or point it at a single file or a non-git
+directory), open the URL, tap the lines you want changed, and leave
+comments. No commit, no PR, no GitHub round-trip.
+
+The point is the **hand-off loop**. prereview ships as a
+[Claude Code](https://claude.com/claude-code) skill: say *"review my
+changes"* (or `/prereview`) and Claude launches a session scoped to
+your current changes and hands you a link. You leave comments — from
+your laptop, or from your **phone**: the UI is responsive, and it pairs
+with the Claude mobile app + `/remote-control` so you can review and
+comment *before pushing* without a desk. Hit **"Hand off → Claude"**
+and Claude reads every comment and applies it. You never run anything
+by hand.
+
+Pure Go single binary built on
+[livetemplate](https://github.com/livetemplate/livetemplate) — no JS
+runtime, no Node. On a remote box it auto-binds your Tailscale address
+so the phone flow just works, without exposing anything publicly.
+
+> **Status:** the core flow — review → hand-off → LLM applies the
+> comments — works end-to-end and is in daily use. The UI is still
+> being polished; expect rough edges, not missing teeth.
+
+## Features
+
+- **Per-line & range comments on your working tree** — two-click range
+  select; comment on any file (changed or not); a single file or a
+  non-git directory works too.
+- **The hand-off loop** — a **"Hand off → Claude"** button writes a
+  marker; the Claude Code skill polls it, reads the CSV, and applies
+  your comments. Review → hand-off → changes, without leaving the chat.
+- **Ships as a Claude Code skill** — `/prereview` (or *"review my
+  changes"*) launches a session scoped to your current changes;
+  `prereview --install-skill` installs it from the binary.
+- **Responsive, phone-friendly UI** — review from an iPhone via the
+  Claude mobile app + `/remote-control`, comment, hand off, push.
+- **Tailscale-aware binding** — on a remote (SSH) box it auto-binds
+  your tailnet address (reachable from your phone, never the public
+  internet); locally it stays on `127.0.0.1`. No `--host` juggling.
+- **Markdown renders, but comments by source line** — `.md` shows
+  formatted; tapping a rendered block selects its real line range, so
+  it round-trips with the raw view and the CSV.
+- **Diff or full-file view** — changed hunks with context, or the whole
+  file; line numbers match so a comment resolves across both.
+- **Durable, boring storage** — one RFC-4180 CSV, atomic writes
+  (tmp+fsync+rename). Survives restarts; resume where you left off.
+- **Single Go binary** — embeds every asset; no Node/npm, no JS runtime.
 
 ## Install
 
@@ -109,7 +152,7 @@ filesystem reference.
 | `--repo` | `.` | Path to the git repo to review |
 | `--base` | `HEAD` | Git ref to diff against (any rev-spec: `HEAD~1`, `main`, `origin/master`, commit SHA…) |
 | `--port` | `0` | TCP port; 0 = OS-assigned |
-| `--host` | `127.0.0.1` | Bind address. `0.0.0.0` exposes on LAN (handy for iPhone-over-Tailscale) |
+| `--host` | auto | Bind address. **Auto:** `127.0.0.1` locally; on a remote (SSH) box, this host's **Tailscale** IP — phone-reachable over the tailnet, never public. Pass an explicit value to override; avoid `0.0.0.0` (binds every interface, including any public IP) |
 | `--skill` | `false` | Show "Hand off → Claude" instead of "Quit"; writes `.prereview/DONE` on hand-off |
 | `--version` | — | Print build version |
 
