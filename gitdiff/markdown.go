@@ -77,15 +77,38 @@ func RenderMarkdownBlocks(src []byte) []MarkdownBlock {
 
 	doc := mdRenderer.Parser().Parse(text.NewReader(src))
 	var out []MarkdownBlock
+	// cursor tracks "one line past the last emitted block" so nodes whose
+	// AST entry carries no source segments (goldmark's ThematicBreak being
+	// the load-bearing example — it leaves an empty Lines() set) still get
+	// a unique source line. Without this, segmentSpan returns (0, 0) and
+	// lineAt(0) collapses every such node to line 1, so a 1200-line plan
+	// with 20+ `---` separators ends up with 20+ blocks all reporting
+	// [1, 1]. That violates the "every line belongs to one block" invariant
+	// the template relies on and causes the composer + L1-anchored comments
+	// to render once per collapsed block.
+	cursor := 1
 	emit := func(node ast.Node, htmlStr string) {
 		if htmlStr == "" {
 			return
 		}
 		start, stop := segmentSpan(node)
+		var startLine, endLine int
+		if start == 0 && stop == 0 {
+			// No source segments — fall back to the cursor. The line will
+			// be one past the previous block (usually the blank line that
+			// precedes the node); comments on visual-only blocks like
+			// thematic breaks are vanishingly rare, so the slight
+			// imprecision is acceptable in exchange for a unique range.
+			startLine, endLine = cursor, cursor
+		} else {
+			startLine = lineAt(start)
+			endLine = lineAt(max(stop-1, start))
+		}
+		cursor = endLine + 1
 		out = append(out, MarkdownBlock{
 			HTML:      template.HTML(htmlStr), //nolint:gosec // goldmark safe-mode output; raw HTML not passed through
-			StartLine: lineAt(start),
-			EndLine:   lineAt(max(stop-1, start)),
+			StartLine: startLine,
+			EndLine:   endLine,
 		})
 	}
 
@@ -138,6 +161,10 @@ func RenderMarkdownBlocks(src []byte) []MarkdownBlock {
 						StartLine: ln,
 						EndLine:   ln,
 					})
+					// Mirror emit()'s cursor update so a thematic-break
+					// (or other empty-segmentSpan node) following a
+					// split paragraph anchors to the correct line.
+					cursor = ln + 1
 				}
 			}
 		default:

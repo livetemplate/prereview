@@ -370,6 +370,61 @@ func TestRenderMarkdownBlocks_HardWrapReflow(t *testing.T) {
 	}
 }
 
+// TestRenderMarkdownBlocks_ThematicBreakLineRanges pins that nodes
+// without source segments — goldmark's ThematicBreak is the load-bearing
+// example, since it stores no Lines() data — still get unique [Start,End]
+// ranges instead of collapsing to [1, 1]. Without the cursor fallback,
+// every `---` separator anchored to line 1, so a multi-section document
+// rendered a comment / composer on L1 once per separator (the user-
+// reported bug: ~20 stacked composers).
+func TestRenderMarkdownBlocks_ThematicBreakLineRanges(t *testing.T) {
+	// 1: # H1
+	// 2: (blank)
+	// 3: para A.
+	// 4: (blank)
+	// 5: ---
+	// 6: (blank)
+	// 7: ## H2
+	// 8: (blank)
+	// 9: para B.
+	// 10: (blank)
+	// 11: ---
+	// 12: (blank)
+	// 13: ## H3
+	src := "# H1\n\npara A.\n\n---\n\n## H2\n\npara B.\n\n---\n\n## H3\n"
+	blocks := RenderMarkdownBlocks([]byte(src))
+
+	// Sanity: we got both <hr>s plus the surrounding blocks.
+	var hrs []MarkdownBlock
+	for _, b := range blocks {
+		if strings.Contains(string(b.HTML), "<hr") {
+			hrs = append(hrs, b)
+		}
+	}
+	if len(hrs) != 2 {
+		t.Fatalf("got %d <hr> blocks, want 2; blocks=%+v", len(hrs), blocks)
+	}
+
+	// The invariant the template depends on: every block has a unique
+	// range and ranges do not overlap. Walk in emit order and check.
+	for i, b := range blocks {
+		if b.StartLine > b.EndLine {
+			t.Errorf("block %d: StartLine %d > EndLine %d", i, b.StartLine, b.EndLine)
+		}
+		if i > 0 && b.StartLine <= blocks[i-1].EndLine {
+			t.Errorf("block %d at [%d,%d] overlaps prior block at [%d,%d]; HTML=%q",
+				i, b.StartLine, b.EndLine, blocks[i-1].StartLine, blocks[i-1].EndLine, b.HTML)
+		}
+	}
+
+	// Neither <hr> should collapse to line 1 (the smoking-gun symptom).
+	for i, hr := range hrs {
+		if hr.StartLine == 1 {
+			t.Errorf("hr %d collapsed to line 1 (pre-fix bug)", i)
+		}
+	}
+}
+
 // TestEndsSentence pins the terminal-punctuation rule that decides
 // one-sentence-per-line vs hard-wrapped: only . ! ? (after stripping
 // trailing whitespace and inline-close markers) end a sentence; , : ;
