@@ -3250,3 +3250,69 @@ func TestE2E_NoGitDirWalk(t *testing.T) {
 		t.Errorf("file buttons = %q, want both plan.md and notes.txt listed", joined)
 	}
 }
+
+// TestE2E_ThematicBreaksDontStackComposers reproduces the user-reported
+// bug from the long-plan dogfood case: a Markdown file with multiple
+// `---` separators caused 20+ <hr> blocks to collapse to source line 1
+// (goldmark's ThematicBreak carries no Lines() data; pre-fix segmentSpan
+// returned (0, 0) → lineAt(0) = 1). The template's md-view renders one
+// composer and one inline-comment instance per MarkdownBlock whose range
+// contains SelectionEndMax, so a comment on L1 stacked N+1 composers on
+// Edit. Pin the fix: exactly one .composer and one .inline-comment
+// remain visible after clicking Edit.
+func TestE2E_ThematicBreaksDontStackComposers(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, dir, "plan.md",
+		"# Heading One\n\nparagraph A sentence.\n\n---\n\n## Heading Two\n\nparagraph B sentence.\n\n---\n\n## Heading Three\n\nparagraph C sentence.\n\n---\n\n## Heading Four\n")
+	planFile := filepath.Join(dir, "plan.md")
+	p := bootChromeAgainstRepo(t, planFile, 1200, 800)
+	p.waitReady()
+
+	// Sanity: rendered markdown view is up and the H1 sits at L1.
+	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.md-view .md-rendered h1`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("md-view not visible: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Click the H1 block (anchored at L1), enter a comment, save.
+	if !clickMdBlock(p, "Heading One") {
+		t.Fatalf("could not click the H1 block\nstderr: %s", p.stderr.String())
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "headline feedback", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment on L1: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// After save, exactly one inline-comment should render on L1 (not
+	// once per <hr> block that pre-fix shared its range).
+	var icCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('.inline-comment').length`, &icCount),
+	); err != nil {
+		t.Fatalf("count inline-comments: %v", err)
+	}
+	if icCount != 1 {
+		t.Errorf("inline-comment count = %d after save, want 1 (one per L1 comment, not one per overlapping block)", icCount)
+	}
+
+	// Click Edit → composer reopens in edit mode. There must be exactly
+	// one composer; the pre-fix bug rendered one per overlapping block.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='editComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`//div[contains(@class,'composer')]//strong[starts-with(normalize-space(text()), 'Editing comment on')]`, chromedp.BySearch),
+	); err != nil {
+		t.Fatalf("click Edit: %v\nstderr: %s", err, p.stderr.String())
+	}
+	var composerCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('.composer').length`, &composerCount),
+	); err != nil {
+		t.Fatalf("count composers: %v", err)
+	}
+	if composerCount != 1 {
+		t.Errorf("composer count = %d in edit mode, want 1 (the user-reported bug)", composerCount)
+	}
+}
