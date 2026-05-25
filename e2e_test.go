@@ -3316,3 +3316,263 @@ func TestE2E_ThematicBreaksDontStackComposers(t *testing.T) {
 		t.Errorf("composer count = %d in edit mode, want 1 (the user-reported bug)", composerCount)
 	}
 }
+
+// setupFixtureRepoMarkdownTOC builds a fixture with one .md file that
+// has enough h1/h2/h3 headings (≥ 2 after the h1–h3 filter) to trigger
+// the TOC sidebar AND a second .md file with only a single heading to
+// exercise the "TOC absent" branch in the same boot.
+func setupFixtureRepoMarkdownTOC(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+
+	// big.md: a longer doc with h1 + multiple h2s + an h3, with enough
+	// paragraph body between sections that scroll-spy has room to fire
+	// during a scrollIntoView jump.
+	big := "# Big Doc\n\nIntro paragraph one.\n\n## First Section\n\n" +
+		strings.Repeat("body line.\n\n", 30) +
+		"## Second Section\n\n" +
+		strings.Repeat("more body.\n\n", 30) +
+		"### Nested\n\n" +
+		strings.Repeat("deeper body.\n\n", 20) +
+		"## Third Section\n\n" +
+		strings.Repeat("final body.\n\n", 20)
+	mustWrite(t, dir, "big.md", big)
+
+	// tiny.md: only one heading — TOC must not render.
+	mustWrite(t, dir, "tiny.md", "# Lonely\n\nJust one heading here.\n")
+
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed toc fixture")
+
+	// Edit big.md so it's a changed file (otherwise it might not show
+	// up in the diff view depending on the all-files toggle).
+	mustWrite(t, dir, "big.md", big+"\n## Appendix\n\nAdded later.\n")
+	mustWrite(t, dir, "tiny.md", "# Lonely\n\nJust one heading here.\nNow edited.\n")
+	return dir
+}
+
+// TestE2E_TOCSidebarDesktop covers the desktop layout (≥ 900px):
+// rendering a Markdown file with ≥ 2 headings shows the right-column
+// TOC sidebar; clicking an entry updates the URL hash; the scroll-spy
+// adds `lvt-active` to the link whose target is at or above the
+// trigger line.
+func TestE2E_TOCSidebarDesktop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("e2e not supported on windows")
+	}
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdownTOC(t), 1200, 800)
+	p.waitReady()
+	p.clickFile("big.md")
+
+	// Sidebar present, populated with h1–h3 entries.
+	var sidebarVisible bool
+	var linkCount int
+	var firstHref, firstText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.toc-sidebar`, chromedp.ByQuery),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.toc-sidebar')).display !== 'none'`, &sidebarVisible),
+		chromedp.Evaluate(`document.querySelectorAll('.toc-sidebar [lvt-spy-link]').length`, &linkCount),
+		chromedp.Evaluate(`(document.querySelector('.toc-sidebar [lvt-spy-link]')||{}).getAttribute('href')||''`, &firstHref),
+		chromedp.Evaluate(`(document.querySelector('.toc-sidebar [lvt-spy-link]')||{}).textContent||''`, &firstText),
+	); err != nil {
+		t.Fatalf("toc sidebar query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !sidebarVisible {
+		t.Error("toc sidebar not visible at 1200x800; desktop media query failed")
+	}
+	// Expected headings: # Big Doc, ## First Section, ## Second Section,
+	// ### Nested, ## Third Section, ## Appendix = 6.
+	if linkCount < 5 {
+		t.Errorf("toc link count = %d, want ≥ 5", linkCount)
+	}
+	if firstHref != "#big-doc" {
+		t.Errorf("first link href = %q, want #big-doc", firstHref)
+	}
+	if !strings.Contains(firstText, "Big Doc") {
+		t.Errorf("first link text = %q, want 'Big Doc'", firstText)
+	}
+
+	// On initial paint at scroll-top, the spy applies lvt-active to the
+	// LATEST heading whose top is above the trigger line. With a short
+	// intro between h1 and the first h2, both sit above the line, so
+	// the active link is the first h2 — matching how scroll-spy
+	// behaves on a freshly-loaded long doc (the reader is "in" the
+	// section that just started, not the document title).
+	var initialActive string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(document.querySelector('.toc-sidebar [lvt-spy-link].lvt-active')||{}).getAttribute('href')||''`, &initialActive),
+	); err != nil {
+		t.Fatalf("initial active query: %v", err)
+	}
+	if initialActive == "" {
+		t.Error("no lvt-active link after initial paint; spy didn't run its synchronous initial check")
+	}
+	// At minimum the active link must be one of the headings above the
+	// fold (we don't tie ourselves to specific layout pixels here).
+	if initialActive != "#big-doc" && initialActive != "#first-section" {
+		t.Errorf("initial active = %q, want #big-doc or #first-section", initialActive)
+	}
+
+	// Click a deeper link (Second Section). The native anchor scroll
+	// should land at that heading; once settled, the spy directive
+	// (after one rAF) puts lvt-active on the clicked link. We also
+	// expect window.location.hash to update.
+	var hashAfterClick string
+	var activeAfterClick string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.toc-sidebar a[href="#second-section"]`, chromedp.ByQuery),
+		// Smooth scroll is gated by prefers-reduced-motion in CSS, but in
+		// headless chromium reduced-motion is the default — so the jump
+		// is instant. Still give a beat for the rAF tick.
+		chromedp.Sleep(200*time.Millisecond),
+		chromedp.Evaluate(`window.location.hash`, &hashAfterClick),
+		chromedp.Evaluate(`(document.querySelector('.toc-sidebar [lvt-spy-link].lvt-active')||{}).getAttribute('href')||''`, &activeAfterClick),
+	); err != nil {
+		t.Fatalf("click toc link: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if hashAfterClick != "#second-section" {
+		t.Errorf("location.hash after click = %q, want #second-section", hashAfterClick)
+	}
+	if activeAfterClick != "#second-section" {
+		t.Errorf("active link after click = %q, want #second-section (optimistic activation)", activeAfterClick)
+	}
+
+	// Confirm the heading itself has an id attribute (auto-id worked).
+	var headingHasID bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`!!document.getElementById('second-section')`, &headingHasID),
+	); err != nil {
+		t.Fatalf("heading id query: %v", err)
+	}
+	if !headingHasID {
+		t.Error("rendered heading missing id='second-section'; goldmark AutoHeadingID not flowing through")
+	}
+}
+
+// TestE2E_TOCOverlayMobile covers the mobile flow at 375x812: the
+// three-dots menu shows a "Table of contents" entry; tapping it opens
+// a full-viewport overlay; tapping an entry in the overlay closes it
+// AND updates the URL hash in one gesture.
+func TestE2E_TOCOverlayMobile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("e2e not supported on windows")
+	}
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdownTOC(t), 375, 812)
+
+	// Manually navigate at mobile viewport — waitReady would force
+	// desktop emulation. The first action depends on the deferred
+	// livetemplate-client.js being parsed; sleep 2s per the existing
+	// pattern in TestE2E_MobileDrawer.
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(375, 812),
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`.hamburger`, chromedp.ByQuery),
+		chromedp.Sleep(2*time.Second),
+	); err != nil {
+		t.Fatalf("initial mobile nav: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Open file drawer, click big.md.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.hamburger').click()`, nil),
+		chromedp.WaitVisible(`#files-drawer.is-open`, chromedp.ByQuery),
+		chromedp.Evaluate(`(Array.from(document.querySelectorAll('button[name="selectFile"]')).find(b => b.textContent.includes('big.md'))||{}).click()`, nil),
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("open big.md on mobile: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Desktop sidebar must be hidden under 900px.
+	var desktopSidebarVisible bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{ const s=document.querySelector('.toc-sidebar'); return !!s && getComputedStyle(s).display !== 'none'; })()`, &desktopSidebarVisible),
+	); err != nil {
+		t.Fatalf("sidebar visibility query: %v", err)
+	}
+	if desktopSidebarVisible {
+		t.Error("toc-sidebar should NOT be visible at 375x812 (mobile media query failed)")
+	}
+
+	// Tap three-dots → menu opens → "Table of contents" item present.
+	var tocMenuItemPresent bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('button[name="toggleMoreMenu"]').click()`, nil),
+		chromedp.WaitVisible(`.more-menu.is-open`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('button[name="openTOC"]')`, &tocMenuItemPresent),
+	); err != nil {
+		t.Fatalf("open more menu: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !tocMenuItemPresent {
+		t.Fatal("Table of contents menu item missing on mobile (RenderedHeadings gate misfired)")
+	}
+
+	// Tap "Table of contents" → mobile overlay opens.
+	var overlayOpen bool
+	var overlayLinkCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('button[name="openTOC"]').click()`, nil),
+		chromedp.WaitVisible(`.toc-modal.is-open`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.toc-modal').classList.contains('is-open')`, &overlayOpen),
+		chromedp.Evaluate(`document.querySelectorAll('.toc-modal [lvt-spy-link]').length`, &overlayLinkCount),
+	); err != nil {
+		t.Fatalf("open toc overlay: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !overlayOpen {
+		t.Fatal("toc overlay did not open after tapping menu item")
+	}
+	if overlayLinkCount < 5 {
+		t.Errorf("overlay link count = %d, want ≥ 5", overlayLinkCount)
+	}
+
+	// Tap an overlay link → native anchor scroll + closeTOC action,
+	// composed via <a href + lvt-on:click="closeTOC". After the action
+	// round-trip, the overlay must be closed AND the URL hash set.
+	var hashAfter string
+	var overlayStillOpen bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.toc-modal a[href="#second-section"]').click()`, nil),
+		// Give the WebSocket round-trip a beat to apply state.TOCOpen=false.
+		chromedp.Sleep(500*time.Millisecond),
+		chromedp.Evaluate(`window.location.hash`, &hashAfter),
+		chromedp.Evaluate(`document.querySelector('.toc-modal').classList.contains('is-open')`, &overlayStillOpen),
+	); err != nil {
+		t.Fatalf("tap overlay link: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if hashAfter != "#second-section" {
+		t.Errorf("location.hash after tap = %q, want #second-section (native scroll missing)", hashAfter)
+	}
+	if overlayStillOpen {
+		t.Error("toc overlay still open after tapping a link (closeTOC action didn't fire or didn't compose with native scroll)")
+	}
+}
+
+// TestE2E_TOCAbsentWhenFewHeadings opens a Markdown file with only one
+// heading. The sidebar must not render, and the more-menu must not
+// expose a "Table of contents" entry.
+func TestE2E_TOCAbsentWhenFewHeadings(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("e2e not supported on windows")
+	}
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdownTOC(t), 1200, 800)
+	p.waitReady()
+	p.clickFile("tiny.md")
+
+	var sidebarInDOM, tocMenuItemInDOM bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('.toc-sidebar')`, &sidebarInDOM),
+		chromedp.Evaluate(`!!document.querySelector('button[name="openTOC"]')`, &tocMenuItemInDOM),
+	); err != nil {
+		t.Fatalf("tiny.md toc query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if sidebarInDOM {
+		t.Error("toc-sidebar rendered for single-heading doc; the ≥ 2 gate failed")
+	}
+	if tocMenuItemInDOM {
+		t.Error("toc menu item present for single-heading doc; the ≥ 2 gate failed")
+	}
+}

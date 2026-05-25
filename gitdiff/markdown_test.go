@@ -457,3 +457,85 @@ func TestEndsSentence(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractHeadings(t *testing.T) {
+	t.Run("empty source returns nil", func(t *testing.T) {
+		if got := ExtractHeadings(nil); got != nil {
+			t.Errorf("ExtractHeadings(nil) = %v, want nil", got)
+		}
+		if got := ExtractHeadings([]byte("   \n\n   ")); got != nil {
+			t.Errorf("ExtractHeadings(whitespace) = %v, want nil", got)
+		}
+	})
+
+	t.Run("source with no headings returns nil", func(t *testing.T) {
+		src := []byte("just a paragraph.\n\nanother paragraph.\n")
+		if got := ExtractHeadings(src); got != nil {
+			t.Errorf("ExtractHeadings(no-headings) = %v, want nil", got)
+		}
+	})
+
+	t.Run("captures level, id, and text in document order", func(t *testing.T) {
+		src := []byte("# Top Title\n\n## Sub One\n\n### Deeper\n\n## Sub Two\n")
+		got := ExtractHeadings(src)
+		want := []Heading{
+			{Level: 1, ID: "top-title", Text: "Top Title"},
+			{Level: 2, ID: "sub-one", Text: "Sub One"},
+			{Level: 3, ID: "deeper", Text: "Deeper"},
+			{Level: 2, ID: "sub-two", Text: "Sub Two"},
+		}
+		if len(got) != len(want) {
+			t.Fatalf("got %d headings, want %d: %+v", len(got), len(want), got)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("heading[%d] = %+v, want %+v", i, got[i], want[i])
+			}
+		}
+	})
+
+	t.Run("disambiguates duplicate slugs with -1 -2 suffix", func(t *testing.T) {
+		src := []byte("# Notes\n\n## Notes\n\n## Notes\n")
+		got := ExtractHeadings(src)
+		if len(got) != 3 {
+			t.Fatalf("got %d headings, want 3", len(got))
+		}
+		if got[0].ID != "notes" || got[1].ID != "notes-1" || got[2].ID != "notes-2" {
+			t.Errorf("dup-slug ids = [%q, %q, %q], want [\"notes\", \"notes-1\", \"notes-2\"]",
+				got[0].ID, got[1].ID, got[2].ID)
+		}
+	})
+
+	t.Run("handles inline emphasis in heading text", func(t *testing.T) {
+		// goldmark walks inline children; emphasis nodes wrap a Text node
+		// whose Segment carries the plain text, so the visible label is
+		// preserved without the *…* markers.
+		src := []byte("# Hello *world*\n")
+		got := ExtractHeadings(src)
+		if len(got) != 1 {
+			t.Fatalf("got %d headings, want 1", len(got))
+		}
+		if got[0].Text != "Hello world" {
+			t.Errorf("heading text = %q, want \"Hello world\"", got[0].Text)
+		}
+		if got[0].ID != "hello-world" {
+			t.Errorf("heading id = %q, want \"hello-world\"", got[0].ID)
+		}
+	})
+}
+
+func TestRenderMarkdownBlocks_HeadingHasID(t *testing.T) {
+	// AutoHeadingID flows through to the rendered HTML so the TOC links
+	// can deep-link to each heading's id without any post-processing.
+	src := []byte("# Hello World\n\n## Sub-section\n")
+	blocks := RenderMarkdownBlocks(src)
+	if len(blocks) != 2 {
+		t.Fatalf("got %d blocks, want 2", len(blocks))
+	}
+	if !strings.Contains(string(blocks[0].HTML), `id="hello-world"`) {
+		t.Errorf("h1 HTML missing id attribute: %s", blocks[0].HTML)
+	}
+	if !strings.Contains(string(blocks[1].HTML), `id="sub-section"`) {
+		t.Errorf("h2 HTML missing id attribute: %s", blocks[1].HTML)
+	}
+}

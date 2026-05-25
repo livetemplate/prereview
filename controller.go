@@ -431,6 +431,28 @@ func (c *PrereviewController) CloseMoreMenu(state PrereviewState, ctx *livetempl
 	return state, nil
 }
 
+// OpenTOC opens the mobile Table-of-Contents overlay. Bound to the
+// "Table of contents" entry in the 3-dots menu, so the menu must close
+// at the same time — otherwise the dropdown stays drawn over the
+// overlay it just summoned. Desktop never renders this entry; the TOC
+// is a permanent right sidebar there.
+func (c *PrereviewController) OpenTOC(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.TOCOpen = true
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// CloseTOC dismisses the mobile TOC overlay. Bound to two things: the
+// backdrop tap (close-without-jump) and the click on a heading link
+// inside the overlay (close-and-jump — the <a href="#…"> performs the
+// native anchor scroll, this action closes the overlay in the same
+// gesture). Browser-level anchor navigation is unaffected because
+// event-delegation.ts only preventDefault's submit and drag events.
+func (c *PrereviewController) CloseTOC(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.TOCOpen = false
+	return state, nil
+}
+
 // ToggleFileView flips between diff-overlay mode (default) and plain
 // file-view mode. See PrereviewState.FileView. Closes the overflow
 // menu so the effect on the diff is immediately visible.
