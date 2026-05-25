@@ -29,6 +29,13 @@ type FileDiff struct {
 	// range. Populated only for .md/.markdown paths; nil otherwise.
 	// Computed once per load and cached with the FileDiff.
 	MarkdownBlocks []MarkdownBlock
+	// Headings is the TOC source for the rendered-Markdown view:
+	// every Markdown heading in the new-side file, in document order,
+	// with goldmark's slugified anchor `id`. Populated only for
+	// .md/.markdown paths; nil otherwise. Filtering by level (e.g.
+	// h1–h3) and the "≥ 2 entries" visibility gate live at the caller
+	// (state.RenderedHeadings()).
+	Headings []Heading
 }
 
 // IsMarkdownPath reports whether path is a Markdown file by extension.
@@ -167,7 +174,9 @@ func highlightLines(fd *FileDiff) {
 				src.WriteByte('\n')
 			}
 		}
-		fd.MarkdownBlocks = RenderMarkdownBlocks([]byte(src.String()))
+		srcBytes := []byte(src.String())
+		fd.MarkdownBlocks = RenderMarkdownBlocks(srcBytes)
+		fd.Headings = ExtractHeadings(srcBytes)
 	}
 	if totalBytes > maxHighlightTotalBytes {
 		// Too big to highlight cheaply — leave HighlightedContent empty;

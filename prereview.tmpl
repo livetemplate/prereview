@@ -16,6 +16,7 @@
 :root {
   --pr-bar-h: 44px;
   --pr-drawer-w: 280px;
+  --pr-toc-w: 220px;
   --pr-add: #1f4e1f; --pr-del: #4e1f1f;
   --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9;
   --pr-sel-bg: #fff3a8;
@@ -655,6 +656,61 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    margin-inline:auto balances the remaining space; the parent
    main.viewer>article is max-width:100% so nothing else clamps it. */
 .md-view { padding: 0.6rem 1.2rem 2rem; max-width: 110ch; margin-inline: auto; }
+/* Sticky top bar (var(--pr-bar-h)) would otherwise obscure the anchored
+   heading when the browser jumps to "#id". scroll-padding-top reserves
+   that gap so the heading lands just below the bar. Smooth scroll is
+   gated behind prefers-reduced-motion so motion-sensitive users get an
+   instant jump. */
+html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+/* ===== TOC sidebar (desktop) + overlay (mobile) =====
+   Base (mobile) state: sidebar hidden, overlay closed. The desktop
+   media query below promotes the sidebar into the right column and
+   removes the mobile overlay/menu-entry from the DOM cascade. */
+.toc-sidebar { display: none; }
+.toc-modal {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 60; padding: calc(var(--pr-bar-h) + 0.5rem) 0 0;
+  background: var(--pico-background-color);
+  transform: translateX(100%); transition: transform 0.15s ease;
+  display: flex; flex-direction: column; gap: 0.25rem;
+  overflow-y: auto;
+}
+.toc-modal.is-open { transform: translateX(0); }
+.toc-backdrop {
+  position: fixed; inset: 0; z-index: 55;
+  background: rgba(0, 0, 0, 0.35);
+  display: none;
+}
+.toc-backdrop.is-open { display: block; }
+.toc-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.toc-modal-head strong { font-size: 0.9rem; color: var(--pico-muted-color); }
+.toc-modal-head form { margin: 0; }
+.toc-modal-head .close-btn {
+  padding: 0.25rem 0.45rem; min-height: auto; line-height: 1; min-width: 0;
+  background: transparent; color: var(--pico-muted-color);
+  border-color: var(--pico-muted-border-color);
+}
+.toc-modal-list { display: flex; flex-direction: column; padding: 0.4rem 0; }
+.toc-link {
+  display: block; padding: 0.55rem 1rem; text-decoration: none;
+  color: var(--pico-color); border-left: 3px solid transparent;
+  font-size: 0.95rem; line-height: 1.35;
+}
+.toc-link:hover { background: var(--pico-card-sectioning-background-color); }
+.toc-link.lvt-active {
+  color: var(--pr-add); font-weight: 600;
+  border-left-color: var(--pr-add);
+  background: var(--pico-card-sectioning-background-color);
+}
+.toc-l1 { padding-left: 1rem; }
+.toc-l2 { padding-left: 1.75rem; font-size: 0.9rem; }
+.toc-l3 { padding-left: 2.5rem; font-size: 0.85rem; color: var(--pico-muted-color); }
 .md-block { margin: 0 0 0.2rem; border-radius: 6px; }
 .md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
 .md-rendered {
@@ -898,6 +954,30 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   .toolbar-inline { display: inline-flex; }
   .more-trigger { display: none; }
   .more-menu, .more-menu-backdrop { display: none !important; }
+  /* TOC: a permanent right column. The .md-view container is the spy
+     root (lvt-spy="h1, h2, h3"); the sticky sidebar lists each h1–h3
+     and `lvt-spy-link` highlights the active one as the reader
+     scrolls. Mobile overlay + menu entry are hidden — desktop never
+     needs them. */
+  .toc-sidebar {
+    display: block; flex: 0 0 var(--pr-toc-w);
+    position: sticky; top: var(--pr-bar-h);
+    align-self: flex-start;
+    max-height: calc(100vh - var(--pr-bar-h));
+    overflow-y: auto;
+    padding: 0.5rem 0;
+    border-left: 1px solid var(--pico-muted-border-color);
+  }
+  .toc-sidebar .toc-head {
+    padding: 0.3rem 1rem 0.5rem;
+    font-size: 0.8rem; color: var(--pico-muted-color);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .toc-sidebar .toc-link { font-size: 0.9rem; padding: 0.35rem 1rem; }
+  .toc-sidebar .toc-l2 { font-size: 0.85rem; }
+  .toc-sidebar .toc-l3 { font-size: 0.8rem; }
+  .toc-modal, .toc-backdrop { display: none !important; }
+  .toc-menu-item { display: none !important; }
   /* Pico defaults buttons to width:100% so they fill mobile forms.
      On desktop the composer becomes a card next to the diff — full-
      width Save/Cancel look comically large. Pin them to content size. */
@@ -991,6 +1071,19 @@ main.viewer { overscroll-behavior: contain; }
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
   <div class="menu-info">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
   {{if .CurrentDiff}}
+  {{with .RenderedHeadings}}
+  {{/* Mobile-only entry — desktop renders the TOC as a permanent right
+       sidebar, so this is `display: none` ≥900px via the media query.
+       OpenTOC closes the more-menu in the same action so the dropdown
+       doesn't stay drawn over the overlay it just summoned. */}}
+  <form method="POST">
+    <button type="submit" name="openTOC" class="menu-item toc-menu-item" role="menuitem">
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+      <span class="menu-label">Table of contents</span>
+      <span class="menu-meta">{{len .}}</span>
+    </button>
+  </form>
+  {{end}}
   {{if .IsMarkdown}}
   <form method="POST">
     <button type="submit" name="toggleRawMarkdown" class="menu-item{{if not .RawMarkdown}} is-on{{end}}" role="menuitem">
@@ -1210,7 +1303,7 @@ main.viewer { overscroll-behavior: contain; }
        the CSV — nothing is renumbered. Comments/composer interleave
        by source line the same way the line view does, just matched to
        a block's [StartLine,EndLine] span. */}}
-  <div class="md-view" data-key="md-{{.Path}}">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="MB-{{$bs}}-{{$be}}"><div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>{{end}}</div>
+  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="MB-{{$bs}}-{{$be}}"><div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>{{end}}</div>
   {{else if .Lines}}
   {{/* data-key by path is load-bearing, NOT just a scroll-reset hack:
        per-row keys are "L<old>-<new>" which COLLIDE across files
@@ -1258,7 +1351,45 @@ main.viewer { overscroll-behavior: contain; }
 </div>
 {{end}}
 </main>
+{{/* TOC sidebar — desktop only (CSS hides it under 900px). Rendered
+     only when the document has ≥ 2 headings (h1–h3). The mobile
+     overlay below shares the same data; the menu entry that opens it
+     uses the same RenderedHeadings gate. */}}
+{{with .RenderedHeadings}}
+<aside class="toc-sidebar" aria-label="Table of contents">
+  <div class="toc-head"><strong>On this page</strong></div>
+  <nav class="toc-list">
+    {{range .}}<a href="#{{.ID}}" lvt-spy-link class="toc-link toc-l{{.Level}}">{{.Text}}</a>
+    {{end}}
+  </nav>
+</aside>
+{{end}}
 </div>
+{{/* Mobile TOC overlay — full-viewport sheet shown when TOCOpen is true.
+     Each link is BOTH an <a href="#id"> (browser performs the native
+     anchor scroll) AND lvt-on:click="closeTOC" (server closes the
+     overlay in the same gesture). event-delegation.ts does not call
+     preventDefault on click, and link-interceptor.ts's same-path branch
+     also returns without preventDefault for non-special hash targets,
+     so both effects compose cleanly. Backdrop tap closes without
+     jumping. */}}
+{{with .RenderedHeadings}}
+<div class="toc-backdrop{{if $.TOCOpen}} is-open{{end}}" lvt-on:click="closeTOC" aria-hidden="true"></div>
+<div class="toc-modal{{if $.TOCOpen}} is-open{{end}}" role="dialog" aria-label="Table of contents" aria-modal="true">
+  <div class="toc-modal-head">
+    <strong>On this page</strong>
+    <form method="POST">
+      <button type="submit" name="closeTOC" class="outline close-btn" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      </button>
+    </form>
+  </div>
+  <nav class="toc-modal-list">
+    {{range .}}<a href="#{{.ID}}" lvt-spy-link lvt-on:click="closeTOC" class="toc-link toc-l{{.Level}}">{{.Text}}</a>
+    {{end}}
+  </nav>
+</div>
+{{end}}
 <footer class="app-footer" role="contentinfo">
   prereview {{if eq .Version "dev"}}(dev){{else}}v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
 </footer>

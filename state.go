@@ -128,6 +128,13 @@ type PrereviewState struct {
 	// default; nobody expects an overflow menu to survive a refresh.
 	MoreMenuOpen bool `json:"more_menu_open"`
 
+	// TOCOpen drives the mobile Table-of-Contents overlay. On desktop
+	// the TOC is always a right sidebar (no state needed); on narrow
+	// viewports it lives behind a 3-dots menu item that flips this flag,
+	// rendering the heading list as a full-screen overlay. Not persisted
+	// for the same reason as MoreMenuOpen.
+	TOCOpen bool `json:"toc_open"`
+
 	// FileView, when true, turns off the diff overlay: deleted lines are
 	// hidden, +/- gutter markers disappear, and add/del row coloring is
 	// dropped. The user sees the file as it currently exists in the
@@ -274,6 +281,32 @@ func (s PrereviewState) RenderedMarkdown() []gitdiff.MarkdownBlock {
 		return nil
 	}
 	return s.CurrentDiff.MarkdownBlocks
+}
+
+// RenderedHeadings returns the TOC entries for the current Markdown
+// file, filtered to h1–h3 (deeper levels create visual noise without
+// adding navigational value for typical docs). Returns nil when the
+// rendered view isn't showing OR when there are fewer than two
+// headings — a TOC with one entry is pointless and just steals
+// horizontal real estate from the prose.
+func (s PrereviewState) RenderedHeadings() []gitdiff.Heading {
+	if !s.ShowRenderedMarkdown() {
+		return nil
+	}
+	all := s.CurrentDiff.Headings
+	if len(all) == 0 {
+		return nil
+	}
+	out := make([]gitdiff.Heading, 0, len(all))
+	for _, h := range all {
+		if h.Level >= 1 && h.Level <= 3 {
+			out = append(out, h)
+		}
+	}
+	if len(out) < 2 {
+		return nil
+	}
+	return out
 }
 
 // FilteredFiles returns the scoped files (see scopedFiles) further

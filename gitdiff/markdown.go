@@ -11,6 +11,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -42,6 +43,17 @@ type MarkdownBlock struct {
 	EndLine   int
 }
 
+// Heading captures one rendered Markdown heading for the TOC sidebar.
+// Level is 1–6 (matches the source HN); ID is the slugified anchor
+// goldmark's WithAutoHeadingID emits (stable across renders, collisions
+// disambiguated by `-1`/`-2` suffix); Text is the plain-text inline
+// content. Empty source → nil.
+type Heading struct {
+	Level int
+	ID    string
+	Text  string
+}
+
 // mdRenderer enables the GFM extension (tables, strikethrough,
 // autolinks, task-lists) so repo Markdown renders the way its authors
 // wrote it for GitHub. GFM does NOT enable html.WithUnsafe, so the safe
@@ -49,7 +61,14 @@ type MarkdownBlock struct {
 // untrusted repo content can't inject <script>/onerror/etc. No separate
 // sanitizer needed — same choice the sibling modules (tinkerdown,
 // devbox-dash) make.
-var mdRenderer = goldmark.New(goldmark.WithExtensions(extension.GFM))
+//
+// WithAutoHeadingID slugifies headings into stable `id` attributes so
+// the TOC sidebar can deep-link to each section, and ExtractHeadings
+// reads the same id back off the AST node.
+var mdRenderer = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+)
 
 // RenderMarkdownBlocks parses src and returns each commentable unit as
 // safe HTML tagged with its source line span. Empty input → nil.
@@ -172,6 +191,63 @@ func RenderMarkdownBlocks(src []byte) []MarkdownBlock {
 		}
 	}
 	return out
+}
+
+// ExtractHeadings walks src as Markdown and returns each heading in
+// document order, with the `id` attribute goldmark's WithAutoHeadingID
+// transformer attached during parse. Callers filter by Level for TOC
+// depth (we typically render h1–h3 only). Empty / heading-less input → nil.
+func ExtractHeadings(src []byte) []Heading {
+	if len(bytes.TrimSpace(src)) == 0 {
+		return nil
+	}
+	doc := mdRenderer.Parser().Parse(text.NewReader(src))
+	var out []Heading
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		h, ok := n.(*ast.Heading)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		idBytes, _ := h.AttributeString("id")
+		id, _ := idBytes.([]byte)
+		// A heading with no id (extremely rare — only possible if the
+		// auto-id transformer couldn't produce one, e.g. heading is
+		// entirely punctuation that slugifies to "") is skipped: the TOC
+		// can't link to it anyway.
+		if len(id) == 0 {
+			return ast.WalkSkipChildren, nil
+		}
+		out = append(out, Heading{
+			Level: h.Level,
+			ID:    string(id),
+			Text:  headingText(h, src),
+		})
+		return ast.WalkSkipChildren, nil
+	})
+	return out
+}
+
+// headingText concatenates the plain-text content of a heading's inline
+// children. Replaces the deprecated ast.Node.Text(): we walk *ast.Text
+// segments (which carry source ranges, including emphasized/strong/code
+// children since their inner Text node sits below them) and join. Any
+// raw segments goldmark synthesizes (e.g. autolink labels) come out
+// as-is.
+func headingText(h *ast.Heading, src []byte) string {
+	var buf bytes.Buffer
+	_ = ast.Walk(h, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if t, ok := n.(*ast.Text); ok {
+			buf.Write(t.Segment.Value(src))
+		}
+		return ast.WalkContinue, nil
+	})
+	return buf.String()
 }
 
 // wrapListItem renders a single list item back inside its parent list
