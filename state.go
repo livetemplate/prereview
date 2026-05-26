@@ -265,6 +265,32 @@ func (s PrereviewState) IsMarkdown() bool {
 	return s.CurrentDiff != nil && gitdiff.IsMarkdownPath(s.CurrentDiff.Path)
 }
 
+// BinaryKind classifies an IsBinary FileDiff by extension so the viewer
+// can render a real preview (<img>, <iframe>, <video>, <audio>) instead
+// of the bare "Binary file — cannot display" message. Returns "" for
+// formats with no in-browser viewer (e.g. .zip, .so, unknown ext) so
+// the template falls back to the cannot-display copy. Extensions must
+// be a subset of staticAllowedExt in main.go — the static fallback
+// only serves what's on that allowlist, and an <img>/<iframe> pointing
+// at a 404 would just show a broken icon.
+func (s PrereviewState) BinaryKind() string {
+	if s.CurrentDiff == nil || !s.CurrentDiff.IsBinary {
+		return ""
+	}
+	ext := strings.ToLower(filepath.Ext(s.CurrentDiff.Path))
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico":
+		return "image"
+	case ".pdf":
+		return "pdf"
+	case ".mp4", ".webm":
+		return "video"
+	case ".mp3", ".wav":
+		return "audio"
+	}
+	return ""
+}
+
 // ShowRenderedMarkdown is true when the viewer should show the
 // rendered-Markdown blocks instead of the line view: a Markdown file,
 // not toggled to raw, with at least one rendered block. Zero-arg so

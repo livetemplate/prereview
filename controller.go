@@ -303,6 +303,12 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
 	state.FileDrawerOpen = false
+	// Picking a file from the drawer while the all-comments view is
+	// open implies "leave this overview, go look at that file" — same
+	// intent as the Back button on the all-comments view. Without this
+	// the user would land on the all-comments view with a freshly-
+	// selected (but invisible) file behind it.
+	state.ShowAllComments = false
 	c.relocateSelected(&state)
 	return state, nil
 }
@@ -475,6 +481,26 @@ func (c *PrereviewController) ToggleFileScope(state PrereviewState, ctx *livetem
 // effect is immediately visible on mobile.
 func (c *PrereviewController) ToggleRawMarkdown(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RawMarkdown = !state.RawMarkdown
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// SetMarkdownView is the idempotent setter behind the desktop radio
+// group (Rendered / Raw). Reads form field `view`; anything other than
+// "raw" resolves to rendered. Unlike ToggleRawMarkdown, clicking the
+// already-active radio is a no-op for state — the value reflects the
+// final mode, not a flip.
+func (c *PrereviewController) SetMarkdownView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.RawMarkdown = ctx.GetString("view") == "raw"
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// SetFileViewMode is the setter counterpart of ToggleFileView for the
+// desktop radio group (Diff / File). Reads form field `view`; "file"
+// → FileView true, anything else (incl. "diff") → false.
+func (c *PrereviewController) SetFileViewMode(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FileView = ctx.GetString("view") == "file"
 	state.MoreMenuOpen = false
 	return state, nil
 }

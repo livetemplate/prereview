@@ -460,6 +460,13 @@ func staticFallback(root string, next http.Handler) http.Handler {
 		}
 		defer f.Close()
 		w.Header().Set("Cache-Control", "no-cache")
+		// Force inline rendering — without this, Chrome respects the
+		// user's "Download PDFs" setting and shows the compact embed
+		// stub (PDF icon + Open button) instead of the inline viewer.
+		// `inline` is the safe default for every allowlisted format
+		// here (images, PDFs, media) — none of these are intended as
+		// downloads in a code-review context.
+		w.Header().Set("Content-Disposition", "inline")
 		// http.ServeContent sets Content-Type via mime.TypeByExtension,
 		// honours Range, and handles If-Modified-Since for 304s.
 		http.ServeContent(w, r, resolved, info.ModTime(), f)

@@ -1041,7 +1041,7 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 
 	var codeFam string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code button.line`, chromedp.ByQuery),
 		chromedp.Evaluate(`getComputedStyle(document.querySelector('.code .content')).fontFamily`, &codeFam),
 	); err != nil {
@@ -1546,7 +1546,7 @@ func TestE2E_AllCommentsView(t *testing.T) {
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
 		// Open all-comments view via the pill.
-		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("open all-comments: %v\nstderr: %s", err, p.stderr.String())
@@ -1641,7 +1641,7 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 	// new actions.
 	var items, withResolve, withEdit, withDelete int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item').length`, &items),
 		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item button[name="toggleResolved"]').length`, &withResolve),
@@ -1682,7 +1682,7 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='clearSelection']`, chromedp.ByQuery),
 		chromedp.Sleep(150*time.Millisecond),
-		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("cancel edit + reopen list: %v%s", err, diag())
@@ -1777,7 +1777,7 @@ func TestE2E_ResolveComment(t *testing.T) {
 
 	// Toggle "Show resolved" → the resolved comment reappears with is-resolved.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleShowResolved']`, chromedp.ByQuery),
+		chromedp.Click(`.tb-checkbox input[type="checkbox"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("toggle show resolved: %v\nstderr: %s", err, p.stderr.String())
@@ -1845,7 +1845,7 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	var fvAfter bool
 	var delAfter int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvAfter),
 		chromedp.Evaluate(delRowsVisible, &delAfter),
@@ -1863,7 +1863,7 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	var fvFinal bool
 	var delFinal int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(200*time.Millisecond),
 		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvFinal),
 		chromedp.Evaluate(delRowsVisible, &delFinal),
@@ -1946,7 +1946,7 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	// Toggle to File view: whole file, no folds, no del.
 	var fileBtns, fileFolds, fileDels int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
 		chromedp.Sleep(200*time.Millisecond),
 		chromedp.Evaluate(lineBtns, &fileBtns),
@@ -1968,7 +1968,7 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	// Toggle back to Diff view: folds return.
 	var backBtns, backFolds int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(250*time.Millisecond),
 		chromedp.Evaluate(lineBtns, &backBtns),
 		chromedp.Evaluate(foldRows, &backFolds),
@@ -2253,9 +2253,9 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	p.waitReady()
 
 	// Rendered by default.
-	var hasMdView, hasH1, hasRawChip, hasDiffChip bool
+	var hasMdView, hasH1, hasMdRadios, hasFileRadios bool
 	var scriptCount, lineBtns int
-	var h1Text, chipText string
+	var h1Text, checkedView string
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView),
@@ -2263,9 +2263,9 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 		chromedp.Evaluate(`(document.querySelector('.md-rendered h1')||{}).textContent||''`, &h1Text),
 		chromedp.Evaluate(`document.querySelectorAll('.md-rendered script').length`, &scriptCount),
 		chromedp.Evaluate(`document.querySelectorAll('.code button.line').length`, &lineBtns),
-		chromedp.Evaluate(`!!document.querySelector('button[name="toggleRawMarkdown"]')`, &hasRawChip),
-		chromedp.Evaluate(`(document.querySelector('button[name="toggleRawMarkdown"]')||{}).textContent||''`, &chipText),
-		chromedp.Evaluate(`!!document.querySelector('button[name="toggleFileView"]')`, &hasDiffChip),
+		chromedp.Evaluate(`!!document.querySelector('form[aria-label="Markdown view"]')`, &hasMdRadios),
+		chromedp.Evaluate(`(document.querySelector('form[aria-label="Markdown view"] input:checked')||{}).value||''`, &checkedView),
+		chromedp.Evaluate(`!!document.querySelector('form[aria-label="File view"]')`, &hasFileRadios),
 	); err != nil {
 		t.Fatalf("render-default query: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -2281,11 +2281,11 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	if lineBtns != 0 {
 		t.Errorf("rendered view must not show the line viewer; got %d line buttons", lineBtns)
 	}
-	if !hasRawChip || !strings.Contains(chipText, "Rendered") {
-		t.Errorf("expected a 'Rendered' toggle chip; got present=%v text=%q", hasRawChip, chipText)
+	if !hasMdRadios || checkedView != "rendered" {
+		t.Errorf("expected Markdown view radios with rendered checked; radios present=%v checked value=%q", hasMdRadios, checkedView)
 	}
-	if hasDiffChip {
-		t.Error("Diff/File chip should be hidden while rendered Markdown is shown")
+	if hasFileRadios {
+		t.Error("File view radios should be hidden while rendered Markdown is shown")
 	}
 
 	// Click the first rendered block (the h1, source line 1) and comment.
@@ -2318,7 +2318,7 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	var rawLineBtns int
 	var rawHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(350*time.Millisecond),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &rawHasMdView),
 		chromedp.Evaluate(`document.querySelectorAll('.code button.line').length`, &rawLineBtns),
@@ -2339,7 +2339,7 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	// Toggle back to rendered: comment shows under its block again.
 	var backHasMdView, backHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &backHasMdView),
 		chromedp.Evaluate(`!!document.querySelector('.md-block .inline-comment')`, &backHasComment),
@@ -2457,7 +2457,7 @@ func TestE2E_MarkdownPerRowComment(t *testing.T) {
 	// Round-trip to raw line view: the comment shows on line 15.
 	var rawHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(350*time.Millisecond),
 		chromedp.Evaluate(`!!document.querySelector('.code .inline-comment')`, &rawHasComment),
 	); err != nil {
@@ -2472,7 +2472,7 @@ func TestE2E_MarkdownPerRowComment(t *testing.T) {
 	// proving per-row anchoring rather than whole-table.
 	var underRowD bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`(()=>{const b=[...document.querySelectorAll('.md-block')].find(x=>x.querySelector('.inline-comment')); return b?b.textContent.includes('authrow EDITED'):false;})()`, &underRowD),
 	); err != nil {

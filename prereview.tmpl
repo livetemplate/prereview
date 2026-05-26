@@ -14,9 +14,14 @@
 <link rel="stylesheet" href="/syntax.css">
 <style>
 :root {
-  --pr-bar-h: 44px;
+  --pr-bar-h: 52px;
+  /* Three-column desktop layout (≥900px): file drawer | viewer | TOC.
+     Drawer at 280px holds most filenames intact (mockups/, docs/
+     prefixed paths fit); on the rare longer path, the button's
+     title="{{.Path}}" attribute is the hover fallback. TOC at 340px
+     gives heading prose 1-2 lines instead of the old cramped 3+. */
   --pr-drawer-w: 280px;
-  --pr-toc-w: 220px;
+  --pr-toc-w: 340px;
   --pr-add: #1f4e1f; --pr-del: #4e1f1f;
   --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9;
   --pr-sel-bg: #fff3a8;
@@ -89,12 +94,16 @@ body { padding: 0; display: flex; flex-direction: column; height: 100dvh; font-f
 body > [data-lvt-id] { display: contents; }
 .layout { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 
-/* Top bar — sticky on mobile, becomes header row on desktop */
+/* Top bar — sticky on mobile, becomes header row on desktop. The
+   block padding (top + bottom) leaves a small but visible breathing
+   strip above and below the buttons; without it the chrome looks
+   pressed against the page top, especially in the browser's address-
+   bar-adjacent area. */
 header.bar {
   position: sticky; top: 0; z-index: 30;
-  height: var(--pr-bar-h);
+  min-height: var(--pr-bar-h);
   display: flex; align-items: center; gap: 0.4rem;
-  padding: 0 0.5rem;
+  padding: 0.4rem 0.5rem;
   background: var(--pico-card-background-color);
   border-bottom: 1px solid var(--pico-muted-border-color);
 }
@@ -109,43 +118,73 @@ header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: e
 
 /* Inline chip group — only shown on desktop where the toolbar has room.
    Mobile users get the same controls inside the 3-dots overflow menu. */
-.toolbar-inline { display: none; align-items: center; gap: 0.4rem; flex-shrink: 0; }
+.toolbar-inline { display: none; align-items: center; gap: 0; flex-shrink: 0; }
 .toolbar-inline .auto-saved-long { font-size: 0.7rem; color: var(--pico-muted-color); }
+/* .tb-group is the segment primitive: an inline cluster of chips
+   (counters or toggles). Segments are visually separated by a thin
+   vertical divider — supplied as the LEFT border of every group
+   except the first. Same primitive applies to the nav arrows and the
+   Quit button (which sit OUTSIDE .toolbar-inline as siblings in the
+   header flex row, marked with .tb-action / class="nav-prev"). */
+.tb-group { display: inline-flex; align-items: center; gap: 0.8rem; padding: 0 0.6rem; }
+.tb-group:first-child { padding-left: 0; }
+/* `<small class="auto-saved-long">` defaults to inline + baseline
+   alignment, which sits at a slightly different vertical position than
+   the surrounding inline-flex checkbox/radio labels. Force it onto the
+   same flex baseline so "19 files · 0/19 viewed" lines up cleanly with
+   the checkboxes next to it. */
+.toolbar-inline .auto-saved-long {
+  display: inline-flex; align-items: center; line-height: 1.5;
+  padding-right: 0.4rem;
+}
+.tb-group + .tb-group,
+header.bar .toolbar-inline + .nav-prev,
+header.bar .nav-next + .tb-action,
+header.bar .toolbar-inline + .tb-action {
+  border-left: 1px solid var(--pico-muted-border-color);
+  margin-left: 0.2rem;
+  padding-left: 0.7rem;
+}
+/* The Prev/Next labels live in a span so we can hide them at smaller
+   desktop widths if needed; on mobile the prev/next buttons are SVG-
+   only (label has display:none). */
+.nav-label { display: none; }
+header.bar .nav-prev button,
+header.bar .nav-next button { gap: 0.3rem; }
+/* Radio-button groups for view-mode toggles (Rendered/Raw, Diff/File).
+   Native <input type="radio"> + <label>, no custom button styling —
+   the browser's radio circle is the cheapest, most universally-
+   recognised "one of N is selected" affordance. `accent-color` recolours
+   the radio dot to match the rest of the dark toolbar chrome. */
+.tb-radios { display: inline-flex; gap: 0.8rem; align-items: center; margin: 0; padding: 0; border: 0; }
+.tb-radios label {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  cursor: pointer; user-select: none; font-size: 1rem;
+}
+.tb-radios input[type="radio"] {
+  margin: 0; width: 1.05rem; height: 1.05rem;
+  accent-color: var(--pico-contrast); cursor: pointer;
+}
+/* Checkbox controls (comments / resolved counter-toggles). Same
+   accent-color + sizing as the radios so the toolbar reads as a
+   coherent palette of native form controls. */
+.tb-checkbox {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  cursor: pointer; user-select: none; font-size: 1rem;
+  white-space: nowrap;
+}
+.tb-checkbox input[type="checkbox"] {
+  margin: 0; width: 1.05rem; height: 1.05rem;
+  accent-color: var(--pico-contrast); cursor: pointer;
+}
 
-.chip {
-  flex-shrink: 0; margin: 0; padding: 0.15rem 0.5rem;
-  font-size: 0.7rem; font-weight: 600; min-height: 0;
-  background: var(--pico-card-sectioning-background-color);
-  /* Pico v2 sets `--pico-color: var(--pico-primary-inverse)` (white) inside
-     button scope — re-anchor to the document text color so the chip label
-     stays readable. Same fix lives on .more-trigger and .menu-item. */
-  --pico-color: var(--pico-h1-color);
-  color: var(--pico-color);
-  border: 1px solid var(--pico-muted-border-color); border-radius: 999px;
-  cursor: pointer; white-space: nowrap;
-}
-.chip.resolved.is-on {
-  background: var(--pr-add-bg); --pico-color: var(--pr-add); color: var(--pico-color); border-color: var(--pr-add);
-}
-/* View chip: distinct amber tint when File view is active so users
-   can tell at a glance the diff overlay is off. */
-.chip.view-chip.is-on {
-  background: #fef3c7; --pico-color: #92400e; color: var(--pico-color); border-color: #d97706;
-}
-/* Pico's `button:hover` re-sets --pico-color to its inverse (white),
-   which made the chip label vanish on hover (light text on the chip's
-   light background). Re-assert the readable color per state on hover
-   and add a subtle affordance via the border. */
-.chip:hover, .chip:focus-visible {
-  --pico-color: var(--pico-h1-color); color: var(--pico-color);
-  border-color: var(--pico-primary); background: var(--pico-card-sectioning-background-color);
-}
-.chip.resolved.is-on:hover, .chip.resolved.is-on:focus-visible {
-  --pico-color: var(--pr-add); color: var(--pico-color); background: var(--pr-add-bg);
-}
-.chip.view-chip.is-on:hover, .chip.view-chip.is-on:focus-visible {
-  --pico-color: #92400e; color: var(--pico-color); background: #fef3c7;
-}
+/* Toolbar buttons all use Pico's `class="contrast"` (solid dark, white
+   text) for visual consistency — same style as Hand off / Quit. State
+   for toggles (Rendered/Raw, File/Diff, ✓/○ resolved) is conveyed by
+   the label text itself, not by chip-tint variants. White-on-dark
+   solves the prior chip-label-vanishes-on-hover bug for free: Pico's
+   contrast button manages its own --pico-color stack across hover and
+   focus-visible, so no manual re-assertion is needed. */
 
 /* 3-dots overflow menu trigger — mobile only. The menu itself uses the
    same state-driven open/close pattern as #files-drawer: a CSS class
@@ -318,6 +357,22 @@ dialog#files-drawer .close-btn:hover { border-color: var(--pico-muted-border-col
    (HEAD, HEAD~1, main, abc1234, …). Lives right under .drawer-head so
    it's contextually near the file count it produces. The text input
    uses lvt-form:preserve so partial typing survives re-renders. */
+/* All-comments view-switch button. Sits at the top of the drawer so it
+   reads as a sibling of "the file list" (i.e. "instead of a file, look
+   at all comments") — semantically distinct from the toolbar's filter
+   checkboxes. Outline-style button (not contrast-filled) keeps it from
+   competing visually with Hand off / Quit, which remain the toolbar's
+   primary actions. */
+dialog#files-drawer .drawer-all-comments {
+  padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
+}
+dialog#files-drawer .drawer-all-comments form { margin: 0; }
+dialog#files-drawer .drawer-all-comments button {
+  width: 100%; margin: 0; padding: 0.45rem 0.6rem;
+  font-size: 0.9rem; min-height: 0; text-align: left;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+}
+
 dialog#files-drawer .drawer-base {
   padding: 0.3rem 0.5rem 0.35rem; border-bottom: 1px solid var(--pico-muted-border-color);
   font-size: 0.75rem;
@@ -655,7 +710,15 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    (100ch still left a big right gap) without an unreadably long line.
    margin-inline:auto balances the remaining space; the parent
    main.viewer>article is max-width:100% so nothing else clamps it. */
-.md-view { padding: 0.6rem 1.2rem 2rem; max-width: 110ch; margin-inline: auto; }
+/* Reading surface used to be capped at 110ch + margin-auto, which left
+   big symmetric gutters in the middle column on wide monitors. Now
+   the .md-view fills the column with only its own 1.2rem side padding;
+   a 160ch ceiling kicks in on ultrawide displays so prose lines don't
+   get absurdly long. Tighter than the column on a 1920px display
+   would feel cramped against the TOC; tests still pass the ≥85% width
+   + centered invariants because the symmetric padding centres the
+   block naturally. */
+.md-view { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
 /* Sticky top bar (var(--pr-bar-h)) would otherwise obscure the anchored
    heading when the browser jumps to "#id". scroll-padding-top reserves
    that gap so the heading lands just below the bar. Smooth scroll is
@@ -708,9 +771,13 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border-left-color: var(--pr-add);
   background: var(--pico-card-sectioning-background-color);
 }
-.toc-l1 { padding-left: 1rem; }
-.toc-l2 { padding-left: 1.75rem; font-size: 0.9rem; }
-.toc-l3 { padding-left: 2.5rem; font-size: 0.85rem; color: var(--pico-muted-color); }
+/* Per-level indent kept visually distinct but tighter than before — the
+   old 1rem / 1.75rem / 2.5rem cascade ate so much horizontal space
+   that L3 titles in the 220px sidebar had ≤7 chars of text room. New
+   ladder is half-step (0.5rem) per level, leaving more width for prose. */
+.toc-l1 { padding-left: 0.75rem; }
+.toc-l2 { padding-left: 1.25rem; font-size: 0.9rem; }
+.toc-l3 { padding-left: 1.75rem; font-size: 0.85rem; color: var(--pico-muted-color); }
 .md-block { margin: 0 0 0.2rem; border-radius: 6px; }
 .md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
 .md-rendered {
@@ -816,7 +883,6 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   background: var(--pico-card-sectioning-background-color);
   padding: 0.3rem 0.45rem; border-radius: 4px; font-size: 0.72rem;
 }
-.chip.outdated { background: var(--pr-del-bg); color: var(--pr-del); border-color: var(--pr-del); }
 .reanchor-prompt {
   position: sticky; bottom: 0;
   margin: 0.4rem 0.4rem 0.2rem; padding: 0.4rem 0.6rem;
@@ -869,6 +935,33 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 /* Empty states */
 .empty { color: var(--pico-muted-color); padding: 2rem; text-align: center; }
 
+/* Binary file previews — rendered inline now that the HTTP server's
+   static fallback (issue #13) serves the bytes. Each kind picks the
+   most natural sizing: images fill width up to their natural size; PDFs
+   take a tall viewport-relative iframe (PDFs scroll internally); video
+   gets a 16:9 cap; audio is its own minimal player. */
+.binary-preview { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
+.binary-image img { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+/* PDF card: a centred file affordance with a clear "Open in new tab"
+   CTA. Browsers' inline PDF viewers are too restricted in embed
+   contexts to be useful (see template note), so we lean on Chrome's
+   full standalone viewer via target=_blank instead. */
+.binary-pdf-card {
+  display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+  padding: 3rem 1rem; max-width: 28rem; margin: 2rem auto;
+  border: 1px solid var(--pico-muted-border-color); border-radius: 8px;
+  background: var(--pico-card-background-color);
+}
+.binary-pdf-card .pdf-card-icon { font-size: 3rem; line-height: 1; }
+.binary-pdf-card .pdf-card-name { font-size: 0.95rem; color: var(--pico-h1-color); word-break: break-all; text-align: center; }
+/* Pico v2 styles `<a role="button" class="contrast">` as a solid dark
+   button identical to <button class="contrast">. We only override
+   spacing/sizing; colors come from Pico's role=button cascade so this
+   stays in lockstep with Quit/Hand off automatically. */
+.binary-pdf-card .pdf-card-open { margin-top: 0.4rem; padding: 0.5rem 1.2rem; width: auto; }
+.binary-video video { display: block; max-width: 100%; max-height: calc(100vh - var(--pr-bar-h) - 4rem); margin-inline: auto; }
+.binary-audio audio { display: block; width: 100%; max-width: 480px; margin-inline: auto; }
+
 /* Floating toast — confirms DONE write without consuming header space.
    Positioned absolutely so the layout doesn't shift when it appears/dismisses. */
 .toast {
@@ -916,6 +1009,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
     height: auto; align-self: stretch;
     flex-shrink: 0;
   }
+  /* The drawer is permanent on desktop — the whole `.drawer-head` is
+     mobile-only chrome: the "19 files" count is already in the toolbar's
+     `19 files · 0/19 viewed`, and the close X has nowhere meaningful to
+     "close" to. Mobile keeps both (count + exit affordance for the
+     overlay). */
+  dialog#files-drawer .drawer-head { display: none; }
   /* Sidebar (file drawer) had NO desktop bump — the file list was the
      mobile 0.85rem on a big screen. Lift it to ≈ body size; keep it a
      touch below the toolbar (dense list vs chrome). */
@@ -945,9 +1044,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   /* Toolbar controls: 0.9rem/38px was still miniature on desktop —
      match the 1rem body and a 44px touch target. */
   header.bar button { padding: 0.5rem 0.9rem; font-size: 1rem; min-height: 44px; }
-  header.bar .nav-prev button, header.bar .nav-next button { min-width: 44px; min-height: 44px; }
-  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 22px; height: 22px; }
-  .chip { font-size: 1rem; padding: 0.5rem 0.95rem; }
+  header.bar .nav-prev button, header.bar .nav-next button { min-width: 0; min-height: 44px; padding: 0.5rem 0.8rem !important; }
+  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 18px; height: 18px; }
+  /* Desktop has the horizontal room — surface the Prev/Next label so
+     the buttons aren't bare arrows. Aria-label stays as the SR text;
+     the visible label is the explicit affordance per issue #11. */
+  header.bar .nav-label { display: inline; font-weight: 500; font-size: 0.95rem; }
   .toolbar-inline { gap: 0.6rem; }
   .toolbar-inline .auto-saved-long { font-size: 1rem; }
   /* Desktop has room — render chips inline and hide the overflow menu. */
@@ -969,13 +1071,16 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
     border-left: 1px solid var(--pico-muted-border-color);
   }
   .toc-sidebar .toc-head {
-    padding: 0.3rem 1rem 0.5rem;
-    font-size: 0.8rem; color: var(--pico-muted-color);
+    padding: 0.3rem 0.75rem 0.5rem;
+    font-size: 0.85rem; color: var(--pico-muted-color);
     text-transform: uppercase; letter-spacing: 0.06em;
   }
-  .toc-sidebar .toc-link { font-size: 0.9rem; padding: 0.35rem 1rem; }
-  .toc-sidebar .toc-l2 { font-size: 0.85rem; }
-  .toc-sidebar .toc-l3 { font-size: 0.8rem; }
+  /* TOC fonts were 0.8/0.85/0.9rem (smaller than body) → unreadable on
+     desktop. Bumped to 1/0.95/0.9rem with a slightly tighter line-
+     height ladder so long wrapped titles don't dominate the sidebar. */
+  .toc-sidebar .toc-link { font-size: 1rem; line-height: 1.4; padding: 0.4rem 0.5rem 0.4rem 0.75rem; }
+  .toc-sidebar .toc-l2 { font-size: 0.95rem; padding-left: 1.25rem; }
+  .toc-sidebar .toc-l3 { font-size: 0.9rem; padding-left: 1.75rem; }
   .toc-modal, .toc-backdrop { display: none !important; }
   .toc-menu-item { display: none !important; }
   /* Pico defaults buttons to width:100% so they fill mobile forms.
@@ -1011,36 +1116,68 @@ main.viewer { overscroll-behavior: contain; }
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
   </form>
   <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}<small>All comments ({{len .Comments}})</small>{{else if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}</span>
+    <span class="title-main">{{if .ShowAllComments}}{{/* No title in all-comments mode — the "Show all comments (N) ☑" checkbox in the toolbar already conveys the view. */}}{{else if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}</span>
   </div>
   {{/* Desktop-only inline chip group. On mobile these same actions live
        in the 3-dots overflow menu below — single source of truth, just
-       presented in the layout that fits. */}}
+       presented in the layout that fits.
+
+       Grouped into .tb-group segments (counters | view toggles) with
+       a CSS divider between them; the prev/next and Quit forms below
+       form their own groups via .tb-group-divider on first-of-group. */}}
   <div class="toolbar-inline">
-    <small class="auto-saved-long">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed</small>
+    <div class="tb-group tb-counters">
+      <small class="auto-saved-long">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed</small>
+      {{/* "Show resolved" is a FILTER — modifies which comments appear
+           in the current view, semantically a checkbox on/off. The
+           view-change "All comments" used to share this row but lived
+           an entire UI level apart (replaces the file viewer); it now
+           lives in the file drawer as a clearly-distinct button so the
+           two semantics don't get conflated under identical chrome.
+           change events flow through the existing toggleShowResolved
+           action unchanged. */}}
+      {{if gt .ResolvedCount 0}}
+      <form method="POST"><label class="tb-checkbox" title="Include resolved comments in the view"><input type="checkbox" {{if .ShowResolved}}checked{{end}} lvt-on:change="toggleShowResolved">Show resolved comments ({{.ResolvedCount}})</label></form>
+      {{end}}
+      {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
+      <form method="POST"><button type="submit" name="toggleCommentList" class="contrast" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">⚠ {{.OutdatedCount}} outdated</button></form>
+      {{end}}
+    </div>
     {{if .CurrentDiff}}
-    {{if .IsMarkdown}}<form method="POST"><button type="submit" name="toggleRawMarkdown" class="chip view-chip{{if not .RawMarkdown}} is-on{{end}}" title="{{if .RawMarkdown}}Show rendered Markdown{{else}}Show raw Markdown source{{end}}">{{if .RawMarkdown}}Raw{{else}}Rendered{{end}}</button></form>{{end}}
-    {{if not .ShowRenderedMarkdown}}<form method="POST"><button type="submit" name="toggleFileView" class="chip view-chip{{if .FileView}} is-on{{end}}" title="{{if .FileView}}Show diff overlay{{else}}Hide diff overlay — view file as-is{{end}}">{{if .FileView}}File{{else}}Diff{{end}}</button></form>{{end}}
-    {{end}}
-    {{if gt (len .Comments) 0}}
-    <form method="POST"><button type="submit" name="toggleCommentList" class="chip" title="View all comments">{{len .Comments}} 💬</button></form>
-    {{end}}
-    {{if gt .ResolvedCount 0}}
-    <form method="POST"><button type="submit" name="toggleShowResolved" class="chip resolved{{if .ShowResolved}} is-on{{end}}" title="{{if .ShowResolved}}Hide{{else}}Show{{end}} {{.ResolvedCount}} resolved">{{if .ShowResolved}}✓{{else}}○{{end}} {{.ResolvedCount}} resolved</button></form>
-    {{end}}
-    {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
-    <form method="POST"><button type="submit" name="toggleCommentList" class="chip outdated" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">⚠ {{.OutdatedCount}} outdated</button></form>
+    <div class="tb-group tb-toggles">
+      {{/* Native HTML radio groups for view-mode toggles. Auto-submit
+           on change via livetemplate's `lvt-on:change` (same pattern as
+           the Base picker <select> in the file drawer). Setters
+           (SetMarkdownView / SetFileViewMode) read the form's `view`
+           field — idempotent, so clicking the already-active radio is a
+           genuine no-op (vs. the old toggle action which would have
+           flipped). Browser-native radio visuals beat any custom
+           segmented control: clear "one of N" affordance, no squish
+           bugs, accent-color matches the toolbar contrast. */}}
+      {{if .IsMarkdown}}
+      <form method="POST" class="tb-radios" aria-label="Markdown view">
+        <label><input type="radio" name="view" value="rendered" {{if not .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Preview</label>
+        <label><input type="radio" name="view" value="raw" {{if .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Raw</label>
+      </form>
+      {{end}}
+      {{if not .ShowRenderedMarkdown}}
+      <form method="POST" class="tb-radios" aria-label="File view">
+        <label><input type="radio" name="view" value="diff" {{if not .FileView}}checked{{end}} lvt-on:change="setFileViewMode">Diff</label>
+        <label><input type="radio" name="view" value="file" {{if .FileView}}checked{{end}} lvt-on:change="setFileViewMode">File</label>
+      </form>
+      {{end}}
+    </div>
     {{end}}
   </div>
   {{if gt (len .Files) 1}}
-  <form method="POST" class="nav-prev"><button type="submit" name="prevFile" aria-label="Previous file" class="outline contrast"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></form>
-  <form method="POST" class="nav-next"><button type="submit" name="nextFile" aria-label="Next file" class="outline contrast"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></form>
+  <form method="POST" class="nav-prev"><button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span class="nav-label">Prev</span></button></form>
+  <form method="POST" class="nav-next"><button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></form>
   {{end}}
-  <form method="POST">
+  <form method="POST" class="tb-action">
     {{if .SkillMode}}
-    <button type="submit" name="handOff" class="contrast">Hand off →</button>
+    <button type="submit" name="handOff" class="contrast" title="Stop the server and signal Claude to read the CSV">Hand off →</button>
     {{else}}
-    <button type="submit" name="quit" class="contrast">Quit</button>
+    <button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button>
     {{end}}
   </form>
   {{/* 3-dots trigger — mobile only (hidden on desktop via CSS). Placed
@@ -1094,7 +1231,7 @@ main.viewer { overscroll-behavior: contain; }
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M9 9h4M9 12h6M9 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         {{end}}
       </span>
-      <span class="menu-label">{{if .RawMarkdown}}Render Markdown{{else}}View raw source{{end}}</span>
+      <span class="menu-label">{{if .RawMarkdown}}Preview{{else}}View raw source{{end}}</span>
     </button>
   </form>
   {{end}}
@@ -1119,7 +1256,7 @@ main.viewer { overscroll-behavior: contain; }
   <form method="POST">
     <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem">
       <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
-      <span class="menu-label">{{if .ShowAllComments}}Back to diff{{else}}All comments{{end}}</span>
+      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}</span>
       <span class="menu-meta">{{len .Comments}}</span>
     </button>
   </form>
@@ -1174,6 +1311,20 @@ main.viewer { overscroll-behavior: contain; }
       <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
     </form>
   </div>
+  {{/* View-change to the all-comments overview. Lives at the top of the
+       drawer so it's obviously a "switch what's in the viewer" action,
+       not a filter (which is the role checkboxes play in the toolbar).
+       When already in all-comments view, this button hides — the
+       view's own "Back" header button handles returning. */}}
+  {{if and (gt (len .Comments) 0) (not .ShowAllComments)}}
+  <div class="drawer-all-comments">
+    <form method="POST">
+      <button type="submit" name="toggleCommentList" class="outline" title="Open the all-comments overview">
+        💬 All comments ({{len .Comments}})
+      </button>
+    </form>
+  </div>
+  {{end}}
   {{/* Base picker — native select so iOS renders the platform wheel
        (a text input opens the keyboard with autofill noise). Options
        come from state.BaseChoices: HEAD~N presets + every local and
@@ -1257,7 +1408,7 @@ main.viewer { overscroll-behavior: contain; }
   <header class="ac-head">
     <strong>All comments ({{len .Comments}})</strong>
     <form method="POST" style="margin:0">
-      <button type="submit" name="toggleCommentList" class="outline contrast">Back to diff</button>
+      <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
     </form>
   </header>
   {{if .VisibleComments}}
@@ -1294,7 +1445,36 @@ main.viewer { overscroll-behavior: contain; }
     {{if .Note}}<small>{{.Note}}</small>{{end}}
   </header>
   {{if .IsBinary}}
+  {{/* Binary files: now that the HTTP static fallback serves the bytes
+       (issue #13), the browser can render images, PDFs, video and audio
+       inline. The src is the working-tree path under the repo root,
+       served by staticFallback in main.go — its allowlist must stay in
+       sync with state.BinaryKind. Unknown binary kinds (zip, etc.)
+       still fall back to the cannot-display copy. */}}
+  {{$kind := $.BinaryKind}}
+  {{if eq $kind "image"}}
+  <div class="binary-preview binary-image"><img src="/{{.Path}}" alt="{{.Path}}"></div>
+  {{else if eq $kind "pdf"}}
+  {{/* Chrome 117+ ships a deliberately-minimal embed viewer for same-
+       origin PDFs (compact thumbnail + "Open" button) regardless of
+       <embed>/<iframe>/<object> or Content-Disposition: inline — it's
+       a PDFium sandbox policy, not something HTML/headers can override.
+       PDF.js would unlock the full inline viewer at ~500KB gz cost;
+       not worth the bundle weight here. So: clean card with the
+       filename and an "Open in new tab" CTA — single click hands off
+       to Chrome's full standalone viewer. */}}
+  <div class="binary-preview binary-pdf-card">
+    <div class="pdf-card-icon" aria-hidden="true">📄</div>
+    <strong class="pdf-card-name">{{.Path}}</strong>
+    <a role="button" class="contrast pdf-card-open" href="/{{.Path}}" target="_blank" rel="noopener">Open PDF in new tab →</a>
+  </div>
+  {{else if eq $kind "video"}}
+  <div class="binary-preview binary-video"><video controls preload="metadata" src="/{{.Path}}"></video></div>
+  {{else if eq $kind "audio"}}
+  <div class="binary-preview binary-audio"><audio controls preload="metadata" src="/{{.Path}}"></audio></div>
+  {{else}}
   <p class="empty">Binary file — cannot display.</p>
+  {{end}}
   {{else if $.ShowRenderedMarkdown}}
   {{/* Rendered-Markdown view. Each top-level block is one clickable
        unit carrying its REAL source line range (data-from/data-to);
