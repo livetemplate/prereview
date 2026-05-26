@@ -12,9 +12,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	stdcsv "encoding/csv"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -3575,4 +3579,169 @@ func TestE2E_TOCAbsentWhenFewHeadings(t *testing.T) {
 	if tocMenuItemInDOM {
 		t.Error("toc menu item present for single-heading doc; the ≥ 2 gate failed")
 	}
+}
+
+// TestE2E_RelativeImageInMarkdown pins issue #13: a markdown file that
+// references a sibling image with a relative path must render the image
+// in the SPA (not a broken-image icon), the underlying HTTP GET must
+// return the actual PNG bytes (not the SPA HTML shell), and a missing
+// sibling must produce a 404 instead of a misleading 200+HTML. The
+// .git/ directory must stay inaccessible — the static fallback must
+// reject dot-component paths even when an attacker knows the exact
+// filename inside.
+func TestE2E_RelativeImageInMarkdown(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("e2e not supported on windows")
+	}
+
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+
+	// Real 1×1 red PNG: the browser must successfully decode it for
+	// naturalWidth > 0 to hold. Generated at runtime so we're not
+	// trusting an opaque hex blob.
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var pngBuf bytes.Buffer
+	if err := png.Encode(&pngBuf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	pngBytes := pngBuf.Bytes()
+	mustWrite(t, dir, "pixel.png", string(pngBytes))
+	// Mockups-shaped layout to mirror the motivating checklistkit case
+	// (PLAN.md referencing mockups/screenshots/*.png).
+	if err := os.MkdirAll(filepath.Join(dir, "mockups", "screenshots"), 0o755); err != nil {
+		t.Fatalf("mkdir mockups: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mockups", "screenshots", "dash.png"), pngBytes, 0o644); err != nil {
+		t.Fatalf("write nested png: %v", err)
+	}
+	mustWrite(t, dir, "vis.md", "# Visual review\n\n![One pixel](pixel.png)\n\n![Dashboard](mockups/screenshots/dash.png)\n")
+
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+
+	// Mutate vis.md so it shows up in the working-tree diff — otherwise
+	// the file list is empty and the SPA never renders the markdown.
+	mustWrite(t, dir, "vis.md", "# Visual review\n\nNow with a second paragraph.\n\n![One pixel](pixel.png)\n\n![Dashboard](mockups/screenshots/dash.png)\n")
+
+	p := bootChromeAgainstRepo(t, dir, 1200, 800)
+	p.waitReady()
+	p.clickFile("vis.md")
+
+	// Wait for the rendered markdown view, then poll until both <img>
+	// elements report naturalWidth > 0 — which is the browser's signal
+	// that it actually decoded a real image, NOT that the network
+	// request returned HTML (which gives naturalWidth == 0).
+	deadline := time.Now().Add(5 * time.Second)
+	var pixelW, dashW int
+	for time.Now().Before(deadline) {
+		if err := chromedp.Run(p.ctx,
+			chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+			chromedp.Evaluate(`(document.querySelector('img[src="pixel.png"]')||{}).naturalWidth||0`, &pixelW),
+			chromedp.Evaluate(`(document.querySelector('img[src="mockups/screenshots/dash.png"]')||{}).naturalWidth||0`, &dashW),
+		); err != nil {
+			t.Fatalf("query images: %v\nstderr: %s", err, p.stderr.String())
+		}
+		if pixelW > 0 && dashW > 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if pixelW == 0 {
+		t.Errorf("pixel.png did not load in the browser (naturalWidth=0) — static fallback regressed?\nstderr: %s", p.stderr.String())
+	}
+	if dashW == 0 {
+		t.Errorf("mockups/screenshots/dash.png did not load (naturalWidth=0) — nested-path static fallback regressed?\nstderr: %s", p.stderr.String())
+	}
+
+	// Now exercise the HTTP contract directly. The browser test above
+	// proves the integration end-to-end; these calls pin the specific
+	// status / Content-Type / body invariants that DevTools-driven
+	// debugging will care about, AND verify the security-relevant
+	// fallthrough cases.
+	httpCases := []struct {
+		name        string
+		path        string
+		wantStatus  int
+		wantCType   string // prefix check
+		wantBodyEq  []byte // exact body match if non-nil
+		wantNotHTML bool   // body must NOT start with "<!" or "<html"
+	}{
+		{
+			name: "GET /pixel.png returns the PNG, not the SPA",
+			path: "/pixel.png", wantStatus: 200,
+			wantCType: "image/png", wantBodyEq: pngBytes,
+		},
+		{
+			name: "GET /mockups/screenshots/dash.png handles nested paths",
+			path: "/mockups/screenshots/dash.png", wantStatus: 200,
+			wantCType: "image/png", wantBodyEq: pngBytes,
+		},
+		{
+			name: "GET /missing.png returns 404, not 200+HTML",
+			path: "/missing.png", wantStatus: 404,
+			wantNotHTML: true,
+		},
+		{
+			// .git/HEAD always exists in a git repo — the dot-component
+			// rejection MUST fire even though the file is real. The fall
+			// through then returns the SPA shell, which is fine — what
+			// matters is that the secret bytes are not in the response.
+			name: "GET /.git/HEAD does NOT expose git internals",
+			path: "/.git/HEAD", wantStatus: 200,
+		},
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	for _, tc := range httpCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := client.Get(p.url + tc.path)
+			if err != nil {
+				t.Fatalf("GET %s: %v", tc.path, err)
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if resp.StatusCode != tc.wantStatus {
+				t.Errorf("status = %d, want %d (body prefix=%q)",
+					resp.StatusCode, tc.wantStatus, snippet(body))
+			}
+			if tc.wantCType != "" && !strings.HasPrefix(resp.Header.Get("Content-Type"), tc.wantCType) {
+				t.Errorf("Content-Type = %q, want prefix %q",
+					resp.Header.Get("Content-Type"), tc.wantCType)
+			}
+			if tc.wantBodyEq != nil && !bytes.Equal(body, tc.wantBodyEq) {
+				t.Errorf("body bytes don't match the file on disk (got %d bytes, want %d)",
+					len(body), len(tc.wantBodyEq))
+			}
+			if tc.wantNotHTML {
+				trimmed := bytes.TrimSpace(body)
+				if bytes.HasPrefix(trimmed, []byte("<!")) || bytes.HasPrefix(bytes.ToLower(trimmed), []byte("<html")) {
+					t.Errorf("body is HTML (status=%d), want a non-HTML 404 — prefix=%q",
+						resp.StatusCode, snippet(body))
+				}
+			}
+			// For /.git/HEAD, separately verify the secret didn't leak.
+			if tc.path == "/.git/HEAD" {
+				gitHead, _ := os.ReadFile(filepath.Join(dir, ".git", "HEAD"))
+				if len(gitHead) > 0 && bytes.Contains(body, bytes.TrimSpace(gitHead)) {
+					t.Errorf("response body contains .git/HEAD contents — dot-component defense failed")
+				}
+			}
+		})
+	}
+}
+
+func snippet(b []byte) string {
+	const max = 80
+	if len(b) <= max {
+		return string(b)
+	}
+	return string(b[:max]) + "…"
 }

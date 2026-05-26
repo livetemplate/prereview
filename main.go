@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -253,7 +255,14 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool) e
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/", tmpl.Handle(controller, livetemplate.AsState(initial)))
+	// The catch-all `/` route owns the SPA — but http.ServeMux routes
+	// every unmatched GET to it, so a relative-path image reference in
+	// reviewed markdown (e.g. `<img src="mockups/foo.png">`) gets back the
+	// SPA HTML shell instead of PNG bytes. staticFallback intercepts
+	// GET/HEAD for allowlisted asset extensions and serves them from the
+	// repo root; everything else (POSTs, WS upgrades, non-asset paths)
+	// falls through to the LiveHandler unchanged.
+	mux.Handle("/", staticFallback(absRepo, tmpl.Handle(controller, livetemplate.AsState(initial))))
 	mux.HandleFunc("/livetemplate-client.js", serveBytes("application/javascript", assets.ClientJS()))
 	mux.HandleFunc("/livetemplate.css", serveBytes("text/css", assets.ClientCSS()))
 	mux.HandleFunc("/syntax.css", serveBytes("text/css", []byte(gitdiff.HighlightCSS)))
@@ -380,6 +389,92 @@ func serveBytes(contentType string, body []byte) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(body)
 	}
+}
+
+// staticAllowedExt is the closed set of extensions staticFallback will
+// serve from disk. Excludes .md / .html / .txt — those must keep
+// routing to the SPA so the LiveHandler can render markdown reviews and
+// future SPA routes don't accidentally hit the filesystem.
+var staticAllowedExt = map[string]bool{
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
+	".svg": true, ".webp": true, ".ico": true,
+	".pdf": true,
+	".css": true, ".js": true,
+	".woff": true, ".woff2": true, ".ttf": true,
+	".mp4": true, ".webm": true, ".mp3": true, ".wav": true,
+}
+
+// staticFallback serves files from root for GET/HEAD requests whose
+// URL path has an allowlisted extension and resolves (after symlink
+// eval + traversal checks) to an existing regular file under root.
+// Every other request — wrong method, dot-component path
+// (.git/.prereview/.env), non-allowlisted extension, WebSocket
+// upgrade on `/` — is delegated to next, which is the LiveHandler.
+//
+// Two independent traversal defenses: reject any path segment that
+// begins with `.`, AND verify EvalSymlinks(resolved) stays under
+// EvalSymlinks(root). Either alone is enough; both is belt-and-braces.
+func staticFallback(root string, next http.Handler) http.Handler {
+	rootResolved, err := filepath.EvalSymlinks(root)
+	if err != nil || rootResolved == "" {
+		rootResolved = root
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// URL semantics: path.Clean (not filepath.Clean) collapses ".."
+		// and "." in slash-separated paths regardless of OS.
+		cleaned := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
+		if cleaned == "/" || hasDotComponent(cleaned) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !staticAllowedExt[strings.ToLower(filepath.Ext(cleaned))] {
+			next.ServeHTTP(w, r)
+			return
+		}
+		full := filepath.Join(rootResolved, filepath.FromSlash(cleaned))
+		resolved, err := filepath.EvalSymlinks(full)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		// EvalSymlinks-then-prefix-check defeats symlinks that escape the
+		// repo. Append the separator on both sides so "/repo" doesn't
+		// accept "/repo-evil/foo.png".
+		if !strings.HasPrefix(resolved+string(filepath.Separator), rootResolved+string(filepath.Separator)) {
+			http.NotFound(w, r)
+			return
+		}
+		info, err := os.Stat(resolved)
+		if err != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		f, err := os.Open(resolved)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+		w.Header().Set("Cache-Control", "no-cache")
+		// http.ServeContent sets Content-Type via mime.TypeByExtension,
+		// honours Range, and handles If-Modified-Since for 304s.
+		http.ServeContent(w, r, resolved, info.ModTime(), f)
+	})
+}
+
+// hasDotComponent returns true if any segment of cleaned (a slash-rooted
+// path) begins with "." — guards against /.git/, /.prereview/, /.env etc.
+func hasDotComponent(cleaned string) bool {
+	for seg := range strings.SplitSeq(strings.TrimPrefix(cleaned, "/"), "/") {
+		if strings.HasPrefix(seg, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 // reviewTarget is the classified --repo argument after normalization.
