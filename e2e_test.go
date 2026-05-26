@@ -12,9 +12,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	stdcsv "encoding/csv"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -1037,7 +1041,7 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 
 	var codeFam string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code button.line`, chromedp.ByQuery),
 		chromedp.Evaluate(`getComputedStyle(document.querySelector('.code .content')).fontFamily`, &codeFam),
 	); err != nil {
@@ -1542,7 +1546,7 @@ func TestE2E_AllCommentsView(t *testing.T) {
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
 		// Open all-comments view via the pill.
-		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("open all-comments: %v\nstderr: %s", err, p.stderr.String())
@@ -1637,7 +1641,7 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 	// new actions.
 	var items, withResolve, withEdit, withDelete int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item').length`, &items),
 		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item button[name="toggleResolved"]').length`, &withResolve),
@@ -1678,7 +1682,7 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='clearSelection']`, chromedp.ByQuery),
 		chromedp.Sleep(150*time.Millisecond),
-		chromedp.Click(`button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("cancel edit + reopen list: %v%s", err, diag())
@@ -1773,7 +1777,7 @@ func TestE2E_ResolveComment(t *testing.T) {
 
 	// Toggle "Show resolved" → the resolved comment reappears with is-resolved.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleShowResolved']`, chromedp.ByQuery),
+		chromedp.Click(`.tb-checkbox input[type="checkbox"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("toggle show resolved: %v\nstderr: %s", err, p.stderr.String())
@@ -1841,7 +1845,7 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	var fvAfter bool
 	var delAfter int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvAfter),
 		chromedp.Evaluate(delRowsVisible, &delAfter),
@@ -1859,7 +1863,7 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	var fvFinal bool
 	var delFinal int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(200*time.Millisecond),
 		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvFinal),
 		chromedp.Evaluate(delRowsVisible, &delFinal),
@@ -1942,7 +1946,7 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	// Toggle to File view: whole file, no folds, no del.
 	var fileBtns, fileFolds, fileDels int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
 		chromedp.Sleep(200*time.Millisecond),
 		chromedp.Evaluate(lineBtns, &fileBtns),
@@ -1964,7 +1968,7 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	// Toggle back to Diff view: folds return.
 	var backBtns, backFolds int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(250*time.Millisecond),
 		chromedp.Evaluate(lineBtns, &backBtns),
 		chromedp.Evaluate(foldRows, &backFolds),
@@ -2249,9 +2253,9 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	p.waitReady()
 
 	// Rendered by default.
-	var hasMdView, hasH1, hasRawChip, hasDiffChip bool
+	var hasMdView, hasH1, hasMdRadios, hasFileRadios bool
 	var scriptCount, lineBtns int
-	var h1Text, chipText string
+	var h1Text, checkedView string
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView),
@@ -2259,9 +2263,9 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 		chromedp.Evaluate(`(document.querySelector('.md-rendered h1')||{}).textContent||''`, &h1Text),
 		chromedp.Evaluate(`document.querySelectorAll('.md-rendered script').length`, &scriptCount),
 		chromedp.Evaluate(`document.querySelectorAll('.code button.line').length`, &lineBtns),
-		chromedp.Evaluate(`!!document.querySelector('button[name="toggleRawMarkdown"]')`, &hasRawChip),
-		chromedp.Evaluate(`(document.querySelector('button[name="toggleRawMarkdown"]')||{}).textContent||''`, &chipText),
-		chromedp.Evaluate(`!!document.querySelector('button[name="toggleFileView"]')`, &hasDiffChip),
+		chromedp.Evaluate(`!!document.querySelector('form[aria-label="Markdown view"]')`, &hasMdRadios),
+		chromedp.Evaluate(`(document.querySelector('form[aria-label="Markdown view"] input:checked')||{}).value||''`, &checkedView),
+		chromedp.Evaluate(`!!document.querySelector('form[aria-label="File view"]')`, &hasFileRadios),
 	); err != nil {
 		t.Fatalf("render-default query: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -2277,11 +2281,11 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	if lineBtns != 0 {
 		t.Errorf("rendered view must not show the line viewer; got %d line buttons", lineBtns)
 	}
-	if !hasRawChip || !strings.Contains(chipText, "Rendered") {
-		t.Errorf("expected a 'Rendered' toggle chip; got present=%v text=%q", hasRawChip, chipText)
+	if !hasMdRadios || checkedView != "rendered" {
+		t.Errorf("expected Markdown view radios with rendered checked; radios present=%v checked value=%q", hasMdRadios, checkedView)
 	}
-	if hasDiffChip {
-		t.Error("Diff/File chip should be hidden while rendered Markdown is shown")
+	if hasFileRadios {
+		t.Error("File view radios should be hidden while rendered Markdown is shown")
 	}
 
 	// Click the first rendered block (the h1, source line 1) and comment.
@@ -2314,7 +2318,7 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	var rawLineBtns int
 	var rawHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(350*time.Millisecond),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &rawHasMdView),
 		chromedp.Evaluate(`document.querySelectorAll('.code button.line').length`, &rawLineBtns),
@@ -2335,7 +2339,7 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	// Toggle back to rendered: comment shows under its block again.
 	var backHasMdView, backHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &backHasMdView),
 		chromedp.Evaluate(`!!document.querySelector('.md-block .inline-comment')`, &backHasComment),
@@ -2453,7 +2457,7 @@ func TestE2E_MarkdownPerRowComment(t *testing.T) {
 	// Round-trip to raw line view: the comment shows on line 15.
 	var rawHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(350*time.Millisecond),
 		chromedp.Evaluate(`!!document.querySelector('.code .inline-comment')`, &rawHasComment),
 	); err != nil {
@@ -2468,7 +2472,7 @@ func TestE2E_MarkdownPerRowComment(t *testing.T) {
 	// proving per-row anchoring rather than whole-table.
 	var underRowD bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleRawMarkdown']`, chromedp.ByQuery),
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`(()=>{const b=[...document.querySelectorAll('.md-block')].find(x=>x.querySelector('.inline-comment')); return b?b.textContent.includes('authrow EDITED'):false;})()`, &underRowD),
 	); err != nil {
@@ -3575,4 +3579,169 @@ func TestE2E_TOCAbsentWhenFewHeadings(t *testing.T) {
 	if tocMenuItemInDOM {
 		t.Error("toc menu item present for single-heading doc; the ≥ 2 gate failed")
 	}
+}
+
+// TestE2E_RelativeImageInMarkdown pins issue #13: a markdown file that
+// references a sibling image with a relative path must render the image
+// in the SPA (not a broken-image icon), the underlying HTTP GET must
+// return the actual PNG bytes (not the SPA HTML shell), and a missing
+// sibling must produce a 404 instead of a misleading 200+HTML. The
+// .git/ directory must stay inaccessible — the static fallback must
+// reject dot-component paths even when an attacker knows the exact
+// filename inside.
+func TestE2E_RelativeImageInMarkdown(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("e2e not supported on windows")
+	}
+
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+
+	// Real 1×1 red PNG: the browser must successfully decode it for
+	// naturalWidth > 0 to hold. Generated at runtime so we're not
+	// trusting an opaque hex blob.
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var pngBuf bytes.Buffer
+	if err := png.Encode(&pngBuf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	pngBytes := pngBuf.Bytes()
+	mustWrite(t, dir, "pixel.png", string(pngBytes))
+	// Mockups-shaped layout to mirror the motivating checklistkit case
+	// (PLAN.md referencing mockups/screenshots/*.png).
+	if err := os.MkdirAll(filepath.Join(dir, "mockups", "screenshots"), 0o755); err != nil {
+		t.Fatalf("mkdir mockups: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mockups", "screenshots", "dash.png"), pngBytes, 0o644); err != nil {
+		t.Fatalf("write nested png: %v", err)
+	}
+	mustWrite(t, dir, "vis.md", "# Visual review\n\n![One pixel](pixel.png)\n\n![Dashboard](mockups/screenshots/dash.png)\n")
+
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+
+	// Mutate vis.md so it shows up in the working-tree diff — otherwise
+	// the file list is empty and the SPA never renders the markdown.
+	mustWrite(t, dir, "vis.md", "# Visual review\n\nNow with a second paragraph.\n\n![One pixel](pixel.png)\n\n![Dashboard](mockups/screenshots/dash.png)\n")
+
+	p := bootChromeAgainstRepo(t, dir, 1200, 800)
+	p.waitReady()
+	p.clickFile("vis.md")
+
+	// Wait for the rendered markdown view, then poll until both <img>
+	// elements report naturalWidth > 0 — which is the browser's signal
+	// that it actually decoded a real image, NOT that the network
+	// request returned HTML (which gives naturalWidth == 0).
+	deadline := time.Now().Add(5 * time.Second)
+	var pixelW, dashW int
+	for time.Now().Before(deadline) {
+		if err := chromedp.Run(p.ctx,
+			chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+			chromedp.Evaluate(`(document.querySelector('img[src="pixel.png"]')||{}).naturalWidth||0`, &pixelW),
+			chromedp.Evaluate(`(document.querySelector('img[src="mockups/screenshots/dash.png"]')||{}).naturalWidth||0`, &dashW),
+		); err != nil {
+			t.Fatalf("query images: %v\nstderr: %s", err, p.stderr.String())
+		}
+		if pixelW > 0 && dashW > 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if pixelW == 0 {
+		t.Errorf("pixel.png did not load in the browser (naturalWidth=0) — static fallback regressed?\nstderr: %s", p.stderr.String())
+	}
+	if dashW == 0 {
+		t.Errorf("mockups/screenshots/dash.png did not load (naturalWidth=0) — nested-path static fallback regressed?\nstderr: %s", p.stderr.String())
+	}
+
+	// Now exercise the HTTP contract directly. The browser test above
+	// proves the integration end-to-end; these calls pin the specific
+	// status / Content-Type / body invariants that DevTools-driven
+	// debugging will care about, AND verify the security-relevant
+	// fallthrough cases.
+	httpCases := []struct {
+		name        string
+		path        string
+		wantStatus  int
+		wantCType   string // prefix check
+		wantBodyEq  []byte // exact body match if non-nil
+		wantNotHTML bool   // body must NOT start with "<!" or "<html"
+	}{
+		{
+			name: "GET /pixel.png returns the PNG, not the SPA",
+			path: "/pixel.png", wantStatus: 200,
+			wantCType: "image/png", wantBodyEq: pngBytes,
+		},
+		{
+			name: "GET /mockups/screenshots/dash.png handles nested paths",
+			path: "/mockups/screenshots/dash.png", wantStatus: 200,
+			wantCType: "image/png", wantBodyEq: pngBytes,
+		},
+		{
+			name: "GET /missing.png returns 404, not 200+HTML",
+			path: "/missing.png", wantStatus: 404,
+			wantNotHTML: true,
+		},
+		{
+			// .git/HEAD always exists in a git repo — the dot-component
+			// rejection MUST fire even though the file is real. The fall
+			// through then returns the SPA shell, which is fine — what
+			// matters is that the secret bytes are not in the response.
+			name: "GET /.git/HEAD does NOT expose git internals",
+			path: "/.git/HEAD", wantStatus: 200,
+		},
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	for _, tc := range httpCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := client.Get(p.url + tc.path)
+			if err != nil {
+				t.Fatalf("GET %s: %v", tc.path, err)
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if resp.StatusCode != tc.wantStatus {
+				t.Errorf("status = %d, want %d (body prefix=%q)",
+					resp.StatusCode, tc.wantStatus, snippet(body))
+			}
+			if tc.wantCType != "" && !strings.HasPrefix(resp.Header.Get("Content-Type"), tc.wantCType) {
+				t.Errorf("Content-Type = %q, want prefix %q",
+					resp.Header.Get("Content-Type"), tc.wantCType)
+			}
+			if tc.wantBodyEq != nil && !bytes.Equal(body, tc.wantBodyEq) {
+				t.Errorf("body bytes don't match the file on disk (got %d bytes, want %d)",
+					len(body), len(tc.wantBodyEq))
+			}
+			if tc.wantNotHTML {
+				trimmed := bytes.TrimSpace(body)
+				if bytes.HasPrefix(trimmed, []byte("<!")) || bytes.HasPrefix(bytes.ToLower(trimmed), []byte("<html")) {
+					t.Errorf("body is HTML (status=%d), want a non-HTML 404 — prefix=%q",
+						resp.StatusCode, snippet(body))
+				}
+			}
+			// For /.git/HEAD, separately verify the secret didn't leak.
+			if tc.path == "/.git/HEAD" {
+				gitHead, _ := os.ReadFile(filepath.Join(dir, ".git", "HEAD"))
+				if len(gitHead) > 0 && bytes.Contains(body, bytes.TrimSpace(gitHead)) {
+					t.Errorf("response body contains .git/HEAD contents — dot-component defense failed")
+				}
+			}
+		})
+	}
+}
+
+func snippet(b []byte) string {
+	const max = 80
+	if len(b) <= max {
+		return string(b)
+	}
+	return string(b[:max]) + "…"
 }
