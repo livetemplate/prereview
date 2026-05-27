@@ -475,14 +475,14 @@ func TestExtractHeadings(t *testing.T) {
 		}
 	})
 
-	t.Run("captures level, id, and text in document order", func(t *testing.T) {
+	t.Run("captures level, id, text, and source line in document order", func(t *testing.T) {
 		src := []byte("# Top Title\n\n## Sub One\n\n### Deeper\n\n## Sub Two\n")
 		got := ExtractHeadings(src)
 		want := []Heading{
-			{Level: 1, ID: "top-title", Text: "Top Title"},
-			{Level: 2, ID: "sub-one", Text: "Sub One"},
-			{Level: 3, ID: "deeper", Text: "Deeper"},
-			{Level: 2, ID: "sub-two", Text: "Sub Two"},
+			{Level: 1, ID: "top-title", Text: "Top Title", Line: 1},
+			{Level: 2, ID: "sub-one", Text: "Sub One", Line: 3},
+			{Level: 3, ID: "deeper", Text: "Deeper", Line: 5},
+			{Level: 2, ID: "sub-two", Text: "Sub Two", Line: 7},
 		}
 		if len(got) != len(want) {
 			t.Fatalf("got %d headings, want %d: %+v", len(got), len(want), got)

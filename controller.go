@@ -505,6 +505,32 @@ func (c *PrereviewController) SetFileViewMode(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// NavigateToHeading is the server-side bookkeeping for a TOC heading
+// link click. It dismisses both the mobile TOC overlay AND the
+// all-comments overview, then records ScrollToHeadingID so the
+// framework's `lvt-fx:scroll="into-view"` directive on the matching
+// MarkdownBlock scrolls the section into view on the next render —
+// the same declarative pattern JumpToComment uses for comments.
+//
+// Fixes issue #12: previously the TOC link only closed the overlay
+// (closeTOC); from inside all-comments view the heading was never in
+// the DOM, so the native anchor scroll missed and the user stayed
+// stuck on the comments overview.
+//
+// data-id on the link supplies the slugified heading id (matches the
+// `id="..."` goldmark's WithAutoHeadingID writes into the rendered
+// HTML and that ExtractHeadings reads back).
+func (c *PrereviewController) NavigateToHeading(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("navigateToHeading: missing id")
+	}
+	state.TOCOpen = false
+	state.ShowAllComments = false
+	state.ScrollToHeadingID = id
+	return state, nil
+}
+
 // JumpToComment closes the all-comments view, selects the comment's
 // file, and sets ScrollToCommentID so the framework's
 // `lvt-fx:scroll="into-view"` directive on the matching inline comment
