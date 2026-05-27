@@ -261,23 +261,6 @@ header.bar .nav-next button { gap: 0.3rem; }
   border-bottom: 1px solid var(--pr-del); font-size: 0.85rem; text-align: center;
   font-weight: 600;
 }
-/* Progress bar at the very top — appears 200ms after any action click
-   that hasn't completed, hides on the next `lvt:updated`. Helps mask
-   the file-switch latency on big highlighted files (~500-700ms) so
-   the click feels acknowledged. Pure CSS keyframe + a tiny inline
-   script (further down) that toggles the element. */
-.pr-progress {
-  position: fixed; top: 0; left: 0; right: 0; height: 2px;
-  background: linear-gradient(90deg, transparent 0%, var(--pico-primary) 50%, transparent 100%);
-  background-size: 200% 100%;
-  z-index: 100;
-  animation: pr-progress-shimmer 1.1s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes pr-progress-shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
 /* Composer hint shown between first-click and second-click on a range. */
 .composer .selection-hint {
   font-weight: normal; color: var(--pico-muted-color); font-size: 0.7rem;
@@ -1109,7 +1092,7 @@ main.viewer { overscroll-behavior: contain; }
 .app-footer a:hover { color: var(--pico-primary); }
 </style>
 </head>
-<body lvt-on:keydown="clearSelection" lvt-key="Escape">
+<body lvt-on:keydown="clearSelection" lvt-key="Escape" data-lvt-loading-debounce-ms="200">
 
 <header class="bar">
   <form method="POST">
@@ -1288,7 +1271,7 @@ main.viewer { overscroll-behavior: contain; }
 {{end}}
 
 {{if .DoneWritten}}
-<div class="toast" role="status">
+<div class="toast" role="status" lvt-fx:auto-click="5000:dismissBanner">
   <span class="toast-msg">✓ Saved to <code>.prereview/{{.CSVBasename}}</code></span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="dismissBanner" class="toast-dismiss" aria-label="Dismiss">
@@ -1495,7 +1478,7 @@ main.viewer { overscroll-behavior: contain; }
        Measured: this costs no extra bandwidth — livetemplate resends
        {{range}} statics on a full content swap regardless of the key.
        Bonus: a fresh element also starts at scroll (0,0). */}}
-  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>
+  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>
 {{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
@@ -1587,90 +1570,5 @@ main.viewer { overscroll-behavior: contain; }
 </footer>
 
 <script defer src="/livetemplate-client.js"></script>
-<script>
-  // Progress bar wiring: show after 200 ms of "action in flight",
-  // hide on the next render. The framework dispatches `lvt:pending`
-  // on the clicked target (no bubbles) and `lvt:updated` on the
-  // [data-lvt-id] wrapper — both reachable via capture-phase
-  // listeners on document.
-  (() => {
-    let timer = null;
-    let bar = null;
-    const show = () => {
-      timer = null;
-      if (bar) return;
-      bar = document.createElement('div');
-      bar.className = 'pr-progress';
-      bar.setAttribute('role', 'status');
-      bar.setAttribute('aria-label', 'Loading');
-      document.body.appendChild(bar);
-    };
-    const hide = () => {
-      if (timer) { clearTimeout(timer); timer = null; }
-      if (bar) { bar.remove(); bar = null; }
-    };
-    document.addEventListener('lvt:pending', () => {
-      if (timer || bar) return;
-      timer = setTimeout(show, 200);
-    }, true);
-    document.addEventListener('lvt:updated', hide, true);
-  })();
-
-  // Scroll-reset on file switch. The .code element is intentionally
-  // NOT data-keyed (keying defeats livetemplate's statics cache —
-  // switching files would resend the full per-row HTML scaffolding
-  // instead of just the dynamic line text, ~400KB vs ~50KB). So
-  // morphdom reuses the .code element and its scrollLeft/scrollTop
-  // carry over from a previously-scrolled file, leaving the new file
-  // rendered scrolled-right (content appears offset/truncated).
-  // Detect the file change via .code's data-path attribute and reset
-  // scroll only when it actually changes — same-file interactions
-  // (select line, add comment) keep scroll intact.
-  (() => {
-    let lastPath = null;
-    const resetIfFileChanged = () => {
-      const code = document.querySelector('.code');
-      if (!code) { lastPath = null; return; }
-      const p = code.getAttribute('data-path');
-      if (p !== lastPath) {
-        code.scrollLeft = 0;
-        code.scrollTop = 0;
-        lastPath = p;
-      }
-    };
-    document.addEventListener('lvt:updated', resetIfFileChanged, true);
-    // Initial paint (auto-selected file) — run once after first render.
-    if (document.readyState === 'complete') resetIfFileChanged();
-    else window.addEventListener('load', resetIfFileChanged);
-  })();
-
-  // Auto-dismiss the DONE "Saved" toast after 5s. We click the existing
-  // dismiss button rather than just hiding it: that submits the
-  // dismissBanner action so the server clears DoneWritten and the toast
-  // won't re-render on a later morphdom update. A single timer is armed
-  // while the toast is present and self-cancels if it's already gone
-  // (manual dismiss, or DoneWritten cleared by another action).
-  (() => {
-    let timer = null;
-    const arm = () => {
-      const toast = document.querySelector('.toast');
-      if (toast) {
-        if (timer === null) {
-          timer = setTimeout(() => {
-            timer = null;
-            const btn = document.querySelector('.toast .toast-dismiss');
-            if (btn) btn.click();
-          }, 5000);
-        }
-      } else if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    };
-    document.addEventListener('lvt:updated', arm, true);
-    if (document.readyState === 'complete') arm();
-    else window.addEventListener('load', arm);
-  })();
-</script>
 </body>
 </html>
