@@ -117,6 +117,16 @@ type PrereviewState struct {
 	// (data-lvt-iv-done) prevents repeated scrolls on subsequent renders.
 	ScrollToCommentID string `json:"scroll_to_comment_id"`
 
+	// ScrollToHeadingID, when non-empty, drives the
+	// `lvt-fx:scroll="into-view"` directive on the MarkdownBlock that
+	// contains the heading with this ID. Set by NavigateToHeading (TOC
+	// click) so a heading clicked from inside the all-comments overview
+	// actually lands the user on that section once ShowAllComments
+	// flips back off — the all-comments view replaces the md-view in the
+	// DOM, so the rendered markdown is fresh on return and the framework's
+	// data-lvt-iv-done guard hasn't been set yet (issue #12).
+	ScrollToHeadingID string `json:"scroll_to_heading_id"`
+
 	// ShowResolved, when true, includes resolved comments in the inline
 	// comment stream + all-comments view. Default false so the viewer
 	// focuses on what's still actionable. Persisted across reconnects.
@@ -307,6 +317,41 @@ func (s PrereviewState) RenderedMarkdown() []gitdiff.MarkdownBlock {
 		return nil
 	}
 	return s.CurrentDiff.MarkdownBlocks
+}
+
+// ScrollHeadingBlockKey returns the `data-key` (e.g. "MB-5-10") of the
+// MarkdownBlock containing the heading currently targeted by
+// ScrollToHeadingID — or "" when no scroll is requested or the heading
+// is not found. The template compares this against each block's own
+// data-key to gate a `lvt-fx:scroll="into-view"` directive; see
+// NavigateToHeading and issue #12.
+//
+// Zero-arg by design: livetemplate's template evaluator
+// (livetemplate/internal/parse/eval.go callMethod) only auto-invokes
+// methods with NumIn() == 0, so a "does this block match" predicate
+// taking the block's range as arguments isn't reachable from the
+// template. Precomputing the matching key here and comparing with the
+// builtin `eq`/`printf` keeps the hot path in Go.
+func (s PrereviewState) ScrollHeadingBlockKey() string {
+	if s.ScrollToHeadingID == "" {
+		return ""
+	}
+	var line int
+	for _, h := range s.CurrentDiff.Headings {
+		if h.ID == s.ScrollToHeadingID {
+			line = h.Line
+			break
+		}
+	}
+	if line == 0 {
+		return ""
+	}
+	for _, b := range s.CurrentDiff.MarkdownBlocks {
+		if line >= b.StartLine && line <= b.EndLine {
+			return fmt.Sprintf("MB-%d-%d", b.StartLine, b.EndLine)
+		}
+	}
+	return ""
 }
 
 // RenderedHeadings returns the TOC entries for the current Markdown

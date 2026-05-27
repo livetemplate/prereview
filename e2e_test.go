@@ -3554,6 +3554,140 @@ func TestE2E_TOCOverlayMobile(t *testing.T) {
 	}
 }
 
+// TestE2E_TOCNavigationFromAllCommentsView pins issue #12: on mobile,
+// opening the TOC from inside the all-comments overview and tapping a
+// heading must (a) dismiss the all-comments view, (b) close the TOC
+// overlay, and (c) actually land the user at that heading's block —
+// previously the heading wasn't in the DOM at click time so the native
+// anchor scroll missed and the user stayed stuck on the comments view.
+// The fix wires the link to NavigateToHeading, which sets
+// ScrollToHeadingID so the matching md-block carries lvt-fx:scroll into
+// view on re-render.
+func TestE2E_TOCNavigationFromAllCommentsView(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("e2e not supported on windows")
+	}
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdownTOC(t), 375, 812)
+
+	// Mobile boot — same pattern as TestE2E_TOCOverlayMobile.
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(375, 812),
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`.hamburger`, chromedp.ByQuery),
+		chromedp.Sleep(2*time.Second),
+	); err != nil {
+		t.Fatalf("initial mobile nav: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Open file drawer, pick big.md so we land on the markdown view with
+	// h1/h2/h3 headings (RenderedHeadings ≥ 2 → TOC available).
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.hamburger').click()`, nil),
+		chromedp.WaitVisible(`#files-drawer.is-open`, chromedp.ByQuery),
+		chromedp.Evaluate(`(Array.from(document.querySelectorAll('button[name="selectFile"]')).find(b => b.textContent.includes('big.md'))||{}).click()`, nil),
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("open big.md: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Seed a comment so the all-comments view has something to show
+	// (the drawer's "All comments" CTA is gated on len(Comments) > 0).
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.md-block .md-rendered').click()`, nil),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "seed for #12", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.md-block .inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("seed comment: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Enter the all-comments view via the file drawer's CTA. Use JS
+	// click() rather than chromedp.Click because the drawer slides in
+	// via CSS transform — chromedp.Click's visibility precheck doesn't
+	// always settle on a transformed element on a narrow viewport.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.hamburger').click()`, nil),
+		chromedp.WaitVisible(`#files-drawer.is-open`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.drawer-all-comments button[name="toggleCommentList"]').click()`, nil),
+		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("enter all-comments view: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Confirm the md-view is NOT in the DOM right now — this is the
+	// exact precondition that makes the bug reproducible (heading
+	// targets don't exist for the browser to scroll to).
+	var mdViewBeforeNav bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &mdViewBeforeNav),
+	); err != nil {
+		t.Fatalf("pre-nav md-view query: %v", err)
+	}
+	if mdViewBeforeNav {
+		t.Fatal("md-view present while ShowAllComments=true; fixture/setup wrong")
+	}
+
+	// Tap three-dots → "Table of contents" → tap a non-first heading.
+	// Target "second-section" so we can distinguish "scrolled to start"
+	// (top of doc) from "actually scrolled to target".
+	var overlayOpen bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('button[name="toggleMoreMenu"]').click()`, nil),
+		chromedp.WaitVisible(`.more-menu.is-open`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('button[name="openTOC"]').click()`, nil),
+		chromedp.WaitVisible(`.toc-modal.is-open`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.toc-modal').classList.contains('is-open')`, &overlayOpen),
+	); err != nil {
+		t.Fatalf("open TOC from all-comments: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !overlayOpen {
+		t.Fatal("TOC overlay didn't open from all-comments view")
+	}
+
+	// Click the TOC link for #second-section. This must fire
+	// NavigateToHeading on the server, which clears ShowAllComments,
+	// closes TOCOpen, and sets ScrollToHeadingID = "second-section".
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.toc-modal a[href="#second-section"]').click()`, nil),
+		// Round-trip + morph + scroll. The scroll directive runs
+		// post-morph so we need a beat for the full sequence.
+		chromedp.Sleep(700*time.Millisecond),
+	); err != nil {
+		t.Fatalf("tap TOC link: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Post-conditions: all-comments dismissed, TOC closed, md-view back,
+	// and the second-section heading is actually within the viewport.
+	var allCommentsStillVisible, tocStillOpen, mdViewAfter bool
+	var headingTop, viewportH float64
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`!!document.querySelector('section.all-comments')`, &allCommentsStillVisible),
+		chromedp.Evaluate(`!!document.querySelector('.toc-modal.is-open')`, &tocStillOpen),
+		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &mdViewAfter),
+		chromedp.Evaluate(`(()=>{const h=document.getElementById('second-section'); return h ? h.getBoundingClientRect().top : -99999;})()`, &headingTop),
+		chromedp.Evaluate(`window.innerHeight`, &viewportH),
+	); err != nil {
+		t.Fatalf("post-nav state query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if allCommentsStillVisible {
+		t.Error("all-comments view still visible after TOC nav — issue #12 not fixed")
+	}
+	if tocStillOpen {
+		t.Error("TOC overlay still open after heading tap (NavigateToHeading should clear TOCOpen)")
+	}
+	if !mdViewAfter {
+		t.Fatal("md-view not in DOM after TOC nav — page didn't re-render")
+	}
+	// scrollIntoView with block:"center" puts the heading roughly mid-
+	// viewport; tolerate the full viewport range. The bug symptom would
+	// be top == 0 (no scroll happened, or the heading is at top of a
+	// scrollable region but the user landed at the document top).
+	if headingTop < 0 || headingTop > viewportH {
+		t.Errorf("second-section heading top = %.0f, want within [0, %.0f] (server-driven scroll missed)", headingTop, viewportH)
+	}
+}
+
 // TestE2E_TOCAbsentWhenFewHeadings opens a Markdown file with only one
 // heading. The sidebar must not render, and the more-menu must not
 // expose a "Table of contents" entry.

@@ -47,11 +47,15 @@ type MarkdownBlock struct {
 // Level is 1–6 (matches the source HN); ID is the slugified anchor
 // goldmark's WithAutoHeadingID emits (stable across renders, collisions
 // disambiguated by `-1`/`-2` suffix); Text is the plain-text inline
-// content. Empty source → nil.
+// content; Line is the 1-based source line where the heading starts —
+// used to map a clicked TOC entry to the MarkdownBlock containing it
+// so a server-side scroll directive can target the right block.
+// Empty source → nil.
 type Heading struct {
 	Level int
 	ID    string
 	Text  string
+	Line  int
 }
 
 // mdRenderer enables the GFM extension (tables, strikethrough,
@@ -201,6 +205,15 @@ func ExtractHeadings(src []byte) []Heading {
 	if len(bytes.TrimSpace(src)) == 0 {
 		return nil
 	}
+	lineAt := func(off int) int {
+		if off < 0 {
+			off = 0
+		}
+		if off > len(src) {
+			off = len(src)
+		}
+		return bytes.Count(src[:off], []byte{'\n'}) + 1
+	}
 	doc := mdRenderer.Parser().Parse(text.NewReader(src))
 	var out []Heading
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -220,10 +233,12 @@ func ExtractHeadings(src []byte) []Heading {
 		if len(id) == 0 {
 			return ast.WalkSkipChildren, nil
 		}
+		start, _ := segmentSpan(h)
 		out = append(out, Heading{
 			Level: h.Level,
 			ID:    string(id),
 			Text:  headingText(h, src),
+			Line:  lineAt(start),
 		})
 		return ast.WalkSkipChildren, nil
 	})
