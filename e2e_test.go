@@ -1099,18 +1099,19 @@ func TestE2E_QuitShutsServer(t *testing.T) {
 	}
 }
 
-// TestE2E_ProgressBarOnAction verifies the progress bar appears
-// during a file-switch action (~200ms+ in flight) and disappears
-// after the render completes. Polls via setInterval+capture to catch
-// the .pr-progress element even when its lifetime is short.
+// TestE2E_ProgressBarOnAction verifies the loading bar appears during a
+// file-switch action (~200ms+ in flight) and disappears after the render
+// completes. The bar is the framework's LoadingIndicator, opted-in via
+// `data-lvt-loading-debounce-ms="200"` on <body>. Polls via
+// MutationObserver to catch the element even when its lifetime is short.
 func TestE2E_ProgressBarOnAction(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 	p.waitReady()
 
-	// Click a file and observe whether the progress bar ever appeared
-	// during the round-trip. We can't WaitVisible(.pr-progress) directly
-	// because it could appear AND disappear before our query lands;
-	// instead, install a MutationObserver before the click.
+	// Click a file and observe whether the loading bar ever appeared
+	// during the round-trip. We can't WaitVisible(.lvt-loading-bar)
+	// directly because it could appear AND disappear before our query
+	// lands; instead, install a MutationObserver before the click.
 	var sawBar bool
 	if err := chromedp.Run(p.ctx,
 		chromedp.Evaluate(`(() => {
@@ -1118,7 +1119,7 @@ func TestE2E_ProgressBarOnAction(t *testing.T) {
 			const obs = new MutationObserver((mutations) => {
 				for (const m of mutations) {
 					for (const n of m.addedNodes) {
-						if (n.classList && n.classList.contains('pr-progress')) {
+						if (n.classList && n.classList.contains('lvt-loading-bar')) {
 							window.__sawProgressBar = true;
 						}
 					}
@@ -1145,14 +1146,54 @@ func TestE2E_ProgressBarOnAction(t *testing.T) {
 	// debounce + cleanup contract by confirming no orphan bar remains.
 	var orphan bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`!!document.querySelector('.pr-progress')`, &orphan),
+		chromedp.Evaluate(`!!document.querySelector('.lvt-loading-bar')`, &orphan),
 	); err != nil {
 		t.Fatalf("orphan probe: %v", err)
 	}
 	if orphan {
-		t.Error(".pr-progress element should be removed once lvt:updated fires")
+		t.Error(".lvt-loading-bar element should be removed once lvt:updated fires")
 	}
 	t.Logf("progress bar appeared during fresh.go click: %v", sawBar)
+}
+
+// TestE2E_CodeScrollResetsOnFileSwitch verifies that .code's scrollLeft is
+// reset to 0 when the user switches files. The .code element is intentionally
+// not data-keyed (statics-cache reasons documented in prereview.tmpl), so
+// morphdom reuses it across renders and its prior scroll position would
+// otherwise carry over. The `lvt-fx:scroll="reset-on:data-path"` directive
+// (added to .code) clears scrollLeft/scrollTop on data-path changes.
+func TestE2E_CodeScrollResetsOnFileSwitch(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	// Land on a real file so .code has horizontal overflow we can scroll.
+	p.clickFile("fresh.go")
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='fresh.go']`, chromedp.BySearch),
+	); err != nil {
+		t.Fatalf("wait fresh.go viewer: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Force-scroll .code horizontally.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(() => { const c = document.querySelector('.code'); if (c) c.scrollLeft = 200; })()`, nil),
+	); err != nil {
+		t.Fatalf("force scroll: %v", err)
+	}
+
+	// Switch to a different file and confirm .code's scrollLeft is back to 0.
+	p.clickFile("edited.go")
+	var scrollLeftAfter float64
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='edited.go']`, chromedp.BySearch),
+		chromedp.Sleep(150*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('.code').scrollLeft`, &scrollLeftAfter),
+	); err != nil {
+		t.Fatalf("post-switch query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if scrollLeftAfter != 0 {
+		t.Errorf(".code scrollLeft after file switch = %v, want 0 (scroll-reset directive should have fired)", scrollLeftAfter)
+	}
 }
 
 // TestE2E_NextPrevFile verifies the top-bar Next/Prev arrows cycle through
