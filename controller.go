@@ -496,6 +496,25 @@ func (c *PrereviewController) SetMarkdownView(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// ToggleRawHTML is the .html/.htm equivalent of ToggleRawMarkdown:
+// flips the iframe preview off and the syntax-highlighted line view on
+// (and back). Closes the overflow menu so the change is visible on
+// mobile.
+func (c *PrereviewController) ToggleRawHTML(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.RawHTML = !state.RawHTML
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// SetHTMLView is the idempotent setter behind the HTML Preview/Raw
+// radio group. Mirrors SetMarkdownView: "raw" → line view, anything
+// else → iframe preview.
+func (c *PrereviewController) SetHTMLView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.RawHTML = ctx.GetString("view") == "raw"
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
 // SetFileViewMode is the setter counterpart of ToggleFileView for the
 // desktop radio group (Diff / File). Reads form field `view`; "file"
 // → FileView true, anything else (incl. "diff") → false.

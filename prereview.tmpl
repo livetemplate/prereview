@@ -702,6 +702,16 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    + centered invariants because the symmetric padding centres the
    block naturally. */
 .md-view { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
+/* HTML preview blocks: same column shape as .md-view. The rendered
+   content lives inside a Declarative Shadow DOM per block so the user's
+   CSS doesn't leak to the SPA chrome. .html-rendered is the click target
+   that anchors a comment to the block's source-line range; .selected
+   adds the same affordance .md-block uses so the active selection is
+   obvious before the composer opens. */
+.html-view { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
+.html-block { position: relative; border-radius: 6px; }
+.html-block.selected { outline: 2px solid var(--primary, currentColor); outline-offset: 4px; }
+.html-rendered { cursor: pointer; padding: 0.2rem 0; }
 /* Sticky top bar (var(--pr-bar-h)) would otherwise obscure the anchored
    heading when the browser jumps to "#id". scroll-padding-top reserves
    that gap so the heading lands just below the bar. Smooth scroll is
@@ -1143,7 +1153,13 @@ main.viewer { overscroll-behavior: contain; }
         <label><input type="radio" name="view" value="raw" {{if .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Raw</label>
       </form>
       {{end}}
-      {{if not .ShowRenderedMarkdown}}
+      {{if .IsHTML}}
+      <form method="POST" class="tb-radios" aria-label="HTML view">
+        <label><input type="radio" name="view" value="rendered" {{if not .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Preview</label>
+        <label><input type="radio" name="view" value="raw" {{if .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Raw</label>
+      </form>
+      {{end}}
+      {{if and (not .ShowRenderedMarkdown) (not .ShowRenderedHTML)}}
       <form method="POST" class="tb-radios" aria-label="File view">
         <label><input type="radio" name="view" value="diff" {{if not .FileView}}checked{{end}} lvt-on:change="setFileViewMode">Diff</label>
         <label><input type="radio" name="view" value="file" {{if .FileView}}checked{{end}} lvt-on:change="setFileViewMode">File</label>
@@ -1218,7 +1234,21 @@ main.viewer { overscroll-behavior: contain; }
     </button>
   </form>
   {{end}}
-  {{if not .ShowRenderedMarkdown}}
+  {{if .IsHTML}}
+  <form method="POST">
+    <button type="submit" name="toggleRawHTML" class="menu-item{{if not .RawHTML}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">
+        {{if .RawHTML}}
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{else}}
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M9 9h4M9 12h6M9 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{end}}
+      </span>
+      <span class="menu-label">{{if .RawHTML}}Preview{{else}}View raw source{{end}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{if and (not .ShowRenderedMarkdown) (not .ShowRenderedHTML)}}
   <form method="POST">
     <button type="submit" name="toggleFileView" class="menu-item{{if .FileView}} is-on{{end}}" role="menuitem">
       <span class="menu-icon">
@@ -1458,6 +1488,19 @@ main.viewer { overscroll-behavior: contain; }
   {{else}}
   <p class="empty">Binary file — cannot display.</p>
   {{end}}
+  {{else if $.ShowRenderedHTML}}
+  {{/* Rendered-HTML view. Mirrors the rendered-Markdown layout: each
+       top-level <body> child becomes one clickable block carrying its
+       REAL source line range (data-from / data-to). SelectBlock turns
+       that into a normal line-anchored selection, so a comment placed
+       here round-trips with the raw line view and the CSV — same
+       contract as MarkdownBlock. The block's HTML is wrapped in a
+       Declarative Shadow DOM (`<template shadowrootmode="open">`) so
+       the user's CSS (head stylesheets embedded in each block's HTML
+       at parse time) applies inside the shadow root WITHOUT leaking
+       to the SPA chrome. The client's handleShadowRootHydration
+       activates the shadow root after morphdom inserts it. */}}
+  <div class="html-view" data-key="html-{{.Path}}">{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}"><div class="html-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}"><template shadowrootmode="open">{{.HTML}}</template></div>{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>{{end}}</div>
   {{else if $.ShowRenderedMarkdown}}
   {{/* Rendered-Markdown view. Each top-level block is one clickable
        unit carrying its REAL source line range (data-from/data-to);

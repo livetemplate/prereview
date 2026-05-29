@@ -29,6 +29,12 @@ type FileDiff struct {
 	// range. Populated only for .md/.markdown paths; nil otherwise.
 	// Computed once per load and cached with the FileDiff.
 	MarkdownBlocks []MarkdownBlock
+	// HTMLBlocks is the rendered-HTML equivalent for .html/.htm paths:
+	// each top-level <body> child tagged with its source line span,
+	// embedded with the document's head stylesheets so per-block
+	// Declarative Shadow DOM hydration in the client renders with the
+	// user's CSS isolated from the SPA. Nil for non-HTML paths.
+	HTMLBlocks []HTMLBlock
 	// Headings is the TOC source for the rendered-Markdown view:
 	// every Markdown heading in the new-side file, in document order,
 	// with goldmark's slugified anchor `id`. Populated only for
@@ -42,6 +48,14 @@ type FileDiff struct {
 func IsMarkdownPath(path string) bool {
 	p := strings.ToLower(path)
 	return strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".markdown")
+}
+
+// IsHTMLPath reports whether path is an HTML file by extension. The viewer
+// uses this to flip the preview area into a sandboxed iframe instead of the
+// syntax-highlighted line view.
+func IsHTMLPath(path string) bool {
+	p := strings.ToLower(path)
+	return strings.HasSuffix(p, ".html") || strings.HasSuffix(p, ".htm")
 }
 
 // DiffLine is one rendered line in the viewer. Exactly one of OldNum / NewNum
@@ -177,6 +191,16 @@ func highlightLines(fd *FileDiff) {
 		srcBytes := []byte(src.String())
 		fd.MarkdownBlocks = RenderMarkdownBlocks(srcBytes)
 		fd.Headings = ExtractHeadings(srcBytes)
+	}
+	if IsHTMLPath(fd.Path) {
+		var src strings.Builder
+		for i := range fd.Lines {
+			if fd.Lines[i].NewNum > 0 {
+				src.WriteString(fd.Lines[i].Content)
+				src.WriteByte('\n')
+			}
+		}
+		fd.HTMLBlocks = RenderHTMLBlocks([]byte(src.String()))
 	}
 	if totalBytes > maxHighlightTotalBytes {
 		// Too big to highlight cheaply — leave HighlightedContent empty;

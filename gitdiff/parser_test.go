@@ -282,6 +282,28 @@ func TestLoadDiff_BinaryFile(t *testing.T) {
 	}
 }
 
+func TestIsHTMLPath(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"index.html", true},
+		{"INDEX.HTML", true},
+		{"foo.htm", true},
+		{"foo.HTM", true},
+		{"dir/sub/index.html", true},
+		{"foo.html.bak", false},
+		{"htmllike", false},
+		{"foo.md", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := IsHTMLPath(c.path); got != c.want {
+			t.Errorf("IsHTMLPath(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
 func TestParseHunkHeader(t *testing.T) {
 	cases := []struct {
 		in               string

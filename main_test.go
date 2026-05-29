@@ -92,6 +92,10 @@ func TestStaticFallback(t *testing.T) {
 	mustWriteFile(t, filepath.Join(root, ".prereview", "evil.png"), pngBody)
 	// Uppercase extension — case-insensitive lookup must serve it.
 	mustWriteFile(t, filepath.Join(root, "SHOUT.PNG"), pngBody)
+	// Real HTML file — the iframe preview consumer drives this allowlist
+	// entry, so cover both the served and missing-file behaviour.
+	htmlBody := []byte("<!doctype html><html><body>hi</body></html>")
+	mustWriteFile(t, filepath.Join(root, "index.html"), htmlBody)
 
 	cases := []struct {
 		name         string
@@ -128,6 +132,17 @@ func TestStaticFallback(t *testing.T) {
 		{
 			name: "404: allowlisted ext, file missing",
 			method: http.MethodGet, path: "/does-not-exist.png",
+			wantStatus: 404,
+		},
+		{
+			name: "served: .html for iframe preview",
+			method: http.MethodGet, path: "/index.html",
+			wantStatus: 200, wantBody: string(htmlBody),
+			wantCType: "text/html",
+		},
+		{
+			name: "404: .html missing (broken iframe shows blank, not the SPA shell)",
+			method: http.MethodGet, path: "/missing.html",
 			wantStatus: 404,
 		},
 		{
