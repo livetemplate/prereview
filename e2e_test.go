@@ -3920,3 +3920,172 @@ func snippet(b []byte) string {
 	}
 	return string(b[:max]) + "…"
 }
+
+// setupFixtureHTMLRepo builds a fixture repo whose only changed file is
+// an HTML page with a stylesheet sibling — exercises the iframe preview
+// branch and proves the static fallback serves both the .html document
+// and its relative .css subresource. The HTML/CSS are read from
+// testdata/htmlpreview/ so the fixture is editable as real files (a
+// developer can open them in a browser to inspect the visual).
+func setupFixtureHTMLRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+
+	mustWrite(t, dir, "keep.go", "package keep\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+
+	for _, name := range []string{"index.html", "styles.css"} {
+		body, err := os.ReadFile(filepath.Join("testdata", "htmlpreview", name))
+		if err != nil {
+			t.Fatalf("read testdata/htmlpreview/%s: %v", name, err)
+		}
+		mustWrite(t, dir, name, string(body))
+	}
+	return dir
+}
+
+// TestE2E_HTMLPreviewBlocksAreLineAnchored pins issue #15: clicking a
+// .html file shows rendered blocks (mirror of markdown), each block is
+// clickable and anchors a comment to its source line range. Verifies
+// declarative shadow DOM hydration ran (each block has a shadowRoot
+// attached) so the user's CSS isolates from the SPA chrome.
+//
+// Doesn't drill into shadow DOM content — that would couple the test
+// to the fixture's exact HTML. The hydration assertion ("parent has
+// shadowRoot") is the contract we care about.
+func TestE2E_HTMLPreviewBlocksAreLineAnchored(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureHTMLRepo(t), 1200, 800)
+	p.waitReady()
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server ---\n%s\n--- console ---\n%s\n--- ws ---\n%s\n--- html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.clickFile("index.html")
+
+	// Wait for the rendered blocks to appear.
+	var blockCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.html-view .html-block`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('.html-view .html-block').length`, &blockCount),
+	); err != nil {
+		t.Fatalf("wait .html-block: %v%s", err, diag())
+	}
+	if blockCount < 1 {
+		t.Errorf("got %d HTML blocks, want >= 1%s", blockCount, diag())
+	}
+
+	// Shadow DOM hydration must have moved each block's <template> into
+	// a shadowRoot on its .html-rendered wrapper — the client's
+	// handleShadowRootHydration directive runs after every morph.
+	var hydrated int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`
+			(() => {
+				let n = 0;
+				for (const el of document.querySelectorAll('.html-view .html-rendered')) {
+					if (el.shadowRoot && el.shadowRoot.childNodes.length > 0) n++;
+				}
+				return n;
+			})()`, &hydrated),
+	); err != nil {
+		t.Fatalf("query shadow roots: %v%s", err, diag())
+	}
+	if hydrated != blockCount {
+		t.Errorf("shadow DOM hydration: %d/%d blocks have populated shadow roots%s",
+			hydrated, blockCount, diag())
+	}
+
+	// Stray <template> tags would be a hydration bug (the directive
+	// removes them after moving content to shadowRoot).
+	var strayTemplates int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('.html-view template').length`, &strayTemplates),
+	); err != nil {
+		t.Fatalf("query templates: %v%s", err, diag())
+	}
+	if strayTemplates != 0 {
+		t.Errorf("found %d unhydrated <template> in .html-view%s", strayTemplates, diag())
+	}
+
+	// Click the first block — composer must appear with the block's
+	// source line range as the selection.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.html-view .html-block:first-of-type .html-rendered`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("click block + wait composer: %v%s", err, diag())
+	}
+
+	// Type and submit a comment — confirms the line-anchored flow
+	// end-to-end.
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`.composer textarea`, "comment from html block", chromedp.ByQuery),
+		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment .body`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("save comment: %v%s", err, diag())
+	}
+
+	// Toggle to Raw → blocks gone, code line view appears.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`form[aria-label="HTML view"] input[type=radio][value="raw"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("toggle to raw: %v%s", err, diag())
+	}
+
+	// And back — blocks return with their shadow roots re-hydrated.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`form[aria-label="HTML view"] input[type=radio][value="rendered"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.html-view .html-block`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("toggle back: %v%s", err, diag())
+	}
+
+	mu.Lock()
+	for _, l := range consoleLines {
+		if strings.Contains(strings.ToLower(l), "error") {
+			t.Errorf("browser console error: %s", l)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}

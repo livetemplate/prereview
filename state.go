@@ -159,6 +159,13 @@ type PrereviewState struct {
 	// see the source lines. Non-Markdown files ignore this.
 	RawMarkdown bool `json:"raw_markdown" lvt:"persist"`
 
+	// RawHTML is the .html/.htm equivalent of RawMarkdown: when true the
+	// viewer shows the syntax-highlighted source instead of the
+	// sandboxed-iframe preview. Persisted per-user. Defaults false.
+	// Independent of RawMarkdown so a user's preference for one format
+	// doesn't drag the other along. Non-HTML files ignore this.
+	RawHTML bool `json:"raw_html" lvt:"persist"`
+
 	// BaseChoices populates the base-picker dropdown. Computed in
 	// Mount: ["HEAD", "HEAD~1", "HEAD~5", <local branches…>] plus the
 	// current state.Base if it isn't already in the list (so custom
@@ -275,6 +282,13 @@ func (s PrereviewState) IsMarkdown() bool {
 	return s.CurrentDiff != nil && gitdiff.IsMarkdownPath(s.CurrentDiff.Path)
 }
 
+// IsHTML reports whether the selected file is an HTML file (.html/.htm).
+// Drives the Preview/Raw toolbar toggle and the iframe branch in the
+// viewer template, parallel to IsMarkdown.
+func (s PrereviewState) IsHTML() bool {
+	return s.CurrentDiff != nil && gitdiff.IsHTMLPath(s.CurrentDiff.Path)
+}
+
 // BinaryKind classifies an IsBinary FileDiff by extension so the viewer
 // can render a real preview (<img>, <iframe>, <video>, <audio>) instead
 // of the bare "Binary file — cannot display" message. Returns "" for
@@ -307,6 +321,27 @@ func (s PrereviewState) BinaryKind() string {
 // the template can branch on `$.ShowRenderedMarkdown`.
 func (s PrereviewState) ShowRenderedMarkdown() bool {
 	return s.IsMarkdown() && !s.RawMarkdown && len(s.CurrentDiff.MarkdownBlocks) > 0
+}
+
+// ShowRenderedHTML is true when the viewer should swap the line view
+// for the inline-blocks view: an HTML file, not toggled to raw, with at
+// least one rendered block. Mirrors ShowRenderedMarkdown — a deleted /
+// empty file falls through to the line view (showing the diff)
+// instead of an empty preview pane.
+func (s PrereviewState) ShowRenderedHTML() bool {
+	return s.IsHTML() && !s.RawHTML &&
+		s.CurrentDiff != nil && len(s.CurrentDiff.HTMLBlocks) > 0
+}
+
+// RenderedHTML is the block list for the rendered HTML view (nil unless
+// ShowRenderedHTML). Each block carries its real source line range so
+// comments stay line-accurate across rendered and raw views — same
+// contract as RenderedMarkdown.
+func (s PrereviewState) RenderedHTML() []gitdiff.HTMLBlock {
+	if !s.ShowRenderedHTML() {
+		return nil
+	}
+	return s.CurrentDiff.HTMLBlocks
 }
 
 // RenderedMarkdown is the block list for the rendered view (nil unless

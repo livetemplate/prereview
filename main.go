@@ -392,14 +392,18 @@ func serveBytes(contentType string, body []byte) http.HandlerFunc {
 }
 
 // staticAllowedExt is the closed set of extensions staticFallback will
-// serve from disk. Excludes .md / .html / .txt — those must keep
-// routing to the SPA so the LiveHandler can render markdown reviews and
-// future SPA routes don't accidentally hit the filesystem.
+// serve from disk. Excludes .md / .txt — those must keep routing to the
+// SPA so the LiveHandler can render markdown reviews and future SPA
+// routes don't accidentally hit the filesystem. .html / .htm ARE on the
+// list: the HTML preview iframe (`<iframe src="/foo.html">`) needs the
+// file served from disk; the SPA entry is `/`, never `/index.html`, so
+// the fall-through path is unaffected.
 var staticAllowedExt = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
 	".svg": true, ".webp": true, ".ico": true,
 	".pdf": true,
 	".css": true, ".js": true,
+	".html": true, ".htm": true,
 	".woff": true, ".woff2": true, ".ttf": true,
 	".mp4": true, ".webm": true, ".mp3": true, ".wav": true,
 }
