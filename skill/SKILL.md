@@ -89,19 +89,20 @@ cat "$csv_path"
 **Columns** (load-bearing — order is the contract):
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area
 ```
 
 - `id`: opaque per-comment identifier
-- `from_line` / `to_line`: 1-indexed; equal for single-line comments. **`0` when `kind=file`** (no line anchor).
-- `side`: `new` | `old` (which side of the diff the line is on). Empty when `kind=file`.
+- `from_line` / `to_line`: 1-indexed; equal for single-line comments. **`0` when `kind=file` or `kind=area`** (no line anchor).
+- `side`: `new` | `old` (which side of the diff the line is on). Empty when `kind=file` or `kind=area`.
 - `body`: RFC-4180 quoted; preserves newlines
 - `created_at`: RFC-3339 UTC
 - `resolved`: `true` | `false` — see "Resolved comments" below
-- `anchor`: internal JSON fingerprint — **do not parse or act on it**. Empty when `kind=file`.
-- `anchor_status`: `ok` | `moved` | `outdated` | *(empty)* — see "Re-anchoring" below. Always empty for `kind=file` (nothing to drift).
-- `kind`: `line` | `file` | *(empty)* — see "Comment kinds" below. Empty means `line` for pre-migration rows.
-- Older CSVs may have fewer trailing columns (7–10); index by position and default missing ones to empty.
+- `anchor`: internal JSON fingerprint — **do not parse or act on it**. Empty when `kind=file` or `kind=area`.
+- `anchor_status`: `ok` | `moved` | `outdated` | *(empty)* — see "Re-anchoring" below. Always empty for `kind=file` / `kind=area` (nothing to drift).
+- `kind`: `line` | `file` | `area` | *(empty)* — see "Comment kinds" below. Empty means `line` for pre-migration rows.
+- `area`: JSON blob `{"x":0.1,"y":0.2,"w":0.3,"h":0.15}` when `kind=area`; empty otherwise. See "Comment kinds" below.
+- Older CSVs may have fewer trailing columns (7–11); index by position and default missing ones to empty.
 
 Multi-line bodies use standard CSV quoting; use `encoding/csv` or any RFC-4180-compliant parser.
 
@@ -117,6 +118,17 @@ Multi-line bodies use standard CSV quoting; use `encoding/csv` or any RFC-4180-c
   act on the file as a whole, or, if the body suggests a specific edit,
   use semantic understanding of the body to locate where in the file to
   apply it.
+- `area` — comment overlays a rectangular region on a binary image
+  (PNG, JPEG, SVG, etc.). `from_line` / `to_line` / `side` / `anchor` /
+  `anchor_status` are all zero/empty; the `area` column (#12) holds a
+  JSON blob `{"x":0.1,"y":0.2,"w":0.3,"h":0.15}` where each value is a
+  0..1 fraction of the image's natural dimensions. Treat the body as
+  guidance for that rectangular region (e.g., "this label is wrong",
+  "this part of the diagram needs to be re-drawn"). Convert fractions
+  to pixels by multiplying by the image's natural width / height — the
+  image file itself is the source of truth for those numbers, so
+  re-encoding at different dimensions still highlights the same
+  logical region.
 
 ### Resolved comments
 

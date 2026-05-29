@@ -302,7 +302,8 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
-	state.CommentMode = "" // any file-level composer from the prior file is cancelled
+	state.SelectionArea = Area{} // pending image rectangle from the prior file is cancelled
+	state.CommentMode = ""       // any file-level / area composer from the prior file is cancelled
 	state.FileDrawerOpen = false
 	// Picking a file from the drawer while the all-comments view is
 	// open implies "leave this overview, go look at that file" — same
@@ -656,6 +657,7 @@ func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemp
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
+	state.SelectionArea = Area{}
 	state.CommentMode = ""
 	state.DraftBody = ""
 	state.EditingCommentID = ""
@@ -675,6 +677,41 @@ func (c *PrereviewController) OpenFileComment(state PrereviewState, ctx *livetem
 		return state, fmt.Errorf("openFileComment: no file selected")
 	}
 	state.CommentMode = commentKindFile
+	state.SelectionAnchor = 0
+	state.SelectionEnd = 0
+	state.SelectionSide = ""
+	state.SelectionArea = Area{}
+	state.EditingCommentID = ""
+	state.ReanchorCommentID = ""
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// SelectImageArea opens the composer in "area" mode with a captured
+// rectangle. Fired by the client's lvt-fx:area-select directive on
+// pointerup with the final 0..1-fraction coords. Sets CommentMode +
+// SelectionArea and clears any pending line/file selection so the
+// area composer is the only one visible.
+func (c *PrereviewController) SelectImageArea(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if state.SelectedFile == "" {
+		return state, fmt.Errorf("selectImageArea: no file selected")
+	}
+	area := Area{
+		X: ctx.GetFloat("x"),
+		Y: ctx.GetFloat("y"),
+		W: ctx.GetFloat("w"),
+		H: ctx.GetFloat("h"),
+	}
+	// Defensive validation: the client clamps before dispatching, but a
+	// malicious / buggy caller could send out-of-range values. Reject
+	// rather than persist a nonsense rectangle.
+	if area.W <= 0 || area.H <= 0 ||
+		area.X < 0 || area.X > 1 || area.Y < 0 || area.Y > 1 ||
+		area.X+area.W > 1.0001 || area.Y+area.H > 1.0001 {
+		return state, fmt.Errorf("selectImageArea: out-of-range rectangle %+v", area)
+	}
+	state.CommentMode = commentKindArea
+	state.SelectionArea = area
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
@@ -708,6 +745,13 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 	// DraftBody + EditingCommentID).
 	if state.CommentMode == commentKindFile {
 		return c.addFileLevelComment(state, body)
+	}
+	// Image-area comments take a dedicated path: rectangle in
+	// SelectionArea (set by SelectImageArea, dispatched from the
+	// client's lvt-fx:area-select directive), no line range, no anchor
+	// capture, kind="area" in both memory and CSV.
+	if state.CommentMode == commentKindArea {
+		return c.addAreaComment(state, body)
 	}
 	if state.SelectionAnchor == 0 {
 		return state, fmt.Errorf("no line selected")
@@ -863,6 +907,56 @@ func (c *PrereviewController) addFileLevelComment(state PrereviewState, body str
 	return state, nil
 }
 
+// addAreaComment is the AddComment branch for image-area annotations.
+// Shape matches addFileLevelComment — append-and-persist with a kind
+// tag and no anchor — but also carries the SelectionArea rectangle.
+// Edits to an existing area comment update body + rectangle in place
+// when EditingCommentID is set.
+func (c *PrereviewController) addAreaComment(state PrereviewState, body string) (PrereviewState, error) {
+	if state.SelectionArea.Empty() {
+		return state, fmt.Errorf("no image area selected")
+	}
+	var rollback func()
+	if state.EditingCommentID != "" {
+		idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == state.EditingCommentID })
+		if idx >= 0 {
+			prev := state.Comments[idx]
+			state.Comments[idx].Body = body
+			state.Comments[idx].Area = state.SelectionArea
+			rollback = func() { state.Comments[idx] = prev }
+		}
+	}
+	if rollback == nil {
+		cm := Comment{
+			ID:      newCommentID(),
+			File:    state.SelectedFile,
+			Body:    body,
+			Created: time.Now().UTC(),
+			Kind:    commentKindArea,
+			Area:    state.SelectionArea,
+			// FromLine/ToLine/Side/Anchor/AnchorStatus stay zero — the
+			// "no anchor to relocate" contract is what IsAreaLevel()
+			// keys off of in relocate() and the UI ranges.
+		}
+		state.Comments = append(state.Comments, cm)
+		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
+	}
+
+	if err := c.persist(state.Comments); err != nil {
+		rollback()
+		return state, fmt.Errorf("persist area comment: %w", err)
+	}
+
+	state.CommentMode = ""
+	state.SelectionArea = Area{}
+	state.DraftBody = ""
+	state.EditingCommentID = ""
+	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	state.Files = annotateCommentCounts(state.Files, state.Comments)
+	return state, nil
+}
+
 // EditComment seeds the composer with an existing comment's body +
 // line range so the user can rewrite it. The original comment stays in
 // state.Comments — AddComment detects EditingCommentID and updates
@@ -884,19 +978,29 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	if err == nil {
 		state.CurrentDiff = diff
 	}
-	// File-level comments open in file-mode (CommentMode="file"), with
-	// no SelectionAnchor — the composer renders at the file-comments
-	// section above the body, not inline at a line.
-	if cm.IsFileLevel() {
+	// Route the composer into the right mode based on the comment's
+	// Kind — file-level lands in file-mode, area in area-mode (with
+	// the saved rectangle so the pending overlay re-renders), and
+	// line-anchored in the default line mode.
+	switch {
+	case cm.IsFileLevel():
 		state.CommentMode = commentKindFile
 		state.SelectionAnchor = 0
 		state.SelectionEnd = 0
 		state.SelectionSide = ""
-	} else {
+		state.SelectionArea = Area{}
+	case cm.IsAreaLevel():
+		state.CommentMode = commentKindArea
+		state.SelectionArea = cm.Area
+		state.SelectionAnchor = 0
+		state.SelectionEnd = 0
+		state.SelectionSide = ""
+	default:
 		state.CommentMode = ""
 		state.SelectionAnchor = cm.FromLine
 		state.SelectionEnd = cm.ToLine
 		state.SelectionSide = cm.Side
+		state.SelectionArea = Area{}
 	}
 	state.DraftBody = cm.Body
 	state.EditingCommentID = cm.ID
@@ -1069,6 +1173,7 @@ func (c *PrereviewController) persist(comments []Comment) error {
 			Anchor:       cm.Anchor.JSON(),
 			AnchorStatus: cm.AnchorStatus,
 			Kind:         cm.Kind,
+			Area:         cm.Area.JSON(),
 		})
 	}
 	return c.CSVWriter.Write(rows)
@@ -1120,7 +1225,8 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 		out = append(out, Comment{
 			ID: r.ID, File: r.File, FromLine: r.FromLine, ToLine: r.ToLine,
 			Side: r.Side, Body: r.Body, Created: r.CreatedAt, Resolved: r.Resolved,
-			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus, Kind: r.Kind,
+			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus,
+			Kind: r.Kind, Area: parseArea(r.Area),
 		})
 	}
 	return out

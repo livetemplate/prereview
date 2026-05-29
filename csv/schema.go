@@ -30,13 +30,19 @@ const (
 	// pre-kind rows) for line-anchored comments where `from_line` and
 	// `to_line` are meaningful; "file" for whole-file comments where
 	// `from_line` / `to_line` / `side` / `anchor` / `anchor_status`
-	// are all zero/empty. Reserved for the area-annotation follow-up:
-	// "area" with companion area-geometry column.
+	// are all zero/empty; "area" for image-overlay annotations where
+	// `area` (column 12) carries the rectangle.
 	ColKind = "kind"
+	// `area` is a JSON blob {"x":0.1,"y":0.2,"w":0.3,"h":0.15} where
+	// each value is a 0..1 fraction of the image's natural dimensions.
+	// Only populated when `kind` is "area"; empty for line / file
+	// rows. Fractions (not pixels) so a re-encoded image at different
+	// dimensions still highlights the same logical region.
+	ColArea = "area"
 )
 
 // Header is the row written before any data. Position-stable.
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
-	ColAnchor, ColAnchorStatus, ColKind,
+	ColAnchor, ColAnchorStatus, ColKind, ColArea,
 }
