@@ -89,20 +89,34 @@ cat "$csv_path"
 **Columns** (load-bearing — order is the contract):
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind
 ```
 
 - `id`: opaque per-comment identifier
-- `from_line` / `to_line`: 1-indexed; equal for single-line comments
-- `side`: `new` | `old` (which side of the diff the line is on)
+- `from_line` / `to_line`: 1-indexed; equal for single-line comments. **`0` when `kind=file`** (no line anchor).
+- `side`: `new` | `old` (which side of the diff the line is on). Empty when `kind=file`.
 - `body`: RFC-4180 quoted; preserves newlines
 - `created_at`: RFC-3339 UTC
 - `resolved`: `true` | `false` — see "Resolved comments" below
-- `anchor`: internal JSON fingerprint — **do not parse or act on it**
-- `anchor_status`: `ok` | `moved` | `outdated` | *(empty)* — see "Re-anchoring" below
-- Older CSVs may have fewer trailing columns (7–9); index by position and default missing ones to empty.
+- `anchor`: internal JSON fingerprint — **do not parse or act on it**. Empty when `kind=file`.
+- `anchor_status`: `ok` | `moved` | `outdated` | *(empty)* — see "Re-anchoring" below. Always empty for `kind=file` (nothing to drift).
+- `kind`: `line` | `file` | *(empty)* — see "Comment kinds" below. Empty means `line` for pre-migration rows.
+- Older CSVs may have fewer trailing columns (7–10); index by position and default missing ones to empty.
 
 Multi-line bodies use standard CSV quoting; use `encoding/csv` or any RFC-4180-compliant parser.
+
+### Comment kinds
+
+- `line` (or empty for legacy rows) — comment is anchored to a line range
+  via `from_line` / `to_line` / `side`. Treat as before: edit the named
+  file at those lines per the comment body.
+- `file` — comment applies to the whole file. `from_line` / `to_line` are
+  both `0` and `anchor` / `anchor_status` are empty; don't look at them.
+  Treat the comment as guidance for the entire file (e.g., "rename to
+  foo.go", "this binary shouldn't be in the PR", "good test coverage"):
+  act on the file as a whole, or, if the body suggests a specific edit,
+  use semantic understanding of the body to locate where in the file to
+  apply it.
 
 ### Resolved comments
 

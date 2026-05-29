@@ -36,6 +36,14 @@ type PrereviewState struct {
 	// Comment composer.
 	DraftBody string `json:"draft_body" lvt:"persist"`
 
+	// CommentMode flags whether the open composer is targeting a line
+	// range ("" — the historical default, paired with SelectionAnchor)
+	// or the whole file ("file" — SelectionAnchor stays 0). Persisted
+	// so a WebSocket reconnect while a file-level composer is open
+	// doesn't drop the user back to the file head. Reserved value
+	// "area" for the image-annotation follow-up.
+	CommentMode string `json:"comment_mode" lvt:"persist"`
+
 	// Comments accumulated during this session.
 	Comments []Comment `json:"comments"`
 
@@ -467,20 +475,38 @@ type Comment struct {
 	// legacy pre-migration comments).
 	Anchor       CommentAnchor `json:"anchor"`
 	AnchorStatus string        `json:"anchor_status"`
+	// Kind is the comment-shape vocabulary: "line" (or "" for legacy /
+	// pre-migration comments) for line-anchored comments —
+	// FromLine/ToLine are meaningful — and "file" for whole-file
+	// comments where line numbers are zero and the anchor is empty.
+	// Reserved: "area" for image-overlay annotations.
+	Kind string `json:"kind"`
 }
+
+// IsFileLevel reports whether this comment applies to the whole file
+// rather than a line range. The CSV-side persistence reads `kind=file`
+// and FromLine=0; this method is the single in-process predicate so
+// callers (anchor.relocate, template ranges, skill exports) don't
+// re-implement the test.
+func (c Comment) IsFileLevel() bool { return c.Kind == commentKindFile }
 
 // AnchorOutdated reports that re-location could not confidently place
 // the comment — its line numbers no longer point at the intended
 // content and a human (or the skill) must re-anchor or resolve it.
+// File-level comments never go outdated (no anchor to drift).
 func (c Comment) AnchorOutdated() bool { return c.AnchorStatus == anchorOutdated }
 
 // AnchorMoved reports that the comment was auto-shifted to follow its
 // content after the file changed (purely informational in the UI).
 func (c Comment) AnchorMoved() bool { return c.AnchorStatus == anchorMoved }
 
-// LineSpan returns "L42" for single-line and "L42-L48" for ranges.
-// Method on Comment so the template can call {{.LineSpan}} on each entry.
+// LineSpan returns "L42" for single-line, "L42-L48" for ranges, and
+// "file" for whole-file comments — used in the template badge and
+// the composer label, so both render uniformly.
 func (c Comment) LineSpan() string {
+	if c.IsFileLevel() {
+		return "file"
+	}
 	if c.FromLine == c.ToLine {
 		return fmt.Sprintf("L%d", c.FromLine)
 	}
@@ -513,6 +539,9 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 		if c.File != s.SelectedFile {
 			continue
 		}
+		if c.IsFileLevel() {
+			continue
+		}
 		if c.Resolved && !s.ShowResolved {
 			continue
 		}
@@ -521,11 +550,16 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 	return out
 }
 
-// FileComments returns the selected file's visible comments (honoring
-// ShowResolved) as a flat slice. Zero-arg so the rendered-Markdown
-// view can, per block, show the comments whose ToLine falls in that
-// block's source range — the line-view path uses CommentsByEndLine
-// (exact-line map) instead.
+// FileComments returns the selected file's visible LINE-anchored
+// comments (honoring ShowResolved) as a flat slice. Zero-arg so the
+// rendered-Markdown view can, per block, show the comments whose
+// ToLine falls in that block's source range — the line-view path
+// uses CommentsByEndLine (exact-line map) instead.
+//
+// File-level comments (Kind == "file") are excluded here so they
+// don't accidentally try to anchor at line 0 inside a block range.
+// They're rendered in their own section above the file body via
+// FileLevelComments().
 func (s PrereviewState) FileComments() []Comment {
 	if s.SelectedFile == "" {
 		return nil
@@ -533,6 +567,33 @@ func (s PrereviewState) FileComments() []Comment {
 	var out []Comment
 	for _, c := range s.Comments {
 		if c.File != s.SelectedFile {
+			continue
+		}
+		if c.IsFileLevel() {
+			continue
+		}
+		if c.Resolved && !s.ShowResolved {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// FileLevelComments returns the selected file's visible whole-file
+// comments (Kind == "file") in creation order. Rendered in a dedicated
+// section above the per-line body so reviewers see "comments on the
+// file itself" before any line-anchored feedback.
+func (s PrereviewState) FileLevelComments() []Comment {
+	if s.SelectedFile == "" {
+		return nil
+	}
+	var out []Comment
+	for _, c := range s.Comments {
+		if c.File != s.SelectedFile {
+			continue
+		}
+		if !c.IsFileLevel() {
 			continue
 		}
 		if c.Resolved && !s.ShowResolved {
