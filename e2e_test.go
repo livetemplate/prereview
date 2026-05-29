@@ -4089,3 +4089,100 @@ func TestE2E_HTMLPreviewBlocksAreLineAnchored(t *testing.T) {
 	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
 	mu.Unlock()
 }
+
+// TestE2E_FileLevelComment pins issue #16, phase 1: a top-level
+// "Comment on file" affordance must be reachable for every file type
+// (here we exercise a text .go file and a binary 1×1 PNG), the
+// composer must save without a line range, and the persisted CSV row
+// must have kind=file with from_line/to_line/side/anchor/anchor_status
+// all empty/zero — the contract the skill consumes.
+func TestE2E_FileLevelComment(t *testing.T) {
+	repo := setupFixtureRepo(t)
+	// Drop the canonical fixture files into the repo so the e2e and
+	// the manual-test path documented in testdata/filecomments/README.md
+	// exercise the exact same bytes — a developer copying that README
+	// is following the same script as CI.
+	for _, name := range []string{"README.md", "logo.png"} {
+		body, err := os.ReadFile(filepath.Join("testdata", "filecomments", name))
+		if err != nil {
+			t.Fatalf("read testdata/filecomments/%s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(repo, name), body, 0o644); err != nil {
+			t.Fatalf("write %s into fixture repo: %v", name, err)
+		}
+	}
+	p := bootChromeAgainstRepo(t, repo, 1200, 800)
+	p.waitReady()
+
+	// 1) Comment on a text file (edited.go). The toolbar button must
+	// be present even without any line clicked.
+	p.clickFile("edited.go")
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`button[name='openFileComment']`, chromedp.ByQuery),
+		chromedp.Click(`button[name='openFileComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.file-comments .composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.file-comments .composer textarea`, "this file should be renamed", chromedp.ByQuery),
+		chromedp.Click(`.file-comments button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.file-comments .inline-comment .body`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("file-level comment on edited.go: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected header + 1 row, got %d:\n%v", len(rows), rows)
+	}
+	if rows[0][10] != "kind" {
+		t.Errorf("header[10] = %q, want %q", rows[0][10], "kind")
+	}
+	r := rows[1]
+	if r[1] != "edited.go" || r[2] != "0" || r[3] != "0" || r[4] != "" || r[8] != "" || r[9] != "" || r[10] != "file" {
+		t.Errorf("file-level row shape wrong: %v", r)
+	}
+	if !strings.Contains(r[5], "renamed") {
+		t.Errorf("body = %q, missing %q", r[5], "renamed")
+	}
+
+	// 2) Same flow on a binary file — the existing line-anchor path is
+	// impossible there, so this is the gap the issue called out.
+	p.clickFile("logo.png")
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.binary-preview.binary-image img`, chromedp.ByQuery),
+		chromedp.WaitVisible(`button[name='openFileComment']`, chromedp.ByQuery),
+		chromedp.Click(`button[name='openFileComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.file-comments .composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.file-comments .composer textarea`, "wrong file in this PR", chromedp.ByQuery),
+		chromedp.Click(`.file-comments button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.file-comments .inline-comment .body`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("file-level comment on logo.png: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rows = p.readCSV()
+	if len(rows) != 3 {
+		t.Fatalf("expected header + 2 rows after binary comment, got %d:\n%v", len(rows), rows)
+	}
+	bin := rows[2]
+	if bin[1] != "logo.png" || bin[10] != "file" {
+		t.Errorf("binary file-level row shape wrong: %v", bin)
+	}
+
+	// 3) Cancel from file-mode: opening + cancelling clears the composer
+	// without persisting anything.
+	p.clickFile("edited.go")
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='openFileComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.file-comments .composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.file-comments .composer textarea`, "draft to discard", chromedp.ByQuery),
+		chromedp.Click(`.file-comments button[name='clearSelection']`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.file-comments .composer`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.file-comments .inline-comment .body`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("cancel file-level composer: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rows = p.readCSV()
+	if len(rows) != 3 {
+		t.Errorf("cancel must not persist a new row, got %d rows", len(rows))
+	}
+}

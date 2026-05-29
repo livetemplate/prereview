@@ -829,6 +829,17 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border-radius: 3px;
   font-size: 0.82rem; line-height: 1.35;
 }
+/* File-level comments section. Lives between the file-head and the
+   body branch so it's visible above every preview mode (line view,
+   markdown blocks, html blocks, binary placeholder). Reuses the
+   .inline-comment shell so the visual matches per-line comments
+   exactly — only the surrounding container changes (no line gutter
+   above, a dotted bottom separator below). */
+.file-comments {
+  padding: 0.5rem 0.6rem 0.6rem;
+  border-bottom: 1px dotted var(--pico-muted-border-color, #d9d9d9);
+}
+.file-comments .composer { margin-top: 0.5rem; }
 /* Resolved comments stay visible but muted, with a clear badge. The skill
    reads the CSV `resolved` column and skips these — UI just signals the
    resolution to the human reviewer. */
@@ -1168,6 +1179,22 @@ main.viewer { overscroll-behavior: contain; }
     </div>
     {{end}}
   </div>
+  {{if .CurrentDiff}}
+  {{/* Comment on the file as a whole — works on every file type
+       including binaries (image/PDF/video), deleted files, and files
+       past the "too large to review" cap, since the composer doesn't
+       need any line content to function. The action clears any in-
+       progress line selection. Hidden when the composer is already
+       open in file-mode to avoid a self-toggle loop. */}}
+  {{if ne .CommentMode "file"}}
+  <form method="POST" class="tb-action">
+    <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/></svg>
+      <span class="nav-label">Comment on file</span>
+    </button>
+  </form>
+  {{end}}
+  {{end}}
   {{if gt (len .Files) 1}}
   <form method="POST" class="nav-prev"><button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span class="nav-label">Prev</span></button></form>
   <form method="POST" class="nav-next"><button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></form>
@@ -1207,6 +1234,16 @@ main.viewer { overscroll-behavior: contain; }
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
   <div class="menu-info">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
   {{if .CurrentDiff}}
+  {{if ne .CommentMode "file"}}
+  {{/* "Comment on file" mirrors the desktop toolbar button. Works for
+       binary / deleted / too-large files where no line is clickable. */}}
+  <form method="POST">
+    <button type="submit" name="openFileComment" class="menu-item" role="menuitem">
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="menu-label">Comment on file</span>
+    </button>
+  </form>
+  {{end}}
   {{with .RenderedHeadings}}
   {{/* Mobile-only entry — desktop renders the TOC as a permanent right
        sidebar, so this is `display: none` ≥900px via the media query.
@@ -1457,6 +1494,22 @@ main.viewer { overscroll-behavior: contain; }
     <strong>{{.Path}}</strong>
     {{if .Note}}<small>{{.Note}}</small>{{end}}
   </header>
+  {{/* File-level comments + composer. Lives above the body branch so
+       it's visible for every preview mode (line view, markdown blocks,
+       HTML blocks, binary preview, "no diff content" placeholder).
+       File-level comments use the same inline-comment markup as the
+       line view; the gutter / line badge is replaced with a "file" tag
+       via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
+       per-comment actions — no new endpoints. */}}
+  {{$fcs := $.FileLevelComments}}
+  {{if or $fcs (eq $.CommentMode "file")}}
+  <section class="file-comments" data-key="file-comments-{{.Path}}">
+    {{range $fcs}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> · file</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}
+    {{if eq $.CommentMode "file"}}
+    <div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{.Path}}</code></strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this file?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>
+    {{end}}
+  </section>
+  {{end}}
   {{if .IsBinary}}
   {{/* Binary files: now that the HTTP static fallback serves the bytes
        (issue #13), the browser can render images, PDFs, video and audio

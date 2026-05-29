@@ -26,10 +26,17 @@ const (
 	// `resolved`: treat `outdated` like `resolved=true` — the line
 	// numbers no longer point at the intended content.
 	ColAnchorStatus = "anchor_status"
+	// `kind` classifies the comment shape: "line" (or empty for
+	// pre-kind rows) for line-anchored comments where `from_line` and
+	// `to_line` are meaningful; "file" for whole-file comments where
+	// `from_line` / `to_line` / `side` / `anchor` / `anchor_status`
+	// are all zero/empty. Reserved for the area-annotation follow-up:
+	// "area" with companion area-geometry column.
+	ColKind = "kind"
 )
 
 // Header is the row written before any data. Position-stable.
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
-	ColAnchor, ColAnchorStatus,
+	ColAnchor, ColAnchorStatus, ColKind,
 }

@@ -302,6 +302,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
+	state.CommentMode = "" // any file-level composer from the prior file is cancelled
 	state.FileDrawerOpen = false
 	// Picking a file from the drawer while the all-comments view is
 	// open implies "leave this overview, go look at that file" — same
@@ -655,9 +656,31 @@ func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemp
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
+	state.CommentMode = ""
 	state.DraftBody = ""
 	state.EditingCommentID = ""
 	state.ReanchorCommentID = ""
+	return state, nil
+}
+
+// OpenFileComment opens the composer in "comment on whole file" mode.
+// Distinct from SelectLine in that no line range is involved; the
+// resulting Comment persists with Kind="file", FromLine=0, ToLine=0.
+// Clears any pending line selection / edit / re-anchor so the composer
+// renders once at the file head rather than twice. Mirrors the markdown
+// raw-toggle's "close the overflow menu" behaviour so mobile clicks
+// don't leave the menu hanging open over the composer.
+func (c *PrereviewController) OpenFileComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if state.SelectedFile == "" {
+		return state, fmt.Errorf("openFileComment: no file selected")
+	}
+	state.CommentMode = commentKindFile
+	state.SelectionAnchor = 0
+	state.SelectionEnd = 0
+	state.SelectionSide = ""
+	state.EditingCommentID = ""
+	state.ReanchorCommentID = ""
+	state.MoreMenuOpen = false
 	return state, nil
 }
 
@@ -677,6 +700,14 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 	}
 	if state.SelectedFile == "" {
 		return state, fmt.Errorf("no file selected")
+	}
+	// File-level comments take a dedicated path: no line range, no
+	// anchor capture, and a separate Kind tag in both the in-memory
+	// Comment and the persisted CSV. Edits to existing file-level
+	// comments flow through here too (EditComment sets CommentMode +
+	// DraftBody + EditingCommentID).
+	if state.CommentMode == commentKindFile {
+		return c.addFileLevelComment(state, body)
 	}
 	if state.SelectionAnchor == 0 {
 		return state, fmt.Errorf("no line selected")
@@ -788,6 +819,50 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 	return state, nil
 }
 
+// addFileLevelComment is the AddComment branch for whole-file comments.
+// Mirrors the line-comment path's append-and-persist shape but skips
+// every line-range / anchor concern. Edits to an existing file-level
+// comment update in place when EditingCommentID is set — same rule as
+// the line-comment path.
+func (c *PrereviewController) addFileLevelComment(state PrereviewState, body string) (PrereviewState, error) {
+	var rollback func()
+	if state.EditingCommentID != "" {
+		idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == state.EditingCommentID })
+		if idx >= 0 {
+			prev := state.Comments[idx]
+			state.Comments[idx].Body = body
+			rollback = func() { state.Comments[idx] = prev }
+		}
+	}
+	if rollback == nil {
+		cm := Comment{
+			ID:      newCommentID(),
+			File:    state.SelectedFile,
+			Body:    body,
+			Created: time.Now().UTC(),
+			Kind:    commentKindFile,
+			// FromLine/ToLine/Side/Anchor/AnchorStatus stay zero — the
+			// "no anchor to relocate" contract is what IsFileLevel()
+			// keys off of in relocate() and the UI ranges.
+		}
+		state.Comments = append(state.Comments, cm)
+		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
+	}
+
+	if err := c.persist(state.Comments); err != nil {
+		rollback()
+		return state, fmt.Errorf("persist file-level comment: %w", err)
+	}
+
+	state.CommentMode = ""
+	state.DraftBody = ""
+	state.EditingCommentID = ""
+	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	state.Files = annotateCommentCounts(state.Files, state.Comments)
+	return state, nil
+}
+
 // EditComment seeds the composer with an existing comment's body +
 // line range so the user can rewrite it. The original comment stays in
 // state.Comments — AddComment detects EditingCommentID and updates
@@ -809,9 +884,20 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	if err == nil {
 		state.CurrentDiff = diff
 	}
-	state.SelectionAnchor = cm.FromLine
-	state.SelectionEnd = cm.ToLine
-	state.SelectionSide = cm.Side
+	// File-level comments open in file-mode (CommentMode="file"), with
+	// no SelectionAnchor — the composer renders at the file-comments
+	// section above the body, not inline at a line.
+	if cm.IsFileLevel() {
+		state.CommentMode = commentKindFile
+		state.SelectionAnchor = 0
+		state.SelectionEnd = 0
+		state.SelectionSide = ""
+	} else {
+		state.CommentMode = ""
+		state.SelectionAnchor = cm.FromLine
+		state.SelectionEnd = cm.ToLine
+		state.SelectionSide = cm.Side
+	}
 	state.DraftBody = cm.Body
 	state.EditingCommentID = cm.ID
 	state.LastDeletedComment = nil
@@ -982,6 +1068,7 @@ func (c *PrereviewController) persist(comments []Comment) error {
 			Resolved:     cm.Resolved,
 			Anchor:       cm.Anchor.JSON(),
 			AnchorStatus: cm.AnchorStatus,
+			Kind:         cm.Kind,
 		})
 	}
 	return c.CSVWriter.Write(rows)
@@ -1033,7 +1120,7 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 		out = append(out, Comment{
 			ID: r.ID, File: r.File, FromLine: r.FromLine, ToLine: r.ToLine,
 			Side: r.Side, Body: r.Body, Created: r.CreatedAt, Resolved: r.Resolved,
-			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus,
+			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus, Kind: r.Kind,
 		})
 	}
 	return out

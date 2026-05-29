@@ -27,6 +27,10 @@ type Row struct {
 	// "ok" | "moved" | "outdated".
 	Anchor       string
 	AnchorStatus string
+	// Kind is "line" (or "" for legacy/back-compat) for line-anchored
+	// comments and "file" for whole-file comments. Reserved: "area" for
+	// the image-overlay annotation follow-up.
+	Kind string
 }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
@@ -134,5 +138,6 @@ func rowToRecord(r Row) []string {
 		resolved,
 		r.Anchor,
 		r.AnchorStatus,
+		r.Kind,
 	}
 }
