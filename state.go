@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -37,12 +38,20 @@ type PrereviewState struct {
 	DraftBody string `json:"draft_body" lvt:"persist"`
 
 	// CommentMode flags whether the open composer is targeting a line
-	// range ("" — the historical default, paired with SelectionAnchor)
-	// or the whole file ("file" — SelectionAnchor stays 0). Persisted
-	// so a WebSocket reconnect while a file-level composer is open
-	// doesn't drop the user back to the file head. Reserved value
-	// "area" for the image-annotation follow-up.
+	// range ("" — the historical default, paired with SelectionAnchor),
+	// the whole file ("file" — SelectionAnchor stays 0), or an image
+	// region ("area" — paired with SelectionArea). Persisted so a
+	// WebSocket reconnect mid-composer doesn't drop the user back to
+	// the file head.
 	CommentMode string `json:"comment_mode" lvt:"persist"`
+
+	// SelectionArea holds the in-progress rectangle for a kind=area
+	// comment: 0..1 fractions of the image's rendered size. Set by
+	// SelectImageArea (dispatched from the client's lvt-fx:area-select
+	// directive on pointerup) and cleared by AddComment / ClearSelection
+	// / SelectFile. Persisted so the pending overlay re-appears after a
+	// WebSocket reconnect.
+	SelectionArea Area `json:"selection_area" lvt:"persist"`
 
 	// Comments accumulated during this session.
 	Comments []Comment `json:"comments"`
@@ -457,6 +466,61 @@ func (s PrereviewState) ViewedCount() int {
 	return n
 }
 
+// Area is the rectangle for a kind=area comment, expressed as 0..1
+// fractions of the host image's rendered (== natural-uniformly-scaled)
+// dimensions. Persisted alongside the Comment in the CSV's `area`
+// column as a JSON blob; the LLM consuming the CSV can scale these to
+// pixels using the image's natural dimensions if it wants. Zero-value
+// (W=0, H=0) is the "no area selected" sentinel.
+type Area struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
+}
+
+// Empty reports whether the area carries no rectangle (zero-value).
+// Used by the controller (validate non-empty before persisting) and
+// the template (only render the pending-overlay when set).
+func (a Area) Empty() bool { return a.W == 0 && a.H == 0 }
+
+// JSON encodes a as the compact JSON blob persisted in the CSV's
+// `area` column. Returns "" for the zero value so the column stays
+// empty for non-area rows.
+func (a Area) JSON() string {
+	if a.Empty() {
+		return ""
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// parseArea decodes the CSV's `area` JSON back into an Area. Returns
+// the zero value for empty strings or malformed JSON — same
+// permissive contract as parseAnchor.
+func parseArea(s string) Area {
+	if s == "" {
+		return Area{}
+	}
+	var a Area
+	if err := json.Unmarshal([]byte(s), &a); err != nil {
+		return Area{}
+	}
+	return a
+}
+
+// PercentX/Y/W/H render the area's coords as CSS percentage strings
+// for the template to drop straight into `style="left:...; top:...;"`.
+// Multiply by 100 to convert fraction → percent; 4 decimal places is
+// enough precision for sub-pixel positioning on any sane image size.
+func (a Area) PercentX() string { return fmt.Sprintf("%.4f%%", a.X*100) }
+func (a Area) PercentY() string { return fmt.Sprintf("%.4f%%", a.Y*100) }
+func (a Area) PercentW() string { return fmt.Sprintf("%.4f%%", a.W*100) }
+func (a Area) PercentH() string { return fmt.Sprintf("%.4f%%", a.H*100) }
+
 // Comment is one row in the CSV output (and one entry in state).
 type Comment struct {
 	ID       string    `json:"id"`
@@ -477,10 +541,13 @@ type Comment struct {
 	AnchorStatus string        `json:"anchor_status"`
 	// Kind is the comment-shape vocabulary: "line" (or "" for legacy /
 	// pre-migration comments) for line-anchored comments —
-	// FromLine/ToLine are meaningful — and "file" for whole-file
-	// comments where line numbers are zero and the anchor is empty.
-	// Reserved: "area" for image-overlay annotations.
+	// FromLine/ToLine are meaningful — "file" for whole-file comments
+	// where line numbers are zero and the anchor is empty, and "area"
+	// for image-overlay annotations where Area carries the rectangle.
 	Kind string `json:"kind"`
+	// Area is the rectangle for kind=area comments. Zero-value for
+	// non-area rows.
+	Area Area `json:"area"`
 }
 
 // IsFileLevel reports whether this comment applies to the whole file
@@ -490,20 +557,29 @@ type Comment struct {
 // re-implement the test.
 func (c Comment) IsFileLevel() bool { return c.Kind == commentKindFile }
 
+// IsAreaLevel reports whether this comment overlays an image region
+// (kind="area" with a populated Area). Parallel to IsFileLevel; both
+// share the "no anchor to drift, skip in relocate" contract.
+func (c Comment) IsAreaLevel() bool { return c.Kind == commentKindArea }
+
 // AnchorOutdated reports that re-location could not confidently place
 // the comment — its line numbers no longer point at the intended
 // content and a human (or the skill) must re-anchor or resolve it.
-// File-level comments never go outdated (no anchor to drift).
+// File-level and area-level comments never go outdated (no anchor).
 func (c Comment) AnchorOutdated() bool { return c.AnchorStatus == anchorOutdated }
 
 // AnchorMoved reports that the comment was auto-shifted to follow its
 // content after the file changed (purely informational in the UI).
 func (c Comment) AnchorMoved() bool { return c.AnchorStatus == anchorMoved }
 
-// LineSpan returns "L42" for single-line, "L42-L48" for ranges, and
-// "file" for whole-file comments — used in the template badge and
-// the composer label, so both render uniformly.
+// LineSpan returns "L42" for single-line, "L42-L48" for ranges,
+// "file" for whole-file comments, and "area" for image-area
+// comments — used in the template badge and the composer label, so
+// every kind renders a recognisable span.
 func (c Comment) LineSpan() string {
+	if c.IsAreaLevel() {
+		return "area"
+	}
 	if c.IsFileLevel() {
 		return "file"
 	}
@@ -539,7 +615,7 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 		if c.File != s.SelectedFile {
 			continue
 		}
-		if c.IsFileLevel() {
+		if c.IsFileLevel() || c.IsAreaLevel() {
 			continue
 		}
 		if c.Resolved && !s.ShowResolved {
@@ -556,10 +632,10 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 // ToLine falls in that block's source range — the line-view path
 // uses CommentsByEndLine (exact-line map) instead.
 //
-// File-level comments (Kind == "file") are excluded here so they
-// don't accidentally try to anchor at line 0 inside a block range.
-// They're rendered in their own section above the file body via
-// FileLevelComments().
+// File-level (Kind=="file") and area-level (Kind=="area") comments
+// are excluded here so they don't accidentally try to anchor at line
+// 0 inside a block range. They're rendered in their own sections via
+// FileLevelComments() and AreaComments().
 func (s PrereviewState) FileComments() []Comment {
 	if s.SelectedFile == "" {
 		return nil
@@ -569,7 +645,7 @@ func (s PrereviewState) FileComments() []Comment {
 		if c.File != s.SelectedFile {
 			continue
 		}
-		if c.IsFileLevel() {
+		if c.IsFileLevel() || c.IsAreaLevel() {
 			continue
 		}
 		if c.Resolved && !s.ShowResolved {
@@ -594,6 +670,31 @@ func (s PrereviewState) FileLevelComments() []Comment {
 			continue
 		}
 		if !c.IsFileLevel() {
+			continue
+		}
+		if c.Resolved && !s.ShowResolved {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// AreaComments returns the selected file's visible image-area comments
+// (Kind == "area") in creation order. Rendered as semi-transparent
+// rectangle overlays inside the image wrapper, with paired list
+// entries for body + Resolve/Edit/Delete actions in the file-comments
+// section. Same shape as FileLevelComments — parallel iteration.
+func (s PrereviewState) AreaComments() []Comment {
+	if s.SelectedFile == "" {
+		return nil
+	}
+	var out []Comment
+	for _, c := range s.Comments {
+		if c.File != s.SelectedFile {
+			continue
+		}
+		if !c.IsAreaLevel() {
 			continue
 		}
 		if c.Resolved && !s.ShowResolved {

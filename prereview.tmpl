@@ -840,6 +840,33 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border-bottom: 1px dotted var(--pico-muted-border-color, #d9d9d9);
 }
 .file-comments .composer { margin-top: 0.5rem; }
+/* image-with-areas: positioning context for the .area-overlay
+   rectangles. The wrapper is display:inline-block so it shrinks to
+   the rendered image dimensions — overlays positioned in % then
+   line up exactly with the visible pixels.
+   Saved areas: low-alpha fill + 2px solid border that stays
+   readable on both light and dark images.
+   Pending area: dashed border + slightly brighter fill so the
+   not-yet-saved selection is visually distinct from saved ones. */
+.image-with-areas { position: relative; display: inline-block; max-width: 100%; }
+.image-with-areas img { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+.area-overlay {
+  position: absolute;
+  border: 2px solid var(--lvt-area-select-color, #4cc2ff);
+  background: var(--lvt-area-select-fill, rgba(76, 194, 255, 0.18));
+  box-sizing: border-box;
+  pointer-events: none;
+  border-radius: 2px;
+}
+.area-overlay.is-resolved {
+  border-color: var(--pico-muted-color, #666);
+  background: rgba(128, 128, 128, 0.15);
+  opacity: 0.6;
+}
+.area-overlay-pending {
+  border-style: dashed;
+  background: var(--lvt-area-select-fill, rgba(76, 194, 255, 0.28));
+}
 /* Resolved comments stay visible but muted, with a clear badge. The skill
    reads the CSV `resolved` column and skips these — UI just signals the
    resolution to the human reviewer. */
@@ -1502,11 +1529,16 @@ main.viewer { overscroll-behavior: contain; }
        via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
        per-comment actions — no new endpoints. */}}
   {{$fcs := $.FileLevelComments}}
-  {{if or $fcs (eq $.CommentMode "file")}}
+  {{$acs := $.AreaComments}}
+  {{if or $fcs $acs (eq $.CommentMode "file") (eq $.CommentMode "area")}}
   <section class="file-comments" data-key="file-comments-{{.Path}}">
     {{range $fcs}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> · file</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}
+    {{range $acs}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> · area</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}
     {{if eq $.CommentMode "file"}}
     <div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{.Path}}</code></strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this file?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>
+    {{end}}
+    {{if eq $.CommentMode "area"}}
+    <div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{.Path}}</code></strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this region?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>
     {{end}}
   </section>
   {{end}}
@@ -1519,7 +1551,17 @@ main.viewer { overscroll-behavior: contain; }
        still fall back to the cannot-display copy. */}}
   {{$kind := $.BinaryKind}}
   {{if eq $kind "image"}}
-  <div class="binary-preview binary-image"><img src="/{{.Path}}" alt="{{.Path}}"></div>
+  {{/* image-with-areas wrapper: position:relative so .area-overlay
+       children (saved areas + the pending selection) land at the
+       right CSS coords. lvt-fx:area-select arms the upstream
+       directive — pointer-drag → final-coords action via the client's
+       send() pipeline. touch-action:none on the img stops iOS Safari
+       from interpreting the drag as a pinch/scroll. */}}
+  <div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-{{.Path}}">
+    <img src="/{{.Path}}" alt="{{.Path}}" lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;">
+    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}"></div>{{end}}
+    {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
+  </div></div>
   {{else if eq $kind "pdf"}}
   {{/* Chrome 117+ ships a deliberately-minimal embed viewer for same-
        origin PDFs (compact thumbnail + "Open" button) regardless of

@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	cdpinput "github.com/chromedp/cdproto/input"
 	cdpnetwork "github.com/chromedp/cdproto/network"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
@@ -4184,5 +4185,115 @@ func TestE2E_FileLevelComment(t *testing.T) {
 	rows = p.readCSV()
 	if len(rows) != 3 {
 		t.Errorf("cancel must not persist a new row, got %d rows", len(rows))
+	}
+}
+
+// TestE2E_ImageAreaComment pins issue #16 phase 2: dragging a
+// rectangle on a binary image opens the composer with the rectangle
+// in `state.SelectionArea`, saving persists a `kind=area` row whose
+// `area` column carries the 0..1-fraction JSON, and the saved area
+// renders as an absolutely-positioned overlay on the image. The
+// drag is synthesized via Chrome's Input.dispatchMouseEvent so the
+// upstream `lvt-fx:area-select` directive's pointerdown/move/up
+// handlers fire identically to a real user gesture.
+func TestE2E_ImageAreaComment(t *testing.T) {
+	repo := setupFixtureRepo(t)
+	// Drop the canonical fixture image into the repo so the e2e and
+	// the manual-test path documented in testdata/areacomments/README.md
+	// exercise the exact same bytes.
+	body, err := os.ReadFile(filepath.Join("testdata", "areacomments", "diagram.png"))
+	if err != nil {
+		t.Fatalf("read testdata/areacomments/diagram.png: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "diagram.png"), body, 0o644); err != nil {
+		t.Fatalf("write diagram.png into fixture repo: %v", err)
+	}
+	p := bootChromeAgainstRepo(t, repo, 1200, 800)
+	p.waitReady()
+
+	p.clickFile("diagram.png")
+
+	// Wait for the image-with-areas wrapper to render so the directive
+	// has had its FIRE-ON-CHANGE pass to attach pointer handlers.
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.image-with-areas img[lvt-fx\:area-select]`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("wait img: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Compute drag coords inside the rendered image rect. Read the rect
+	// from the page so we don't have to know the layout in advance —
+	// the drag covers the top-left quadrant (≈ x=0.1, y=0.1, w=0.4, h=0.4
+	// in fraction space).
+	var rect struct{ Left, Top, Width, Height float64 }
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(() => {
+			const r = document.querySelector('.image-with-areas img').getBoundingClientRect();
+			return { Left: r.left, Top: r.top, Width: r.width, Height: r.height };
+		})()`, &rect),
+	); err != nil {
+		t.Fatalf("read image rect: %v", err)
+	}
+	if rect.Width < 10 || rect.Height < 10 {
+		t.Fatalf("image rect too small: %+v", rect)
+	}
+	x1 := rect.Left + rect.Width*0.10
+	y1 := rect.Top + rect.Height*0.10
+	x2 := rect.Left + rect.Width*0.50
+	y2 := rect.Top + rect.Height*0.50
+
+	// Synthesize a left-button pointer-drag from (x1,y1) → (x2,y2).
+	// Chrome's DispatchMouseEvent fires both pointer and mouse events,
+	// so the directive's pointerdown/move/up handlers respond
+	// identically to a real user gesture. Two Move events between
+	// Press and Release help the directive's overlay-paint logic
+	// settle on the final coords.
+	if err := chromedp.Run(p.ctx,
+		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).
+			WithButton(cdpinput.Left).WithClickCount(1),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).
+			WithButton(cdpinput.Left),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, x2, y2).
+			WithButton(cdpinput.Left),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseReleased, x2, y2).
+			WithButton(cdpinput.Left).WithClickCount(1),
+		chromedp.WaitVisible(`.file-comments .composer textarea`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.area-overlay.area-overlay-pending`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("synthetic drag + composer: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Type a body and save.
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`.file-comments .composer textarea`, "this colour should be brighter", chromedp.ByQuery),
+		chromedp.Click(`.file-comments button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.file-comments .inline-comment .body`, chromedp.ByQuery),
+		// Pending overlay should clear; a saved overlay (not -pending)
+		// should render with the persisted coords.
+		chromedp.WaitNotPresent(`.area-overlay.area-overlay-pending`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.area-overlay:not(.area-overlay-pending)`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("save area comment: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Inspect the CSV: header must have 12 columns ending in `area`,
+	// row must have kind=area + a valid area JSON inside [0,1].
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected header + 1 row, got %d:\n%v", len(rows), rows)
+	}
+	if rows[0][11] != "area" {
+		t.Errorf("header[11] = %q, want %q", rows[0][11], "area")
+	}
+	row := rows[1]
+	if row[1] != "diagram.png" || row[2] != "0" || row[3] != "0" || row[4] != "" || row[10] != "area" {
+		t.Errorf("area row shape wrong: %v", row)
+	}
+	if !strings.Contains(row[5], "brighter") {
+		t.Errorf("body missing: %q", row[5])
+	}
+	if !strings.Contains(row[11], `"x":`) || !strings.Contains(row[11], `"w":`) {
+		t.Errorf("area JSON malformed: %q", row[11])
 	}
 }

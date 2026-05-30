@@ -28,9 +28,14 @@ type Row struct {
 	Anchor       string
 	AnchorStatus string
 	// Kind is "line" (or "" for legacy/back-compat) for line-anchored
-	// comments and "file" for whole-file comments. Reserved: "area" for
-	// the image-overlay annotation follow-up.
+	// comments, "file" for whole-file comments, and "area" for image-
+	// overlay annotations (geometry lives in Area).
 	Kind string
+	// Area is a JSON blob {"x":0.1,"y":0.2,"w":0.3,"h":0.15} (each
+	// value a 0..1 fraction of the image's natural dimensions) when
+	// Kind=="area"; "" otherwise. Treated as opaque on the CSV side —
+	// the main package owns the schema.
+	Area string
 }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
@@ -139,5 +144,6 @@ func rowToRecord(r Row) []string {
 		r.Anchor,
 		r.AnchorStatus,
 		r.Kind,
+		r.Area,
 	}
 }
