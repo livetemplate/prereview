@@ -144,6 +144,17 @@ type PrereviewState struct {
 	// data-lvt-iv-done guard hasn't been set yet (issue #12).
 	ScrollToHeadingID string `json:"scroll_to_heading_id"`
 
+	// URLHashScrollAnchor persists the `h-<anchor>` target from a
+	// deep-link URL across renders so the URL bar keeps `:h-<anchor>`
+	// even after the scroll completed (shareable link stays valid).
+	// Used by `state.URLHash()` and `state.ScrollHTMLBlockKey()`. For
+	// markdown, the scroll itself routes through the existing
+	// ScrollToHeadingID + ScrollHeadingBlockKey machinery — this field
+	// only feeds URL serialisation. For HTML preview, it ALSO drives
+	// the block-level scroll via ScrollHTMLBlockKey. Cleared by
+	// ClearSelection, by clicking a line, and by SelectFile.
+	URLHashScrollAnchor string `json:"url_hash_scroll_anchor" lvt:"persist"`
+
 	// ShowResolved, when true, includes resolved comments in the inline
 	// comment stream + all-comments view. Default false so the viewer
 	// focuses on what's still actionable. Persisted across reconnects.
@@ -404,6 +415,45 @@ func (s PrereviewState) ScrollHeadingBlockKey() string {
 		}
 	}
 	return ""
+}
+
+// ScrollHTMLBlockKey returns the `data-key` (e.g. "HB-3-7") of the
+// HTMLBlock containing the element id currently targeted by
+// URLHashScrollAnchor — or "" when no anchor is set, the current file
+// isn't an HTML preview, or the id isn't present. The template
+// compares this against each block's data-key to gate a
+// `lvt-fx:scroll="into-view"` directive — same pattern as
+// ScrollHeadingBlockKey, but for `#path:h-id` deep links into HTML
+// previews. Zero-arg by livetemplate template-method convention.
+func (s PrereviewState) ScrollHTMLBlockKey() string {
+	if s.URLHashScrollAnchor == "" || len(s.CurrentDiff.HTMLBlocks) == 0 {
+		return ""
+	}
+	idx, ok := s.CurrentDiff.HTMLAnchors[s.URLHashScrollAnchor]
+	if !ok || idx >= len(s.CurrentDiff.HTMLBlocks) {
+		return ""
+	}
+	b := s.CurrentDiff.HTMLBlocks[idx]
+	return fmt.Sprintf("HB-%d-%d", b.StartLine, b.EndLine)
+}
+
+// URLHash returns the canonical hash string for the current state,
+// suitable for placement in `data-lvt-url-hash` on the body. Returns
+// "" when no file is selected (the directive then no-ops on mirror).
+// Order of precedence: SelectedFile + SelectionAnchor/End (line range
+// is the most specific target a user is viewing) > SelectedFile +
+// URLHashScrollAnchor > SelectedFile alone. The line-range form
+// matches the gutter `<a>` permalinks; the anchor form survives a
+// markdown TOC click or an HTML deep link until the user moves.
+func (s PrereviewState) URLHash() string {
+	if s.SelectedFile == "" {
+		return ""
+	}
+	from, to := s.SelectionAnchor, s.SelectionEnd
+	if to < from {
+		from, to = to, from
+	}
+	return gitdiff.FormatHash(s.SelectedFile, from, to, s.URLHashScrollAnchor)
 }
 
 // RenderedHeadings returns the TOC entries for the current Markdown

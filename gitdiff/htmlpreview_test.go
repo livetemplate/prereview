@@ -18,7 +18,7 @@ func TestRenderHTMLBlocks_HappyPath(t *testing.T) {
 </body>
 </html>
 `)
-	blocks := RenderHTMLBlocks(src)
+	blocks := RenderHTMLBlocks(src, "")
 	if len(blocks) != 2 {
 		t.Fatalf("got %d blocks, want 2", len(blocks))
 	}
@@ -48,7 +48,7 @@ func TestRenderHTMLBlocks_StripsScripts(t *testing.T) {
 <script>alert("xss")</script>
 <p>After script</p>
 </body></html>`)
-	blocks := RenderHTMLBlocks(src)
+	blocks := RenderHTMLBlocks(src, "")
 	if len(blocks) != 2 {
 		t.Fatalf("got %d blocks, want 2 (h1, p) — script must be excluded entirely", len(blocks))
 	}
@@ -64,7 +64,7 @@ func TestRenderHTMLBlocks_StripsEventHandlers(t *testing.T) {
 <button onclick="bad()" id="btn">Click</button>
 <img onerror="bad()" src="x.png">
 </body></html>`)
-	blocks := RenderHTMLBlocks(src)
+	blocks := RenderHTMLBlocks(src, "")
 	if len(blocks) != 2 {
 		t.Fatalf("got %d blocks, want 2", len(blocks))
 	}
@@ -91,7 +91,7 @@ func TestRenderHTMLBlocks_StripsJavascriptURLs(t *testing.T) {
 <a href="javascript:bad()">click</a>
 <a href="/safe">safe</a>
 </body></html>`)
-	blocks := RenderHTMLBlocks(src)
+	blocks := RenderHTMLBlocks(src, "")
 	if len(blocks) != 2 {
 		t.Fatalf("got %d blocks", len(blocks))
 	}
@@ -114,7 +114,7 @@ func TestRenderHTMLBlocks_PreambleEmbedded(t *testing.T) {
 <h1>Title</h1>
 </body>
 </html>`)
-	blocks := RenderHTMLBlocks(src)
+	blocks := RenderHTMLBlocks(src, "")
 	if len(blocks) != 1 {
 		t.Fatalf("got %d blocks, want 1", len(blocks))
 	}
@@ -138,7 +138,7 @@ func TestRenderHTMLBlocks_MultilineBlock(t *testing.T) {
   <p>nested 2</p>
 </div>
 </body></html>`)
-	blocks := RenderHTMLBlocks(src)
+	blocks := RenderHTMLBlocks(src, "")
 	if len(blocks) != 1 {
 		t.Fatalf("got %d blocks, want 1 (whole div)", len(blocks))
 	}
@@ -158,7 +158,7 @@ func TestRenderHTMLBlocks_VoidElementAtTopLevel(t *testing.T) {
 <hr>
 <p>After</p>
 </body></html>`)
-	blocks := RenderHTMLBlocks(src)
+	blocks := RenderHTMLBlocks(src, "")
 	if len(blocks) != 3 {
 		t.Fatalf("got %d blocks, want 3 (h1, hr, p)", len(blocks))
 	}
@@ -169,7 +169,7 @@ func TestRenderHTMLBlocks_VoidElementAtTopLevel(t *testing.T) {
 
 func TestRenderHTMLBlocks_EmptyInput(t *testing.T) {
 	for _, src := range [][]byte{nil, {}, []byte("   \n   ")} {
-		if got := RenderHTMLBlocks(src); got != nil {
+		if got := RenderHTMLBlocks(src, ""); got != nil {
 			t.Errorf("RenderHTMLBlocks(%q) = %v, want nil", src, got)
 		}
 	}
@@ -177,7 +177,7 @@ func TestRenderHTMLBlocks_EmptyInput(t *testing.T) {
 
 func TestRenderHTMLBlocks_NoBody(t *testing.T) {
 	src := []byte(`<html><head><title>nothing</title></head></html>`)
-	if got := RenderHTMLBlocks(src); got != nil {
+	if got := RenderHTMLBlocks(src, ""); got != nil {
 		t.Errorf("RenderHTMLBlocks (no body) = %v, want nil", got)
 	}
 }

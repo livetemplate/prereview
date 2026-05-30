@@ -75,8 +75,13 @@ var mdRenderer = goldmark.New(
 )
 
 // RenderMarkdownBlocks parses src and returns each commentable unit as
-// safe HTML tagged with its source line span. Empty input → nil.
-func RenderMarkdownBlocks(src []byte) []MarkdownBlock {
+// safe HTML tagged with its source line span. currentPath drives the
+// relative-link rewriter: in-repo links like `[other](OTHER.md)` and
+// `[section](#anchor)` are rewritten to deep-link hashes so a click
+// stays in the SPA; external links pass through unchanged. Empty
+// currentPath disables rewriting (used by tests and any caller that
+// doesn't care about deep links). Empty input → nil.
+func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 	if len(bytes.TrimSpace(src)) == 0 {
 		return nil
 	}
@@ -113,6 +118,9 @@ func RenderMarkdownBlocks(src []byte) []MarkdownBlock {
 	emit := func(node ast.Node, htmlStr string) {
 		if htmlStr == "" {
 			return
+		}
+		if currentPath != "" {
+			htmlStr = rewriteAnchorHrefs(htmlStr, currentPath)
 		}
 		start, stop := segmentSpan(node)
 		var startLine, endLine int
@@ -178,6 +186,9 @@ func RenderMarkdownBlocks(src []byte) []MarkdownBlock {
 			for i := 0; i < ls.Len(); i++ {
 				seg := ls.At(i)
 				if h := renderProseLine(src[seg.Start:seg.Stop]); h != "" {
+					if currentPath != "" {
+						h = rewriteAnchorHrefs(h, currentPath)
+					}
 					ln := lineAt(seg.Start)
 					out = append(out, MarkdownBlock{
 						HTML:      template.HTML(h), //nolint:gosec // single <p> of goldmark safe-mode output, else HTML-escaped text

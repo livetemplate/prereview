@@ -42,6 +42,14 @@ type FileDiff struct {
 	// h1–h3) and the "≥ 2 entries" visibility gate live at the caller
 	// (state.RenderedHeadings()).
 	Headings []Heading
+	// HTMLAnchors maps every `id=...` attribute in the HTML preview
+	// source to the index of the HTMLBlock that contains it. Used by
+	// the deep-link scroll target (`#path:h-id` → scroll the matching
+	// block into view). Populated only for HTML paths; nil otherwise.
+	// Block-level granularity — finer scroll (the id element itself
+	// inside the shadow root) requires a second client primitive and
+	// is deferred.
+	HTMLAnchors map[string]int
 }
 
 // IsMarkdownPath reports whether path is a Markdown file by extension.
@@ -189,7 +197,7 @@ func highlightLines(fd *FileDiff) {
 			}
 		}
 		srcBytes := []byte(src.String())
-		fd.MarkdownBlocks = RenderMarkdownBlocks(srcBytes)
+		fd.MarkdownBlocks = RenderMarkdownBlocks(srcBytes, fd.Path)
 		fd.Headings = ExtractHeadings(srcBytes)
 	}
 	if IsHTMLPath(fd.Path) {
@@ -200,7 +208,9 @@ func highlightLines(fd *FileDiff) {
 				src.WriteByte('\n')
 			}
 		}
-		fd.HTMLBlocks = RenderHTMLBlocks([]byte(src.String()))
+		srcBytes := []byte(src.String())
+		fd.HTMLBlocks = RenderHTMLBlocks(srcBytes, fd.Path)
+		fd.HTMLAnchors = ExtractHTMLAnchorIDs(fd.HTMLBlocks)
 	}
 	if totalBytes > maxHighlightTotalBytes {
 		// Too big to highlight cheaply — leave HighlightedContent empty;

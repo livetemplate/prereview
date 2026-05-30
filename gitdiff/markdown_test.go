@@ -14,7 +14,7 @@ func TestRenderMarkdownBlocks_LineRangesAndHTML(t *testing.T) {
 	// 6: - item one
 	// 7: - item two
 	src := "# Title\n\nfirst paragraph line.\ncontinues here.\n\n- item one\n- item two\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 	// heading(1) · prose line(3) · prose line(4) · item(6) · item(7):
 	// the 2-line paragraph splits per source line and the 2-item list
 	// splits per item, so every line is independently commentable.
@@ -62,7 +62,7 @@ func TestRenderMarkdownBlocks_CodeFenceLineRange(t *testing.T) {
 	// 4: x := 1
 	// 5: ```
 	src := "para\n\n```go\nx := 1\n```\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 	if len(blocks) != 2 {
 		t.Fatalf("got %d blocks, want 2", len(blocks))
 	}
@@ -82,7 +82,7 @@ func TestRenderMarkdownBlocks_CodeFenceLineRange(t *testing.T) {
 
 func TestRenderMarkdownBlocks_RawHTMLNotPassedThrough(t *testing.T) {
 	src := "intro\n\n<script>alert('xss')</script>\n\n<img src=x onerror=alert(1)>\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 	joined := ""
 	for _, b := range blocks {
 		joined += string(b.HTML)
@@ -111,7 +111,7 @@ func TestRenderMarkdownBlocks_GFMTable(t *testing.T) {
 	// 7: (blank)
 	// 8: after
 	src := "before\n\n| Col A | Col B |\n|-------|-------|\n| a1 | b1 |\n| a2 | b2 |\n\nafter\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 	// before(1) · header(3) · row(5) · row(6) · after(8)
 	if len(blocks) != 5 {
 		t.Fatalf("got %d blocks, want 5 (before, header, row, row, after); blocks=%+v", len(blocks), blocks)
@@ -160,7 +160,7 @@ func TestRenderMarkdownBlocks_ListPerItem(t *testing.T) {
 	// 2: 2. second
 	// 3: 3. third
 	src := "1. first\n2. second\n3. third\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 	if len(blocks) != 3 {
 		t.Fatalf("got %d blocks, want 3 (one per ordered item); blocks=%+v", len(blocks), blocks)
 	}
@@ -186,7 +186,7 @@ func TestRenderMarkdownBlocks_ListPerItem(t *testing.T) {
 	}
 
 	// Unordered list → each item wrapped in <ul>, one block per item.
-	ub := RenderMarkdownBlocks([]byte("- a\n- b\n"))
+	ub := RenderMarkdownBlocks([]byte("- a\n- b\n"), "")
 	if len(ub) != 2 {
 		t.Fatalf("unordered: got %d blocks, want 2", len(ub))
 	}
@@ -206,7 +206,7 @@ func TestRenderMarkdownBlocks_TablePerRow(t *testing.T) {
 	// 3: | C | chat     |
 	// 4: | D | auth room |
 	src := "| # | Use case |\n|---|----------|\n| C | chat |\n| D | auth room |\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 	if len(blocks) != 3 {
 		t.Fatalf("got %d blocks, want 3 (header + 2 rows); blocks=%+v", len(blocks), blocks)
 	}
@@ -248,7 +248,7 @@ func TestRenderMarkdownBlocks_ProsePerLine(t *testing.T) {
 	// 2: 3) a & b paren-ordered.    (start!=1 → stays a paragraph line)
 	// 3: tail plain line            (one sentence per line → splits per line)
 	src := "intro **bold** and `code`.\n3) a & b paren-ordered.\ntail plain line\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 	if len(blocks) != 3 {
 		t.Fatalf("got %d blocks, want 3 (one per source line); blocks=%+v", len(blocks), blocks)
 	}
@@ -278,7 +278,7 @@ func TestRenderMarkdownBlocks_ProsePerLine(t *testing.T) {
 	}
 
 	// A single-source-line paragraph stays exactly one block.
-	one := RenderMarkdownBlocks([]byte("just one sentence here\n"))
+	one := RenderMarkdownBlocks([]byte("just one sentence here\n"), "")
 	if len(one) != 1 || one[0].StartLine != 1 || one[0].EndLine != 1 {
 		t.Fatalf("single-line paragraph: got %+v, want 1 block @ 1-1", one)
 	}
@@ -288,10 +288,10 @@ func TestRenderMarkdownBlocks_ProsePerLine(t *testing.T) {
 }
 
 func TestRenderMarkdownBlocks_Empty(t *testing.T) {
-	if RenderMarkdownBlocks(nil) != nil {
+	if RenderMarkdownBlocks(nil, "") != nil {
 		t.Error("nil src should yield nil")
 	}
-	if RenderMarkdownBlocks([]byte("   \n\n")) != nil {
+	if RenderMarkdownBlocks([]byte("   \n\n"), "") != nil {
 		t.Error("blank src should yield nil")
 	}
 }
@@ -313,7 +313,7 @@ func TestRenderMarkdownBlocks_HardWrapReflow(t *testing.T) {
 	src := "**The design:** a single primitive — a named topic, with classic publish/subscribe naming,\n" +
 		"where per-identity targeting is a topic derived from the identity. This is the `Phoenix.PubSub`\n" +
 		"model. Per-connection state is the default; nothing fans out unless you `Publish`.\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 	if len(blocks) != 1 {
 		t.Fatalf("hard-wrapped paragraph: got %d blocks, want 1 reflowed block; blocks=%+v", len(blocks), blocks)
 	}
@@ -337,7 +337,7 @@ func TestRenderMarkdownBlocks_HardWrapReflow(t *testing.T) {
 	}
 
 	// One sentence per line → still one block per source line.
-	osl := RenderMarkdownBlocks([]byte("First sentence here.\nSecond sentence here.\nThird and last sentence.\n"))
+	osl := RenderMarkdownBlocks([]byte("First sentence here.\nSecond sentence here.\nThird and last sentence.\n"), "")
 	if len(osl) != 3 {
 		t.Fatalf("one-sentence-per-line: got %d blocks, want 3; blocks=%+v", len(osl), osl)
 	}
@@ -353,8 +353,8 @@ func TestRenderMarkdownBlocks_HardWrapReflow(t *testing.T) {
 	// Mixed: a one-sentence-per-line paragraph (2 lines → 2 blocks) and
 	// a hard-wrapped paragraph (2 lines → 1 reflowed block).
 	mix := RenderMarkdownBlocks([]byte(
-		"Standalone sentence one.\nStandalone sentence two.\n\n" +
-			"Hard wrapped paragraph that continues\nonto a second physical line here.\n"))
+		"Standalone sentence one.\nStandalone sentence two.\n\n"+
+			"Hard wrapped paragraph that continues\nonto a second physical line here.\n"), "")
 	if len(mix) != 3 {
 		t.Fatalf("mixed doc: got %d blocks, want 3 (2 split + 1 reflowed); blocks=%+v", len(mix), mix)
 	}
@@ -392,7 +392,7 @@ func TestRenderMarkdownBlocks_ThematicBreakLineRanges(t *testing.T) {
 	// 12: (blank)
 	// 13: ## H3
 	src := "# H1\n\npara A.\n\n---\n\n## H2\n\npara B.\n\n---\n\n## H3\n"
-	blocks := RenderMarkdownBlocks([]byte(src))
+	blocks := RenderMarkdownBlocks([]byte(src), "")
 
 	// Sanity: we got both <hr>s plus the surrounding blocks.
 	var hrs []MarkdownBlock
@@ -528,7 +528,7 @@ func TestRenderMarkdownBlocks_HeadingHasID(t *testing.T) {
 	// AutoHeadingID flows through to the rendered HTML so the TOC links
 	// can deep-link to each heading's id without any post-processing.
 	src := []byte("# Hello World\n\n## Sub-section\n")
-	blocks := RenderMarkdownBlocks(src)
+	blocks := RenderMarkdownBlocks(src, "")
 	if len(blocks) != 2 {
 		t.Fatalf("got %d blocks, want 2", len(blocks))
 	}
