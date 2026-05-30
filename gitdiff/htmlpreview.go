@@ -50,9 +50,14 @@ type rawAttr struct {
 // the SPA origin (within a shadow root) which would let those mutate
 // livetemplate state or fire on element load.
 //
+// currentPath drives the relative-link rewriter: `<a href="other.html">`
+// and `<a href="#section">` inside the preview are rewritten to deep-
+// link hashes so a click stays in the SPA; external `href`s pass
+// through. Empty currentPath disables rewriting.
+//
 // Empty input → nil. Input without a <body> → nil (no commentable
 // surface).
-func RenderHTMLBlocks(src []byte) []HTMLBlock {
+func RenderHTMLBlocks(src []byte, currentPath string) []HTMLBlock {
 	if len(bytes.TrimSpace(src)) == 0 {
 		return nil
 	}
@@ -168,7 +173,7 @@ func RenderHTMLBlocks(src []byte) []HTMLBlock {
 					blockStartLine = startLine
 					blockBuf.Reset()
 				}
-				blockBuf.Write(serializeTag(tagName, attrs, false))
+				blockBuf.Write(serializeTag(tagName, rewriteAnchorAttrs(tagName, attrs, currentPath), false))
 				if !voidElements[tagName] {
 					depthInBody++
 				} else if depthInBody == 0 {
@@ -193,10 +198,10 @@ func RenderHTMLBlocks(src []byte) []HTMLBlock {
 				if depthInBody == 0 {
 					blockStartLine = startLine
 					blockBuf.Reset()
-					blockBuf.Write(serializeTag(tagName, attrs, true))
+					blockBuf.Write(serializeTag(tagName, rewriteAnchorAttrs(tagName, attrs, currentPath), true))
 					emitBlock(line)
 				} else {
-					blockBuf.Write(serializeTag(tagName, attrs, true))
+					blockBuf.Write(serializeTag(tagName, rewriteAnchorAttrs(tagName, attrs, currentPath), true))
 				}
 			}
 

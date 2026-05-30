@@ -304,6 +304,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.SelectionSide = ""
 	state.SelectionArea = Area{} // pending image rectangle from the prior file is cancelled
 	state.CommentMode = ""       // any file-level / area composer from the prior file is cancelled
+	state.URLHashScrollAnchor = "" // anchor target was for the previous file; let the new file pick its own
 	state.FileDrawerOpen = false
 	// Picking a file from the drawer while the all-comments view is
 	// open implies "leave this overview, go look at that file" — same
@@ -662,6 +663,79 @@ func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemp
 	state.DraftBody = ""
 	state.EditingCommentID = ""
 	state.ReanchorCommentID = ""
+	state.URLHashScrollAnchor = ""
+	return state, nil
+}
+
+// SetURLHash dispatches from the client's url-hash directive when
+// `location.hash` changes (page-load with a hash, address-bar edit,
+// back-button, permalink click). Parses the hash via gitdiff.ParseHash
+// and updates state.SelectedFile + selection range + anchor; loads
+// the diff if the path changed and resolves to a known file. Tolerant
+// of bogus hashes (an unrelated `#confirm-delete-xyz` dialog hash
+// resolves to a non-existent file and is silently dropped) — the
+// existing dialog/popover/details hash machinery in setupHashLink
+// handles those independently.
+//
+// On a successful path match, also clears any in-progress composer
+// state from the previous file (mirror of SelectFile), since the user
+// just navigated.
+func (c *PrereviewController) SetURLHash(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	hash := ctx.GetString("hash")
+	parsed := gitdiff.ParseHash(hash)
+	if parsed.Path == "" {
+		// No path → nothing to do. The directive fires this on the
+		// initial-load case too, so empty hashes are normal.
+		return state, nil
+	}
+
+	// Path change requires a diff load; if the load fails (file not in
+	// the repo), treat as no-op rather than surfacing a controller
+	// error — the user pasted a stale link or hit an unrelated hash.
+	if parsed.Path != state.SelectedFile {
+		diff, err := c.loadDiffCached(state.Base, parsed.Path)
+		if err != nil {
+			return state, nil
+		}
+		state.SelectedFile = parsed.Path
+		state.CurrentDiff = diff
+		state.SelectionArea = Area{}
+		state.CommentMode = ""
+		state.DraftBody = ""
+		state.EditingCommentID = ""
+		state.ReanchorCommentID = ""
+		state.FileDrawerOpen = false
+		state.ShowAllComments = false
+	}
+
+	if parsed.FromLine > 0 {
+		state.SelectionAnchor = parsed.FromLine
+		state.SelectionEnd = parsed.ToLine
+		// Default side is "new" — line numbers in deep links are the
+		// post-diff numbering. Matches selectLine's default for
+		// add/ctx rows; user can still manually re-select if they
+		// want the old side.
+		state.SelectionSide = "new"
+		state.URLHashScrollAnchor = ""
+	} else if parsed.Anchor != "" {
+		state.SelectionAnchor = 0
+		state.SelectionEnd = 0
+		state.SelectionSide = ""
+		state.URLHashScrollAnchor = parsed.Anchor
+		// Anchor inside a markdown file? Route through ScrollToHeadingID
+		// so the existing block-scroll directive lights up. (For HTML
+		// previews, ScrollHTMLBlockKey reads URLHashScrollAnchor
+		// directly — no parallel state needed.)
+		if gitdiff.IsMarkdownPath(state.SelectedFile) {
+			state.ScrollToHeadingID = parsed.Anchor
+		}
+	} else {
+		// Path-only hash: same file, no target. Don't touch
+		// SelectionAnchor — it might already be a meaningful selection.
+		state.URLHashScrollAnchor = ""
+	}
+
+	c.relocateSelected(&state)
 	return state, nil
 }
 

@@ -4297,3 +4297,128 @@ func TestE2E_ImageAreaComment(t *testing.T) {
 		t.Errorf("area JSON malformed: %q", row[11])
 	}
 }
+
+// TestE2E_DeepLinkHash exercises issue #7: the URL hash must drive
+// state on initial load AND mirror state on user navigation.
+// Verifies: load-with-hash selects file + line; clicking a different
+// file updates location.hash; a markdown link `[other](OTHER.md)`
+// gets rewritten to a SPA hash and clicking it stays in the SPA.
+func TestE2E_DeepLinkHash(t *testing.T) {
+	repo := setupFixtureRepo(t)
+	// Seed the deep-link fixture files into the repo so the same bytes
+	// drive both this test and any manual smoke from testdata/deeplinks.
+	for _, name := range []string{"README.md", "OTHER.md", "mockups/dashboard.html"} {
+		body, err := os.ReadFile(filepath.Join("testdata", "deeplinks", name))
+		if err != nil {
+			t.Fatalf("read testdata/deeplinks/%s: %v", name, err)
+		}
+		dst := filepath.Join(repo, name)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			t.Fatalf("mkdir for %s: %v", name, err)
+		}
+		if err := os.WriteFile(dst, body, 0o644); err != nil {
+			t.Fatalf("write %s into fixture repo: %v", name, err)
+		}
+	}
+
+	p := bootChromeAgainstRepo(t, repo, 1200, 800)
+
+	// 1) Load with `#README.md:L7` directly in the URL. The directive's
+	//    initial-arm path should dispatch setURLHash and the server
+	//    should select README.md with line 7 highlighted.
+	deepURL := p.url + "#README.md:L7"
+	var locationHash string
+	var selectedFileLabel string
+	var dataAttrAfter string
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(deepURL),
+		// SSR has the first file alphabetically selected (OTHER.md);
+		// after the WS connects, the directive's initial-arm path
+		// dispatches setURLHash with "README.md:L7", the server
+		// re-renders, and morphdom converges. ~200ms total in manual
+		// probes; sleep generously to absorb chromedp + CI jitter.
+		chromedp.WaitVisible(`header.bar`, chromedp.ByQuery),
+		chromedp.Sleep(3*time.Second),
+		chromedp.Evaluate(`window.location.hash`, &locationHash),
+		chromedp.Evaluate(`document.querySelector('main.viewer strong')?.textContent || ''`, &selectedFileLabel),
+		chromedp.AttributeValue(`header.bar`, "data-lvt-url-hash", &dataAttrAfter, nil, chromedp.ByQuery),
+	); err != nil {
+		var bodyHTML string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &bodyHTML, chromedp.ByQuery))
+		t.Fatalf("load with #README.md:L7: %v\nstderr: %s\nbody: %s", err, p.stderr.String(), bodyHTML)
+	}
+	if selectedFileLabel != "README.md" {
+		t.Errorf("selected file = %q, want README.md (dataAttr=%q hash=%q)",
+			selectedFileLabel, dataAttrAfter, locationHash)
+	}
+	if dataAttrAfter != "README.md:L7" {
+		t.Errorf("data-lvt-url-hash = %q, want README.md:L7", dataAttrAfter)
+	}
+	if locationHash != "#README.md:L7" {
+		t.Errorf("after load, location.hash = %q, want %q", locationHash, "#README.md:L7")
+	}
+	if selectedFileLabel != "README.md" {
+		t.Errorf("selected file label = %q, want README.md", selectedFileLabel)
+	}
+
+	// 2) Click the OTHER.md file in the drawer. URL hash should update
+	//    to the new file (pushState, since the path component changed).
+	p.clickFile("OTHER.md")
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`window.location.hash`, &locationHash),
+	); err != nil {
+		t.Fatalf("read hash after click: %v", err)
+	}
+	if !strings.HasPrefix(locationHash, "#OTHER.md") {
+		t.Errorf("after click OTHER.md, location.hash = %q, want prefix #OTHER.md", locationHash)
+	}
+
+	// 3) Go back to README.md and verify the markdown link to OTHER.md
+	//    was rewritten to a SPA hash. We're in line view by default;
+	//    flip into raw-markdown OFF (so RenderedMarkdown drives) — the
+	//    template ships `.md` files in rendered mode by default already,
+	//    so just clicking selectFile gets us there.
+	p.clickFile("README.md")
+	var hrefValue string
+	if err := chromedp.Run(p.ctx,
+		// Wait for rendered markdown to appear (.md-view contains rendered
+		// anchor tags). The link to OTHER.md has its href rewritten by the
+		// markdown renderer.
+		chromedp.WaitVisible(`.md-view a[href^="#"]`, chromedp.ByQuery),
+		chromedp.AttributeValue(`.md-view a[href*="OTHER.md"]`, "href", &hrefValue, nil, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("locate rewritten link: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if hrefValue != "#OTHER.md" {
+		t.Errorf("OTHER.md link href = %q, want %q", hrefValue, "#OTHER.md")
+	}
+
+	// 4) Click the rewritten link. Browser navigates to #OTHER.md
+	//    natively → hashchange fires → directive dispatches setURLHash
+	//    → server switches the file. Verify the file actually changed
+	//    without a full page reload (the chromedp session would have
+	//    torn down on a real navigation).
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.md-view a[href="#OTHER.md"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='OTHER.md']`, chromedp.BySearch),
+		chromedp.Evaluate(`window.location.hash`, &locationHash),
+	); err != nil {
+		t.Fatalf("click rewritten link: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !strings.HasPrefix(locationHash, "#OTHER.md") {
+		t.Errorf("after clicking rewritten link, hash = %q, want prefix #OTHER.md", locationHash)
+	}
+
+	// 5) External links pass through unchanged.
+	p.clickFile("README.md")
+	var externalHref string
+	if err := chromedp.Run(p.ctx,
+		chromedp.AttributeValue(`.md-view a[href*="example.com"]`, "href", &externalHref, nil, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("locate external link: %v", err)
+	}
+	if externalHref != "https://example.com" {
+		t.Errorf("external href = %q, want https://example.com", externalHref)
+	}
+}
