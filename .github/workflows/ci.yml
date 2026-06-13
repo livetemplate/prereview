@@ -51,7 +51,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install via script, then uninstall
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: install.sh installs the published release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -67,14 +71,32 @@ jobs:
           PREREVIEW_VERSION="$tag" PREREVIEW_INSTALL_DIR="$dir" sh ./install.sh
           # Invoke by full path: install dir may not be on PATH.
           "$dir/prereview" --version
-          # curl/manual install is NOT package-managed, so --uninstall really
-          # deletes the binary.
-          "$dir/prereview" --uninstall
-          if [ -e "$dir/prereview" ]; then
+          rm -f "$dir/prereview"
+          echo "install.sh OK"
+      - name: --uninstall removes an unmanaged (curl-style) binary
+        shell: bash
+        env:
+          GOWORK: 'off'
+        run: |
+          set -euo pipefail
+          # The published release predates --uninstall, so the removal path is
+          # tested with the PR's own binary placed in a non-package-managed
+          # dir (where the gate deletes rather than defers).
+          go build -o /tmp/prbuilt .
+          d="$HOME/plainbin"
+          mkdir -p "$d"
+          cp /tmp/prbuilt "$d/prereview"
+          out="$("$d/prereview" --uninstall)"
+          echo "$out"
+          echo "$out" | grep -q 'left untouched' || {
+            echo "FAIL: expected comments-preserved message"
+            exit 1
+          }
+          if [ -e "$d/prereview" ]; then
             echo "FAIL: --uninstall did not remove the binary"
             exit 1
           fi
-          echo "install + uninstall OK"
+          echo "uninstall removal OK"
 
   homebrew:
     name: Homebrew (${{ matrix.os }})
@@ -93,20 +115,24 @@ jobs:
         env:
           GOWORK: 'off'
         run: go build -o prereview .
-      - name: brew install (local formula) + uninstall gate
+      - name: brew install (local tap) + uninstall gate
         shell: bash
         run: |
           set -euo pipefail
           if ! command -v brew >/dev/null 2>&1; then
             eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           fi
-          # A minimal formula that installs the just-built binary from a local
-          # tarball — no release, tap, or network needed. Installing it the
-          # real way puts the binary under Homebrew's Cellar prefix, exactly
-          # the layout the defer gate keys on.
+          # Modern Homebrew refuses a loose .rb file ("formulae must be in a
+          # tap"), so drop a minimal formula into a local tap. It installs the
+          # just-built binary from a local tarball — no release or network
+          # needed — putting it under Homebrew's Cellar prefix, exactly the
+          # layout the defer gate keys on.
           tar czf prereview.tar.gz prereview
           sha="$(shasum -a 256 prereview.tar.gz | awk '{print $1}')"
-          cat > prereview.rb <<EOF
+          brew tap-new --no-git local/ci
+          formula_dir="$(brew --repository)/Library/Taps/local/homebrew-ci/Formula"
+          mkdir -p "$formula_dir"
+          cat > "$formula_dir/prereview.rb" <<EOF
           class Prereview < Formula
             desc "CI test build of prereview"
             homepage "https://github.com/livetemplate/prereview"
@@ -118,7 +144,7 @@ jobs:
             end
           end
           EOF
-          brew install --formula ./prereview.rb
+          brew install local/ci/prereview
           bin="$(brew --prefix)/bin/prereview"
           # The gate firing IS the proof that the binary's own EvalSymlinks
           # resolved its path under /Cellar/ — the real-layout assertion.
