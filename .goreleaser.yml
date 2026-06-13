@@ -40,6 +40,44 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 
+# Homebrew formula published to the livetemplate/homebrew-tap repo on every
+# release: `brew install livetemplate/tap/prereview`. Requires the
+# HOMEBREW_TAP_GITHUB_TOKEN secret (a PAT with write access to that tap repo)
+# to be set in the release workflow env; without it this step fails the run.
+#
+# We use `brews` (a formula) and NOT `homebrew_casks` despite goreleaser's
+# deprecation notice: Homebrew casks are macOS-only, but prereview is
+# routinely installed via Homebrew on Linux remote/SSH boxes, and only a
+# formula works on Linuxbrew.
+brews:
+  - repository:
+      owner: livetemplate
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/livetemplate/prereview"
+    description: "Local per-line code review webapp"
+    license: "MIT"
+    # git is a hard runtime prerequisite; tailscale is optional.
+    dependencies:
+      - name: git
+    caveats: |
+      prereview needs git on your PATH at runtime.
+      Upgrade with: brew upgrade prereview
+    test: |
+      system "#{bin}/prereview", "--version"
+
+# Scoop manifest published to the livetemplate/scoop-bucket repo for Windows:
+# `scoop bucket add livetemplate https://github.com/livetemplate/scoop-bucket`
+# then `scoop install prereview`. Requires the SCOOP_BUCKET_GITHUB_TOKEN secret.
+scoops:
+  - repository:
+      owner: livetemplate
+      name: scoop-bucket
+      token: "{{ .Env.SCOOP_BUCKET_GITHUB_TOKEN }}"
+    homepage: "https://github.com/livetemplate/prereview"
+    description: "Local per-line code review webapp"
+    license: "MIT"
+
 changelog:
   use: github
   sort: asc

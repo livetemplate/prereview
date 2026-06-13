@@ -1,0 +1,224 @@
+name: CI
+
+# Guards the install/upgrade/uninstall surface on every push and PR — until
+# now nothing ran before a release tag. The brew/scoop jobs install via the
+# real package managers on GitHub-hosted runners (ubuntu/macos ship Homebrew;
+# windows installs Scoop), so the package-manager defer gate is validated
+# against genuine /Cellar/ and \scoop\ layouts, not simulated paths.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.26.0'
+
+jobs:
+  lint-test:
+    name: Lint & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: shellcheck install.sh
+        run: shellcheck install.sh
+      - name: go vet
+        env:
+          GOWORK: 'off'
+        run: go vet ./...
+      - name: Unit tests (non-browser)
+        env:
+          GOWORK: 'off'
+        run: go test -skip='E2E|e2e|Browser|browser' ./...
+
+  install-script:
+    name: install.sh (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install via script, then uninstall
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$HOME/prbin"
+          # Pin to the current latest tag via the authenticated gh CLI so the
+          # job is deterministic and avoids install.sh's unauthenticated API
+          # call hitting the shared-runner rate limit. This still exercises
+          # the full download -> checksum -> extract -> install path.
+          tag="$(gh release view --repo livetemplate/prereview --json tagName -q .tagName)"
+          echo "Installing $tag"
+          PREREVIEW_VERSION="$tag" PREREVIEW_INSTALL_DIR="$dir" sh ./install.sh
+          # Invoke by full path: install dir may not be on PATH.
+          "$dir/prereview" --version
+          # curl/manual install is NOT package-managed, so --uninstall really
+          # deletes the binary.
+          "$dir/prereview" --uninstall
+          if [ -e "$dir/prereview" ]; then
+            echo "FAIL: --uninstall did not remove the binary"
+            exit 1
+          fi
+          echo "install + uninstall OK"
+
+  homebrew:
+    name: Homebrew (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Build binary
+        env:
+          GOWORK: 'off'
+        run: go build -o prereview .
+      - name: brew install (local formula) + uninstall gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v brew >/dev/null 2>&1; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          # A minimal formula that installs the just-built binary from a local
+          # tarball — no release, tap, or network needed. Installing it the
+          # real way puts the binary under Homebrew's Cellar prefix, exactly
+          # the layout the defer gate keys on.
+          tar czf prereview.tar.gz prereview
+          sha="$(shasum -a 256 prereview.tar.gz | awk '{print $1}')"
+          cat > prereview.rb <<EOF
+          class Prereview < Formula
+            desc "CI test build of prereview"
+            homepage "https://github.com/livetemplate/prereview"
+            url "file://$(pwd)/prereview.tar.gz"
+            sha256 "$sha"
+            version "0.0.0-ci"
+            def install
+              bin.install "prereview"
+            end
+          end
+          EOF
+          brew install --formula ./prereview.rb
+          bin="$(brew --prefix)/bin/prereview"
+          # The gate firing IS the proof that the binary's own EvalSymlinks
+          # resolved its path under /Cellar/ — the real-layout assertion.
+          out="$("$bin" --uninstall)"
+          echo "$out"
+          echo "$out" | grep -q 'brew uninstall prereview' || {
+            echo "FAIL: expected Homebrew defer message"
+            exit 1
+          }
+          [ -e "$bin" ] || {
+            echo "FAIL: gate must NOT delete a brew-managed binary"
+            exit 1
+          }
+          brew uninstall prereview
+          echo "homebrew gate OK"
+
+  scoop:
+    name: Scoop (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Build binary
+        shell: pwsh
+        env:
+          GOWORK: 'off'
+        run: go build -o prereview.exe .
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-RestMethod -Uri 'https://get.scoop.sh' -OutFile install-scoop.ps1
+          # GitHub runners execute as admin; Scoop refuses an admin install
+          # without this flag.
+          .\install-scoop.ps1 -RunAsAdmin
+          "$env:USERPROFILE\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: scoop install (local manifest) + uninstall gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Compress-Archive -Path .\prereview.exe -DestinationPath .\prereview.zip -Force
+          $hash = (Get-FileHash .\prereview.zip -Algorithm SHA256).Hash
+          $uri  = ([System.Uri](Resolve-Path .\prereview.zip).Path).AbsoluteUri
+          @{
+            version      = '0.0.0-ci'
+            url          = $uri
+            hash         = $hash
+            bin          = 'prereview.exe'
+          } | ConvertTo-Json | Set-Content -Path .\prereview.json
+          scoop install .\prereview.json
+          # The shim execs the app exe under ...\scoop\apps\...; either path
+          # contains \scoop\, so the gate must defer.
+          $exe = "$env:USERPROFILE\scoop\shims\prereview.exe"
+          $out = (& $exe --uninstall | Out-String)
+          Write-Host $out
+          if ($out -notmatch 'scoop uninstall prereview') {
+            Write-Error 'FAIL: expected Scoop defer message'
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Error 'FAIL: gate must NOT remove a scoop-managed binary'
+          }
+          scoop uninstall prereview
+          Write-Host 'scoop gate OK'
+
+  goreleaser:
+    name: GoReleaser config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Snapshot build (no publish)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean --skip=publish
+        env:
+          # goreleaser templates reference these; snapshot skips publishing so
+          # the values are never used, but must be set for templating.
+          HOMEBREW_TAP_GITHUB_TOKEN: ci-dummy
+          SCOOP_BUCKET_GITHUB_TOKEN: ci-dummy
+          GOWORK: 'off'
+      - name: Assert formula, manifest, and archive naming
+        run: |
+          set -euo pipefail
+          test -f dist/homebrew/prereview.rb
+          test -f dist/scoop/prereview.json
+          grep -q 'on_linux' dist/homebrew/prereview.rb
+          grep -q 'depends_on "git"' dist/homebrew/prereview.rb
+          # Cross-check that the archive name shape install.sh constructs
+          # (prereview_<ver>_<os>_<arch>.<ext>) still matches goreleaser output.
+          ls dist/prereview_*_linux_amd64.tar.gz >/dev/null
+          ls dist/prereview_*_darwin_arm64.tar.gz >/dev/null
+          ls dist/prereview_*_windows_amd64.zip >/dev/null
+          echo "goreleaser artifacts OK"

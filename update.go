@@ -116,6 +116,39 @@ func resolveExecutablePath() (string, error) {
 	return p, nil
 }
 
+// pkgManager identifies the package manager that owns a binary's lifecycle
+// and the exact commands to suggest. upgrade/uninstall are stored in full
+// because the verbs aren't uniform across managers (brew upgrades with
+// "brew upgrade" but Scoop uses "scoop update"; both uninstall with
+// "uninstall").
+type pkgManager struct {
+	name      string // display name, e.g. "Homebrew"
+	upgrade   string // e.g. "brew upgrade prereview"
+	uninstall string // e.g. "brew uninstall prereview"
+}
+
+// detectPackageManager reports whether the binary at exePath was installed
+// by a package manager that owns its lifecycle. Self-replacing or
+// self-deleting such a binary would desync it from the manager's metadata,
+// so both the update and uninstall paths defer to the manager instead.
+// Detection is a path-substring heuristic on the symlink-resolved executable
+// path (resolveExecutablePath already calls EvalSymlinks): Homebrew installs
+// land under a ".../Cellar/..." prefix on both Intel (/usr/local/Cellar) and
+// ARM (/opt/homebrew/Cellar) layouts; Scoop installs live under a "scoop"
+// directory. ok is false for binaries placed by curl, `go install`, or a
+// manual download.
+func detectPackageManager(exePath string) (pm pkgManager, ok bool) {
+	switch {
+	case strings.Contains(exePath, "/Cellar/"):
+		return pkgManager{"Homebrew", "brew upgrade prereview", "brew uninstall prereview"}, true
+	case strings.Contains(exePath, "/scoop/"),
+		strings.Contains(exePath, `\scoop\`):
+		return pkgManager{"Scoop", "scoop update prereview", "scoop uninstall prereview"}, true
+	default:
+		return pkgManager{}, false
+	}
+}
+
 // shouldAutoUpdate is the pure predicate gating the on-run check. It is
 // false for dev builds, when opted out via flag/env, and inside a
 // re-exec'd child (PREREVIEW_UPDATED set) to prevent an update loop.
