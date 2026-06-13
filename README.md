@@ -77,7 +77,8 @@ Knobs: `PREREVIEW_INSTALL_DIR=/path` to choose the directory,
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew install livetemplate/tap/prereview
+brew tap livetemplate/prereview https://github.com/livetemplate/prereview
+brew install livetemplate/prereview/prereview
 ```
 
 Upgrade with `brew upgrade prereview`. (`brew` owns upgrades here, so the
@@ -86,8 +87,8 @@ binary's self-update is disabled for this install.)
 ### Windows (Scoop)
 
 ```powershell
-scoop bucket add livetemplate https://github.com/livetemplate/scoop-bucket
-scoop install prereview
+scoop bucket add prereview https://github.com/livetemplate/prereview
+scoop install prereview/prereview
 ```
 
 Upgrade with `scoop update prereview`.

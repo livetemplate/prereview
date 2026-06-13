@@ -230,18 +230,14 @@ jobs:
           version: '~> v2'
           args: release --snapshot --clean --skip=publish
         env:
-          # goreleaser templates reference these; snapshot skips publishing so
-          # the values are never used, but must be set for templating.
-          HOMEBREW_TAP_GITHUB_TOKEN: ci-dummy
-          SCOOP_BUCKET_GITHUB_TOKEN: ci-dummy
           GOWORK: 'off'
       - name: Assert formula, manifest, and archive naming
         run: |
           set -euo pipefail
-          test -f dist/homebrew/prereview.rb
-          test -f dist/scoop/prereview.json
-          grep -q 'on_linux' dist/homebrew/prereview.rb
-          grep -q 'depends_on "git"' dist/homebrew/prereview.rb
+          test -f dist/homebrew/Formula/prereview.rb
+          test -f dist/scoop/bucket/prereview.json
+          grep -q 'on_linux' dist/homebrew/Formula/prereview.rb
+          grep -q 'depends_on "git"' dist/homebrew/Formula/prereview.rb
           # Cross-check that the archive name shape install.sh constructs
           # (prereview_<ver>_<os>_<arch>.<ext>) still matches goreleaser output.
           ls dist/prereview_*_linux_amd64.tar.gz >/dev/null

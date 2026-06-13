@@ -47,9 +47,8 @@ jobs:
           version: '~> v2'
           args: release --clean
         env:
+          # Same token publishes the release AND commits the Homebrew formula
+          # + Scoop manifest into this repo (Formula/ and bucket/) — no PAT,
+          # no separate tap repo. Needs `contents: write` (set above).
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # PATs with write access to the tap/bucket repos so goreleaser can
-          # publish the Homebrew formula and Scoop manifest cross-repo.
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-          SCOOP_BUCKET_GITHUB_TOKEN: ${{ secrets.SCOOP_BUCKET_GITHUB_TOKEN }}
           GOWORK: off
