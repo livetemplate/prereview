@@ -1,0 +1,15 @@
+{
+    "version": "0.4.0",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/livetemplate/prereview/releases/download/v0.4.0/prereview_0.4.0_windows_amd64.zip",
+            "bin": [
+                "prereview.exe"
+            ],
+            "hash": "c0e24df775ac2960570182085ac8915a42ce651926928dfa641fab07fec7c27c"
+        }
+    },
+    "homepage": "https://github.com/livetemplate/prereview",
+    "license": "MIT",
+    "description": "Local per-line code review webapp"
+}
