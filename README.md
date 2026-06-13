@@ -59,13 +59,83 @@ is pushed.
 
 ## Install
 
-### Binary
+`prereview` is a single static binary. Pick whichever method fits — all
+put `prereview` on your `$PATH`. **Runtime prerequisite:** `git` must be
+on your `$PATH` for prereview to work.
+
+### Quick install (macOS / Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/livetemplate/prereview/main/install.sh | sh
+```
+
+Downloads the latest release for your OS/arch, verifies its checksum, and
+installs it (to `/usr/local/bin` if writable, else `~/.local/bin`).
+Knobs: `PREREVIEW_INSTALL_DIR=/path` to choose the directory,
+`PREREVIEW_VERSION=v0.3.6` to pin a version.
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap livetemplate/prereview https://github.com/livetemplate/prereview
+brew install livetemplate/prereview/prereview
+```
+
+Upgrade with `brew upgrade prereview`. (`brew` owns upgrades here, so the
+binary's self-update is disabled for this install.)
+
+### Windows (Scoop)
+
+```powershell
+scoop bucket add prereview https://github.com/livetemplate/prereview
+scoop install prereview/prereview
+```
+
+Upgrade with `scoop update prereview`.
+
+### Go toolchain
 
 ```bash
 go install github.com/livetemplate/prereview@latest
 ```
 
-This puts `prereview` on your `$PATH`.
+**Behind a corporate network that blocks the Go module proxy?** Try, in
+order:
+
+1. Default (above) — uses `proxy.golang.org`.
+2. Proxy blocked, but GitHub and dependency hosts reachable:
+   ```bash
+   GOPROXY=direct GOSUMDB=off go install github.com/livetemplate/prereview@latest
+   ```
+   Note this fetches *every* transitive dependency straight from its VCS
+   host, so it still fails on a fully locked-down network.
+3. You have an internal proxy/Athens: `GOPROXY=https://your-internal-proxy go install …`.
+4. Fully air-gapped from public hosts → use the **Quick install** script
+   or **Homebrew** above; those download a single prebuilt binary and
+   never touch the Go module ecosystem.
+
+### Upgrading
+
+- Homebrew: `brew upgrade prereview` · Scoop: `scoop update prereview`.
+- Quick-install / `go install` binaries self-update on run (hourly check),
+  or force it with `prereview --update`. Disable with `--no-update` or
+  `PREREVIEW_NO_UPDATE=1`.
+
+### Uninstall
+
+Your review comments live in each repo's `.prereview/` directory and are
+**never touched** by uninstalling — removing prereview only removes the tool.
+
+- Homebrew: `brew uninstall prereview`
+- Scoop: `scoop uninstall prereview`
+- Quick-install / manual: `prereview --uninstall` removes the binary
+  (it defers to brew/scoop if it detects one of those owns it).
+- Go: `rm "$(go env GOPATH)/bin/prereview"`
+
+Optional leftovers you can remove by hand: the Claude skill at
+`~/.claude/skills/prereview/` (if you ran `--install-skill`) and the
+update-check cache under your OS cache dir (`prereview/`). To discard a
+single repo's review state, `rm -rf .prereview` in that repo.
 
 ### Claude Code skill (optional, for the LLM-driven flow)
 

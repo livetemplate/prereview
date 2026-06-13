@@ -1,6 +1,7 @@
 /prereview
 /screenshot
 /bin/
+/dist/
 .prereview/
 .worktrees/
 *.out

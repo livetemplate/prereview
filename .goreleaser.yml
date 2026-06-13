@@ -40,6 +40,46 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 
+# Homebrew formula committed into Formula/ in THIS repo on every release, so
+# no separate tap repo and no PAT are needed — goreleaser writes it with the
+# release workflow's built-in GITHUB_TOKEN. Users install with:
+#   brew tap livetemplate/prereview https://github.com/livetemplate/prereview
+#   brew install livetemplate/prereview/prereview
+#
+# We use `brews` (a formula) and NOT `homebrew_casks` despite goreleaser's
+# deprecation notice: Homebrew casks are macOS-only, but prereview is
+# routinely installed via Homebrew on Linux remote/SSH boxes, and only a
+# formula works on Linuxbrew.
+brews:
+  - repository:
+      owner: livetemplate
+      name: prereview
+    directory: Formula
+    homepage: "https://github.com/livetemplate/prereview"
+    description: "Local per-line code review webapp"
+    license: "MIT"
+    # git is a hard runtime prerequisite; tailscale is optional.
+    dependencies:
+      - name: git
+    caveats: |
+      prereview needs git on your PATH at runtime.
+      Upgrade with: brew upgrade prereview
+    test: |
+      system "#{bin}/prereview", "--version"
+
+# Scoop manifest committed into bucket/ in THIS repo (same no-tap-repo, no-PAT
+# approach). Users install with:
+#   scoop bucket add prereview https://github.com/livetemplate/prereview
+#   scoop install prereview/prereview
+scoops:
+  - repository:
+      owner: livetemplate
+      name: prereview
+    directory: bucket
+    homepage: "https://github.com/livetemplate/prereview"
+    description: "Local per-line code review webapp"
+    license: "MIT"
+
 changelog:
   use: github
   sort: asc

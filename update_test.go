@@ -171,6 +171,33 @@ func TestShouldAutoUpdate(t *testing.T) {
 	}
 }
 
+func TestDetectPackageManager(t *testing.T) {
+	brew := pkgManager{"Homebrew", "brew upgrade prereview", "brew uninstall prereview"}
+	scoop := pkgManager{"Scoop", "scoop update prereview", "scoop uninstall prereview"}
+	cases := []struct {
+		name    string
+		exePath string
+		wantPM  pkgManager
+		wantOK  bool
+	}{
+		{"homebrew arm", "/opt/homebrew/Cellar/prereview/0.3.6/bin/prereview", brew, true},
+		{"homebrew intel", "/usr/local/Cellar/prereview/0.3.6/bin/prereview", brew, true},
+		{"scoop windows", `C:\Users\me\scoop\apps\prereview\current\prereview.exe`, scoop, true},
+		{"scoop posix-sep", "/c/Users/me/scoop/apps/prereview/current/prereview.exe", scoop, true},
+		{"system bin", "/usr/local/bin/prereview", pkgManager{}, false},
+		{"go install bin", "/home/me/go/bin/prereview", pkgManager{}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			pm, ok := detectPackageManager(c.exePath)
+			if ok != c.wantOK || pm != c.wantPM {
+				t.Errorf("detectPackageManager(%q) = (%+v,%v), want (%+v,%v)",
+					c.exePath, pm, ok, c.wantPM, c.wantOK)
+			}
+		})
+	}
+}
+
 func TestCheckForUpdate_AlreadyCurrent(t *testing.T) {
 	srv, hits, _, _ := releaseServer(t, "v0.0.1", "x", serverOpts{})
 	tag, archiveURL, checksumsURL, newer, err := checkForUpdate(context.Background(), srv.Client(), srv.URL, "0.0.1")

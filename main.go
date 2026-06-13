@@ -49,6 +49,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
 	doInstallSkill := flag.Bool("install-skill", false, "install the Claude Code skill into ~/.claude/skills/prereview/ and exit")
 	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
+	doUninstall := flag.Bool("uninstall", false, "remove the prereview binary from disk, then exit (your review comments in each repo's .prereview/ are left untouched)")
 	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
 	flag.Parse()
 
@@ -76,6 +77,10 @@ func main() {
 			fmt.Println(err)
 			return
 		}
+		if pm, ok := detectPackageManager(exe); ok {
+			fmt.Printf("prereview was installed via %s, which manages upgrades.\nUpgrade with:\n  %s\n", pm.name, pm.upgrade)
+			return
+		}
 		cacheDir, _ := os.UserCacheDir()
 		newTag, err := selfUpdate(context.Background(), version, exe,
 			githubAPIBase, &http.Client{Timeout: 120 * time.Second}, cacheDir, true)
@@ -90,6 +95,32 @@ func main() {
 			slog.Error("update failed", "err", err)
 			os.Exit(1)
 		}
+		return
+	}
+
+	if *doUninstall {
+		exe, err := resolveExecutablePath()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		// brew/scoop own the binary they placed; deleting it underneath
+		// them leaves dangling package metadata. Defer to their uninstaller.
+		if pm, ok := detectPackageManager(exe); ok {
+			fmt.Printf("prereview was installed via %s, which manages removal.\nUninstall with:\n  %s\n", pm.name, pm.uninstall)
+			return
+		}
+		// Scope is the binary only: review comments live in each repo's
+		// .prereview/ and are never touched by uninstall.
+		fmt.Printf("Removing prereview binary: %s\n", exe)
+		if err := os.Remove(exe); err != nil {
+			// A running binary can't delete itself on Windows ("access is
+			// denied"); on Unix the unlink succeeds while still executing.
+			fmt.Printf("Could not remove %s automatically: %v\n", exe, err)
+			fmt.Println("Delete that file manually to finish uninstalling.")
+			os.Exit(1)
+		}
+		fmt.Println("Uninstalled. Your review comments in each repo's .prereview/ are left untouched.")
 		return
 	}
 
@@ -131,6 +162,11 @@ func maybeAutoUpdate() {
 	exe, err := resolveExecutablePath()
 	if err != nil {
 		slog.Debug("auto-update: resolve executable", "err", err)
+		return
+	}
+	// A brew/scoop-installed binary must not self-replace — the package
+	// manager owns upgrades. Skip silently; `--update` surfaces a hint.
+	if _, ok := detectPackageManager(exe); ok {
 		return
 	}
 	cacheDir, _ := os.UserCacheDir()

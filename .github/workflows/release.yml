@@ -47,5 +47,8 @@ jobs:
           version: '~> v2'
           args: release --clean
         env:
+          # Same token publishes the release AND commits the Homebrew formula
+          # + Scoop manifest into this repo (Formula/ and bucket/) — no PAT,
+          # no separate tap repo. Needs `contents: write` (set above).
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOWORK: off
