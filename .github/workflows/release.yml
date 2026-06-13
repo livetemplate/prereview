@@ -52,3 +52,78 @@ jobs:
           # no separate tap repo. Needs `contents: write` (set above).
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOWORK: off
+
+  # Post-publish smoke: install the REAL published formula/manifest from the
+  # tap the release just updated, on real package managers. PR-time CI tests a
+  # local stand-in formula; only this catches breakage in the actual
+  # goreleaser-generated artifact (wrong URL/checksum, bad install block).
+  # Runs after publish, so it flags a bad release loudly rather than blocking
+  # it — the formula can only be tested once its release assets exist.
+  smoke-homebrew:
+    name: Smoke — Homebrew (${{ matrix.os }})
+    needs: [goreleaser]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install published formula + gate check
+        shell: bash
+        env:
+          # The tap is third-party; recent Homebrew requires `brew trust`.
+          # Bypass here so the job tests formula mechanics, not the (separately
+          # documented) trust UX.
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: '1'
+        run: |
+          set -euo pipefail
+          if ! command -v brew >/dev/null 2>&1; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          brew tap livetemplate/prereview https://github.com/livetemplate/prereview
+          brew install livetemplate/prereview/prereview
+          bin="$(brew --prefix)/bin/prereview"
+          "$bin" --version
+          out="$("$bin" --uninstall)"
+          echo "$out"
+          echo "$out" | grep -q 'brew uninstall prereview' || {
+            echo "FAIL: expected Homebrew defer message"
+            exit 1
+          }
+          [ -e "$bin" ] || {
+            echo "FAIL: gate must NOT delete a brew-managed binary"
+            exit 1
+          }
+          brew uninstall livetemplate/prereview/prereview
+          echo "homebrew smoke OK"
+
+  smoke-scoop:
+    name: Smoke — Scoop (windows)
+    needs: [goreleaser]
+    runs-on: windows-latest
+    steps:
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-RestMethod -Uri 'https://get.scoop.sh' -OutFile install-scoop.ps1
+          .\install-scoop.ps1 -RunAsAdmin
+          "$env:USERPROFILE\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Install published manifest + gate check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          scoop bucket add prereview https://github.com/livetemplate/prereview
+          scoop install prereview/prereview
+          $exe = "$env:USERPROFILE\scoop\shims\prereview.exe"
+          & $exe --version
+          $out = (& $exe --uninstall | Out-String)
+          Write-Host $out
+          if ($out -notmatch 'scoop uninstall prereview') {
+            Write-Error 'FAIL: expected Scoop defer message'
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Error 'FAIL: gate must NOT remove a scoop-managed binary'
+          }
+          scoop uninstall prereview
+          Write-Host 'scoop smoke OK'
