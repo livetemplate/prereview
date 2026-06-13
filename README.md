@@ -78,11 +78,17 @@ Knobs: `PREREVIEW_INSTALL_DIR=/path` to choose the directory,
 
 ```bash
 brew tap livetemplate/prereview https://github.com/livetemplate/prereview
+brew trust --formula livetemplate/prereview/prereview
 brew install livetemplate/prereview/prereview
 ```
 
-Upgrade with `brew upgrade prereview`. (`brew` owns upgrades here, so the
-binary's self-update is disabled for this install.)
+The `brew trust` step is a one-time per-machine acknowledgement: recent
+Homebrew refuses to install from a third-party tap until you trust it (this
+applies to *every* non-core tap, not just this one). Without it the install
+fails with "tap trust is required". Then upgrade with `brew upgrade prereview`
+(`brew` owns upgrades, so the binary's self-update is disabled for this
+install). Prefer zero ceremony? The **Quick install** script above needs no
+trust step.
 
 ### Windows (Scoop)
 
