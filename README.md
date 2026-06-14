@@ -117,13 +117,31 @@ Open the URL, comment, click **Quit**. Comments live in
 `.prereview/comments.csv`.
 
 ```bash
-prereview --skill --repo "$(pwd)" --base HEAD &   # what the Claude skill runs for you
+prereview --skill "$(pwd)" &   # what the Claude skill runs for you
 ```
 
 In skill mode the UI shows **"Hand off → Claude"**: clicking it writes
 `.prereview/DONE`; the skill polls for it, reads the CSV, and acts. Or
 just tell Claude *"review my changes"* and it drives the whole loop. See
 [skill/SKILL.md](skill/SKILL.md) and [skill/reference.md](skill/reference.md).
+
+## CLI usage
+
+The review target is the **positional path** (default: current dir);
+everything else has a sane default, so a bare `prereview` just works.
+
+```bash
+prereview                                # current dir (git repo or not) — just works
+prereview ./PLAN.md                      # a single file
+prereview ./design-docs                  # a non-git directory — every file shown whole
+prereview --base origin/main ../service  # a different git repo vs a ref (flags BEFORE the path)
+prereview --skill                        # LLM hand-off mode (path defaults to .)
+```
+
+A non-git directory or single file is auto-detected: it's shown whole
+(every line commentable), with no diff and no base picker. Flags must come
+**before** the path. Full reference — every flag, mode, and combination —
+in **[docs/cli.md](docs/cli.md)**.
 
 ## Usage
 
@@ -177,20 +195,6 @@ file (line numbers match, so comments resolve across both) · the base
 `--base`) · each comment has **Edit / Resolve / Delete** (Resolve keeps
 an audit trail; Delete has Undo) · **Esc** clears a selection.
 
-## Flags
-
-| Flag | Default | Meaning |
-|---|---|---|
-| `--repo` | `.` | Path to the git repo (or a single file / non-git dir) to review |
-| `--base` | `HEAD` | Git ref to diff against (`HEAD~1`, `main`, `origin/master`, a SHA…) |
-| `--port` | `0` | TCP port; 0 = OS-assigned |
-| `--host` | auto | Bind address. **Auto:** `127.0.0.1` locally; a remote box's **Tailscale** IP. Override explicitly; avoid `0.0.0.0` |
-| `--skill` | `false` | Show "Hand off → Claude" instead of "Quit"; write `.prereview/DONE` on hand-off |
-| `--install-skill` | — | Install the Claude Code skill and exit |
-| `--update` / `--no-update` | — | Force a self-update / skip the on-run update check |
-| `--uninstall` | — | Remove the binary (leaves `.prereview/` untouched) and exit |
-| `--version` | — | Print build version |
-
 ## Output
 
 `<repo>/.prereview/comments.csv` is the source of truth — RFC-4180
@@ -222,7 +226,7 @@ git clone https://github.com/livetemplate/prereview
 cd prereview
 make sync-client   # copies the latest livetemplate-client.js into internal/assets/client/
 go build .
-./prereview --repo "$(pwd)"
+./prereview
 ```
 
 E2E tests use chromedp + headless chromium: `go test -tags=browser ./...`.

@@ -10,6 +10,27 @@ import (
 	"testing"
 )
 
+func TestReviewPath(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"no args defaults to cwd", nil, "."},
+		{"empty slice defaults to cwd", []string{}, "."},
+		{"positional file", []string{"./PLAN.md"}, "./PLAN.md"},
+		{"positional dir", []string{"../service"}, "../service"},
+		{"first positional wins", []string{"a", "b"}, "a"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := reviewPath(c.args); got != c.want {
+				t.Errorf("reviewPath(%v) = %q, want %q", c.args, got, c.want)
+			}
+		})
+	}
+}
+
 func TestInstallSkill(t *testing.T) {
 	home := t.TempDir()
 

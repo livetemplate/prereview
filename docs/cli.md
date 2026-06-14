@@ -1,0 +1,106 @@
+# prereview CLI reference
+
+Companion to the [README](../README.md). The README shows the common
+invocations; this is the full reference for every flag, mode, and combination.
+
+```
+Usage: prereview [flags] [path]
+```
+
+`path` is the review target — a git repo, a non-git directory, or a single
+file. It's the trailing **positional** argument and defaults to the current
+directory, so a bare `prereview` just works. **Flags must come before the
+path** (Go's flag parser stops at the first non-flag): `prereview --skill ./docs`,
+not `prereview ./docs --skill`.
+
+## Defaults
+
+| | Default | |
+|---|---|---|
+| `[path]` | `.` | current directory |
+| `--base` | `HEAD` | working tree vs last commit (git mode only) |
+| `--port` | `0` | OS-assigned random free port |
+| `--host` | `127.0.0.1` | auto-resolves to the Tailscale IP on a remote box |
+| `--skill` | off | UI shows **Quit** (not **Hand off → Claude**) |
+
+So `prereview` ≡ `prereview --port 0 --host 127.0.0.1 .` reviewing the current
+git repo's working tree against `HEAD`.
+
+## Review modes (auto-detected from `path`)
+
+`prereview` classifies the path and adapts — you don't pick a mode.
+
+| Path is… | Mode | What you see |
+|---|---|---|
+| a dir with `.git` (incl. worktrees/submodules) | **git** | real `git diff` hunks vs `--base`; base picker shown; file list is git/`.gitignore`-aware (tracked + untracked) |
+| a dir without `.git` | **no-git** | the dir walked recursively; **every file shown whole** (each line "new"/commentable), no diff, base picker hidden |
+| a single file | **no-git (single file)** | just that file, whole; `.prereview/` lives in the file's **parent** dir |
+
+In no-git mode `--base` is ignored (there are no refs). The directory walk skips
+`.git/`, `.prereview/`, dotfiles/dotdirs, and files over the 1 MB render cap.
+Everything else — comments, CSV, re-anchoring, hand-off — is identical to git mode.
+
+```bash
+prereview                        # current git repo
+prereview ../service             # a different git repo
+prereview ~/.claude/plans        # a non-git directory (e.g. Claude plans)
+prereview ~/.claude/plans/x.md   # a single file
+```
+
+## Flags
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--base <ref>` | `HEAD` | Git ref to diff against: `HEAD~1`, `main`, `origin/master`, a tag, a SHA — any rev-spec. **Git mode only** (ignored for a non-git dir / single file). |
+| `--port <n>` | `0` | TCP port; `0` = OS-assigned random free port. |
+| `--host <ip>` | `127.0.0.1` | Bind address — see [Binding](#binding--remote-access). |
+| `--skill` | `false` | Show **Hand off → Claude** instead of **Quit**, and write `.prereview/DONE` on hand-off. The Claude Code skill sets this. |
+
+### Run-and-exit actions
+
+These do one thing and exit — they don't start the server:
+
+| Flag | Effect |
+|---|---|
+| `--version` | Print the build version. |
+| `--install-skill` | Install the Claude Code skill into `~/.claude/skills/prereview/` (re-run after upgrading to refresh it). |
+| `--update` | Download and install the latest GitHub release (defers to brew/scoop if one manages the binary). |
+| `--uninstall` | Remove the binary (your `.prereview/` review comments are left untouched; defers to brew/scoop). |
+| `--no-update` | Skip the on-run update check (also via `PREREVIEW_NO_UPDATE=1`). |
+
+## Composing flags
+
+Flags compose freely; just keep the path last.
+
+```bash
+prereview --base origin/main ../service        # a different repo, diffed against a ref
+prereview --skill --base HEAD~3 "$(pwd)"        # skill mode, last-3-commits view
+prereview --host 0.0.0.0 --port 8080            # explicit bind (see below)
+```
+
+`--base` only affects git mode. `--skill` only changes the UI/hand-off; it
+composes with any path and base.
+
+## Binding & remote access
+
+`--host` defaults to `127.0.0.1` and is smart on remote boxes: on an SSH host
+with a tailnet, prereview binds the host's **Tailscale IP** so you can open the
+review from your phone over the tailnet — never the public internet. Passing
+`--host` explicitly is an absolute override (never auto-rebound). **Avoid
+`0.0.0.0`**: it exposes the source diff on every interface, including any public
+IP. The first stdout line is `READY <url>`; extra `ALT <url>` lines (e.g. the
+MagicDNS hostname) may follow.
+
+## Environment
+
+| Var | Effect |
+|---|---|
+| `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: skip the on-run update check. |
+
+## Output
+
+`<repo-root>/.prereview/comments.csv` is the source of truth (RFC-4180, 12
+columns, atomically written). For a single-file review the `.prereview/` dir is
+the file's **parent** directory — the `REPO` line on stdout always points at it.
+See [skill/reference.md](../skill/reference.md) for the column schema and the
+stdout protocol.

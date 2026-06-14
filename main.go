@@ -40,9 +40,26 @@ var skillReferenceMD string
 // Version set via -ldflags at build time.
 var version = "dev"
 
+// reviewPath is the path to review: the first positional argument, or "."
+// (current directory) when none is given. It's a git repo, a non-git
+// directory, or a single file — resolveTarget classifies which.
+func reviewPath(args []string) string {
+	if len(args) > 0 {
+		return args[0]
+	}
+	return "."
+}
+
 func main() {
-	repo := flag.String("repo", ".", "absolute path to the git repository to review")
-	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit)")
+	flag.Usage = func() {
+		fmt.Fprint(flag.CommandLine.Output(),
+			"Usage: prereview [flags] [path]\n\n"+
+				"  path   git repo, non-git directory, or single file to review (default: current dir).\n"+
+				"         Flags must come before the path, e.g. `prereview --skill ./docs`.\n\n"+
+				"Flags:\n")
+		flag.PrintDefaults()
+	}
+	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit); ignored for a non-git dir or single file")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
 	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
@@ -145,7 +162,7 @@ func main() {
 		maybeAutoUpdate()
 	}
 
-	if err := run(*repo, *base, *host, explicitHost, *port, *skill); err != nil {
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, *skill); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -203,7 +220,7 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool) e
 	}
 	// Normalize: RepoPath is always a directory from here on, so the
 	// .prereview/ store and every filepath.Join(absRepo, relPath) stay
-	// valid whether --repo was a repo, a loose dir, or a single file.
+	// valid whether the path was a repo, a loose dir, or a single file.
 	absRepo = tgt.RepoPath
 
 	// .prereview/ holds the CSV and the DONE marker. Create it eagerly so
@@ -342,9 +359,9 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool) e
 		fmt.Printf("ALT %s\n", alt)
 	}
 	// Print the resolved review directory so the skill can poll
-	// <dir>/.prereview/DONE even when --repo was a single file (RepoPath
+	// <dir>/.prereview/DONE even when the path was a single file (RepoPath
 	// is normalized to the file's parent). For a git repo this equals the
-	// --repo argument, so the existing skill contract is unchanged.
+	// path argument, so the existing skill contract is unchanged.
 	fmt.Printf("REPO %s\n", absRepo)
 	slog.Info("prereview started", "url", url, "repo", absRepo, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
 
@@ -524,7 +541,7 @@ func hasDotComponent(cleaned string) bool {
 	return false
 }
 
-// reviewTarget is the classified --repo argument after normalization.
+// reviewTarget is the classified path argument after normalization.
 // RepoPath is ALWAYS a directory: the comment store and DONE marker live
 // at RepoPath/.prereview/, and every downstream filepath.Join(RepoPath,
 // relPath) stays valid. SingleFile, when non-empty, is the only
@@ -537,7 +554,7 @@ type reviewTarget struct {
 	NoGit      bool
 }
 
-// resolveTarget classifies an absolute --repo path:
+// resolveTarget classifies an absolute review path:
 //
 //   - a file              → no-git, review just that file
 //     (RepoPath = its parent dir, SingleFile = its basename)

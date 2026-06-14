@@ -5,7 +5,7 @@ poke around.
 
 ## Try these
 
-1. Load `prereview --repo $(pwd)` and append `#README.md:L7` to the URL.
+1. Load `prereview $(pwd)` and append `#README.md:L7` to the URL.
    The viewer should open this file with line 7 selected.
 2. Click the [other doc](OTHER.md) link below. The markdown link gets
    rewritten to a SPA hash, so the file switches without a full reload.

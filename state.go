@@ -71,7 +71,7 @@ type PrereviewState struct {
 	// the controller is the source of truth; Mount refreshes it every connect.
 	SkillMode bool `json:"skill_mode"`
 
-	// NoGit is mirrored from the controller (set when --repo is a single
+	// NoGit is mirrored from the controller (set when the path is a single
 	// file or a non-git directory) into state in Mount so the template
 	// can hide the base/branch picker — there are no refs to compare
 	// against. Not persisted; the controller is the source of truth.

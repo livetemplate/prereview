@@ -142,7 +142,11 @@ func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (str
 	// the Tailscale IP and every test starts depending on tailscaled
 	// being up. The flag default being 127.0.0.1 is irrelevant here —
 	// what matters is that the flag is *explicitly set*.
-	args := append([]string{"--repo", repo, "--base", "HEAD", "--port", "0", "--host", "127.0.0.1"}, extraArgs...)
+	// The review path is a positional arg now, so it must come AFTER every
+	// flag (Go's flag package stops parsing at the first non-flag). extraArgs
+	// are flags (e.g. --skill), so append the path last.
+	args := append([]string{"--base", "HEAD", "--port", "0", "--host", "127.0.0.1"}, extraArgs...)
+	args = append(args, repo)
 	cmd := exec.Command(binary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -3124,7 +3128,7 @@ func readCSVRowsAt(t *testing.T, csvDir string) [][]string {
 }
 
 // TestE2E_NoGitSingleFile is the core "review a Claude plan" scenario:
-// --repo points at a single Markdown file in a NON-git directory. It
+// the path arg points at a single Markdown file in a NON-git directory. It
 // asserts (1) the file is reviewable with the base picker hidden (no
 // refs exist), (2) Markdown renders, (3) a comment persists to
 // .prereview/ in the file's PARENT directory, and (4) the git-free
@@ -3270,7 +3274,7 @@ func TestE2E_NoGitSingleFile(t *testing.T) {
 	mu.Unlock()
 }
 
-// TestE2E_NoGitDirWalk asserts that pointing --repo at a NON-git
+// TestE2E_NoGitDirWalk asserts that pointing prereview at a NON-git
 // directory reviews every file in it (recursively, here flat): both the
 // .md and the .txt show up, with the base picker hidden. The single-
 // file test above covers the comment + re-anchor flow; this one pins
