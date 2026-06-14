@@ -1,4 +1,4 @@
-.PHONY: all build test sync-client install clean
+.PHONY: all build test sync-client install clean screenshots
 
 BIN := prereview
 CLIENT_JS_SRC := ../client/dist/livetemplate-client.browser.js
@@ -27,3 +27,7 @@ install: sync-client
 
 clean:
 	rm -f $(BIN) $(CLIENT_JS_DST) $(CLIENT_CSS_DST)
+
+# Regenerate the captioned README screenshots in docs/ (needs chromium).
+screenshots:
+	bash cmd/screenshot/capture-readme.sh

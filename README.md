@@ -3,302 +3,217 @@
 **Review your own changes — per line — before you push, and hand the comments to an LLM to act on.**
 
 <p align="center">
-  <img src="docs/screenshot-review-desktop.png" alt="prereview on desktop in skill mode: a diff with a per-line comment and the Hand off to Claude button" width="820">
+  <img src="docs/review-desktop.png" alt="prereview reviewing a Go diff: a line-range comment, the inline composer, and the Hand off to Claude button" width="820">
 </p>
+<p align="center"><sub><em>Select a line range, leave a comment, hand the CSV to Claude.</em></sub></p>
 
 A tiny local webapp for **per-line review of your working tree** — no
-commit, no PR, no GitHub round-trip. It ships as a
-[Claude Code](https://claude.com/claude-code) skill: `/prereview`
-launches a session on your current changes, you comment per line, hit
-**"Hand off → Claude"**, and Claude applies them. Run it on a remote
-dev box and it auto-binds your Tailscale address — review and hand off
-straight from the Claude mobile app, over the tailnet, before anything
-is pushed.
+commit, no PR, no GitHub round-trip. Run `prereview` in your repo, click
+the lines you want changed, comment; a CSV is written that you (or an
+LLM) can act on. It ships as a [Claude Code](https://claude.com/claude-code)
+skill, so `/prereview` launches a session, you comment, hit **"Hand off
+→ Claude"**, and Claude applies the changes. On a remote box it auto-binds
+your Tailscale address — review from the Claude mobile app over the
+tailnet, before anything is pushed.
 
 > **Status:** core flow (review → hand-off → LLM applies) works
 > end-to-end and is in daily use; UI still being polished.
 
-<p align="center">
-  <img src="docs/screenshot-files-desktop.png" alt="Desktop file drawer with per-file diff stats" width="410">
-  &nbsp;
-  <img src="docs/screenshot-all-comments.png" alt="All-comments overview across files" width="410">
-</p>
-
-<p align="center">
-  <img src="docs/screenshot-review-mobile.png" alt="Reviewing and commenting from a phone" width="220">
-  &nbsp;&nbsp;
-  <img src="docs/screenshot-drawer-mobile.png" alt="File drawer open on a phone" width="220">
-</p>
-
-<p align="center"><sub>Per-line review &amp; hand-off on desktop · the all-comments view · <b>the same flow from your phone</b></sub></p>
-
 ## Features
 
-- **Per-line & range comments on your working tree** — two-click range
-  select; comment on any file (changed or not); a single file or a
-  non-git directory works too.
-- **The hand-off loop** — a **"Hand off → Claude"** button writes a
-  marker; the Claude Code skill polls it, reads the CSV, and applies
-  your comments. Review → hand-off → changes, without leaving the chat.
-- **Ships as a Claude Code skill** — `/prereview` (or *"review my
-  changes"*) launches a session scoped to your current changes;
-  `prereview --install-skill` installs it from the binary.
-- **Responsive, phone-friendly UI** — review from an iPhone via the
-  Claude mobile app + `/remote-control`, comment, hand off, push.
-- **Tailscale-aware binding** — on a remote (SSH) box it auto-binds
-  your tailnet address (reachable from your phone, never the public
-  internet); locally it stays on `127.0.0.1`. No `--host` juggling.
-- **Markdown renders, but comments by source line** — `.md` shows
-  formatted; tapping a rendered block selects its real line range, so
-  it round-trips with the raw view and the CSV.
-- **Diff or full-file view** — changed hunks with context, or the whole
-  file; line numbers match so a comment resolves across both.
-- **Durable, boring storage** — one RFC-4180 CSV, atomic writes
-  (tmp+fsync+rename). Survives restarts; resume where you left off.
-- **Single Go binary** — embeds every asset; no Node/npm, no JS runtime.
+- **Comment per line, range, file, or image region** — two-click range
+  select; whole-file comments; drag a box on a binary image.
+- **Markdown & HTML render** — formatted by default, but comments anchor
+  to real source lines and round-trip with the raw view.
+- **One CSV, atomically written** — the source of truth; read it any time
+  without a torn file.
+- **The hand-off loop** — "Hand off → Claude" writes a marker; the skill
+  reads the CSV and applies your comments without leaving the chat.
+- **Phone-friendly + Tailscale-aware** — on a remote box it binds your
+  tailnet address (never the public internet); review from your phone.
+- **Single Go binary** — every asset embedded; no Node, no JS runtime.
 
 ## Install
 
-`prereview` is a single static binary. Pick whichever method fits — all
-put `prereview` on your `$PATH`. **Runtime prerequisite:** `git` must be
-on your `$PATH` for prereview to work.
-
-### Quick install (macOS / Linux)
+`prereview` is a single static binary. **Prerequisite:** `git` on your
+`$PATH`. Pick one:
 
 ```bash
+# Quick install (macOS / Linux) — downloads the latest release, checksum-verified
 curl -fsSL https://raw.githubusercontent.com/livetemplate/prereview/main/install.sh | sh
 ```
-
-Downloads the latest release for your OS/arch, verifies its checksum, and
-installs it (to `/usr/local/bin` if writable, else `~/.local/bin`).
-Knobs: `PREREVIEW_INSTALL_DIR=/path` to choose the directory,
-`PREREVIEW_VERSION=v0.3.6` to pin a version.
-
-### Homebrew (macOS / Linux)
-
 ```bash
+# Homebrew (macOS / Linux)
 brew tap livetemplate/prereview https://github.com/livetemplate/prereview
-brew trust --formula livetemplate/prereview/prereview
+brew trust --formula livetemplate/prereview/prereview   # one-time: brew requires trusting third-party taps
 brew install livetemplate/prereview/prereview
 ```
-
-The `brew trust` step is a one-time per-machine acknowledgement: recent
-Homebrew refuses to install from a third-party tap until you trust it (this
-applies to *every* non-core tap, not just this one). Without it the install
-fails with "tap trust is required". Then upgrade with `brew upgrade prereview`
-(`brew` owns upgrades, so the binary's self-update is disabled for this
-install). Prefer zero ceremony? The **Quick install** script above needs no
-trust step.
-
-### Windows (Scoop)
-
 ```powershell
+# Windows (Scoop)
 scoop bucket add prereview https://github.com/livetemplate/prereview
 scoop install prereview/prereview
 ```
-
-Upgrade with `scoop update prereview`.
-
-### Go toolchain
-
 ```bash
+# Go toolchain
 go install github.com/livetemplate/prereview@latest
 ```
 
-**Behind a corporate network that blocks the Go module proxy?** Try, in
-order:
-
-1. Default (above) — uses `proxy.golang.org`.
-2. Proxy blocked, but GitHub and dependency hosts reachable:
-   ```bash
-   GOPROXY=direct GOSUMDB=off go install github.com/livetemplate/prereview@latest
-   ```
-   Note this fetches *every* transitive dependency straight from its VCS
-   host, so it still fails on a fully locked-down network.
-3. You have an internal proxy/Athens: `GOPROXY=https://your-internal-proxy go install …`.
-4. Fully air-gapped from public hosts → use the **Quick install** script
-   or **Homebrew** above; those download a single prebuilt binary and
-   never touch the Go module ecosystem.
-
-### Upgrading
-
-- Homebrew: `brew upgrade prereview` · Scoop: `scoop update prereview`.
-- Quick-install / `go install` binaries self-update on run (hourly check),
-  or force it with `prereview --update`. Disable with `--no-update` or
-  `PREREVIEW_NO_UPDATE=1`.
-
-### Uninstall
-
-Your review comments live in each repo's `.prereview/` directory and are
-**never touched** by uninstalling — removing prereview only removes the tool.
-
-- Homebrew: `brew uninstall prereview`
-- Scoop: `scoop uninstall prereview`
-- Quick-install / manual: `prereview --uninstall` removes the binary
-  (it defers to brew/scoop if it detects one of those owns it).
-- Go: `rm "$(go env GOPATH)/bin/prereview"`
-
-Optional leftovers you can remove by hand: the Claude skill at
-`~/.claude/skills/prereview/` (if you ran `--install-skill`) and the
-update-check cache under your OS cache dir (`prereview/`). To discard a
-single repo's review state, `rm -rf .prereview` in that repo.
-
-### Claude Code skill (optional, for the LLM-driven flow)
-
-The skill lets Claude Code launch and drive a review session for you —
-just say *"review my changes"* or `/prereview` instead of running the
-binary by hand.
-
-**Install it with one command** (the binary embeds the skill):
-
-```bash
-prereview --install-skill
-# → Installed prereview skill → ~/.claude/skills/prereview/SKILL.md
-```
-
-That writes `~/.claude/skills/prereview/SKILL.md` (+ `reference.md`),
-available in every repo. Re-run after upgrading the binary to refresh
-the skill.
+Quick-install knobs: `PREREVIEW_INSTALL_DIR=/path`, `PREREVIEW_VERSION=v0.4.0`.
 
 <details>
-<summary>Manual install (project-scoped, or without the binary)</summary>
+<summary>Behind a corporate proxy, upgrading, or uninstalling</summary>
 
-From a clone, copy it yourself — e.g. project-scoped so it ships with
-the repo for everyone who clones it:
+**Go install with the module proxy blocked**, in order: default (uses
+`proxy.golang.org`) → `GOPROXY=direct GOSUMDB=off go install …@latest`
+(still needs every dependency's VCS host) → an internal `GOPROXY=…` →
+fully air-gapped, use the **Quick install** script or **Homebrew** (a
+single prebuilt binary, no module fetching).
+
+**Upgrade:** `brew upgrade prereview` · `scoop update prereview` · re-run
+the install script · or `prereview --update` (curl/`go install` binaries
+self-update hourly; disable with `--no-update` / `PREREVIEW_NO_UPDATE=1`).
+
+**Uninstall** (your `.prereview/` comments are never touched):
+`brew uninstall prereview` · `scoop uninstall prereview` ·
+`prereview --uninstall` (defers to brew/scoop if one owns it) ·
+`rm "$(go env GOPATH)/bin/prereview"`. Leftovers you can delete by hand:
+the skill at `~/.claude/skills/prereview/` and the update-check cache.
+</details>
+
+### Claude Code skill (for the LLM-driven flow)
+
+The binary embeds the skill — install it with one command:
+
+```bash
+prereview --install-skill   # → ~/.claude/skills/prereview/SKILL.md (+ reference.md)
+```
+
+Re-run after upgrading to refresh it. Then invoke with `/prereview` or
+*"review my changes"*. (If it reports "unknown skill", run `/reload`.)
+
+<details>
+<summary>Manual / project-scoped install</summary>
+
+From a clone, copy it yourself (e.g. project-scoped so it ships with the repo):
 
 ```bash
 mkdir -p .claude/skills/prereview
 cp skill/SKILL.md .claude/skills/prereview/SKILL.md
 ```
 
-> **The filename must be exactly `SKILL.md` — uppercase, case-sensitive.**
-> A lowercase `skill.md` is silently ignored and the skill never
-> registers. `--install-skill` gets this right for you; only a hazard
-> if you copy by hand.
-
+> The filename must be exactly `SKILL.md` — uppercase. A lowercase
+> `skill.md` is silently ignored. `skill/reference.md` (full CSV schema +
+> filesystem contract) is optional but handy to copy alongside.
 </details>
-
-Requirements & notes:
-
-- The skill shells out to the `prereview` binary, so install the binary
-  (above) first and keep it on `$PATH`.
-- Invoke it with `/prereview`, or natural-language triggers like
-  *"review my changes"* / *"per-line code review"*.
-- New or renamed skills are normally picked up within the running
-  session; if `/prereview` reports "unknown skill", run `/reload` or
-  restart Claude Code (discovery is primarily a startup scan).
-- `skill/reference.md` is supplementary (full CSV schema + filesystem
-  contract). The skill works without it, but copy it alongside
-  `SKILL.md` if you want Claude to have the deep reference handy.
 
 ## Quick start
 
-### Standalone (manual review)
-
 ```bash
 cd <your-repo>
-prereview
-# stdout: READY http://127.0.0.1:43029
+prereview                 # standalone: prints READY <url>, shows a Quit button
 ```
 
-Open the URL. Browse files in the left drawer, tap a line to select it,
-tap another to extend the selection, type a comment, save. Click
-**Quit** when done — the server shuts down. Your comments live in
+Open the URL, comment, click **Quit**. Comments live in
 `.prereview/comments.csv`.
 
-### Skill mode (LLM-driven)
-
-With the [Claude Code skill installed](#claude-code-skill-optional-for-the-llm-driven-flow),
-just ask Claude to *"review my changes"* (or run `/prereview`). Claude
-launches the session, hands you the URL, waits for your hand-off, then
-reads and acts on your comments — you don't run anything by hand.
-
-Equivalent manual invocation (what the skill runs for you):
-
 ```bash
-prereview --skill --repo "$(pwd)" --base HEAD &
+prereview --skill --repo "$(pwd)" --base HEAD &   # what the Claude skill runs for you
 ```
 
-The UI shows **"Hand off → Claude"** instead of **"Quit"**. When you
-click it, `.prereview/DONE` is written with the path to the CSV; the
-skill polls for that file, reads the CSV, and acts on the comments.
+In skill mode the UI shows **"Hand off → Claude"**: clicking it writes
+`.prereview/DONE`; the skill polls for it, reads the CSV, and acts. Or
+just tell Claude *"review my changes"* and it drives the whole loop. See
+[skill/SKILL.md](skill/SKILL.md) and [skill/reference.md](skill/reference.md).
 
-See [skill/SKILL.md](skill/SKILL.md) for the LLM-side integration and
-[skill/reference.md](skill/reference.md) for the full schema +
-filesystem reference.
+## Usage
+
+**Comment on lines.** Tap a line to anchor, tap another to extend the
+range (tap again to reseat), then type and save. The gutter line numbers
+are permalinks — the URL hash tracks your selection so you can share or
+reopen it.
+
+**Comment on a whole file** with the **Comment on file** button — handy
+for binary, deleted, or unchanged files where no line is clickable. The
+file drawer defaults to *changed files only*; the **show all** toggle
+exposes the full tree when you want to comment on something that didn't
+change.
+
+<p align="center"><img src="docs/file-comment.png" alt="A file-level comment shown above the diff" width="760"></p>
+<p align="center"><sub><em>Comment a whole file — changed or not.</em></sub></p>
+
+**Annotate an image region.** On a binary image, drag a rectangle to
+select an area and comment on it; the box is stored as fractions, so it
+survives re-encoding.
+
+<p align="center"><img src="docs/image-area.png" alt="A rectangle drawn on an image with a paired area comment" width="760"></p>
+<p align="center"><sub><em>Drag a box on an image to annotate a region.</em></sub></p>
+
+**Markdown & HTML render** by default; tap a rendered block (heading,
+paragraph, list…) to select its *source* lines, so the comment anchors
+to real line numbers and round-trips with the raw view. A **Preview ⇄
+Raw** toggle switches to source. Long docs get a table-of-contents
+sidebar.
+
+<p align="center"><img src="docs/markdown-toc.png" alt="A rendered Markdown file with a table-of-contents sidebar" width="760"></p>
+<p align="center"><sub><em>Markdown renders with a TOC; comment a block, it anchors to source lines.</em></sub></p>
+
+**See every comment in one place** — the **All comments** chip lists
+comments across all files (line, file, and area kinds), each with a jump
+back to its source.
+
+<p align="center"><img src="docs/all-comments.png" alt="The all-comments overview listing line, file, and area comments across files" width="760"></p>
+<p align="center"><sub><em>Every comment across files in one list.</em></sub></p>
+
+**Review from your phone.** On a remote box prereview binds your
+Tailscale IP, so the same review + hand-off works from the Claude mobile
+app over the tailnet.
+
+<p align="center"><img src="docs/review-mobile.png" alt="prereview reviewing a diff on a phone-sized screen" width="300"></p>
+<p align="center"><sub><em>Review and hand off from your phone.</em></sub></p>
+
+**More:** **Diff ⇄ File** toggles changed-hunks-with-context vs the whole
+file (line numbers match, so comments resolve across both) · the base
+**dropdown** picks `HEAD~N`, branches, or remotes (pass anything else via
+`--base`) · each comment has **Edit / Resolve / Delete** (Resolve keeps
+an audit trail; Delete has Undo) · **Esc** clears a selection.
 
 ## Flags
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--repo` | `.` | Path to the git repo to review |
-| `--base` | `HEAD` | Git ref to diff against (any rev-spec: `HEAD~1`, `main`, `origin/master`, commit SHA…) |
+| `--repo` | `.` | Path to the git repo (or a single file / non-git dir) to review |
+| `--base` | `HEAD` | Git ref to diff against (`HEAD~1`, `main`, `origin/master`, a SHA…) |
 | `--port` | `0` | TCP port; 0 = OS-assigned |
-| `--host` | auto | Bind address. **Auto:** `127.0.0.1` locally; on a remote (SSH) box, this host's **Tailscale** IP — phone-reachable over the tailnet, never public. Pass an explicit value to override; avoid `0.0.0.0` (binds every interface, including any public IP) |
-| `--skill` | `false` | Show "Hand off → Claude" instead of "Quit"; writes `.prereview/DONE` on hand-off |
+| `--host` | auto | Bind address. **Auto:** `127.0.0.1` locally; a remote box's **Tailscale** IP. Override explicitly; avoid `0.0.0.0` |
+| `--skill` | `false` | Show "Hand off → Claude" instead of "Quit"; write `.prereview/DONE` on hand-off |
+| `--install-skill` | — | Install the Claude Code skill and exit |
+| `--update` / `--no-update` | — | Force a self-update / skip the on-run update check |
+| `--uninstall` | — | Remove the binary (leaves `.prereview/` untouched) and exit |
 | `--version` | — | Print build version |
-
-## Usage tips
-
-- **Two-click range selection.** Tap a line to anchor. Tap another to
-  extend the selection. Tap again to reseat the anchor. Type and save.
-- **Edit/resolve/delete.** Each saved comment has Edit, Resolve,
-  Delete buttons in the inline card. Resolve keeps the comment in
-  the CSV with `resolved=true` (audit trail); Delete removes it
-  entirely (with an Undo toast).
-- **All-comments overview.** The `💬 N` chip in the top bar (desktop)
-  or the overflow menu (mobile) jumps to a list view of every comment
-  across all files; tap a comment to jump back to its source line.
-- **Diff vs File.** Toggle "Diff" → "File" (overflow menu on mobile,
-  chip on desktop). **Diff** shows only the changed hunks — changed
-  lines plus 3 lines of context, with long unchanged runs collapsed to
-  a "··· N unchanged lines ···" marker (an unchanged file has no diff,
-  so it shows whole). **File** shows the entire current file with no
-  diff at all — no add/del coloring, deletions omitted. Line numbers
-  are identical in both modes, so a comment made in one resolves in
-  the other.
-- **Markdown renders by default.** `.md`/`.markdown` files show
-  formatted (headings, lists, code, tables) instead of raw lines.
-  You can still comment: tap a rendered block (heading, paragraph,
-  list, code fence…) and it selects that block's *source* line range —
-  the comment anchors to real line numbers, so it round-trips with the
-  raw view and the CSV exactly like a line comment. A "Rendered" ⇄
-  "Raw" toggle switches to the source line view. Raw HTML embedded in
-  the Markdown is not rendered (safe for untrusted repos).
-- **Base picker.** The file drawer has a base dropdown listing
-  `HEAD~1/3/5/10`, every local branch, and every remote-tracking
-  branch (e.g. `origin/main`). For anything more exotic (a specific
-  commit SHA, a tag), pass it once at launch with `--base`.
-- **File scope.** The drawer defaults to *changed files only* (vs the
-  base) — the right default on a large repo. A "Changed N · show all M"
-  toggle switches to the full tracked-file list when you want to
-  comment on something that didn't change. On a clean tree (nothing
-  changed) it auto-shows everything and the toggle is hidden.
 
 ## Output
 
 `<repo>/.prereview/comments.csv` is the source of truth — RFC-4180
-quoted, 8 columns, one row per comment:
+quoted, 12 columns, one row per comment:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area
 ```
 
-See [skill/reference.md](skill/reference.md) for the full column
-documentation.
+`kind` is `line` (default), `file`, or `area`; `area` carries the image
+rectangle as `{x,y,w,h}` fractions. See
+[skill/reference.md](skill/reference.md) for the full column docs.
 
 ## Architecture (at a glance)
 
-- **Single binary**, embeds all assets (including the livetemplate
-  client JS bundle) via `//go:embed`.
+- **Single binary**, embeds all assets (incl. the livetemplate client JS)
+  via `//go:embed`.
 - **State held server-side** in livetemplate's session storage;
-  WebSocket-driven UI patches. Pure Go on the server; no Node/npm.
-- **Atomic CSV writes** via tmp+fsync+rename+parent-fsync. Read at any
-  time without risk of a torn file.
-- **Syntax highlighting** server-side via
-  [chroma](https://github.com/alecthomas/chroma) — GitHub light theme.
-  Cached per file path; falls back to plain text for unsupported
-  languages.
+  WebSocket-driven UI patches. Pure Go server; no Node/npm.
+- **Atomic CSV writes** via tmp+fsync+rename — read at any time without a
+  torn file.
+- **Server-side syntax highlighting** via
+  [chroma](https://github.com/alecthomas/chroma), cached per file path.
 
 ## Development
 
@@ -307,14 +222,11 @@ git clone https://github.com/livetemplate/prereview
 cd prereview
 make sync-client   # copies the latest livetemplate-client.js into internal/assets/client/
 go build .
-./prereview --repo "$(pwd)" --port 8765
+./prereview --repo "$(pwd)"
 ```
 
-E2E tests use chromedp + a headless browser:
-
-```bash
-go test -tags=browser ./...
-```
+E2E tests use chromedp + headless chromium: `go test -tags=browser ./...`.
+Regenerate the README screenshots with `make screenshots`.
 
 ## License
 
