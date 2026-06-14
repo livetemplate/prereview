@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
 )
 
@@ -24,6 +25,7 @@ func main() {
 	url := flag.String("url", "http://127.0.0.1:8765", "running prereview URL")
 	outDir := flag.String("out", "/tmp/prereview-shots", "directory to write PNGs")
 	debug := flag.Bool("debug", false, "also dump hamburger HTML + computed style to stdout")
+	readme := flag.Bool("readme", false, "capture the curated README screenshot set (needs a demo-repo server; see `make screenshots`)")
 	flag.Parse()
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -43,6 +45,11 @@ func main() {
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOpts...)
 	defer allocCancel()
+
+	if *readme {
+		runReadmeShots(allocCtx, *url, *outDir)
+		return
+	}
 
 	ctx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
@@ -268,6 +275,190 @@ func main() {
 		shotTCancel()
 		shotCancel()
 	}
+}
+
+// ===== README screenshot set =================================================
+//
+// Captures the curated, captioned shots embedded in README.md against a demo
+// repo (see cmd/screenshot/demo-repo.sh + `make screenshots`). Comments are
+// created through the real UI — line, file, and image-area — so anchors are
+// authentic and nothing shows as "outdated". prereview's deep-link hash
+// (`#path`, `#path:Ln-Lm`) drives file/line navigation; clicks/drags handle the
+// rest. Run the server in --skill mode so the hero shows "Hand off → Claude".
+
+const saveBtn = `button.save-btn[name="addComment"]`
+
+func runReadmeShots(allocCtx context.Context, url, outDir string) {
+	// 1) Seed comments that later shots read back from the CSV. Order matters:
+	//    all-comments / file / image shots depend on these existing.
+	seedLineComment(allocCtx, url, "payment.go:L13-L16",
+		"Retry loop has no backoff or ctx — a failing gateway gets hammered.")
+	seedFileComment(allocCtx, url, "payment.go",
+		"Add a package doc comment summarizing the charge → gateway → refund flow.")
+	seedAreaComment(allocCtx, url, "architecture.png",
+		"This box overlaps the gateway lane — tighten the spacing.")
+
+	// 2) Capture. The hero + mobile show the live composing flow (unsaved
+	//    draft); the rest read the seeded comments.
+	hero := []chromedp.Action{typeComposer("Surface the gateway's real error here, not a generic string.")}
+	shots := []struct {
+		name  string
+		w, h  int
+		frag  string
+		setup []chromedp.Action
+	}{
+		{"review-desktop", 1280, 800, "payment.go:L18", hero},
+		{"file-comment", 1280, 800, "payment.go", nil},
+		{"image-area", 1280, 800, "architecture.png", nil},
+		{"all-comments", 1280, 800, "", []chromedp.Action{
+			clickJS(`button[name="toggleCommentList"]`),
+			chromedp.Sleep(600 * time.Millisecond),
+		}},
+		{"markdown-toc", 1280, 800, "guide.md", nil},
+		{"review-mobile", 390, 844, "payment.go:L18", []chromedp.Action{
+			typeComposer("Surface the gateway's real error here, not a generic string."),
+		}},
+	}
+	for _, s := range shots {
+		captureShot(allocCtx, url, s.name, s.w, s.h, s.frag, s.setup, outDir)
+	}
+}
+
+func navURL(url, frag string) string {
+	if frag == "" {
+		return url
+	}
+	return url + "#" + frag
+}
+
+// base navigates to url[#frag] at the given viewport and waits for the
+// livetemplate client to connect over WebSocket and apply the hash.
+func base(url, frag string, w, h int) []chromedp.Action {
+	return []chromedp.Action{
+		chromedp.EmulateViewport(int64(w), int64(h)),
+		chromedp.Navigate(navURL(url, frag)),
+		chromedp.WaitVisible(`#files-drawer`, chromedp.ByQuery),
+		chromedp.Sleep(1000 * time.Millisecond),
+	}
+}
+
+func withCtx(allocCtx context.Context, label string, fn func(context.Context) error) {
+	ctx, cancel := chromedp.NewContext(allocCtx)
+	defer cancel()
+	ctx, tcancel := context.WithTimeout(ctx, 45*time.Second)
+	defer tcancel()
+	if err := fn(ctx); err != nil {
+		log.Printf("[%s] %v", label, err)
+	}
+}
+
+func seedLineComment(allocCtx context.Context, url, frag, body string) {
+	withCtx(allocCtx, "seed-line:"+frag, func(ctx context.Context) error {
+		acts := base(url, frag, 1280, 800)
+		acts = append(acts,
+			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
+			chromedp.Sleep(150*time.Millisecond),
+			chromedp.Click(saveBtn, chromedp.ByQuery),
+			chromedp.Sleep(600*time.Millisecond),
+		)
+		return chromedp.Run(ctx, acts...)
+	})
+}
+
+func seedFileComment(allocCtx context.Context, url, frag, body string) {
+	withCtx(allocCtx, "seed-file:"+frag, func(ctx context.Context) error {
+		acts := base(url, frag, 1280, 800)
+		acts = append(acts,
+			chromedp.Click(`.tb-action button[name="openFileComment"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
+			chromedp.Sleep(150*time.Millisecond),
+			chromedp.Click(saveBtn, chromedp.ByQuery),
+			chromedp.Sleep(600*time.Millisecond),
+		)
+		return chromedp.Run(ctx, acts...)
+	})
+}
+
+func seedAreaComment(allocCtx context.Context, url, frag, body string) {
+	withCtx(allocCtx, "seed-area:"+frag, func(ctx context.Context) error {
+		imgSel := `img[src*="` + frag + `"]`
+		var r struct{ X, Y, W, H float64 }
+		acts := base(url, frag, 1280, 800)
+		acts = append(acts,
+			chromedp.WaitVisible(imgSel, chromedp.ByQuery),
+			chromedp.Sleep(300*time.Millisecond),
+			chromedp.Evaluate(`(()=>{const im=document.querySelector('`+imgSel+`');const b=im.getBoundingClientRect();return {X:b.x,Y:b.y,W:b.width,H:b.height};})()`, &r),
+			chromedp.ActionFunc(func(ctx context.Context) error {
+				return mouseDrag(ctx, r.X+r.W*0.15, r.Y+r.H*0.15, r.X+r.W*0.62, r.Y+r.H*0.58)
+			}),
+			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
+			chromedp.Sleep(150*time.Millisecond),
+			chromedp.Click(saveBtn, chromedp.ByQuery),
+			chromedp.Sleep(600*time.Millisecond),
+		)
+		return chromedp.Run(ctx, acts...)
+	})
+}
+
+// mouseDrag presses, glides, and releases the left button — the gesture the
+// image area-select directive listens for.
+func mouseDrag(ctx context.Context, x1, y1, x2, y2 float64) error {
+	if err := input.DispatchMouseEvent(input.MousePressed, x1, y1).
+		WithButton(input.Left).WithClickCount(1).Do(ctx); err != nil {
+		return err
+	}
+	const steps = 10
+	for i := 1; i <= steps; i++ {
+		x := x1 + (x2-x1)*float64(i)/steps
+		y := y1 + (y2-y1)*float64(i)/steps
+		if err := input.DispatchMouseEvent(input.MouseMoved, x, y).
+			WithButton(input.Left).Do(ctx); err != nil {
+			return err
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return input.DispatchMouseEvent(input.MouseReleased, x2, y2).
+		WithButton(input.Left).WithClickCount(1).Do(ctx)
+}
+
+func typeComposer(body string) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.Run(ctx,
+			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
+			chromedp.Sleep(250*time.Millisecond),
+			chromedp.Evaluate(`document.querySelector('.composer')?.scrollIntoView({block:'center'})`, nil),
+			chromedp.Sleep(150*time.Millisecond),
+		)
+	})
+}
+
+func clickJS(sel string) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.Run(ctx, chromedp.Evaluate(
+			fmt.Sprintf(`(()=>{const b=document.querySelector(%q);if(b)b.click();})()`, sel), nil))
+	})
+}
+
+func captureShot(allocCtx context.Context, url, name string, w, h int, frag string, setup []chromedp.Action, outDir string) {
+	withCtx(allocCtx, "shot:"+name, func(ctx context.Context) error {
+		acts := base(url, frag, w, h)
+		acts = append(acts, setup...)
+		var buf []byte
+		acts = append(acts, chromedp.CaptureScreenshot(&buf))
+		if err := chromedp.Run(ctx, acts...); err != nil {
+			return err
+		}
+		path := filepath.Join(outDir, name+".png")
+		if err := os.WriteFile(path, buf, 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("wrote %s (%d bytes)\n", path, len(buf))
+		return nil
+	})
 }
 
 func findChromium() string {
