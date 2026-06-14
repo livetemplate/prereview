@@ -34,7 +34,7 @@ cp <PREREVIEW>/testdata/areacomments/* .
 git add -A && git commit -q -m seed
 # Make the diff non-empty:
 git mv diagram.png renamed.png
-prereview --repo $(pwd)
+prereview $(pwd)
 ```
 
 Then in the browser:

@@ -7,7 +7,7 @@ this file is the LLM's lookup for **what every value means**.
 
 | Flag | Default | Required | Description |
 |---|---|---|---|
-| `--repo` | `.` | yes (for skill use) | Absolute path to review. Usually a git repository (`--repo "$(pwd)"`). May also be a **single file** or a **non-git directory** (e.g. a Claude plan) → no-git mode: no diff, no base, every line "new". When it's a single file the review root is the file's **parent** directory. |
+| `[path]` (positional) | `.` | recommended (for skill use) | Path to review — the trailing positional argument, e.g. `prereview --skill "$(pwd)"`. Must come **after** all flags. Usually a git repository; may also be a **single file** or a **non-git directory** (e.g. a Claude plan) → no-git mode: no diff, no base, every line "new". When it's a single file the review root is the file's **parent** directory. |
 | `--base` | `HEAD` | no | Git base for diff comparison. `HEAD` = working tree vs last commit; `main` = branch-vs-trunk; `HEAD~3` = last-3-commits view; any rev-spec git accepts works. **Ignored in no-git mode** (single file / non-git dir — there is no base). |
 | `--port` | `0` | no | TCP port to listen on. `0` = OS-assigned (random free port — what the skill should normally use to avoid collisions). |
 | `--host` | `127.0.0.1` | no | Host/IP to bind on. **Auto-resolved when not set explicitly:** a remote (SSH) box with a tailnet binds its Tailscale IP (phone-reachable, never public); a remote box with no tailnet stays `127.0.0.1` and prints a stderr warning; local stays `127.0.0.1` (unchanged). An explicit value is an absolute override and is never auto-rebound — avoid `0.0.0.0`, which exposes the source diff on every interface including any public IP. |
@@ -31,9 +31,9 @@ prefix `READY ` and take the rest. Zero or more `ALT` lines follow with
 additional reachable forms (chiefly the MagicDNS hostname, friendlier to
 tap on a phone); they are purely additive and parsers may ignore them.
 `REPO` is the directory whose `.prereview/` holds `comments.csv` and
-`DONE` — equal to the `--repo` argument for a git repo or non-git
+`DONE` — equal to the path argument for a git repo or non-git
 directory, and the file's **parent** directory for a single-file review.
-Poll and clean up relative to the `REPO` line, not the raw `--repo`
+Poll and clean up relative to the `REPO` line, not the raw path
 argument. All other output is slog-formatted (timestamp + level +
 key-value pairs) and goes to stderr — including the "remote box, no
 tailnet" fallback warning.
@@ -65,7 +65,7 @@ Everything prereview writes lives under `<REPO>/.prereview/`, where
     └── DONE             ← written ONLY on "Hand off → Claude" (skill mode); contents = absolute path to comments.csv
 ```
 
-For a git repo or non-git directory `<REPO>` is the `--repo` argument.
+For a git repo or non-git directory `<REPO>` is the path argument.
 For a single-file review `<REPO>` is the file's **parent** directory, so
 sibling files reviewed from that directory share one `comments.csv`
 (the `file` column disambiguates rows). `.prereview/` is created
@@ -150,7 +150,7 @@ pre-mutation or post-mutation state, never a torn write.
 ## Behavioral quirks
 
 - **Untracked files** appear in the file list as added (`[A]` badge). Commenting on them works the same as on tracked files. They're rendered as if every line were a new addition.
-- **No-git mode** (`--repo` is a single file or a non-git directory). There is no git base: every file is listed as added (`[A]`), `--base` is ignored, and the base picker is hidden. A non-git directory is walked recursively, skipping `.git/`, `.prereview/`, dotfiles/dotdirs, and files over the 1 MB render cap. Everything else — comments, CSV schema, atomicity, re-anchoring on hand-off — is identical to git mode. This is the path for reviewing Claude plans and other loose docs.
+- **No-git mode** (the path is a single file or a non-git directory). There is no git base: every file is listed as added (`[A]`), `--base` is ignored, and the base picker is hidden. A non-git directory is walked recursively, skipping `.git/`, `.prereview/`, dotfiles/dotdirs, and files over the 1 MB render cap. Everything else — comments, CSV schema, atomicity, re-anchoring on hand-off — is identical to git mode. This is the path for reviewing Claude plans and other loose docs.
 - **File-list scope.** By default the drawer lists only files that differ from the base (the common review case, and the only sane default on a large repo). A "Changed N · show all M" toggle at the top of the drawer switches to the full tracked-file list. When *no* file differs from the base (clean tree) the scope automatically falls back to all files so the list is never empty, and the toggle is hidden. Comment processing is unaffected — the CSV contains whatever the user commented on, changed or not.
 - **Diff vs File view.** The viewer has two modes (toggle in the top bar). *Diff* (default) shows only changed hunks — changed lines plus 3 lines of context, with long unchanged runs collapsed to a "··· N unchanged lines ···" marker. *File* shows the entire current file, no diff, deletions omitted. Line numbers are identical in both, so a comment anchors to the same line regardless of which mode it was made in. This is presentational only; it doesn't affect the CSV.
 - **Markdown files** render by default (`.md`/`.markdown`). The reviewer can comment on a rendered block (heading, paragraph, list, code fence…); the comment anchors to that block's **real source line range**, so CSV rows for Markdown look exactly like any other line comment (`from_line`/`to_line` are true source lines) and are interchangeable with comments made in the raw view. A "Rendered ⇄ Raw" toggle switches to the source line view. Embedded raw HTML is not rendered (safe by default). Nothing about this changes the CSV contract.

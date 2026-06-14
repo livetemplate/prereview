@@ -25,7 +25,7 @@ type PrereviewController struct {
 	CSVPath  string
 	DonePath string
 
-	// NoGit is true when --repo was a single file or a directory with no
+	// NoGit is true when the path was a single file or a directory with no
 	// .git: the file list and per-file diff are synthesized from the
 	// filesystem (gitdiff.ListFilesNoGit / LoadDiffNoGit) instead of git,
 	// the base picker is suppressed, and Base is unused. SingleFile, when

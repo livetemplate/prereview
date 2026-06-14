@@ -29,7 +29,7 @@ cp <PREREVIEW>/testdata/filecomments/* .
 git add -A && git commit -q -m seed
 # Add a change so the diff isn't empty:
 echo $'\nA paragraph added after seeding.' >> README.md
-prereview --repo $(pwd)
+prereview $(pwd)
 ```
 
 Then in the browser:

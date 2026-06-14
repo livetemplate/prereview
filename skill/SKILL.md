@@ -19,7 +19,7 @@ Launches a web UI for the user to leave per-line comments on the working-tree di
 
 ```bash
 cd <repo>
-prereview --skill --repo "$(pwd)" --base HEAD &
+prereview --skill "$(pwd)" &
 # stdout: READY http://127.0.0.1:PORT          (or http://100.x.y.z:PORT on a remote box)
 #         ALT   http://host.tailnet.ts.net:PORT   (0+ extra reachable URLs; only on a tailnet)
 #         REPO  /abs/dir/whose/.prereview/holds/the/CSV+DONE
@@ -27,15 +27,15 @@ prereview --skill --repo "$(pwd)" --base HEAD &
 
 The `--skill` flag is critical — without it the UI shows a "Quit" button instead, and no DONE marker is ever written.
 
-`--base` defaults to `HEAD` (working tree vs last commit). Pass `--base main` for branch-vs-base review, `--base HEAD~3` for last-3-commits review, etc.
+The review path is the **positional argument** (here `"$(pwd)"`); it defaults to the current directory if omitted. Flags must come **before** the path (Go's flag parser stops at the first non-flag). `--base` defaults to `HEAD` (working tree vs last commit); pass `--base main` (before the path) for branch-vs-base review, `--base HEAD~3` for last-3-commits review, etc.
 
-After `READY`, prereview prints a second line `REPO <dir>` — the directory whose `.prereview/` holds the CSV and DONE marker. **Always poll/read relative to that `REPO` directory**, not the raw `--repo` argument: they're identical for a git repo, but differ for a single file (see below).
+After `READY`, prereview prints a second line `REPO <dir>` — the directory whose `.prereview/` holds the CSV and DONE marker. **Always poll/read relative to that `REPO` directory**, not the raw path argument: they're identical for a git repo, but differ for a single file (see below).
 
-**Reviewing files outside a git repo** (e.g. a Claude plan, a loose doc): `--repo` accepts more than a git repo. Pass it a **single file** or a **non-git directory** and prereview reviews it with no diff — every line is "new" and commentable, the base picker is hidden, `--base` is ignored:
+**Reviewing files outside a git repo** (e.g. a Claude plan, a loose doc): the path accepts more than a git repo. Pass a **single file** or a **non-git directory** and prereview reviews it with no diff — every line is "new" and commentable, the base picker is hidden, `--base` is ignored:
 
 ```bash
-prereview --skill --repo ~/.claude/plans/some-plan.md &   # one file
-prereview --skill --repo ~/.claude/plans &                 # whole dir, recursively
+prereview --skill ~/.claude/plans/some-plan.md &   # one file
+prereview --skill ~/.claude/plans &                 # whole dir, recursively
 ```
 
 For a single file the `.prereview/` store lives in the file's **parent** directory (so sibling files in that directory share one `comments.csv`, disambiguated by the `file` column) — which is exactly what the printed `REPO` line points at. Re-anchoring works the same as for git files: if an LLM rewrites the doc before the user hands off, comments follow their sentences. The clean-tree / restart-fresh guidance below applies unchanged (skip the `git` probe when there's no git repo).
@@ -43,18 +43,18 @@ For a single file the `.prereview/` store lives in the file's **parent** directo
 **Already running for this repo? Restart it fresh.** If a prereview `--skill` server is already running for this same repo (you launched one earlier this session, or the user re-invoked the skill), do **not** start a second one — duplicate servers fight over the same `.prereview/comments.csv`. Stop the existing one *for this repo* and relaunch:
 
 ```bash
-pgrep -af "prereview --skill --repo $repo" | awk '{print $1}' | xargs -r kill
+pgrep -af "prereview --skill.*$repo" | awk '{print $1}' | xargs -r kill
 rm -f "$REPO/.prereview/DONE"
 ```
 
-`$repo` in the `pgrep` match is the literal `--repo` argument the server was launched with (a path, a dir, or a single file — it matches the process's own argv); `$REPO` in the `rm` is the printed `REPO` directory (the file's parent for a single-file review). The `--repo $repo` match targets only this repo's server — unrelated prereview servers (a different repo, test leftovers) are left alone, and it avoids the `pkill -f prereview` self-match trap. Comments are auto-saved (and the current composer draft is persisted), so killing the running server loses nothing. Removing a stale `DONE` marker keeps the fresh server from looking already-handed-off.
+`$repo` in the `pgrep` match is the literal path argument the server was launched with (a path, a dir, or a single file — it matches the process's own argv); `$REPO` in the `rm` is the printed `REPO` directory (the file's parent for a single-file review). The `prereview --skill.*$repo` match targets only this repo's server — unrelated prereview servers (a different repo, test leftovers) are left alone, and it avoids the `pkill -f prereview` self-match trap. Comments are auto-saved (and the current composer draft is persisted), so killing the running server loses nothing. Removing a stale `DONE` marker keeps the fresh server from looking already-handed-off.
 
 **Clean working tree → review the whole branch.** Before launching, if you did *not* set an explicit `--base` (so it would default to `HEAD`) and `git status --porcelain` is empty, the `HEAD` diff is empty and the session has nothing to review. In that case launch with the empty tree as the base so every file on the current branch appears as added and any line is commentable:
 
 ```bash
 base=HEAD
 [ -z "$(git -C "$repo" status --porcelain)" ] && base="$(git -C "$repo" hash-object -t tree /dev/null)"
-prereview --skill --repo "$repo" --base "$base" &
+prereview --skill --base "$base" "$repo" &
 ```
 
 An explicitly requested base (`--base main`, `HEAD~3`, a tag, …) is always honored as-is — never override it, even if its file list happens to be empty.
@@ -73,7 +73,7 @@ When an `ALT` MagicDNS hostname is present, make **that** the headline link (sta
 
 ### 3. Poll for the DONE marker
 
-`<REPO>` below is the directory from the printed `REPO` line (equals the `--repo` argument for a git repo; the file's parent directory for a single-file review):
+`<REPO>` below is the directory from the printed `REPO` line (equals the path argument for a git repo; the file's parent directory for a single-file review):
 
 ```bash
 while [ ! -f <REPO>/.prereview/DONE ]; do sleep 1; done
