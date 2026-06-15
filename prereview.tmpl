@@ -702,16 +702,17 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    + centered invariants because the symmetric padding centres the
    block naturally. */
 .md-view { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
-/* HTML preview blocks: same column shape as .md-view. The rendered
-   content lives inside a Declarative Shadow DOM per block so the user's
-   CSS doesn't leak to the SPA chrome. .html-rendered is the click target
-   that anchors a comment to the block's source-line range; .selected
-   adds the same affordance .md-block uses so the active selection is
-   obvious before the composer opens. */
+/* HTML preview: the whole file renders in one sandboxed iframe (full
+   document fidelity), with the comments list stacked below it. The
+   client auto-heights .html-preview from its content; the fallback
+   min-height avoids a zero-height flash before the directive runs.
+   .html-block now wraps only a block's comments + composer; .selected
+   marks the block being commented on (the visual highlight lives inside
+   the iframe). */
 .html-view { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
+.html-preview { display: block; width: 100%; border: 0; min-height: 60vh; background: #fff; color-scheme: light; }
 .html-block { position: relative; border-radius: 6px; }
 .html-block.selected { outline: 2px solid var(--primary, currentColor); outline-offset: 4px; }
-.html-rendered { cursor: pointer; padding: 0.2rem 0; }
 /* Sticky top bar (var(--pr-bar-h)) would otherwise obscure the anchored
    heading when the browser jumps to "#id". scroll-padding-top reserves
    that gap so the heading lands just below the bar. Smooth scroll is
@@ -850,6 +851,26 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    not-yet-saved selection is visually distinct from saved ones. */
 .image-with-areas { position: relative; display: inline-block; max-width: 100%; }
 .image-with-areas img { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+
+/* Region-select overlay (issue #26 region comments). A transparent layer
+   in the PARENT document laid over the rendered-HTML preview iframe — the
+   one surface with no per-line commenting (you can't tap a line inside the
+   sandboxed iframe), so a drawn box is the fallback. The lvt-fx:region-
+   select directive captures a drag on it and hit-tests the box to a source
+   line range. Only rendered when armed (the "Select region" toggle), so a
+   one-finger gesture scrolls normally when off; touch-action:none stops
+   the drag from scrolling while armed. The drawn box is the directive's
+   own .lvt-area-select-overlay (z-index 9999), which sits above this. */
+.preview-stage { position: relative; }
+.region-overlay {
+  position: absolute; inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+  background: rgba(76, 194, 255, 0.06);
+  z-index: 5;
+}
+.region-toggle { margin: 0 0 0.5rem; }
+.region-toggle button { font-size: 0.85rem; padding: 0.25rem 0.6rem; width: auto; }
 .area-overlay {
   position: absolute;
   border: 2px solid var(--lvt-area-select-color, #4cc2ff);
@@ -1584,18 +1605,18 @@ main.viewer { overscroll-behavior: contain; }
   <p class="empty">Binary file — cannot display.</p>
   {{end}}
   {{else if $.ShowRenderedHTML}}
-  {{/* Rendered-HTML view. Mirrors the rendered-Markdown layout: each
-       top-level <body> child becomes one clickable block carrying its
-       REAL source line range (data-from / data-to). SelectBlock turns
-       that into a normal line-anchored selection, so a comment placed
-       here round-trips with the raw line view and the CSV — same
-       contract as MarkdownBlock. The block's HTML is wrapped in a
-       Declarative Shadow DOM (`<template shadowrootmode="open">`) so
-       the user's CSS (head stylesheets embedded in each block's HTML
-       at parse time) applies inside the shadow root WITHOUT leaking
-       to the SPA chrome. The client's handleShadowRootHydration
-       activates the shadow root after morphdom inserts it. */}}
-  <div class="html-view" data-key="html-{{.Path}}">{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}"{{if eq $.ScrollHTMLBlockKey $hbkey}} lvt-fx:scroll="into-view"{{end}}><div class="html-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}"><template shadowrootmode="open">{{.HTML}}</template></div>{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>{{end}}</div>
+  {{/* Rendered-HTML view. The whole file renders once in a sandboxed
+       <iframe srcdoc> — a real document, so var()/@media/vw/sticky all
+       resolve against the iframe viewport (a shadow root can't do this).
+       Each top-level <body> child in the srcdoc carries its REAL source
+       line range (data-from / data-to). lvt-fx:iframe-autoheight sizes the
+       iframe to its content; selecting a region to comment on is driven by
+       a parent-document overlay (added in a later phase), not from inside
+       the iframe — iOS does not deliver iframe-internal events to parent
+       listeners. The sandbox without allow-scripts keeps page <script>
+       inert. Comments and the composer render in a list BELOW the preview
+       (they can't interleave into the iframe document). */}}
+  <div class="html-view" data-key="html-{{.Path}}"><form method="POST" class="region-toggle"><button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button></form><div class="preview-stage"><iframe class="html-preview" sandbox="allow-same-origin" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:iframe-autoheight title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>{{end}}</div>
   {{else if $.ShowRenderedMarkdown}}
   {{/* Rendered-Markdown view. Each top-level block is one clickable
        unit carrying its REAL source line range (data-from/data-to);

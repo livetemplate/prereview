@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Page-level preview fixture</title>
+  <style>
+    :root { --bg: rgb(0, 128, 0); --ink: rgb(255, 255, 255); }
+    html, body { margin: 0; }
+    body { background: var(--bg); color: var(--ink); font-family: system-ui, sans-serif; }
+    .nav { position: sticky; top: 0; height: 40px; background: rgb(10, 20, 30); }
+    .hero { width: 50vw; padding: 2rem; }
+    @media (max-width: 600px) { .hero { background: rgb(9, 9, 9); } }
+  </style>
+</head>
+<body>
+  <nav class="nav"></nav>
+  <h1 id="hero" class="hero">Hello from the page-level preview</h1>
+  <p>Second top-level block — exists so a comment can anchor to it.</p>
+</body>
+</html>

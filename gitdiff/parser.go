@@ -29,11 +29,15 @@ type FileDiff struct {
 	// range. Populated only for .md/.markdown paths; nil otherwise.
 	// Computed once per load and cached with the FileDiff.
 	MarkdownBlocks []MarkdownBlock
-	// HTMLBlocks is the rendered-HTML equivalent for .html/.htm paths:
-	// each top-level <body> child tagged with its source line span,
-	// embedded with the document's head stylesheets so per-block
-	// Declarative Shadow DOM hydration in the client renders with the
-	// user's CSS isolated from the SPA. Nil for non-HTML paths.
+	// HTMLDoc is the preview document for .html/.htm paths: the file
+	// transformed for the sandboxed preview iframe's srcdoc (see
+	// RenderHTMLPreview) — real <body>/<head> with a <base> injected,
+	// each top-level child stamped with its source line range, and
+	// scripts/handlers stripped. Empty for non-HTML paths.
+	HTMLDoc string
+	// HTMLBlocks pairs with HTMLDoc: one entry per top-level <body>
+	// child, carrying the source line range a click in the iframe
+	// resolves to. Nil for non-HTML paths.
 	HTMLBlocks []HTMLBlock
 	// Headings is the TOC source for the rendered-Markdown view:
 	// every Markdown heading in the new-side file, in document order,
@@ -42,14 +46,6 @@ type FileDiff struct {
 	// h1–h3) and the "≥ 2 entries" visibility gate live at the caller
 	// (state.RenderedHeadings()).
 	Headings []Heading
-	// HTMLAnchors maps every `id=...` attribute in the HTML preview
-	// source to the index of the HTMLBlock that contains it. Used by
-	// the deep-link scroll target (`#path:h-id` → scroll the matching
-	// block into view). Populated only for HTML paths; nil otherwise.
-	// Block-level granularity — finer scroll (the id element itself
-	// inside the shadow root) requires a second client primitive and
-	// is deferred.
-	HTMLAnchors map[string]int
 }
 
 // IsMarkdownPath reports whether path is a Markdown file by extension.
@@ -209,8 +205,7 @@ func highlightLines(fd *FileDiff) {
 			}
 		}
 		srcBytes := []byte(src.String())
-		fd.HTMLBlocks = RenderHTMLBlocks(srcBytes, fd.Path)
-		fd.HTMLAnchors = ExtractHTMLAnchorIDs(fd.HTMLBlocks)
+		fd.HTMLDoc, fd.HTMLBlocks = RenderHTMLPreview(srcBytes, fd.Path)
 	}
 	if totalBytes > maxHighlightTotalBytes {
 		// Too big to highlight cheaply — leave HighlightedContent empty;
