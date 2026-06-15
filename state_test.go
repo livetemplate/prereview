@@ -29,7 +29,7 @@ func TestIsHTML(t *testing.T) {
 }
 
 func TestShowRenderedHTML(t *testing.T) {
-	blocks := []gitdiff.HTMLBlock{{HTML: "<h1>x</h1>", StartLine: 1, EndLine: 1}}
+	blocks := []gitdiff.HTMLBlock{{StartLine: 1, EndLine: 1}}
 	cases := []struct {
 		name    string
 		diff    *gitdiff.FileDiff

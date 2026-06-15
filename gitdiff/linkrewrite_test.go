@@ -83,71 +83,7 @@ func TestRenderMarkdownBlocks_LinkRewritingFlow(t *testing.T) {
 	}
 }
 
-func TestRenderHTMLBlocks_LinkRewritingFlow(t *testing.T) {
-	src := []byte(`<html><body>
-<a href="other.html">other</a>
-<a href="#section">section</a>
-<a href="https://ext.com">ext</a>
-</body></html>`)
-	blocks := RenderHTMLBlocks(src, "docs/index.html")
-	if len(blocks) == 0 {
-		t.Fatal("got no blocks")
-	}
-	joined := ""
-	for _, b := range blocks {
-		joined += string(b.HTML)
-	}
-	if !strings.Contains(joined, `href="#docs/other.html"`) {
-		t.Errorf("html link not rewritten: %q", joined)
-	}
-	if !strings.Contains(joined, `href="#docs/index.html:h-section"`) {
-		t.Errorf("html intra-doc anchor not rewritten: %q", joined)
-	}
-	if !strings.Contains(joined, `href="https://ext.com"`) {
-		t.Errorf("external href changed: %q", joined)
-	}
-}
-
-func TestExtractHTMLAnchorIDs(t *testing.T) {
-	src := []byte(`<html><body>
-<h1 id="hero">Hello</h1>
-<section id="features"><p>stuff</p></section>
-<div><span id="cta">Click</span></div>
-</body></html>`)
-	blocks := RenderHTMLBlocks(src, "doc.html")
-	ids := ExtractHTMLAnchorIDs(blocks)
-	if ids == nil {
-		t.Fatal("expected non-nil map")
-	}
-	// hero is block 0, features is block 1 (with cta nested below)
-	if ids["hero"] != 0 {
-		t.Errorf("hero index = %d, want 0", ids["hero"])
-	}
-	if ids["features"] != 1 {
-		t.Errorf("features index = %d, want 1", ids["features"])
-	}
-	// cta is inside block 2 (the <div>), not features
-	if _, ok := ids["cta"]; !ok {
-		t.Error("cta id not extracted")
-	}
-}
-
-func TestExtractHTMLAnchorIDs_DuplicateIDsKeepFirst(t *testing.T) {
-	src := []byte(`<html><body>
-<h1 id="dup">first</h1>
-<h2 id="dup">second</h2>
-</body></html>`)
-	blocks := RenderHTMLBlocks(src, "doc.html")
-	ids := ExtractHTMLAnchorIDs(blocks)
-	if ids["dup"] != 0 {
-		t.Errorf("duplicate id should map to FIRST occurrence (block 0), got %d", ids["dup"])
-	}
-}
-
-func TestExtractHTMLAnchorIDs_NoIDs_ReturnsNil(t *testing.T) {
-	src := []byte(`<html><body><p>no ids here</p></body></html>`)
-	blocks := RenderHTMLBlocks(src, "doc.html")
-	if got := ExtractHTMLAnchorIDs(blocks); got != nil {
-		t.Errorf("expected nil for no-id input, got %+v", got)
-	}
-}
+// Anchor-href rewriting in the HTML preview was retired with the move to
+// the sandboxed iframe (in-iframe links are inert; <base> handles relative
+// resolution). The rewriteAnchorHrefs tests above still cover the markdown
+// renderer, which is the only remaining consumer.

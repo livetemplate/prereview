@@ -2,7 +2,6 @@ package gitdiff
 
 import (
 	"bytes"
-	htmlpkg "html"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -80,57 +79,4 @@ func rewriteAnchorHrefs(htmlFragment, currentPath string) string {
 // counting the number of `<` tag starts.)
 func looksWellFormed(out, in string) bool {
 	return strings.Count(out, "<") == strings.Count(in, "<")
-}
-
-// ExtractHTMLAnchorIDs returns a map from each `id` attribute found
-// inside the supplied HTMLBlocks to the block index that contains
-// it. Used by the deep-link scroll target (`#path:h-id` → scroll the
-// matching block into view). Block-level granularity — the id
-// element itself lives in a shadow root and needs a second client
-// primitive to scroll to (deferred). Empty input → nil.
-//
-// Within a block we walk only the rendered HTML (no head preamble,
-// no script content — those are already stripped by RenderHTMLBlocks).
-// Duplicate ids are kept at the FIRST occurrence (HTML5 says ids
-// SHOULD be unique; if they're not, the deep link is ambiguous and
-// going to the first instance is the standard browser behaviour).
-func ExtractHTMLAnchorIDs(blocks []HTMLBlock) map[string]int {
-	if len(blocks) == 0 {
-		return nil
-	}
-	out := map[string]int{}
-	for blockIdx, b := range blocks {
-		z := html.NewTokenizer(strings.NewReader(string(b.HTML)))
-		for {
-			tt := z.Next()
-			if tt == html.ErrorToken {
-				break
-			}
-			if tt != html.StartTagToken && tt != html.SelfClosingTagToken {
-				continue
-			}
-			_, hasAttr := z.TagName()
-			if !hasAttr {
-				continue
-			}
-			for {
-				k, v, more := z.TagAttr()
-				if string(k) == "id" {
-					id := htmlpkg.UnescapeString(string(v))
-					if id != "" {
-						if _, dup := out[id]; !dup {
-							out[id] = blockIdx
-						}
-					}
-				}
-				if !more {
-					break
-				}
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }

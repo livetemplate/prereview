@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -3954,16 +3955,18 @@ func setupFixtureHTMLRepo(t *testing.T) string {
 	return dir
 }
 
-// TestE2E_HTMLPreviewBlocksAreLineAnchored pins issue #15: clicking a
-// .html file shows rendered blocks (mirror of markdown), each block is
-// clickable and anchors a comment to its source line range. Verifies
-// declarative shadow DOM hydration ran (each block has a shadowRoot
-// attached) so the user's CSS isolates from the SPA chrome.
+// TestE2E_HTMLPreviewRendersAndAutoHeights pins the iframe preview (issue
+// #26): a .html file renders once in a sandboxed iframe whose top-level
+// <body> children carry their real source line range (data-from/data-to),
+// and lvt-fx:iframe-autoheight sizes the iframe to its content. The raw ↔
+// rendered toggle swaps the iframe for the code line view and back.
 //
-// Doesn't drill into shadow DOM content — that would couple the test
-// to the fixture's exact HTML. The hydration assertion ("parent has
-// shadowRoot") is the contract we care about.
-func TestE2E_HTMLPreviewBlocksAreLineAnchored(t *testing.T) {
+// Selecting a region of the preview to anchor a comment is driven by a
+// parent-document overlay (lvt-fx:region-select) and is covered end-to-end
+// by TestE2E_HTMLPreviewRegionSelect — NOT here. There is deliberately no
+// in-iframe click path: iOS does not deliver iframe-internal events to the
+// parent.
+func TestE2E_HTMLPreviewRendersAndAutoHeights(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureHTMLRepo(t), 1200, 800)
 	p.waitReady()
 
@@ -4005,71 +4008,42 @@ func TestE2E_HTMLPreviewBlocksAreLineAnchored(t *testing.T) {
 
 	p.clickFile("index.html")
 
-	// Wait for the rendered blocks to appear.
-	var blockCount int
+	// Wait for the preview iframe and its document to populate with the
+	// data-from blocks that carry the source line ranges.
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.html-view .html-block`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll('.html-view .html-block').length`, &blockCount),
+		chromedp.WaitVisible(`iframe.html-preview`, chromedp.ByQuery),
+		chromedp.Poll(
+			`(() => {
+				const fr = document.querySelector('iframe.html-preview');
+				const d = fr && fr.contentDocument;
+				return !!(d && d.querySelector('[data-from]'));
+			})()`,
+			nil,
+			chromedp.WithPollingTimeout(10*time.Second),
+		),
 	); err != nil {
-		t.Fatalf("wait .html-block: %v%s", err, diag())
-	}
-	if blockCount < 1 {
-		t.Errorf("got %d HTML blocks, want >= 1%s", blockCount, diag())
+		t.Fatalf("wait preview iframe: %v%s", err, diag())
 	}
 
-	// Shadow DOM hydration must have moved each block's <template> into
-	// a shadowRoot on its .html-rendered wrapper — the client's
-	// handleShadowRootHydration directive runs after every morph.
-	var hydrated int
-	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`
-			(() => {
-				let n = 0;
-				for (const el of document.querySelectorAll('.html-view .html-rendered')) {
-					if (el.shadowRoot && el.shadowRoot.childNodes.length > 0) n++;
-				}
-				return n;
-			})()`, &hydrated),
-	); err != nil {
-		t.Fatalf("query shadow roots: %v%s", err, diag())
+	// Auto-height: the directive sets an explicit pixel height from the
+	// content's scrollHeight (iframes don't size to content on their own).
+	var heightPx float64
+	if err := chromedp.Run(p.ctx, chromedp.Poll(
+		`(() => {
+			const fr = document.querySelector('iframe.html-preview');
+			const h = parseFloat(fr && fr.style.height);
+			return Number.isFinite(h) && h > 0 ? h : 0;
+		})()`,
+		&heightPx,
+		chromedp.WithPollingTimeout(10*time.Second),
+	)); err != nil {
+		t.Fatalf("iframe did not auto-height: %v%s", err, diag())
 	}
-	if hydrated != blockCount {
-		t.Errorf("shadow DOM hydration: %d/%d blocks have populated shadow roots%s",
-			hydrated, blockCount, diag())
+	if heightPx <= 0 {
+		t.Fatalf("expected a positive auto-height, got %v%s", heightPx, diag())
 	}
 
-	// Stray <template> tags would be a hydration bug (the directive
-	// removes them after moving content to shadowRoot).
-	var strayTemplates int
-	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelectorAll('.html-view template').length`, &strayTemplates),
-	); err != nil {
-		t.Fatalf("query templates: %v%s", err, diag())
-	}
-	if strayTemplates != 0 {
-		t.Errorf("found %d unhydrated <template> in .html-view%s", strayTemplates, diag())
-	}
-
-	// Click the first block — composer must appear with the block's
-	// source line range as the selection.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.html-view .html-block:first-of-type .html-rendered`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("click block + wait composer: %v%s", err, diag())
-	}
-
-	// Type and submit a comment — confirms the line-anchored flow
-	// end-to-end.
-	if err := chromedp.Run(p.ctx,
-		chromedp.SendKeys(`.composer textarea`, "comment from html block", chromedp.ByQuery),
-		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.inline-comment .body`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("save comment: %v%s", err, diag())
-	}
-
-	// Toggle to Raw → blocks gone, code line view appears.
+	// Toggle to Raw → iframe gone, code line view appears.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`form[aria-label="HTML view"] input[type=radio][value="raw"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
@@ -4077,10 +4051,10 @@ func TestE2E_HTMLPreviewBlocksAreLineAnchored(t *testing.T) {
 		t.Fatalf("toggle to raw: %v%s", err, diag())
 	}
 
-	// And back — blocks return with their shadow roots re-hydrated.
+	// And back — the preview iframe returns.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`form[aria-label="HTML view"] input[type=radio][value="rendered"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.html-view .html-block`, chromedp.ByQuery),
+		chromedp.WaitVisible(`iframe.html-preview`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("toggle back: %v%s", err, diag())
 	}
@@ -4092,6 +4066,164 @@ func TestE2E_HTMLPreviewBlocksAreLineAnchored(t *testing.T) {
 		}
 	}
 	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}
+
+// TestE2E_HTMLPreviewRegionSelect pins issue #26's region commenting on
+// the rendered-HTML preview: with the "Select region" toggle armed, a
+// transparent overlay in the PARENT document (not inside the iframe — iOS
+// doesn't deliver iframe-internal events to parent listeners) captures a
+// drawn box, the lvt-fx:region-select directive hit-tests it against the
+// iframe's data-from/data-to blocks, and SelectBlock anchors a comment to
+// that source line range — round-tripping with the raw view + CSV. The
+// drag is synthesized via Chrome's Input.dispatchMouseEvent so the shared
+// drag spine's pointerdown/move/up handlers fire like a real gesture.
+func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureHTMLRepo(t), 1200, 800)
+	p.waitReady()
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server ---\n%s\n--- console ---\n%s\n--- ws ---\n%s\n--- html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	p.clickFile("index.html")
+
+	// Preview renders; wait for the iframe's data-from blocks to populate.
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`iframe.html-preview`, chromedp.ByQuery),
+		chromedp.Poll(
+			`(() => {
+				const fr = document.querySelector('iframe.html-preview');
+				const d = fr && fr.contentDocument;
+				return !!(d && d.querySelector('[data-from]'));
+			})()`,
+			nil,
+			chromedp.WithPollingTimeout(10*time.Second),
+		),
+	); err != nil {
+		t.Fatalf("wait preview iframe: %v%s", err, diag())
+	}
+
+	// Arm the "Select region" toggle → the parent overlay appears.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.region-overlay[data-surface="html"]`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond),
+	); err != nil {
+		t.Fatalf("arm region toggle: %v%s", err, diag())
+	}
+
+	// Read the first iframe block's VIEWPORT rect (its in-iframe rect plus
+	// the iframe's own offset) + its source line range, so we drag a box
+	// we know overlaps it.
+	var blk struct {
+		From, To            int
+		X, Y, Width, Height float64
+	}
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+		const fr = document.querySelector('iframe.html-preview');
+		const ir = fr.getBoundingClientRect();
+		const el = fr.contentDocument.querySelector('[data-from]');
+		const b = el.getBoundingClientRect();
+		return {
+			From: parseInt(el.getAttribute('data-from'), 10),
+			To: parseInt(el.getAttribute('data-to') || el.getAttribute('data-from'), 10),
+			X: ir.left + b.left, Y: ir.top + b.top, Width: b.width, Height: b.height,
+		};
+	})()`, &blk)); err != nil {
+		t.Fatalf("read target block rect: %v%s", err, diag())
+	}
+	if blk.From <= 0 || blk.Width < 10 || blk.Height < 4 {
+		t.Fatalf("target block looks wrong: %+v%s", blk, diag())
+	}
+
+	// Drag a box across the block: wide (most of its width) and tall
+	// enough to clear the click threshold, comfortably inside its bounds.
+	x1 := blk.X + blk.Width*0.10
+	y1 := blk.Y + 2
+	x2 := blk.X + blk.Width*0.80
+	y2 := blk.Y + blk.Height - 2
+	if err := chromedp.Run(p.ctx,
+		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).
+			WithButton(cdpinput.Left).WithClickCount(1),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).
+			WithButton(cdpinput.Left),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, x2, y2).
+			WithButton(cdpinput.Left),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseReleased, x2, y2).
+			WithButton(cdpinput.Left).WithClickCount(1),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("region drag + composer: %v%s", err, diag())
+	}
+
+	// Type + save → comment persists and renders inline.
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`.composer textarea`, "comment from a drawn region", chromedp.ByQuery),
+		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment .body`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("save region comment: %v%s", err, diag())
+	}
+
+	// CSV: a line-anchored row (NOT kind=area) whose range overlaps the
+	// block we dragged over — proving the box resolved to source lines.
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected header + 1 row, got %d:\n%v%s", len(rows), rows, diag())
+	}
+	row := rows[1]
+	if row[10] == "area" {
+		t.Errorf("kind = %q, want a line kind (region over HTML must store a line range, not a rect)", row[10])
+	}
+	from, _ := strconv.Atoi(row[2])
+	to, _ := strconv.Atoi(row[3])
+	if from <= 0 || to < from {
+		t.Errorf("bad persisted line range from=%q to=%q", row[2], row[3])
+	}
+	// The resolved range must intersect the block we targeted.
+	if to < blk.From || from > blk.To {
+		t.Errorf("persisted range [%d,%d] does not overlap target block [%d,%d]", from, to, blk.From, blk.To)
+	}
+
+	mu.Lock()
+	for _, l := range consoleLines {
+		if strings.Contains(strings.ToLower(l), "error") {
+			t.Errorf("browser console error: %s", l)
+		}
+	}
 	mu.Unlock()
 }
 

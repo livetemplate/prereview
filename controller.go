@@ -302,9 +302,10 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
-	state.SelectionArea = Area{} // pending image rectangle from the prior file is cancelled
-	state.CommentMode = ""       // any file-level / area composer from the prior file is cancelled
-	state.URLHashScrollAnchor = "" // anchor target was for the previous file; let the new file pick its own
+	state.SelectionArea = Area{}    // pending image rectangle from the prior file is cancelled
+	state.RegionSelectArmed = false // the region-select overlay is per-preview; disarm on file switch
+	state.CommentMode = ""          // any file-level / area composer from the prior file is cancelled
+	state.URLHashScrollAnchor = ""  // anchor target was for the previous file; let the new file pick its own
 	state.FileDrawerOpen = false
 	// Picking a file from the drawer while the all-comments view is
 	// open implies "leave this overview, go look at that file" — same
@@ -634,21 +635,46 @@ func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate
 	return state, nil
 }
 
-// SelectBlock selects a whole rendered-Markdown block in one click.
-// A block IS a range, so unlike SelectLine's two-click anchor/extend,
-// this sets the full source line span at once (data-from/data-to are
-// the block's real source lines). The existing composer/AddComment
-// flow then anchors the comment to those lines, so it round-trips
-// with the raw view and the CSV unchanged.
+// SelectBlock selects a whole source block in one shot: a rendered-
+// Markdown block, a region drawn over the rendered-HTML preview, or a
+// region drawn over the code view (issue #26 region comments). A block
+// IS a range, so unlike SelectLine's two-click anchor/extend, this sets
+// the full source line span at once — for the previews, data-from/data-to
+// are the real source lines the client's region-select directive resolved
+// the drawn box to. The existing composer/AddComment flow then anchors
+// the comment to those lines, so it round-trips with the raw view and the
+// CSV unchanged.
+//
+// `side` is optional and defaults to "new" (rendered Markdown/HTML have no
+// diff sides; deep-link line numbers are post-diff). The code-view region
+// path passes the side of the box's first matched row so a comment on a
+// deleted ("old") row anchors correctly.
 func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	from := ctx.GetInt("from")
 	to := ctx.GetInt("to")
 	if from <= 0 || to < from {
 		return state, fmt.Errorf("selectBlock: invalid range from=%d to=%d", from, to)
 	}
+	side := ctx.GetString("side")
+	if side != "old" {
+		side = "new"
+	}
 	state.SelectionAnchor = from
 	state.SelectionEnd = to
-	state.SelectionSide = "new"
+	state.SelectionSide = side
+	// Capturing a region disarms the overlay so scrolling returns and the
+	// composer is reachable (mirror of SelectImageArea).
+	state.RegionSelectArmed = false
+	return state, nil
+}
+
+// ToggleRegionSelect flips the "draw a box to comment" overlay for the
+// current preview on/off. Bound to the "Select region" toggle button.
+// Off by default so one-finger gestures scroll; on, the parent-document
+// overlay (lvt-fx:region-select) captures a drag and resolves it to a
+// pixel rect (image) or a source line range (rendered HTML / code).
+func (c *PrereviewController) ToggleRegionSelect(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.RegionSelectArmed = !state.RegionSelectArmed
 	return state, nil
 }
 
@@ -659,6 +685,7 @@ func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemp
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
 	state.SelectionArea = Area{}
+	state.RegionSelectArmed = false
 	state.CommentMode = ""
 	state.DraftBody = ""
 	state.EditingCommentID = ""
@@ -700,6 +727,7 @@ func (c *PrereviewController) SetURLHash(state PrereviewState, ctx *livetemplate
 		state.SelectedFile = parsed.Path
 		state.CurrentDiff = diff
 		state.SelectionArea = Area{}
+		state.RegionSelectArmed = false
 		state.CommentMode = ""
 		state.DraftBody = ""
 		state.EditingCommentID = ""
@@ -723,9 +751,8 @@ func (c *PrereviewController) SetURLHash(state PrereviewState, ctx *livetemplate
 		state.SelectionSide = ""
 		state.URLHashScrollAnchor = parsed.Anchor
 		// Anchor inside a markdown file? Route through ScrollToHeadingID
-		// so the existing block-scroll directive lights up. (For HTML
-		// previews, ScrollHTMLBlockKey reads URLHashScrollAnchor
-		// directly — no parallel state needed.)
+		// so the existing block-scroll directive lights up. (HTML previews
+		// render in one iframe and have no block-level scroll target.)
 		if gitdiff.IsMarkdownPath(state.SelectedFile) {
 			state.ScrollToHeadingID = parsed.Anchor
 		}
@@ -755,6 +782,7 @@ func (c *PrereviewController) OpenFileComment(state PrereviewState, ctx *livetem
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
 	state.SelectionArea = Area{}
+	state.RegionSelectArmed = false
 	state.EditingCommentID = ""
 	state.ReanchorCommentID = ""
 	state.MoreMenuOpen = false
@@ -792,6 +820,8 @@ func (c *PrereviewController) SelectImageArea(state PrereviewState, ctx *livetem
 	state.EditingCommentID = ""
 	state.ReanchorCommentID = ""
 	state.MoreMenuOpen = false
+	// Capturing a region disarms the overlay so the composer is reachable.
+	state.RegionSelectArmed = false
 	return state, nil
 }
 

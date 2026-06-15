@@ -53,6 +53,15 @@ type PrereviewState struct {
 	// WebSocket reconnect.
 	SelectionArea Area `json:"selection_area" lvt:"persist"`
 
+	// RegionSelectArmed gates the "draw a box to comment" overlay over a
+	// preview (image / rendered HTML / code). Off by default so a one-
+	// finger gesture scrolls the page normally; the "Select region" toggle
+	// flips it on, the overlay then captures the drag, and capturing a
+	// region (SelectImageArea / SelectBlock) disarms it again so the
+	// composer shows and scrolling returns. Persisted so a reconnect
+	// mid-selection doesn't silently disarm the overlay.
+	RegionSelectArmed bool `json:"region_select_armed" lvt:"persist"`
+
 	// Comments accumulated during this session.
 	Comments []Comment `json:"comments"`
 
@@ -147,11 +156,10 @@ type PrereviewState struct {
 	// URLHashScrollAnchor persists the `h-<anchor>` target from a
 	// deep-link URL across renders so the URL bar keeps `:h-<anchor>`
 	// even after the scroll completed (shareable link stays valid).
-	// Used by `state.URLHash()` and `state.ScrollHTMLBlockKey()`. For
-	// markdown, the scroll itself routes through the existing
-	// ScrollToHeadingID + ScrollHeadingBlockKey machinery — this field
-	// only feeds URL serialisation. For HTML preview, it ALSO drives
-	// the block-level scroll via ScrollHTMLBlockKey. Cleared by
+	// Used by `state.URLHash()`. For markdown, the scroll itself routes
+	// through the ScrollToHeadingID + ScrollHeadingBlockKey machinery —
+	// this field only feeds URL serialisation. (HTML preview renders in
+	// one iframe, so it has no block-level scroll target.) Cleared by
 	// ClearSelection, by clicking a line, and by SelectFile.
 	URLHashScrollAnchor string `json:"url_hash_scroll_anchor" lvt:"persist"`
 
@@ -364,12 +372,24 @@ func (s PrereviewState) ShowRenderedHTML() bool {
 // RenderedHTML is the block list for the rendered HTML view (nil unless
 // ShowRenderedHTML). Each block carries its real source line range so
 // comments stay line-accurate across rendered and raw views — same
-// contract as RenderedMarkdown.
+// contract as RenderedMarkdown. The preview itself renders in a single
+// iframe (RenderedHTMLDoc); these ranges drive the comments list below it.
 func (s PrereviewState) RenderedHTML() []gitdiff.HTMLBlock {
 	if !s.ShowRenderedHTML() {
 		return nil
 	}
 	return s.CurrentDiff.HTMLBlocks
+}
+
+// RenderedHTMLDoc is the preview document for the iframe srcdoc (empty
+// unless ShowRenderedHTML). The whole file rendered with real-document
+// fidelity; the client wires clicks inside it back to a block via the
+// data-from/data-to ranges.
+func (s PrereviewState) RenderedHTMLDoc() string {
+	if !s.ShowRenderedHTML() {
+		return ""
+	}
+	return s.CurrentDiff.HTMLDoc
 }
 
 // RenderedMarkdown is the block list for the rendered view (nil unless
@@ -415,26 +435,6 @@ func (s PrereviewState) ScrollHeadingBlockKey() string {
 		}
 	}
 	return ""
-}
-
-// ScrollHTMLBlockKey returns the `data-key` (e.g. "HB-3-7") of the
-// HTMLBlock containing the element id currently targeted by
-// URLHashScrollAnchor — or "" when no anchor is set, the current file
-// isn't an HTML preview, or the id isn't present. The template
-// compares this against each block's data-key to gate a
-// `lvt-fx:scroll="into-view"` directive — same pattern as
-// ScrollHeadingBlockKey, but for `#path:h-id` deep links into HTML
-// previews. Zero-arg by livetemplate template-method convention.
-func (s PrereviewState) ScrollHTMLBlockKey() string {
-	if s.URLHashScrollAnchor == "" || len(s.CurrentDiff.HTMLBlocks) == 0 {
-		return ""
-	}
-	idx, ok := s.CurrentDiff.HTMLAnchors[s.URLHashScrollAnchor]
-	if !ok || idx >= len(s.CurrentDiff.HTMLBlocks) {
-		return ""
-	}
-	b := s.CurrentDiff.HTMLBlocks[idx]
-	return fmt.Sprintf("HB-%d-%d", b.StartLine, b.EndLine)
 }
 
 // URLHash returns the canonical hash string for the current state,
