@@ -31,11 +31,13 @@ const (
 // Comment kinds — mirror csv.ColKind values. "" / commentKindLine for
 // line-anchored comments; commentKindFile for whole-file comments;
 // commentKindArea for image-overlay annotations (rectangle in
-// Comment.Area).
+// Comment.Area); commentKindRegion for live-site annotations in --external
+// mode (rectangle in Comment.Area + page in Comment.URL).
 const (
-	commentKindLine = "line"
-	commentKindFile = "file"
-	commentKindArea = "area"
+	commentKindLine   = "line"
+	commentKindFile   = "file"
+	commentKindArea   = "area"
+	commentKindRegion = "region"
 )
 
 // CommentAnchor is the content fingerprint captured when a comment is
@@ -188,11 +190,11 @@ func neighborScore(lines []string, start1, step int, want []string) int {
 // relocate re-anchors c against the current diff. It mutates
 // c.FromLine/c.ToLine and c.AnchorStatus and reports whether anything
 // changed (so the caller can decide to self-heal the CSV). Resolved
-// comments, file-level comments, area-level comments, and comments
-// without a captured anchor are left untouched — there's nothing to
-// drift against.
+// comments, file-level comments, area-level comments, region comments,
+// and comments without a captured anchor are left untouched — there's
+// nothing to drift against.
 func relocate(diff *gitdiff.FileDiff, c *Comment) bool {
-	if c.Resolved || c.IsFileLevel() || c.IsAreaLevel() || c.Anchor.Empty() || diff == nil {
+	if c.Resolved || c.IsFileLevel() || c.IsAreaLevel() || c.IsRegionLevel() || c.Anchor.Empty() || diff == nil {
 		return false
 	}
 	lines := sideContent(diff, c.Side)

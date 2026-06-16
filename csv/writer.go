@@ -31,11 +31,14 @@ type Row struct {
 	// comments, "file" for whole-file comments, and "area" for image-
 	// overlay annotations (geometry lives in Area).
 	Kind string
-	// Area is a JSON blob {"x":0.1,"y":0.2,"w":0.3,"h":0.15} (each
-	// value a 0..1 fraction of the image's natural dimensions) when
-	// Kind=="area"; "" otherwise. Treated as opaque on the CSV side —
-	// the main package owns the schema.
+	// Area is a JSON blob {"x":0.1,"y":0.2,"w":0.3,"h":0.15} (0..1
+	// fractions) when Kind is "area" (of the image) or "region" (of the
+	// live page's document); "" otherwise. Treated as opaque on the CSV
+	// side — the main package owns the schema.
 	Area string
+	// URL is the proxied page (app-relative) for Kind=="region"; ""
+	// otherwise.
+	URL string
 }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
@@ -145,5 +148,6 @@ func rowToRecord(r Row) []string {
 		r.AnchorStatus,
 		r.Kind,
 		r.Area,
+		r.URL,
 	}
 }

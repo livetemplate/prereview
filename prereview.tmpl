@@ -888,6 +888,52 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border-style: dashed;
   background: var(--lvt-area-select-fill, rgba(76, 194, 255, 0.28));
 }
+/* --external (live-site) mode. The proxied site renders in a fixed-height
+   scrolling iframe; the region overlay (toggle-armed, same as the HTML
+   preview) captures a drag above it; the pin layer — sized to the document
+   and translated by -scroll by the lvt-fx:proxy-bridge directive — re-pins
+   saved annotations as the page scrolls. */
+.layout-external { display: flex; gap: 0; align-items: stretch; }
+.ext-viewer { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 0.8rem; }
+.ext-stage { height: calc(100vh - 9rem); overflow: hidden; border: 1px solid var(--pico-muted-border-color, #d9d9d9); border-radius: 6px; background: #fff; }
+.ext-frame { width: 100%; height: 100%; border: 0; display: block; }
+.pin-layer { position: absolute; top: 0; left: 0; pointer-events: none; transform-origin: 0 0; z-index: 4; }
+/* Saved pins are buttons: clicking one opens its comment in the editor. They
+   re-enable pointer events (the layer itself passes clicks through to the live
+   page); gaps between pins stay click-through so the page is still usable. */
+.pin-btn { pointer-events: auto; cursor: pointer; padding: 0; appearance: none; -webkit-appearance: none; }
+.pin-btn:hover { background: rgba(76, 194, 255, 0.30); }
+/* Annotations sidebar: collapsed by default (full width for the live site);
+   the header "💬 N" button toggles AnnoDrawerOpen → .is-open. */
+.ext-sidebar { display: none; flex: 0 0 320px; border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); overflow-y: auto; }
+.ext-sidebar.is-open { display: block; }
+.ext-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--pico-muted-border-color, #d9d9d9); position: sticky; top: 0; background: var(--pico-background-color, #fff); }
+.ext-sidebar-head .close-btn { width: auto; padding: 0.2rem 0.45rem; margin: 0; }
+.ext-sidebar-body { padding: 0.6rem 0.8rem; }
+.ext-anno { margin-bottom: 0.6rem; }
+.ext-anno.is-focused { outline: 2px solid var(--accent, #4361ee); outline-offset: 2px; border-radius: 6px; }
+.anno-locate-form { margin: 0; }
+.anno-locate { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0.1rem 0; margin: 0; color: inherit; cursor: pointer; }
+.anno-locate .ext-page-link { font-size: 0.78rem; word-break: break-all; }
+.anno-locate .anno-body { display: block; margin-top: 0.15rem; }
+.ext-page-link { font-family: var(--jbm); }
+/* Focused pin: bright ring + a one-shot pulse so a tapped annotation is
+   obvious on the page once the iframe scrolls it into view. */
+.area-overlay.is-focused { border-color: var(--accent, #4361ee); border-width: 3px; background: rgba(67, 97, 238, 0.28); z-index: 6; animation: pin-pulse 1.4s ease-out 2; }
+@keyframes pin-pulse { 0% { box-shadow: 0 0 0 0 rgba(67,97,238,0.55); } 70% { box-shadow: 0 0 0 12px rgba(67,97,238,0); } 100% { box-shadow: 0 0 0 0 rgba(67,97,238,0); } }
+.ext-composer { margin-top: 0.6rem; }
+.bar-external { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0.8rem; }
+.bar-external .ext-target { font-size: 0.85rem; color: var(--pico-muted-color, #666); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-external .ext-page { font-family: var(--jbm); }
+.bar-external .bar-actions { display: flex; gap: 0.5rem; flex: none; }
+.anno-toggle { width: auto; padding: 0.25rem 0.6rem; margin: 0; font-size: 0.85rem; }
+@media (max-width: 900px) {
+  .layout-external { flex-direction: column; }
+  .ext-stage { height: 68vh; }
+  /* On a phone the open drawer slides over the live site rather than pushing
+     it below the fold. */
+  .ext-sidebar.is-open { position: fixed; inset: 0 0 0 auto; width: min(88vw, 360px); z-index: 50; background: var(--pico-background-color, #fff); border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); box-shadow: -8px 0 24px rgba(0,0,0,0.18); }
+}
 /* Resolved comments stay visible but muted, with a clear badge. The skill
    reads the CSV `resolved` column and skips these — UI just signals the
    resolution to the human reviewer. */
@@ -1163,6 +1209,42 @@ main.viewer { overscroll-behavior: contain; }
 </head>
 <body lvt-on:keydown="clearSelection" lvt-key="Escape" data-lvt-loading-debounce-ms="200">
 
+{{if .ExternalMode}}
+{{/* --external (live-site) view. The proxied site renders in a cross-origin
+     iframe (src = the second-origin proxy); the region overlay is toggle-
+     armed (same UX as the HTML preview) so the live page stays interactive
+     when off and captures a drawn box when on. lvt-fx:proxy-bridge wires the
+     injected beacon's nav (→ setProxyURL) + scroll (→ pin-layer transform).
+     Annotations anchor to URL + region (kind=region); the pin layer re-pins
+     them on the live page, the sidebar lists them across pages. */}}
+<header class="bar bar-external">
+  <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
+  <span class="bar-actions"><form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button></form>{{if .SkillMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Stop the server and signal Claude to read the CSV">Hand off →</button></form>{{else}}<form method="POST" style="margin:0"><button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button></form>{{end}}</span>
+</header>
+<div class="layout layout-external">
+  <main class="viewer ext-viewer">
+    <form method="POST" class="region-toggle"><button type="submit" name="toggleRegionSelect" class="{{if .RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if .RegionSelectArmed}}true{{else}}false{{end}}">{{if .RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button></form>
+    <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+      {{/* lvt-ignore: morphdom must never re-process this iframe. Its src is
+           set once (SSR); as the user navigates the live site in-app the
+           content moves while the src attribute stays put. Without this, any
+           server render re-emits src={{`{{.ProxyBaseURL}}`}} and morphdom
+           resets the iframe back to the home page. (lvt-ignore-attrs is NOT
+           enough — it only back-fills dropped attrs; the template always has
+           src, so morphdom would still sync it.) */}}
+      <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
+      {{if .RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
+    </div>
+    {{if eq $.CommentMode "region"}}<div class="composer ext-composer" data-key="composer" lvt-fx:scroll="into-view"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small></strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this region?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}
+  </main>
+  <aside class="ext-sidebar{{if .AnnoDrawerOpen}} is-open{{end}}" aria-label="Annotations">
+    <header class="ext-sidebar-head"><strong>Annotations ({{len $.AllRegionComments}})</strong><form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary close-btn" aria-label="Close annotations"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></form></header>
+    <div class="ext-sidebar-body">{{range $.AllRegionComments}}<div class="inline-comment ext-anno{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"><form method="POST" class="anno-locate-form"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="focusComment" class="anno-locate" title="Locate this region on the page"><span class="ext-page-link">📍 {{.URL}}</span>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}<span class="anno-body">{{.Body}}</span></button></form><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.URL}}</code> · region</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
+  </aside>
+</div>
+<footer class="app-footer" role="contentinfo"><small>prereview {{if eq .Version "dev"}}(dev){{else}}v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
+{{else}}
 <header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
   <form method="POST">
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
@@ -1727,6 +1809,7 @@ main.viewer { overscroll-behavior: contain; }
 <footer class="app-footer" role="contentinfo">
   prereview {{if eq .Version "dev"}}(dev){{else}}v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
 </footer>
+{{end}}
 
 <script defer src="/livetemplate-client.js"></script>
 </body>

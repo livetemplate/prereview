@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -60,6 +61,8 @@ func main() {
 		flag.PrintDefaults()
 	}
 	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit); ignored for a non-git dir or single file")
+	external := flag.String("external", "", "annotate a live local website instead of files: reverse-proxies this http(s):// URL and overlays the region-annotation UI. Requires --out. Ignores [path]/--base.")
+	out := flag.String("out", "", "directory whose .prereview/ holds the saved annotations (comments.csv + DONE). Defaults to the review path; required with --external (which has no review path).")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
 	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
@@ -162,7 +165,15 @@ func main() {
 		maybeAutoUpdate()
 	}
 
-	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, *skill); err != nil {
+	if *external != "" {
+		if err := runExternal(*external, *out, *host, explicitHost, *port, *skill); err != nil {
+			slog.Error("fatal", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, *skill, *out); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -209,7 +220,7 @@ func maybeAutoUpdate() {
 	}
 }
 
-func run(repo, base, host string, explicitHost bool, port int, skillMode bool) error {
+func run(repo, base, host string, explicitHost bool, port int, skillMode bool, out string) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -223,22 +234,18 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool) e
 	// valid whether the path was a repo, a loose dir, or a single file.
 	absRepo = tgt.RepoPath
 
-	// .prereview/ holds the CSV and the DONE marker. Create it eagerly so
-	// the skill's polling loop has a stable directory to watch.
-	prereviewDir := filepath.Join(absRepo, ".prereview")
-	if err := os.MkdirAll(prereviewDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir %s: %w", prereviewDir, err)
+	// The .prereview/ store defaults to the review root; --out redirects it
+	// (e.g. to keep a read-only checkout pristine). storeRoot is what we print
+	// as REPO so the skill polls the right .prereview/.
+	storeRoot, err := resolveStoreRoot(out, absRepo)
+	if err != nil {
+		return err
 	}
 	startedAt := time.Now()
-	// Fixed CSV filename — survives server restarts so users can resume
-	// editing where they left off. (Earlier versions timestamped the
-	// filename per session, which orphaned previous comments on restart.)
-	csvPath := filepath.Join(prereviewDir, "comments.csv")
-	donePath := filepath.Join(prereviewDir, "DONE")
-	// Wipe any stale DONE marker from a previous session so the skill
-	// doesn't read it and exit before the user has done anything.
-	_ = os.Remove(donePath)
-	csvWriter := csv.NewWriter(csvPath)
+	csvPath, donePath, csvWriter, err := openStore(storeRoot)
+	if err != nil {
+		return err
+	}
 
 	// Load any existing comments from disk so a restart resumes the session.
 	existing, err := csv.Read(csvPath)
@@ -316,11 +323,7 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool) e
 	// repo root; everything else (POSTs, WS upgrades, non-asset paths)
 	// falls through to the LiveHandler unchanged.
 	mux.Handle("/", staticFallback(absRepo, tmpl.Handle(controller, livetemplate.AsState(initial))))
-	mux.HandleFunc("/livetemplate-client.js", serveBytes("application/javascript", assets.ClientJS()))
-	mux.HandleFunc("/livetemplate.css", serveBytes("text/css", assets.ClientCSS()))
-	mux.HandleFunc("/syntax.css", serveBytes("text/css", []byte(gitdiff.HighlightCSS)))
-	mux.HandleFunc("/fonts/jetbrains-mono-regular.woff2", serveBytes("font/woff2", assets.FontRegular()))
-	mux.HandleFunc("/fonts/jetbrains-mono-bold.woff2", serveBytes("font/woff2", assets.FontBold()))
+	registerAssetRoutes(mux)
 
 	// Decide what to actually bind to. On a remote (SSH) box with no
 	// explicit --host, prefer this host's Tailscale IP: reachable from
@@ -362,9 +365,60 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool) e
 	// <dir>/.prereview/DONE even when the path was a single file (RepoPath
 	// is normalized to the file's parent). For a git repo this equals the
 	// path argument, so the existing skill contract is unchanged.
-	fmt.Printf("REPO %s\n", absRepo)
-	slog.Info("prereview started", "url", url, "repo", absRepo, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
+	fmt.Printf("REPO %s\n", storeRoot)
+	slog.Info("prereview started", "url", url, "repo", absRepo, "store", storeRoot, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
 
+	return serveAndWait(srv, ln, nil, shutdownReq)
+}
+
+// openStore prepares the .prereview/ store (comments.csv + DONE marker) under
+// storeRoot, the directory whose .prereview/ holds annotations — the value
+// printed as REPO so the skill polls the right place. Shared by repo mode and
+// external mode; clears any stale DONE marker so a fresh session isn't read as
+// already-handed-off, and returns the paths plus a goroutine-safe CSV writer.
+func openStore(storeRoot string) (csvPath, donePath string, w *csv.Writer, err error) {
+	dir := filepath.Join(storeRoot, ".prereview")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", "", nil, fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	// Fixed CSV filename — survives server restarts so users can resume editing
+	// where they left off. (Earlier versions timestamped it per session, which
+	// orphaned previous comments on restart.)
+	csvPath = filepath.Join(dir, "comments.csv")
+	donePath = filepath.Join(dir, "DONE")
+	_ = os.Remove(donePath)
+	return csvPath, donePath, csv.NewWriter(csvPath), nil
+}
+
+// resolveStoreRoot picks the directory whose .prereview/ holds annotations:
+// --out when set (available in every mode so it's never a silently-ignored
+// flag), else the default review root.
+func resolveStoreRoot(out, defaultRoot string) (string, error) {
+	if out == "" {
+		return defaultRoot, nil
+	}
+	abs, err := filepath.Abs(out)
+	if err != nil {
+		return "", fmt.Errorf("resolve --out: %w", err)
+	}
+	return abs, nil
+}
+
+// registerAssetRoutes mounts the static client/font/CSS routes shared by repo
+// mode and external (proxy) mode. The catch-all "/" (the livetemplate SPA) is
+// registered by the caller, since its wrapper differs between modes.
+func registerAssetRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/livetemplate-client.js", serveBytes("application/javascript", assets.ClientJS()))
+	mux.HandleFunc("/livetemplate.css", serveBytes("text/css", assets.ClientCSS()))
+	mux.HandleFunc("/syntax.css", serveBytes("text/css", []byte(gitdiff.HighlightCSS)))
+	mux.HandleFunc("/fonts/jetbrains-mono-regular.woff2", serveBytes("font/woff2", assets.FontRegular()))
+	mux.HandleFunc("/fonts/jetbrains-mono-bold.woff2", serveBytes("font/woff2", assets.FontBold()))
+}
+
+// serveAndWait runs the UI server (and an optional secondary server, e.g. the
+// external-mode reverse proxy) until an OS signal, a UI Quit, or a serve error
+// arrives, then shuts both down gracefully. extra may be nil.
+func serveAndWait(srv *http.Server, ln net.Listener, extra *http.Server, shutdownReq <-chan struct{}) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -389,10 +443,124 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool) e
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if extra != nil {
+		_ = extra.Shutdown(shutdownCtx)
+	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil
+}
+
+// runExternal serves `prereview --external <url>`: a reverse proxy fronting the
+// live local site on its own port (a separate origin so the app's root-relative
+// URLs forward cleanly — see proxy.go) plus the prereview UI that frames it and
+// overlays the region-annotation overlay. Annotations save to <out>/comments.csv.
+func runExternal(externalURL, outDir, host string, explicitHost bool, port int, skillMode bool) error {
+	target, err := url.Parse(externalURL)
+	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
+		return fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
+	}
+	if outDir == "" {
+		return fmt.Errorf("--external requires --out <dir> (where annotations are saved)")
+	}
+	absOut, err := resolveStoreRoot(outDir, "")
+	if err != nil {
+		return err
+	}
+
+	// Same .prereview/ store layout as repo mode (so the skill polls
+	// <out>/.prereview/DONE identically), just rooted at --out.
+	startedAt := time.Now()
+	csvPath, donePath, csvWriter, err := openStore(absOut)
+	if err != nil {
+		return err
+	}
+	// Fail fast on a corrupt store; Mount reloads the rows on every connect.
+	if _, err := csv.Read(csvPath); err != nil {
+		return fmt.Errorf("read existing csv: %w", err)
+	}
+
+	tmplFile, cleanup, err := writeTempTemplate(prereviewTemplate)
+	if err != nil {
+		return fmt.Errorf("stage template: %w", err)
+	}
+	defer cleanup()
+	tmpl, err := livetemplate.New("prereview",
+		livetemplate.WithParseFiles(tmplFile),
+		livetemplate.WithWebSocketCompression(),
+	)
+	if err != nil {
+		return fmt.Errorf("livetemplate.New: %w", err)
+	}
+
+	tsIP, magicDNS := tailscaleIPv4()
+	bindHost, warn := resolveBindHost(explicitHost, host, isRemoteBox(), tsIP)
+	if warn != "" {
+		fmt.Fprintf(os.Stderr, "prereview: %s\n", warn)
+	}
+
+	// The proxy gets its OWN origin (a random port on the same bind host) so
+	// the framed app's root-relative URLs resolve against the proxy root. Bind
+	// it first to learn its port before rendering the UI that iframes it.
+	proxyLn, err := net.Listen("tcp", net.JoinHostPort(bindHost, "0"))
+	if err != nil {
+		return fmt.Errorf("listen proxy: %w", err)
+	}
+	proxyPort := proxyLn.Addr().(*net.TCPAddr).Port
+	proxyBaseURL := fmt.Sprintf("http://%s:%d/", bindHost, proxyPort)
+	proxySrv := &http.Server{Handler: newExternalProxy(target), ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		if err := proxySrv.Serve(proxyLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("proxy server", "err", err)
+		}
+	}()
+
+	shutdownReq := make(chan struct{}, 1)
+	controller := &PrereviewController{
+		ExternalMode: true,
+		ProxyBaseURL: proxyBaseURL,
+		TargetURL:    externalURL,
+		CSVPath:      csvPath,
+		DonePath:     donePath,
+		Version:      version,
+		CSVWriter:    csvWriter,
+		SkillMode:    skillMode,
+		ShutdownReq:  shutdownReq,
+	}
+	initial := &PrereviewState{
+		ExternalMode: true,
+		ProxyBaseURL: proxyBaseURL,
+		TargetURL:    externalURL,
+		StartedAt:    startedAt.Format("2006-01-02 15:04:05"),
+		CSVPath:      csvPath,
+		SkillMode:    skillMode,
+	}
+
+	mux := http.NewServeMux()
+	// No staticFallback: there is no repo to serve assets from. The live
+	// site's own assets flow through the proxy origin, not this one.
+	mux.Handle("/", tmpl.Handle(controller, livetemplate.AsState(initial)))
+	registerAssetRoutes(mux)
+
+	uiLn, err := net.Listen("tcp", net.JoinHostPort(bindHost, fmt.Sprintf("%d", port)))
+	if err != nil {
+		return fmt.Errorf("listen ui: %w", err)
+	}
+	uiPort := uiLn.Addr().(*net.TCPAddr).Port
+	uiSrv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+
+	uiURL := fmt.Sprintf("http://%s:%d", bindHost, uiPort)
+	fmt.Printf("READY %s\n", uiURL)
+	for _, alt := range altURLs(bindHost, tsIP, magicDNS, uiPort) {
+		fmt.Printf("ALT %s\n", alt)
+	}
+	fmt.Printf("PROXY %s\n", proxyBaseURL)
+	// REPO points at the annotation store so the skill polls <out>/DONE.
+	fmt.Printf("REPO %s\n", absOut)
+	slog.Info("prereview started (external)", "url", uiURL, "proxy", proxyBaseURL, "target", externalURL, "out", absOut, "bindHost", bindHost)
+
+	return serveAndWait(uiSrv, uiLn, proxySrv, shutdownReq)
 }
 
 // installSkill writes the embedded skill files into

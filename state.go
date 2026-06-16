@@ -22,6 +22,19 @@ type PrereviewState struct {
 	CSVPath   string `json:"csv_path"   lvt:"persist"`
 	Version   string `json:"version"    lvt:"persist"`
 
+	// External (proxy) mode — `prereview --external <url>`. When true the
+	// session reviews a live local website framed through the reverse proxy
+	// instead of files in a repo: there is no git diff and no file list, and
+	// comments anchor to URL + region rather than file + line.
+	// ProxyBaseURL is the same-host second-origin URL the UI iframes;
+	// TargetURL is the upstream the proxy fronts (shown to the user);
+	// CurrentURL is the proxied page currently in the iframe, reported by the
+	// injected beacon and used to scope which annotations are shown/placed.
+	ExternalMode bool   `json:"external_mode"  lvt:"persist"`
+	ProxyBaseURL string `json:"proxy_base_url" lvt:"persist"`
+	TargetURL    string `json:"target_url"     lvt:"persist"`
+	CurrentURL   string `json:"current_url"    lvt:"persist"`
+
 	// File navigation.
 	Files        []gitdiff.FileEntry `json:"files"`
 	SelectedFile string              `json:"selected_file" lvt:"persist"`
@@ -73,6 +86,20 @@ type PrereviewState struct {
 	// surprise the user with a closed drawer. The desktop CSS ignores this
 	// field (sidebar is always visible above 900px).
 	FileDrawerOpen bool `json:"file_drawer_open" lvt:"persist"`
+
+	// AnnoDrawerOpen toggles the --external annotations sidebar. Collapsed by
+	// default (zero value) so the framed live site gets the full width —
+	// especially on a phone; the header "Annotations (N)" button opens it.
+	// Persisted so the choice survives a reconnect.
+	AnnoDrawerOpen bool `json:"anno_drawer_open" lvt:"persist"`
+
+	// FocusedCommentID is the region annotation the user tapped in the
+	// sidebar; its on-page pin renders highlighted, and the client asks the
+	// iframe (via the beacon) to navigate to its page + scroll it into view.
+	// FocusSeq changes on every focus so re-tapping the same annotation
+	// re-triggers the client even when the id is unchanged.
+	FocusedCommentID string `json:"focused_comment_id" lvt:"persist"`
+	FocusSeq         int    `json:"focus_seq"          lvt:"persist"`
 
 	// SkillMode is mirrored from the controller (set by --skill flag) into
 	// state in Mount so the template can branch the top-bar button between
@@ -592,12 +619,19 @@ type Comment struct {
 	// Kind is the comment-shape vocabulary: "line" (or "" for legacy /
 	// pre-migration comments) for line-anchored comments —
 	// FromLine/ToLine are meaningful — "file" for whole-file comments
-	// where line numbers are zero and the anchor is empty, and "area"
-	// for image-overlay annotations where Area carries the rectangle.
+	// where line numbers are zero and the anchor is empty, "area" for
+	// image-overlay annotations where Area carries the rectangle, and
+	// "region" for live-site annotations (--external mode) where Area
+	// carries the rectangle and URL carries the page.
 	Kind string `json:"kind"`
-	// Area is the rectangle for kind=area comments. Zero-value for
-	// non-area rows.
+	// Area is the rectangle for kind=area (fraction of the image) and
+	// kind=region (fraction of the live page's document) comments.
+	// Zero-value for line / file rows.
 	Area Area `json:"area"`
+	// URL is the proxied page (app-relative: pathname+query, no proxy
+	// origin since the proxy port is random per run) a kind=region
+	// comment is anchored to. Empty for every file-based kind.
+	URL string `json:"url"`
 }
 
 // IsFileLevel reports whether this comment applies to the whole file
@@ -612,6 +646,12 @@ func (c Comment) IsFileLevel() bool { return c.Kind == commentKindFile }
 // share the "no anchor to drift, skip in relocate" contract.
 func (c Comment) IsAreaLevel() bool { return c.Kind == commentKindArea }
 
+// IsRegionLevel reports whether this comment annotates a region of a live
+// page in --external mode (kind="region" with a populated Area + URL).
+// Parallel to IsAreaLevel; shares the "no anchor to drift, skip in
+// relocate" contract.
+func (c Comment) IsRegionLevel() bool { return c.Kind == commentKindRegion }
+
 // AnchorOutdated reports that re-location could not confidently place
 // the comment — its line numbers no longer point at the intended
 // content and a human (or the skill) must re-anchor or resolve it.
@@ -623,10 +663,13 @@ func (c Comment) AnchorOutdated() bool { return c.AnchorStatus == anchorOutdated
 func (c Comment) AnchorMoved() bool { return c.AnchorStatus == anchorMoved }
 
 // LineSpan returns "L42" for single-line, "L42-L48" for ranges,
-// "file" for whole-file comments, and "area" for image-area
-// comments — used in the template badge and the composer label, so
-// every kind renders a recognisable span.
+// "file" for whole-file comments, "area" for image-area comments, and
+// "region" for live-site comments — used in the template badge and the
+// composer label, so every kind renders a recognisable span.
 func (c Comment) LineSpan() string {
+	if c.IsRegionLevel() {
+		return "region"
+	}
 	if c.IsAreaLevel() {
 		return "area"
 	}
@@ -745,6 +788,64 @@ func (s PrereviewState) AreaComments() []Comment {
 			continue
 		}
 		if !c.IsAreaLevel() {
+			continue
+		}
+		if c.Resolved && !s.ShowResolved {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// RegionComments returns the visible region annotations (kind="region")
+// for the CURRENT proxied page (--external mode), in creation order.
+// Rendered as the re-pin overlay markers + paired list entries. Scoped by
+// CurrentURL (the page the iframe is on) rather than SelectedFile, since
+// external mode has no file. Zero-arg so the template can range over it.
+func (s PrereviewState) RegionComments() []Comment {
+	if !s.ExternalMode || s.CurrentURL == "" {
+		return nil
+	}
+	var out []Comment
+	for _, c := range s.Comments {
+		if !c.IsRegionLevel() || c.URL != s.CurrentURL {
+			continue
+		}
+		if c.Resolved && !s.ShowResolved {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// FocusedComment returns the region annotation the user tapped to locate
+// (FocusedCommentID), or nil. The template reads its URL + Area to tell the
+// client which page to show and where to scroll the iframe.
+func (s PrereviewState) FocusedComment() *Comment {
+	if s.FocusedCommentID == "" {
+		return nil
+	}
+	for i := range s.Comments {
+		if s.Comments[i].ID == s.FocusedCommentID {
+			return &s.Comments[i]
+		}
+	}
+	return nil
+}
+
+// AllRegionComments returns every visible region annotation for the
+// --external sidebar, in creation order. Unlike RegionComments it is NOT
+// scoped to the current page, so the sidebar can show annotations across
+// every page the user has visited.
+func (s PrereviewState) AllRegionComments() []Comment {
+	if !s.ExternalMode {
+		return nil
+	}
+	var out []Comment
+	for _, c := range s.Comments {
+		if !c.IsRegionLevel() {
 			continue
 		}
 		if c.Resolved && !s.ShowResolved {
