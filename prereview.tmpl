@@ -933,6 +933,13 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   /* On a phone the open drawer slides over the live site rather than pushing
      it below the fold. */
   .ext-sidebar.is-open { position: fixed; inset: 0 0 0 auto; width: min(88vw, 360px); z-index: 50; background: var(--pico-background-color, #fff); border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); box-shadow: -8px 0 24px rgba(0,0,0,0.18); }
+  /* Stream mode adds a second top-bar action (End session). Two contrast
+     buttons overflow the narrow bar and wrap, so on mobile keep only
+     "Hand off →" inline and surface End session in the ⋮ overflow menu. */
+  header.bar .tb-action .end-session-inline { display: none; }
+  /* The external bar has no overflow menu — keep its actions compact so
+     💬 + Hand off + End session fit on one row. */
+  .bar-external .bar-actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
 }
 /* Resolved comments stay visible but muted, with a clear badge. The skill
    reads the CSV `resolved` column and skips these — UI just signals the
@@ -1219,7 +1226,7 @@ main.viewer { overscroll-behavior: contain; }
      them on the live page, the sidebar lists them across pages. */}}
 <header class="bar bar-external">
   <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
-  <span class="bar-actions"><form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button></form>{{if .SkillMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Stop the server and signal Claude to read the CSV">Hand off →</button></form>{{else}}<form method="POST" style="margin:0"><button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button></form>{{end}}</span>
+  <span class="bar-actions"><form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button></form>{{if .StreamMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Send the current annotations to Claude as a handoff event (session stays open)">Hand off →</button></form><form method="POST" style="margin:0"><button type="submit" name="endSession" class="contrast" title="Emit session_end and stop the server — Claude stops consuming the stream">End session</button></form>{{else if .SkillMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Stop the server and signal Claude to read the CSV">Hand off →</button></form>{{else}}<form method="POST" style="margin:0"><button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button></form>{{end}}</span>
 </header>
 <div class="layout layout-external">
   <main class="viewer ext-viewer">
@@ -1330,7 +1337,13 @@ main.viewer { overscroll-behavior: contain; }
   <form method="POST" class="nav-next"><button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></form>
   {{end}}
   <form method="POST" class="tb-action">
-    {{if .SkillMode}}
+    {{if .StreamMode}}
+    <button type="submit" name="handOff" class="contrast" title="Send the current comments to Claude as a handoff event (session stays open)">Hand off →</button>
+    {{/* On mobile End session moves to the ⋮ overflow menu (below) so the
+         narrow bar isn't crowded by two action buttons — hidden here via
+         .end-session-inline in the mobile media query. */}}
+    <button type="submit" name="endSession" class="contrast end-session-inline" title="Emit session_end and stop the server — Claude stops consuming the stream">End session</button>
+    {{else if .SkillMode}}
     <button type="submit" name="handOff" class="contrast" title="Stop the server and signal Claude to read the CSV">Hand off →</button>
     {{else}}
     <button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button>
@@ -1459,11 +1472,28 @@ main.viewer { overscroll-behavior: contain; }
   {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
   <div class="menu-info" style="border-bottom: 0; margin-bottom: 0; font-style: italic;">No comments yet — tap a line to add one.</div>
   {{end}}
+  {{if .StreamMode}}
+  {{/* Stream-mode terminator. Inline in the top bar on desktop; on mobile it
+       lives here (the inline copy is hidden) so the bar isn't crowded by two
+       action buttons. Last item, so it's not an accidental tap target. */}}
+  <form method="POST">
+    <button type="submit" name="endSession" class="menu-item" role="menuitem">
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8" fill="none"/></svg></span>
+      <span class="menu-label">End session</span>
+    </button>
+  </form>
+  {{end}}
 </div>
 
 {{if .Quitting}}
 <div class="banner-stopping" role="status">
   Server stopping… you can close this tab.
+</div>
+{{end}}
+
+{{if .SessionEnded}}
+<div class="banner-stopping" role="status">
+  Session ended — Claude has been notified. You can close this tab.
 </div>
 {{end}}
 

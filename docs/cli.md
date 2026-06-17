@@ -23,6 +23,7 @@ not `prereview ./docs --skill`.
 | `--host` | `127.0.0.1` | auto-resolves to the Tailscale IP on a remote box |
 | `--out` | the review path | the directory whose `.prereview/` holds the store |
 | `--skill` | off | UI shows **Quit** (not **Hand off → Claude**) |
+| `--stream` | off | one-shot DONE handoff (no JSON event stream) |
 
 So `prereview` ≡ `prereview --port 0 --host 127.0.0.1 .` reviewing the current
 git repo's working tree against `HEAD`.
@@ -78,6 +79,35 @@ re-anchoring.
 `--out` is **required** (there's no repo to default the store to), and `[path]`
 and `--base` are **ignored**.
 
+### Stream mode (`--stream`)
+
+The default handoff is **one-shot**: the skill polls `.prereview/DONE` once,
+reads the CSV, acts, and stops. `--stream` turns the handoff into a **continuous,
+multi-round** session for an LLM consumer — no re-invocation between rounds, and
+no hand-written CSV parser.
+
+```bash
+prereview --skill --stream "$(pwd)"
+```
+
+`--stream` implies `--skill` and adds an **End session** button next to **Hand
+off →**. prereview emits a JSON event log to **stdout** (one object per line,
+after the usual `READY`/`REPO` preamble) and mirrors it to
+`.prereview/events.jsonl` (append-only, for replay):
+
+- `ready` — once, after the preamble.
+- `handoff` — on every **Hand off** click; a full snapshot of the actionable
+  comments (unresolved, non-outdated), each as ready-to-use JSON (the opaque
+  `anchor` is dropped and `area` is a nested object, not a string). The consumer
+  dedupes by `id` across rounds.
+- `session_end` — once, on **End session**; the only terminator. The server
+  shuts down right after.
+
+Every event carries a monotonic `seq`, so repeated handoffs are distinguishable
+(the idempotent DONE marker can't do that). The CSV stays the authoritative
+store; the stream is a convenience layer over it. Works in repo, no-git, and
+`--external` modes.
+
 ## Flags
 
 | Flag | Default | Notes |
@@ -88,6 +118,7 @@ and `--base` are **ignored**.
 | `--external <url>` | — | Annotate a **live local site** instead of files: reverse-proxies `<url>` on a second origin and overlays region annotation. **Requires `--out`**; ignores `[path]` and `--base`. See [External mode](#external-mode---external). |
 | `--out <dir>` | the review path | Store root — the directory whose `.prereview/` holds `comments.csv` + `DONE`. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The `REPO` stdout line is the resolved store root. |
 | `--skill` | `false` | Show **Hand off → Claude** instead of **Quit**, and write `.prereview/DONE` on hand-off. The Claude Code skill sets this. |
+| `--stream` | `false` | Emit a continuous JSON event stream for an LLM (stdout + `.prereview/events.jsonl`): each Hand off emits a `handoff` snapshot, a new **End session** button emits a terminating `session_end`. **Implies `--skill`.** See [Stream mode](#stream-mode---stream). |
 
 ### Run-and-exit actions
 
@@ -108,6 +139,7 @@ Flags compose freely; just keep the path last.
 ```bash
 prereview --base origin/main ../service        # a different repo, diffed against a ref
 prereview --skill --base HEAD~3 "$(pwd)"        # skill mode, last-3-commits view
+prereview --skill --stream "$(pwd)"             # multi-round JSON event stream for an LLM
 prereview --host 0.0.0.0 --port 8080            # explicit bind (see below)
 prereview --external http://localhost:5173 --out ./review   # annotate a live local site
 ```

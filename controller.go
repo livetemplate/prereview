@@ -49,8 +49,18 @@ type PrereviewController struct {
 
 	// SkillMode is true when prereview is launched via `--skill` (the
 	// Claude skill sets this). It selects the top-bar button label:
-	// "Hand off → Claude" vs "Quit".
+	// "Hand off → Claude" vs "Quit". --stream implies SkillMode.
 	SkillMode bool
+
+	// StreamMode is true under `prereview --stream`: each Hand off emits a
+	// JSON handoff event and the UI offers an "End session" button that emits
+	// the terminating session_end event. Set once by main.go.
+	StreamMode bool
+
+	// Emitter is the stream-mode JSON event log writer (stdout +
+	// .prereview/events.jsonl). Non-nil only in stream mode; HandOff /
+	// EndSession guard on nil so non-stream sessions emit nothing.
+	Emitter *eventStream
 
 	// ShutdownReq receives a struct{} when the user clicks Quit. main.go
 	// listens for it and triggers graceful HTTP shutdown.
@@ -165,6 +175,10 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// so a binary launched with --skill renders the right button even after
 	// a session-storage reconnect.
 	state.SkillMode = c.SkillMode
+	// StreamMode mirrors the same way and BEFORE the external short-circuit
+	// below, so the "End session" button renders in both repo and external
+	// stream sessions.
+	state.StreamMode = c.StreamMode
 
 	// External (proxy) mode short-circuits the entire git/file-list path:
 	// there is no repo to diff. Mirror the proxy identity from the controller
@@ -1384,20 +1398,33 @@ func (c *PrereviewController) UndoDelete(state PrereviewState, ctx *livetemplate
 	return state, nil
 }
 
-// HandOff is the skill-mode "I'm finished reviewing" handoff. Writes
-// the CSV one more time (defensive — should already be current), then
-// writes the DONE marker AFTER the CSV is fsynced + renamed. The skill
-// polls for the marker, so writing DONE before the CSV is durable
-// would let the skill race and read a half-written file.
-//
-// Server keeps running afterwards so the user can keep editing.
-func (c *PrereviewController) HandOff(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	// The CSV only becomes a contract at handoff. Re-anchor every
-	// commented file first so the skill gets accurate line numbers (and
-	// an explicit anchor_status=outdated where it cannot be trusted).
-	c.relocateAll(&state)
+// flushHandoff re-anchors every commented file, persists the CSV, and (in
+// stream mode) emits a handoff event carrying the full actionable snapshot.
+// Shared by HandOff and EndSession. The CSV only becomes a contract at
+// handoff, so re-anchoring here gives the consumer accurate line numbers (and
+// an explicit anchor_status=outdated where it cannot be trusted); the stream
+// snapshot is filtered to actionable rows and the consumer dedupes by id.
+func (c *PrereviewController) flushHandoff(state *PrereviewState) error {
+	c.relocateAll(state)
 	if err := c.persist(state.Comments); err != nil {
-		return state, fmt.Errorf("final csv write: %w", err)
+		return fmt.Errorf("final csv write: %w", err)
+	}
+	if c.Emitter != nil {
+		if err := c.Emitter.EmitHandoff(state.Comments, time.Now()); err != nil {
+			return fmt.Errorf("emit handoff event: %w", err)
+		}
+	}
+	return nil
+}
+
+// HandOff is the skill-mode "I'm finished reviewing" handoff. Flushes the CSV
+// (+ a stream handoff event in stream mode), then writes the DONE marker AFTER
+// the CSV is fsynced + renamed. The skill polls for the marker, so writing
+// DONE before the CSV is durable would let it race and read a half-written
+// file. Server keeps running afterwards so the user can keep editing.
+func (c *PrereviewController) HandOff(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if err := c.flushHandoff(&state); err != nil {
+		return state, err
 	}
 	if err := writeDoneMarker(c.DonePath, c.CSVPath); err != nil {
 		return state, fmt.Errorf("write done marker: %w", err)
@@ -1408,22 +1435,53 @@ func (c *PrereviewController) HandOff(state PrereviewState, ctx *livetemplate.Co
 	return state, nil
 }
 
+// EndSession is the stream-mode terminator. It first flushes a final handoff
+// snapshot — so comments left since the last Hand off still reach the consumer
+// (dedup-by-id makes a redundant snapshot harmless, and the alternative would
+// silently strand them in the CSV but never the stream) — then emits the single
+// session_end event (the only event the consumer loop treats as "stop") and
+// shuts the server down on the same delay as Quit, so the framework renders the
+// "session ended" banner before the WebSocket is torn down. The LLM's
+// background job completing is the second, redundant terminator.
+func (c *PrereviewController) EndSession(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if err := c.flushHandoff(&state); err != nil {
+		return state, err
+	}
+	if c.Emitter != nil {
+		if err := c.Emitter.EmitSessionEnd(time.Now()); err != nil {
+			return state, fmt.Errorf("emit session_end event: %w", err)
+		}
+	}
+	state.SessionEnded = true
+	state.LastDeletedComment = nil
+	c.requestShutdown()
+	return state, nil
+}
+
 // Quit gracefully shuts the HTTP server down. The actual shutdown is
 // dispatched on a delay so the framework gets to render `Quitting=true`
 // back to the client before the WebSocket is torn down — otherwise the
 // browser sees a sudden disconnect with no UI feedback.
 func (c *PrereviewController) Quit(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.Quitting = true
-	if c.ShutdownReq != nil {
-		go func() {
-			time.Sleep(300 * time.Millisecond)
-			select {
-			case c.ShutdownReq <- struct{}{}:
-			default:
-			}
-		}()
-	}
+	c.requestShutdown()
 	return state, nil
+}
+
+// requestShutdown dispatches the graceful shutdown on a delay so the framework
+// can render the final state (Quitting / SessionEnded) back to the client
+// before the WebSocket is torn down. No-op when ShutdownReq is unset (tests).
+func (c *PrereviewController) requestShutdown() {
+	if c.ShutdownReq == nil {
+		return
+	}
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		select {
+		case c.ShutdownReq <- struct{}{}:
+		default:
+		}
+	}()
 }
 
 // persist converts the in-memory comments to CSV Rows and atomically

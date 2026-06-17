@@ -66,6 +66,7 @@ func main() {
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
 	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
+	stream := flag.Bool("stream", false, "emit a continuous JSON event stream (stdout + .prereview/events.jsonl) for an LLM: each 'Hand off' emits a handoff snapshot, the new 'End session' button emits a terminating session_end. Implies --skill.")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	doInstallSkill := flag.Bool("install-skill", false, "install the Claude Code skill into ~/.claude/skills/prereview/ and exit")
 	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
@@ -166,14 +167,14 @@ func main() {
 	}
 
 	if *external != "" {
-		if err := runExternal(*external, *out, *host, explicitHost, *port, *skill); err != nil {
+		if err := runExternal(*external, *out, *host, explicitHost, *port, *skill, *stream); err != nil {
 			slog.Error("fatal", "err", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, *skill, *out); err != nil {
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, *skill, *out, *stream); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -220,7 +221,12 @@ func maybeAutoUpdate() {
 	}
 }
 
-func run(repo, base, host string, explicitHost bool, port int, skillMode bool, out string) error {
+func run(repo, base, host string, explicitHost bool, port int, skillMode bool, out string, streamMode bool) error {
+	// --stream implies --skill: the stream needs the "Hand off" button, which
+	// is gated by skill mode.
+	if streamMode {
+		skillMode = true
+	}
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -246,6 +252,7 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	if err != nil {
 		return err
 	}
+	emitter := newStreamEmitter(streamMode, csvPath)
 
 	// Load any existing comments from disk so a restart resumes the session.
 	existing, err := csv.Read(csvPath)
@@ -302,16 +309,19 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 		Version:     version,
 		CSVWriter:   csvWriter,
 		SkillMode:   skillMode,
+		StreamMode:  streamMode,
+		Emitter:     emitter,
 		ShutdownReq: shutdownReq,
 	}
 	initial := &PrereviewState{
-		RepoPath:  absRepo,
-		Base:      base,
-		NoGit:     tgt.NoGit,
-		StartedAt: startedAt.Format("2006-01-02 15:04:05"),
-		CSVPath:   csvPath,
-		Comments:  initialComments,
-		SkillMode: skillMode,
+		RepoPath:   absRepo,
+		Base:       base,
+		NoGit:      tgt.NoGit,
+		StartedAt:  startedAt.Format("2006-01-02 15:04:05"),
+		CSVPath:    csvPath,
+		Comments:   initialComments,
+		SkillMode:  skillMode,
+		StreamMode: streamMode,
 	}
 
 	mux := http.NewServeMux()
@@ -368,7 +378,34 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	fmt.Printf("REPO %s\n", storeRoot)
 	slog.Info("prereview started", "url", url, "repo", absRepo, "store", storeRoot, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
 
+	// Emit the `ready` event AFTER the plaintext preamble so the skill's
+	// READY/REPO parse is never interleaved with JSON. No-op when not streaming.
+	emitReady(emitter, storeRoot, csvPath)
+
 	return serveAndWait(srv, ln, nil, shutdownReq)
+}
+
+// newStreamEmitter builds the stream-mode event emitter targeting
+// <store>/.prereview/events.jsonl (durable mirror) and stdout (live channel),
+// or returns nil when streaming is off so callers attach it unconditionally.
+func newStreamEmitter(streamMode bool, csvPath string) *eventStream {
+	if !streamMode {
+		return nil
+	}
+	eventsPath := filepath.Join(filepath.Dir(csvPath), "events.jsonl")
+	return newEventStream(os.Stdout, eventsPath)
+}
+
+// emitReady emits the one-shot `ready` event when streaming; a nil emitter
+// (non-stream session) is a no-op. A write failure is logged, not fatal — the
+// review server must run regardless.
+func emitReady(emitter *eventStream, storeRoot, csvPath string) {
+	if emitter == nil {
+		return
+	}
+	if err := emitter.EmitReady(storeRoot, csvPath, time.Now()); err != nil {
+		slog.Warn("emit ready event", "err", err)
+	}
 }
 
 // openStore prepares the .prereview/ store (comments.csv + DONE marker) under
@@ -387,6 +424,10 @@ func openStore(storeRoot string) (csvPath, donePath string, w *csv.Writer, err e
 	csvPath = filepath.Join(dir, "comments.csv")
 	donePath = filepath.Join(dir, "DONE")
 	_ = os.Remove(donePath)
+	// Clear any stale stream event log so a fresh session starts from seq 0
+	// rather than appending onto a previous run's events (same intent as the
+	// DONE reset above). Harmless when not streaming — the file won't exist.
+	_ = os.Remove(filepath.Join(dir, "events.jsonl"))
 	return csvPath, donePath, csv.NewWriter(csvPath), nil
 }
 
@@ -456,7 +497,11 @@ func serveAndWait(srv *http.Server, ln net.Listener, extra *http.Server, shutdow
 // live local site on its own port (a separate origin so the app's root-relative
 // URLs forward cleanly — see proxy.go) plus the prereview UI that frames it and
 // overlays the region-annotation overlay. Annotations save to <out>/comments.csv.
-func runExternal(externalURL, outDir, host string, explicitHost bool, port int, skillMode bool) error {
+func runExternal(externalURL, outDir, host string, explicitHost bool, port int, skillMode bool, streamMode bool) error {
+	// --stream implies --skill (the stream needs the "Hand off" button).
+	if streamMode {
+		skillMode = true
+	}
 	target, err := url.Parse(externalURL)
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
 		return fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
@@ -476,6 +521,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	if err != nil {
 		return err
 	}
+	emitter := newStreamEmitter(streamMode, csvPath)
 	// Fail fast on a corrupt store; Mount reloads the rows on every connect.
 	if _, err := csv.Read(csvPath); err != nil {
 		return fmt.Errorf("read existing csv: %w", err)
@@ -526,6 +572,8 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		Version:      version,
 		CSVWriter:    csvWriter,
 		SkillMode:    skillMode,
+		StreamMode:   streamMode,
+		Emitter:      emitter,
 		ShutdownReq:  shutdownReq,
 	}
 	initial := &PrereviewState{
@@ -535,6 +583,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		StartedAt:    startedAt.Format("2006-01-02 15:04:05"),
 		CSVPath:      csvPath,
 		SkillMode:    skillMode,
+		StreamMode:   streamMode,
 	}
 
 	mux := http.NewServeMux()
@@ -559,6 +608,8 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	// REPO points at the annotation store so the skill polls <out>/DONE.
 	fmt.Printf("REPO %s\n", absOut)
 	slog.Info("prereview started (external)", "url", uiURL, "proxy", proxyBaseURL, "target", externalURL, "out", absOut, "bindHost", bindHost)
+
+	emitReady(emitter, absOut, csvPath)
 
 	return serveAndWait(uiSrv, uiLn, proxySrv, shutdownReq)
 }

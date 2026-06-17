@@ -107,7 +107,7 @@ func TestRunExternalValidation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// All cases fail validation before any listener is bound.
-			if err := runExternal(tc.extURL, tc.out, "127.0.0.1", false, 0, false); err == nil {
+			if err := runExternal(tc.extURL, tc.out, "127.0.0.1", false, 0, false, false); err == nil {
 				t.Errorf("expected validation error for %s", tc.name)
 			}
 		})
