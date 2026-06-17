@@ -23,6 +23,8 @@ tailnet, before anything is pushed.
 
 - **Comment per line, range, file, or image region** — two-click range
   select; whole-file comments; drag a box on a binary image.
+- **Annotate a live local site** (`--external`) — proxy a running dev
+  server and drag a box on any page to comment.
 - **Markdown & HTML render** — formatted by default, but comments anchor
   to real source lines and round-trip with the raw view.
 - **One CSV, atomically written** — the source of truth; read it any time
@@ -135,6 +137,7 @@ prereview                                # current dir (git repo or not) — jus
 prereview ./PLAN.md                      # a single file
 prereview ./design-docs                  # a non-git directory — every file shown whole
 prereview --base origin/main ../service  # a different git repo vs a ref (flags BEFORE the path)
+prereview --external http://localhost:5173 --out ./review   # annotate a live local site (dev server)
 prereview --skill                        # LLM hand-off mode (path defaults to .)
 ```
 
@@ -198,13 +201,14 @@ an audit trail; Delete has Undo) · **Esc** clears a selection.
 ## Output
 
 `<repo>/.prereview/comments.csv` is the source of truth — RFC-4180
-quoted, 12 columns, one row per comment:
+quoted, 13 columns, one row per comment:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url
 ```
 
-`kind` is `line` (default), `file`, or `area`; `area` carries the image
+`kind` is `line` (default), `file`, `area`, or `region` (a live-site
+rectangle from `--external`, anchored to a `url`); `area` carries the
 rectangle as `{x,y,w,h}` fractions. See
 [skill/reference.md](skill/reference.md) for the full column docs.
 

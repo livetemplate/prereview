@@ -33,6 +33,15 @@ type PrereviewController struct {
 	// RepoPath is its parent directory.
 	NoGit      bool
 	SingleFile string
+
+	// ExternalMode is true under `prereview --external <url>`: the session
+	// fronts a live local website through the reverse proxy instead of a
+	// repo. ProxyBaseURL is the second-origin URL the UI iframes; TargetURL
+	// is the upstream shown to the user. Set once by main.go.
+	ExternalMode bool
+	ProxyBaseURL string
+	TargetURL    string
+
 	// Version is the build version (main.version; "dev" for source
 	// builds) surfaced into state for the footer.
 	Version   string
@@ -156,6 +165,19 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// so a binary launched with --skill renders the right button even after
 	// a session-storage reconnect.
 	state.SkillMode = c.SkillMode
+
+	// External (proxy) mode short-circuits the entire git/file-list path:
+	// there is no repo to diff. Mirror the proxy identity from the controller
+	// (source of truth) and return — the template renders the framed live
+	// site + URL-grouped annotations instead of a file tree.
+	if c.ExternalMode {
+		state.ExternalMode = true
+		state.ProxyBaseURL = c.ProxyBaseURL
+		state.TargetURL = c.TargetURL
+		state.Version = c.Version
+		state.CSVPath = c.CSVPath
+		return state, nil
+	}
 
 	// NoGit is mirror-only too (controller is source of truth): the
 	// template hides the base picker and the diff/file-view affordances
@@ -678,6 +700,27 @@ func (c *PrereviewController) ToggleRegionSelect(state PrereviewState, ctx *live
 	return state, nil
 }
 
+// ToggleAnnotations opens/closes the --external annotations sidebar (collapsed
+// by default so the live site gets full width). Pure flip.
+func (c *PrereviewController) ToggleAnnotations(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.AnnoDrawerOpen = !state.AnnoDrawerOpen
+	return state, nil
+}
+
+// FocusComment marks a region annotation as the one to locate: its on-page
+// pin renders highlighted and the client (via the beacon) navigates the
+// iframe to its page + scrolls it into view. FocusSeq bumps every call so
+// re-tapping the same annotation re-fires the client even with an unchanged id.
+func (c *PrereviewController) FocusComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("focusComment: missing id")
+	}
+	state.FocusedCommentID = id
+	state.FocusSeq++
+	return state, nil
+}
+
 // ClearSelection wipes the line selection and any draft. Bound to a
 // "Cancel" button next to the composer and to ESC keydown on the body.
 func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
@@ -804,12 +847,7 @@ func (c *PrereviewController) SelectImageArea(state PrereviewState, ctx *livetem
 		W: ctx.GetFloat("w"),
 		H: ctx.GetFloat("h"),
 	}
-	// Defensive validation: the client clamps before dispatching, but a
-	// malicious / buggy caller could send out-of-range values. Reject
-	// rather than persist a nonsense rectangle.
-	if area.W <= 0 || area.H <= 0 ||
-		area.X < 0 || area.X > 1 || area.Y < 0 || area.Y > 1 ||
-		area.X+area.W > 1.0001 || area.Y+area.H > 1.0001 {
+	if !validUnitRect(area) {
 		return state, fmt.Errorf("selectImageArea: out-of-range rectangle %+v", area)
 	}
 	state.CommentMode = commentKindArea
@@ -821,6 +859,70 @@ func (c *PrereviewController) SelectImageArea(state PrereviewState, ctx *livetem
 	state.ReanchorCommentID = ""
 	state.MoreMenuOpen = false
 	// Capturing a region disarms the overlay so the composer is reachable.
+	state.RegionSelectArmed = false
+	return state, nil
+}
+
+// validUnitRect reports whether a is a non-empty rectangle fully inside the
+// unit square (0..1 fractions) — the shared shape for kind=area (image) and
+// kind=region (live page) selections. The client clamps before dispatch;
+// this rejects a buggy/malicious out-of-range payload rather than persisting
+// a nonsense rectangle. The 1.0001 slack absorbs float rounding at the edge.
+func validUnitRect(a Area) bool {
+	return a.W > 0 && a.H > 0 &&
+		a.X >= 0 && a.X <= 1 && a.Y >= 0 && a.Y <= 1 &&
+		a.X+a.W <= 1.0001 && a.Y+a.H <= 1.0001
+}
+
+// SetProxyURL records the proxied page the iframe is currently showing,
+// reported by the injected beacon on load / pushState / popstate. It scopes
+// which region annotations render (RegionComments) and where new ones
+// anchor. Navigating to a different page drops any in-progress region
+// composer — it belonged to the page we just left.
+func (c *PrereviewController) SetProxyURL(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	url := ctx.GetString("url")
+	if url == "" || url == state.CurrentURL {
+		return state, nil
+	}
+	state.CurrentURL = url
+	if state.CommentMode == commentKindRegion {
+		state.CommentMode = ""
+		state.SelectionArea = Area{}
+		state.DraftBody = ""
+		state.EditingCommentID = ""
+	}
+	return state, nil
+}
+
+// SelectRegion arms the composer for a region annotation on the current
+// proxied page: a rectangle in document-fraction coordinates (computed
+// client-side from the drag box + the beacon's scroll/document metrics),
+// dispatched from the overlay's lvt-fx:region-select="selectRegion"
+// data-surface="page" directive. Mirrors SelectImageArea but anchors to
+// CurrentURL instead of a file.
+func (c *PrereviewController) SelectRegion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if state.CurrentURL == "" {
+		return state, fmt.Errorf("selectRegion: no current page")
+	}
+	area := Area{
+		X: ctx.GetFloat("x"),
+		Y: ctx.GetFloat("y"),
+		W: ctx.GetFloat("w"),
+		H: ctx.GetFloat("h"),
+	}
+	if !validUnitRect(area) {
+		return state, fmt.Errorf("selectRegion: out-of-range rectangle %+v", area)
+	}
+	state.CommentMode = commentKindRegion
+	state.SelectionArea = area
+	state.SelectionAnchor = 0
+	state.SelectionEnd = 0
+	state.SelectionSide = ""
+	state.EditingCommentID = ""
+	state.ReanchorCommentID = ""
+	state.MoreMenuOpen = false
+	// Capturing a region disarms the overlay so the live page is interactive
+	// again (scroll / click / navigate) and the composer is reachable.
 	state.RegionSelectArmed = false
 	return state, nil
 }
@@ -838,6 +940,11 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 	body := strings.TrimSpace(ctx.GetString("body"))
 	if body == "" {
 		return state, fmt.Errorf("comment body cannot be empty")
+	}
+	// Region comments (--external mode) anchor to a URL, not a file — handle
+	// before the file guard below, which would otherwise reject them.
+	if state.CommentMode == commentKindRegion {
+		return c.addRegionComment(state, body)
 	}
 	if state.SelectedFile == "" {
 		return state, fmt.Errorf("no file selected")
@@ -1061,6 +1168,57 @@ func (c *PrereviewController) addAreaComment(state PrereviewState, body string) 
 	return state, nil
 }
 
+// addRegionComment persists a kind=region annotation: a rectangle
+// (document-fraction Area, set by SelectRegion) on the current proxied page
+// (CurrentURL), with no file / line / anchor. Mirrors addAreaComment; the
+// only differences are the URL anchor and Kind. Edits (EditingCommentID)
+// update body + rectangle in place.
+func (c *PrereviewController) addRegionComment(state PrereviewState, body string) (PrereviewState, error) {
+	if state.SelectionArea.Empty() {
+		return state, fmt.Errorf("no region selected")
+	}
+	if state.CurrentURL == "" {
+		return state, fmt.Errorf("no current page")
+	}
+	var rollback func()
+	if state.EditingCommentID != "" {
+		idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == state.EditingCommentID })
+		if idx >= 0 {
+			prev := state.Comments[idx]
+			state.Comments[idx].Body = body
+			state.Comments[idx].Area = state.SelectionArea
+			rollback = func() { state.Comments[idx] = prev }
+		}
+	}
+	if rollback == nil {
+		cm := Comment{
+			ID:      newCommentID(),
+			Body:    body,
+			Created: time.Now().UTC(),
+			Kind:    commentKindRegion,
+			Area:    state.SelectionArea,
+			URL:     state.CurrentURL,
+			// File/FromLine/ToLine/Side/Anchor stay zero — IsRegionLevel()
+			// keys off the "no anchor to relocate" contract.
+		}
+		state.Comments = append(state.Comments, cm)
+		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
+	}
+
+	if err := c.persist(state.Comments); err != nil {
+		rollback()
+		return state, fmt.Errorf("persist region comment: %w", err)
+	}
+
+	state.CommentMode = ""
+	state.SelectionArea = Area{}
+	state.DraftBody = ""
+	state.EditingCommentID = ""
+	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
 // EditComment seeds the composer with an existing comment's body +
 // line range so the user can rewrite it. The original comment stays in
 // state.Comments — AddComment detects EditingCommentID and updates
@@ -1078,9 +1236,11 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	cm := state.Comments[idx]
 	state.SelectedFile = cm.File
 	// Reload diff for the comment's file in case we're on a different one.
-	diff, err := c.loadDiffCached(state.Base, cm.File)
-	if err == nil {
-		state.CurrentDiff = diff
+	// Region comments (--external) have no file, so skip the git call entirely.
+	if cm.File != "" {
+		if diff, err := c.loadDiffCached(state.Base, cm.File); err == nil {
+			state.CurrentDiff = diff
+		}
 	}
 	// Route the composer into the right mode based on the comment's
 	// Kind — file-level lands in file-mode, area in area-mode (with
@@ -1096,6 +1256,15 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	case cm.IsAreaLevel():
 		state.CommentMode = commentKindArea
 		state.SelectionArea = cm.Area
+		state.SelectionAnchor = 0
+		state.SelectionEnd = 0
+		state.SelectionSide = ""
+	case cm.IsRegionLevel():
+		state.CommentMode = commentKindRegion
+		state.SelectionArea = cm.Area
+		// Scope to the comment's page so addRegionComment writes it back to
+		// the right URL even if the iframe is currently on another page.
+		state.CurrentURL = cm.URL
 		state.SelectionAnchor = 0
 		state.SelectionEnd = 0
 		state.SelectionSide = ""
@@ -1278,6 +1447,7 @@ func (c *PrereviewController) persist(comments []Comment) error {
 			AnchorStatus: cm.AnchorStatus,
 			Kind:         cm.Kind,
 			Area:         cm.Area.JSON(),
+			URL:          cm.URL,
 		})
 	}
 	return c.CSVWriter.Write(rows)
@@ -1330,7 +1500,7 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 			ID: r.ID, File: r.File, FromLine: r.FromLine, ToLine: r.ToLine,
 			Side: r.Side, Body: r.Body, Created: r.CreatedAt, Resolved: r.Resolved,
 			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus,
-			Kind: r.Kind, Area: parseArea(r.Area),
+			Kind: r.Kind, Area: parseArea(r.Area), URL: r.URL,
 		})
 	}
 	return out

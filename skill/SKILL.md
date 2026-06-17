@@ -89,20 +89,21 @@ cat "$csv_path"
 **Columns** (load-bearing — order is the contract):
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url
 ```
 
 - `id`: opaque per-comment identifier
-- `from_line` / `to_line`: 1-indexed; equal for single-line comments. **`0` when `kind=file` or `kind=area`** (no line anchor).
-- `side`: `new` | `old` (which side of the diff the line is on). Empty when `kind=file` or `kind=area`.
+- `from_line` / `to_line`: 1-indexed; equal for single-line comments. **`0` when `kind=file`, `kind=area`, or `kind=region`** (no line anchor).
+- `side`: `new` | `old` (which side of the diff the line is on). Empty when `kind=file`, `kind=area`, or `kind=region`.
 - `body`: RFC-4180 quoted; preserves newlines
 - `created_at`: RFC-3339 UTC
 - `resolved`: `true` | `false` — see "Resolved comments" below
-- `anchor`: internal JSON fingerprint — **do not parse or act on it**. Empty when `kind=file` or `kind=area`.
-- `anchor_status`: `ok` | `moved` | `outdated` | *(empty)* — see "Re-anchoring" below. Always empty for `kind=file` / `kind=area` (nothing to drift).
-- `kind`: `line` | `file` | `area` | *(empty)* — see "Comment kinds" below. Empty means `line` for pre-migration rows.
-- `area`: JSON blob `{"x":0.1,"y":0.2,"w":0.3,"h":0.15}` when `kind=area`; empty otherwise. See "Comment kinds" below.
-- Older CSVs may have fewer trailing columns (7–11); index by position and default missing ones to empty.
+- `anchor`: internal JSON fingerprint — **do not parse or act on it**. Empty when `kind=file`, `kind=area`, or `kind=region`.
+- `anchor_status`: `ok` | `moved` | `outdated` | *(empty)* — see "Re-anchoring" below. Always empty for `kind=file` / `kind=area` / `kind=region` (nothing to drift).
+- `kind`: `line` | `file` | `area` | `region` | *(empty)* — see "Comment kinds" below. Empty means `line` for pre-migration rows.
+- `area`: JSON blob `{"x":0.1,"y":0.2,"w":0.3,"h":0.15}` (0..1 fractions) when `kind=area` (of the image) or `kind=region` (of the live page's document); empty otherwise. See "Comment kinds" below.
+- `url`: the proxied page (app-relative, e.g. `/pricing`) when `kind=region` (`--external` live-site review); empty for every file-based kind.
+- Older CSVs may have fewer trailing columns (7–12); index by position and default missing ones to empty.
 
 Multi-line bodies use standard CSV quoting; use `encoding/csv` or any RFC-4180-compliant parser.
 
@@ -129,6 +130,10 @@ Multi-line bodies use standard CSV quoting; use `encoding/csv` or any RFC-4180-c
   image file itself is the source of truth for those numbers, so
   re-encoding at different dimensions still highlights the same
   logical region.
+- `region` — comment overlays a rectangle on a **live page** from
+  `--external` live-site review. It points at a URL + page region, not a
+  file: the `file` column is empty and there are no line numbers, so
+  treat it as context/feedback about a page, not an actionable file edit.
 
 ### Resolved comments
 

@@ -33,16 +33,24 @@ const (
 	// are all zero/empty; "area" for image-overlay annotations where
 	// `area` (column 12) carries the rectangle.
 	ColKind = "kind"
-	// `area` is a JSON blob {"x":0.1,"y":0.2,"w":0.3,"h":0.15} where
-	// each value is a 0..1 fraction of the image's natural dimensions.
-	// Only populated when `kind` is "area"; empty for line / file
-	// rows. Fractions (not pixels) so a re-encoded image at different
-	// dimensions still highlights the same logical region.
+	// `area` is a JSON blob {"x":0.1,"y":0.2,"w":0.3,"h":0.15} where each
+	// value is a 0..1 fraction. For `kind=area` it's a fraction of the
+	// image's natural dimensions; for `kind=region` it's a fraction of the
+	// live page's document scroll dimensions (so a re-pinned annotation
+	// survives scroll). Empty for line / file rows. Fractions (not pixels)
+	// so a re-encoded image / re-laid-out page still highlights the same
+	// logical region.
 	ColArea = "area"
+	// `kind=region` annotations (the --external live-site mode) anchor to a
+	// URL + rectangle instead of a file + line. `url` is the proxied page,
+	// app-relative (pathname+query, no proxy origin — the proxy port is
+	// random per run). Empty for every file-based kind.
+	ColURL = "url"
 )
 
-// Header is the row written before any data. Position-stable.
+// Header is the row written before any data. Position-stable: only ever
+// append new columns (readers tolerate short legacy rows by length).
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
-	ColAnchor, ColAnchorStatus, ColKind, ColArea,
+	ColAnchor, ColAnchorStatus, ColKind, ColArea, ColURL,
 }

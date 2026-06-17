@@ -12,6 +12,8 @@ this file is the LLM's lookup for **what every value means**.
 | `--port` | `0` | no | TCP port to listen on. `0` = OS-assigned (random free port — what the skill should normally use to avoid collisions). |
 | `--host` | `127.0.0.1` | no | Host/IP to bind on. **Auto-resolved when not set explicitly:** a remote (SSH) box with a tailnet binds its Tailscale IP (phone-reachable, never public); a remote box with no tailnet stays `127.0.0.1` and prints a stderr warning; local stays `127.0.0.1` (unchanged). An explicit value is an absolute override and is never auto-rebound — avoid `0.0.0.0`, which exposes the source diff on every interface including any public IP. |
 | `--skill` | `false` | yes (for skill use) | Show the "Hand off → Claude" top-bar button (writes `.prereview/DONE` on click) instead of "Quit" (gracefully shuts down). Without `--skill`, no DONE marker is ever written and the skill's poll loop never terminates. |
+| `--external` | — | no | Annotate a live local website instead of files: reverse-proxies the URL on a second origin and overlays region annotation. Requires `--out`; ignores `[path]`/`--base`. |
+| `--out` | the review path | with `--external` | Directory whose `.prereview/` holds comments.csv + DONE. Defaults to the review path; required with `--external`. |
 | `--version` | — | no | Print build version and exit. |
 
 ## stdout protocol
@@ -21,6 +23,7 @@ On startup, prereview prints these lines to stdout, in order:
 ```
 READY http://<host>:<port>
 ALT   http://<host>:<port>     (zero or more; only when on a tailnet)
+PROXY http://<host>:<port>     (external mode only; the proxy origin the UI frames)
 REPO  <absolute review-root directory>
 ```
 
@@ -30,6 +33,10 @@ line the skill and the e2e harness machine-parse — match the literal
 prefix `READY ` and take the rest. Zero or more `ALT` lines follow with
 additional reachable forms (chiefly the MagicDNS hostname, friendlier to
 tap on a phone); they are purely additive and parsers may ignore them.
+In **external mode** (`--external`) one extra `PROXY <url>` line follows
+the `ALT` lines (before `REPO`): it's the proxy origin the UI frames.
+It's additive too — parsers may ignore it, and `READY` remains the
+canonical UI url (not the proxy).
 `REPO` is the directory whose `.prereview/` holds `comments.csv` and
 `DONE` — equal to the path argument for a git repo or non-git
 directory, and the file's **parent** directory for a single-file review.
@@ -79,12 +86,12 @@ File: `<repo>/.prereview/comments.csv`. RFC-4180 quoted; encoding is UTF-8.
 ### Header (load-bearing — column order is the contract)
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url
 ```
 
-Older CSVs may have 7–9 columns (pre-`resolved`, pre-`anchor`,
-pre-`anchor_status`); columns 0–7 are stable, so index by position and
-treat missing trailing columns as empty/default.
+Older CSVs may have 7–12 columns (pre-`resolved`/`anchor`/`anchor_status`/`kind`/`area`/`url`);
+columns 0–7 are stable, so index by position and treat missing trailing
+columns as empty/default. Columns are only ever appended.
 
 ### Column details
 
@@ -100,6 +107,9 @@ treat missing trailing columns as empty/default.
 | `resolved` | bool | `true`, `false` | Lowercase. `true` = human marked the comment as already addressed; **skip these as directives**. |
 | `anchor` | JSON string | `{"text":"…","before":[…],"after":[…]}` | **Internal — do not parse or act on.** The content fingerprint prereview uses to re-locate a comment when the doc changes. May be empty for legacy rows. |
 | `anchor_status` | enum | `ok`, `moved`, `outdated`, *(empty)* | `ok`/empty = line numbers are trustworthy. `moved` = the doc was edited and prereview already auto-corrected `from_line`/`to_line` to follow the content (still trustworthy). `outdated` = the anchored content changed or vanished and prereview could **not** confidently re-place it — `from_line`/`to_line` are stale. **Treat `outdated` like `resolved=true`: skip as a directive** (may still use as context). |
+| `kind` | enum | `line`, `file`, `area`, `region`, *(empty)* | What the comment anchors to. `line` (default; empty for pre-migration rows) = a line range. `file` = the whole file. `area` = a rectangle on a binary image. `region` = a rectangle on a live page (from `--external`). For `file`/`area`/`region` the line/side/anchor columns are empty/zero. |
+| `area` | JSON string | `{"x":0.1,"y":0.2,"w":0.3,"h":0.15}` | Rectangle as 0..1 fractions — of the **image** (`kind=area`) or of the live page's **document** (`kind=region`, so a re-pin survives scroll). Empty for every other kind. |
+| `url` | string (app-relative path) | `/pricing` | The proxied page for a `kind=region` comment. App-relative (the proxy port is random per run, so no absolute URL is stored). **Empty for every file-based kind.** |
 
 ### Parsing example
 
@@ -135,6 +145,16 @@ for _, row := range rows[1:] {
 - Comments still auto-save to `comments.csv` — the user can read or
   hand off later by relaunching with `--skill`
 
+### External mode (`--external`)
+
+- Reverse-proxies a **live local site** (`--external <url>`) instead of
+  reviewing files; the user drags a box on any page to leave a comment
+- Comments are stored as `kind=region` rows: a **URL + rectangle**
+  (`url` + `area` columns), not a file + line
+- Region comments are **frozen** — no content re-anchoring (like `area`)
+- Requires `--out` (no repo to default the store to); `[path]`/`--base`
+  are ignored
+
 ## Atomicity guarantees
 
 `comments.csv` is rewritten on every add/edit/delete/resolve via:
@@ -157,6 +177,7 @@ pre-mutation or post-mutation state, never a torn write.
 - **Unchanged files**, when shown (toggle set to "all", or clean-tree fallback), appear with no badge. They render as plain context lines; comments on them anchor to the working-tree line numbers.
 - **Deleted files** (in base, absent from working tree) are omitted from the file list — there's nothing to scroll through. Use a different `--base` if you specifically need to review deletions.
 - **Binary files** render as "Binary file — cannot display". The skill should treat binary file rows in the CSV (if any) as informational, not actionable.
+- **Region comments** (`kind=region`, from `--external`) reference a **URL + rectangle**, not a file + line — the `file` column is empty and there are no line numbers. Treat them as **informational/context** (a human's visual concern about a page), not as a file-edit directive.
 - **Very large files** (>1 MB) render with a "file too large to review" placeholder rather than the full content. Comments on those files are still accepted (anchored to line numbers the user knows), but the skill should be conservative — the diff context the LLM saw is just the placeholder.
 - **Resolved comments** stay in the CSV with `resolved=true`. The skill should skip them as directives but may include them as context (e.g., "the user has already addressed this similar concern").
 - **Comment re-anchoring.** prereview captures a content fingerprint when a comment is made. If the doc is edited afterwards (including by *you*, between writing the file and the user handing off), prereview re-locates each comment on the live file: it auto-corrects `from_line`/`to_line` and marks `anchor_status=moved` when it can do so confidently, or marks `anchor_status=outdated` (line numbers left stale) when it cannot. **The handed-off CSV is already re-anchored** (relocation runs on hand-off). So: trust `ok`/`moved` line numbers; treat `outdated` like resolved — don't act on its line numbers (the user must re-anchor it in the UI, or you may use its `body` as context only).

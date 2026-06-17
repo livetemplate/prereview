@@ -31,11 +31,13 @@ func TestWriter_HeaderAndRows(t *testing.T) {
 
 	created := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
 	areaJSON := `{"x":0.1,"y":0.2,"w":0.3,"h":0.15}`
+	regionJSON := `{"x":0.4,"y":0.5,"w":0.2,"h":0.1}`
 	rows := []Row{
 		{ID: "01A", File: "main.go", FromLine: 10, ToLine: 12, Side: "new", Body: "extract this", CreatedAt: created},
 		{ID: "01B", File: "x.go", FromLine: 1, ToLine: 1, Side: "old", Body: "remove?", CreatedAt: created},
 		{ID: "01F", File: "logo.png", Body: "wrong file", CreatedAt: created, Kind: "file"},
 		{ID: "01R", File: "diagram.png", Body: "wrong label", CreatedAt: created, Kind: "area", Area: areaJSON},
+		{ID: "01G", Body: "CTA too low", CreatedAt: created, Kind: "region", Area: regionJSON, URL: "/pricing"},
 	}
 	if err := w.Write(rows); err != nil {
 		t.Fatalf("write: %v", err)
@@ -43,11 +45,12 @@ func TestWriter_HeaderAndRows(t *testing.T) {
 
 	got := readCSV(t, w.Path())
 	want := [][]string{
-		{"id", "file", "from_line", "to_line", "side", "body", "created_at", "resolved", "anchor", "anchor_status", "kind", "area"},
-		{"01A", "main.go", "10", "12", "new", "extract this", "2026-05-14T10:00:00Z", "false", "", "", "", ""},
-		{"01B", "x.go", "1", "1", "old", "remove?", "2026-05-14T10:00:00Z", "false", "", "", "", ""},
-		{"01F", "logo.png", "0", "0", "", "wrong file", "2026-05-14T10:00:00Z", "false", "", "", "file", ""},
-		{"01R", "diagram.png", "0", "0", "", "wrong label", "2026-05-14T10:00:00Z", "false", "", "", "area", areaJSON},
+		{"id", "file", "from_line", "to_line", "side", "body", "created_at", "resolved", "anchor", "anchor_status", "kind", "area", "url"},
+		{"01A", "main.go", "10", "12", "new", "extract this", "2026-05-14T10:00:00Z", "false", "", "", "", "", ""},
+		{"01B", "x.go", "1", "1", "old", "remove?", "2026-05-14T10:00:00Z", "false", "", "", "", "", ""},
+		{"01F", "logo.png", "0", "0", "", "wrong file", "2026-05-14T10:00:00Z", "false", "", "", "file", "", ""},
+		{"01R", "diagram.png", "0", "0", "", "wrong label", "2026-05-14T10:00:00Z", "false", "", "", "area", areaJSON, ""},
+		{"01G", "", "0", "0", "", "CTA too low", "2026-05-14T10:00:00Z", "false", "", "", "region", regionJSON, "/pricing"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d rows, want %d: %v", len(got), len(want), got)
