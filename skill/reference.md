@@ -14,6 +14,7 @@ this file is the LLM's lookup for **what every value means**.
 | `--skill` | `false` | yes (for skill use) | Show the "Hand off → Claude" top-bar button (writes `.prereview/DONE` on click) instead of "Quit" (gracefully shuts down). Without `--skill`, no DONE marker is ever written and the skill's poll loop never terminates. |
 | `--external` | — | no | Annotate a live local website instead of files: reverse-proxies the URL on a second origin and overlays region annotation. Requires `--out`; ignores `[path]`/`--base`. |
 | `--out` | the review path | with `--external` | Directory whose `.prereview/` holds comments.csv + DONE. Defaults to the review path; required with `--external`. |
+| `--stream` | `false` | no | Emit a continuous JSON event stream for an LLM consumer (stdout + `.prereview/events.jsonl`): each Hand off emits a `handoff` snapshot, the new **End session** button emits a terminating `session_end`. **Implies `--skill`.** See [Stream mode](#stream-mode---stream). |
 | `--version` | — | no | Print build version and exit. |
 
 ## stdout protocol
@@ -45,6 +46,13 @@ argument. All other output is slog-formatted (timestamp + level +
 key-value pairs) and goes to stderr — including the "remote box, no
 tailnet" fallback warning.
 
+In **stream mode** (`--stream`), after the preamble prereview emits one JSON
+object per line (JSONL) to stdout — a `ready` event, then a `handoff` event per
+Hand off click, then a single `session_end` — and mirrors the same lines to
+`<REPO>/.prereview/events.jsonl`. The plaintext `READY ` line still comes
+first, so the existing preamble parse is unchanged (JSON lines start with `{`).
+See [Stream mode](#stream-mode---stream) for the event schema.
+
 If the bind fails or the path is invalid (missing, unreadable),
 prereview exits non-zero without printing `READY`.
 
@@ -52,13 +60,15 @@ prereview exits non-zero without printing `READY`.
 
 | Code | Cause |
 |---|---|
-| `0` | Graceful shutdown via Quit (standalone) or SIGINT/SIGTERM |
+| `0` | Graceful shutdown via Quit (standalone), End session (stream), or SIGINT/SIGTERM |
 | `1` | Argument validation failed (missing repo, port already in use, etc.) |
 | `1` | Runtime error during shutdown |
 
 The skill should `kill %1` rather than relying on the binary to exit
 on its own — Hand off doesn't shut the server down, it just writes the
-DONE marker.
+DONE marker. (The exception is **stream mode**: clicking **End session**
+emits `session_end` and *does* shut the server down, so the background
+job exits on its own.)
 
 ## Filesystem layout
 
@@ -69,7 +79,8 @@ Everything prereview writes lives under `<REPO>/.prereview/`, where
 <REPO>/
 └── .prereview/
     ├── comments.csv     ← source of truth, rewritten atomically on every change
-    └── DONE             ← written ONLY on "Hand off → Claude" (skill mode); contents = absolute path to comments.csv
+    ├── DONE             ← written ONLY on "Hand off → Claude" (skill mode); contents = absolute path to comments.csv
+    └── events.jsonl     ← stream mode only (--stream); append-only JSON event log, reset each launch
 ```
 
 For a git repo or non-git directory `<REPO>` is the path argument.
@@ -154,6 +165,42 @@ for _, row := range rows[1:] {
 - Region comments are **frozen** — no content re-anchoring (like `area`)
 - Requires `--out` (no repo to default the store to); `[path]`/`--base`
   are ignored
+
+### Stream mode (`--stream`)
+
+For an iterative, multi-round handoff to an LLM. Implies `--skill` and adds an
+**End session** button next to Hand off. Instead of the one-shot DONE poll,
+prereview emits a JSON event log — to stdout (live) and
+`<REPO>/.prereview/events.jsonl` (durable replay) — that the consumer reads
+continuously until the user explicitly ends the session:
+
+- `ready` — emitted once, after the stdout preamble.
+- `handoff` — emitted on every **Hand off** click; carries the full snapshot of
+  actionable comments (unresolved, non-outdated). Dedupe by `id` across rounds,
+  so the human's resolve-clicks prune later rounds.
+- `session_end` — emitted once on **End session**; the **only** event the
+  consumer loop should treat as "stop". The server shuts down right after.
+
+Every event has `event`, a monotonic `seq` (re-handoffs are distinguishable —
+the idempotent DONE marker can't do this), and an RFC-3339 `ts`. Each comment
+in a `handoff` snapshot mirrors the CSV columns **minus** the opaque `anchor`
+fingerprint and `resolved` (the snapshot is already filtered to actionable
+rows), with `area` as a nested object (or `null`) — no nested
+JSON-in-a-string to parse:
+
+```jsonc
+{"event":"ready","seq":0,"ts":"…","repo":"/abs/dir","csv":"/abs/dir/.prereview/comments.csv"}
+{"event":"handoff","seq":1,"ts":"…","comments":[
+  {"id":"01J…","kind":"line","file":"main.go","from_line":42,"to_line":42,
+   "side":"new","body":"rename this","url":"","area":null,
+   "created_at":"…","anchor_status":"ok"}
+]}
+{"event":"session_end","seq":2,"ts":"…"}
+```
+
+`events.jsonl` is append-only and reset on each fresh launch (same as the DONE
+marker). The CSV stays the authoritative store; the stream is a convenience
+layer over it.
 
 ## Atomicity guarantees
 

@@ -107,6 +107,13 @@ type PrereviewState struct {
 	// the controller is the source of truth; Mount refreshes it every connect.
 	SkillMode bool `json:"skill_mode"`
 
+	// StreamMode is mirrored from the controller (set by --stream flag) into
+	// state in Mount. It implies SkillMode (the "Hand off" button) and adds the
+	// "End session" button: in stream mode each Hand off emits a JSON handoff
+	// event and End session emits the terminating session_end event. Not
+	// persisted; the controller is the source of truth.
+	StreamMode bool `json:"stream_mode"`
+
 	// NoGit is mirrored from the controller (set when the path is a single
 	// file or a non-git directory) into state in Mount so the template
 	// can hide the base/branch picker — there are no refs to compare
@@ -117,6 +124,12 @@ type PrereviewState struct {
 	// a "Server stopping…" banner; ~250ms later the HTTP server actually
 	// shuts down (giving the framework time to flush the render).
 	Quitting bool `json:"quitting"`
+
+	// SessionEnded flips true when the user clicks "End session" in stream
+	// mode. Like Quitting it precedes a delayed graceful shutdown, but the
+	// banner wording differs ("session ended") and EndSession also emits the
+	// terminating session_end stream event before shutting down.
+	SessionEnded bool `json:"session_ended"`
 
 	// EditingCommentID is set when the user has tapped Edit on an existing
 	// comment. The composer label changes to "Editing comment on L28"

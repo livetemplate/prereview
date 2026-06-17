@@ -31,6 +31,10 @@ tailnet, before anything is pushed.
   without a torn file.
 - **The hand-off loop** — "Hand off → Claude" writes a marker; the skill
   reads the CSV and applies your comments without leaving the chat.
+- **Multi-round streaming hand-off** (`--stream`) — emit a continuous JSON
+  event stream the LLM consumes across many rounds (Hand off as often as you
+  like), ending only when you click **End session**. No re-invocation, no
+  hand-written CSV parser.
 - **Phone-friendly + Tailscale-aware** — on a remote box it binds your
   tailnet address (never the public internet); review from your phone.
 - **Single Go binary** — every asset embedded; no Node, no JS runtime.
@@ -139,6 +143,7 @@ prereview ./design-docs                  # a non-git directory — every file sh
 prereview --base origin/main ../service  # a different git repo vs a ref (flags BEFORE the path)
 prereview --external http://localhost:5173 --out ./review   # annotate a live local site (dev server)
 prereview --skill                        # LLM hand-off mode (path defaults to .)
+prereview --skill --stream               # multi-round JSON event stream for an LLM
 ```
 
 A non-git directory or single file is auto-detected: it's shown whole

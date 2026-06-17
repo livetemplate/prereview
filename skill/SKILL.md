@@ -167,9 +167,70 @@ kill %1                  # stop the background prereview server
 rm <REPO>/.prereview/DONE   # so the next session starts fresh
 ```
 
+## Streaming handoff (`--stream`) — multi-round, no re-invocation
+
+The default flow above is **one-shot**: poll `DONE` once, read the CSV, act,
+stop. For an **iterative** review — the user leaves comments, you address them,
+the user reviews your work and leaves more — launch with `--stream` instead.
+prereview then emits a continuous JSON event log you consume across many rounds
+until the user explicitly ends the session. Bonus: the events are ready-to-use
+JSON, so you **never hand-write a CSV parser**.
+
+### Launch
+
+```bash
+prereview --skill --stream "$(pwd)" &
+# stdout: the same READY/ALT/REPO preamble as above, then JSON event lines:
+#         {"event":"ready","seq":0,...}
+```
+
+`--stream` implies `--skill`. The UI shows two buttons: **Hand off →** (send the
+current comments as a round; the session stays open) and **End session**
+(finish). Tell the user this two-button flow up front: Hand off after each batch
+(you'll process it and report back), End session when they're fully done.
+
+### Consume the stream — block for each event, exit ONLY on `session_end`
+
+Events are appended to `<REPO>/.prereview/events.jsonl` (one JSON object per
+line; the same events also print to stdout). Read the **next** event with a
+**blocking** read so you wait across rounds without busy-polling — a single
+tool call that returns the instant the user clicks Hand off (or End session),
+and otherwise just waits:
+
+```bash
+# n = next line to read (1-based); start at 1, increment after each event.
+tail -n +"$n" -f <REPO>/.prereview/events.jsonl | head -n 1
+```
+
+`head -n 1` returns as soon as line `n` exists — immediately if it's already
+there (catch-up / replay after a context reset), or whenever the user's next
+click appends it — then exits and stops `tail`. Parse the returned JSON,
+increment `n`, and read the next one. Run it with a **long Bash timeout** (e.g.
+600s); if it times out because the user is idle, just re-issue it for the same
+`n`. **The loop's only exit is `{"event":"session_end"}`** — do **not** stop
+after the first handoff; a review is iterative.
+
+- `{"event":"ready",...}` — session is live; tell the user to review.
+- `{"event":"handoff","seq":N,"comments":[…]}` — the user clicked Hand off.
+  Process `comments`, then tell the user this round is done and to leave more or
+  click **End session**. Each handoff is a **full snapshot** of everything still
+  actionable, so **dedupe by `id`** across rounds — a comment reappears only
+  while it's unresolved. `comments` is always present (`[]` when nothing is
+  actionable).
+- `{"event":"session_end","seq":N}` — stop consuming. The review is over (the
+  server also exits right after, so a backgrounded launch's job completes too).
+
+Each comment in a handoff carries `id`, `kind`, `file`, `from_line`, `to_line`,
+`side`, `body`, `url`, `area` (nested object or `null`), `created_at`,
+`anchor_status`. The snapshot is already filtered to actionable rows (no
+`resolved=true`, no `anchor_status=outdated`) and omits the opaque `anchor`
+fingerprint. Interpret `kind` exactly as in the CSV section above
+(`line`/`file`/`area`/`region`).
+
 ## Modes
 
 - **Skill mode** (`--skill`): top-bar button is "Hand off → Claude". Clicking writes `.prereview/DONE` and keeps the server running so the user can keep editing.
+- **Stream mode** (`--stream`, implies `--skill`): two buttons — "Hand off →" (emits a `handoff` JSON event each click; session stays open) and "End session" (emits `session_end` and shuts the server down). Consume the JSON event stream continuously until `session_end` — see "Streaming handoff" above.
 - **Standalone** (no `--skill`): top-bar button is "Quit", which gracefully shuts the server down. No DONE marker. Comments are still auto-saved to `.prereview/comments.csv` — the user can read them manually or invoke the skill later to process them.
 
 ## Notes
