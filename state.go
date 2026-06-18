@@ -242,6 +242,15 @@ type PrereviewState struct {
 	// doesn't drag the other along. Non-HTML files ignore this.
 	RawHTML bool `json:"raw_html" lvt:"persist"`
 
+	// FocusMode, when true, hides both desktop side columns (the file
+	// drawer on the left and the TOC sidebar on the right) so the center
+	// reading surface gets the full width — a distraction-free reading
+	// view for long docs/diffs. Desktop-only in effect: the hiding CSS
+	// lives behind the ≥900px media query; on mobile the columns are
+	// already overlays/modals, so the flag is a harmless no-op there.
+	// Persisted as a per-user reading preference, like FileView.
+	FocusMode bool `json:"focus_mode" lvt:"persist"`
+
 	// BaseChoices populates the base-picker dropdown. Computed in
 	// Mount: ["HEAD", "HEAD~1", "HEAD~5", <local branches…>] plus the
 	// current state.Base if it isn't already in the list (so custom

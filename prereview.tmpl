@@ -432,6 +432,20 @@ dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: #166534; }
 
 /* All-comments overview pane (replaces the diff viewer). */
 .all-comments { padding: 0.5rem; }
+/* Make the overview fill the viewer so the empty-state can vertically
+   centre. The existing `main.viewer > .empty` centering rule uses a
+   direct-child combinator and never matches the all-comments empty <p>
+   (it's nested in this section) — hence this dedicated flow: the section
+   is a flex column, the sticky header sits at the top, and .ac-empty
+   grows to fill the rest and centres its message + Back button. */
+main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: column; }
+.all-comments .ac-empty {
+  flex: 1; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; gap: 1.2rem;
+  text-align: center; color: var(--pico-muted-color); padding: 2rem;
+}
+.all-comments .ac-empty-msg { margin: 0; }
+.all-comments .ac-empty-back { margin: 0; }
 .all-comments .ac-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
@@ -688,20 +702,17 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    lives in .md-rendered; inline comment cards / the composer are
    siblings inside .md-block so they sit BELOW the block, not inside
    the clickable area. */
-/* Centered reading column. ch-based measure so it tracks the font:
-   ~110 JetBrains Mono chars — wide enough to use the desktop pane
-   (100ch still left a big right gap) without an unreadably long line.
-   margin-inline:auto balances the remaining space; the parent
-   main.viewer>article is max-width:100% so nothing else clamps it. */
-/* Reading surface used to be capped at 110ch + margin-auto, which left
-   big symmetric gutters in the middle column on wide monitors. Now
-   the .md-view fills the column with only its own 1.2rem side padding;
-   a 160ch ceiling kicks in on ultrawide displays so prose lines don't
-   get absurdly long. Tighter than the column on a 1920px display
-   would feel cramped against the TOC; tests still pass the ≥85% width
-   + centered invariants because the symmetric padding centres the
-   block naturally. */
-.md-view { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
+/* Reading surface: capped at 56rem (≈896px ≈ 80 chars of the 20px
+   rendered prose) — a comfortable readable line length (issue #27
+   "narrower body for breathing space"). Expressed in rem (tracks html =
+   16px) rather than ch: ch would resolve against the 14px .md-view
+   container, giving a misleadingly tight ~672px that read as too narrow
+   on wide monitors. margin-inline:auto centres it, so on a wide viewer
+   (focus mode or an ultrawide display) the prose sits in a comfortable
+   column with symmetric gutters instead of running edge to edge; on a
+   typical laptop the column fills most of the viewer. The diff/code
+   surface (.code) is deliberately NOT capped — code needs full width. */
+.md-view { padding: 0.6rem 1.8rem 2rem; max-width: 56rem; margin-inline: auto; }
 /* HTML preview: the whole file renders in one sandboxed iframe (full
    document fidelity), with the comments list stacked below it. The
    client auto-heights .html-preview from its content; the fallback
@@ -709,7 +720,7 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    .html-block now wraps only a block's comments + composer; .selected
    marks the block being commented on (the visual highlight lives inside
    the iframe). */
-.html-view { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
+.html-view { padding: 0.6rem 1.8rem 2rem; max-width: 56rem; margin-inline: auto; }
 .html-preview { display: block; width: 100%; border: 0; min-height: 60vh; background: #fff; color-scheme: light; }
 .html-block { position: relative; border-radius: 6px; }
 .html-block.selected { outline: 2px solid var(--primary, currentColor); outline-offset: 4px; }
@@ -1125,7 +1136,13 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      rem-based size (toolbar, sidebar, chrome) miniature on a desktop
      screen — the root cause of "still too small". Lift the base to
      16px here so ALL rem sizing scales up coherently in one move; the
-     per-element bumps below are relative to this. */
+     per-element bumps below are relative to this. body is left at the
+     14px base on purpose: rem tracks html (so every rem-sized control
+     scales), while the few elements that inherit body's size — chiefly
+     the .md-view prose container — stay at 14px, which keeps the 80ch
+     reading-column measure at a deliberately narrow ~672px (issue #27
+     "narrower body"). Actual reading content that was too small (comment
+     bodies) is bumped explicitly below, not via the body cascade. */
   html { font-size: 16px; }
   .hamburger { display: none; }
   .drawer-backdrop { display: none; }
@@ -1210,11 +1227,44 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   .toc-sidebar .toc-l3 { font-size: 0.9rem; padding-left: 1.75rem; }
   .toc-modal, .toc-backdrop { display: none !important; }
   .toc-menu-item { display: none !important; }
+  /* Focus mode — distraction-free reading. The toggleFocusMode button
+     puts `.focus-mode` on .layout; here (desktop only) that hides BOTH
+     side columns so the center viewer reflows to the full width. The
+     toolbar button stays visible as the restore affordance (its label
+     flips to "Exit focus"). Mobile needs no rule: the drawer + TOC are
+     already overlays/modals there, so the flag is a no-op. */
+  .layout.focus-mode dialog#files-drawer { display: none; }
+  .layout.focus-mode .toc-sidebar { display: none; }
   /* Pico defaults buttons to width:100% so they fill mobile forms.
      On desktop the composer becomes a card next to the diff — full-
      width Save/Cancel look comically large. Pin them to content size. */
   .composer .save-btn,
   .composer .cancel-btn { width: auto; flex: 0 0 auto; }
+  /* Comment-action + edit-box controls were sized for a dense phone
+     (0.72rem / 26px tap targets, a 3rem textarea). On desktop they read
+     as miniature and are fiddly to click (issue #27 "delete buttons too
+     small", "edit box and buttons too small"). Bump the whole set to a
+     comfortable ~0.9rem font / ~36px target and give the edit textarea
+     real room. */
+  .inline-comment .ic-actions button,
+  .all-comments .ac-actions button {
+    font-size: 0.9rem; min-height: 36px; padding: 0.35rem 0.8rem; line-height: 1.3;
+  }
+  .all-comments .ac-head button { font-size: 0.9rem; min-height: 36px; padding: 0.4rem 0.9rem; }
+  /* The delete-confirmation dialog footer (Cancel / Delete) — give the
+     destructive action a roomy hit area too. */
+  dialog[id^="confirm-delete-"] footer button { min-height: 36px; padding: 0.4rem 1rem; font-size: 0.9rem; }
+  .composer textarea { min-height: 6rem; font-size: 1rem; }
+  .composer strong { font-size: 0.95rem; }
+  /* Comment + overview reading text was 0.82–0.85rem (≈13px) on a 16px
+     desktop — the review prose itself read small (issue #27 #1). Bump
+     the comment-card body and the all-comments overview entries to
+     ~0.95rem; the tiny meta lines (line-span, file path) keep their
+     own explicit sizes. */
+  .inline-comment { font-size: 0.95rem; }
+  .all-comments .ac-jump-btn { font-size: 0.95rem; }
+  .composer .save-btn { font-size: 1rem; min-height: 40px; padding: 0.45rem 1.3rem; }
+  .composer .cancel-btn { font-size: 0.9rem; min-height: 40px; padding: 0.45rem 1rem; }
 }
 
 /* Anchor the empty-state to the viewer center so the user can't scroll
@@ -1335,6 +1385,18 @@ main.viewer { overscroll-behavior: contain; }
         <label><input type="radio" name="view" value="file" {{if .FileView}}checked{{end}} lvt-on:change="setFileViewMode">File</label>
       </form>
       {{end}}
+    </div>
+    {{end}}
+    {{/* Focus mode — desktop-only reading toggle. Hides both side columns
+         (file drawer + TOC) via a class on .layout so the center surface
+         gets full width. The button is the restore affordance too (label
+         flips), so no separate reopen rail is needed. Gated on a file
+         being open (matches the sibling tb-toggles group): with no file
+         selected the drawer is the only way to pick one, so hiding it
+         would strand the user — focus is a "while reading" affordance. */}}
+    {{if .CurrentDiff}}
+    <div class="tb-group tb-focus">
+      <form method="POST"><button type="submit" name="toggleFocusMode" class="contrast focus-toggle" aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}" title="{{if .FocusMode}}Show the file list and outline columns{{else}}Hide the side columns for distraction-free reading{{end}}">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}</button></form>
     </div>
     {{end}}
   </div>
@@ -1535,7 +1597,7 @@ main.viewer { overscroll-behavior: contain; }
      button which had submission edge cases. */}}
 <div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" lvt-on:click="closeFiles" aria-label="Close file list"></div>
 
-<div class="layout">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}">
 <dialog id="files-drawer" open class="{{if .FileDrawerOpen}}is-open{{end}}">
   <div class="drawer-head">
     <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
@@ -1666,7 +1728,16 @@ main.viewer { overscroll-behavior: contain; }
     {{end}}
   </ul>
   {{else}}
-  <p class="empty"><small>{{if and (gt (len .Comments) 0) (not .ShowResolved)}}{{len .Comments}} resolved comment{{if ne (len .Comments) 1}}s{{end}} hidden — toggle "Show resolved" to see them.{{else}}No comments yet.{{end}}</small></p>
+  {{/* Empty overview: a centered message + a prominent Back so the user
+       isn't stranded on a near-blank page with only the small sticky-
+       header Back (issue #27). Both empty branches get the Back; the
+       resolved-hidden branch keeps its "toggle Show resolved" hint. */}}
+  <div class="ac-empty">
+    <p class="ac-empty-msg">{{if and (gt (len .Comments) 0) (not .ShowResolved)}}{{len .Comments}} resolved comment{{if ne (len .Comments) 1}}s{{end}} hidden — toggle “Show resolved” to see them.{{else}}No comments yet.{{end}}</p>
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleCommentList" class="contrast ac-empty-back" title="Return to the file you were viewing">← Back to file</button>
+    </form>
+  </div>
   {{end}}
 </section>
 {{else}}

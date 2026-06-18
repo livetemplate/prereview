@@ -39,6 +39,24 @@ func TestToggleAnnotations_Flips(t *testing.T) {
 	}
 }
 
+// TestToggleFocusMode_Flips pins the desktop focus-mode reading toggle:
+// off by default, then a pure on/off flip of FocusMode.
+func TestToggleFocusMode_Flips(t *testing.T) {
+	c := &PrereviewController{}
+	st := PrereviewState{}
+	if st.FocusMode {
+		t.Fatal("focus mode must be off by default")
+	}
+	st, _ = c.ToggleFocusMode(st, regionCtx("toggleFocusMode", nil))
+	if !st.FocusMode {
+		t.Error("expected focus mode on after first toggle")
+	}
+	st, _ = c.ToggleFocusMode(st, regionCtx("toggleFocusMode", nil))
+	if st.FocusMode {
+		t.Error("expected focus mode off after second toggle")
+	}
+}
+
 // TestFocusComment_SetsIDAndBumpsSeq pins that tapping "Locate" records the
 // annotation to highlight and bumps FocusSeq so re-tapping the same id still
 // re-triggers the client, plus the FocusedComment lookup.
