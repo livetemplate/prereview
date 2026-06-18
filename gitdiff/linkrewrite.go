@@ -16,6 +16,15 @@ func rewriteAnchorAttrs(tagName string, attrs []rawAttr, currentPath string) []r
 	if currentPath == "" || strings.ToLower(tagName) != "a" {
 		return attrs
 	}
+	// Footnote links (`#fn:1` / `#fnref:1`, emitted by extension.Footnote)
+	// are intra-document anchors to ids that live in the SAME rendered page,
+	// not repo-file links. Routing them through ResolveRelativeLink would
+	// turn `#fn:1` into a cross-file deep-link hash and break footnote
+	// navigation, so leave a footnote anchor's href untouched. goldmark tags
+	// these with class="footnote-ref"/"footnote-backref".
+	if isFootnoteAnchor(attrs) {
+		return attrs
+	}
 	out := make([]rawAttr, len(attrs))
 	for i, a := range attrs {
 		if strings.ToLower(a.key) == "href" {
@@ -26,6 +35,24 @@ func rewriteAnchorAttrs(tagName string, attrs []rawAttr, currentPath string) []r
 		out[i] = a
 	}
 	return out
+}
+
+// isFootnoteAnchor reports whether attrs carry goldmark's footnote class
+// ("footnote-ref" on a `[^1]` reference, "footnote-backref" on the ↩ link
+// back from a definition). Matched as a whitespace-delimited token so a
+// substring like "my-footnote-ref-x" doesn't falsely match.
+func isFootnoteAnchor(attrs []rawAttr) bool {
+	for _, a := range attrs {
+		if strings.ToLower(a.key) != "class" {
+			continue
+		}
+		for _, cls := range strings.Fields(a.val) {
+			if cls == "footnote-ref" || cls == "footnote-backref" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // rewriteAnchorHrefs walks a fragment of rendered HTML and rewrites

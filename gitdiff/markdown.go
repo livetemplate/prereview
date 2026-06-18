@@ -7,7 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/yuin/goldmark"
+	emoji "github.com/yuin/goldmark-emoji"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
@@ -58,19 +61,41 @@ type Heading struct {
 	Line  int
 }
 
-// mdRenderer enables the GFM extension (tables, strikethrough,
-// autolinks, task-lists) so repo Markdown renders the way its authors
-// wrote it for GitHub. GFM does NOT enable html.WithUnsafe, so the safe
-// default still holds: raw HTML in the source is not passed through, so
-// untrusted repo content can't inject <script>/onerror/etc. No separate
-// sanitizer needed — same choice the sibling modules (tinkerdown,
-// devbox-dash) make.
+// mdRenderer renders repo Markdown the way its authors see it on GitHub:
+// the full GitHub-flavoured feature set, not just the strict GFM spec.
+//
+//   - extension.GFM — tables, strikethrough, extended autolinks, task-lists.
+//   - highlighting — chroma syntax-colouring for fenced code, using the
+//     same chromaStyleName theme the diff view uses. WithClasses(false)
+//     emits inline styles rather than the class names the diff view's
+//     /syntax.css carries: it keeps each code block self-contained so its
+//     colours never collide with .md-rendered pre / .chroma rules in the
+//     cascade, at the cost of slightly heavier HTML per block.
+//   - extension.Footnote — `[^1]` references + a trailing definition list.
+//   - emoji.Emoji — `:smile:` shortcodes; the default renderer writes the
+//     Unicode codepoint as text (no <img>, no embedded assets), so it keeps
+//     the single-binary / no-JS promise and adds no new HTML/XSS surface.
+//   - alertExtender — GitHub `> [!NOTE]` callouts (local, no dependency).
+//
+// None of these enable html.WithUnsafe, so the safe default still holds:
+// raw HTML in the source is not passed through, so untrusted repo content
+// can't inject <script>/onerror/etc. No separate sanitizer needed — same
+// choice the sibling modules (tinkerdown, devbox-dash) make.
 //
 // WithAutoHeadingID slugifies headings into stable `id` attributes so
 // the TOC sidebar can deep-link to each section, and ExtractHeadings
 // reads the same id back off the AST node.
 var mdRenderer = goldmark.New(
-	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithExtensions(
+		extension.GFM,
+		extension.Footnote,
+		emoji.Emoji,
+		highlighting.NewHighlighting(
+			highlighting.WithStyle(chromaStyleName),
+			highlighting.WithFormatOptions(chromahtml.WithClasses(false)),
+		),
+		alertExtender{},
+	),
 	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
 )
 

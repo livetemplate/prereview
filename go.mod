@@ -9,6 +9,9 @@ require (
 	github.com/livetemplate/livetemplate v0.9.1
 	github.com/minio/selfupdate v0.6.0
 	github.com/yuin/goldmark v1.8.2
+	github.com/yuin/goldmark-emoji v1.0.6
+	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
+	golang.org/x/net v0.49.0
 )
 
 require (
@@ -35,7 +38,6 @@ require (
 	github.com/tdewolff/minify/v2 v2.24.8 // indirect
 	github.com/tdewolff/parse/v2 v2.8.5 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
-	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.14.0 // indirect

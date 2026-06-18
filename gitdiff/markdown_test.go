@@ -67,8 +67,11 @@ func TestRenderMarkdownBlocks_CodeFenceLineRange(t *testing.T) {
 		t.Fatalf("got %d blocks, want 2", len(blocks))
 	}
 	code := blocks[1]
-	if !strings.Contains(string(code.HTML), "<pre") || !strings.Contains(string(code.HTML), "x := 1") {
-		t.Errorf("code block HTML = %q, want a <pre> with the code", code.HTML)
+	// This test owns the line-range invariant; highlighting specifics live
+	// in TestRenderMarkdownBlocks_SyntaxHighlight. Syntax highlighting wraps
+	// each token in its own <span>, so just assert the <pre> wrapper here.
+	if !strings.Contains(string(code.HTML), "<pre") {
+		t.Errorf("code block HTML = %q, want a <pre>", code.HTML)
 	}
 	// The fenced content spans roughly lines 3..5; assert it covers the
 	// code line and stays within the fence.
@@ -537,5 +540,160 @@ func TestRenderMarkdownBlocks_HeadingHasID(t *testing.T) {
 	}
 	if !strings.Contains(string(blocks[1].HTML), `id="sub-section"`) {
 		t.Errorf("h2 HTML missing id attribute: %s", blocks[1].HTML)
+	}
+}
+
+// --- Full GitHub-flavoured Markdown (issue #20) --------------------------
+
+// TestRenderMarkdownBlocks_SyntaxHighlight pins that fenced code is
+// chroma-highlighted with inline styles (the "github" theme, WithClasses
+// false), stays a single commentable block, and keeps its source-line span.
+func TestRenderMarkdownBlocks_SyntaxHighlight(t *testing.T) {
+	// 1: ```go
+	// 2: func main() {}
+	// 3: ```
+	src := "```go\nfunc main() {}\n```\n"
+	blocks := RenderMarkdownBlocks([]byte(src), "")
+	if len(blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1 (one code fence); blocks=%+v", len(blocks), blocks)
+	}
+	h := string(blocks[0].HTML)
+	if !strings.Contains(h, "<pre") {
+		t.Errorf("code HTML = %q, want a <pre>", h)
+	}
+	// Inline-styled coloured spans are the signal that highlighting ran.
+	if !strings.Contains(h, `<span style="color:`) {
+		t.Errorf("code HTML = %q, want chroma inline-styled spans", h)
+	}
+	if !strings.Contains(h, "func") || !strings.Contains(h, "main") {
+		t.Errorf("code HTML = %q, missing keyword/identifier", h)
+	}
+	if blocks[0].StartLine < 1 || blocks[0].EndLine < blocks[0].StartLine {
+		t.Errorf("code lines = %d-%d, want a valid span", blocks[0].StartLine, blocks[0].EndLine)
+	}
+}
+
+// TestRenderMarkdownBlocks_Alert pins GitHub alerts: a `> [!TYPE]`
+// blockquote becomes one .md-alert callout block, the `[!TYPE]` marker is
+// not leaked as literal text, and the body survives.
+func TestRenderMarkdownBlocks_Alert(t *testing.T) {
+	for _, tc := range []struct {
+		marker, class, title string
+	}{
+		{"[!NOTE]", "md-alert-note", "Note"},
+		{"[!TIP]", "md-alert-tip", "Tip"},
+		{"[!IMPORTANT]", "md-alert-important", "Important"},
+		{"[!WARNING]", "md-alert-warning", "Warning"},
+		{"[!CAUTION]", "md-alert-caution", "Caution"},
+	} {
+		src := "> " + tc.marker + "\n> body text here.\n"
+		blocks := RenderMarkdownBlocks([]byte(src), "")
+		if len(blocks) != 1 {
+			t.Fatalf("%s: got %d blocks, want 1; blocks=%+v", tc.marker, len(blocks), blocks)
+		}
+		h := string(blocks[0].HTML)
+		if !strings.Contains(h, `class="md-alert `+tc.class+`"`) {
+			t.Errorf("%s: HTML = %q, want class md-alert %s", tc.marker, h, tc.class)
+		}
+		if !strings.Contains(h, tc.title) {
+			t.Errorf("%s: HTML = %q, want title %q", tc.marker, h, tc.title)
+		}
+		if !strings.Contains(h, "body text here.") {
+			t.Errorf("%s: HTML = %q, want the body text", tc.marker, h)
+		}
+		if strings.Contains(h, tc.marker) {
+			t.Errorf("%s: marker leaked as literal text: %q", tc.marker, h)
+		}
+		if !strings.Contains(h, "<svg") {
+			t.Errorf("%s: HTML = %q, want an inline octicon SVG", tc.marker, h)
+		}
+	}
+}
+
+// TestRenderMarkdownBlocks_AlertNotMisfired pins that an ordinary
+// blockquote is untouched: no [!TYPE] marker → a plain <blockquote>.
+func TestRenderMarkdownBlocks_AlertNotMisfired(t *testing.T) {
+	src := "> just a quote\n> over two lines.\n"
+	blocks := RenderMarkdownBlocks([]byte(src), "")
+	if len(blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1; blocks=%+v", len(blocks), blocks)
+	}
+	h := string(blocks[0].HTML)
+	if !strings.Contains(h, "<blockquote") {
+		t.Errorf("HTML = %q, want a plain <blockquote>", h)
+	}
+	if strings.Contains(h, "md-alert") {
+		t.Errorf("plain blockquote wrongly rendered as an alert: %q", h)
+	}
+}
+
+// TestRenderMarkdownBlocks_Footnotes pins footnote rendering: the `[^1]`
+// reference becomes a footnote-ref link, the definition collects into a
+// trailing block with a real source line (not collapsed to line 1), and —
+// crucially — the footnote anchors are NOT rewritten into deep-link hashes
+// even when a currentPath is supplied.
+func TestRenderMarkdownBlocks_Footnotes(t *testing.T) {
+	// 1: A claim.[^1]
+	// 2: (blank)
+	// 3: [^1]: The supporting note.
+	src := "A claim.[^1]\n\n[^1]: The supporting note.\n"
+	blocks := RenderMarkdownBlocks([]byte(src), "DOC.md")
+	if len(blocks) < 2 {
+		t.Fatalf("got %d blocks, want >=2 (paragraph + footnote list); blocks=%+v", len(blocks), blocks)
+	}
+	ref := string(blocks[0].HTML)
+	if !strings.Contains(ref, "footnote-ref") {
+		t.Errorf("reference HTML = %q, want a footnote-ref link", ref)
+	}
+	// The footnote-ref href must stay a plain intra-doc anchor (#fn:1),
+	// NOT be rewritten by the deep-link resolver (would contain the file
+	// path). This is the linkrewrite.go fix.
+	if !strings.Contains(ref, `href="#fn:1"`) {
+		t.Errorf("footnote ref href = %q, want untouched href=\"#fn:1\"", ref)
+	}
+	if strings.Contains(ref, "DOC.md") {
+		t.Errorf("footnote ref href was deep-link-rewritten (contains file path): %q", ref)
+	}
+	last := blocks[len(blocks)-1]
+	defHTML := string(last.HTML)
+	if !strings.Contains(defHTML, "The supporting note.") {
+		t.Errorf("trailing block HTML = %q, want the footnote definition", defHTML)
+	}
+	// The definition is on source line 3; pin it so a regression in
+	// segmentSpan / the cursor fallback (which would collapse this block to
+	// line 1 or 2) is caught — line-accuracy is the whole point.
+	if last.StartLine != 3 {
+		t.Errorf("footnote-list block StartLine = %d, want 3 (the [^1]: line)", last.StartLine)
+	}
+	// The back-reference link must also be left untouched.
+	if strings.Contains(defHTML, "footnote-backref") && !strings.Contains(defHTML, `href="#fnref:1"`) {
+		t.Errorf("footnote backref href was rewritten: %q", defHTML)
+	}
+}
+
+// TestRenderMarkdownBlocks_Emoji pins that :shortcode: emoji render as the
+// Unicode codepoint (text, no <img>), and an unknown shortcode is left
+// literal.
+func TestRenderMarkdownBlocks_Emoji(t *testing.T) {
+	src := "Ship it :rocket: now, :not_a_real_emoji_xyz: stays.\n"
+	blocks := RenderMarkdownBlocks([]byte(src), "")
+	if len(blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1; blocks=%+v", len(blocks), blocks)
+	}
+	h := string(blocks[0].HTML)
+	// goldmark-emoji's default renderer writes the codepoint as an HTML
+	// numeric entity (&#x1f680;), which the browser displays as 🚀 — text,
+	// no <img>, no embedded asset.
+	if !strings.Contains(strings.ToLower(h), "&#x1f680;") {
+		t.Errorf("HTML = %q, want the 🚀 codepoint entity &#x1f680;", h)
+	}
+	if strings.Contains(h, ":rocket:") {
+		t.Errorf("known shortcode left literal: %q", h)
+	}
+	if strings.Contains(h, "<img") {
+		t.Errorf("emoji rendered as <img> (should be text codepoint): %q", h)
+	}
+	if !strings.Contains(h, ":not_a_real_emoji_xyz:") {
+		t.Errorf("unknown shortcode should stay literal: %q", h)
 	}
 }
