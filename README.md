@@ -25,8 +25,10 @@ tailnet, before anything is pushed.
   select; whole-file comments; drag a box on a binary image.
 - **Annotate a live local site** (`--external`) — proxy a running dev
   server and drag a box on any page to comment.
-- **Markdown & HTML render** — formatted by default, but comments anchor
-  to real source lines and round-trip with the raw view.
+- **Full GitHub-flavoured Markdown & HTML render** — tables, task-lists,
+  syntax-highlighted code, `> [!NOTE]` alerts, footnotes and `:emoji:`
+  render the way GitHub shows them; formatted by default, but comments
+  anchor to real source lines and round-trip with the raw view.
 - **One CSV, atomically written** — the source of truth; read it any time
   without a torn file.
 - **The hand-off loop** — "Hand off → Claude" writes a marker; the skill

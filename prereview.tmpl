@@ -807,6 +807,28 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border-left: 3px solid var(--pico-muted-border-color);
   padding-left: 0.7rem; color: var(--pico-muted-color);
 }
+/* GitHub alerts (`> [!NOTE]` etc, rendered by the local alert extension):
+   a coloured callout. The per-type accent (set below) drives the left
+   border and the title row (octicon + label); a faint same-hue tint fills
+   the box. The page is data-theme="light", so GitHub's light-theme accent
+   colours read correctly without a dark-mode variant. */
+.md-rendered .md-alert {
+  border-left: 3px solid var(--md-alert-accent);
+  padding: 0.3rem 0.8rem; margin: 0.6em 0; border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--md-alert-accent) 7%, transparent);
+}
+.md-rendered .md-alert > :first-child { margin-top: 0; }
+.md-rendered .md-alert > :last-child { margin-bottom: 0; }
+.md-rendered .md-alert-title {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-weight: 600; color: var(--md-alert-accent); margin: 0.2em 0 0.3em;
+}
+.md-rendered .md-alert-title svg { fill: currentColor; flex: none; }
+.md-rendered .md-alert-note      { --md-alert-accent: #0969da; }
+.md-rendered .md-alert-tip       { --md-alert-accent: #1a7f37; }
+.md-rendered .md-alert-important { --md-alert-accent: #8250df; }
+.md-rendered .md-alert-warning   { --md-alert-accent: #9a6700; }
+.md-rendered .md-alert-caution   { --md-alert-accent: #cf222e; }
 .md-rendered table { display: block; overflow-x: auto; border-collapse: collapse; }
 .md-rendered th, .md-rendered td { border: 1px solid var(--pico-muted-border-color); padding: 0.2rem 0.45rem; }
 /* Per-row solo tables: the rendered view splits a table into one block

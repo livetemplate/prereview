@@ -38,6 +38,12 @@ import (
 // del/add pair render slightly wrong but the common case looks right
 // and the implementation stays simple.
 
+// chromaStyleName is the chroma theme shared by both highlighters: the
+// diff view (class-based, served as /syntax.css) and rendered-Markdown code
+// fences (inline-styled, in markdown.go). Kept in one place so a theme
+// change can't drift between the two.
+const chromaStyleName = "github"
+
 var (
 	chromaFormatter = html.New(
 		html.WithClasses(true),
@@ -45,7 +51,7 @@ var (
 		html.WithLineNumbers(false),
 	)
 	chromaStyle = func() *chroma.Style {
-		s := styles.Get("github")
+		s := styles.Get(chromaStyleName)
 		if s == nil {
 			return styles.Fallback
 		}
