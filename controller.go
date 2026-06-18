@@ -461,6 +461,17 @@ func (c *PrereviewController) ToggleShowResolved(state PrereviewState, ctx *live
 	return state, nil
 }
 
+// ToggleFocusMode flips the distraction-free reading view. When on, the
+// desktop file drawer (left) and TOC sidebar (right) are hidden so the
+// center reading surface gets the full width. Persisted per-user. Closes
+// the overflow menu so the effect is visible immediately (the menu entry
+// is the mobile control; the desktop control is a toolbar button).
+func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FocusMode = !state.FocusMode
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
 // ToggleMoreMenu opens/closes the 3-dots overflow menu in the top bar.
 // Mirrors the file-drawer pattern: state-driven boolean + CSS class
 // toggle. No JS. Backdrop tap submits CloseMoreMenu.

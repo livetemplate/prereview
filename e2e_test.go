@@ -923,7 +923,13 @@ func TestE2E_Footer(t *testing.T) {
 // past the cramped 14px mobile base, and the reading column uses the
 // available width centered (no longer a narrow left-hugging 60rem).
 func TestE2E_DesktopReadingSurface(t *testing.T) {
-	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdown(t), 1200, 800)
+	// Wide viewport (1920): the prose reading cap (56rem ≈ 896px) only
+	// produces visible breathing gutters when the viewer is wider than
+	// the cap. At 1200px the viewer (~920px, no TOC here) is barely wider
+	// than the cap, so "is it capped/centered" is only meaningfully
+	// testable on a wide screen — which is also where issue #27's
+	// too-narrow complaint lived.
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdown(t), 1920, 1000)
 
 	var mu sync.Mutex
 	var consoleLines, wsFrames, netResponses []string
@@ -963,7 +969,7 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(netResponses, "\n"), strings.Join(wsFrames, "\n"), html)
 	}
 
-	p.waitReady()
+	p.waitReadyAt(1920, 1000)
 
 	// JetBrains Mono actually loaded (woff2 fetched + decoded), applied
 	// as the computed family, and the desktop prose size is comfortable.
@@ -1004,15 +1010,24 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 		t.Errorf("expected a 200 for a /fonts/jetbrains-mono-*.woff2 route%s", diag())
 	}
 
-	// Reading column: no longer the narrow left-hugging 60rem. It now
-	// uses the viewer width and is balanced (symmetric side gaps), so a
-	// huge empty right region can't reappear.
+	// Reading column (issue #27 "narrower body for breathing space"):
+	// the prose is capped to a readable measure (80ch) and CENTERED, so
+	// on a wide viewer there are symmetric breathing gutters rather than
+	// edge-to-edge text. The anti-regression that still matters is
+	// SYMMETRY — the original bug was a narrow column hugging one side
+	// (60rem pinned left with a huge empty right region). So we assert:
+	//   • not the old 60rem cap;
+	//   • symmetric side gaps (centered, not hugging);
+	//   • the column is genuinely narrower than the viewer (gutters
+	//     exist) yet still a substantial reading width (not the old
+	//     too-narrow bug).
 	var maxWidth string
-	var symmetric, usesWidth bool
+	var symmetric, capped, wideEnough bool
 	if err := chromedp.Run(p.ctx,
 		chromedp.Evaluate(`getComputedStyle(document.querySelector('.md-view')).maxWidth`, &maxWidth),
 		chromedp.Evaluate(`(()=>{const m=document.querySelector('.md-view').getBoundingClientRect(),v=document.querySelector('main.viewer').getBoundingClientRect();return Math.abs((m.left-v.left)-(v.right-m.right))<=24;})()`, &symmetric),
-		chromedp.Evaluate(`(()=>{const m=document.querySelector('.md-view').getBoundingClientRect(),v=document.querySelector('main.viewer').getBoundingClientRect();return m.width>=v.width*0.85;})()`, &usesWidth),
+		chromedp.Evaluate(`(()=>{const m=document.querySelector('.md-view').getBoundingClientRect(),v=document.querySelector('main.viewer').getBoundingClientRect();return m.width < v.width - 80;})()`, &capped),
+		chromedp.Evaluate(`(()=>{const m=document.querySelector('.md-view').getBoundingClientRect();return m.width >= 560;})()`, &wideEnough),
 	); err != nil {
 		t.Fatalf("md-view geometry query: %v%s", err, diag())
 	}
@@ -1022,8 +1037,11 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 	if !symmetric {
 		t.Errorf("md-view is not horizontally balanced — it hugs one side (the reported bug)%s", diag())
 	}
-	if !usesWidth {
-		t.Errorf("md-view does not use the available reading width%s", diag())
+	if !capped {
+		t.Errorf("md-view fills the viewer edge-to-edge — expected a capped, centered reading column with breathing gutters (issue #27)%s", diag())
+	}
+	if !wideEnough {
+		t.Errorf("md-view reading column is too narrow (<560px) — not the intended comfortable measure%s", diag())
 	}
 
 	// Issue 4: code must use the SAME font as prose. The Markdown code
@@ -3501,6 +3519,64 @@ func TestE2E_TOCSidebarDesktop(t *testing.T) {
 	}
 	if !headingHasID {
 		t.Error("rendered heading missing id='second-section'; goldmark AutoHeadingID not flowing through")
+	}
+}
+
+// TestE2E_FocusModeDesktop covers the desktop focus-mode reading toggle
+// (issue #27): both side columns (file drawer + TOC sidebar) are visible
+// by default; clicking the toolbar "Focus" button puts .focus-mode on
+// .layout and hides BOTH columns; clicking again restores them. State is
+// server-side (ToggleFocusMode) and re-rendered over the WS, so the test
+// polls for the morphed DOM rather than expecting a synchronous flip.
+func TestE2E_FocusModeDesktop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("e2e not supported on windows")
+	}
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdownTOC(t), 1200, 800)
+	p.waitReady()
+	p.clickFile("big.md")
+
+	// Baseline: both columns visible, no focus-mode class.
+	var drawerVisible, tocVisible, hasFocusClass bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.toc-sidebar`, chromedp.ByQuery),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('#files-drawer')).display !== 'none'`, &drawerVisible),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.toc-sidebar')).display !== 'none'`, &tocVisible),
+		chromedp.Evaluate(`!!document.querySelector('.layout.focus-mode')`, &hasFocusClass),
+	); err != nil {
+		t.Fatalf("baseline query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !drawerVisible {
+		t.Error("file drawer should be visible before focus mode")
+	}
+	if !tocVisible {
+		t.Error("toc sidebar should be visible before focus mode")
+	}
+	if hasFocusClass {
+		t.Error("focus-mode class should be absent by default")
+	}
+
+	// Enable focus mode → class present, BOTH columns hidden.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleFocusMode']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.layout.focus-mode`, chromedp.ByQuery),
+		chromedp.Poll(
+			`getComputedStyle(document.querySelector('#files-drawer')).display === 'none' && getComputedStyle(document.querySelector('.toc-sidebar')).display === 'none'`,
+			nil, chromedp.WithPollingTimeout(5*time.Second),
+		),
+	); err != nil {
+		t.Fatalf("enable focus mode: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Disable focus mode → class gone, both columns visible again.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleFocusMode']`, chromedp.ByQuery),
+		chromedp.Poll(
+			`!document.querySelector('.layout.focus-mode') && getComputedStyle(document.querySelector('#files-drawer')).display !== 'none' && getComputedStyle(document.querySelector('.toc-sidebar')).display !== 'none'`,
+			nil, chromedp.WithPollingTimeout(5*time.Second),
+		),
+	); err != nil {
+		t.Fatalf("disable focus mode: %v\nstderr: %s", err, p.stderr.String())
 	}
 }
 
