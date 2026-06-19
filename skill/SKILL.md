@@ -1,17 +1,18 @@
 ---
 name: prereview
-description: Launch an interactive per-line code review session over the working tree. The user leaves comments in a browser; you read them from a CSV when they hit "Hand off → Claude".
+description: Launch an interactive review session over the working tree (or any file/directory) — code diffs, Markdown, HTML, images, and live local sites, by line, block, or region. The user leaves comments in a browser; you read them from a CSV when they hit "Hand off → Claude" and apply the fixes.
 triggers:
   - prereview
   - review my changes
-  - per-line code review
+  - review this file
+  - review before push
   - leave comments on diff
   - review before commit
 ---
 
 # prereview
 
-Launches a web UI for the user to leave per-line comments on the working-tree diff. Binding is automatic: `127.0.0.1` on a local machine, and — on a remote (SSH) box — this host's **Tailscale IP**, so the user can reach it from a phone over the tailnet without exposing it publicly (`--host` overrides). The UI shows a **"Hand off → Claude"** button when launched with `--skill`; clicking it writes `.prereview/DONE` containing the path to the CSV. Poll for that file, then read the CSV.
+Launches a web UI for the user to review the working tree (or any file/directory) and leave comments — on a diff line or range, a rendered Markdown/HTML block, a region of an image, or a box on a live local site (`--external`). Binding is automatic: `127.0.0.1` on a local machine, and — on a remote (SSH) box — this host's **Tailscale IP**, so the user can reach it from a phone over the tailnet without exposing it publicly (`--host` overrides). The UI shows a **"Hand off → Claude"** button when launched with `--skill`; clicking it writes `.prereview/DONE` containing the path to the CSV. Poll for that file, then read the CSV.
 
 ## Usage
 

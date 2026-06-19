@@ -11,5 +11,5 @@
     },
     "homepage": "https://github.com/livetemplate/prereview",
     "license": "MIT",
-    "description": "Local per-line code review webapp"
+    "description": "Local review-and-fix webapp — review any change and hand the fixes to an LLM before you push"
 }
