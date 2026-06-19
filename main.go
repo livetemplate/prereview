@@ -452,6 +452,7 @@ func registerAssetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/livetemplate-client.js", serveBytes("application/javascript", assets.ClientJS()))
 	mux.HandleFunc("/mermaid.min.js", serveBytes("application/javascript", assets.MermaidJS()))
 	mux.HandleFunc("/mermaid-init.js", serveBytes("application/javascript", assets.MermaidInitJS()))
+	mux.HandleFunc("/pico.min.css", serveBytes("text/css", assets.PicoCSS()))
 	mux.HandleFunc("/livetemplate.css", serveBytes("text/css", assets.ClientCSS()))
 	mux.HandleFunc("/syntax.css", serveBytes("text/css", []byte(gitdiff.HighlightCSS)))
 	mux.HandleFunc("/fonts/jetbrains-mono-regular.woff2", serveBytes("font/woff2", assets.FontRegular()))

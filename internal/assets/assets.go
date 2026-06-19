@@ -27,6 +27,15 @@ var clientJS []byte
 //go:embed client/livetemplate.css
 var clientCSS []byte
 
+// picoCSS is the pinned Pico CSS v2.1.1 minified stylesheet (MIT). It was
+// previously loaded from a jsdelivr CDN <link>, which silently broke the
+// styling when prereview runs offline (its primary mode — reviewed over
+// Tailscale/devbox). Vendored + embedded so the binary stays truly
+// self-contained, matching the JetBrains Mono fonts and mermaid bundle.
+//
+//go:embed pico.min.css
+var picoCSS []byte
+
 //go:embed fonts/JetBrainsMono-Regular.woff2
 var fontRegular []byte
 
@@ -53,6 +62,9 @@ func ClientJS() []byte { return clientJS }
 
 // ClientCSS returns the embedded livetemplate shared stylesheet.
 func ClientCSS() []byte { return clientCSS }
+
+// PicoCSS returns the embedded Pico CSS v2.1.1 stylesheet.
+func PicoCSS() []byte { return picoCSS }
 
 // FontRegular returns the embedded JetBrains Mono Regular (400) woff2.
 func FontRegular() []byte { return fontRegular }
