@@ -814,6 +814,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 .md-rendered pre code { word-break: normal; background: none; padding: 0; }
 .md-rendered img { max-width: 100%; height: auto; }
+.md-mermaid { margin: 0.4em 0; text-align: center; overflow-x: auto; }
+.md-mermaid > pre.mermaid { display: none; }
+.md-mermaid svg { max-width: 100%; height: auto; }
+.md-mermaid-failed { text-align: left; }
+.md-mermaid-failed > pre.mermaid { display: block; background: var(--pico-card-sectioning-background-color); padding: 0.5rem 0.6rem; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+.md-mermaid-error { display: flex; align-items: center; gap: 0.4em; margin-bottom: 0.4em; padding: 0.3rem 0.5rem; border-radius: 6px; font-size: 0.85em; color: #9a6700; background: #fff8c5; border: 1px solid #d4a72c66; }
 .md-rendered blockquote {
   border-left: 3px solid var(--pico-muted-border-color);
   padding-left: 0.7rem; color: var(--pico-muted-color);
@@ -1935,5 +1941,7 @@ main.viewer { overscroll-behavior: contain; }
 {{end}}
 
 <script defer src="/livetemplate-client.js"></script>
+<!-- Lazy mermaid renderer; standalone file keeps it out of livetemplate's template tree. See internal/assets/mermaid-init.js. -->
+<script defer src="/mermaid-init.js"></script>
 </body>
 </html>

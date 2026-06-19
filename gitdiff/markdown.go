@@ -226,6 +226,17 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 					cursor = ln + 1
 				}
 			}
+		case ast.KindFencedCodeBlock:
+			// A ```mermaid fence renders client-side as an SVG diagram
+			// (see mermaid.go) instead of chroma-highlighted code; any
+			// other language falls through to the highlighting renderer.
+			// Either way it stays one source-line-anchored block.
+			fcb := n.(*ast.FencedCodeBlock)
+			if isMermaidFence(fcb, src) {
+				emit(n, renderMermaidBlock(fencedCodeRaw(fcb, src)))
+			} else {
+				emit(n, renderNode(n))
+			}
 		default:
 			emit(n, renderNode(n))
 		}
