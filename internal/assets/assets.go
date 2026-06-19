@@ -11,6 +11,10 @@
 // fonts/ holds the static Regular (400) and Bold (700) JetBrains Mono
 // woff2 (SIL OFL 1.1, see fonts/OFL.txt) — prose needs only those two
 // weights; other weights/italics synthesize. These ARE committed.
+//
+// mermaid.min.js is the pinned mermaid UMD bundle, committed for the same
+// offline reason — the only third-party JS we ship besides the livetemplate
+// client.
 package assets
 
 import (
@@ -29,6 +33,21 @@ var fontRegular []byte
 //go:embed fonts/JetBrainsMono-Bold.woff2
 var fontBold []byte
 
+// mermaidJS is the pinned mermaid UMD bundle (v11.15.0). It is self-contained
+// (no dynamic import()), so every bundled diagram type renders offline. The
+// browser fetches it lazily — only when a page contains a ```mermaid fence.
+//
+//go:embed mermaid.min.js
+var mermaidJS []byte
+
+// mermaidInitJS is prereview's own loader: it lazy-fetches mermaidJS when a
+// page has a diagram and renders each fence to SVG. Kept a standalone file
+// (not inlined in prereview.tmpl) so it stays out of livetemplate's template
+// tree.
+//
+//go:embed mermaid-init.js
+var mermaidInitJS []byte
+
 // ClientJS returns the embedded livetemplate client browser bundle.
 func ClientJS() []byte { return clientJS }
 
@@ -40,3 +59,9 @@ func FontRegular() []byte { return fontRegular }
 
 // FontBold returns the embedded JetBrains Mono Bold (700) woff2.
 func FontBold() []byte { return fontBold }
+
+// MermaidJS returns the embedded mermaid UMD bundle.
+func MermaidJS() []byte { return mermaidJS }
+
+// MermaidInitJS returns prereview's mermaid loader/renderer script.
+func MermaidInitJS() []byte { return mermaidInitJS }
