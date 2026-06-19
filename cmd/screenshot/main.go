@@ -26,6 +26,7 @@ func main() {
 	outDir := flag.String("out", "/tmp/prereview-shots", "directory to write PNGs")
 	debug := flag.Bool("debug", false, "also dump hamburger HTML + computed style to stdout")
 	readme := flag.Bool("readme", false, "capture the curated README screenshot set (needs a demo-repo server; see `make screenshots`)")
+	gifFlow := flag.String("gif", "", "capture a single animated GIF flow (hero); needs a demo-repo server")
 	flag.Parse()
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -48,6 +49,11 @@ func main() {
 
 	if *readme {
 		runReadmeShots(allocCtx, *url, *outDir)
+		return
+	}
+
+	if *gifFlow != "" {
+		runGif(allocCtx, *url, *gifFlow, *outDir)
 		return
 	}
 
@@ -298,23 +304,21 @@ func runReadmeShots(allocCtx context.Context, url, outDir string) {
 	seedAreaComment(allocCtx, url, "architecture.png",
 		"This box overlaps the gateway lane — tighten the spacing.")
 
-	// 2) Capture. The hero + mobile show the live composing flow (unsaved
-	//    draft); the rest read the seeded comments.
-	hero := []chromedp.Action{typeComposer("Surface the gateway's real error here, not a generic string.")}
+	// 2) Capture. review-mobile shows the live composing flow (unsaved draft);
+	//    the rest read the seeded comments. The desktop hero, image-area, and
+	//    markdown-block flows are now animated GIFs (see `make gifs`), so they
+	//    are intentionally NOT captured here as stills.
 	shots := []struct {
 		name  string
 		w, h  int
 		frag  string
 		setup []chromedp.Action
 	}{
-		{"review-desktop", 1280, 800, "payment.go:L18", hero},
 		{"file-comment", 1280, 800, "payment.go", nil},
-		{"image-area", 1280, 800, "architecture.png", nil},
 		{"all-comments", 1280, 800, "", []chromedp.Action{
 			clickJS(`button[name="toggleCommentList"]`),
 			chromedp.Sleep(600 * time.Millisecond),
 		}},
-		{"markdown-toc", 1280, 800, "guide.md", nil},
 		{"review-mobile", 390, 844, "payment.go:L18", []chromedp.Action{
 			typeComposer("Surface the gateway's real error here, not a generic string."),
 		}},

@@ -9,7 +9,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>prereview · {{.RepoPath}}</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<link rel="stylesheet" href="/pico.min.css">
 <link rel="stylesheet" href="/livetemplate.css">
 <link rel="stylesheet" href="/syntax.css">
 <style>
@@ -27,6 +27,19 @@
   --pr-sel-bg: #fff3a8;
   --pr-comment-bg: #eef4ff;
   --pr-comment-bd: #b9cdf0;
+  /* ── Design tokens (added in the polish pass) ──────────────────────
+     A small, consistent scale so radii / shadows / the accent blue stop
+     drifting per-component. Values are tuned for the all-monospace,
+     light-theme chrome; the diff/status colors above are intentionally
+     left as-is (their contrast pairings are documented and load-bearing). */
+  --radius-sm: 5px;   /* chips, badges, list rows, comment cards, inputs */
+  --radius-md: 8px;   /* cards, menus, composer, callouts */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, .12);
+  --accent: #2563eb;          /* one blue for focus rings + soft-button hover */
+  --accent-weak: #93c5fd;     /* hairline accent (selected file border) */
+  --soft-bg: #f1f4f9;         /* low-weight (secondary) button surface */
+  --soft-bg-hover: #e6ecf5;
   /* JetBrains Mono is the single reading font for the WHOLE app — prose
      and code alike (the user reviews docs + diffs and wants them
      identical). Pico v2 has TWO family vars: --pico-font-family (body,
@@ -178,13 +191,50 @@ header.bar .nav-next button { gap: 0.3rem; }
   accent-color: var(--pico-contrast); cursor: pointer;
 }
 
-/* Toolbar buttons all use Pico's `class="contrast"` (solid dark, white
-   text) for visual consistency — same style as Hand off / Quit. State
-   for toggles (Rendered/Raw, File/Diff, ✓/○ resolved) is conveyed by
-   the label text itself, not by chip-tint variants. White-on-dark
-   solves the prior chip-label-vanishes-on-hover bug for free: Pico's
-   contrast button manages its own --pico-color stack across hover and
-   focus-visible, so no manual re-assertion is needed. */
+/* Toolbar button hierarchy (polish pass). The bar used to be a wall of
+   identical solid-dark `class="contrast"` pills, which read as heavy and
+   undifferentiated. Now only the PRIMARY action (Hand off / Quit / End
+   session) stays solid-dark; the secondary controls (Focus, Comment on
+   file, Prev/Next) drop to a low-weight "soft" surface so the eye lands
+   on the primary action.
+
+   These soft rules fully self-manage background + color + border at every
+   state — they do NOT consume Pico's --pico-color cascade — so the old
+   chip-label-vanishes-on-hover bug (the reason the bar was all-contrast)
+   cannot reappear. Targeted by existing selectors so no markup changes;
+   the leftover `class="contrast"` on these buttons is overridden here at
+   every state via the higher-specificity `header.bar …` prefix.
+
+   State for toggles (Rendered/Raw, File/Diff, ✓/○ resolved) is conveyed
+   by the label text itself, not by chip-tint variants. */
+header.bar .focus-toggle,
+header.bar button[name="openFileComment"],
+header.bar .nav-prev button,
+header.bar .nav-next button {
+  background: var(--soft-bg);
+  color: var(--pico-h1-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+header.bar .focus-toggle:hover,
+header.bar button[name="openFileComment"]:hover,
+header.bar .nav-prev button:hover,
+header.bar .nav-next button:hover,
+header.bar .focus-toggle:focus-visible,
+header.bar button[name="openFileComment"]:focus-visible,
+header.bar .nav-prev button:focus-visible,
+header.bar .nav-next button:focus-visible {
+  background: var(--soft-bg-hover);
+  color: var(--pico-h1-color);
+  border-color: var(--accent);
+}
+/* The active (pressed) focus-mode toggle reads as "on": tint it with the
+   accent so the distraction-free state is visibly engaged. */
+header.bar .focus-toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: var(--accent); color: var(--accent);
+}
 
 /* 3-dots overflow menu trigger — mobile only. The menu itself uses the
    same state-driven open/close pattern as #files-drawer: a CSS class
@@ -459,8 +509,9 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
 .all-comments .ac-jump-btn {
   display: block; width: 100%; padding: 0.5rem 0.6rem; margin: 0;
   text-align: left; background: var(--pr-comment-bg);
-  border: 1px solid var(--pr-comment-bd); border-radius: 4px; color: inherit;
+  border: 1px solid var(--pr-comment-bd); border-radius: var(--radius-sm); color: inherit;
   cursor: pointer; font-family: inherit; font-size: 0.85rem; line-height: 1.4;
+  transition: background 100ms ease;
 }
 .all-comments .ac-jump-btn:hover { background: #c7daf3; }
 .all-comments .ac-item.is-resolved .ac-jump-btn {
@@ -487,6 +538,8 @@ dialog#files-drawer button.file-btn {
   padding: 0.3rem 0.55rem; font-size: 0.82rem;
   line-height: 1.3; min-height: 28px;
   display: flex; align-items: center; gap: 0.4rem;
+  border-radius: var(--radius-sm);
+  transition: background 100ms ease, color 100ms ease;
 }
 dialog#files-drawer button.file-btn .file-label {
   flex: 1; min-width: 0;
@@ -797,6 +850,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .md-rendered > :first-child { margin-top: 0; }
 .md-rendered > :last-child { margin-bottom: 0; }
 .md-rendered :is(h1,h2,h3,h4,h5,h6) { margin: 0.6em 0 0.3em; line-height: 1.25; }
+/* A hairline under the top two heading levels gives rendered docs a clear
+   sectioned structure (GitHub-style) without changing the monospace font —
+   the all-mono identity is preserved; only the rhythm reads as "rendered". */
+.md-rendered :is(h1,h2) {
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.md-rendered > :is(h1,h2):first-child { margin-top: 0; }
 .md-rendered p, .md-rendered ul, .md-rendered ol, .md-rendered blockquote, .md-rendered table { margin: 0.4em 0; }
 .md-rendered pre {
   background: var(--pico-card-sectioning-background-color);
@@ -863,10 +924,11 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 
 /* Inline comment cards — between the diff lines */
 .inline-comment {
-  margin: 0.25rem 0.4rem; padding: 0.35rem 0.5rem;
+  margin: 0.3rem 0.4rem; padding: 0.45rem 0.6rem;
   background: var(--pr-comment-bg);
+  border: 1px solid var(--pr-comment-bd);
   border-left: 3px solid var(--pr-comment-bd);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   font-size: 0.82rem; line-height: 1.35;
 }
 /* File-level comments section. Lives between the file-head and the
@@ -1045,12 +1107,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    get blocked by the required-textarea validation on the add form. */
 .composer {
   position: sticky; bottom: 0; z-index: 10;
-  margin: 0.35rem 0.4rem;
-  padding: 0.4rem 0.5rem;
+  margin: 0.4rem;
+  padding: 0.5rem 0.6rem;
   background: var(--pico-card-background-color);
   border: 1px solid var(--pico-muted-border-color);
-  border-radius: 4px;
-  box-shadow: 0 -2px 8px rgba(0,0,0,.06);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   display: flex; flex-direction: column;
 }
 .composer strong { font-size: 0.78rem; }
@@ -1328,7 +1390,7 @@ main.viewer { overscroll-behavior: contain; }
     <div class="ext-sidebar-body">{{range $.AllRegionComments}}<div class="inline-comment ext-anno{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"><form method="POST" class="anno-locate-form"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="focusComment" class="anno-locate" title="Locate this region on the page"><span class="ext-page-link">📍 {{.URL}}</span>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}<span class="anno-body">{{.Body}}</span></button></form><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button><dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.URL}}</code> · region</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog></div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
   </aside>
 </div>
-<footer class="app-footer" role="contentinfo"><small>prereview {{if eq .Version "dev"}}(dev){{else}}v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
+<footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
 {{else}}
 <header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
   <form method="POST">
@@ -1936,7 +1998,7 @@ main.viewer { overscroll-behavior: contain; }
 </div>
 {{end}}
 <footer class="app-footer" role="contentinfo">
-  prereview {{if eq .Version "dev"}}(dev){{else}}v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
+  prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
 </footer>
 {{end}}
 

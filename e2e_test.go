@@ -835,8 +835,9 @@ func TestE2E_ToastAutoDismiss(t *testing.T) {
 	mu.Unlock()
 }
 
-// TestE2E_Footer verifies the page footer shows the build version and
-// a "built with livetemplate" link to the livetemplate GitHub repo.
+// TestE2E_Footer verifies the page footer shows the product name (plus the
+// version on real releases, never the "(dev)" suffix on dev builds) and a
+// "built with livetemplate" link to the livetemplate GitHub repo.
 func TestE2E_Footer(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 
@@ -872,9 +873,14 @@ func TestE2E_Footer(t *testing.T) {
 	if !hasFooter {
 		t.Fatalf("footer.app-footer should be present%s", diag())
 	}
-	// e2e builds with plain `go build` (no -ldflags), so version == "dev".
-	if !strings.Contains(footerText, "prereview (dev)") {
-		t.Errorf("footer text = %q, want it to show the version (prereview (dev))%s", footerText, diag())
+	// e2e builds with plain `go build` (no -ldflags), so version == "dev" —
+	// which the footer renders as a bare "prereview" (the noisy "(dev)" suffix
+	// was dropped in the polish pass; only real releases show "prereview vX.Y.Z").
+	if !strings.Contains(footerText, "prereview") {
+		t.Errorf("footer text = %q, want it to start with the product name (prereview)%s", footerText, diag())
+	}
+	if strings.Contains(footerText, "(dev)") {
+		t.Errorf("footer text = %q, should no longer show the '(dev)' suffix%s", footerText, diag())
 	}
 	if !strings.Contains(footerText, "built with livetemplate") {
 		t.Errorf("footer text = %q, want 'built with livetemplate'%s", footerText, diag())

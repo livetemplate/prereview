@@ -1,4 +1,4 @@
-.PHONY: all build test sync-client install clean screenshots
+.PHONY: all build test sync-client install clean screenshots gifs
 
 BIN := prereview
 CLIENT_JS_SRC := ../client/dist/livetemplate-client.browser.js
@@ -31,3 +31,7 @@ clean:
 # Regenerate the captioned README screenshots in docs/ (needs chromium).
 screenshots:
 	bash cmd/screenshot/capture-readme.sh
+
+# Regenerate the animated README GIFs in docs/ (needs chromium; pure-Go encode).
+gifs:
+	bash cmd/screenshot/capture-gifs.sh

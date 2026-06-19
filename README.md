@@ -1,45 +1,63 @@
 # prereview
 
-**Review your own changes — per line — before you push, and hand the comments to an LLM to act on.**
+**Review any change — code, Markdown, HTML, images, even a live local site — by line, block, or region, then hand the fixes to an LLM. All local, before anything leaves your machine.**
 
 <p align="center">
-  <img src="docs/review-desktop.png" alt="prereview reviewing a Go diff: a line-range comment, the inline composer, and the Hand off to Claude button" width="820">
+  <img src="docs/hero.gif" alt="prereview: selecting a line range on a Go diff, typing a comment, and clicking Hand off to Claude" width="820">
 </p>
-<p align="center"><sub><em>Select a line range, leave a comment, hand the CSV to Claude.</em></sub></p>
+<p align="center"><sub><em>Select what's wrong — a line, a block, a region — comment, and hand the CSV to Claude.</em></sub></p>
 
-A tiny local webapp for **per-line review of your working tree** — no
-commit, no PR, no GitHub round-trip. Run `prereview` in your repo, click
-the lines you want changed, comment; a CSV is written that you (or an
-LLM) can act on. It ships as a [Claude Code](https://claude.com/claude-code)
-skill, so `/prereview` launches a session, you comment, hit **"Hand off
-→ Claude"**, and Claude applies the changes. On a remote box it auto-binds
-your Tailscale address — review from the Claude mobile app over the
-tailnet, before anything is pushed.
-
-> **Status:** core flow (review → hand-off → LLM applies) works
-> end-to-end and is in daily use; UI still being polished.
+A tiny local webapp for **reviewing your working tree and handing the
+fixes to an LLM** — no commit, no PR, no GitHub round-trip. Run
+`prereview` in your repo (or point it at any file or directory), click
+what you want changed — a line or range in a diff, a rendered Markdown or
+HTML block, a region of an image, or a box on a running dev site — and
+leave a comment; a CSV is written that you (or an LLM) act on. It ships as
+a [Claude Code](https://claude.com/claude-code) skill, so `/prereview`
+launches a session, you comment, hit **"Hand off → Claude"**, and Claude
+applies the changes. On a remote box it auto-binds your Tailscale address —
+review from the Claude mobile app over the tailnet, before anything is
+pushed.
 
 ## Features
 
-- **Comment per line, range, file, or image region** — two-click range
-  select; whole-file comments; drag a box on a binary image.
-- **Annotate a live local site** (`--external`) — proxy a running dev
-  server and drag a box on any page to comment.
+- **Review any artifact, at the granularity that fits** — a line or range
+  in a diff; a whole file; a rendered **Markdown** or **HTML** block (the
+  comment anchors to real source lines); a dragged **region of a binary
+  image**; or a box on a **live local site** (`--external`, proxies a
+  running dev server). One tool for code and everything around it.
+- **The review → fix loop** — "Hand off → Claude" writes a marker; the
+  skill reads the CSV and applies your comments without leaving the chat.
+  **Multi-round streaming** (`--stream`) emits a continuous JSON event
+  stream the LLM consumes across many rounds — hand off as often as you
+  like, ending only when you click **End session**. No re-invocation, no
+  hand-written CSV parser.
 - **Full GitHub-flavoured Markdown & HTML render** — tables, task-lists,
-  syntax-highlighted code, `> [!NOTE]` alerts, footnotes and `:emoji:`
-  render the way GitHub shows them; formatted by default, but comments
-  anchor to real source lines and round-trip with the raw view.
+  syntax-highlighted code, `> [!NOTE]` alerts, footnotes, `:emoji:` and
+  mermaid diagrams render the way GitHub shows them; formatted by default,
+  but comments anchor to real source lines and round-trip with the raw view.
 - **One CSV, atomically written** — the source of truth; read it any time
   without a torn file.
-- **The hand-off loop** — "Hand off → Claude" writes a marker; the skill
-  reads the CSV and applies your comments without leaving the chat.
-- **Multi-round streaming hand-off** (`--stream`) — emit a continuous JSON
-  event stream the LLM consumes across many rounds (Hand off as often as you
-  like), ending only when you click **End session**. No re-invocation, no
-  hand-written CSV parser.
 - **Phone-friendly + Tailscale-aware** — on a remote box it binds your
   tailnet address (never the public internet); review from your phone.
-- **Single Go binary** — every asset embedded; no Node, no JS runtime.
+- **Single Go binary** — every asset embedded (Pico, fonts, client JS,
+  mermaid); no Node, no JS runtime; works fully offline.
+
+## How it's different
+
+Most "AI code review" tools have the model *find* the problems for you to
+read. prereview inverts that: **you** spot what's wrong — across any
+artifact, not just code — and the LLM does the *fixing*, locally, before
+you push.
+
+- **vs. AI reviewers** (CodeRabbit, Gito, Ollama pre-commit hooks, Qodo) —
+  they generate the review; prereview captures *your* judgment as
+  structured comments an LLM then acts on.
+- **vs. team review tools** (Gerrit, ReviewBoard, `arc diff`) — those are
+  multi-person, server-side, and code-only; prereview is single-user,
+  local, and reviews any artifact.
+- **vs. diff viewers** (lazygit, tig, delta, difftastic) — they show
+  changes; prereview captures anchored comments and hands them to an LLM.
 
 ## Install
 
@@ -173,7 +191,7 @@ change.
 select an area and comment on it; the box is stored as fractions, so it
 survives re-encoding.
 
-<p align="center"><img src="docs/image-area.png" alt="A rectangle drawn on an image with a paired area comment" width="760"></p>
+<p align="center"><img src="docs/image-area.gif" alt="Dragging a rectangle on an image and saving a region comment" width="760"></p>
 <p align="center"><sub><em>Drag a box on an image to annotate a region.</em></sub></p>
 
 **Markdown & HTML render** by default; tap a rendered block (heading,
@@ -182,8 +200,15 @@ to real line numbers and round-trips with the raw view. A **Preview ⇄
 Raw** toggle switches to source. Long docs get a table-of-contents
 sidebar.
 
-<p align="center"><img src="docs/markdown-toc.png" alt="A rendered Markdown file with a table-of-contents sidebar" width="760"></p>
-<p align="center"><sub><em>Markdown renders with a TOC; comment a block, it anchors to source lines.</em></sub></p>
+<p align="center"><img src="docs/markdown-block.gif" alt="Clicking a rendered Markdown block; the comment anchors to its source line" width="760"></p>
+<p align="center"><sub><em>Markdown renders with a TOC; click a block and the comment anchors to its source line.</em></sub></p>
+
+**Annotate a live local site** (`--external`). Point prereview at a
+running dev server; it proxies the page so you can drag a box on any
+region and comment — the annotation re-pins to the page as it scrolls.
+
+<p align="center"><img src="docs/external-region.gif" alt="Dragging a region on a proxied live local site and saving a comment" width="760"></p>
+<p align="center"><sub><em>Review a running site: drag a region on the live page and comment.</em></sub></p>
 
 **See every comment in one place** — the **All comments** chip lists
 comments across all files (line, file, and area kinds), each with a jump
