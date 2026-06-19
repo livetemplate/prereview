@@ -3,7 +3,7 @@
 **Review any change — code, Markdown, HTML, images, even a live local site — by line, block, or region, then hand the fixes to an LLM. All local, before anything leaves your machine.**
 
 <p align="center">
-  <img src="docs/review-desktop.png" alt="prereview reviewing a Go diff: a line-range comment, the inline composer, and the Hand off to Claude button" width="820">
+  <img src="docs/hero.gif" alt="prereview: selecting a line range on a Go diff, typing a comment, and clicking Hand off to Claude" width="820">
 </p>
 <p align="center"><sub><em>Select what's wrong — a line, a block, a region — comment, and hand the CSV to Claude.</em></sub></p>
 
@@ -191,7 +191,7 @@ change.
 select an area and comment on it; the box is stored as fractions, so it
 survives re-encoding.
 
-<p align="center"><img src="docs/image-area.png" alt="A rectangle drawn on an image with a paired area comment" width="760"></p>
+<p align="center"><img src="docs/image-area.gif" alt="Dragging a rectangle on an image and saving a region comment" width="760"></p>
 <p align="center"><sub><em>Drag a box on an image to annotate a region.</em></sub></p>
 
 **Markdown & HTML render** by default; tap a rendered block (heading,
@@ -200,8 +200,15 @@ to real line numbers and round-trips with the raw view. A **Preview ⇄
 Raw** toggle switches to source. Long docs get a table-of-contents
 sidebar.
 
-<p align="center"><img src="docs/markdown-toc.png" alt="A rendered Markdown file with a table-of-contents sidebar" width="760"></p>
-<p align="center"><sub><em>Markdown renders with a TOC; comment a block, it anchors to source lines.</em></sub></p>
+<p align="center"><img src="docs/markdown-block.gif" alt="Clicking a rendered Markdown block; the comment anchors to its source line" width="760"></p>
+<p align="center"><sub><em>Markdown renders with a TOC; click a block and the comment anchors to its source line.</em></sub></p>
+
+**Annotate a live local site** (`--external`). Point prereview at a
+running dev server; it proxies the page so you can drag a box on any
+region and comment — the annotation re-pins to the page as it scrolls.
+
+<p align="center"><img src="docs/external-region.gif" alt="Dragging a region on a proxied live local site and saving a comment" width="760"></p>
+<p align="center"><sub><em>Review a running site: drag a region on the live page and comment.</em></sub></p>
 
 **See every comment in one place** — the **All comments** chip lists
 comments across all files (line, file, and area kinds), each with a jump

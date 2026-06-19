@@ -6,11 +6,13 @@ require (
 	github.com/alecthomas/chroma/v2 v2.24.1
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327
 	github.com/chromedp/chromedp v0.14.2
+	github.com/ericpauley/go-quantize v0.0.0-20200331213906-ae555eb2afa4
 	github.com/livetemplate/livetemplate v0.9.1
 	github.com/minio/selfupdate v0.6.0
 	github.com/yuin/goldmark v1.8.2
 	github.com/yuin/goldmark-emoji v1.0.6
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
+	golang.org/x/image v0.43.0
 	golang.org/x/net v0.49.0
 )
 
@@ -39,6 +41,6 @@ require (
 	github.com/tdewolff/parse/v2 v2.8.5 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 )
