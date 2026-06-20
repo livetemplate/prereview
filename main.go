@@ -25,6 +25,7 @@ import (
 	"github.com/livetemplate/prereview/internal/assets"
 	"github.com/livetemplate/prereview/internal/netaddr"
 	"github.com/livetemplate/prereview/internal/proxy"
+	"github.com/livetemplate/prereview/internal/update"
 )
 
 //go:embed prereview.tmpl
@@ -95,24 +96,24 @@ func main() {
 	}
 
 	if *doUpdate {
-		exe, err := resolveExecutablePath()
+		exe, err := update.ResolveExecutablePath()
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		if pm, ok := detectPackageManager(exe); ok {
-			fmt.Printf("prereview was installed via %s, which manages upgrades.\nUpgrade with:\n  %s\n", pm.name, pm.upgrade)
+		if pm, ok := update.DetectPackageManager(exe); ok {
+			fmt.Printf("prereview was installed via %s, which manages upgrades.\nUpgrade with:\n  %s\n", pm.Name, pm.Upgrade)
 			return
 		}
 		cacheDir, _ := os.UserCacheDir()
-		newTag, err := selfUpdate(context.Background(), version, exe,
-			githubAPIBase, &http.Client{Timeout: 120 * time.Second}, cacheDir, true)
+		newTag, err := update.SelfUpdate(context.Background(), version, exe,
+			update.GithubAPIBase, &http.Client{Timeout: 120 * time.Second}, cacheDir, true)
 		switch {
 		case err == nil:
 			fmt.Printf("Updated prereview %s → %s. Restart prereview to use the new version.\n", version, newTag)
-		case errors.Is(err, errAlreadyCurrent):
+		case errors.Is(err, update.ErrAlreadyCurrent):
 			fmt.Printf("prereview %s is already the latest version.\n", version)
-		case errors.Is(err, errDevBuild), errors.Is(err, errGoBuildCache), errors.Is(err, errUnwritable):
+		case errors.Is(err, update.ErrDevBuild), errors.Is(err, update.ErrGoBuildCache), errors.Is(err, update.ErrUnwritable):
 			fmt.Println(err)
 		default:
 			slog.Error("update failed", "err", err)
@@ -122,15 +123,15 @@ func main() {
 	}
 
 	if *doUninstall {
-		exe, err := resolveExecutablePath()
+		exe, err := update.ResolveExecutablePath()
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 		// brew/scoop own the binary they placed; deleting it underneath
 		// them leaves dangling package metadata. Defer to their uninstaller.
-		if pm, ok := detectPackageManager(exe); ok {
-			fmt.Printf("prereview was installed via %s, which manages removal.\nUninstall with:\n  %s\n", pm.name, pm.uninstall)
+		if pm, ok := update.DetectPackageManager(exe); ok {
+			fmt.Printf("prereview was installed via %s, which manages removal.\nUninstall with:\n  %s\n", pm.Name, pm.Uninstall)
 			return
 		}
 		// Scope is the binary only: review comments live in each repo's
@@ -164,7 +165,7 @@ func main() {
 		return
 	}
 
-	if shouldAutoUpdate(version, *noUpdate) {
+	if update.ShouldAutoUpdate(version, *noUpdate) {
 		maybeAutoUpdate()
 	}
 
@@ -190,33 +191,33 @@ func main() {
 // signal worth surfacing (corrupt CDN or tampering); transport errors
 // are debug-only noise.
 func maybeAutoUpdate() {
-	exe, err := resolveExecutablePath()
+	exe, err := update.ResolveExecutablePath()
 	if err != nil {
 		slog.Debug("auto-update: resolve executable", "err", err)
 		return
 	}
 	// A brew/scoop-installed binary must not self-replace — the package
 	// manager owns upgrades. Skip silently; `--update` surfaces a hint.
-	if _, ok := detectPackageManager(exe); ok {
+	if _, ok := update.DetectPackageManager(exe); ok {
 		return
 	}
 	cacheDir, _ := os.UserCacheDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 	defer cancel()
 
-	newTag, err := selfUpdate(ctx, version, exe, githubAPIBase,
+	newTag, err := update.SelfUpdate(ctx, version, exe, update.GithubAPIBase,
 		&http.Client{Timeout: 120 * time.Second}, cacheDir, false)
 	switch {
 	case err == nil && newTag != "":
 		fmt.Fprintf(os.Stderr, "prereview: updated %s → %s, restarting…\n", version, newTag)
-		if rerr := reexec(exe, newTag); rerr != nil {
+		if rerr := update.Reexec(exe, newTag); rerr != nil {
 			slog.Warn("re-exec after update failed; continuing on current version", "err", rerr)
 		}
-	case errors.Is(err, errDevBuild), errors.Is(err, errGoBuildCache),
-		errors.Is(err, errAlreadyCurrent), errors.Is(err, errThrottled),
-		errors.Is(err, errUnwritable):
+	case errors.Is(err, update.ErrDevBuild), errors.Is(err, update.ErrGoBuildCache),
+		errors.Is(err, update.ErrAlreadyCurrent), errors.Is(err, update.ErrThrottled),
+		errors.Is(err, update.ErrUnwritable):
 		// Expected steady-state outcomes — stay silent.
-	case errors.Is(err, errChecksumMismatch):
+	case errors.Is(err, update.ErrChecksumMismatch):
 		slog.Warn("auto-update aborted: release checksum mismatch", "err", err)
 	default:
 		slog.Debug("auto-update check failed", "err", err)

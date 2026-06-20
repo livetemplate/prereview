@@ -1,4 +1,8 @@
-package main
+// Package update implements prereview's self-update: checking GitHub for a
+// newer release, verifying the download against the release checksums, and
+// atomically swapping the running binary. It also detects package-manager
+// installs (Homebrew, Scoop) whose lifecycle prereview must not disturb.
+package update
 
 import (
 	"archive/tar"
@@ -29,16 +33,16 @@ import (
 // prints to the user, so keep them human-readable. The on-run path
 // treats the "expected, not really a failure" ones as no-ops.
 var (
-	errDevBuild         = errors.New("not a released build (version is \"dev\"); install a release from https://github.com/livetemplate/prereview/releases or via `go install github.com/livetemplate/prereview@latest`")
-	errGoBuildCache     = errors.New("running from the go build cache (go run); self-update is only for installed release binaries")
-	errAlreadyCurrent   = errors.New("already on the latest version")
-	errThrottled        = errors.New("update check skipped (already checked within the last hour)")
-	errUnwritable       = errors.New("the prereview binary is not writable; reinstall it somewhere you own or run with elevated permissions")
-	errChecksumMismatch = errors.New("checksum mismatch: the downloaded archive is corrupt or has been tampered with")
+	ErrDevBuild         = errors.New("not a released build (version is \"dev\"); install a release from https://github.com/livetemplate/prereview/releases or via `go install github.com/livetemplate/prereview@latest`")
+	ErrGoBuildCache     = errors.New("running from the go build cache (go run); self-update is only for installed release binaries")
+	ErrAlreadyCurrent   = errors.New("already on the latest version")
+	ErrThrottled        = errors.New("update check skipped (already checked within the last hour)")
+	ErrUnwritable       = errors.New("the prereview binary is not writable; reinstall it somewhere you own or run with elevated permissions")
+	ErrChecksumMismatch = errors.New("checksum mismatch: the downloaded archive is corrupt or has been tampered with")
 )
 
 const (
-	githubAPIBase  = "https://api.github.com"
+	GithubAPIBase  = "https://api.github.com"
 	updateRepoPath = "/repos/livetemplate/prereview/releases/latest"
 	checkInterval  = 1 * time.Hour
 	checksumsName  = "checksums.txt"
@@ -99,10 +103,10 @@ func splitVersion(v string) [3]int {
 	return out
 }
 
-// resolveExecutablePath returns the real on-disk path of the running
+// ResolveExecutablePath returns the real on-disk path of the running
 // binary with symlinks resolved (Homebrew/asdf/nix wrappers), or
-// errGoBuildCache when running via `go run`.
-func resolveExecutablePath() (string, error) {
+// ErrGoBuildCache when running via `go run`.
+func ResolveExecutablePath() (string, error) {
 	p, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("resolve executable: %w", err)
@@ -111,48 +115,48 @@ func resolveExecutablePath() (string, error) {
 		p = rp
 	}
 	if strings.Contains(p, string(filepath.Separator)+"go-build") {
-		return "", errGoBuildCache
+		return "", ErrGoBuildCache
 	}
 	return p, nil
 }
 
-// pkgManager identifies the package manager that owns a binary's lifecycle
+// PkgManager identifies the package manager that owns a binary's lifecycle
 // and the exact commands to suggest. upgrade/uninstall are stored in full
 // because the verbs aren't uniform across managers (brew upgrades with
 // "brew upgrade" but Scoop uses "scoop update"; both uninstall with
 // "uninstall").
-type pkgManager struct {
-	name      string // display name, e.g. "Homebrew"
-	upgrade   string // e.g. "brew upgrade prereview"
-	uninstall string // e.g. "brew uninstall prereview"
+type PkgManager struct {
+	Name      string // display name, e.g. "Homebrew"
+	Upgrade   string // e.g. "brew upgrade prereview"
+	Uninstall string // e.g. "brew uninstall prereview"
 }
 
-// detectPackageManager reports whether the binary at exePath was installed
+// DetectPackageManager reports whether the binary at exePath was installed
 // by a package manager that owns its lifecycle. Self-replacing or
 // self-deleting such a binary would desync it from the manager's metadata,
 // so both the update and uninstall paths defer to the manager instead.
 // Detection is a path-substring heuristic on the symlink-resolved executable
-// path (resolveExecutablePath already calls EvalSymlinks): Homebrew installs
+// path (ResolveExecutablePath already calls EvalSymlinks): Homebrew installs
 // land under a ".../Cellar/..." prefix on both Intel (/usr/local/Cellar) and
 // ARM (/opt/homebrew/Cellar) layouts; Scoop installs live under a "scoop"
 // directory. ok is false for binaries placed by curl, `go install`, or a
 // manual download.
-func detectPackageManager(exePath string) (pm pkgManager, ok bool) {
+func DetectPackageManager(exePath string) (pm PkgManager, ok bool) {
 	switch {
 	case strings.Contains(exePath, "/Cellar/"):
-		return pkgManager{"Homebrew", "brew upgrade prereview", "brew uninstall prereview"}, true
+		return PkgManager{"Homebrew", "brew upgrade prereview", "brew uninstall prereview"}, true
 	case strings.Contains(exePath, "/scoop/"),
 		strings.Contains(exePath, `\scoop\`):
-		return pkgManager{"Scoop", "scoop update prereview", "scoop uninstall prereview"}, true
+		return PkgManager{"Scoop", "scoop update prereview", "scoop uninstall prereview"}, true
 	default:
-		return pkgManager{}, false
+		return PkgManager{}, false
 	}
 }
 
-// shouldAutoUpdate is the pure predicate gating the on-run check. It is
+// ShouldAutoUpdate is the pure predicate gating the on-run check. It is
 // false for dev builds, when opted out via flag/env, and inside a
 // re-exec'd child (PREREVIEW_UPDATED set) to prevent an update loop.
-func shouldAutoUpdate(version string, noUpdateFlag bool) bool {
+func ShouldAutoUpdate(version string, noUpdateFlag bool) bool {
 	return version != "dev" &&
 		!noUpdateFlag &&
 		os.Getenv("PREREVIEW_NO_UPDATE") != "1" &&
@@ -232,7 +236,7 @@ func checkForUpdate(ctx context.Context, client *http.Client, apiBase, current s
 	case http.StatusForbidden, http.StatusTooManyRequests:
 		// Anonymous GitHub API rate limit hit — treat as "skip", not a
 		// hard failure, so a normal run still starts.
-		return "", "", "", false, errThrottled
+		return "", "", "", false, ErrThrottled
 	default:
 		return "", "", "", false, fmt.Errorf("latest release: unexpected status %s", resp.Status)
 	}
@@ -370,7 +374,7 @@ func downloadVerified(ctx context.Context, client *http.Client, url string, dst 
 		return fmt.Errorf("download archive: %w", err)
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(got, wantSum) {
-		return errChecksumMismatch
+		return ErrChecksumMismatch
 	}
 	return nil
 }
@@ -429,24 +433,24 @@ func openArchiveBinary(archivePath, archiveBase string) (io.Reader, func(), erro
 	return nil, func() {}, fmt.Errorf("%s not found in archive", want)
 }
 
-// selfUpdate is the single orchestrator used by both `--update`
+// SelfUpdate is the single orchestrator used by both `--update`
 // (force=true, bypasses the 1h throttle) and the on-run check
 // (force=false). On success it returns the new tag and nil; the
 // "expected non-update" outcomes are returned as sentinel errors so the
 // caller can decide whether to surface or silently ignore them.
-func selfUpdate(ctx context.Context, current, targetPath, apiBase string, client *http.Client, cacheDir string, force bool) (newTag string, err error) {
+func SelfUpdate(ctx context.Context, current, targetPath, apiBase string, client *http.Client, cacheDir string, force bool) (newTag string, err error) {
 	if current == "dev" {
-		return "", errDevBuild
+		return "", ErrDevBuild
 	}
 
 	if !force {
 		if checkedAt, _ := readUpdateCache(cacheDir); !checkedAt.IsZero() && time.Since(checkedAt) < checkInterval {
-			return "", errThrottled
+			return "", ErrThrottled
 		}
 	}
 
 	if perr := (&selfupdate.Options{TargetPath: targetPath}).CheckPermissions(); perr != nil {
-		return "", fmt.Errorf("%w (%v)", errUnwritable, perr)
+		return "", fmt.Errorf("%w (%v)", ErrUnwritable, perr)
 	}
 
 	tag, archiveURL, checksumsURL, newer, err := checkForUpdate(ctx, client, apiBase, current)
@@ -458,7 +462,7 @@ func selfUpdate(ctx context.Context, current, targetPath, apiBase string, client
 		// Steady state (the dominant case): record the check so the
 		// throttle holds regardless of launch frequency.
 		_ = writeUpdateCache(cacheDir, tag)
-		return tag, errAlreadyCurrent
+		return tag, ErrAlreadyCurrent
 	}
 	if err := performUpdate(ctx, client, archiveURL, checksumsURL, targetPath); err != nil {
 		// Do NOT write the cache on a failed download — otherwise a
@@ -470,12 +474,12 @@ func selfUpdate(ctx context.Context, current, targetPath, apiBase string, client
 	return tag, nil
 }
 
-// reexec replaces the current process with the freshly-installed binary
+// Reexec replaces the current process with the freshly-installed binary
 // so the in-flight invocation runs the new version. PREREVIEW_UPDATED
 // makes the child skip its own update check (loop guard). On unix this
 // never returns on success (the image is replaced); on Windows it spawns
 // a child, waits, and exits with the child's status.
-func reexec(exe, newTag string) error {
+func Reexec(exe, newTag string) error {
 	env := append(os.Environ(), "PREREVIEW_UPDATED="+newTag)
 	if runtime.GOOS == "windows" {
 		cmd := exec.Command(exe, os.Args[1:]...)
