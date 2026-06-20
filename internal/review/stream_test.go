@@ -1,4 +1,4 @@
-package main
+package review
 
 import (
 	"bytes"
@@ -14,14 +14,14 @@ import (
 var fixedTS = time.Date(2026, 6, 17, 9, 30, 0, 0, time.UTC)
 
 // decodeEvents splits JSONL output into decoded streamEvents.
-func decodeEvents(t *testing.T, b []byte) []streamEvent {
+func decodeEvents(t *testing.T, b []byte) []StreamEvent {
 	t.Helper()
-	var evs []streamEvent
+	var evs []StreamEvent
 	for line := range bytes.SplitSeq(bytes.TrimSpace(b), []byte("\n")) {
 		if len(line) == 0 {
 			continue
 		}
-		var ev streamEvent
+		var ev StreamEvent
 		if err := json.Unmarshal(line, &ev); err != nil {
 			t.Fatalf("decode event line %q: %v", line, err)
 		}
@@ -33,7 +33,7 @@ func decodeEvents(t *testing.T, b []byte) []streamEvent {
 func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	var out bytes.Buffer
 	file := filepath.Join(t.TempDir(), "events.jsonl")
-	es := newEventStream(&out, file)
+	es := NewEventStream(&out, file)
 
 	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
@@ -77,7 +77,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 // absent), while ready/session_end omit it entirely.
 func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	var out bytes.Buffer
-	es := newEventStream(&out, "")
+	es := NewEventStream(&out, "")
 	if err := es.EmitReady("/r", "/r/c.csv", fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
@@ -106,12 +106,12 @@ func TestEventStream_AppendOnly(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "events.jsonl")
 
 	// First session writes one event.
-	es1 := newEventStream(&bytes.Buffer{}, file)
+	es1 := NewEventStream(&bytes.Buffer{}, file)
 	if err := es1.EmitSessionEnd(fixedTS); err != nil {
 		t.Fatalf("first emit: %v", err)
 	}
 	// A second emitter pointed at the same file must append, not truncate.
-	es2 := newEventStream(&bytes.Buffer{}, file)
+	es2 := NewEventStream(&bytes.Buffer{}, file)
 	if err := es2.EmitSessionEnd(fixedTS); err != nil {
 		t.Fatalf("second emit: %v", err)
 	}

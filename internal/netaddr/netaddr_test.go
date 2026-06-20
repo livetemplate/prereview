@@ -1,4 +1,4 @@
-package main
+package netaddr
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 )
 
 // TestResolveBindHost pins the four-row contract documented above
-// resolveBindHost. It is the executable spec for the user-implemented
+// ResolveBindHost. It is the executable spec for the user-implemented
 // decision function — keep these green.
 func TestResolveBindHost(t *testing.T) {
 	tests := []struct {
@@ -51,7 +51,7 @@ func TestResolveBindHost(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotHost, gotWarn := resolveBindHost(tt.explicitHost, tt.host, tt.remote, tt.tsIP)
+			gotHost, gotWarn := ResolveBindHost(tt.explicitHost, tt.host, tt.remote, tt.tsIP)
 			if gotHost != tt.wantHost {
 				t.Errorf("bindHost = %q, want %q", gotHost, tt.wantHost)
 			}
@@ -100,7 +100,7 @@ func TestAltURLs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := altURLs(tt.bindHost, tt.tsIP, tt.magicDNS, tt.port)
+			got := AltURLs(tt.bindHost, tt.tsIP, tt.magicDNS, tt.port)
 			if len(got) != len(tt.want) {
 				t.Fatalf("altURLs = %v, want %v", got, tt.want)
 			}

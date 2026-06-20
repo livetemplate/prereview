@@ -1,4 +1,4 @@
-package main
+package review
 
 import (
 	"encoding/json"
@@ -9,31 +9,31 @@ import (
 	"time"
 )
 
-// eventStream emits the --stream mode JSON event log: one JSON object per
+// EventStream emits the --stream mode JSON event log: one JSON object per
 // line, written to both a live channel (stdout, polled by the consuming LLM)
 // and an append-only durable mirror (.prereview/events.jsonl, for replay after
 // a context reset). It is the single writer of these events — controller
 // actions call it under its mutex, so emitted lines are naturally ordered and
-// carry a monotonic seq. A nil *eventStream is never emitted to; callers gate
+// carry a monotonic seq. A nil *EventStream is never emitted to; callers gate
 // on stream mode before constructing one.
-type eventStream struct {
+type EventStream struct {
 	mu       sync.Mutex
 	seq      int
 	out      io.Writer // live channel (os.Stdout in production)
 	filePath string    // append-only durable mirror
 }
 
-// newEventStream returns an emitter targeting out (live) and filePath (durable
+// NewEventStream returns an emitter targeting out (live) and filePath (durable
 // mirror). filePath may be "" to disable the durable mirror (tests).
-func newEventStream(out io.Writer, filePath string) *eventStream {
-	return &eventStream{out: out, filePath: filePath}
+func NewEventStream(out io.Writer, filePath string) *EventStream {
+	return &EventStream{out: out, filePath: filePath}
 }
 
-// streamEvent is one line of the event log. Per-event-type fields are
+// StreamEvent is one line of the event log. Per-event-type fields are
 // omitempty so each event carries only what it needs; the leading
 // event/seq/ts are always present and, being struct fields, keep their
 // declared order (a map would sort them alphabetically).
-type streamEvent struct {
+type StreamEvent struct {
 	Event string `json:"event"`
 	Seq   int    `json:"seq"`
 	Ts    string `json:"ts"`
@@ -42,24 +42,24 @@ type streamEvent struct {
 	// Comments is a pointer so a handoff always serializes the key — `[]` when
 	// empty, never absent — while ready/session_end (nil) omit it. A consumer
 	// keying event["comments"] on a handoff never chokes on a missing field.
-	Comments *[]streamComment `json:"comments,omitempty"` // handoff
+	Comments *[]StreamComment `json:"comments,omitempty"` // handoff
 }
 
-// commentList returns the event's comment snapshot, or nil for events that
+// CommentList returns the event's comment snapshot, or nil for events that
 // carry none (ready / session_end).
-func (e streamEvent) commentList() []streamComment {
+func (e StreamEvent) CommentList() []StreamComment {
 	if e.Comments == nil {
 		return nil
 	}
 	return *e.Comments
 }
 
-// streamComment is the consumer-facing shape of a Comment: the CSV fields
+// StreamComment is the consumer-facing shape of a Comment: the CSV fields
 // minus the opaque `anchor` fingerprint (the consumer must not parse it) and
 // minus `resolved` (a handoff snapshot is pre-filtered to actionable rows).
 // Area is a nested object (or null) rather than a JSON-in-a-string blob, so
 // the consumer never parses nested JSON.
-type streamComment struct {
+type StreamComment struct {
 	ID           string `json:"id"`
 	Kind         string `json:"kind"`
 	File         string `json:"file"`
@@ -76,8 +76,8 @@ type streamComment struct {
 // toStreamComment maps a Comment to its consumer-facing shape. Area is set
 // only when the comment actually carries a rectangle (kind=area/region); line
 // and file comments serialize as "area":null.
-func toStreamComment(c Comment) streamComment {
-	sc := streamComment{
+func toStreamComment(c Comment) StreamComment {
+	sc := StreamComment{
 		ID:           c.ID,
 		Kind:         c.Kind,
 		File:         c.File,
@@ -100,8 +100,8 @@ func toStreamComment(c Comment) streamComment {
 // unresolved, non-outdated comment, mapped to its stream shape. This is the
 // payload of a handoff event: a full snapshot, deduped by id on the consumer
 // side, so the human's resolve-clicks naturally prune later rounds.
-func actionableComments(comments []Comment) []streamComment {
-	out := make([]streamComment, 0, len(comments))
+func actionableComments(comments []Comment) []StreamComment {
+	out := make([]StreamComment, 0, len(comments))
 	for _, c := range comments {
 		if c.Resolved || c.AnchorOutdated() {
 			continue
@@ -115,7 +115,7 @@ func actionableComments(comments []Comment) []streamComment {
 // JSON line to both sinks. ts is passed in (not read from the clock) so tests
 // are deterministic. The live channel is written first — it's the channel the
 // LLM is actively polling — then the durable mirror is appended.
-func (e *eventStream) emit(ev streamEvent, ts time.Time) error {
+func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -151,20 +151,20 @@ func (e *eventStream) emit(ev streamEvent, ts time.Time) error {
 // EmitReady announces the session is live. Emitted once, after the
 // READY/REPO stdout preamble, so the preamble parse is never interleaved
 // with JSON.
-func (e *eventStream) EmitReady(repo, csvPath string, ts time.Time) error {
-	return e.emit(streamEvent{Event: "ready", Repo: repo, CSV: csvPath}, ts)
+func (e *EventStream) EmitReady(repo, csvPath string, ts time.Time) error {
+	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath}, ts)
 }
 
 // EmitHandoff emits a full actionable snapshot — one per "Hand off" click.
 // The snapshot is always a non-nil slice so the comments key is always present
 // (`[]` when nothing is actionable).
-func (e *eventStream) EmitHandoff(comments []Comment, ts time.Time) error {
+func (e *EventStream) EmitHandoff(comments []Comment, ts time.Time) error {
 	snap := actionableComments(comments)
-	return e.emit(streamEvent{Event: "handoff", Comments: &snap}, ts)
+	return e.emit(StreamEvent{Event: "handoff", Comments: &snap}, ts)
 }
 
 // EmitSessionEnd emits the single terminator — the only event the consumer
 // loop should treat as "stop".
-func (e *eventStream) EmitSessionEnd(ts time.Time) error {
-	return e.emit(streamEvent{Event: "session_end"}, ts)
+func (e *EventStream) EmitSessionEnd(ts time.Time) error {
+	return e.emit(StreamEvent{Event: "session_end"}, ts)
 }

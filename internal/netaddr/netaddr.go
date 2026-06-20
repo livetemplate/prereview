@@ -1,7 +1,9 @@
-package main
+// Package netaddr resolves which host/IP the review server should bind to
+// and which alternate URLs to advertise, with first-class support for
+// Tailscale tailnets so a remote box is reachable from the user's phone
+// without exposing the diff on a public interface.
+package netaddr
 
-// Reachability resolution for the review server.
-//
 // Default bind is 127.0.0.1 (localhost-only) — perfect on a dev laptop,
 // useless on a remote box where the human reviews from a phone. The
 // previous workaround was telling the operator to pass --host 0.0.0.0,
@@ -33,7 +35,7 @@ var tailscaleCGNAT = func() *net.IPNet {
 	return n
 }()
 
-// tailscaleIPv4 returns this host's Tailscale IPv4 address and, when
+// TailscaleIPv4 returns this host's Tailscale IPv4 address and, when
 // discoverable, its MagicDNS hostname (trailing dot stripped). Either
 // may be empty:
 //
@@ -45,7 +47,7 @@ var tailscaleCGNAT = func() *net.IPNet {
 // testable). The MagicDNS name is a best-effort nicety shelled out to
 // `tailscale status --json` — any failure there is swallowed, never
 // fatal: a working 100.x URL beats a missing one.
-func tailscaleIPv4() (ip string, magicDNS string) {
+func TailscaleIPv4() (ip string, magicDNS string) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return "", ""
@@ -106,7 +108,7 @@ func magicDNSName() string {
 	return strings.TrimSuffix(status.Self.DNSName, ".")
 }
 
-// isRemoteBox reports whether prereview is running on a machine the user
+// IsRemoteBox reports whether prereview is running on a machine the user
 // is connected to over the network rather than sitting in front of. An
 // active SSH session is the canonical, dependency-free signal: any of
 // the three vars is set by sshd for the session's processes.
@@ -114,7 +116,7 @@ func magicDNSName() string {
 // This gates the auto-rebind: on a local dev box (no SSH) we keep the
 // historical 127.0.0.1 default so nothing about the laptop workflow
 // changes, even if that laptop happens to be on a tailnet.
-func isRemoteBox() bool {
+func IsRemoteBox() bool {
 	for _, v := range []string{"SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"} {
 		if os.Getenv(v) != "" {
 			return true
@@ -123,7 +125,7 @@ func isRemoteBox() bool {
 	return false
 }
 
-// resolveBindHost decides which host/IP the server should bind to, given
+// ResolveBindHost decides which host/IP the server should bind to, given
 // the situation. It returns the bind host plus an optional human warning
 // (printed to stderr by the caller; "" means nothing to say).
 //
@@ -147,8 +149,8 @@ func isRemoteBox() bool {
 //
 //	explicitHost — did the operator actually pass --host on the CLI?
 //	host         — the value of --host (its flag default is "127.0.0.1")
-//	remote       — isRemoteBox()
-//	tsIP         — tailscaleIPv4()'s ip ("" when there's no tailnet)
+//	remote       — IsRemoteBox()
+//	tsIP         — TailscaleIPv4()'s ip ("" when there's no tailnet)
 //
 // ─────────────────────────────────────────────────────────────────────
 // TODO(you): implement this. ~5–10 lines. The four happy/edge rows above
@@ -159,7 +161,7 @@ func isRemoteBox() bool {
 // message count; it's the only feedback they'll get before they go
 // looking for a URL that isn't reachable.
 // ─────────────────────────────────────────────────────────────────────
-func resolveBindHost(explicitHost bool, host string, remote bool, tsIP string) (bindHost string, warn string) {
+func ResolveBindHost(explicitHost bool, host string, remote bool, tsIP string) (bindHost string, warn string) {
 	// An explicit --host is an absolute operator override: honored
 	// verbatim (even 0.0.0.0 — their call), never auto-rebound.
 	if explicitHost {
@@ -181,13 +183,13 @@ func resolveBindHost(explicitHost bool, host string, remote bool, tsIP string) (
 	return "127.0.0.1", "remote box has no tailnet — bound 127.0.0.1, which your phone can't reach; pass --host <private-ip> (e.g. a LAN or VPN address) to bind a reachable interface"
 }
 
-// altURLs returns *additional* reachable URLs to advertise alongside the
+// AltURLs returns *additional* reachable URLs to advertise alongside the
 // canonical READY line — never including the bind URL itself (the caller
 // already prints that). The MagicDNS hostname is the headline extra: on
 // a phone, tapping `http://box.tailnet.ts.net:PORT` beats typing a
 // 100.x.y.z octet string. Order is stable and the bound form is
 // de-duplicated out so the user never sees the same endpoint twice.
-func altURLs(bindHost, tsIP, magicDNS string, port int) []string {
+func AltURLs(bindHost, tsIP, magicDNS string, port int) []string {
 	seen := map[string]bool{bindHost: true}
 	var out []string
 	add := func(h string) {

@@ -1,4 +1,4 @@
-package main
+package update
 
 import (
 	"archive/tar"
@@ -78,7 +78,7 @@ type serverOpts struct {
 }
 
 // releaseServer stands in for the GitHub API + asset CDN. apiBase for
-// selfUpdate/checkForUpdate is srv.URL. releasesHits counts how many
+// SelfUpdate/checkForUpdate is srv.URL. releasesHits counts how many
 // times the "latest release" endpoint was queried (to assert throttle /
 // skip behaviour).
 func releaseServer(t *testing.T, tag, binContent string, opts serverOpts) (srv *httptest.Server, releasesHits *atomic.Int32, assetName, archiveSum string) {
@@ -164,34 +164,34 @@ func TestShouldAutoUpdate(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("PREREVIEW_NO_UPDATE", c.envNo)
 			t.Setenv("PREREVIEW_UPDATED", c.envUpdated)
-			if got := shouldAutoUpdate(c.version, c.noFlag); got != c.want {
-				t.Errorf("shouldAutoUpdate(%q,%v) = %v, want %v", c.version, c.noFlag, got, c.want)
+			if got := ShouldAutoUpdate(c.version, c.noFlag); got != c.want {
+				t.Errorf("ShouldAutoUpdate(%q,%v) = %v, want %v", c.version, c.noFlag, got, c.want)
 			}
 		})
 	}
 }
 
 func TestDetectPackageManager(t *testing.T) {
-	brew := pkgManager{"Homebrew", "brew upgrade prereview", "brew uninstall prereview"}
-	scoop := pkgManager{"Scoop", "scoop update prereview", "scoop uninstall prereview"}
+	brew := PkgManager{"Homebrew", "brew upgrade prereview", "brew uninstall prereview"}
+	scoop := PkgManager{"Scoop", "scoop update prereview", "scoop uninstall prereview"}
 	cases := []struct {
 		name    string
 		exePath string
-		wantPM  pkgManager
+		wantPM  PkgManager
 		wantOK  bool
 	}{
 		{"homebrew arm", "/opt/homebrew/Cellar/prereview/0.3.6/bin/prereview", brew, true},
 		{"homebrew intel", "/usr/local/Cellar/prereview/0.3.6/bin/prereview", brew, true},
 		{"scoop windows", `C:\Users\me\scoop\apps\prereview\current\prereview.exe`, scoop, true},
 		{"scoop posix-sep", "/c/Users/me/scoop/apps/prereview/current/prereview.exe", scoop, true},
-		{"system bin", "/usr/local/bin/prereview", pkgManager{}, false},
-		{"go install bin", "/home/me/go/bin/prereview", pkgManager{}, false},
+		{"system bin", "/usr/local/bin/prereview", PkgManager{}, false},
+		{"go install bin", "/home/me/go/bin/prereview", PkgManager{}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			pm, ok := detectPackageManager(c.exePath)
+			pm, ok := DetectPackageManager(c.exePath)
 			if ok != c.wantOK || pm != c.wantPM {
-				t.Errorf("detectPackageManager(%q) = (%+v,%v), want (%+v,%v)",
+				t.Errorf("DetectPackageManager(%q) = (%+v,%v), want (%+v,%v)",
 					c.exePath, pm, ok, c.wantPM, c.wantOK)
 			}
 		})
@@ -243,9 +243,9 @@ func TestSelfUpdate_DevSkip(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "prereview")
 	seedFile(t, target, "old")
 
-	tag, err := selfUpdate(context.Background(), "dev", target, srv.URL, srv.Client(), t.TempDir(), true)
-	if !errors.Is(err, errDevBuild) {
-		t.Fatalf("err = %v, want errDevBuild", err)
+	tag, err := SelfUpdate(context.Background(), "dev", target, srv.URL, srv.Client(), t.TempDir(), true)
+	if !errors.Is(err, ErrDevBuild) {
+		t.Fatalf("err = %v, want ErrDevBuild", err)
 	}
 	if tag != "" {
 		t.Errorf("tag = %q, want empty", tag)
@@ -269,17 +269,17 @@ func TestSelfUpdate_Throttled(t *testing.T) {
 		t.Fatalf("seed cache: %v", err)
 	}
 
-	_, err := selfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false)
-	if !errors.Is(err, errThrottled) {
-		t.Fatalf("err = %v, want errThrottled", err)
+	_, err := SelfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false)
+	if !errors.Is(err, ErrThrottled) {
+		t.Fatalf("err = %v, want ErrThrottled", err)
 	}
 	if hits.Load() != 0 {
 		t.Errorf("throttled run must not contact GitHub; hits = %d", hits.Load())
 	}
 
 	// force=true (the --update path) must bypass the throttle.
-	if _, err := selfUpdate(context.Background(), "9.9.9", target, srv.URL, srv.Client(), cacheDir, true); !errors.Is(err, errAlreadyCurrent) {
-		t.Fatalf("forced err = %v, want errAlreadyCurrent (throttle bypassed)", err)
+	if _, err := SelfUpdate(context.Background(), "9.9.9", target, srv.URL, srv.Client(), cacheDir, true); !errors.Is(err, ErrAlreadyCurrent) {
+		t.Fatalf("forced err = %v, want ErrAlreadyCurrent (throttle bypassed)", err)
 	}
 	if hits.Load() != 1 {
 		t.Errorf("forced run should query once; hits = %d", hits.Load())
@@ -314,10 +314,10 @@ func TestSelfUpdate_NotThrottledAfterInterval(t *testing.T) {
 	}
 
 	// current == server tag → it must have actually queried GitHub
-	// (errAlreadyCurrent), proving the stale cache did NOT throttle.
-	_, err = selfUpdate(context.Background(), "9.9.9", target, srv.URL, srv.Client(), cacheDir, false)
-	if !errors.Is(err, errAlreadyCurrent) {
-		t.Fatalf("stale cache must not throttle; err = %v, want errAlreadyCurrent", err)
+	// (ErrAlreadyCurrent), proving the stale cache did NOT throttle.
+	_, err = SelfUpdate(context.Background(), "9.9.9", target, srv.URL, srv.Client(), cacheDir, false)
+	if !errors.Is(err, ErrAlreadyCurrent) {
+		t.Fatalf("stale cache must not throttle; err = %v, want ErrAlreadyCurrent", err)
 	}
 	if hits.Load() != 1 {
 		t.Errorf("expected one GitHub query after the interval elapsed; hits = %d", hits.Load())
@@ -331,9 +331,9 @@ func TestSelfUpdate_UpdatesAndSwaps(t *testing.T) {
 	seedFile(t, target, "OLD BINARY BYTES")
 	cacheDir := t.TempDir()
 
-	tag, err := selfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false)
+	tag, err := SelfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false)
 	if err != nil {
-		t.Fatalf("selfUpdate: %v", err)
+		t.Fatalf("SelfUpdate: %v", err)
 	}
 	if tag != "v0.0.2" {
 		t.Errorf("tag = %q, want v0.0.2", tag)
@@ -353,9 +353,9 @@ func TestSelfUpdate_BadChecksum(t *testing.T) {
 	seedFile(t, target, "OLD")
 	cacheDir := t.TempDir()
 
-	_, err := selfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false)
-	if !errors.Is(err, errChecksumMismatch) {
-		t.Fatalf("err = %v, want errChecksumMismatch", err)
+	_, err := SelfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false)
+	if !errors.Is(err, ErrChecksumMismatch) {
+		t.Fatalf("err = %v, want ErrChecksumMismatch", err)
 	}
 	if got := slurp(t, target); got != "OLD" {
 		t.Errorf("target mutated to %q on bad checksum, want untouched", got)
@@ -373,14 +373,14 @@ func TestSelfUpdate_FailedDownloadDoesNotThrottle(t *testing.T) {
 	seedFile(t, target, "OLD")
 	cacheDir := t.TempDir()
 
-	if _, err := selfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false); err == nil {
+	if _, err := SelfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false); err == nil {
 		t.Fatal("expected error from failed archive download, got nil")
 	}
 	if _, latest := readUpdateCache(cacheDir); latest != "" {
 		t.Fatalf("cache written %q after failed download — would throttle retries", latest)
 	}
 	// Next launch must hit GitHub again rather than be throttled.
-	_, err := selfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false)
+	_, err := SelfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), cacheDir, false)
 	if err == nil {
 		t.Fatal("expected error on retry, got nil")
 	}
@@ -406,9 +406,9 @@ func TestSelfUpdate_UnwritableTarget(t *testing.T) {
 	// Restore so t.TempDir cleanup can remove the tree.
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 
-	_, err := selfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), t.TempDir(), true)
-	if !errors.Is(err, errUnwritable) {
-		t.Fatalf("err = %v, want errUnwritable", err)
+	_, err := SelfUpdate(context.Background(), "0.0.1", target, srv.URL, srv.Client(), t.TempDir(), true)
+	if !errors.Is(err, ErrUnwritable) {
+		t.Fatalf("err = %v, want ErrUnwritable", err)
 	}
 	if hits.Load() != 0 {
 		t.Errorf("unwritable target should fail before contacting GitHub; hits = %d", hits.Load())
@@ -424,12 +424,12 @@ func TestResolveExecutablePath(t *testing.T) {
 	// `go run`-launched processes from trying to self-update). The
 	// happy path (a real installed binary returning its resolved path)
 	// is covered by the P5 end-to-end manual check.
-	p, err := resolveExecutablePath()
-	if !errors.Is(err, errGoBuildCache) {
-		t.Fatalf("resolveExecutablePath under go test = (%q, %v), want errGoBuildCache", p, err)
+	p, err := ResolveExecutablePath()
+	if !errors.Is(err, ErrGoBuildCache) {
+		t.Fatalf("ResolveExecutablePath under go test = (%q, %v), want ErrGoBuildCache", p, err)
 	}
 	if p != "" {
-		t.Errorf("path = %q, want empty when errGoBuildCache", p)
+		t.Errorf("path = %q, want empty when ErrGoBuildCache", p)
 	}
 }
 

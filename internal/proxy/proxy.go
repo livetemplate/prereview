@@ -1,4 +1,9 @@
-package main
+// Package proxy implements the reverse proxy that fronts the user's live
+// local server in prereview's --external mode: it strips framing/CSP
+// blockers from HTML navigations and injects a postMessage beacon so the
+// prereview UI can iframe the page and track navigation, scroll, and
+// annotation focus.
+package proxy
 
 import (
 	"bytes"
@@ -55,7 +60,7 @@ const proxyBeaconJS = `<script>(function(){
   [0,250,700,1500,3000].forEach(function(d){setTimeout(nav,d);});
 })();</script>`
 
-// newExternalProxy builds the reverse proxy that fronts the user's live local
+// NewExternalProxy builds the reverse proxy that fronts the user's live local
 // server in `--external` mode. It runs on its OWN port (a separate origin from
 // the prereview UI) so the app's root-relative URLs (`/api/…`, `/@vite/client`,
 // its own websocket) resolve against the proxy root and forward cleanly with
@@ -64,7 +69,7 @@ const proxyBeaconJS = `<script>(function(){
 //
 // For HTML navigations it strips framing/CSP blockers (so the page can be
 // iframed by the UI) and injects proxyBeaconJS before </body>.
-func newExternalProxy(target *url.URL) http.Handler {
+func NewExternalProxy(target *url.URL) http.Handler {
 	rp := &httputil.ReverseProxy{}
 	rp.Rewrite = func(pr *httputil.ProxyRequest) {
 		pr.SetURL(target)

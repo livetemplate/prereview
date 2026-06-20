@@ -21,6 +21,8 @@ import (
 
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+
+	"github.com/livetemplate/prereview/internal/review"
 )
 
 // startPrereviewStream launches the binary with --skill --stream and captures
@@ -104,14 +106,14 @@ func bootChromeStream(t *testing.T) (*runningPrereview, *bytesBuf, <-chan error)
 
 // parseStreamEvents extracts the JSON event lines from a stdout capture,
 // tolerating the plaintext READY/ALT/REPO preamble (non-`{` lines).
-func parseStreamEvents(s string) []streamEvent {
-	var evs []streamEvent
+func parseStreamEvents(s string) []review.StreamEvent {
+	var evs []review.StreamEvent
 	for _, line := range strings.Split(s, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "{") {
 			continue
 		}
-		var ev streamEvent
+		var ev review.StreamEvent
 		if err := json.Unmarshal([]byte(line), &ev); err == nil {
 			evs = append(evs, ev)
 		}
@@ -119,8 +121,8 @@ func parseStreamEvents(s string) []streamEvent {
 	return evs
 }
 
-func handoffEvents(evs []streamEvent) []streamEvent {
-	var out []streamEvent
+func handoffEvents(evs []review.StreamEvent) []review.StreamEvent {
+	var out []review.StreamEvent
 	for _, e := range evs {
 		if e.Event == "handoff" {
 			out = append(out, e)
@@ -130,7 +132,7 @@ func handoffEvents(evs []streamEvent) []streamEvent {
 }
 
 // waitStream polls the stdout capture until pred is satisfied or it times out.
-func waitStream(t *testing.T, buf *bytesBuf, pred func([]streamEvent) bool, what string, diag func() string) {
+func waitStream(t *testing.T, buf *bytesBuf, pred func([]review.StreamEvent) bool, what string, diag func() string) {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
@@ -187,12 +189,12 @@ func TestE2E_StreamHandoff(t *testing.T) {
 	); err != nil {
 		t.Fatalf("round 1 hand off: %v%s", err, diag())
 	}
-	waitStream(t, stdoutBuf, func(evs []streamEvent) bool {
+	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		h := handoffEvents(evs)
 		if len(h) < 1 {
 			return false
 		}
-		c := h[len(h)-1].commentList()
+		c := h[len(h)-1].CommentList()
 		return len(c) == 1 && strings.Contains(c[0].Body, "first round")
 	}, "round 1 handoff event with the comment", diag)
 
@@ -204,9 +206,9 @@ func TestE2E_StreamHandoff(t *testing.T) {
 	); err != nil {
 		t.Fatalf("round 2 hand off: %v%s", err, diag())
 	}
-	waitStream(t, stdoutBuf, func(evs []streamEvent) bool {
+	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		h := handoffEvents(evs)
-		return len(h) >= 2 && len(h[len(h)-1].commentList()) == 2
+		return len(h) >= 2 && len(h[len(h)-1].CommentList()) == 2
 	}, "round 2 handoff event with both comments", diag)
 
 	// Resolve the first comment (line 3) → next Hand off prunes it.
@@ -218,12 +220,12 @@ func TestE2E_StreamHandoff(t *testing.T) {
 	); err != nil {
 		t.Fatalf("resolve + round 3 hand off: %v%s", err, diag())
 	}
-	waitStream(t, stdoutBuf, func(evs []streamEvent) bool {
+	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		h := handoffEvents(evs)
 		if len(h) < 3 {
 			return false
 		}
-		c := h[len(h)-1].commentList()
+		c := h[len(h)-1].CommentList()
 		return len(c) == 1 && strings.Contains(c[0].Body, "second round")
 	}, "round 3 handoff with the resolved comment pruned", diag)
 
@@ -252,7 +254,7 @@ func TestE2E_StreamHandoff(t *testing.T) {
 	); err != nil {
 		t.Fatalf("click End session: %v%s", err, diag())
 	}
-	waitStream(t, stdoutBuf, func(evs []streamEvent) bool {
+	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		return len(evs) > 0 && evs[len(evs)-1].Event == "session_end"
 	}, "session_end terminator", diag)
 
