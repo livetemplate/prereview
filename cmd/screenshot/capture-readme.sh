@@ -24,7 +24,7 @@ echo "› building prereview"
 GOWORK=off go build -o "$bin" .
 
 echo "› creating demo repo"
-bash cmd/screenshot/demo-repo.sh "$demo" "$(pwd)/testdata/areacomments/diagram.png"
+bash cmd/screenshot/demo-repo.sh "$demo" "$(pwd)/e2e/testdata/areacomments/diagram.png"
 
 echo "› starting server"
 PREREVIEW_NO_UPDATE=1 "$bin" --skill --port 0 --host 127.0.0.1 "$demo" >"$log" 2>&1 &
