@@ -23,6 +23,7 @@ import (
 	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/assets"
+	"github.com/livetemplate/prereview/internal/netaddr"
 )
 
 //go:embed prereview.tmpl
@@ -340,8 +341,8 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	// the user's phone over the tailnet, never exposed to the public
 	// internet the way --host 0.0.0.0 would. Locally, unchanged: the
 	// historical 127.0.0.1 default.
-	tsIP, magicDNS := tailscaleIPv4()
-	bindHost, warn := resolveBindHost(explicitHost, host, isRemoteBox(), tsIP)
+	tsIP, magicDNS := netaddr.TailscaleIPv4()
+	bindHost, warn := netaddr.ResolveBindHost(explicitHost, host, netaddr.IsRemoteBox(), tsIP)
 	if warn != "" {
 		fmt.Fprintf(os.Stderr, "prereview: %s\n", warn)
 	}
@@ -368,7 +369,7 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	// ALT lines are additive, human-facing alternatives the harness
 	// ignores by contract: chiefly the MagicDNS hostname, far nicer to
 	// tap on a phone than a 100.x octet string. Same format, one per line.
-	for _, alt := range altURLs(bindHost, tsIP, magicDNS, actual.Port) {
+	for _, alt := range netaddr.AltURLs(bindHost, tsIP, magicDNS, actual.Port) {
 		fmt.Printf("ALT %s\n", alt)
 	}
 	// Print the resolved review directory so the skill can poll
@@ -543,8 +544,8 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		return fmt.Errorf("livetemplate.New: %w", err)
 	}
 
-	tsIP, magicDNS := tailscaleIPv4()
-	bindHost, warn := resolveBindHost(explicitHost, host, isRemoteBox(), tsIP)
+	tsIP, magicDNS := netaddr.TailscaleIPv4()
+	bindHost, warn := netaddr.ResolveBindHost(explicitHost, host, netaddr.IsRemoteBox(), tsIP)
 	if warn != "" {
 		fmt.Fprintf(os.Stderr, "prereview: %s\n", warn)
 	}
@@ -604,7 +605,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 
 	uiURL := fmt.Sprintf("http://%s:%d", bindHost, uiPort)
 	fmt.Printf("READY %s\n", uiURL)
-	for _, alt := range altURLs(bindHost, tsIP, magicDNS, uiPort) {
+	for _, alt := range netaddr.AltURLs(bindHost, tsIP, magicDNS, uiPort) {
 		fmt.Printf("ALT %s\n", alt)
 	}
 	fmt.Printf("PROXY %s\n", proxyBaseURL)

@@ -137,7 +137,7 @@ func mustWrite(t *testing.T, dir, path, content string) {
 func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (string, *exec.Cmd, *bytesBuf) {
 	t.Helper()
 	// --host 127.0.0.1 is explicit ON PURPOSE — do NOT delete as a
-	// "redundant default". It forces resolveBindHost's operator-override
+	// "redundant default". It forces netaddr.ResolveBindHost's operator-override
 	// path so e2e stays hermetic: without it, on an SSH+tailnet machine
 	// (this dev box, or CI reached over SSH) the binary auto-rebinds to
 	// the Tailscale IP and every test starts depending on tailscaled
