@@ -114,8 +114,11 @@ The binary embeds the skill — install it with one command:
 prereview --install-skill   # → ~/.claude/skills/prereview/SKILL.md (+ reference.md)
 ```
 
-Re-run after upgrading to refresh it. Then invoke with `/prereview` or
-*"review my changes"*. (If it reports "unknown skill", run `/reload`.)
+Then invoke with `/prereview` or *"review my changes"*. (If it reports
+"unknown skill", run `/reload`.) Once installed, the skill auto-refreshes
+to match the binary on the next run after any upgrade — `prereview
+--update`, `brew upgrade`, `scoop update`, or `go install` — so you never
+re-run `--install-skill` to keep it current.
 
 <details>
 <summary>Manual / project-scoped install</summary>

@@ -127,7 +127,7 @@ These do one thing and exit — they don't start the server:
 | Flag | Effect |
 |---|---|
 | `--version` | Print the build version. |
-| `--install-skill` | Install the Claude Code skill into `~/.claude/skills/prereview/` (re-run after upgrading to refresh it). |
+| `--install-skill` | Install the Claude Code skill into `~/.claude/skills/prereview/`. Once installed, it auto-refreshes to match the binary on the next run after any upgrade (`--update`, brew, scoop, `go install`) — no need to re-run this. |
 | `--update` | Download and install the latest GitHub release (defers to brew/scoop if one manages the binary). |
 | `--uninstall` | Remove the binary (your `.prereview/` review comments are left untouched; defers to brew/scoop). |
 | `--no-update` | Skip the on-run update check (also via `PREREVIEW_NO_UPDATE=1`). |
