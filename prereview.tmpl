@@ -668,6 +668,15 @@
 </body>
 </html>
 
+{{/*
+  Reusable partials for the comment-rendering markup that was duplicated
+  across the diff / html / markdown / file / area / all-comments views.
+  livetemplate flattens {{template "x" .}} at parse time by inlining the
+  define body, so inside a partial `.` is the passed value (a Comment, or a
+  rendered block) and `$` still resolves to the root state — read draft /
+  selection / scroll state off `$`. Block partials recompute $bs/$be from
+  the block's .StartLine/.EndLine since a partial can't see caller locals.
+*/}}
 {{define "blockComments" -}}
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}
 {{- end}}
