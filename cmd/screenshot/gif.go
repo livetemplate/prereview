@@ -47,7 +47,7 @@ const (
 	heroWidth = 820
 	heroGap   = 12
 	termW     = 1280
-	termH     = 360
+	termH     = 392
 )
 
 // gifRec accumulates paletted frames + per-frame delays (centiseconds).
@@ -212,11 +212,13 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 
 	rec := &gifRec{}
 
-	// Terminal pane: launched, idle, waiting for the handoff.
+	// Terminal pane: launched, idle, waiting for the handoff. Mirrors the real
+	// skill flow — /prereview prints a review URL the user taps to open.
 	idle := []termLine{
 		{"$ claude", "dim"},
 		{"> /prereview", "prompt"},
-		{"└ prereview live — review in your browser", "dim"},
+		{"● Review session live — open in your browser:", "bullet"},
+		{"  http://127.0.0.1:8420  (tap to open →)", "link"},
 		{"", "sp"},
 		{"waiting for handoff…", "dim"},
 	}
@@ -270,8 +272,9 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	_ = chromedp.Run(bctx, chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery), chromedp.Sleep(800*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 150) // toast; terminal still idle (event arriving)
 
-	// Terminal: Claude receives the handoff and reads the comment.
-	recv := append(idle[:3:3], // keep "$ claude / > /prereview / ⎿ live", drop the wait line
+	// Terminal: Claude receives the handoff and reads the comment. Keep the
+	// launch lines + review URL (first 4), drop the blank + "waiting…" lines.
+	recv := append(idle[:4:4],
 		termLine{"", "sp"},
 		termLine{"Read 1 comment — payment.go:14", "bullet"},
 		termLine{`  "Surface the gateway's real error here, not a generic string."`, "dim"},

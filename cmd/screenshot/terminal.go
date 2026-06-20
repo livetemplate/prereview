@@ -32,6 +32,7 @@ import (
 //	bullet — a Claude action line ("●", accent dot)
 //	del    — a removed line in an Edit block ("-", red)
 //	add    — an added line in an Edit block ("+", green)
+//	link   — a URL (blue, underlined) — reads as a clickable link
 //	plain  — default text
 //	sp     — a blank spacer line
 type termLine struct {
@@ -101,6 +102,7 @@ const termSkeletonJS = `(() => {
     '.ln.bullet .bdot{color:#d97757;font-weight:700;}' +
     '.ln.del{color:#f85149;}' +
     '.ln.add{color:#3fb950;}' +
+    '.ln.link{color:#58a6ff;text-decoration:underline;}' +
     '.ln.plain{color:#c9d1d9;}' +
     '.ln.sp{min-height:.7em;}' +
   '</style>';
