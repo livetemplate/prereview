@@ -222,6 +222,7 @@ func registerAssetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/pico.min.css", serveBytes("text/css", assets.PicoCSS()))
 	mux.HandleFunc("/livetemplate.css", serveBytes("text/css", assets.ClientCSS()))
 	mux.HandleFunc("/syntax.css", serveBytes("text/css", []byte(gitdiff.HighlightCSS)))
+	mux.HandleFunc("/prereview.css", serveBytes("text/css", assets.PrereviewCSS()))
 	mux.HandleFunc("/fonts/jetbrains-mono-regular.woff2", serveBytes("font/woff2", assets.FontRegular()))
 	mux.HandleFunc("/fonts/jetbrains-mono-bold.woff2", serveBytes("font/woff2", assets.FontBold()))
 }

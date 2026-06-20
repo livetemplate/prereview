@@ -36,6 +36,14 @@ var clientCSS []byte
 //go:embed pico.min.css
 var picoCSS []byte
 
+// prereviewCSS is prereview's own stylesheet. It was previously a large inline
+// <style> block in prereview.tmpl; extracted to a served asset so the template
+// shows its HTML structure rather than ~1340 lines of CSS. Embedded (not a CDN
+// link) so the binary stays self-contained and offline-safe, matching pico.
+//
+//go:embed prereview.css
+var prereviewCSS []byte
+
 //go:embed fonts/JetBrainsMono-Regular.woff2
 var fontRegular []byte
 
@@ -65,6 +73,9 @@ func ClientCSS() []byte { return clientCSS }
 
 // PicoCSS returns the embedded Pico CSS v2.1.1 stylesheet.
 func PicoCSS() []byte { return picoCSS }
+
+// PrereviewCSS returns prereview's own stylesheet (extracted from the template).
+func PrereviewCSS() []byte { return prereviewCSS }
 
 // FontRegular returns the embedded JetBrains Mono Regular (400) woff2.
 func FontRegular() []byte { return fontRegular }

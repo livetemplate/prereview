@@ -1,0 +1,1339 @@
+:root {
+  --pr-bar-h: 52px;
+  /* Three-column desktop layout (≥900px): file drawer | viewer | TOC.
+     Drawer at 280px holds most filenames intact (mockups/, docs/
+     prefixed paths fit); on the rare longer path, the button's
+     title="{{.Path}}" attribute is the hover fallback. TOC at 340px
+     gives heading prose 1-2 lines instead of the old cramped 3+. */
+  --pr-drawer-w: 280px;
+  --pr-toc-w: 340px;
+  --pr-add: #1f4e1f; --pr-del: #4e1f1f;
+  --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9;
+  --pr-sel-bg: #fff3a8;
+  --pr-comment-bg: #eef4ff;
+  --pr-comment-bd: #b9cdf0;
+  /* ── Design tokens (added in the polish pass) ──────────────────────
+     A small, consistent scale so radii / shadows / the accent blue stop
+     drifting per-component. Values are tuned for the all-monospace,
+     light-theme chrome; the diff/status colors above are intentionally
+     left as-is (their contrast pairings are documented and load-bearing). */
+  --radius-sm: 5px;   /* chips, badges, list rows, comment cards, inputs */
+  --radius-md: 8px;   /* cards, menus, composer, callouts */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, .12);
+  --accent: #2563eb;          /* one blue for focus rings + soft-button hover */
+  --accent-weak: #93c5fd;     /* hairline accent (selected file border) */
+  --soft-bg: #f1f4f9;         /* low-weight (secondary) button surface */
+  --soft-bg-hover: #e6ecf5;
+  /* JetBrains Mono is the single reading font for the WHOLE app — prose
+     and code alike (the user reviews docs + diffs and wants them
+     identical). Pico v2 has TWO family vars: --pico-font-family (body,
+     articles, forms) and --pico-font-family-monospace (pre/code/kbd/
+     samp). BOTH must point at --jbm or the diff/code view renders in a
+     different mono than the rendered Markdown. Every explicit
+     font-family in this sheet also uses var(--jbm). ui-monospace
+     fallback renders instantly (font-display:swap) until the woff2
+     loads. */
+  --jbm: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --pico-font-family: var(--jbm);
+  --pico-font-family-monospace: var(--jbm);
+}
+
+/* Self-hosted (offline over Tailscale/devbox). Only 400 + 700 are
+   bundled — prose uses just those; other weights/italics synthesize. */
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-bold.woff2") format("woff2");
+}
+
+/* ===== Mobile-first base ===== */
+
+/* `overflow-x: hidden` clamps horizontal scroll only — a too-wide toolbar
+   or descendant can't push the page sideways past the viewport.
+   IMPORTANT: do NOT set `overflow-y: hidden` here. iOS Safari treats
+   `overflow: hidden` on body as a hard scroll-lock that blocks touch
+   events from reaching nested `overflow-y: auto` containers like
+   main.viewer — the page silently becomes unscrollable. Body's height
+   is already 100dvh (below) and its only direct flex children (header
+   + .layout) fit within that bound, so body has no vertical overflow
+   to scroll regardless. Rubber-band-into-whitespace is prevented by
+   the empty-state CSS that gives the .empty wrapper `min-height: 100%`
+   and the `overscroll-behavior: contain` on main.viewer further down. */
+html, body { height: 100%; margin: 0; font-size: 14px; overflow-x: hidden; }
+/* Use `height: 100dvh` (not just min-height) so main.viewer becomes the
+   actual scroll container — without this, the window scrolls and the
+   sticky file-head detaches from the viewer (file-head ends up under the
+   top bar, defeating the point of sticky positioning). */
+body { padding: 0; display: flex; flex-direction: column; height: 100dvh; font-family: var(--pico-font-family); }
+/* livetemplate wraps the entire page content in an unstyled
+   data-lvt-id block. As a normal block it broke the flex chain:
+   .layout (flex:1) sized against this content-height wrapper instead
+   of the 100dvh page body, so .layout/main.viewer grew to the full
+   diff height (~12000px) and nothing scrolled ("scroll locked on
+   desktop").
+
+   Fix: display:contents removes the wrapper's box entirely (the DOM
+   node stays for livetemplate's delegation/morphdom). header.bar +
+   .layout then become DIRECT flex children of the 100dvh body, so
+   .layout's flex:1 binds to the body height and main.viewer becomes
+   the scroll viewport. We deliberately do NOT make the wrapper a
+   flex container: doing so created a new flex formatting context
+   whose default min-width:auto (= min-content of the widest code
+   line) made .layout overflow the viewport horizontally — a bug that
+   reproduced in Safari and Chrome device mode. display:contents has
+   no box, so there is no such context and the horizontal axis
+   behaves exactly as it did before this rule existed. */
+body > [data-lvt-id] { display: contents; }
+.layout { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+
+/* Top bar — sticky on mobile, becomes header row on desktop. The
+   block padding (top + bottom) leaves a small but visible breathing
+   strip above and below the buttons; without it the chrome looks
+   pressed against the page top, especially in the browser's address-
+   bar-adjacent area. */
+header.bar {
+  position: sticky; top: 0; z-index: 30;
+  min-height: var(--pr-bar-h);
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--pico-card-background-color);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+header.bar .title {
+  flex: 1; min-width: 0;
+  font-weight: 600; font-size: 0.95rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+header.bar .title small { color: var(--pico-muted-color); font-weight: normal; }
+header.bar .title { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Inline chip group — only shown on desktop where the toolbar has room.
+   Mobile users get the same controls inside the 3-dots overflow menu. */
+.toolbar-inline { display: none; align-items: center; gap: 0; flex-shrink: 0; }
+.toolbar-inline .auto-saved-long { font-size: 0.7rem; color: var(--pico-muted-color); }
+/* .tb-group is the segment primitive: an inline cluster of chips
+   (counters or toggles). Segments are visually separated by a thin
+   vertical divider — supplied as the LEFT border of every group
+   except the first. Same primitive applies to the nav arrows and the
+   Quit button (which sit OUTSIDE .toolbar-inline as siblings in the
+   header flex row, marked with .tb-action / class="nav-prev"). */
+.tb-group { display: inline-flex; align-items: center; gap: 0.8rem; padding: 0 0.6rem; }
+.tb-group:first-child { padding-left: 0; }
+/* `<small class="auto-saved-long">` defaults to inline + baseline
+   alignment, which sits at a slightly different vertical position than
+   the surrounding inline-flex checkbox/radio labels. Force it onto the
+   same flex baseline so "19 files · 0/19 viewed" lines up cleanly with
+   the checkboxes next to it. */
+.toolbar-inline .auto-saved-long {
+  display: inline-flex; align-items: center; line-height: 1.5;
+  padding-right: 0.4rem;
+}
+.tb-group + .tb-group,
+header.bar .toolbar-inline + .nav-prev,
+header.bar .nav-next + .tb-action,
+header.bar .toolbar-inline + .tb-action {
+  border-left: 1px solid var(--pico-muted-border-color);
+  margin-left: 0.2rem;
+  padding-left: 0.7rem;
+}
+/* The Prev/Next labels live in a span so we can hide them at smaller
+   desktop widths if needed; on mobile the prev/next buttons are SVG-
+   only (label has display:none). */
+.nav-label { display: none; }
+header.bar .nav-prev button,
+header.bar .nav-next button { gap: 0.3rem; }
+/* Radio-button groups for view-mode toggles (Rendered/Raw, Diff/File).
+   Native <input type="radio"> + <label>, no custom button styling —
+   the browser's radio circle is the cheapest, most universally-
+   recognised "one of N is selected" affordance. `accent-color` recolours
+   the radio dot to match the rest of the dark toolbar chrome. */
+.tb-radios { display: inline-flex; gap: 0.8rem; align-items: center; margin: 0; padding: 0; border: 0; }
+.tb-radios label {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  cursor: pointer; user-select: none; font-size: 1rem;
+}
+.tb-radios input[type="radio"] {
+  margin: 0; width: 1.05rem; height: 1.05rem;
+  accent-color: var(--pico-contrast); cursor: pointer;
+}
+/* Checkbox controls (comments / resolved counter-toggles). Same
+   accent-color + sizing as the radios so the toolbar reads as a
+   coherent palette of native form controls. */
+.tb-checkbox {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  cursor: pointer; user-select: none; font-size: 1rem;
+  white-space: nowrap;
+}
+.tb-checkbox input[type="checkbox"] {
+  margin: 0; width: 1.05rem; height: 1.05rem;
+  accent-color: var(--pico-contrast); cursor: pointer;
+}
+
+/* Toolbar button hierarchy (polish pass). The bar used to be a wall of
+   identical solid-dark `class="contrast"` pills, which read as heavy and
+   undifferentiated. Now only the PRIMARY action (Hand off / Quit / End
+   session) stays solid-dark; the secondary controls (Focus, Comment on
+   file, Prev/Next) drop to a low-weight "soft" surface so the eye lands
+   on the primary action.
+
+   These soft rules fully self-manage background + color + border at every
+   state — they do NOT consume Pico's --pico-color cascade — so the old
+   chip-label-vanishes-on-hover bug (the reason the bar was all-contrast)
+   cannot reappear. Targeted by existing selectors so no markup changes;
+   the leftover `class="contrast"` on these buttons is overridden here at
+   every state via the higher-specificity `header.bar …` prefix.
+
+   State for toggles (Rendered/Raw, File/Diff, ✓/○ resolved) is conveyed
+   by the label text itself, not by chip-tint variants. */
+header.bar .focus-toggle,
+header.bar button[name="openFileComment"],
+header.bar .nav-prev button,
+header.bar .nav-next button {
+  background: var(--soft-bg);
+  color: var(--pico-h1-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+header.bar .focus-toggle:hover,
+header.bar button[name="openFileComment"]:hover,
+header.bar .nav-prev button:hover,
+header.bar .nav-next button:hover,
+header.bar .focus-toggle:focus-visible,
+header.bar button[name="openFileComment"]:focus-visible,
+header.bar .nav-prev button:focus-visible,
+header.bar .nav-next button:focus-visible {
+  background: var(--soft-bg-hover);
+  color: var(--pico-h1-color);
+  border-color: var(--accent);
+}
+/* The active (pressed) focus-mode toggle reads as "on": tint it with the
+   accent so the distraction-free state is visibly engaged. */
+header.bar .focus-toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: var(--accent); color: var(--accent);
+}
+
+/* 3-dots overflow menu trigger — mobile only. The menu itself uses the
+   same state-driven open/close pattern as #files-drawer: a CSS class
+   toggle on a hidden block, with a backdrop sibling whose tap submits
+   CloseMoreMenu. No client JS.
+
+   Pico v2 redefines `--pico-color: var(--pico-primary-inverse)` inside
+   `button { ... }` for its blue button. Any custom button that does
+   `color: var(--pico-color)` would resolve to white. So we re-anchor
+   `--pico-color` back to the document text color at the button level
+   before consuming it. This keeps child elements that inherit color
+   (icon glyphs, label spans) readable. */
+.more-trigger {
+  flex-shrink: 0; margin: 0;
+  padding: 0 !important;
+  min-width: 36px; min-height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid var(--pico-muted-border-color);
+  --pico-color: var(--pico-h1-color);
+  color: var(--pico-color);
+  border-radius: 4px;
+}
+.more-trigger svg { display: block; pointer-events: none; }
+.more-menu {
+  position: fixed; top: calc(var(--pr-bar-h) + 0.25rem); right: 0.5rem;
+  min-width: 13rem; max-width: calc(100vw - 1rem);
+  display: none;
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  padding: 0.35rem;
+  z-index: 50;
+}
+.more-menu.is-open { display: block; }
+.more-menu form { margin: 0; }
+.more-menu button.menu-item {
+  display: flex; align-items: center; justify-content: flex-start; gap: 0.6rem;
+  width: 100%; margin: 0; padding: 0.55rem 0.65rem;
+  background: none;
+  --pico-color: var(--pico-h1-color);
+  color: var(--pico-color);
+  border: 0; border-radius: 4px;
+  font-size: 0.9rem; font-weight: 500; min-height: 0;
+  text-align: left; cursor: pointer;
+}
+.more-menu button.menu-item:hover,
+.more-menu button.menu-item:focus { background: var(--pico-card-sectioning-background-color); }
+.more-menu button.menu-item .menu-icon {
+  flex: 0 0 1.2rem; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--pico-muted-color);
+}
+.more-menu button.menu-item .menu-icon svg { display: block; }
+.more-menu button.menu-item .menu-label { flex: 1; }
+.more-menu button.menu-item .menu-meta {
+  margin-left: auto; font-size: 0.72rem; color: var(--pico-muted-color); font-weight: 600;
+  padding: 0.05rem 0.4rem; background: var(--pico-card-sectioning-background-color);
+  border-radius: 999px;
+}
+.more-menu button.menu-item.is-on .menu-icon,
+.more-menu button.menu-item.is-on .menu-label { color: var(--pr-add); font-weight: 600; }
+.more-menu .menu-info {
+  padding: 0.4rem 0.65rem; font-size: 0.7rem;
+  color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-muted-border-color);
+  margin-bottom: 0.25rem;
+}
+.more-menu-backdrop {
+  position: fixed; inset: 0; background: transparent; z-index: 45;
+  display: none;
+}
+.more-menu-backdrop.is-open { display: block; }
+.banner-stopping {
+  padding: 0.5rem 0.75rem; background: var(--pr-del-bg); color: var(--pr-del);
+  border-bottom: 1px solid var(--pr-del); font-size: 0.85rem; text-align: center;
+  font-weight: 600;
+}
+/* Composer hint shown between first-click and second-click on a range. */
+.composer .selection-hint {
+  font-weight: normal; color: var(--pico-muted-color); font-size: 0.7rem;
+  display: inline-block; margin-left: 0.4rem;
+}
+/* Empty-diff state — when the diff has zero files. */
+.empty.empty-diff { padding: 3rem 1rem; max-width: 32rem; margin: 0 auto; }
+.empty.empty-diff h3 { margin: 0 0 0.5rem 0; }
+.empty.empty-diff p { margin: 0.25rem 0; }
+/* Undo-delete toast — sticky at the bottom of the viewer, fades on next mutation. */
+.undo-toast {
+  position: sticky; bottom: 0;
+  margin: 0.4rem 0.4rem 0.2rem; padding: 0.4rem 0.6rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color); border-radius: 4px;
+  font-size: 0.8rem; box-shadow: 0 -2px 8px rgba(0,0,0,.08);
+  z-index: 8;
+}
+.undo-toast code { font-size: 0.75rem; padding: 0 0.2rem; }
+.undo-toast .undo-btn {
+  margin: 0; padding: 0.2rem 0.7rem; font-size: 0.78rem;
+  background: var(--pico-primary); color: var(--pico-primary-inverse); border: 0;
+}
+header.bar form { margin: 0; }
+header.bar button { margin: 0; padding: 0.25rem 0.55rem; font-size: 0.85rem; min-height: 32px; }
+.hamburger {
+  background: none; border: 1px solid var(--pico-muted-border-color);
+  padding: 0 !important; line-height: 1;
+  min-width: 36px; min-height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--pico-color);
+}
+.hamburger svg { display: block; pointer-events: none; }
+header.bar .nav-prev, header.bar .nav-next { margin: 0; }
+header.bar .nav-prev button, header.bar .nav-next button {
+  padding: 0 0.4rem !important; min-width: 32px; min-height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+header.bar .nav-prev button svg, header.bar .nav-next button svg { pointer-events: none; display: block; }
+/* iOS Safari sometimes dispatches taps to <svg> children of a <button>
+   rather than the button itself; pointer-events: none ensures the button
+   wins the tap and submits its form. */
+.close-btn svg { pointer-events: none; }
+
+/* Files drawer — overlay on mobile, sidebar on desktop.
+   The `html body` prefix raises specificity over Pico's default dialog rules
+   which otherwise force width:100% and align-items:center on every <dialog>. */
+html body dialog#files-drawer {
+  position: fixed;
+  top: var(--pr-bar-h); bottom: 0; left: 0;
+  width: 85vw; max-width: var(--pr-drawer-w); min-width: 0; inset-inline-end: auto;
+  margin: 0; padding: 0; border: 0; border-right: 1px solid var(--pico-muted-border-color);
+  background: var(--pico-card-background-color);
+  transform: translateX(-100%); transition: transform 220ms ease;
+  z-index: 40;
+  overflow: hidden; display: flex; flex-direction: column; align-items: stretch;
+}
+html body dialog#files-drawer.is-open { transform: translateX(0); }
+/* All direct flex children should fill the drawer's width. */
+dialog#files-drawer > * { width: 100%; }
+dialog#files-drawer .drawer-head {
+  padding: 0.4rem 0.6rem; display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  gap: 0.5rem;
+}
+dialog#files-drawer .drawer-head strong { font-size: 0.85rem; color: var(--pico-muted-color); }
+dialog#files-drawer .drawer-head form { margin: 0; }
+dialog#files-drawer .close-btn {
+  margin: 0; padding: 0.25rem 0.4rem;
+  min-height: 28px; min-width: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; color: var(--pico-muted-color);
+}
+dialog#files-drawer .close-btn:hover { border-color: var(--pico-muted-border-color); }
+/* Base picker — lets the user swap the comparison ref at runtime
+   (HEAD, HEAD~1, main, abc1234, …). Lives right under .drawer-head so
+   it's contextually near the file count it produces. The text input
+   uses lvt-form:preserve so partial typing survives re-renders. */
+/* All-comments view-switch button. Sits at the top of the drawer so it
+   reads as a sibling of "the file list" (i.e. "instead of a file, look
+   at all comments") — semantically distinct from the toolbar's filter
+   checkboxes. Outline-style button (not contrast-filled) keeps it from
+   competing visually with Hand off / Quit, which remain the toolbar's
+   primary actions. */
+dialog#files-drawer .drawer-all-comments {
+  padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
+}
+dialog#files-drawer .drawer-all-comments form { margin: 0; }
+dialog#files-drawer .drawer-all-comments button {
+  width: 100%; margin: 0; padding: 0.45rem 0.6rem;
+  font-size: 0.9rem; min-height: 0; text-align: left;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+}
+
+dialog#files-drawer .drawer-base {
+  padding: 0.3rem 0.5rem 0.35rem; border-bottom: 1px solid var(--pico-muted-border-color);
+  font-size: 0.75rem;
+}
+dialog#files-drawer .drawer-base form { margin: 0; display: flex; gap: 0.3rem; align-items: center; }
+dialog#files-drawer .drawer-base label {
+  flex: 0 0 auto;
+  font-weight: 600; color: var(--pico-muted-color); margin: 0;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+/* Native <select> for the primary picker — iOS renders this as the
+   platform wheel picker (no keyboard, no autofill suggestions). */
+dialog#files-drawer .drawer-base select {
+  flex: 1 1 auto; min-width: 0; margin: 0; width: auto;
+  padding: 0.3rem 0.5rem; font-size: 0.85rem; min-height: 32px;
+  font-family: var(--jbm);
+  background: var(--pico-form-element-background-color, white);
+  border: 1px solid var(--pico-muted-border-color); border-radius: 4px;
+}
+dialog#files-drawer .drawer-search {
+  padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
+}
+dialog#files-drawer .drawer-search form { margin: 0; }
+dialog#files-drawer .drawer-search input {
+  margin: 0; padding: 0.3rem 0.5rem; font-size: 0.85rem; min-height: 30px; width: 100%;
+  /* Strip iOS Safari's built-in search-icon decoration which otherwise
+     overlaps the typed text/placeholder. */
+  appearance: none; -webkit-appearance: none;
+}
+dialog#files-drawer .drawer-search input::-webkit-search-decoration,
+dialog#files-drawer .drawer-search input::-webkit-search-cancel-button,
+dialog#files-drawer .drawer-search input::-webkit-search-results-button,
+dialog#files-drawer .drawer-search input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+dialog#files-drawer .drawer-scope { padding: 0 0.4rem 0.4rem; }
+dialog#files-drawer .drawer-scope form { margin: 0; }
+dialog#files-drawer .scope-toggle {
+  margin: 0; width: 100%; padding: 0.32rem 0.5rem; font-size: 0.72rem;
+  font-weight: 600; min-height: 0; border-radius: 6px; cursor: pointer;
+  background: var(--pico-card-sectioning-background-color);
+  /* Re-anchor --pico-color (Pico sets it to white inside button scope)
+     so the label stays readable, incl. on :hover — same pattern as
+     .chip. */
+  --pico-color: var(--pico-h1-color); color: var(--pico-color);
+  border: 1px solid var(--pico-muted-border-color);
+}
+dialog#files-drawer .scope-toggle:hover, dialog#files-drawer .scope-toggle:focus-visible {
+  --pico-color: var(--pico-h1-color); color: var(--pico-color);
+  border-color: var(--pico-primary);
+}
+dialog#files-drawer .scope-toggle.is-on {
+  background: #e0ecff; --pico-color: #1e40af; color: var(--pico-color); border-color: #93c5fd;
+}
+dialog#files-drawer .scope-toggle.is-on:hover, dialog#files-drawer .scope-toggle.is-on:focus-visible {
+  --pico-color: #1e40af; color: var(--pico-color); border-color: #1e40af;
+}
+dialog#files-drawer .drawer-body { flex: 1; overflow-y: auto; padding: 0.4rem 0.4rem 0.5rem; }
+dialog#files-drawer .file-row { display: flex; gap: 0.25rem; align-items: stretch; }
+dialog#files-drawer .file-select-form { flex: 1; margin: 0; min-width: 0; }
+dialog#files-drawer .file-viewed-form { margin: 0; }
+dialog#files-drawer .viewed-toggle {
+  margin: 0; padding: 0 !important;
+  min-width: 28px; min-height: 28px;
+  background: none; border: 1px solid var(--pico-muted-border-color); border-radius: 4px;
+  color: var(--pico-muted-color); display: inline-flex; align-items: center; justify-content: center;
+}
+dialog#files-drawer .viewed-toggle svg { width: 16px; height: 16px; display: block; pointer-events: none; }
+dialog#files-drawer .file-row.is-viewed .file-btn { opacity: 0.5; text-decoration: line-through; }
+dialog#files-drawer .file-row.is-viewed .viewed-toggle { color: #166534; border-color: #166534; background: #dcfce7; }
+dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: #166534; }
+.empty-filter { padding: 0.5rem; color: var(--pico-muted-color); }
+
+/* All-comments overview pane (replaces the diff viewer). */
+.all-comments { padding: 0.5rem; }
+/* Make the overview fill the viewer so the empty-state can vertically
+   centre. The existing `main.viewer > .empty` centering rule uses a
+   direct-child combinator and never matches the all-comments empty <p>
+   (it's nested in this section) — hence this dedicated flow: the section
+   is a flex column, the sticky header sits at the top, and .ac-empty
+   grows to fill the rest and centres its message + Back button. */
+main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: column; }
+.all-comments .ac-empty {
+  flex: 1; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; gap: 1.2rem;
+  text-align: center; color: var(--pico-muted-color); padding: 2rem;
+}
+.all-comments .ac-empty-msg { margin: 0; }
+.all-comments .ac-empty-back { margin: 0; }
+.all-comments .ac-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
+  margin-bottom: 0.5rem; position: sticky; top: 0;
+  background: var(--pico-card-background-color); z-index: 5;
+}
+.all-comments .ac-head button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.all-comments .ac-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.all-comments .ac-item { margin: 0; }
+.all-comments .ac-jump { margin: 0; }
+.all-comments .ac-jump-btn {
+  display: block; width: 100%; padding: 0.5rem 0.6rem; margin: 0;
+  text-align: left; background: var(--pr-comment-bg);
+  border: 1px solid var(--pr-comment-bd); border-radius: var(--radius-sm); color: inherit;
+  cursor: pointer; font-family: inherit; font-size: 0.85rem; line-height: 1.4;
+  transition: background 100ms ease;
+}
+.all-comments .ac-jump-btn:hover { background: #c7daf3; }
+.all-comments .ac-item.is-resolved .ac-jump-btn {
+  background: var(--pico-card-sectioning-background-color, #f4f4f4);
+  border-color: var(--pico-muted-color); opacity: 0.7;
+}
+.all-comments .ac-item.is-resolved .ac-body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
+.all-comments .ac-where { font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.25rem; }
+.all-comments .ac-body { white-space: pre-wrap; word-break: break-word; }
+/* Per-item edit/resolve/delete row — mirrors .inline-comment
+   .ic-actions (that selector is descendant-scoped so it can't be
+   reused here). flex-wrap keeps the three buttons usable on a narrow
+   iPhone screen. */
+.all-comments .ac-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+.all-comments .ac-actions button {
+  padding: 0.15rem 0.5rem; font-size: 0.72rem; margin: 0;
+  min-height: 26px; min-width: auto; line-height: 1.2;
+}
+.all-comments .ac-actions form { margin: 0; }
+dialog#files-drawer ul { list-style: none; padding: 0; margin: 0; }
+dialog#files-drawer li { margin: 0 0 0.15rem 0; }
+dialog#files-drawer button.file-btn {
+  width: 100%; text-align: left; margin: 0;
+  padding: 0.3rem 0.55rem; font-size: 0.82rem;
+  line-height: 1.3; min-height: 28px;
+  display: flex; align-items: center; gap: 0.4rem;
+  border-radius: var(--radius-sm);
+  transition: background 100ms ease, color 100ms ease;
+}
+dialog#files-drawer button.file-btn .file-label {
+  flex: 1; min-width: 0;
+  /* Ellipsis instead of break-all so long paths like
+     "cmd/screenshot/main.go" don't wrap mid-character into "g\no".
+     The button's title attribute carries the full path on hover. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+dialog#files-drawer button.file-btn .file-meta { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; }
+dialog#files-drawer button.file-btn .file-count {
+  margin: 0;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+dialog#files-drawer button.file-btn .diff-stats {
+  font-family: var(--jbm);
+  font-size: 0.7rem; line-height: 1.3; white-space: nowrap;
+}
+dialog#files-drawer button.file-btn .diff-stats .add { color: #166534; margin-right: 0.2rem; }
+dialog#files-drawer button.file-btn .diff-stats .del { color: #991b1b; }
+
+/* Status badges — colored pills instead of dark-text-in-brackets so the
+   user can scan diff status at a glance. Slot is fixed-width (~18px) so
+   filenames align across rows regardless of which letter the file has. */
+.status-badge {
+  display: inline-block; flex-shrink: 0;
+  min-width: 18px; padding: 0 4px; margin-right: 0.35rem;
+  border-radius: 3px; font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.03em; text-align: center; line-height: 1.6;
+  font-family: var(--jbm);
+  vertical-align: 1px;
+}
+.status-badge.A { background: #dcfce7; color: #166534; }
+.status-badge.M { background: #fef3c7; color: #92400e; }
+.status-badge.D { background: #fee2e2; color: #991b1b; }
+.status-badge.R { background: #dbeafe; color: #1e40af; }
+.status-badge.C { background: #e0e7ff; color: #3730a3; }
+.status-badge.T { background: #f3e8ff; color: #6b21a8; }
+
+/* Selected file: light blue tint + strong left accent + bold weight.
+   The bg color (#dbeafe, tailwind blue-100) is light enough that
+   dark status-A/M/D text colors stay readable. */
+dialog#files-drawer button.file-btn.is-selected {
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-left: 4px solid #1e40af;
+  padding-left: calc(0.55rem - 3px);
+  font-weight: 600;
+}
+dialog#files-drawer form { margin: 0; }
+
+/* Backdrop behind the drawer, click-to-close on mobile */
+.drawer-backdrop {
+  position: fixed; top: var(--pr-bar-h); bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,.4); z-index: 35;
+  opacity: 0; pointer-events: none; transition: opacity 200ms;
+}
+.drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+/* Backdrop only catches taps in the visible strip to the right of the
+   open drawer. Restricting pointer-events to that strip prevents taps in
+   the drawer's area from being eaten before they reach the drawer. */
+.drawer-backdrop.open { cursor: pointer; }
+
+/* Main viewer — must have min-width: 0 so flex shrink works and a wide
+   button.line inside .code doesn't push article past the viewer's width.
+   Without this, the file-head inherits the wider article width and gets
+   clipped at the left edge of the viewport (negative x). */
+/* min-height: 0 is load-bearing: a flex item's default min-height is
+   `auto` (= its content's min-content height). Without overriding it,
+   `flex: 1` can't shrink main.viewer below the full diff height, so it
+   grows to ~12000px, overflow-y:auto has nothing to scroll, and the
+   page becomes one giant unscrollable column (the "scroll locked on
+   desktop" + "janky vertical" regression). .layout already sets
+   min-height:0; main.viewer needs it too for the flex chain to bound
+   the scroll viewport to the actual screen. */
+main.viewer { flex: 1; min-height: 0; overflow-y: auto; padding: 0; min-width: 0; }
+main.viewer > article { margin: 0; padding: 0; min-width: 0; max-width: 100%; }
+/* `main.viewer > article > header` beats Pico's `article > header` rules
+   so our explicit padding isn't dropped — the filename would otherwise
+   be clipped at the viewport edge with no margin. */
+main.viewer > article > header.file-head {
+  /* Pico CSS sets a negative margin on `article > header` to make the
+     header bleed to the article's edges (assuming the article has padding).
+     Our article has no padding, so we need margin: 0 explicitly — otherwise
+     the file-head extends past the viewport on both sides and the first
+     character of the filename gets clipped. */
+  margin: 0;
+  display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--pico-card-background-color);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  position: sticky; top: 0; z-index: 5;
+  font-size: 0.85rem;
+}
+main.viewer > article > header.file-head strong {
+  word-break: break-all; font-size: 0.9rem; padding-left: 0;
+}
+main.viewer > article > header.file-head small { color: var(--pico-muted-color); font-size: 0.75rem; }
+
+/* Diff viewer container — was <pre> but that preserves whitespace which
+   made every template-loop newline a visible blank line. Now a <div>
+   stack with per-line <button> blocks. */
+.code {
+  background: var(--pico-card-background-color);
+  /* Lines WRAP (see .code .content) instead of scrolling horizontally.
+     A focusable button.line wider than this container made mobile
+     Safari/Chrome device-mode scroll .code sideways on focus, leaving
+     every line (and the inline composer) clipped on the left. Wrapping
+     removes horizontal scroll entirely, so that whole class of bug
+     (offset/truncated content) cannot occur. */
+  padding: 0; margin: 0; overflow-x: hidden;
+  font-size: 0.8rem; line-height: 1.2;
+  font-family: var(--jbm);
+}
+.code form { margin: 0; padding: 0; display: block; line-height: 1.2; }
+/* Performance: content-visibility: auto lets the browser skip painting
+   off-screen rows entirely while scrolling a long diff — the dominant
+   cost in 500+ line files. The intrinsic-size hint is a soft floor for
+   unrendered rows so the scrollbar doesn't jitter as content-
+   visibility kicks in.
+
+   IMPORTANT: rows that hold the composer or an inline comment are
+   excluded — content-visibility: auto skips rendering their contents
+   when off-screen, which makes the composer's textarea and comment
+   action buttons unfocusable until scrolled in. Plain diff rows have
+   no interactive sub-elements, so visibility-skip is safe there.
+
+   Previously this rule also set `contain: layout style` on every
+   .line-row for an extra isolation guard. Removed because `contain:
+   layout` clips descendants' overflow from the parent's reported
+   dimensions — and the button.line inside has `width: max-content`
+   that can be MUCH wider than the .code container. With layout
+   containment, the parent .line-row's width stayed at the .code
+   width, and `.code`'s `overflow-x: auto` had nothing to scroll past.
+   Result: horizontal scroll on long lines stopped working entirely.
+   Off-screen rows get layout containment naturally via content-
+   visibility's implicit `contain: size`; on-screen rows pay no extra
+   isolation cost but their wide buttons correctly extend the
+   scroll-width of `.code`. */
+.code .line-row {
+  line-height: 1.2;
+  min-width: 100%;
+}
+/* Collapsed-gap marker in Diff view ("··· N unchanged lines ···").
+   Non-interactive: no gutter, no selectLine button. */
+.code .fold-row {
+  display: flex; justify-content: center;
+  padding: 0.1rem 0.5rem;
+  background: var(--pico-card-sectioning-background-color);
+  border-top: 1px solid var(--pico-muted-border-color);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  user-select: none;
+}
+.code .fold-row .fold-label {
+  font-size: 0.7rem; color: var(--pico-muted-color);
+  font-family: var(--jbm); letter-spacing: 0.04em;
+}
+.code .line-row:not(:has(.composer)):not(:has(.inline-comment)) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 16px;
+}
+/* Legacy horizontal-scroll-extent spacer. Lines wrap now, so .code
+   has no horizontal scroll and this must contribute no width. */
+.code .code-sentinel { display: none; }
+.code button.line {
+  display: flex; padding: 0; margin: 0; min-height: 0;
+  /* Exactly the container width — never wider. A focusable element
+     wider than .code is what let mobile browsers scroll .code
+     sideways on focus. width:100% + wrapping content keeps the
+     focusable box inside the viewport. */
+  width: 100%;
+  border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+  text-align: left; align-items: flex-start; line-height: 1.2;
+}
+.code button.line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
+.code button.line.add { background: var(--pr-add-bg); color: var(--pr-add); }
+.code button.line.del { background: var(--pr-del-bg); color: var(--pr-del); }
+/* When EVERY line in the file is an add (or every line is a del) the
+   per-line background carries no information — the [A]/[D] badge in the
+   file list already signals the file-level state. Drop the noise. */
+.code.pure-add button.line.add { background: none; color: inherit; }
+.code.pure-del button.line.del { background: none; color: inherit; }
+/* File view mode — same effect as pure-add/pure-del but applied unconditionally,
+   plus deleted lines disappear (they don't exist in the working-tree file).
+   The :has() pseudo hides the whole .line-row (button + any inline comments
+   anchored to that del line), which is correct: a comment on a deleted line
+   has no anchor in file-view mode. Switching back to diff view restores them. */
+.code.file-view button.line.add,
+.code.file-view button.line.del { background: none; color: inherit; }
+.code.file-view .line-row:has(button.line.del) { display: none; }
+.code.file-view .gutter-mark { display: none; }
+.code button.line.selected { background: var(--pr-sel-bg) !important; outline: 1px solid var(--pico-primary); outline-offset: -1px; }
+.code .gutter {
+  flex: 0 0 5.5ch; color: var(--pico-muted-color); user-select: none;
+  text-align: right; padding-right: 0.4rem; font-size: 0.75rem;
+  white-space: nowrap;
+  position: sticky; left: 0; z-index: 1;
+  background: var(--pico-card-background-color);
+  border-right: 1px solid var(--pico-muted-border-color);
+}
+.code .content {
+  /* pre-wrap keeps indentation/whitespace but wraps long lines;
+     overflow-wrap:anywhere breaks unbreakable tokens (URLs, long
+     strings) so they can't overflow. min-width:0 lets this flex
+     child shrink so wrapping actually engages. */
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  flex: 1; min-width: 0; padding-left: 0.35rem; min-height: 1em;
+}
+
+/* Rendered-Markdown view. Each .md-block is a click target that
+   selects its source line range (SelectBlock). The rendered HTML
+   lives in .md-rendered; inline comment cards / the composer are
+   siblings inside .md-block so they sit BELOW the block, not inside
+   the clickable area. */
+/* Reading surface: capped at 56rem (≈896px ≈ 80 chars of the 20px
+   rendered prose) — a comfortable readable line length (issue #27
+   "narrower body for breathing space"). Expressed in rem (tracks html =
+   16px) rather than ch: ch would resolve against the 14px .md-view
+   container, giving a misleadingly tight ~672px that read as too narrow
+   on wide monitors. margin-inline:auto centres it, so on a wide viewer
+   (focus mode or an ultrawide display) the prose sits in a comfortable
+   column with symmetric gutters instead of running edge to edge; on a
+   typical laptop the column fills most of the viewer. The diff/code
+   surface (.code) is deliberately NOT capped — code needs full width. */
+.md-view { padding: 0.6rem 1.8rem 2rem; max-width: 56rem; margin-inline: auto; }
+/* HTML preview: the whole file renders in one sandboxed iframe (full
+   document fidelity), with the comments list stacked below it. The
+   client auto-heights .html-preview from its content; the fallback
+   min-height avoids a zero-height flash before the directive runs.
+   .html-block now wraps only a block's comments + composer; .selected
+   marks the block being commented on (the visual highlight lives inside
+   the iframe). */
+.html-view { padding: 0.6rem 1.8rem 2rem; max-width: 56rem; margin-inline: auto; }
+.html-preview { display: block; width: 100%; border: 0; min-height: 60vh; background: #fff; color-scheme: light; }
+.html-block { position: relative; border-radius: 6px; }
+.html-block.selected { outline: 2px solid var(--primary, currentColor); outline-offset: 4px; }
+/* Sticky top bar (var(--pr-bar-h)) would otherwise obscure the anchored
+   heading when the browser jumps to "#id". scroll-padding-top reserves
+   that gap so the heading lands just below the bar. Smooth scroll is
+   gated behind prefers-reduced-motion so motion-sensitive users get an
+   instant jump. */
+html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+/* ===== TOC sidebar (desktop) + overlay (mobile) =====
+   Base (mobile) state: sidebar hidden, overlay closed. The desktop
+   media query below promotes the sidebar into the right column and
+   removes the mobile overlay/menu-entry from the DOM cascade. */
+.toc-sidebar { display: none; }
+.toc-modal {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 60; padding: calc(var(--pr-bar-h) + 0.5rem) 0 0;
+  background: var(--pico-background-color);
+  transform: translateX(100%); transition: transform 0.15s ease;
+  display: flex; flex-direction: column; gap: 0.25rem;
+  overflow-y: auto;
+}
+.toc-modal.is-open { transform: translateX(0); }
+.toc-backdrop {
+  position: fixed; inset: 0; z-index: 55;
+  background: rgba(0, 0, 0, 0.35);
+  display: none;
+}
+.toc-backdrop.is-open { display: block; }
+.toc-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.toc-modal-head strong { font-size: 0.9rem; color: var(--pico-muted-color); }
+.toc-modal-head form { margin: 0; }
+.toc-modal-head .close-btn {
+  padding: 0.25rem 0.45rem; min-height: auto; line-height: 1; min-width: 0;
+  background: transparent; color: var(--pico-muted-color);
+  border-color: var(--pico-muted-border-color);
+}
+.toc-modal-list { display: flex; flex-direction: column; padding: 0.4rem 0; }
+.toc-link {
+  display: block; padding: 0.55rem 1rem; text-decoration: none;
+  color: var(--pico-color); border-left: 3px solid transparent;
+  font-size: 0.95rem; line-height: 1.35;
+}
+.toc-link:hover { background: var(--pico-card-sectioning-background-color); }
+.toc-link.lvt-active {
+  color: var(--pr-add); font-weight: 600;
+  border-left-color: var(--pr-add);
+  background: var(--pico-card-sectioning-background-color);
+}
+/* Per-level indent kept visually distinct but tighter than before — the
+   old 1rem / 1.75rem / 2.5rem cascade ate so much horizontal space
+   that L3 titles in the 220px sidebar had ≤7 chars of text room. New
+   ladder is half-step (0.5rem) per level, leaving more width for prose. */
+.toc-l1 { padding-left: 0.75rem; }
+.toc-l2 { padding-left: 1.25rem; font-size: 0.9rem; }
+.toc-l3 { padding-left: 1.75rem; font-size: 0.85rem; color: var(--pico-muted-color); }
+.md-block { margin: 0 0 0.2rem; border-radius: 6px; }
+.md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
+.md-rendered {
+  cursor: pointer; padding: 0.15rem 0.4rem; border-radius: 6px;
+  border: 1px solid transparent;
+}
+.md-rendered:hover { background: var(--pico-card-sectioning-background-color); border-color: var(--pico-muted-border-color); }
+/* Tighten Pico's default block spacing inside rendered Markdown so a
+   doc reads as one flow rather than widely-spaced cards, and make code
+   wrap instead of forcing horizontal scroll (consistent with the diff
+   viewer). Scoped to .md-rendered so it can't leak to app chrome. */
+.md-rendered > :first-child { margin-top: 0; }
+.md-rendered > :last-child { margin-bottom: 0; }
+.md-rendered :is(h1,h2,h3,h4,h5,h6) { margin: 0.6em 0 0.3em; line-height: 1.25; }
+/* A hairline under the top two heading levels gives rendered docs a clear
+   sectioned structure (GitHub-style) without changing the monospace font —
+   the all-mono identity is preserved; only the rhythm reads as "rendered". */
+.md-rendered :is(h1,h2) {
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.md-rendered > :is(h1,h2):first-child { margin-top: 0; }
+.md-rendered p, .md-rendered ul, .md-rendered ol, .md-rendered blockquote, .md-rendered table { margin: 0.4em 0; }
+.md-rendered pre {
+  background: var(--pico-card-sectioning-background-color);
+  padding: 0.5rem 0.6rem; border-radius: 6px; overflow-x: auto;
+  font-size: 0.85em;
+}
+/* The whole app is now monospace, so an inline `code` span no longer
+   stands out by font alone — give it a subtle tint + padding so e.g.
+   `Phoenix.PubSub` stays visually distinct from prose. Not applied to
+   `pre code`: the <pre> already carries its own block background. */
+.md-rendered code {
+  word-break: break-word;
+  background: var(--pico-code-background-color, var(--pico-card-sectioning-background-color));
+  padding: 0.05em 0.3em; border-radius: 3px;
+}
+.md-rendered pre code { word-break: normal; background: none; padding: 0; }
+.md-rendered img { max-width: 100%; height: auto; }
+.md-mermaid { margin: 0.4em 0; text-align: center; overflow-x: auto; }
+.md-mermaid > pre.mermaid { display: none; }
+.md-mermaid svg { max-width: 100%; height: auto; }
+.md-mermaid-failed { text-align: left; }
+.md-mermaid-failed > pre.mermaid { display: block; background: var(--pico-card-sectioning-background-color); padding: 0.5rem 0.6rem; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+.md-mermaid-error { display: flex; align-items: center; gap: 0.4em; margin-bottom: 0.4em; padding: 0.3rem 0.5rem; border-radius: 6px; font-size: 0.85em; color: #9a6700; background: #fff8c5; border: 1px solid #d4a72c66; }
+.md-rendered blockquote {
+  border-left: 3px solid var(--pico-muted-border-color);
+  padding-left: 0.7rem; color: var(--pico-muted-color);
+}
+/* GitHub alerts (`> [!NOTE]` etc, rendered by the local alert extension):
+   a coloured callout. The per-type accent (set below) drives the left
+   border and the title row (octicon + label); a faint same-hue tint fills
+   the box. The page is data-theme="light", so GitHub's light-theme accent
+   colours read correctly without a dark-mode variant. */
+.md-rendered .md-alert {
+  border-left: 3px solid var(--md-alert-accent);
+  padding: 0.3rem 0.8rem; margin: 0.6em 0; border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--md-alert-accent) 7%, transparent);
+}
+.md-rendered .md-alert > :first-child { margin-top: 0; }
+.md-rendered .md-alert > :last-child { margin-bottom: 0; }
+.md-rendered .md-alert-title {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-weight: 600; color: var(--md-alert-accent); margin: 0.2em 0 0.3em;
+}
+.md-rendered .md-alert-title svg { fill: currentColor; flex: none; }
+.md-rendered .md-alert-note      { --md-alert-accent: #0969da; }
+.md-rendered .md-alert-tip       { --md-alert-accent: #1a7f37; }
+.md-rendered .md-alert-important { --md-alert-accent: #8250df; }
+.md-rendered .md-alert-warning   { --md-alert-accent: #9a6700; }
+.md-rendered .md-alert-caution   { --md-alert-accent: #cf222e; }
+.md-rendered table { display: block; overflow-x: auto; border-collapse: collapse; }
+.md-rendered th, .md-rendered td { border: 1px solid var(--pico-muted-border-color); padding: 0.2rem 0.45rem; }
+/* Per-row solo tables: the rendered view splits a table into one block
+   per row so each row is independently commentable. Fixed layout + full
+   width gives every stacked one-row table identical column widths (same
+   column count), so the rows stay aligned and read as one contiguous
+   grid; zero margin/radius makes header+rows hug instead of looking
+   like separate cards. */
+.md-rendered table.md-solo-table {
+  display: table; width: 100%; table-layout: fixed; margin: 0;
+}
+.md-rendered table.md-solo-table th,
+.md-rendered table.md-solo-table td { word-break: break-word; vertical-align: top; }
+.md-block:has(.md-solo-table) { margin-bottom: 0; border-radius: 0; }
+
+/* Inline comment cards — between the diff lines */
+.inline-comment {
+  margin: 0.3rem 0.4rem; padding: 0.45rem 0.6rem;
+  background: var(--pr-comment-bg);
+  border: 1px solid var(--pr-comment-bd);
+  border-left: 3px solid var(--pr-comment-bd);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem; line-height: 1.35;
+}
+/* File-level comments section. Lives between the file-head and the
+   body branch so it's visible above every preview mode (line view,
+   markdown blocks, html blocks, binary placeholder). Reuses the
+   .inline-comment shell so the visual matches per-line comments
+   exactly — only the surrounding container changes (no line gutter
+   above, a dotted bottom separator below). */
+.file-comments {
+  padding: 0.5rem 0.6rem 0.6rem;
+  border-bottom: 1px dotted var(--pico-muted-border-color, #d9d9d9);
+}
+.file-comments .composer { margin-top: 0.5rem; }
+/* image-with-areas: positioning context for the .area-overlay
+   rectangles. The wrapper is display:inline-block so it shrinks to
+   the rendered image dimensions — overlays positioned in % then
+   line up exactly with the visible pixels.
+   Saved areas: low-alpha fill + 2px solid border that stays
+   readable on both light and dark images.
+   Pending area: dashed border + slightly brighter fill so the
+   not-yet-saved selection is visually distinct from saved ones. */
+.image-with-areas { position: relative; display: inline-block; max-width: 100%; }
+.image-with-areas img { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+
+/* Region-select overlay (issue #26 region comments). A transparent layer
+   in the PARENT document laid over the rendered-HTML preview iframe — the
+   one surface with no per-line commenting (you can't tap a line inside the
+   sandboxed iframe), so a drawn box is the fallback. The lvt-fx:region-
+   select directive captures a drag on it and hit-tests the box to a source
+   line range. Only rendered when armed (the "Select region" toggle), so a
+   one-finger gesture scrolls normally when off; touch-action:none stops
+   the drag from scrolling while armed. The drawn box is the directive's
+   own .lvt-area-select-overlay (z-index 9999), which sits above this. */
+.preview-stage { position: relative; }
+.region-overlay {
+  position: absolute; inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+  background: rgba(76, 194, 255, 0.06);
+  z-index: 5;
+}
+.region-toggle { margin: 0 0 0.5rem; }
+.region-toggle button { font-size: 0.85rem; padding: 0.25rem 0.6rem; width: auto; }
+.area-overlay {
+  position: absolute;
+  border: 2px solid var(--lvt-area-select-color, #4cc2ff);
+  background: var(--lvt-area-select-fill, rgba(76, 194, 255, 0.18));
+  box-sizing: border-box;
+  pointer-events: none;
+  border-radius: 2px;
+}
+.area-overlay.is-resolved {
+  border-color: var(--pico-muted-color, #666);
+  background: rgba(128, 128, 128, 0.15);
+  opacity: 0.6;
+}
+.area-overlay-pending {
+  border-style: dashed;
+  background: var(--lvt-area-select-fill, rgba(76, 194, 255, 0.28));
+}
+/* --external (live-site) mode. The proxied site renders in a fixed-height
+   scrolling iframe; the region overlay (toggle-armed, same as the HTML
+   preview) captures a drag above it; the pin layer — sized to the document
+   and translated by -scroll by the lvt-fx:proxy-bridge directive — re-pins
+   saved annotations as the page scrolls. */
+.layout-external { display: flex; gap: 0; align-items: stretch; }
+.ext-viewer { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 0.8rem; }
+.ext-stage { height: calc(100vh - 9rem); overflow: hidden; border: 1px solid var(--pico-muted-border-color, #d9d9d9); border-radius: 6px; background: #fff; }
+.ext-frame { width: 100%; height: 100%; border: 0; display: block; }
+.pin-layer { position: absolute; top: 0; left: 0; pointer-events: none; transform-origin: 0 0; z-index: 4; }
+/* Saved pins are buttons: clicking one opens its comment in the editor. They
+   re-enable pointer events (the layer itself passes clicks through to the live
+   page); gaps between pins stay click-through so the page is still usable. */
+.pin-btn { pointer-events: auto; cursor: pointer; padding: 0; appearance: none; -webkit-appearance: none; }
+.pin-btn:hover { background: rgba(76, 194, 255, 0.30); }
+/* Annotations sidebar: collapsed by default (full width for the live site);
+   the header "💬 N" button toggles AnnoDrawerOpen → .is-open. */
+.ext-sidebar { display: none; flex: 0 0 320px; border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); overflow-y: auto; }
+.ext-sidebar.is-open { display: block; }
+.ext-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--pico-muted-border-color, #d9d9d9); position: sticky; top: 0; background: var(--pico-background-color, #fff); }
+.ext-sidebar-head .close-btn { width: auto; padding: 0.2rem 0.45rem; margin: 0; }
+.ext-sidebar-body { padding: 0.6rem 0.8rem; }
+.ext-anno { margin-bottom: 0.6rem; }
+.ext-anno.is-focused { outline: 2px solid var(--accent, #4361ee); outline-offset: 2px; border-radius: 6px; }
+.anno-locate-form { margin: 0; }
+.anno-locate { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0.1rem 0; margin: 0; color: inherit; cursor: pointer; }
+.anno-locate .ext-page-link { font-size: 0.78rem; word-break: break-all; }
+.anno-locate .anno-body { display: block; margin-top: 0.15rem; }
+.ext-page-link { font-family: var(--jbm); }
+/* Focused pin: bright ring + a one-shot pulse so a tapped annotation is
+   obvious on the page once the iframe scrolls it into view. */
+.area-overlay.is-focused { border-color: var(--accent, #4361ee); border-width: 3px; background: rgba(67, 97, 238, 0.28); z-index: 6; animation: pin-pulse 1.4s ease-out 2; }
+@keyframes pin-pulse { 0% { box-shadow: 0 0 0 0 rgba(67,97,238,0.55); } 70% { box-shadow: 0 0 0 12px rgba(67,97,238,0); } 100% { box-shadow: 0 0 0 0 rgba(67,97,238,0); } }
+.ext-composer { margin-top: 0.6rem; }
+.bar-external { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0.8rem; }
+.bar-external .ext-target { font-size: 0.85rem; color: var(--pico-muted-color, #666); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-external .ext-page { font-family: var(--jbm); }
+.bar-external .bar-actions { display: flex; gap: 0.5rem; flex: none; }
+.anno-toggle { width: auto; padding: 0.25rem 0.6rem; margin: 0; font-size: 0.85rem; }
+@media (max-width: 900px) {
+  .layout-external { flex-direction: column; }
+  .ext-stage { height: 68vh; }
+  /* On a phone the open drawer slides over the live site rather than pushing
+     it below the fold. */
+  .ext-sidebar.is-open { position: fixed; inset: 0 0 0 auto; width: min(88vw, 360px); z-index: 50; background: var(--pico-background-color, #fff); border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); box-shadow: -8px 0 24px rgba(0,0,0,0.18); }
+  /* Stream mode adds a second top-bar action (End session). Two contrast
+     buttons overflow the narrow bar and wrap, so on mobile keep only
+     "Hand off →" inline and surface End session in the ⋮ overflow menu. */
+  header.bar .tb-action .end-session-inline { display: none; }
+  /* The external bar has no overflow menu — keep its actions compact so
+     💬 + Hand off + End session fit on one row. */
+  .bar-external .bar-actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+}
+/* Resolved comments stay visible but muted, with a clear badge. The skill
+   reads the CSV `resolved` column and skips these — UI just signals the
+   resolution to the human reviewer. */
+.inline-comment.is-resolved {
+  background: var(--pico-card-sectioning-background-color, #f4f4f4);
+  border-left-color: var(--pico-muted-color);
+  opacity: 0.7;
+}
+.inline-comment.is-resolved .body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
+.inline-comment .resolved-badge {
+  background: var(--pr-add-bg); color: var(--pr-add);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.inline-comment header {
+  font-size: 0.7rem; color: var(--pico-muted-color); margin: 0 0 0.2rem 0;
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 600;
+}
+.inline-comment .body { white-space: pre-wrap; word-break: break-word; }
+.inline-comment .ic-actions { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
+.inline-comment .ic-actions button {
+  padding: 0.15rem 0.5rem; font-size: 0.72rem; margin: 0;
+  min-height: 26px; min-width: auto; line-height: 1.2;
+}
+.inline-comment .ic-actions form { margin: 0; }
+/* Anchor-status surface. moved = informational (auto-followed its
+   content); outdated = the anchored text changed/vanished and the
+   comment could not be confidently re-placed — it needs Re-anchor. */
+.inline-comment .moved-badge, .all-comments .moved-badge {
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.inline-comment .outdated-badge, .all-comments .outdated-badge {
+  background: var(--pr-del-bg); color: var(--pr-del);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.inline-comment.is-outdated { border-left: 3px solid var(--pr-del); }
+.anchor-orig { margin: 0.25rem 0 0; font-size: 0.72rem; color: var(--pico-muted-color); }
+.anchor-orig summary { cursor: pointer; }
+.anchor-orig pre {
+  white-space: pre-wrap; word-break: break-word; margin: 0.2rem 0 0;
+  background: var(--pico-card-sectioning-background-color);
+  padding: 0.3rem 0.45rem; border-radius: 4px; font-size: 0.72rem;
+}
+.reanchor-prompt {
+  position: sticky; bottom: 0;
+  margin: 0.4rem 0.4rem 0.2rem; padding: 0.4rem 0.6rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  background: var(--pr-del-bg); color: var(--pr-del);
+  border: 1px solid var(--pr-del); border-radius: 4px;
+  font-size: 0.8rem; box-shadow: 0 -2px 8px rgba(0,0,0,.08); z-index: 8;
+}
+.reanchor-prompt .undo-btn {
+  margin: 0; padding: 0.2rem 0.7rem; font-size: 0.78rem;
+  background: var(--pico-primary); color: var(--pico-primary-inverse); border: 0;
+}
+
+/* Inline composer — sticky on mobile, static on desktop. Save and Cancel
+   live in separate <form> elements (siblings, not nested) so Cancel can't
+   get blocked by the required-textarea validation on the add form. */
+.composer {
+  position: sticky; bottom: 0; z-index: 10;
+  margin: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column;
+}
+.composer strong { font-size: 0.78rem; }
+.composer textarea {
+  min-height: 3rem; margin: 0.25rem 0; font-size: 16px; width: 100%;
+  padding: 0.35rem 0.45rem; line-height: 1.4;
+}
+.composer .composer-add { margin: 0; display: block; }
+/* Save and Cancel submit different actions so they must live in
+   separate <form>s. They're associated to their forms via the HTML
+   `form=` attribute and share one .c-actions row so they sit on the
+   same horizontal level. composer-cancel is just a submit target. */
+.composer .composer-cancel { display: none; }
+.composer .c-actions { display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.4rem; }
+.composer .save-btn { margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 30px; }
+.composer .cancel-btn {
+  margin: 0; padding: 0.3rem 0.7rem; font-size: 0.78rem; min-height: 28px;
+  flex: 0 0 auto;
+  background: none; border: 1px solid var(--pico-muted-border-color);
+  color: var(--pico-muted-color);
+}
+
+/* Legacy status-text rules removed — diff status is now carried by the
+   colored .status-badge pill, not a class on the row. */
+
+/* Empty states */
+.empty { color: var(--pico-muted-color); padding: 2rem; text-align: center; }
+
+/* Binary file previews — rendered inline now that the HTTP server's
+   static fallback (issue #13) serves the bytes. Each kind picks the
+   most natural sizing: images fill width up to their natural size; PDFs
+   take a tall viewport-relative iframe (PDFs scroll internally); video
+   gets a 16:9 cap; audio is its own minimal player. */
+.binary-preview { padding: 0.6rem 1.2rem 2rem; max-width: 160ch; margin-inline: auto; }
+.binary-image img { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+/* PDF card: a centred file affordance with a clear "Open in new tab"
+   CTA. Browsers' inline PDF viewers are too restricted in embed
+   contexts to be useful (see template note), so we lean on Chrome's
+   full standalone viewer via target=_blank instead. */
+.binary-pdf-card {
+  display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+  padding: 3rem 1rem; max-width: 28rem; margin: 2rem auto;
+  border: 1px solid var(--pico-muted-border-color); border-radius: 8px;
+  background: var(--pico-card-background-color);
+}
+.binary-pdf-card .pdf-card-icon { font-size: 3rem; line-height: 1; }
+.binary-pdf-card .pdf-card-name { font-size: 0.95rem; color: var(--pico-h1-color); word-break: break-all; text-align: center; }
+/* Pico v2 styles `<a role="button" class="contrast">` as a solid dark
+   button identical to <button class="contrast">. We only override
+   spacing/sizing; colors come from Pico's role=button cascade so this
+   stays in lockstep with Quit/Hand off automatically. */
+.binary-pdf-card .pdf-card-open { margin-top: 0.4rem; padding: 0.5rem 1.2rem; width: auto; }
+.binary-video video { display: block; max-width: 100%; max-height: calc(100vh - var(--pr-bar-h) - 4rem); margin-inline: auto; }
+.binary-audio audio { display: block; width: 100%; max-width: 480px; margin-inline: auto; }
+
+/* Floating toast — confirms DONE write without consuming header space.
+   Positioned absolutely so the layout doesn't shift when it appears/dismisses. */
+.toast {
+  position: fixed;
+  top: calc(var(--pr-bar-h) + 0.5rem);
+  right: 0.75rem;
+  max-width: calc(100vw - 1.5rem);
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.7rem;
+  background: var(--pr-add-bg); color: var(--pr-add);
+  border: 1px solid var(--pr-add); border-radius: 6px;
+  font-size: 0.8rem; line-height: 1.3;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1);
+  z-index: 25;
+}
+.toast .toast-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.toast .toast-msg code { font-size: 0.75rem; background: rgba(255,255,255,.5); padding: 0 0.25rem; border-radius: 3px; }
+.toast-dismiss-form { margin: 0; }
+.toast-dismiss {
+  margin: 0; padding: 0.15rem 0.3rem; min-height: 22px; min-width: 22px;
+  background: transparent; border: 0; color: inherit;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; line-height: 1;
+}
+.toast-dismiss svg { pointer-events: none; display: block; }
+@media (min-width: 900px) {
+  .toast { font-size: 0.85rem; max-width: 500px; }
+  .toast .toast-msg { white-space: normal; }
+}
+
+/* ===== Desktop overrides (>=900px) ===== */
+@media (min-width: 900px) {
+  /* The base is pinned to 14px for mobile density. That made every
+     rem-based size (toolbar, sidebar, chrome) miniature on a desktop
+     screen — the root cause of "still too small". Lift the base to
+     16px here so ALL rem sizing scales up coherently in one move; the
+     per-element bumps below are relative to this. body is left at the
+     14px base on purpose: rem tracks html (so every rem-sized control
+     scales), while the few elements that inherit body's size — chiefly
+     the .md-view prose container — stay at 14px, which keeps the 80ch
+     reading-column measure at a deliberately narrow ~672px (issue #27
+     "narrower body"). Actual reading content that was too small (comment
+     bodies) is bumped explicitly below, not via the body cascade. */
+  html { font-size: 16px; }
+  .hamburger { display: none; }
+  .drawer-backdrop { display: none; }
+  .layout { flex-direction: row; }
+  html body dialog#files-drawer {
+    position: static; transform: none;
+    width: var(--pr-drawer-w); max-width: var(--pr-drawer-w);
+    height: auto; align-self: stretch;
+    flex-shrink: 0;
+  }
+  /* The drawer is permanent on desktop — the whole `.drawer-head` is
+     mobile-only chrome: the "19 files" count is already in the toolbar's
+     `19 files · 0/19 viewed`, and the close X has nowhere meaningful to
+     "close" to. Mobile keeps both (count + exit affordance for the
+     overlay). */
+  dialog#files-drawer .drawer-head { display: none; }
+  /* Sidebar (file drawer) had NO desktop bump — the file list was the
+     mobile 0.85rem on a big screen. Lift it to ≈ body size; keep it a
+     touch below the toolbar (dense list vs chrome). */
+  dialog#files-drawer .drawer-head strong { font-size: 0.95rem; }
+  dialog#files-drawer .drawer-search input { font-size: 0.95rem; min-height: 36px; }
+  dialog#files-drawer .drawer-base { font-size: 0.9rem; }
+  dialog#files-drawer .drawer-base label { font-size: 0.8rem; }
+  dialog#files-drawer .drawer-base select { font-size: 0.95rem; min-height: 36px; }
+  dialog#files-drawer button.file-btn { font-size: 1rem; }
+  dialog#files-drawer button.file-btn .file-count { font-size: 0.85rem; }
+  main.viewer { flex: 1; padding: 0; min-width: 0; }
+  .composer { position: static; box-shadow: none; }
+  /* Desktop has the space — the mobile sizes are cramped on a large
+     screen. Bump the code and the chrome up to comfortable reading. */
+  .code { font-size: 0.95rem; line-height: 1.45; }
+  .code .gutter { font-size: 0.85rem; }
+  /* The rendered-Markdown reading surface is the primary desktop view
+     (proposal docs). Bump it well past the cramped 14px mobile base. */
+  .md-rendered { font-size: 1.25rem; line-height: 1.75; }
+  main.viewer > article > header.file-head strong { font-size: 1.05rem; }
+  main.viewer > article > header.file-head small { font-size: 0.85rem; }
+  /* The filename already headlines the diff (.file-head) and the
+     all-comments view (.ac-head). Showing it again in the top bar is
+     pure duplication on desktop — drop just the filename, keep the
+     "pick a file" / "all comments" prompts. */
+  header.bar .title-file { display: none; }
+  /* Toolbar controls: 0.9rem/38px was still miniature on desktop —
+     match the 1rem body and a 44px touch target. */
+  header.bar button { padding: 0.5rem 0.9rem; font-size: 1rem; min-height: 44px; }
+  header.bar .nav-prev button, header.bar .nav-next button { min-width: 0; min-height: 44px; padding: 0.5rem 0.8rem !important; }
+  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 18px; height: 18px; }
+  /* Desktop has the horizontal room — surface the Prev/Next label so
+     the buttons aren't bare arrows. Aria-label stays as the SR text;
+     the visible label is the explicit affordance per issue #11. */
+  header.bar .nav-label { display: inline; font-weight: 500; font-size: 0.95rem; }
+  .toolbar-inline { gap: 0.6rem; }
+  .toolbar-inline .auto-saved-long { font-size: 1rem; }
+  /* Desktop has room — render chips inline and hide the overflow menu. */
+  .toolbar-inline { display: inline-flex; }
+  .more-trigger { display: none; }
+  .more-menu, .more-menu-backdrop { display: none !important; }
+  /* TOC: a permanent right column. The .md-view container is the spy
+     root (lvt-spy="h1, h2, h3"); the sticky sidebar lists each h1–h3
+     and `lvt-spy-link` highlights the active one as the reader
+     scrolls. Mobile overlay + menu entry are hidden — desktop never
+     needs them. */
+  .toc-sidebar {
+    display: block; flex: 0 0 var(--pr-toc-w);
+    position: sticky; top: var(--pr-bar-h);
+    align-self: flex-start;
+    max-height: calc(100vh - var(--pr-bar-h));
+    overflow-y: auto;
+    padding: 0.5rem 0;
+    border-left: 1px solid var(--pico-muted-border-color);
+  }
+  .toc-sidebar .toc-head {
+    padding: 0.3rem 0.75rem 0.5rem;
+    font-size: 0.85rem; color: var(--pico-muted-color);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  /* TOC fonts were 0.8/0.85/0.9rem (smaller than body) → unreadable on
+     desktop. Bumped to 1/0.95/0.9rem with a slightly tighter line-
+     height ladder so long wrapped titles don't dominate the sidebar. */
+  .toc-sidebar .toc-link { font-size: 1rem; line-height: 1.4; padding: 0.4rem 0.5rem 0.4rem 0.75rem; }
+  .toc-sidebar .toc-l2 { font-size: 0.95rem; padding-left: 1.25rem; }
+  .toc-sidebar .toc-l3 { font-size: 0.9rem; padding-left: 1.75rem; }
+  .toc-modal, .toc-backdrop { display: none !important; }
+  .toc-menu-item { display: none !important; }
+  /* Focus mode — distraction-free reading. The toggleFocusMode button
+     puts `.focus-mode` on .layout; here (desktop only) that hides BOTH
+     side columns so the center viewer reflows to the full width. The
+     toolbar button stays visible as the restore affordance (its label
+     flips to "Exit focus"). Mobile needs no rule: the drawer + TOC are
+     already overlays/modals there, so the flag is a no-op. */
+  .layout.focus-mode dialog#files-drawer { display: none; }
+  .layout.focus-mode .toc-sidebar { display: none; }
+  /* Pico defaults buttons to width:100% so they fill mobile forms.
+     On desktop the composer becomes a card next to the diff — full-
+     width Save/Cancel look comically large. Pin them to content size. */
+  .composer .save-btn,
+  .composer .cancel-btn { width: auto; flex: 0 0 auto; }
+  /* Comment-action + edit-box controls were sized for a dense phone
+     (0.72rem / 26px tap targets, a 3rem textarea). On desktop they read
+     as miniature and are fiddly to click (issue #27 "delete buttons too
+     small", "edit box and buttons too small"). Bump the whole set to a
+     comfortable ~0.9rem font / ~36px target and give the edit textarea
+     real room. */
+  .inline-comment .ic-actions button,
+  .all-comments .ac-actions button {
+    font-size: 0.9rem; min-height: 36px; padding: 0.35rem 0.8rem; line-height: 1.3;
+  }
+  .all-comments .ac-head button { font-size: 0.9rem; min-height: 36px; padding: 0.4rem 0.9rem; }
+  /* The delete-confirmation dialog footer (Cancel / Delete) — give the
+     destructive action a roomy hit area too. */
+  dialog[id^="confirm-delete-"] footer button { min-height: 36px; padding: 0.4rem 1rem; font-size: 0.9rem; }
+  .composer textarea { min-height: 6rem; font-size: 1rem; }
+  .composer strong { font-size: 0.95rem; }
+  /* Comment + overview reading text was 0.82–0.85rem (≈13px) on a 16px
+     desktop — the review prose itself read small (issue #27 #1). Bump
+     the comment-card body and the all-comments overview entries to
+     ~0.95rem; the tiny meta lines (line-span, file path) keep their
+     own explicit sizes. */
+  .inline-comment { font-size: 0.95rem; }
+  .all-comments .ac-jump-btn { font-size: 0.95rem; }
+  .composer .save-btn { font-size: 1rem; min-height: 40px; padding: 0.45rem 1.3rem; }
+  .composer .cancel-btn { font-size: 0.9rem; min-height: 40px; padding: 0.45rem 1rem; }
+}
+
+/* Anchor the empty-state to the viewer center so the user can't scroll
+   into blank whitespace below it. Without this, `<p class="empty">` is a
+   short paragraph at the top of an unbounded flex container — iOS
+   rubber-band scroll then reveals a sea of nothing below. */
+main.viewer > .empty { min-height: 100%; display: flex; flex-direction: column;
+                       justify-content: center; align-items: center; }
+main.viewer > .empty-diff { min-height: 100%; display: flex; flex-direction: column;
+                            justify-content: center; align-items: center; }
+main.viewer { overscroll-behavior: contain; }
+.app-footer {
+  flex: 0 0 auto; text-align: center;
+  padding: 0.4rem 0.6rem; border-top: 1px solid var(--pico-muted-border-color);
+  font-size: 0.72rem; color: var(--pico-muted-color);
+  background: var(--pico-background-color);
+}
+.app-footer a { color: inherit; text-decoration: underline; }
+.app-footer a:hover { color: var(--pico-primary); }
