@@ -1,4 +1,4 @@
-package main
+package review
 
 import (
 	"fmt"
@@ -59,7 +59,7 @@ type PrereviewController struct {
 	// Emitter is the stream-mode JSON event log writer (stdout +
 	// .prereview/events.jsonl). Non-nil only in stream mode; HandOff /
 	// EndSession guard on nil so non-stream sessions emit nothing.
-	Emitter *eventStream
+	Emitter *EventStream
 
 	// ShutdownReq receives a struct{} when the user clicks Quit. main.go
 	// listens for it and triggers graceful HTTP shutdown.

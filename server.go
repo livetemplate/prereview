@@ -22,6 +22,7 @@ import (
 	"github.com/livetemplate/prereview/internal/assets"
 	"github.com/livetemplate/prereview/internal/netaddr"
 	"github.com/livetemplate/prereview/internal/proxy"
+	"github.com/livetemplate/prereview/internal/review"
 )
 
 func run(repo, base, host string, explicitHost bool, port int, skillMode bool, out string, streamMode bool) error {
@@ -62,9 +63,9 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	if err != nil {
 		return fmt.Errorf("read existing csv: %w", err)
 	}
-	initialComments := make([]Comment, 0, len(existing))
+	initialComments := make([]review.Comment, 0, len(existing))
 	for _, r := range existing {
-		initialComments = append(initialComments, Comment{
+		initialComments = append(initialComments, review.Comment{
 			ID:       r.ID,
 			File:     r.File,
 			FromLine: r.FromLine,
@@ -102,7 +103,7 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	// AFTER the framework has rendered the "stopping…" state back to the client.
 	shutdownReq := make(chan struct{}, 1)
 
-	controller := &PrereviewController{
+	controller := &review.PrereviewController{
 		RepoPath:    absRepo,
 		Base:        base,
 		NoGit:       tgt.NoGit,
@@ -116,7 +117,7 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 		Emitter:     emitter,
 		ShutdownReq: shutdownReq,
 	}
-	initial := &PrereviewState{
+	initial := &review.PrereviewState{
 		RepoPath:   absRepo,
 		Base:       base,
 		NoGit:      tgt.NoGit,
@@ -191,18 +192,18 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 // newStreamEmitter builds the stream-mode event emitter targeting
 // <store>/.prereview/events.jsonl (durable mirror) and stdout (live channel),
 // or returns nil when streaming is off so callers attach it unconditionally.
-func newStreamEmitter(streamMode bool, csvPath string) *eventStream {
+func newStreamEmitter(streamMode bool, csvPath string) *review.EventStream {
 	if !streamMode {
 		return nil
 	}
 	eventsPath := filepath.Join(filepath.Dir(csvPath), "events.jsonl")
-	return newEventStream(os.Stdout, eventsPath)
+	return review.NewEventStream(os.Stdout, eventsPath)
 }
 
 // emitReady emits the one-shot `ready` event when streaming; a nil emitter
 // (non-stream session) is a no-op. A write failure is logged, not fatal — the
 // review server must run regardless.
-func emitReady(emitter *eventStream, storeRoot, csvPath string) {
+func emitReady(emitter *review.EventStream, storeRoot, csvPath string) {
 	if emitter == nil {
 		return
 	}
@@ -332,7 +333,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	}()
 
 	shutdownReq := make(chan struct{}, 1)
-	controller := &PrereviewController{
+	controller := &review.PrereviewController{
 		ExternalMode: true,
 		ProxyBaseURL: proxyBaseURL,
 		TargetURL:    externalURL,
@@ -345,7 +346,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		Emitter:      emitter,
 		ShutdownReq:  shutdownReq,
 	}
-	initial := &PrereviewState{
+	initial := &review.PrereviewState{
 		ExternalMode: true,
 		ProxyBaseURL: proxyBaseURL,
 		TargetURL:    externalURL,

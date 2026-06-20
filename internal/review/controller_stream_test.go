@@ -1,4 +1,4 @@
-package main
+package review
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ func newStreamController(t *testing.T) (*PrereviewController, *bytes.Buffer, cha
 		CSVWriter:    csv.NewWriter(csvPath),
 		SkillMode:    true,
 		StreamMode:   true,
-		Emitter:      newEventStream(buf, ""),
+		Emitter:      NewEventStream(buf, ""),
 		ShutdownReq:  shutdown,
 	}
 	return c, buf, shutdown
@@ -57,7 +57,7 @@ func TestHandOff_StreamEmitsActionableSnapshot(t *testing.T) {
 	if evs[0].Seq != 0 {
 		t.Errorf("first handoff seq = %d, want 0", evs[0].Seq)
 	}
-	if got := evs[0].commentList(); len(got) != 1 || got[0].ID != "keep" {
+	if got := evs[0].CommentList(); len(got) != 1 || got[0].ID != "keep" {
 		t.Fatalf("snapshot = %+v, want only [keep]", got)
 	}
 }
@@ -86,10 +86,10 @@ func TestHandOff_StreamSeqIncrements(t *testing.T) {
 	if evs[0].Seq != 0 || evs[1].Seq != 1 {
 		t.Errorf("seqs = (%d,%d), want (0,1)", evs[0].Seq, evs[1].Seq)
 	}
-	if got := evs[0].commentList(); len(got) != 2 {
+	if got := evs[0].CommentList(); len(got) != 2 {
 		t.Errorf("round 1 = %d comments, want 2", len(got))
 	}
-	if got := evs[1].commentList(); len(got) != 1 || got[0].ID != "b" {
+	if got := evs[1].CommentList(); len(got) != 1 || got[0].ID != "b" {
 		t.Errorf("round 2 = %+v, want only [b] after resolving a", got)
 	}
 }
@@ -115,7 +115,7 @@ func TestEndSession_FlushesThenTerminatesAndShutsDown(t *testing.T) {
 	if len(evs) != 2 {
 		t.Fatalf("want [handoff, session_end], got %+v", evs)
 	}
-	if h := evs[0].commentList(); evs[0].Event != "handoff" || len(h) != 1 || h[0].ID != "late" {
+	if h := evs[0].CommentList(); evs[0].Event != "handoff" || len(h) != 1 || h[0].ID != "late" {
 		t.Errorf("End session should flush the pending comment first, got %+v", evs[0])
 	}
 	if evs[1].Event != "session_end" {
