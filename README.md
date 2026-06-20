@@ -265,7 +265,7 @@ go build .
 ./prereview
 ```
 
-E2E tests use chromedp + headless chromium: `go test -tags=browser ./...`.
+E2E tests (in the `e2e/` package) use chromedp + headless chromium: `go test -tags=browser ./e2e/`.
 Regenerate the README screenshots with `make screenshots`.
 
 ## License

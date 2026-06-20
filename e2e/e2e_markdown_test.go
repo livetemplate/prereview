@@ -10,7 +10,7 @@
 //
 // Run with: go test -tags=browser -run Markdown ./...
 
-package main
+package e2e
 
 import (
 	"context"

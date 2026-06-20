@@ -3,7 +3,7 @@
 // End-to-end test for `prereview --external`: a live local site proxied on a
 // second origin, framed in the UI, region-annotated through the parent overlay.
 // Run with: go test -tags=browser -run TestE2E_External ./...
-package main
+package e2e
 
 import (
 	"bufio"
@@ -124,7 +124,7 @@ func bootChromeExternal(t *testing.T, target string, viewportW, viewportH int) *
 	t.Helper()
 	chromium := findChromium(t)
 	binary := filepath.Join(t.TempDir(), "prereview")
-	if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-o", binary, "..").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	out := t.TempDir()

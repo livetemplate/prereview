@@ -5,7 +5,7 @@
 // multiple handoff rounds, with monotonic seq, a resolve-pruned snapshot, and
 // a terminating session_end that shuts the server down.
 // Run with: go test -tags=browser -run TestE2E_Stream ./...
-package main
+package e2e
 
 import (
 	"bufio"
@@ -76,7 +76,7 @@ func bootChromeStream(t *testing.T) (*runningPrereview, *bytesBuf, <-chan error)
 	t.Helper()
 	chromium := findChromium(t)
 	binary := filepath.Join(t.TempDir(), "prereview")
-	if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-o", binary, "..").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	repo := setupFixtureRepo(t)

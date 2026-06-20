@@ -1,6 +1,6 @@
 //go:build browser
 
-package main
+package e2e
 
 // E2E coverage for issue #26: the HTML preview must render the file's own CSS
 // with real-document fidelity. Rendering is via a sandboxed <iframe srcdoc>, so
