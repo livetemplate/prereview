@@ -4,8 +4,6 @@
 // without exposing the diff on a public interface.
 package netaddr
 
-// Reachability resolution for the review server.
-//
 // Default bind is 127.0.0.1 (localhost-only) — perfect on a dev laptop,
 // useless on a remote box where the human reviews from a phone. The
 // previous workaround was telling the operator to pass --host 0.0.0.0,
