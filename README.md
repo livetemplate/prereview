@@ -3,9 +3,9 @@
 **Review any change — code, Markdown, HTML, images, even a live local site — by line, block, or region, then hand the fixes to an LLM. All local, before anything leaves your machine.**
 
 <p align="center">
-  <img src="docs/hero.gif" alt="prereview: selecting a line range on a Go diff, typing a comment, and clicking Hand off to Claude" width="820">
+  <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
 </p>
-<p align="center"><sub><em>Select what's wrong — a line, a block, a region — comment, and hand the CSV to Claude.</em></sub></p>
+<p align="center"><sub><em>Comment on what's wrong and hand off — Claude reads it and edits the file, the fix lands in the diff, you resolve. You stay in the loop; the output gets better.</em></sub></p>
 
 A tiny local webapp for **reviewing your working tree and handing the
 fixes to an LLM** — no commit, no PR, no GitHub round-trip. Run

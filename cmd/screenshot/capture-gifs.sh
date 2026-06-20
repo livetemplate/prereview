@@ -45,10 +45,16 @@ srv=$!
 url=$(wait_ready "$log")
 [ -n "$url" ] || { echo "server failed:"; cat "$log"; exit 1; }
 
-for flow in hero image markdown; do
+# image/markdown first — they read the pristine demo tree. hero runs LAST
+# because it edits payment.go on disk (the scripted "Claude fix") to show the
+# review→fix loop close; running it after the others keeps their diffs pristine.
+for flow in image markdown; do
 	echo "› capturing gif:$flow"
 	GOWORK=off go run ./cmd/screenshot --gif "$flow" --url "$url" --out docs
 done
+
+echo "› capturing gif:hero"
+GOWORK=off go run ./cmd/screenshot --gif hero --url "$url" --repo "$demo" --out docs
 
 # ---- external : demo static site proxied by prereview --external ------------
 echo "› starting demo site"
