@@ -156,6 +156,20 @@ func main() {
 		maybeAutoUpdate()
 	}
 
+	// Keep an already-installed skill in lockstep with this binary. Runs
+	// after the (possibly re-exec'd) update so the *new* binary's embedded
+	// skill text is what lands on disk. Orthogonal to the binary lifecycle,
+	// so it sits outside the update/package-manager gates and covers brew,
+	// Scoop, and `go install` upgrades too. Best-effort: a review must start
+	// regardless.
+	if home, err := os.UserHomeDir(); err != nil {
+		slog.Debug("skill sync: resolve home", "err", err)
+	} else if changed, serr := syncInstalledSkill(home); serr != nil {
+		slog.Debug("skill sync failed", "err", serr)
+	} else if changed {
+		fmt.Fprintln(os.Stderr, "prereview: refreshed the Claude skill at ~/.claude/skills/prereview/ to match this version.")
+	}
+
 	if *external != "" {
 		if err := runExternal(*external, *out, *host, explicitHost, *port, *skill, *stream); err != nil {
 			slog.Error("fatal", "err", err)

@@ -76,6 +76,96 @@ func TestInstallSkill(t *testing.T) {
 	}
 }
 
+// TestSyncInstalledSkill covers the auto-refresh contract used by every
+// binary-upgrade path (--update re-exec, brew, scoop, go install): keep an
+// ALREADY-installed skill matching the embedded copy, never create one for
+// a user who opted out.
+func TestSyncInstalledSkill(t *testing.T) {
+	skillPathIn := func(home string) string {
+		return filepath.Join(home, ".claude", "skills", "prereview", "SKILL.md")
+	}
+	refPathIn := func(home string) string {
+		return filepath.Join(home, ".claude", "skills", "prereview", "reference.md")
+	}
+
+	t.Run("not installed → no-op, never creates the skill", func(t *testing.T) {
+		home := t.TempDir()
+		changed, err := syncInstalledSkill(home)
+		if err != nil {
+			t.Fatalf("syncInstalledSkill: %v", err)
+		}
+		if changed {
+			t.Error("changed = true, want false (skill was never installed)")
+		}
+		if _, err := os.Stat(filepath.Join(home, ".claude", "skills", "prereview")); !os.IsNotExist(err) {
+			t.Errorf("skill dir must NOT be created for an opted-out user (err=%v)", err)
+		}
+	})
+
+	t.Run("installed and current → no-op", func(t *testing.T) {
+		home := t.TempDir()
+		if _, err := installSkill(home); err != nil {
+			t.Fatalf("installSkill: %v", err)
+		}
+		changed, err := syncInstalledSkill(home)
+		if err != nil {
+			t.Fatalf("syncInstalledSkill: %v", err)
+		}
+		if changed {
+			t.Error("changed = true, want false (already in sync)")
+		}
+	})
+
+	t.Run("stale SKILL.md → rewritten to embedded copy", func(t *testing.T) {
+		home := t.TempDir()
+		if _, err := installSkill(home); err != nil {
+			t.Fatalf("installSkill: %v", err)
+		}
+		// Simulate a binary upgrade: on-disk skill is from the old version.
+		mustWriteFile(t, skillPathIn(home), []byte("# old skill from a previous prereview version"))
+
+		changed, err := syncInstalledSkill(home)
+		if err != nil {
+			t.Fatalf("syncInstalledSkill: %v", err)
+		}
+		if !changed {
+			t.Fatal("changed = false, want true (SKILL.md was stale)")
+		}
+		got, err := os.ReadFile(skillPathIn(home))
+		if err != nil {
+			t.Fatalf("read SKILL.md: %v", err)
+		}
+		if string(got) != skillMD {
+			t.Error("SKILL.md was not refreshed to the embedded copy")
+		}
+	})
+
+	t.Run("missing reference.md → restored", func(t *testing.T) {
+		home := t.TempDir()
+		if _, err := installSkill(home); err != nil {
+			t.Fatalf("installSkill: %v", err)
+		}
+		// SKILL.md stays current but its companion vanished — sync restores it.
+		if err := os.Remove(refPathIn(home)); err != nil {
+			t.Fatalf("remove reference.md: %v", err)
+		}
+		changed, err := syncInstalledSkill(home)
+		if err != nil {
+			t.Fatalf("syncInstalledSkill: %v", err)
+		}
+		if !changed {
+			t.Fatal("changed = false, want true (reference.md was missing)")
+		}
+		got, err := os.ReadFile(refPathIn(home))
+		if err != nil {
+			t.Fatalf("read reference.md: %v", err)
+		}
+		if string(got) != skillReferenceMD {
+			t.Error("reference.md was not restored to the embedded copy")
+		}
+	})
+}
+
 // TestStaticFallback covers the two contracts staticFallback owns:
 //
 //  1. **Served from disk**: GET/HEAD for an allowlisted extension that
