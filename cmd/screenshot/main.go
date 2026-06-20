@@ -27,6 +27,7 @@ func main() {
 	debug := flag.Bool("debug", false, "also dump hamburger HTML + computed style to stdout")
 	readme := flag.Bool("readme", false, "capture the curated README screenshot set (needs a demo-repo server; see `make screenshots`)")
 	gifFlow := flag.String("gif", "", "capture a single animated GIF flow (hero); needs a demo-repo server")
+	repo := flag.String("repo", "", "demo repo working tree (the hero flow edits payment.go here to show Claude's fix)")
 	flag.Parse()
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -53,7 +54,7 @@ func main() {
 	}
 
 	if *gifFlow != "" {
-		runGif(allocCtx, *url, *gifFlow, *outDir)
+		runGif(allocCtx, *url, *gifFlow, *repo, *outDir)
 		return
 	}
 
