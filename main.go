@@ -24,6 +24,7 @@ import (
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/assets"
 	"github.com/livetemplate/prereview/internal/netaddr"
+	"github.com/livetemplate/prereview/internal/proxy"
 )
 
 //go:embed prereview.tmpl
@@ -559,7 +560,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	}
 	proxyPort := proxyLn.Addr().(*net.TCPAddr).Port
 	proxyBaseURL := fmt.Sprintf("http://%s:%d/", bindHost, proxyPort)
-	proxySrv := &http.Server{Handler: newExternalProxy(target), ReadHeaderTimeout: 10 * time.Second}
+	proxySrv := &http.Server{Handler: proxy.NewExternalProxy(target), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := proxySrv.Serve(proxyLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("proxy server", "err", err)

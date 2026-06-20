@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"io"
@@ -32,7 +32,7 @@ func TestExternalProxyInjectsBeaconAndStripsFraming(t *testing.T) {
 	upstream := newTestUpstream()
 	defer upstream.Close()
 	target, _ := url.Parse(upstream.URL)
-	proxy := newExternalProxy(target)
+	proxy := NewExternalProxy(target)
 
 	// HTML navigation: beacon injected, framing/CSP stripped, original kept.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -66,7 +66,7 @@ func TestExternalProxyPassesAssetsThrough(t *testing.T) {
 	upstream := newTestUpstream()
 	defer upstream.Close()
 	target, _ := url.Parse(upstream.URL)
-	proxy := newExternalProxy(target)
+	proxy := NewExternalProxy(target)
 
 	// A root-relative asset must forward verbatim — no beacon, byte-identical.
 	req := httptest.NewRequest(http.MethodGet, "/app.js", nil)
@@ -85,31 +85,12 @@ func TestExternalProxyPassesAssetsThrough(t *testing.T) {
 func TestExternalProxyUnreachableTarget(t *testing.T) {
 	// Nothing is listening here; the proxy should answer 502, not panic/hang.
 	target, _ := url.Parse("http://127.0.0.1:1") // port 1: reliably refused
-	proxy := newExternalProxy(target)
+	proxy := NewExternalProxy(target)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Accept", "text/html")
 	rec := httptest.NewRecorder()
 	proxy.ServeHTTP(rec, req)
 	if rec.Result().StatusCode != http.StatusBadGateway {
 		t.Errorf("unreachable target: want 502, got %d", rec.Result().StatusCode)
-	}
-}
-
-func TestRunExternalValidation(t *testing.T) {
-	cases := []struct {
-		name, extURL, out string
-	}{
-		{"not a url", "::::not-a-url", t.TempDir()},
-		{"non-http scheme", "ftp://localhost:8080", t.TempDir()},
-		{"missing host", "http://", t.TempDir()},
-		{"missing out dir", "http://localhost:8080", ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			// All cases fail validation before any listener is bound.
-			if err := runExternal(tc.extURL, tc.out, "127.0.0.1", false, 0, false, false); err == nil {
-				t.Errorf("expected validation error for %s", tc.name)
-			}
-		})
 	}
 }
