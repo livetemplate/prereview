@@ -13,7 +13,7 @@
 //
 // Run with: go test -tags=browser -run Mermaid ./...
 
-package main
+package e2e
 
 import (
 	"context"

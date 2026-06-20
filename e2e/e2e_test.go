@@ -8,7 +8,7 @@
 // browser console logs and the server's stderr so failures can be diagnosed
 // without re-running the test manually.
 
-package main
+package e2e
 
 import (
 	"bufio"
@@ -222,7 +222,7 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 
 	// Build the binary into a temp path so we don't depend on `make build`.
 	binary := filepath.Join(t.TempDir(), "prereview")
-	build := exec.Command("go", "build", "-o", binary, ".")
+	build := exec.Command("go", "build", "-o", binary, "..")
 	build.Dir = "."
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
@@ -374,7 +374,7 @@ func bootChromeAgainstRepo(t *testing.T, repo string, viewportW, viewportH int, 
 	t.Helper()
 	chromium := findChromium(t)
 	binary := filepath.Join(t.TempDir(), "prereview")
-	build := exec.Command("go", "build", "-o", binary, ".")
+	build := exec.Command("go", "build", "-o", binary, "..")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
