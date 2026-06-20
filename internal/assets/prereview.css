@@ -143,6 +143,14 @@ header.bar .toolbar-inline + .tb-action {
   margin-left: 0.2rem;
   padding-left: 0.7rem;
 }
+/* A .tb-action form can hold two buttons (stream mode: "Hand off →" +
+   "End session"). It's a plain block form, and Pico buttons default to
+   display:block/width:100%, so the two stack and — with margin:0 — overlap
+   into one pill at tighter desktop widths. Lay the form out as a non-shrinking
+   inline row and let its buttons size to content so they always sit side by
+   side; the file-path title (min-width:0, ellipsis) absorbs the squeeze. */
+header.bar .tb-action { display: inline-flex; align-items: center; gap: 0.4rem; flex-shrink: 0; }
+header.bar .tb-action button { width: auto; }
 /* The Prev/Next labels live in a span so we can hide them at smaller
    desktop widths if needed; on mobile the prev/next buttons are SVG-
    only (label has display:none). */
