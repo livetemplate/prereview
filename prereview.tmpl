@@ -59,13 +59,8 @@
 </header>
 <div class="layout layout-external">
   <main class="viewer ext-viewer">
-    <form method="POST" class="region-toggle"><button type="submit" name="toggleRegionSelect"
-        class="{{if .RegionSelectArmed}}contrast{{else}}outline secondary{{end}}"
-        aria-pressed="{{if .RegionSelectArmed}}true{{else}}false{{end}}">{{if .RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button></form>
-    <div class="preview-stage ext-stage"
-      lvt-fx:proxy-bridge="setProxyURL"
-      data-key="ext-stage"
-      {{- with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+    <form method="POST" class="region-toggle"><button type="submit" name="toggleRegionSelect" class="{{if .RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if .RegionSelectArmed}}true{{else}}false{{end}}">{{if .RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button></form>
+    <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
       {{/* lvt-ignore: morphdom must never re-process this iframe. Its src is
            set once (SSR); as the user navigates the live site in-app the
            content moves while the src attribute stays put. Without this, any
@@ -76,14 +71,7 @@
       <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
       <div class="pin-layer" data-pin-layer data-key="pin-layer">
         {{- range $.RegionComments -}}
-        <button type="button"
-          class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}"
-          lvt-on:click="editComment"
-          data-id="{{.ID}}"
-          data-key="pin-{{.ID}}"
-          style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
-          title="{{.Body}}"
-          aria-label="Edit annotation"></button>
+        <button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}" aria-label="Edit annotation"></button>
         {{- end -}}
         {{- if eq $.CommentMode "region" -}}
         <div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>
@@ -649,9 +637,7 @@
        (they can't interleave into the iframe document). */}}
   <div class="html-view" data-key="html-{{.Path}}">
     {{- /* region-select toggle */ -}}
-    <form method="POST" class="region-toggle"><button type="submit" name="toggleRegionSelect"
-        class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}"
-        aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button></form>
+    <form method="POST" class="region-toggle"><button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button></form>
     {{- /* sandboxed iframe preview + draw-a-region overlay */ -}}
     <div class="preview-stage"><iframe class="html-preview" sandbox="allow-same-origin" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:iframe-autoheight title="HTML preview of {{.Path}}"></iframe>
       {{- if $.RegionSelectArmed -}}
