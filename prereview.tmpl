@@ -1,3 +1,18 @@
+{{/* FORMATTING — read before reflowing.
+     Whitespace in this template is SEMANTIC in three places, so it cannot be
+     pretty-printed by a generic HTML formatter (prettier and djlint both
+     corrupt it — they reflow inside these regions):
+       1. the diff rows — div.code / .chroma render with CSS
+          `white-space: pre`, so any added newline becomes a blank line;
+       2. textarea draft bodies — a newline there is literal draft text;
+       3. inline element runs — whitespace between them renders as a space.
+     To keep lines readable WITHOUT changing rendered output, line breaks use
+     Go's whitespace-trim markers (the dash form of an action). An empty
+     trim-trimmed comment placed between two pure-HTML siblings such as
+     </form> and <form> acts as a "trim carrier": it emits nothing and its
+     trim dashes delete the surrounding newline+indent, so the two elements can
+     sit on separate lines while output stays byte-identical. The single long
+     diff-row line is left packed on purpose. */ -}}
 <!DOCTYPE html>
 <!-- data-theme=light forces Pico's light-mode palette regardless of the
      OS color scheme. The diff colors (chroma github theme + the
@@ -25,8 +40,22 @@
      Annotations anchor to URL + region (kind=region); the pin layer re-pins
      them on the live page, the sidebar lists them across pages. */}}
 <header class="bar bar-external">
-  <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
-  <span class="bar-actions"><form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button></form>{{if .StreamMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Send the current annotations to your agent as a handoff event (session stays open)">Hand off →</button></form><form method="POST" style="margin:0"><button type="submit" name="endSession" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button></form>{{else if .SkillMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button></form>{{else}}<form method="POST" style="margin:0"><button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button></form>{{end}}</span>
+  <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>
+    {{- if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end -}}
+  </span>
+  <span class="bar-actions">
+    {{- /* annotation-count toggle */ -}}
+    <form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button></form>
+    {{- if .StreamMode -}}
+    <form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Send the current annotations to your agent as a handoff event (session stays open)">Hand off →</button></form>
+    {{- /* session terminator */ -}}
+    <form method="POST" style="margin:0"><button type="submit" name="endSession" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button></form>
+    {{- else if .SkillMode -}}
+    <form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button></form>
+    {{- else -}}
+    <form method="POST" style="margin:0"><button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button></form>
+    {{- end -}}
+  </span>
 </header>
 <div class="layout layout-external">
   <main class="viewer ext-viewer">
@@ -40,21 +69,58 @@
            enough — it only back-fills dropped attrs; the template always has
            src, so morphdom would still sync it.) */}}
       <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">
+        {{- range $.RegionComments -}}
+        <button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}" aria-label="Edit annotation"></button>
+        {{- end -}}
+        {{- if eq $.CommentMode "region" -}}
+        <div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>
+        {{- end -}}
+      </div>
       {{if .RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
     </div>
-    {{if eq $.CommentMode "region"}}<div class="composer ext-composer" data-key="composer" lvt-fx:scroll="into-view"><strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small></strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this region?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}
+    {{if eq $.CommentMode "region"}}<div class="composer ext-composer" data-key="composer" lvt-fx:scroll="into-view">
+      {{- /* heading */ -}}
+      <strong>{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small></strong>
+      {{- /* draft textarea (content kept inline) */ -}}
+      <form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this region?" required>{{$.DraftBody}}</textarea></form>
+      {{- /* cancel-form target */ -}}
+      <form method="POST" class="composer-cancel" id="composer-cancel-form"></form>
+      {{- /* cancel / save */ -}}
+      <div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div>
+    {{- /* close composer */ -}}
+    </div>{{end}}
   </main>
   <aside class="ext-sidebar{{if .AnnoDrawerOpen}} is-open{{end}}" aria-label="Annotations">
-    <header class="ext-sidebar-head"><strong>Annotations ({{len $.AllRegionComments}})</strong><form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary close-btn" aria-label="Close annotations"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></form></header>
-    <div class="ext-sidebar-body">{{range $.AllRegionComments}}<div class="inline-comment ext-anno{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"><form method="POST" class="anno-locate-form"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="focusComment" class="anno-locate" title="Locate this region on the page"><span class="ext-page-link">📍 {{.URL}}</span>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}<span class="anno-body">{{.Body}}</span></button></form><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
+    <header class="ext-sidebar-head"><strong>Annotations ({{len $.AllRegionComments}})</strong>
+      {{- /* close annotations */ -}}
+      <form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary close-btn" aria-label="Close annotations">{{template "iconClose16"}}</button></form>
+    {{- /* */ -}}
+    </header>
+    <div class="ext-sidebar-body">
+      {{- range $.AllRegionComments -}}
+      <div class="inline-comment ext-anno{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade">
+        {{- /* locate form */ -}}
+        <form method="POST" class="anno-locate-form"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="focusComment" class="anno-locate" title="Locate this region on the page"><span class="ext-page-link">📍 {{.URL}}</span>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}<span class="anno-body">{{.Body}}</span></button></form>
+        {{- /* resolve / edit / delete */ -}}
+        <div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>
+          {{- if not .Resolved -}}
+          <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>
+          {{- end -}}
+          <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
+          {{- template "deleteDialogTagged" . -}}
+        </div></div>
+      {{- else -}}
+      <p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>
+      {{- end -}}
+    </div>
   </aside>
 </div>
 <footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
 {{else}}
 <header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
   <form method="POST">
-    <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+    <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
   </form>
   <div class="title">
     <span class="title-main">{{if .ShowAllComments}}{{/* No title in all-comments mode — the "Show all comments (N) ☑" checkbox in the toolbar already conveys the view. */}}{{else if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}</span>
@@ -138,15 +204,15 @@
   {{if ne .CommentMode "file"}}
   <form method="POST" class="tb-action">
     <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">
-      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/></svg>
+      {{template "iconChat14"}}
       <span class="nav-label">Comment on file</span>
     </button>
   </form>
   {{end}}
   {{end}}
   {{if gt (len .Files) 1}}
-  <form method="POST" class="nav-prev"><button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span class="nav-label">Prev</span></button></form>
-  <form method="POST" class="nav-next"><button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button></form>
+  <form method="POST" class="nav-prev"><button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast">{{template "iconChevronLeft"}}<span class="nav-label">Prev</span></button></form>
+  <form method="POST" class="nav-next"><button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next</span>{{template "iconChevronRight"}}</button></form>
   {{end}}
   <form method="POST" class="tb-action">
     {{if .StreamMode}}
@@ -194,7 +260,7 @@
        binary / deleted / too-large files where no line is clickable. */}}
   <form method="POST">
     <button type="submit" name="openFileComment" class="menu-item" role="menuitem">
-      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="menu-icon">{{template "iconChat16"}}</span>
       <span class="menu-label">Comment on file</span>
     </button>
   </form>
@@ -206,7 +272,7 @@
        doesn't stay drawn over the overlay it just summoned. */}}
   <form method="POST">
     <button type="submit" name="openTOC" class="menu-item toc-menu-item" role="menuitem">
-      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+      <span class="menu-icon">{{template "iconTOC"}}</span>
       <span class="menu-label">Table of contents</span>
       <span class="menu-meta">{{len .}}</span>
     </button>
@@ -217,9 +283,9 @@
     <button type="submit" name="toggleRawMarkdown" class="menu-item{{if not .RawMarkdown}} is-on{{end}}" role="menuitem">
       <span class="menu-icon">
         {{if .RawMarkdown}}
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{template "iconRendered"}}
         {{else}}
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M9 9h4M9 12h6M9 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{template "iconViewRaw"}}
         {{end}}
       </span>
       <span class="menu-label">{{if .RawMarkdown}}Preview{{else}}View raw source{{end}}</span>
@@ -231,9 +297,9 @@
     <button type="submit" name="toggleRawHTML" class="menu-item{{if not .RawHTML}} is-on{{end}}" role="menuitem">
       <span class="menu-icon">
         {{if .RawHTML}}
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{template "iconRendered"}}
         {{else}}
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M9 9h4M9 12h6M9 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{template "iconViewRaw"}}
         {{end}}
       </span>
       <span class="menu-label">{{if .RawHTML}}Preview{{else}}View raw source{{end}}</span>
@@ -246,10 +312,10 @@
       <span class="menu-icon">
         {{if .FileView}}
         {{/* Diff icon (split rectangles with plus/minus) — shown when current view is plain file. */}}
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 4h7v16H4zM13 4h7v16h-7z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M6 11h3M6 13h3M16 9v6M14 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        {{template "iconDiff"}}
         {{else}}
         {{/* File icon (document) — shown when current view is diff. */}}
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>
+        {{template "iconFile"}}
         {{end}}
       </span>
       <span class="menu-label">{{if .FileView}}Show diff{{else}}View file{{end}}</span>
@@ -260,7 +326,7 @@
   {{if gt (len .Comments) 0}}
   <form method="POST">
     <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem">
-      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <span class="menu-icon">{{template "iconComments"}}</span>
       <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}</span>
       <span class="menu-meta">{{len .Comments}}</span>
     </button>
@@ -271,9 +337,9 @@
     <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">
       <span class="menu-icon">
         {{if .ShowResolved}}
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {{template "iconCheck"}}
         {{else}}
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>
+        {{template "iconCircle16"}}
         {{end}}
       </span>
       <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}</span>
@@ -290,7 +356,7 @@
        action buttons. Last item, so it's not an accidental tap target. */}}
   <form method="POST">
     <button type="submit" name="endSession" class="menu-item" role="menuitem">
-      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8" fill="none"/></svg></span>
+      <span class="menu-icon">{{template "iconStop"}}</span>
       <span class="menu-label">End session</span>
     </button>
   </form>
@@ -314,7 +380,7 @@
   <span class="toast-msg">✓ Handed off → Claude is acting on your comments</span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="dismissBanner" class="toast-dismiss" aria-label="Dismiss">
-      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      {{template "iconClose14"}}
     </button>
   </form>
 </div>
@@ -330,7 +396,7 @@
   <div class="drawer-head">
     <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
     <form method="POST">
-      <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+      <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close">{{template "iconClose16"}}</button>
     </form>
   </div>
   {{/* View-change to the all-comments overview. Lives at the top of the
@@ -409,7 +475,7 @@
           <form method="POST" class="file-viewed-form">
             <input type="hidden" name="path" value="{{.Path}}">
             <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if index $.ViewedFiles .Path}}Mark as not viewed{{else}}Mark as viewed{{end}}" title="{{if index $.ViewedFiles .Path}}Viewed{{else}}Mark viewed{{end}}">
-              {{if index $.ViewedFiles .Path}}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>{{else}}<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>{{end}}
+              {{if index $.ViewedFiles .Path}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end}}
             </button>
           </form>
         </div>
@@ -489,10 +555,30 @@
     {{range $fcs}}{{template "commentCardSimple" .}}{{end}}
     {{range $acs}}{{template "commentCardSimple" .}}{{end}}
     {{if eq $.CommentMode "file"}}
-    <div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{.Path}}</code></strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this file?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>
+    <div class="composer" data-key="composer">
+      {{- /* heading */ -}}
+      <strong>{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{.Path}}</code></strong>
+      {{- /* draft textarea (content kept inline) */ -}}
+      <form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this file?" required>{{$.DraftBody}}</textarea></form>
+      {{- /* cancel-form target */ -}}
+      <form method="POST" class="composer-cancel" id="composer-cancel-form"></form>
+      {{- /* cancel / save */ -}}
+      <div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div>
+    {{- /* close composer */ -}}
+    </div>
     {{end}}
     {{if eq $.CommentMode "area"}}
-    <div class="composer" data-key="composer"><strong>{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{.Path}}</code></strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this region?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>
+    <div class="composer" data-key="composer">
+      {{- /* heading */ -}}
+      <strong>{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{.Path}}</code></strong>
+      {{- /* draft textarea (content kept inline) */ -}}
+      <form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with this region?" required>{{$.DraftBody}}</textarea></form>
+      {{- /* cancel-form target */ -}}
+      <form method="POST" class="composer-cancel" id="composer-cancel-form"></form>
+      {{- /* cancel / save */ -}}
+      <div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div>
+    {{- /* close composer */ -}}
+    </div>
     {{end}}
   </section>
   {{end}}
@@ -549,7 +635,21 @@
        listeners. The sandbox without allow-scripts keeps page <script>
        inert. Comments and the composer render in a list BELOW the preview
        (they can't interleave into the iframe document). */}}
-  <div class="html-view" data-key="html-{{.Path}}"><form method="POST" class="region-toggle"><button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button></form><div class="preview-stage"><iframe class="html-preview" sandbox="allow-same-origin" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:iframe-autoheight title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}</div>{{end}}</div>
+  <div class="html-view" data-key="html-{{.Path}}">
+    {{- /* region-select toggle */ -}}
+    <form method="POST" class="region-toggle"><button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button></form>
+    {{- /* sandboxed iframe preview + draw-a-region overlay */ -}}
+    <div class="preview-stage"><iframe class="html-preview" sandbox="allow-same-origin" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:iframe-autoheight title="HTML preview of {{.Path}}"></iframe>
+      {{- if $.RegionSelectArmed -}}
+      <div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>
+      {{- end -}}
+    </div>
+    {{- /* per-block comment anchors, keyed to source line range */ -}}
+    {{- range $.RenderedHTML -}}
+    {{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be -}}
+    <div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}</div>
+    {{- end -}}
+  </div>
   {{else if $.ShowRenderedMarkdown}}
   {{/* Rendered-Markdown view. Each top-level block is one clickable
        unit carrying its REAL source line range (data-from/data-to);
@@ -558,7 +658,16 @@
        the CSV — nothing is renumbered. Comments/composer interleave
        by source line the same way the line view does, just matched to
        a block's [StartLine,EndLine] span. */}}
-  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$mbkey}}"{{if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}><div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}</div>{{end}}</div>
+  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">
+    {{- range $.RenderedMarkdown -}}
+    {{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be -}}
+    <div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$mbkey}}"{{if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}>
+      {{- /* rendered markdown — clicking selects the block's source line span */ -}}
+      <div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>
+      {{- template "blockComments" . -}}
+    </div>
+    {{- end -}}
+  </div>
   {{else if .Lines}}
   {{/* data-key by path is load-bearing, NOT just a scroll-reset hack:
        per-row keys are "L<old>-<new>" which COLLIDE across files
@@ -570,8 +679,37 @@
        Measured: this costs no extra bandwidth — livetemplate resends
        {{range}} statics on a full content swap regardless of the key.
        Bonus: a fresh element also starts at scroll (0,0). */}}
-  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}{{template "commentCardFull" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}</div>
-{{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
+  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">
+    {{- range $.VisibleLines -}}
+    {{- if eq .Kind "fold" -}}
+    <div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>
+    {{- else -}}
+    {{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end -}}
+    <div class="line-row">
+      {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
+      <button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>
+      {{- /* comments anchored to this line, then the composer when this line is selected */ -}}
+      {{- range (index $.CommentsByEndLine $ln)}}{{template "commentCardFull" .}}{{end -}}
+      {{- if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) -}}
+      <div class="composer" data-key="composer">
+        {{- /* heading + optional "extend the selection" hint */ -}}
+        <strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>{{if and (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}
+        {{- /* draft textarea (content kept inline) */ -}}
+        <form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form>
+        {{- /* cancel-form target */ -}}
+        <form method="POST" class="composer-cancel" id="composer-cancel-form"></form>
+        {{- /* cancel / save */ -}}
+        <div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div>
+      {{- /* close composer */ -}}
+      </div>
+      {{- end -}}</div>
+    {{- /* each code line ends with one trailing newline, as the original markup emitted */}}
+{{end -}}
+    {{- end -}}
+    {{- /* bottom sentinel for the scroll/intersection observer */ -}}
+    <div class="code-sentinel" aria-hidden="true"></div>
+    {{- /* */ -}}
+  </div>
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
   {{end}}
@@ -647,7 +785,7 @@
     <strong>On this page</strong>
     <form method="POST">
       <button type="submit" name="closeTOC" class="outline close-btn" aria-label="Close">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+        {{template "iconClose16"}}
       </button>
     </form>
   </div>
@@ -678,21 +816,140 @@
   the block's .StartLine/.EndLine since a partial can't see caller locals.
 */}}
 {{define "blockComments" -}}
-{{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}<div class="composer" data-key="composer"><strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong><form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div></div>{{end}}
+{{$bs := .StartLine}}{{$be := .EndLine}}
+{{- range $.FileComments -}}
+  {{- if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end -}}
+{{- end -}}
+{{- if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be) -}}
+<div class="composer" data-key="composer">
+  {{- /* heading: re-anchor / edit / new comment */ -}}
+  <strong>{{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}</strong>
+  {{- /* draft textarea (kept inline — its content is whitespace-significant) */ -}}
+  <form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form"><textarea name="body" placeholder="What's wrong with these lines?" required>{{$.DraftBody}}</textarea></form>
+  {{- /* cancel-form target */ -}}
+  <form method="POST" class="composer-cancel" id="composer-cancel-form"></form>
+  {{- /* cancel / save */ -}}
+  <div class="c-actions"><button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button><button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button></div>
+{{- /* close composer */ -}}
+</div>
+{{- end}}
 {{- end}}
 
 {{define "deleteDialog" -}}
-<dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog>
+<dialog id="confirm-delete-{{.ID}}"><article>
+  {{- /* */ -}}
+  <header><strong>Delete comment?</strong></header>
+  {{- /* */ -}}
+  <p><small><code>{{.File}}</code> {{.LineSpan}}</small></p>
+  {{- /* */ -}}
+  <footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer>
+{{- /* */ -}}
+</article></dialog>
 {{- end}}
 
 {{define "deleteDialogTagged" -}}
-<dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small>{{if .IsRegionLevel}}<code>{{.URL}}</code> · region{{else if .IsAreaLevel}}<code>{{.File}}</code> · area{{else}}<code>{{.File}}</code> · file{{end}}</small></p><footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer></article></dialog>
+<dialog id="confirm-delete-{{.ID}}"><article>
+  {{- /* */ -}}
+  <header><strong>Delete comment?</strong></header>
+  {{- /* */ -}}
+  <p><small>{{if .IsRegionLevel}}<code>{{.URL}}</code> · region{{else if .IsAreaLevel}}<code>{{.File}}</code> · area{{else}}<code>{{.File}}</code> · file{{end}}</small></p>
+  {{- /* */ -}}
+  <footer><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><fieldset role="group"><button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button><button type="submit" name="deleteComment" class="contrast">Delete</button></fieldset></form></footer>
+{{- /* */ -}}
+</article></dialog>
 {{- end}}
 
 {{define "commentCardFull" -}}
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialog" .}}</div></div>
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}>
+  {{- /* line span · side · status badges */ -}}
+  <header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header>
+  {{- /* comment text */ -}}
+  <div class="body">{{.Body}}</div>
+  {{- if .AnchorOutdated -}}
+  <details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>
+  {{- end -}}
+  {{- /* resolve / re-anchor / edit / delete */ -}}
+  <div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>
+    {{- if and (not .Resolved) .AnchorOutdated -}}
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="reanchorComment" class="outline">Re-anchor</button></form>
+    {{- end -}}
+    {{- if and (not .Resolved) (not .AnchorOutdated) -}}
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>
+    {{- end -}}
+    <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
+    {{- template "deleteDialog" . -}}
+  </div></div>
 {{- end}}
 
 {{define "commentCardSimple" -}}
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>{{if not .Resolved}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}>
+  {{- /* line span · resolved badge */ -}}
+  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header>
+  {{- /* comment text */ -}}
+  <div class="body">{{.Body}}</div>
+  {{- /* resolve / edit / delete */ -}}
+  <div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>
+    {{- if not .Resolved -}}
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editComment" class="outline">Edit</button></form>
+    {{- end -}}
+    <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
+    {{- template "deleteDialogTagged" . -}}
+  </div></div>
 {{- end}}
+{{/* SVG icon partials — extracted from the views so the markup reads cleanly.
+   Each define inlines at parse time (livetemplate flattens {{template}} calls),
+   so output is byte-identical to the old inline <svg>. Static aria-hidden marks. */ -}}
+{{- define "iconChat14" -}}
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/></svg>
+{{- end -}}
+{{- define "iconChat16" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>
+{{- end -}}
+{{- define "iconCheck" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+{{- end -}}
+{{- define "iconChevronLeft" -}}
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
+{{- define "iconChevronRight" -}}
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
+{{- define "iconCircle16" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>
+{{- end -}}
+{{- define "iconClose14" -}}
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
+{{- define "iconClose16" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
+{{- define "iconComments" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>
+{{- end -}}
+{{- define "iconDiff" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 4h7v16H4zM13 4h7v16h-7z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M6 11h3M6 13h3M16 9v6M14 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+{{- end -}}
+{{- define "iconFile" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>
+{{- end -}}
+{{- define "iconHamburger" -}}
+<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
+{{- define "iconRendered" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+{{- end -}}
+{{- define "iconStop" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>
+{{- end -}}
+{{- define "iconTOC" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+{{- end -}}
+{{- define "iconViewRaw" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M9 9h4M9 12h6M9 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+{{- end -}}
+{{- define "iconViewedCheck" -}}
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
+{{- define "iconViewedCircle" -}}
+<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+{{- end -}}
