@@ -1,6 +1,6 @@
 # prereview
 
-**Review any change — code, Markdown, HTML, images, even a live local site — by line, block, or region, then hand the fixes to an LLM. All local, before anything leaves your machine.**
+**You spot what's wrong; the LLM fixes it — locally, before you push.** Review any change — a diff line, a Markdown or HTML block, a region of an image, even a box on a live local site — and hand the fixes to your coding agent. Works with any LLM CLI. All local, before anything leaves your machine.
 
 <p align="center">
   <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
@@ -12,12 +12,14 @@ fixes to an LLM** — no commit, no PR, no GitHub round-trip. Run
 `prereview` in your repo (or point it at any file or directory), click
 what you want changed — a line or range in a diff, a rendered Markdown or
 HTML block, a region of an image, or a box on a running dev site — and
-leave a comment; a CSV is written that you (or an LLM) act on. It ships as
-a [Claude Code](https://claude.com/claude-code) skill, so `/prereview`
-launches a session, you comment, hit **"Hand off → Claude"**, and Claude
-applies the changes. On a remote box it auto-binds your Tailscale address —
-review from the Claude mobile app over the tailnet, before anything is
-pushed.
+leave a comment; a CSV is written that you (or an LLM) act on. It ships
+with a turnkey [Claude Code](https://claude.com/claude-code) skill —
+`/prereview` launches a session, you comment, hit **"Hand off →"**, and
+your agent applies the changes — and works with **any other coding agent**
+(OpenAI Codex CLI, Gemini CLI, aider, opencode, cursor-agent) through the
+same open comment protocol; see **[Works with any LLM CLI](#works-with-any-llm-cli)**.
+On a remote box it auto-binds your Tailscale address — review from your
+phone over the tailnet, before anything is pushed.
 
 ## Features
 
@@ -26,12 +28,13 @@ pushed.
   comment anchors to real source lines); a dragged **region of a binary
   image**; or a box on a **live local site** (`--external`, proxies a
   running dev server). One tool for code and everything around it.
-- **The review → fix loop** — "Hand off → Claude" writes a marker; the
-  skill reads the CSV and applies your comments without leaving the chat.
+- **The review → fix loop** — **"Hand off →"** writes a marker; your agent
+  reads the CSV and applies your comments without leaving the chat.
   **Multi-round streaming** (`--stream`) emits a continuous JSON event
   stream the LLM consumes across many rounds — hand off as often as you
   like, ending only when you click **End session**. No re-invocation, no
-  hand-written CSV parser.
+  hand-written CSV parser. (Streaming is the Claude Code default; other
+  agents use a one-shot-per-batch flow — see [Works with any LLM CLI](#works-with-any-llm-cli).)
 - **Full GitHub-flavoured Markdown & HTML render** — tables, task-lists,
   syntax-highlighted code, `> [!NOTE]` alerts, footnotes, `:emoji:` and
   mermaid diagrams render the way GitHub shows them; formatted by default,
@@ -58,6 +61,36 @@ you push.
   local, and reviews any artifact.
 - **vs. diff viewers** (lazygit, tig, delta, difftastic) — they show
   changes; prereview captures anchored comments and hands them to an LLM.
+
+## Works with any LLM CLI
+
+prereview's hand-off is an **open protocol, not an API** — comments are
+written to `.prereview/comments.csv` (and, with `--stream`, a JSON event
+stream). Any coding agent that can read that CSV and edit files can apply
+your review. Claude Code is the turnkey path; the others are one command to
+wire up.
+
+| Agent | Install | Then |
+|---|---|---|
+| **Claude Code** | `prereview --install-skill --client=claude` | `/prereview` (streaming, multi-round) |
+| **OpenAI Codex CLI** | `prereview --install-skill --client=codex` | `$prereview` / `/skills` |
+| **Gemini CLI** | `prereview --install-skill --client=gemini` | `/prereview` |
+| **opencode** | `prereview --install-skill --client=opencode` | `/prereview` or `opencode run --command prereview` |
+| **aider** | `prereview --install-skill --client=aider` | `~/.config/prereview/aider/prereview-aider.sh <files>` |
+| **cursor-agent** | `prereview --install-skill --client=cursor` | `cursor-agent -p --force "use prereview"` |
+
+Run `prereview --install-skill` with **no `--client`** to pick from a menu.
+Only Claude Code gets the live streaming loop; every other agent uses a
+**one-shot-per-batch** flow (you hand off, the agent re-reads the CSV and
+applies the open comments).
+
+> **Maturity** (smoke-tested 2026-06-21, all keyless): **Claude Code**,
+> **opencode** (free models), and **aider** (local ollama model) are tested
+> end-to-end. **codex** (skill loads from both dirs) and **gemini**
+> (`/prereview` discovered in headless) are verified short of the model call.
+> **cursor-agent** is install/format-verified (a real run needs `CURSOR_API_KEY`).
+> Exact paths, per-agent caveats, and a "bring your own agent" recipe are in
+> **[docs/integrations.md](docs/integrations.md)**.
 
 ## Install
 
@@ -106,19 +139,26 @@ self-update hourly; disable with `--no-update` / `PREREVIEW_NO_UPDATE=1`).
 the skill at `~/.claude/skills/prereview/` and the update-check cache.
 </details>
 
-### Claude Code skill (for the LLM-driven flow)
+### Install the agent integration (for the LLM-driven flow)
 
-The binary embeds the skill — install it with one command:
+The binary embeds the integration for every supported agent — install with
+one command:
 
 ```bash
-prereview --install-skill   # → ~/.claude/skills/prereview/SKILL.md (+ reference.md)
+prereview --install-skill                    # pick agent(s) from a menu
+prereview --install-skill --client=claude    # Claude Code → ~/.claude/skills/prereview/
+prereview --install-skill --client=codex,gemini   # several at once
 ```
 
-Then invoke with `/prereview` or *"review my changes"*. (If it reports
-"unknown skill", run `/reload`.) Once installed, the skill auto-refreshes
-to match the binary on the next run after any upgrade — `prereview
---update`, `brew upgrade`, `scoop update`, or `go install` — so you never
-re-run `--install-skill` to keep it current.
+With no `--client`, you get an interactive menu (Claude Code, Codex,
+Gemini, opencode, aider, cursor-agent). Then invoke per your agent — for
+Claude Code, `/prereview` or *"review my changes"* (if it reports "unknown
+skill", run `/reload`). The Claude skill auto-refreshes to match the binary
+on the next run after any upgrade — `prereview --update`, `brew upgrade`,
+`scoop update`, or `go install` — so you never re-run `--install-skill` to
+keep it current. Other agents' files are left as-is (re-run
+`--install-skill --client=<id>` to refresh them). Full per-agent details:
+**[docs/integrations.md](docs/integrations.md)**.
 
 <details>
 <summary>Manual / project-scoped install</summary>
@@ -146,13 +186,16 @@ Open the URL, comment, click **Quit**. Comments live in
 `.prereview/comments.csv`.
 
 ```bash
-prereview --skill "$(pwd)" &   # what the Claude skill runs for you
+prereview --skill "$(pwd)" &   # what an agent's skill/command runs for you
 ```
 
-In skill mode the UI shows **"Hand off → Claude"**: clicking it writes
-`.prereview/DONE`; the skill polls for it, reads the CSV, and acts. Or
-just tell Claude *"review my changes"* and it drives the whole loop. See
-[skill/SKILL.md](skill/SKILL.md) and [skill/reference.md](skill/reference.md).
+In skill mode the UI shows **"Hand off →"**: clicking it writes
+`.prereview/DONE`; the agent polls for it, reads the CSV, and acts. With
+Claude Code, just tell it *"review my changes"* and it drives the whole
+loop; other agents follow the same protocol — see
+[Works with any LLM CLI](#works-with-any-llm-cli),
+[docs/integrations.md](docs/integrations.md), and
+[skill/SKILL.md](skill/SKILL.md) / [skill/reference.md](skill/reference.md).
 
 ## CLI usage
 

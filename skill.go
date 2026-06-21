@@ -1,31 +1,25 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 )
 
-// installSkill writes the embedded skill files into
-// <home>/.claude/skills/prereview/ and returns the SKILL.md path.
-// Overwrites existing files so re-running upgrades the skill. The
-// filename is the case-sensitive uppercase SKILL.md on purpose — a
-// lowercase skill.md is silently ignored by Claude Code, the exact
-// trap this command exists to prevent users from hitting.
+// installSkill writes the embedded Claude Code skill files into
+// <home>/.claude/skills/prereview/ and returns the SKILL.md path. It is the
+// Claude-specific entry point used by --update's skill sync; the general
+// multi-client installer is installClient (see clients.go). Overwrites
+// existing files so re-running upgrades the skill. The filename is the
+// case-sensitive uppercase SKILL.md on purpose — a lowercase skill.md is
+// silently ignored by Claude Code, the exact trap this command exists to
+// prevent users from hitting.
 func installSkill(home string) (string, error) {
-	dir := filepath.Join(home, ".claude", "skills", "prereview")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("mkdir %s: %w", dir, err)
+	// The "claude" target writes SKILL.md first, then reference.md.
+	paths, err := installClient(home, "claude")
+	if err != nil {
+		return "", err
 	}
-	skillPath := filepath.Join(dir, "SKILL.md")
-	if err := os.WriteFile(skillPath, []byte(skillMD), 0o644); err != nil {
-		return "", fmt.Errorf("write %s: %w", skillPath, err)
-	}
-	refPath := filepath.Join(dir, "reference.md")
-	if err := os.WriteFile(refPath, []byte(skillReferenceMD), 0o644); err != nil {
-		return "", fmt.Errorf("write %s: %w", refPath, err)
-	}
-	return skillPath, nil
+	return paths[0], nil
 }
 
 // syncInstalledSkill refreshes the on-disk skill when it is already
