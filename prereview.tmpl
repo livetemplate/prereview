@@ -26,7 +26,7 @@
      them on the live page, the sidebar lists them across pages. */}}
 <header class="bar bar-external">
   <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
-  <span class="bar-actions"><form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button></form>{{if .StreamMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Send the current annotations to Claude as a handoff event (session stays open)">Hand off →</button></form><form method="POST" style="margin:0"><button type="submit" name="endSession" class="contrast" title="Emit session_end and stop the server — Claude stops consuming the stream">End session</button></form>{{else if .SkillMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Stop the server and signal Claude to read the CSV">Hand off →</button></form>{{else}}<form method="POST" style="margin:0"><button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button></form>{{end}}</span>
+  <span class="bar-actions"><form method="POST" style="margin:0"><button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button></form>{{if .StreamMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Send the current annotations to your agent as a handoff event (session stays open)">Hand off →</button></form><form method="POST" style="margin:0"><button type="submit" name="endSession" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button></form>{{else if .SkillMode}}<form method="POST" style="margin:0"><button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button></form>{{else}}<form method="POST" style="margin:0"><button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button></form>{{end}}</span>
 </header>
 <div class="layout layout-external">
   <main class="viewer ext-viewer">
@@ -150,13 +150,13 @@
   {{end}}
   <form method="POST" class="tb-action">
     {{if .StreamMode}}
-    <button type="submit" name="handOff" class="contrast" title="Send the current comments to Claude as a handoff event (session stays open)">Hand off →</button>
+    <button type="submit" name="handOff" class="contrast" title="Send the current comments to your agent as a handoff event (session stays open)">Hand off →</button>
     {{/* On mobile End session moves to the ⋮ overflow menu (below) so the
          narrow bar isn't crowded by two action buttons — hidden here via
          .end-session-inline in the mobile media query. */}}
-    <button type="submit" name="endSession" class="contrast end-session-inline" title="Emit session_end and stop the server — Claude stops consuming the stream">End session</button>
+    <button type="submit" name="endSession" class="contrast end-session-inline" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
     {{else if .SkillMode}}
-    <button type="submit" name="handOff" class="contrast" title="Stop the server and signal Claude to read the CSV">Hand off →</button>
+    <button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button>
     {{else}}
     <button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button>
     {{end}}

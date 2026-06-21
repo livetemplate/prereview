@@ -727,9 +727,10 @@ func TestE2E_HandOffMarker(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
 	p.waitReady()
 
-	var btnText string
+	var btnText, btnTitle string
 	if err := chromedp.Run(p.ctx,
 		chromedp.Text(`header.bar button[name='handOff']`, &btnText, chromedp.ByQuery),
+		chromedp.AttributeValue(`header.bar button[name='handOff']`, "title", &btnTitle, nil, chromedp.ByQuery),
 		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.toast`, chromedp.ByQuery),
 	); err != nil {
@@ -737,6 +738,11 @@ func TestE2E_HandOffMarker(t *testing.T) {
 	}
 	if !strings.Contains(btnText, "Hand off") {
 		t.Errorf("button text = %q, want 'Hand off'", btnText)
+	}
+	// The hand-off affordance is vendor-neutral: the button and its tooltip
+	// must not name a specific agent (prereview works with any LLM CLI).
+	if strings.Contains(btnText, "Claude") || strings.Contains(btnTitle, "Claude") {
+		t.Errorf("hand-off button must be vendor-neutral; text=%q title=%q", btnText, btnTitle)
 	}
 
 	donePath := filepath.Join(p.repo, ".prereview", "DONE")

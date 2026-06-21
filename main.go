@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	_ "embed"
@@ -55,10 +56,11 @@ func main() {
 	out := flag.String("out", "", "directory whose .prereview/ holds the saved annotations (comments.csv + DONE). Defaults to the review path; required with --external (which has no review path).")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
-	skill := flag.Bool("skill", false, "running under the Claude skill: show 'Hand off → Claude' button that writes .prereview/DONE; default UI shows 'Quit' instead")
+	skill := flag.Bool("skill", false, "running under an agent's skill/command: show the 'Hand off →' button that writes .prereview/DONE; default UI shows 'Quit' instead")
 	stream := flag.Bool("stream", false, "emit a continuous JSON event stream (stdout + .prereview/events.jsonl) for an LLM: each 'Hand off' emits a handoff snapshot, the new 'End session' button emits a terminating session_end. Implies --skill.")
 	showVersion := flag.Bool("version", false, "print version and exit")
-	doInstallSkill := flag.Bool("install-skill", false, "install the Claude Code skill into ~/.claude/skills/prereview/ and exit")
+	doInstallSkill := flag.Bool("install-skill", false, "install the prereview integration for one or more coding agents and exit (choose with --client; omit it to pick from a menu)")
+	clientFlag := flag.String("client", "", "agent(s) to install the integration for: a comma-separated list of claude,codex,gemini,opencode,aider,cursor (with --install-skill; empty shows an interactive menu)")
 	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
 	doUninstall := flag.Bool("uninstall", false, "remove the prereview binary from disk, then exit (your review comments in each repo's .prereview/ are left untouched)")
 	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
@@ -141,14 +143,25 @@ func main() {
 			slog.Error("install skill: resolve home", "err", err)
 			os.Exit(1)
 		}
-		path, err := installSkill(home)
+		ids, err := resolveClients(*clientFlag)
 		if err != nil {
 			slog.Error("install skill", "err", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Installed prereview skill → %s\n", path)
-		fmt.Println("Invoke it in Claude Code with /prereview (or just \"review my changes\").")
-		fmt.Println("If Claude reports it as unknown, run /reload or restart the session.")
+		if len(ids) == 0 {
+			fmt.Println("No agent selected; nothing installed.")
+			return
+		}
+		for _, id := range ids {
+			paths, err := installClient(home, id)
+			if err != nil {
+				slog.Error("install skill", "err", err)
+				os.Exit(1)
+			}
+			t, _ := clientByID(id)
+			fmt.Printf("Installed prereview integration for %s → %s\n", t.label, strings.Join(paths, ", "))
+			fmt.Printf("  %s\n", t.hint)
+		}
 		return
 	}
 
