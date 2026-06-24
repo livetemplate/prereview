@@ -127,7 +127,10 @@
       <div class="pin-layer" data-pin-layer data-key="pin-layer">
         {{- range $.RegionComments -}}
         <button type="button"
-                class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}"
+                class="area-overlay pin-btn
+                {{- if .Resolved}} is-resolved{{end}}
+                {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}
+                "
                 lvt-on:click="editComment"
                 data-id="{{.ID}}"
                 data-key="pin-{{.ID}}"
@@ -169,7 +172,10 @@
     <div class="ext-sidebar-body">
       {{- range $.AllRegionComments -}}
       <div
-        class="inline-comment ext-anno{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}"
+        class="inline-comment ext-anno
+        {{- if .Resolved}} is-resolved{{end}}
+        {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}
+        "
         data-key="{{.ID}}"
         lvt-fx:animate="fade"
       >
@@ -804,7 +810,11 @@
             <button type="submit" name="toggleViewed" class="viewed-toggle"
                     aria-label="{{if index $.ViewedFiles .Path}}Mark as not viewed{{else}}Mark as viewed{{end}}"
                     title="{{if index $.ViewedFiles .Path}}Viewed{{else}}Mark viewed{{end}}">
-              {{if index $.ViewedFiles .Path}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end}}
+              {{if index $.ViewedFiles .Path -}}
+                {{template "iconViewedCheck"}}
+              {{- else -}}
+                {{template "iconViewedCircle"}}
+              {{- end}}
             </button>
           </form>
         </div>
@@ -1030,7 +1040,12 @@
     {{- range $.RenderedHTML -}}
     {{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be -}}
     <div
-      class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}"
+      class="html-block
+      {{- if and
+          (ne $.SelectionEndMax 0)
+          (ge $.SelectionEndMax $bs)
+          (le $.SelectionEndMax $be)}} selected{{end -}}
+      "
       data-key="{{$hbkey}}"
     >{{template "blockComments" .}}</div>
     {{- end -}}
@@ -1046,7 +1061,12 @@
   <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">
     {{- range $.RenderedMarkdown -}}
     {{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be -}}
-    <div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}"
+    <div class="md-block
+    {{- if and
+        (ne $.SelectionEndMax 0)
+        (ge $.SelectionEndMax $bs)
+        (le $.SelectionEndMax $be)}} selected{{end -}}
+    "
          data-key="{{$mbkey}}"
          {{- if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}>
       {{- /* rendered markdown — clicking selects the block's source line span */ -}}
@@ -1071,7 +1091,11 @@
        Measured: this costs no extra bandwidth — livetemplate resends
        {{range}} statics on a full content swap regardless of the key.
        Bonus: a fresh element also starts at scroll (0,0). */}}
-  <div class="code{{if eq .Note "file added"}} pure-add{{else if eq .Note "file deleted"}} pure-del{{end}}{{if $.FileView}} file-view{{end}}"
+  <div class="code
+    {{- if eq .Note "file added"}} pure-add
+    {{- else if eq .Note "file deleted"}} pure-del{{end}}
+    {{- if $.FileView}} file-view{{end -}}
+    "
        data-key="code-{{.Path}}"
        data-path="{{.Path}}"
        lvt-fx:scroll="reset-on:data-path"
