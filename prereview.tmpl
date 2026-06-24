@@ -181,7 +181,9 @@
             name="focusComment"
             class="anno-locate"
             title="Locate this region on the page"
-          ><span class="ext-page-link">📍 {{.URL}}</span>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}<span class="anno-body">{{.Body}}</span></button>
+          ><span class="ext-page-link">📍 {{.URL}}</span>
+          {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
+          {{- /* */ -}}<span class="anno-body">{{.Body}}</span></button>
         </form>
         {{- /* resolve / edit / delete */ -}}
         <div class="ic-actions">
@@ -485,7 +487,9 @@
   role="menu"
   aria-label="More options"
 >
-  <div class="menu-info">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
+  <div class="menu-info">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed
+    {{- if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end -}}
+  </div>
   {{if .CurrentDiff}}
   {{if ne .CommentMode "file"}}
   {{/* "Comment on file" mirrors the desktop toolbar button. Works for
@@ -754,7 +758,11 @@
     <form method="POST">
       <button type="submit" name="toggleFileScope" class="scope-toggle{{if not .ShowAllFiles}} is-on{{end}}"
               title="{{if .ShowAllFiles}}Show only files changed vs {{.Base}}{{else}}Show all {{len .Files}} tracked files{{end}}">
-        {{if .ShowAllFiles}}All {{len .Files}} files · show changed only{{else}}Changed {{.ChangedFilesCount}} · show all {{len .Files}}{{end}}
+        {{if .ShowAllFiles -}}
+        All {{len .Files}} files · show changed only
+        {{- else -}}
+        Changed {{.ChangedFilesCount}} · show all {{len .Files}}
+        {{- end}}
       </button>
     </form>
   </div>
@@ -775,7 +783,10 @@
             >
               {{if .Status}}<span class="status-badge {{.Status}}">{{.Status}}</span>{{end}}<span class="file-label">{{.Path}}</span>
               <span class="file-meta">
-                {{if or (gt .Added 0) (gt .Deleted 0)}}<small class="diff-stats">{{if gt .Added 0}}<span class="add">+{{.Added}}</span>{{end}}{{if gt .Deleted 0}}<span class="del">-{{.Deleted}}</span>{{end}}</small>{{end}}
+                {{if or (gt .Added 0) (gt .Deleted 0)}}<small class="diff-stats">
+                  {{- if gt .Added 0}}<span class="add">+{{.Added}}</span>{{end}}
+                  {{- if gt .Deleted 0}}<span class="del">-{{.Deleted}}</span>{{end -}}
+                </small>{{end}}
                 {{if gt .CommentCount 0}}<mark class="file-count">{{.CommentCount}}</mark>{{end}}
               </span>
             </button>
@@ -1251,7 +1262,14 @@
   {{- /* the "extend the selection" hint shows ONLY in the code/line view, not the rendered
          markdown/html block view; both have CommentMode=="" and can have SelectionAnchor==
          SelectionEnd (a single-line block), so gate on the view too */ -}}
-  {{- if and (eq $.CommentMode "") (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID) (not $.ShowRenderedMarkdown) (not $.ShowRenderedHTML)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}
+  {{- if and
+      (eq $.CommentMode "")
+      (ne $.SelectionAnchor 0)
+      (eq $.SelectionAnchor $.SelectionEnd)
+      (not $.EditingCommentID)
+      (not $.ShowRenderedMarkdown)
+      (not $.ShowRenderedHTML)
+  }} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}
   {{- /* draft textarea (content kept inline — whitespace-significant) */ -}}
   <form
     method="POST"
