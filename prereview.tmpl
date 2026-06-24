@@ -219,7 +219,8 @@
     </div>
   </aside>
 </div>
-<footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
+<footer class="app-footer" role="contentinfo"><small>prereview
+  {{- if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
 {{else}}
 <header
   class="bar"
@@ -365,7 +366,10 @@
           name="toggleFocusMode"
           class="contrast focus-toggle"
           aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}"
-          title="{{if .FocusMode}}Show the file list and outline columns{{else}}Hide the side columns for distraction-free reading{{end}}"
+          title="
+          {{- if .FocusMode}}Show the file list and outline columns
+          {{- else}}Hide the side columns for distraction-free reading{{end -}}
+          "
         >{{if .FocusMode}}Exit focus{{else}}Focus{{end}}</button>
       </form>
     </div>
@@ -757,7 +761,10 @@
   <div class="drawer-scope">
     <form method="POST">
       <button type="submit" name="toggleFileScope" class="scope-toggle{{if not .ShowAllFiles}} is-on{{end}}"
-              title="{{if .ShowAllFiles}}Show only files changed vs {{.Base}}{{else}}Show all {{len .Files}} tracked files{{end}}">
+              title="
+              {{- if .ShowAllFiles}}Show only files changed vs {{.Base}}
+              {{- else}}Show all {{len .Files}} tracked files{{end -}}
+              ">
         {{if .ShowAllFiles -}}
         All {{len .Files}} files · show changed only
         {{- else -}}
@@ -781,7 +788,8 @@
               class="file-btn outline contrast{{if eq .Path $.SelectedFile}} is-selected{{end}}"
               title="{{.Path}}"
             >
-              {{if .Status}}<span class="status-badge {{.Status}}">{{.Status}}</span>{{end}}<span class="file-label">{{.Path}}</span>
+              {{if .Status}}<span class="status-badge {{.Status}}">{{.Status}}</span>{{end -}}
+              <span class="file-label">{{.Path}}</span>
               <span class="file-meta">
                 {{if or (gt .Added 0) (gt .Deleted 0)}}<small class="diff-stats">
                   {{- if gt .Added 0}}<span class="add">+{{.Added}}</span>{{end}}
@@ -1357,7 +1365,11 @@
   {{- /* */ -}}
   <header><strong>Delete comment?</strong></header>
   {{- /* */ -}}
-  <p><small>{{if .IsRegionLevel}}<code>{{.URL}}</code> · region{{else if .IsAreaLevel}}<code>{{.File}}</code> · area{{else}}<code>{{.File}}</code> · file{{end}}</small></p>
+  <p><small>
+    {{- if .IsRegionLevel}}<code>{{.URL}}</code> · region
+    {{- else if .IsAreaLevel}}<code>{{.File}}</code> · area
+    {{- else}}<code>{{.File}}</code> · file{{end -}}
+  </small></p>
   {{- /* */ -}}
   <footer>
     <form method="POST">
