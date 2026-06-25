@@ -1,0 +1,658 @@
+=== blockComments ===
+{{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
+=== commentCardFull ===
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="reanchorComment" class="outline">Re-anchor</button>
+    </form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="editComment" class="outline">Edit</button>
+    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialog" .}}</div></div>
+=== commentCardSimple ===
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>{{if not .Resolved}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="editComment" class="outline">Edit</button>
+    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>
+=== composer ===
+<div class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}" data-key="composer"{{if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}><strong>{{if eq $.CommentMode "region"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small>{{else}}{{if eq $.CommentMode "file"}}{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "area"}}{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if $.ReanchorCommentID}}Re-anchoring comment to {{else}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{end}}{{$.SelectionLabel}}{{end}}{{end}}{{end}}</strong>{{if and (eq $.CommentMode "") (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID) (not $.ShowRenderedMarkdown) (not $.ShowRenderedHTML)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form">
+    <textarea name="body" placeholder="{{if eq $.CommentMode "region"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "file"}}What's wrong with this file?{{else}}{{if eq $.CommentMode "area"}}What's wrong with this region?{{else}}What's wrong with these lines?{{end}}{{end}}{{end}}" required>{{$.DraftBody}}</textarea>
+  </form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions">
+    <button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button>
+    <button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button>
+  </div></div>
+=== deleteDialog ===
+<dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer>
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <fieldset role="group">
+        <button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button>
+        <button type="submit" name="deleteComment" class="contrast">Delete</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog>
+=== deleteDialogTagged ===
+<dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small>{{if .IsRegionLevel}}<code>{{.URL}}</code> · region{{else}}{{if .IsAreaLevel}}<code>{{.File}}</code> · area{{else}}<code>{{.File}}</code> · file{{end}}{{end}}</small></p><footer>
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <fieldset role="group">
+        <button type="button" command="close" commandfor="confirm-delete-{{.ID}}" class="secondary">Cancel</button>
+        <button type="submit" name="deleteComment" class="contrast">Delete</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog>
+=== iconChat14 ===
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round" /></svg>
+=== iconChat16 ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
+=== iconCheck ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
+=== iconChevronLeft ===
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
+=== iconChevronRight ===
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
+=== iconCircle16 ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none" /></svg>
+=== iconClose14 ===
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
+=== iconClose16 ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
+=== iconComments ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
+=== iconDiff ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 4h7v16H4zM13 4h7v16h-7z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M6 11h3M6 13h3M16 9v6M14 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+=== iconFile ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
+=== iconHamburger ===
+<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
+=== iconRendered ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+=== iconStop ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8" fill="none" /></svg>
+=== iconTOC ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+=== iconViewRaw ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M9 9h4M9 12h6M9 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+=== iconViewedCheck ===
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" /></svg>
+=== iconViewedCircle ===
+<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none" /></svg>
+=== prereview ===
+<!DOCTYPE html>
+<!-- data-theme=light forces Pico's light-mode palette regardless of the
+     OS color scheme. The diff colors (chroma github theme + the
+     hardcoded add/del/ctx backgrounds + status-badge tints) all assume
+     a light background; auto-darkmode breaks contrast for chroma's non-bright tokens and leaves status badges invisible on dark. -->
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>prereview · {{.RepoPath}}</title>
+<link rel="stylesheet" href="/pico.min.css">
+<link rel="stylesheet" href="/livetemplate.css">
+<link rel="stylesheet" href="/syntax.css">
+<link rel="stylesheet" href="/prereview.css">
+</head>
+<body lvt-on:keydown="clearSelection" lvt-key="Escape" data-lvt-loading-debounce-ms="200">
+
+{{if .ExternalMode}}
+
+<header class="bar bar-external">
+  <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
+  <span class="bar-actions"><form method="POST" style="margin:0">
+      <button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button>
+    </form>{{if .StreamMode}}<form method="POST" style="margin:0">
+      <button type="submit" name="handOff" class="contrast" title="Send the current annotations to your agent as a handoff event (session stays open)">Hand off →</button>
+    </form><form method="POST" style="margin:0">
+      <button type="submit" name="endSession" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
+    </form>{{else}}{{if .SkillMode}}<form method="POST" style="margin:0">
+      <button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button>
+    </form>{{else}}<form method="POST" style="margin:0">
+      <button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button>
+    </form>{{end}}{{end}}</span>
+</header>
+<div class="layout layout-external">
+  <main class="viewer ext-viewer">
+    {{template "regionToggle" $}}
+    <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+      
+      <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
+      {{if .RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
+    </div>
+    {{if eq $.CommentMode "region"}}{{template "composer" $}}{{end}}
+  </main>
+  <aside class="ext-sidebar{{if .AnnoDrawerOpen}} is-open{{end}}" aria-label="Annotations">
+    <header class="ext-sidebar-head"><strong>Annotations ({{len $.AllRegionComments}})</strong><form method="POST" style="margin:0">
+        <button type="submit" name="toggleAnnotations" class="outline secondary close-btn" aria-label="Close annotations">{{template "iconClose16"}}</button>
+      </form></header>
+    <div class="ext-sidebar-body">{{range $.AllRegionComments}}<div class="inline-comment ext-anno{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"><form method="POST" class="anno-locate-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="focusComment" class="anno-locate" title="Locate this region on the page"><span class="ext-page-link">📍 {{.URL}}</span>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}<span class="anno-body">{{.Body}}</span></button>
+        </form><div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>{{if not .Resolved}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="editComment" class="outline">Edit</button>
+    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
+  </aside>
+</div>
+<footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
+{{else}}
+<header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
+  <form method="POST">
+    <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
+  </form>
+  <div class="title">
+    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}</span>
+  </div>
+  
+  <div class="toolbar-inline">
+    <div class="tb-group tb-counters">
+      <small class="auto-saved-long">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed</small>
+      
+      {{if gt .ResolvedCount 0}}
+      <form method="POST">
+        <label class="tb-checkbox" title="Include resolved comments in the view"><input type="checkbox" {{if .ShowResolved}}checked{{end}} lvt-on:change="toggleShowResolved">Show resolved comments ({{.ResolvedCount}})</label>
+      </form>
+      {{end}}
+      {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
+      <form method="POST">
+        <button type="submit" name="toggleCommentList" class="contrast" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">⚠ {{.OutdatedCount}} outdated</button>
+      </form>
+      {{end}}
+    </div>
+    {{if .CurrentDiff}}
+    <div class="tb-group tb-toggles">
+      
+      {{if .IsMarkdown}}
+      <form method="POST" class="tb-radios" aria-label="Markdown view">
+        <label><input type="radio" name="view" value="rendered" {{if not .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Preview</label>
+        <label><input type="radio" name="view" value="raw" {{if .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Raw</label>
+      </form>
+      {{end}}
+      {{if .IsHTML}}
+      <form method="POST" class="tb-radios" aria-label="HTML view">
+        <label><input type="radio" name="view" value="rendered" {{if not .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Preview</label>
+        <label><input type="radio" name="view" value="raw" {{if .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Raw</label>
+      </form>
+      {{end}}
+      {{if and (not .ShowRenderedMarkdown) (not .ShowRenderedHTML)}}
+      <form method="POST" class="tb-radios" aria-label="File view">
+        <label><input type="radio" name="view" value="diff" {{if not .FileView}}checked{{end}} lvt-on:change="setFileViewMode">Diff</label>
+        <label><input type="radio" name="view" value="file" {{if .FileView}}checked{{end}} lvt-on:change="setFileViewMode">File</label>
+      </form>
+      {{end}}
+    </div>
+    {{end}}
+    
+    {{if .CurrentDiff}}
+    <div class="tb-group tb-focus">
+      <form method="POST">
+        <button type="submit" name="toggleFocusMode" class="contrast focus-toggle" aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}" title="{{if .FocusMode}}Show the file list and outline columns{{else}}Hide the side columns for distraction-free reading{{end}}">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}</button>
+      </form>
+    </div>
+    {{end}}
+  </div>
+  {{if .CurrentDiff}}
+  
+  {{if ne .CommentMode "file"}}
+  <form method="POST" class="tb-action">
+    <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">
+      {{template "iconChat14"}}
+      <span class="nav-label">Comment on file</span>
+    </button>
+  </form>
+  {{end}}
+  {{end}}
+  {{if gt (len .Files) 1}}
+  <form method="POST" class="nav-prev">
+    <button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast">{{template "iconChevronLeft"}}<span class="nav-label">Prev</span></button>
+  </form>
+  <form method="POST" class="nav-next">
+    <button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next</span>{{template "iconChevronRight"}}</button>
+  </form>
+  {{end}}
+  <form method="POST" class="tb-action">
+    {{if .StreamMode}}
+    <button type="submit" name="handOff" class="contrast" title="Send the current comments to your agent as a handoff event (session stays open)">Hand off →</button>
+    
+    <button type="submit" name="endSession" class="contrast end-session-inline" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
+    {{else}}{{if .SkillMode}}
+    <button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button>
+    {{else}}
+    <button type="submit" name="quit" class="contrast" title="Stop the prereview server">Quit</button>
+    {{end}}{{end}}
+  </form>
+  
+  <form method="POST" style="margin:0">
+    <button type="submit" name="toggleMoreMenu" class="more-trigger" aria-label="More options" aria-haspopup="menu" aria-expanded="{{if .MoreMenuOpen}}true{{else}}false{{end}}">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <circle cx="12" cy="5" r="1.8" fill="currentColor"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
+        <circle cx="12" cy="19" r="1.8" fill="currentColor"/>
+      </svg>
+    </button>
+  </form>
+</header>
+
+
+<div class="more-menu-backdrop{{if .MoreMenuOpen}} is-open{{end}}" lvt-on:click="closeMoreMenu" aria-hidden="true"></div>
+<div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
+  <div class="menu-info">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
+  {{if .CurrentDiff}}
+  {{if ne .CommentMode "file"}}
+  
+  <form method="POST">
+    <button type="submit" name="openFileComment" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconChat16"}}</span>
+      <span class="menu-label">Comment on file</span>
+    </button>
+  </form>
+  {{end}}
+  {{with .RenderedHeadings}}
+  
+  <form method="POST">
+    <button type="submit" name="openTOC" class="menu-item toc-menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconTOC"}}</span>
+      <span class="menu-label">Table of contents</span>
+      <span class="menu-meta">{{len .}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{if .IsMarkdown}}
+  <form method="POST">
+    <button type="submit" name="toggleRawMarkdown" class="menu-item{{if not .RawMarkdown}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">
+        {{if .RawMarkdown}}
+        {{template "iconRendered"}}
+        {{else}}
+        {{template "iconViewRaw"}}
+        {{end}}
+      </span>
+      <span class="menu-label">{{if .RawMarkdown}}Preview{{else}}View raw source{{end}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{if .IsHTML}}
+  <form method="POST">
+    <button type="submit" name="toggleRawHTML" class="menu-item{{if not .RawHTML}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">
+        {{if .RawHTML}}
+        {{template "iconRendered"}}
+        {{else}}
+        {{template "iconViewRaw"}}
+        {{end}}
+      </span>
+      <span class="menu-label">{{if .RawHTML}}Preview{{else}}View raw source{{end}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{if and (not .ShowRenderedMarkdown) (not .ShowRenderedHTML)}}
+  <form method="POST">
+    <button type="submit" name="toggleFileView" class="menu-item{{if .FileView}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">
+        {{if .FileView}}
+        
+        {{template "iconDiff"}}
+        {{else}}
+        
+        {{template "iconFile"}}
+        {{end}}
+      </span>
+      <span class="menu-label">{{if .FileView}}Show diff{{else}}View file{{end}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{end}}
+  {{if gt (len .Comments) 0}}
+  <form method="POST">
+    <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconComments"}}</span>
+      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}</span>
+      <span class="menu-meta">{{len .Comments}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{if gt .ResolvedCount 0}}
+  <form method="POST">
+    <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">
+        {{if .ShowResolved}}
+        {{template "iconCheck"}}
+        {{else}}
+        {{template "iconCircle16"}}
+        {{end}}
+      </span>
+      <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}</span>
+      <span class="menu-meta">{{.ResolvedCount}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
+  <div class="menu-info" style="border-bottom: 0; margin-bottom: 0; font-style: italic;">No comments yet — tap a line to add one.</div>
+  {{end}}
+  {{if .StreamMode}}
+  
+  <form method="POST">
+    <button type="submit" name="endSession" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconStop"}}</span>
+      <span class="menu-label">End session</span>
+    </button>
+  </form>
+  {{end}}
+</div>
+
+{{if .Quitting}}
+<div class="banner-stopping" role="status">
+  Server stopping… you can close this tab.
+</div>
+{{end}}
+
+{{if .SessionEnded}}
+<div class="banner-stopping" role="status">
+  Session ended — Claude has been notified. You can close this tab.
+</div>
+{{end}}
+
+{{if .DoneWritten}}
+<div class="toast" role="status" lvt-fx:auto-click="5000:dismissBanner">
+  <span class="toast-msg">✓ Handed off → Claude is acting on your comments</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="dismissBanner" class="toast-dismiss" aria-label="Dismiss">
+      {{template "iconClose14"}}
+    </button>
+  </form>
+</div>
+{{end}}
+
+
+<div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" lvt-on:click="closeFiles" aria-label="Close file list"></div>
+
+<div class="layout{{if .FocusMode}} focus-mode{{end}}">
+<dialog id="files-drawer" open class="{{if .FileDrawerOpen}}is-open{{end}}">
+  <div class="drawer-head">
+    <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
+    <form method="POST">
+      <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close">{{template "iconClose16"}}</button>
+    </form>
+  </div>
+  
+  {{if and (gt (len .Comments) 0) (not .ShowAllComments)}}
+  <div class="drawer-all-comments">
+    <form method="POST">
+      <button type="submit" name="toggleCommentList" class="outline" title="Open the all-comments overview">
+        💬 All comments ({{len .Comments}})
+      </button>
+    </form>
+  </div>
+  {{end}}
+  
+  
+  {{if not .NoGit}}
+  <div class="drawer-base">
+    <form method="POST" class="base-select-form">
+      <label for="base-input">Base</label>
+      <select id="base-input" name="ref" lvt-on:change="setBase">
+        {{range .BaseChoices}}
+        <option value="{{.}}"{{if eq . $.Base}} selected{{end}}>{{.}}</option>
+        {{end}}
+      </select>
+    </form>
+  </div>
+  {{end}}
+  <div class="drawer-search">
+    <form method="POST" lvt-form:preserve>
+      <input type="text" name="filter" placeholder="Filter files…" value="{{.FileFilter}}" lvt-on:input="setFileFilter" lvt-mod:debounce="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    </form>
+  </div>
+  
+  {{if and (gt .ChangedFilesCount 0) (lt .ChangedFilesCount (len .Files))}}
+  <div class="drawer-scope">
+    <form method="POST">
+      <button type="submit" name="toggleFileScope" class="scope-toggle{{if not .ShowAllFiles}} is-on{{end}}" title="{{if .ShowAllFiles}}Show only files changed vs {{.Base}}{{else}}Show all {{len .Files}} tracked files{{end}}">
+        {{if .ShowAllFiles}}All {{len .Files}} files · show changed only{{else}}Changed {{.ChangedFilesCount}} · show all {{len .Files}}{{end}}
+      </button>
+    </form>
+  </div>
+  {{end}}
+  <div class="drawer-body">
+    {{if .Files}}
+    <ul>
+      {{range .FilteredFiles}}
+      <li data-key="{{.Path}}">
+        <div class="file-row{{if index $.ViewedFiles .Path}} is-viewed{{end}}">
+          <form method="POST" class="file-select-form">
+            <input type="hidden" name="path" value="{{.Path}}">
+            <button type="submit" name="selectFile" class="file-btn outline contrast{{if eq .Path $.SelectedFile}} is-selected{{end}}" title="{{.Path}}">
+              {{if .Status}}<span class="status-badge {{.Status}}">{{.Status}}</span>{{end}}<span class="file-label">{{.Path}}</span>
+              <span class="file-meta">
+                {{if or (gt .Added 0) (gt .Deleted 0)}}<small class="diff-stats">{{if gt .Added 0}}<span class="add">+{{.Added}}</span>{{end}}{{if gt .Deleted 0}}<span class="del">-{{.Deleted}}</span>{{end}}</small>{{end}}
+                {{if gt .CommentCount 0}}<mark class="file-count">{{.CommentCount}}</mark>{{end}}
+              </span>
+            </button>
+          </form>
+          <form method="POST" class="file-viewed-form">
+            <input type="hidden" name="path" value="{{.Path}}">
+            <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if index $.ViewedFiles .Path}}Mark as not viewed{{else}}Mark as viewed{{end}}" title="{{if index $.ViewedFiles .Path}}Viewed{{else}}Mark viewed{{end}}">
+              {{if index $.ViewedFiles .Path}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end}}
+            </button>
+          </form>
+        </div>
+      </li>
+      {{else}}
+      <li class="empty-filter"><small>No files match "<code>{{.FileFilter}}</code>"</small></li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="empty"><small>No files in this repository.</small></p>
+    {{end}}
+  </div>
+</dialog>
+
+<main class="viewer">
+{{if .ShowAllComments}}
+<section class="all-comments">
+  <header class="ac-head">
+    <strong>All comments ({{len .Comments}})</strong>
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
+    </form>
+  </header>
+  {{if .VisibleComments}}
+  <ul class="ac-list">
+    {{range .VisibleComments}}
+    <li class="ac-item{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}">
+      <form method="POST" class="ac-jump">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button type="submit" name="jumpToComment" class="ac-jump-btn">
+          <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}</div>
+          <div class="ac-body">{{.Body}}</div>
+        </button>
+      </form>
+      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
+      <div class="ac-actions">
+        <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>
+        {{if and (not .Resolved) .AnchorOutdated}}<form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="reanchorComment" class="outline">Re-anchor</button>
+        </form>{{end}}
+        {{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="editComment" class="outline">Edit</button>
+        </form>{{end}}
+        <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
+        {{template "deleteDialog" .}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  
+  <div class="ac-empty">
+    <p class="ac-empty-msg">{{if and (gt (len .Comments) 0) (not .ShowResolved)}}{{len .Comments}} resolved comment{{if ne (len .Comments) 1}}s{{end}} hidden — toggle “Show resolved” to see them.{{else}}No comments yet.{{end}}</p>
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleCommentList" class="contrast ac-empty-back" title="Return to the file you were viewing">← Back to file</button>
+    </form>
+  </div>
+  {{end}}
+</section>
+{{else}}
+{{with .CurrentDiff}}
+<article>
+  <header class="file-head">
+    <strong>{{.Path}}</strong>
+    {{if .Note}}<small>{{.Note}}</small>{{end}}
+  </header>
+  
+  {{$fcs := $.FileLevelComments}}
+  {{$acs := $.AreaComments}}
+  {{if or $fcs $acs (eq $.CommentMode "file") (eq $.CommentMode "area")}}
+  <section class="file-comments" data-key="file-comments-{{.Path}}">
+    {{range $fcs}}{{template "commentCardSimple" .}}{{end}}
+    {{range $acs}}{{template "commentCardSimple" .}}{{end}}
+    {{if or (eq $.CommentMode "file") (eq $.CommentMode "area")}}{{template "composer" $}}{{end}}
+  </section>
+  {{end}}
+  {{if .IsBinary}}
+  
+  {{$kind := $.BinaryKind}}
+  {{if eq $kind "image"}}
+  
+  <div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-{{.Path}}">
+    <img src="/{{.Path}}" alt="{{.Path}}" lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;">
+    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}"></div>{{end}}
+    {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
+  </div></div>
+  {{else}}{{if eq $kind "pdf"}}
+  
+  <div class="binary-preview binary-pdf-card">
+    <div class="pdf-card-icon" aria-hidden="true">📄</div>
+    <strong class="pdf-card-name">{{.Path}}</strong>
+    <a role="button" class="contrast pdf-card-open" href="/{{.Path}}" target="_blank" rel="noopener">Open PDF in new tab →</a>
+  </div>
+  {{else}}{{if eq $kind "video"}}
+  <div class="binary-preview binary-video"><video controls preload="metadata" src="/{{.Path}}"></video></div>
+  {{else}}{{if eq $kind "audio"}}
+  <div class="binary-preview binary-audio"><audio controls preload="metadata" src="/{{.Path}}"></audio></div>
+  {{else}}
+  <p class="empty">Binary file — cannot display.</p>
+  {{end}}{{end}}{{end}}{{end}}
+  {{else}}{{if $.ShowRenderedHTML}}
+  
+  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-same-origin" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:iframe-autoheight title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}</div>{{end}}</div>
+  {{else}}{{if $.ShowRenderedMarkdown}}
+  
+  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$mbkey}}"{{if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}><div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}</div>{{end}}</div>
+  {{else}}{{if .Lines}}
+  
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}{{template "commentCardFull" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}{{template "composer" $}}{{end}}</div>
+{{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
+  {{else}}
+  <p class="empty"><small>No diff content.</small></p>
+  {{end}}{{end}}{{end}}{{end}}
+</article>
+{{else}}
+  {{if .Files}}
+  <p class="empty">Pick a file from the list.</p>
+  {{else}}
+  <div class="empty empty-diff">
+    <h3>No files in this repository</h3>
+    <p><small>Add some files and refresh, or relaunch prereview pointed at a different repo.</small></p>
+  </div>
+  {{end}}
+{{end}}
+{{end}}
+
+{{if and .LastDeletedComment (not .Quitting)}}
+<div class="undo-toast" role="status">
+  <span>Comment on <code>{{.LastDeletedComment.File}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
+  <form method="POST" style="margin:0;display:inline">
+    <button type="submit" name="undoDelete" class="undo-btn">Undo</button>
+  </form>
+</div>
+{{end}}
+
+{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
+<div class="reanchor-prompt" role="status">
+  <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
+  <form method="POST" style="margin:0;display:inline">
+    <button type="submit" name="clearSelection" class="undo-btn">Cancel</button>
+  </form>
+</div>
+{{end}}
+</main>
+
+
+{{with .RenderedHeadings}}
+<aside class="toc-sidebar" aria-label="Table of contents">
+  <div class="toc-head"><strong>On this page</strong></div>
+  <nav class="toc-list">
+    {{range .}}<a href="#{{.ID}}" lvt-spy-link class="toc-link toc-l{{.Level}}">{{.Text}}</a>
+    {{end}}
+  </nav>
+</aside>
+{{end}}
+</div>
+
+{{with .RenderedHeadings}}
+<div class="toc-backdrop{{if $.TOCOpen}} is-open{{end}}" lvt-on:click="closeTOC" aria-hidden="true"></div>
+<div class="toc-modal{{if $.TOCOpen}} is-open{{end}}" role="dialog" aria-label="Table of contents" aria-modal="true">
+  <div class="toc-modal-head">
+    <strong>On this page</strong>
+    <form method="POST">
+      <button type="submit" name="closeTOC" class="outline close-btn" aria-label="Close">
+        {{template "iconClose16"}}
+      </button>
+    </form>
+  </div>
+  <nav class="toc-modal-list">
+    {{range .}}<a href="#{{.ID}}" lvt-spy-link lvt-on:click="navigateToHeading" data-id="{{.ID}}" class="toc-link toc-l{{.Level}}">{{.Text}}</a>
+    {{end}}
+  </nav>
+</div>
+{{end}}
+<footer class="app-footer" role="contentinfo">
+  prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
+</footer>
+{{end}}
+
+<script defer src="/livetemplate-client.js"></script>
+<!-- Lazy mermaid renderer; standalone file keeps it out of livetemplate's template tree. See internal/assets/mermaid-init.js. -->
+<script defer src="/mermaid-init.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== regionToggle ===
+<form method="POST" class="region-toggle">
+  <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
+</form>
