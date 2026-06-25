@@ -1,4 +1,4 @@
-.PHONY: all build test sync-client install clean screenshots gifs
+.PHONY: all build test tmpl-check sync-client install clean screenshots gifs
 
 BIN := prereview
 CLIENT_JS_SRC := ../client/dist/livetemplate-client.browser.js
@@ -21,6 +21,14 @@ build: sync-client
 
 test:
 	go test ./...
+
+# prereview.tmpl is whitespace-significant — no reflow formatter can touch it
+# safely (see CLAUDE.md). This guards a hand-edit: green = rendered output is
+# unchanged (safe reformat); red = the edit changed what the browser renders.
+# After an intentional content change, regenerate the golden:
+#   go test -run TestTemplateOutputSignature -update-sig .
+tmpl-check:
+	go test -run TestTemplateOutputSignature -count=1 .
 
 install: sync-client
 	go install .
