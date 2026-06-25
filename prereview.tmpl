@@ -18,11 +18,11 @@
          and the next <form> is a "trim carrier" that emits nothing.
      SVG icons live in iconX define blocks at the bottom, inlined at parse. */ -}}
 <!DOCTYPE html>
-<!-- data-theme=light forces Pico's light-mode palette regardless of the
+{{/* data-theme=light forces Pico's light-mode palette regardless of the
      OS color scheme. The diff colors (chroma github theme + the
      hardcoded add/del/ctx backgrounds + status-badge tints) all assume
      a light background; auto-darkmode breaks contrast for chroma's
-     non-bright tokens and leaves status badges invisible on dark. -->
+     non-bright tokens and leaves status badges invisible on dark. */}}
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
@@ -1245,7 +1245,7 @@
 {{end}}
 
 <script defer src="/livetemplate-client.js"></script>
-<!-- Lazy mermaid renderer; standalone file keeps it out of livetemplate's template tree. See internal/assets/mermaid-init.js. -->
+{{/* Lazy mermaid renderer; standalone file keeps it out of livetemplate's template tree. See internal/assets/mermaid-init.js. */}}
 <script defer src="/mermaid-init.js"></script>
 </body>
 </html>
