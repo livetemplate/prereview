@@ -1,0 +1,96 @@
+{{/* Standalone html/template for the drawer file browser. Rendered in Go and
+     injected into prereview.tmpl as template.HTML (see FileBrowserHTML). It is
+     NOT processed by livetemplate, so the self-recursive {{template "treeNode"}}
+     is safe here. Entry point: "fileBrowser" with a PrereviewState as dot. */}}
+{{- define "fileBrowser" -}}
+{{- if .Files -}}
+  {{- if .FileFilter -}}
+    <ul class="file-flat">
+      {{- range .FilteredFileNodes}}{{template "fileRow" .}}{{else}}
+      <li class="empty-filter"><small>No files match "<code>{{$.FileFilter}}</code>"</small></li>
+      {{end -}}
+    </ul>
+  {{- else -}}
+    <ul class="file-tree">
+      {{- range .FileTree}}{{template "treeNode" .}}{{end -}}
+    </ul>
+  {{- end -}}
+{{- else -}}
+  <p class="empty"><small>No files in this repository.</small></p>
+{{- end -}}
+{{- end -}}
+
+{{/* treeNode recurses the folder tree. A directory is a native <details>
+     (instant, keyboard-accessible, zero JS). lvt-ignore-attrs + the upstream
+     morphdom open-durability fix keep the user's expand/collapse across server
+     re-renders; the server emits `open` only as the auto-expand-to-changed
+     default. A file delegates to fileRow. */}}
+{{- define "treeNode" -}}
+{{- if .IsDir -}}
+<li class="tree-dir" data-key="dir:{{.Path}}">
+  <details data-key="{{.Path}}" lvt-ignore-attrs{{if .DefaultOpen}} open{{end}}>
+    <summary class="dir-row" style="{{.DepthStyle}}" title="{{.Path}}">
+      <span class="tree-twisty">{{template "iconChevronRight"}}</span>
+      <span class="tree-folder-icon">{{template "iconFolder"}}</span>
+      <span class="tree-label">{{.Name}}</span>
+      {{if gt .CommentCount 0}}<mark class="file-count">{{.CommentCount}}</mark>{{end}}
+    </summary>
+    <ul class="tree-children">
+      {{- range .Children}}{{template "treeNode" .}}{{end -}}
+    </ul>
+  </details>
+</li>
+{{- else -}}
+{{template "fileRow" .}}
+{{- end -}}
+{{- end -}}
+
+{{/* fileRow renders one file leaf — shared by the flat (filter-active) list and
+     the tree's file leaves. .Name is the label (full path in the flat list, bare
+     filename in the tree); .Path drives the actions; .Entry carries git status /
+     diff stats / comment count. */}}
+{{- define "fileRow" -}}
+<li class="tree-file" data-key="{{.Path}}">
+  <div class="file-row{{if .IsViewed}} is-viewed{{end}}" style="{{.DepthStyle}}">
+    <form method="POST" class="file-select-form">
+      <input type="hidden" name="path" value="{{.Path}}">
+      <button type="submit" name="selectFile" class="file-btn outline contrast{{if .IsSelected}} is-selected{{end}}" title="{{.Path}}">
+        {{- if .Entry.Status}}<span class="status-badge {{.Entry.Status}}">{{.Entry.Status}}</span>{{end -}}
+        <span class="tree-file-icon">{{template "iconFile"}}</span>
+        <span class="file-label">{{.Name}}</span>
+        <span class="file-meta">
+          {{- if or (gt .Entry.Added 0) (gt .Entry.Deleted 0)}}<small class="diff-stats">
+            {{- if gt .Entry.Added 0}}<span class="add">+{{.Entry.Added}}</span>{{end}}
+            {{- if gt .Entry.Deleted 0}}<span class="del">-{{.Entry.Deleted}}</span>{{end -}}
+          </small>{{end}}
+          {{- if gt .Entry.CommentCount 0}}<mark class="file-count">{{.Entry.CommentCount}}</mark>{{end -}}
+        </span>
+      </button>
+    </form>
+    <form method="POST" class="file-viewed-form">
+      <input type="hidden" name="path" value="{{.Path}}">
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark as not viewed{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed{{else}}Mark viewed{{end}}">
+        {{- if .IsViewed}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end -}}
+      </button>
+    </form>
+  </div>
+</li>
+{{- end -}}
+
+{{/* SVG icon partials — mirror the same-named partials in prereview.tmpl so the
+     injected tree looks identical to the rest of the UI. */}}
+{{- define "iconChevronRight" -}}
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
+{{- define "iconFolder" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/></svg>
+{{- end -}}
+{{- define "iconFile" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>
+{{- end -}}
+{{- define "iconViewedCheck" -}}
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
+{{- define "iconViewedCircle" -}}
+<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+{{- end -}}
