@@ -433,12 +433,28 @@ func (p *runningPrereview) waitReadyAt(viewportW, viewportH int) {
 	}
 }
 
-// clickFile clicks the file-tab button by path.
+// clickFile clicks the file button by path. Matches on the button's title
+// attribute (always the full path) rather than its text: in the folder-tree
+// sidebar a file button's label is just the bare filename, so a full path like
+// "docs/index.html" would never match the button text.
 func (p *runningPrereview) clickFile(path string) {
 	p.t.Helper()
-	xpath := fmt.Sprintf(`//button[@name='selectFile' and contains(., '%s')]`, path)
+	// JS click (match on the title = full path) rather than chromedp.Click's
+	// coordinate dispatch: in the folder tree, chromedp's hit-testing on a file
+	// button can hang in headless even though the button is visible — the same
+	// stacking-context flakiness the mobile-drawer test works around. A direct
+	// .click() fires the same form submit a real click does.
+	clickJS := fmt.Sprintf(
+		`(()=>{const b=document.querySelector('button[name="selectFile"][title=%q]');if(!b)return false;b.click();return true})()`,
+		path)
+	var clicked bool
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(clickJS, &clicked)); err != nil {
+		p.t.Fatalf("clickFile %s eval: %v\nstderr: %s", path, err, p.stderr.String())
+	}
+	if !clicked {
+		p.t.Fatalf("clickFile %s: no selectFile button with that title", path)
+	}
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(xpath, chromedp.BySearch),
 		chromedp.WaitVisible(
 			fmt.Sprintf(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='%s']`, path),
 			chromedp.BySearch),

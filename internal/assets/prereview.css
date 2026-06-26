@@ -355,7 +355,11 @@ header.bar .nav-prev button svg, header.bar .nav-next button svg { pointer-event
 html body dialog#files-drawer {
   position: fixed;
   top: var(--pr-bar-h); bottom: 0; left: 0;
-  width: 85vw; max-width: var(--pr-drawer-w); min-width: 0; inset-inline-end: auto;
+  /* Mobile overlay caps at a fixed width — deliberately NOT var(--pr-drawer-w),
+     so a width the user dragged on desktop (persisted into that var) never
+     shrinks the mobile drawer. The desktop rule below is the only place the
+     resizable var drives the width. */
+  width: 85vw; max-width: 320px; min-width: 0; inset-inline-end: auto;
   margin: 0; padding: 0; border: 0; border-right: 1px solid var(--pico-muted-border-color);
   background: var(--pico-card-background-color);
   transform: translateX(-100%); transition: transform 220ms ease;
@@ -584,6 +588,83 @@ dialog#files-drawer button.file-btn.is-selected {
   font-weight: 600;
 }
 dialog#files-drawer form { margin: 0; }
+
+/* ── File tree (GitHub-style) ────────────────────────────────────────────
+   Folders are native <details>/<summary> (instant, keyboard-accessible, no
+   JS). Indentation is driven by the inline --depth each row carries; the
+   tree adds a twisty-width offset to file rows so their icons line up under
+   the folder icons, while the flat (filter-active) list stays flush-left. */
+dialog#files-drawer {
+  --tree-indent: 12px;  /* horizontal step per nesting level */
+  --tree-twisty: 18px;  /* chevron slot width — files reserve it to align */
+}
+/* Disclosure marker off — we render our own left-side chevron (.tree-twisty).
+   Pico draws its chevron via a background-image SVG on summary::after (pinned
+   right); the native list/webkit markers are the other engines' versions.
+   Suppress all three so there's exactly one chevron, on the left. */
+dialog#files-drawer summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+dialog#files-drawer summary::after { display: none; }
+dialog#files-drawer summary::-webkit-details-marker { display: none; }
+dialog#files-drawer summary::marker { content: ""; }
+
+dialog#files-drawer .dir-row {
+  display: flex; align-items: center; gap: 0.35rem;
+  min-height: 28px;
+  padding: 0.3rem 0.5rem;
+  padding-left: calc(0.4rem + var(--depth, 0) * var(--tree-indent));
+  font-size: 0.82rem; line-height: 1.3;
+  border-radius: var(--radius-sm);
+  transition: background 100ms ease;
+}
+dialog#files-drawer .dir-row:hover { background: var(--pico-secondary-background, #eef1f5); }
+dialog#files-drawer .tree-twisty {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--tree-twisty);
+  color: var(--pico-muted-color);
+  transition: transform 120ms ease;
+}
+dialog#files-drawer .tree-twisty svg { width: 14px; height: 14px; display: block; }
+/* Rotate the right-chevron to point down when the folder is open. */
+dialog#files-drawer details[open] > summary .tree-twisty { transform: rotate(90deg); }
+dialog#files-drawer .tree-folder-icon {
+  flex-shrink: 0; display: inline-flex; align-items: center;
+  color: #54aeff; /* GitHub-ish folder blue */
+}
+dialog#files-drawer .tree-folder-icon svg { display: block; }
+dialog#files-drawer .dir-row .tree-label {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 500;
+}
+dialog#files-drawer .dir-row .file-count {
+  flex-shrink: 0; margin: 0;
+  padding: 0.05rem 0.35rem; font-size: 0.7rem; line-height: 1.3;
+}
+
+/* File leaf icon — muted, and a touch smaller than the folder's blue. */
+dialog#files-drawer .tree-file-icon {
+  flex-shrink: 0; display: inline-flex; align-items: center;
+  color: var(--pico-muted-color);
+}
+dialog#files-drawer .tree-file-icon svg { width: 15px; height: 15px; display: block; }
+
+/* Tree file rows indent by depth, plus the twisty slot so their icons sit
+   under the folder icons. The flat list (.file-flat) overrides this to 0. */
+dialog#files-drawer .file-tree .tree-file .file-row {
+  padding-left: calc(0.4rem + var(--depth, 0) * var(--tree-indent) + var(--tree-twisty));
+}
+dialog#files-drawer .file-flat .tree-file .file-row { padding-left: 0; }
+/* The flat list shows full paths, so keep the file-type icon out of the way. */
+dialog#files-drawer .file-flat .tree-file-icon { display: none; }
+
+/* Resize handle hidden by default; the desktop media query reveals it. The
+   mobile drawer is a swipe-in overlay, so there's nothing to edge-resize. */
+dialog#files-drawer .resize-handle { display: none; }
 
 /* Backdrop behind the drawer, click-to-close on mobile */
 .drawer-backdrop {
@@ -1209,10 +1290,28 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   .drawer-backdrop { display: none; }
   .layout { flex-direction: row; }
   html body dialog#files-drawer {
-    position: static; transform: none;
+    /* relative (not static) so the absolutely-positioned .resize-handle
+       anchors to the drawer's right edge; relative keeps it in the flex row. */
+    position: relative; transform: none;
     width: var(--pr-drawer-w); max-width: var(--pr-drawer-w);
     height: auto; align-self: stretch;
     flex-shrink: 0;
+  }
+  /* Drag-to-resize handle — desktop only (the mobile drawer is an overlay). */
+  dialog#files-drawer .resize-handle {
+    display: block;
+    position: absolute; top: 0; bottom: 0; right: -3px;
+    width: 7px; z-index: 5;
+    cursor: col-resize;
+    touch-action: none; /* let the pointer drag instead of scrolling */
+  }
+  dialog#files-drawer .resize-handle::after {
+    content: ""; position: absolute; top: 0; bottom: 0; right: 3px;
+    width: 2px; background: transparent; transition: background 100ms ease;
+  }
+  dialog#files-drawer .resize-handle:hover::after,
+  dialog#files-drawer[data-resizing] .resize-handle::after {
+    background: #54aeff;
   }
   /* The drawer is permanent on desktop — the whole `.drawer-head` is
      mobile-only chrome: the "19 files" count is already in the toolbar's

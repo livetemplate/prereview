@@ -698,6 +698,11 @@
   id="files-drawer"
   open
   class="{{if .FileDrawerOpen}}is-open{{end}}"
+  lvt-fx:resize="--pr-drawer-w"
+  data-resize-handle=".resize-handle"
+  data-resize-min="200"
+  data-resize-max="560"
+  data-resize-store="prereview.drawerW"
 >
   <div class="drawer-head">
     <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
@@ -781,52 +786,20 @@
   </div>
   {{end}}
   <div class="drawer-body">
-    {{if .Files}}
-    <ul>
-      {{range .FilteredFiles}}
-      <li data-key="{{.Path}}">
-        <div class="file-row{{if index $.ViewedFiles .Path}} is-viewed{{end}}">
-          <form method="POST" class="file-select-form">
-            <input type="hidden" name="path" value="{{.Path}}">
-            <button
-              type="submit"
-              name="selectFile"
-              class="file-btn outline contrast{{if eq .Path $.SelectedFile}} is-selected{{end}}"
-              title="{{.Path}}"
-            >
-              {{if .Status}}<span class="status-badge {{.Status}}">{{.Status}}</span>{{end -}}
-              <span class="file-label">{{.Path}}</span>
-              <span class="file-meta">
-                {{if or (gt .Added 0) (gt .Deleted 0)}}<small class="diff-stats">
-                  {{- if gt .Added 0}}<span class="add">+{{.Added}}</span>{{end}}
-                  {{- if gt .Deleted 0}}<span class="del">-{{.Deleted}}</span>{{end -}}
-                </small>{{end}}
-                {{if gt .CommentCount 0}}<mark class="file-count">{{.CommentCount}}</mark>{{end}}
-              </span>
-            </button>
-          </form>
-          <form method="POST" class="file-viewed-form">
-            <input type="hidden" name="path" value="{{.Path}}">
-            <button type="submit" name="toggleViewed" class="viewed-toggle"
-                    aria-label="{{if index $.ViewedFiles .Path}}Mark as not viewed{{else}}Mark as viewed{{end}}"
-                    title="{{if index $.ViewedFiles .Path}}Viewed{{else}}Mark viewed{{end}}">
-              {{if index $.ViewedFiles .Path -}}
-                {{template "iconViewedCheck"}}
-              {{- else -}}
-                {{template "iconViewedCircle"}}
-              {{- end}}
-            </button>
-          </form>
-        </div>
-      </li>
-      {{else}}
-      <li class="empty-filter"><small>No files match "<code>{{.FileFilter}}</code>"</small></li>
-      {{end}}
-    </ul>
-    {{else}}
-    <p class="empty"><small>No files in this repository.</small></p>
-    {{end}}
+    {{/* The file browser (folder tree when unfiltered, flat path list while
+         filtering) is rendered in Go and injected here. livetemplate flattens
+         {{template}} calls at parse time and so cannot host a self-recursive
+         tree template; rendering the recursive markup in Go and injecting it
+         as template.HTML is the same native-<details> pattern tinkerdown uses
+         for its nested nav. The <details lvt-ignore-attrs> open state survives
+         re-renders via the upstream morphdom durability fix. */}}
+    {{.FileBrowserHTML}}
   </div>
+  {{/* Drag handle on the drawer's right edge — the lvt-fx:resize directive
+       (livetemplate client) makes it resize the sidebar live, persisting the
+       width to localStorage. Desktop-only (hidden under the mobile breakpoint
+       where the drawer is an overlay). */}}
+  <div class="resize-handle" aria-hidden="true"></div>
 </dialog>
 
 <main class="viewer">
