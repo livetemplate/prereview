@@ -748,12 +748,12 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
    lives in .md-rendered; inline comment cards / the composer are
    siblings inside .md-block so they sit BELOW the block, not inside
    the clickable area. */
-/* Reading surface: capped at 56rem (≈896px ≈ 80 chars of the 20px
-   rendered prose) — a comfortable readable line length (issue #27
-   "narrower body for breathing space"). Expressed in rem (tracks html =
-   16px) rather than ch: ch would resolve against the 14px .md-view
-   container, giving a misleadingly tight ~672px that read as too narrow
-   on wide monitors. margin-inline:auto centres it, so on a wide viewer
+/* Reading surface: capped at 56rem (≈896px at the 16px desktop html
+   base) — a comfortable readable line length (issue #27 "narrower body
+   for breathing space"). Expressed in rem (tracks the 16px desktop html
+   base) rather than ch: ch would resolve against the .md-view container's
+   font and read as misleadingly tight, too narrow on wide monitors.
+   margin-inline:auto centres it, so on a wide viewer
    (focus mode or an ultrawide display) the prose sits in a comfortable
    column with symmetric gutters instead of running edge to edge; on a
    typical laptop the column fills most of the viewer. The diff/code
@@ -1237,8 +1237,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   .code { font-size: 0.95rem; line-height: 1.45; }
   .code .gutter { font-size: 0.85rem; }
   /* The rendered-Markdown reading surface is the primary desktop view
-     (proposal docs). Bump it well past the cramped 14px mobile base. */
-  .md-rendered { font-size: 1.25rem; line-height: 1.75; }
+     (proposal docs). Keep it at the 16px desktop base (1rem): the earlier
+     1.25rem (20px) bump read as too big on wide monitors — users were
+     dropping browser zoom to 80% (20px → 16px) for comfortable reading
+     (issue: desktop prose too large). 16px is exactly that comfortable
+     size. The generous 1.75 leading still gives prose room to breathe. */
+  .md-rendered { font-size: 1rem; line-height: 1.75; }
   main.viewer > article > header.file-head strong { font-size: 1.05rem; }
   main.viewer > article > header.file-head small { font-size: 0.85rem; }
   /* The filename already headlines the diff (.file-head) and the
