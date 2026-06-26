@@ -1003,8 +1003,12 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 	if !strings.Contains(renderedFamily, "JetBrains Mono") {
 		t.Errorf("rendered Markdown computed font-family = %q, want it to start with \"JetBrains Mono\"%s", renderedFamily, diag())
 	}
-	if proseFontPx < 16 {
-		t.Errorf("desktop prose font-size = %.1fpx, want >=16 (was a cramped 14)%s", proseFontPx, diag())
+	// Desktop prose tracks the 16px desktop html base (1rem). An earlier
+	// 1.25rem (20px) bump read as too large on wide monitors — users
+	// dropped browser zoom to 80% (20px → 16px) for comfortable reading.
+	// Guard both ends: not the oversized bump, not an accidental shrink.
+	if proseFontPx < 15 || proseFontPx > 17 {
+		t.Errorf("desktop prose font-size = %.1fpx, want ≈16 (the 1rem desktop base; 20px read as too large)%s", proseFontPx, diag())
 	}
 
 	// The woff2 was served by our own route with a 200 (self-hosted, no
