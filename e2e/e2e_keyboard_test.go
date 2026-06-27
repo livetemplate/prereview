@@ -284,3 +284,162 @@ func TestE2E_KeyboardMarkdownBlock(t *testing.T) {
 	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
 	mu.Unlock()
 }
+
+// TestE2E_KeyboardCommentLifecycle proves the core of issue #28: a reviewer can
+// author AND save a comment with only the keyboard, then act on it. "c" opens
+// the file composer (textarea autofocused), the body is typed, focus Tabs to
+// the Save button and Enter submits, and the comment persists to CSV. It then
+// resolves the saved comment from the keyboard. Records where focus lands after
+// the composer closes (a known ergonomics watch-point). All four debug signals.
+func TestE2E_KeyboardCommentLifecycle(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server ---\n%s\n--- console ---\n%s\n--- ws ---\n%s\n--- html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+	step := func(label string, actions ...chromedp.Action) {
+		t.Logf("step: %s", label)
+		ctx, cancel := context.WithTimeout(p.ctx, 15*time.Second)
+		defer cancel()
+		if err := chromedp.Run(ctx, actions...); err != nil {
+			t.Fatalf("%s: %v%s", label, err, diag())
+		}
+	}
+
+	p.waitReady()
+
+	// Open the file composer and type a comment — all from the keyboard.
+	step(`press "c" → composer opens`,
+		chromedp.KeyEvent("c"),
+		chromedp.WaitVisible(`.composer textarea[name="body"]`, chromedp.ByQuery),
+	)
+	var activeTag string
+	for i := 0; i < 20; i++ {
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.activeElement && document.activeElement.tagName`, &activeTag))
+		if activeTag == "TEXTAREA" {
+			break
+		}
+		time.Sleep(75 * time.Millisecond)
+	}
+	if activeTag != "TEXTAREA" {
+		t.Fatalf("composer should autofocus the textarea, got %q%s", activeTag, diag())
+	}
+	step("type comment body", chromedp.KeyEvent("looks good via keyboard"))
+
+	// Tab to the Save button (textarea → Cancel → Save) and submit with Enter.
+	var onSave bool
+	for i := 0; i < 8; i++ {
+		_ = chromedp.Run(p.ctx, chromedp.KeyEvent(kb.Tab))
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+			`document.activeElement && document.activeElement.getAttribute('name') === 'addComment'`, &onSave))
+		if onSave {
+			break
+		}
+	}
+	if !onSave {
+		t.Fatalf("Save button not reachable by Tab from the composer textarea%s", diag())
+	}
+	step("Enter on Save submits the comment",
+		chromedp.KeyEvent(kb.Enter),
+		chromedp.WaitNotPresent(`.composer textarea[name="body"]`, chromedp.ByQuery),
+	)
+
+	// The comment must persist (CSV is the source of truth).
+	rows := p.readCSV()
+	found := false
+	for _, r := range rows {
+		for _, c := range r {
+			if strings.Contains(c, "looks good via keyboard") {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("saved comment not found in CSV after keyboard save%s", diag())
+	}
+
+	// Record where focus landed after the composer closed (ergonomics watch-point;
+	// not asserted — focus-on-close restoration is a noted follow-up).
+	var afterSaveFocus string
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+		`(()=>{const a=document.activeElement;return a?(a.tagName+(a.getAttribute('name')?'['+a.getAttribute('name')+']':'')):'none'})()`,
+		&afterSaveFocus))
+	t.Logf("focus after composer close: %s", afterSaveFocus)
+
+	// Resolve the saved comment from the keyboard (native button: focus + Enter).
+	var onResolve bool
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+		`(()=>{const b=document.querySelector('button[name="toggleResolved"]');if(!b)return false;b.focus();return document.activeElement===b})()`,
+		&onResolve))
+	if !onResolve {
+		t.Fatalf("resolve button not focusable after save%s", diag())
+	}
+	step("Enter on Resolve", chromedp.KeyEvent(kb.Enter))
+
+	// Resolved comments are hidden by default, so assert via CSV (the source of
+	// truth) rather than the DOM.
+	resolved := false
+	for i := 0; i < 40 && !resolved; i++ {
+		for _, r := range p.readCSV() {
+			isOurs, hasTrue := false, false
+			for _, c := range r {
+				if strings.Contains(c, "looks good via keyboard") {
+					isOurs = true
+				}
+				if c == "true" {
+					hasTrue = true
+				}
+			}
+			if isOurs && hasTrue {
+				resolved = true
+			}
+		}
+		if !resolved {
+			time.Sleep(75 * time.Millisecond)
+		}
+	}
+	if !resolved {
+		t.Errorf("comment not marked resolved in CSV after keyboard Resolve%s", diag())
+	}
+
+	mu.Lock()
+	for _, l := range consoleLines {
+		if strings.Contains(strings.ToLower(l), "error") {
+			t.Errorf("browser console error: %s", l)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}
