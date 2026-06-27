@@ -1092,10 +1092,17 @@
     "
          data-key="{{$mbkey}}"
          {{- if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}>
-      {{- /* rendered markdown — clicking selects the block's source line span */ -}}
+      {{- /* rendered markdown — clicking (or Enter when focused) selects the
+             block's source line span. role+tabindex make it keyboard-operable;
+             it can't be a <button> because it holds arbitrary rendered HTML
+             (including its own links, which stay independently focusable). */ -}}
       <div
         class="md-rendered"
+        role="button"
+        tabindex="0"
         lvt-on:click="selectBlock"
+        lvt-on:keydown="selectBlock"
+        lvt-key="Enter"
         data-from="{{$bs}}"
         data-to="{{$be}}"
       >{{.HTML}}</div>

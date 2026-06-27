@@ -193,3 +193,94 @@ func TestE2E_KeyboardShortcuts(t *testing.T) {
 	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
 	mu.Unlock()
 }
+
+// TestE2E_KeyboardMarkdownBlock pins the Phase-3 focusability fix: a rendered
+// markdown block (the .md-rendered div, which can't be a native <button>) is
+// reachable by keyboard (tabindex) and activatable with Enter to open the
+// composer — the keyboard equivalent of clicking the block. Captures all four
+// debug signals.
+func TestE2E_KeyboardMarkdownBlock(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureGFMRepo(t), 1200, 800)
+
+	var mu sync.Mutex
+	var consoleLines, wsFrames []string
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch e := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			parts := []string{string(e.Type)}
+			for _, a := range e.Args {
+				if a.Value != nil {
+					parts = append(parts, string(a.Value))
+				} else {
+					parts = append(parts, a.Description)
+				}
+			}
+			consoleLines = append(consoleLines, strings.Join(parts, " "))
+		case *cdpnetwork.EventWebSocketFrameReceived:
+			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
+		case *cdpnetwork.EventWebSocketFrameSent:
+			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
+		}
+	})
+	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return cdpnetwork.Enable().Do(ctx)
+	})); err != nil {
+		t.Fatalf("enable network: %v", err)
+	}
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		mu.Lock()
+		defer mu.Unlock()
+		return fmt.Sprintf("\n--- server ---\n%s\n--- console ---\n%s\n--- ws ---\n%s\n--- html ---\n%s",
+			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
+	}
+
+	// step runs CDP actions under a short timeout so a stuck Wait* fails fast
+	// with diagnostics instead of blocking until the whole-test timeout.
+	step := func(label string, actions ...chromedp.Action) {
+		ctx, cancel := context.WithTimeout(p.ctx, 15*time.Second)
+		defer cancel()
+		if err := chromedp.Run(ctx, actions...); err != nil {
+			t.Fatalf("%s: %v%s", label, err, diag())
+		}
+	}
+
+	p.waitReady()
+	p.clickFile("gfm.md")
+
+	step("markdown should render blocks",
+		chromedp.WaitVisible(`.md-rendered`, chromedp.ByQuery),
+	)
+
+	// The block must be keyboard-focusable.
+	var tabIndex int
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.md-rendered').tabIndex`, &tabIndex))
+	if tabIndex != 0 {
+		t.Errorf("rendered markdown block must be focusable (tabindex 0), got %d%s", tabIndex, diag())
+	}
+
+	// Focus the first block and activate with Enter → composer opens.
+	var focused bool
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+		`(()=>{const b=document.querySelector('.md-rendered');if(!b)return false;b.focus();return document.activeElement===b})()`,
+		&focused))
+	if !focused {
+		t.Fatalf("could not focus the markdown block%s", diag())
+	}
+	step("Enter on a focused markdown block should open the composer",
+		chromedp.KeyEvent(kb.Enter),
+		chromedp.WaitVisible(`.composer textarea[name="body"]`, chromedp.ByQuery),
+	)
+
+	mu.Lock()
+	for _, l := range consoleLines {
+		if strings.Contains(strings.ToLower(l), "error") {
+			t.Errorf("browser console error: %s", l)
+		}
+	}
+	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
+	mu.Unlock()
+}
