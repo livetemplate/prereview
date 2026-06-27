@@ -151,3 +151,40 @@ func TestStepComment_EmptyAndResolved(t *testing.T) {
 		t.Errorf("all-resolved (hidden) should be a no-op, got id=%q", st.ScrollToCommentID)
 	}
 }
+
+// TestToggleShowResolved_FlashWhenNone pins that pressing "r" with no resolved
+// comments shows a flash instead of silently toggling, and that with a resolved
+// comment present it toggles normally and clears any flash.
+func TestToggleShowResolved_FlashWhenNone(t *testing.T) {
+	c := &PrereviewController{}
+
+	// No resolved comments → flash, no toggle.
+	st := PrereviewState{Comments: []Comment{{ID: "a", Resolved: false}}}
+	st, _ = c.ToggleShowResolved(st, kbCtx("toggleShowResolved"))
+	if st.ShowResolved {
+		t.Error("should not toggle ShowResolved when there are no resolved comments")
+	}
+	if st.Flash == "" {
+		t.Error("expected a flash message when there are no resolved comments")
+	}
+
+	// A resolved comment present → toggles and clears the flash.
+	st = PrereviewState{Flash: "stale", Comments: []Comment{{ID: "a", Resolved: true}}}
+	st, _ = c.ToggleShowResolved(st, kbCtx("toggleShowResolved"))
+	if !st.ShowResolved {
+		t.Error("expected ShowResolved to toggle on when a resolved comment exists")
+	}
+	if st.Flash != "" {
+		t.Errorf("flash should clear on a real toggle, got %q", st.Flash)
+	}
+}
+
+// TestClearFlash_Clears pins the toast dismiss.
+func TestClearFlash_Clears(t *testing.T) {
+	c := &PrereviewController{}
+	st := PrereviewState{Flash: "No resolved comments"}
+	st, _ = c.ClearFlash(st, kbCtx("clearFlash"))
+	if st.Flash != "" {
+		t.Errorf("ClearFlash should empty Flash, got %q", st.Flash)
+	}
+}

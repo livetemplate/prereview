@@ -26,8 +26,22 @@ func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livet
 // overflow menu. Closes the menu so the user can immediately see the
 // effect on the diff.
 func (c *PrereviewController) ToggleShowResolved(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.ShowResolved = !state.ShowResolved
 	state.MoreMenuOpen = false
+	// With no resolved comments, toggling has no visible effect — surface a
+	// flash so the keypress isn't a silent no-op.
+	if state.ResolvedCount() == 0 {
+		state.Flash = "No resolved comments"
+		return state, nil
+	}
+	state.ShowResolved = !state.ShowResolved
+	state.Flash = ""
+	return state, nil
+}
+
+// ClearFlash dismisses the transient status toast (auto-clicked after a few
+// seconds, or via the toast's manual dismiss button).
+func (c *PrereviewController) ClearFlash(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.Flash = ""
 	return state, nil
 }
 
@@ -178,6 +192,10 @@ func (c *PrereviewController) NavigateToHeading(state PrereviewState, ctx *livet
 	state.TOCOpen = false
 	state.ShowAllComments = false
 	state.ScrollToHeadingID = id
+	// Heading scroll and comment scroll/focus are mutually exclusive intents —
+	// clear any pending comment target so it doesn't steal the scroll/focus
+	// (the comment card carries lvt-fx:scroll + lvt-autofocus on this match).
+	state.ScrollToCommentID = ""
 	return state, nil
 }
 
@@ -206,6 +224,7 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	}
 	state.ShowAllComments = false
 	state.ScrollToCommentID = cm.ID
+	state.ScrollToHeadingID = ""
 	return state, nil
 }
 

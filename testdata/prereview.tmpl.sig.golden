@@ -1,7 +1,7 @@
 === blockComments ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === commentCardFull ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -13,7 +13,7 @@
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialog" .}}</div></div>
 === commentCardSimple ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -149,7 +149,7 @@
 {{else}}
 
 <div class="kbd-bindings" hidden aria-hidden="true">{{range .KeyBindings}}{{$b := .}}{{range $b.Keys}}{{if $b.Action}}<span lvt-on:window:keydown="{{$b.Action}}" lvt-key="{{.}}" lvt-mod:skip-when-typing></span>{{end}}{{end}}{{end}}</div>
-<header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
+<header class="bar{{if .FileDrawerOpen}} files-collapsed{{end}}" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
   <form method="POST">
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
   </form>
@@ -378,6 +378,16 @@
 </div>
 {{end}}
 
+{{if .Flash}}
+<div class="toast flash-toast" role="status" lvt-fx:auto-click="3000:clearFlash">
+  <span class="toast-msg">{{.Flash}}</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="clearFlash" class="toast-dismiss" aria-label="Dismiss">
+      {{template "iconClose14"}}
+    </button>
+  </form>
+</div>
+{{end}}
 {{if .DoneWritten}}
 <div class="toast" role="status" lvt-fx:auto-click="5000:dismissBanner">
   <span class="toast-msg">✓ Handed off → Claude is acting on your comments</span>
@@ -546,7 +556,7 @@
   <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$mbkey}}"{{if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}><div class="md-rendered" role="button" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}</div>{{end}}</div>
   {{else}}{{if .Lines}}
   
-  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}{{template "commentCardFull" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}{{template "composer" $}}{{end}}</div>
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}-composing{{end}}"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}{{template "commentCardFull" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}{{template "composer" $}}{{end}}</div>
 {{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
   {{else}}
   <p class="empty"><small>No diff content.</small></p>

@@ -390,13 +390,25 @@ func TestE2E_KeyboardCommentLifecycle(t *testing.T) {
 		t.Errorf("saved comment not found in CSV after keyboard save%s", diag())
 	}
 
-	// Record where focus landed after the composer closed (ergonomics watch-point;
-	// not asserted — focus-on-close restoration is a noted follow-up).
-	var afterSaveFocus string
-	_ = chromedp.Run(p.ctx, chromedp.Evaluate(
-		`(()=>{const a=document.activeElement;return a?(a.tagName+(a.getAttribute('name')?'['+a.getAttribute('name')+']':'')):'none'})()`,
-		&afterSaveFocus))
-	t.Logf("focus after composer close: %s", afterSaveFocus)
+	// Focus-on-close: after the composer closes, focus lands ON the saved
+	// comment card (not <body>), so the keyboard user is positioned at their
+	// comment. autofocus runs in a rAF after the patch, so poll.
+	onComment := false
+	for i := 0; i < 20; i++ {
+		var ok bool
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+			`!!(document.activeElement && document.activeElement.closest('.inline-comment'))`, &ok))
+		if ok {
+			onComment = true
+			break
+		}
+		time.Sleep(75 * time.Millisecond)
+	}
+	if !onComment {
+		var where string
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.activeElement?document.activeElement.tagName:'none'`, &where))
+		t.Errorf("after save, focus should land on the saved comment, but activeElement is %s%s", where, diag())
+	}
 
 	// Resolve the saved comment from the keyboard (native button: focus + Enter).
 	var onResolve bool
@@ -442,4 +454,150 @@ func TestE2E_KeyboardCommentLifecycle(t *testing.T) {
 	}
 	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
 	mu.Unlock()
+}
+
+// TestE2E_LineCommentClosesComposerAndNavigates is a regression test for
+// livetemplate/prereview#28's "can't switch files after a comment" bug: a LINE
+// composer rendered inside the keyed line-list used to linger (focus-trapped)
+// after save because lvt-form:preserve kept its form alive, which suppressed
+// every skip-when-typing shortcut. The composer now round-trips its draft via
+// saveDraft (no preserve), so it closes on save and Esc, freeing the keyboard.
+func TestE2E_LineCommentClosesComposerAndNavigates(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	eval := func(js string) string {
+		var s string
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(js, &s))
+		return strings.TrimSpace(s)
+	}
+	composerPresent := func() bool { return eval(`document.querySelector('.composer textarea[name="body"]')?'y':'n'`) == "y" }
+	curFile := func() string { return eval(`(document.querySelector('header.bar .title-file')||{}).textContent||''`) }
+
+	// Open a line composer, type a body in two bursts straddling the debounce
+	// window, and confirm the round-trip never clobbers the typed text.
+	p.clickLine(0, 4)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea[name="body"]`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "first half ", chromedp.ByQuery),
+		chromedp.Sleep(450*time.Millisecond), // let the debounced saveDraft round-trip
+		chromedp.SendKeys(`.composer textarea`, "second half", chromedp.ByQuery),
+		chromedp.Sleep(450*time.Millisecond),
+	); err != nil {
+		t.Fatalf("type line comment: %v", err)
+	}
+	if v := eval(`document.querySelector('.composer textarea[name="body"]').value`); v != "first half second half" {
+		t.Errorf("draft clobbered by round-trip: got %q", v)
+	}
+
+	// Save → composer must close and focus must leave the textarea.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("save line comment: %v", err)
+	}
+	if composerPresent() {
+		t.Errorf("composer must close after saving a line comment (the #28 focus trap)")
+	}
+	if eval(`document.activeElement?document.activeElement.tagName:'?'`) == "TEXTAREA" {
+		t.Errorf("focus must leave the textarea after save")
+	}
+
+	// Let focus settle on the saved comment (autofocus runs in a rAF) before
+	// driving the keyboard, so we're not racing the focus move.
+	for i := 0; i < 20; i++ {
+		var onComment bool
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+			`!!(document.activeElement && document.activeElement.closest('.inline-comment'))`, &onComment))
+		if onComment {
+			break
+		}
+		time.Sleep(75 * time.Millisecond)
+	}
+
+	// The keyboard must work again: j switches files. Re-press each round (a
+	// single press can be lost while focus/scroll is still settling).
+	f0 := curFile()
+	switched := false
+	for i := 0; i < 20 && !switched; i++ {
+		_ = chromedp.Run(p.ctx, chromedp.KeyEvent("j"))
+		for j := 0; j < 6 && !switched; j++ {
+			if c := curFile(); c != f0 && c != "" {
+				switched = true
+			} else {
+				time.Sleep(75 * time.Millisecond)
+			}
+		}
+	}
+	if !switched {
+		t.Errorf("j did not switch files after a line comment (still %q)", f0)
+	}
+}
+
+// TestE2E_ShowResolvedFlash pins that pressing "r" with no resolved comments
+// shows a flash toast instead of doing nothing (livetemplate/prereview#28 follow-up).
+func TestE2E_ShowResolvedFlash(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	if err := chromedp.Run(p.ctx,
+		chromedp.KeyEvent("r"),
+		chromedp.WaitVisible(`.flash-toast`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf(`"r" with no resolved comments should show a flash: %v\nstderr: %s`, err, p.stderr.String())
+	}
+	var msg string
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(document.querySelector('.flash-toast .toast-msg')||{}).textContent||''`, &msg))
+	if !strings.Contains(strings.ToLower(msg), "no resolved") {
+		t.Errorf("flash text = %q, want a 'no resolved comments' message", msg)
+	}
+}
+
+// TestE2E_DesktopFilesToggle pins that "f" collapses/expands the file-tree
+// sidebar on desktop (previously a no-op there), revealing the hamburger as the
+// reopen affordance while collapsed.
+func TestE2E_DesktopFilesToggle(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	hidden := func(sel string) bool {
+		var v bool
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+			`(()=>{const e=document.querySelector(`+"`"+sel+"`"+`);return !e || getComputedStyle(e).display==='none'})()`, &v))
+		return v
+	}
+	visible := func(sel string) bool {
+		var v bool
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+			`(()=>{const e=document.querySelector(`+"`"+sel+"`"+`);return !!e && getComputedStyle(e).display!=='none'})()`, &v))
+		return v
+	}
+	if !visible(`#files-drawer`) {
+		t.Fatalf("sidebar should be visible on desktop initially")
+	}
+	// Collapse.
+	_ = chromedp.Run(p.ctx, chromedp.KeyEvent("f"))
+	collapsed := false
+	for i := 0; i < 30; i++ {
+		if hidden(`#files-drawer`) && visible(`.hamburger`) {
+			collapsed = true
+			break
+		}
+		time.Sleep(75 * time.Millisecond)
+	}
+	if !collapsed {
+		t.Errorf("f should hide the desktop sidebar and reveal the hamburger")
+	}
+	// Expand again.
+	_ = chromedp.Run(p.ctx, chromedp.KeyEvent("f"))
+	back := false
+	for i := 0; i < 30; i++ {
+		if visible(`#files-drawer`) {
+			back = true
+			break
+		}
+		time.Sleep(75 * time.Millisecond)
+	}
+	if !back {
+		t.Errorf("f again should restore the desktop sidebar")
+	}
 }

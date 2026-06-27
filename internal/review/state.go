@@ -225,6 +225,13 @@ type PrereviewState struct {
 	// a refresh shouldn't reopen a help panel.
 	KeyHelpOpen bool `json:"key_help_open"`
 
+	// Flash is a transient status message shown as an auto-dismissing toast —
+	// e.g. pressing "r" (Show resolved) when there are no resolved comments,
+	// where toggling would otherwise do nothing visible. Set by the action,
+	// cleared by clearFlash (auto after a few seconds, or manual dismiss). Not
+	// persisted; a refresh shouldn't resurrect a stale notice.
+	Flash string `json:"flash"`
+
 	// FileView, when true, turns off the diff overlay: deleted lines are
 	// hidden, +/- gutter markers disappear, and add/del row coloring is
 	// dropped. The user sees the file as it currently exists in the

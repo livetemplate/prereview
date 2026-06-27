@@ -191,6 +191,7 @@ func (c *PrereviewController) stepComment(state PrereviewState, delta int) (Prer
 	}
 	state.ShowAllComments = false
 	state.ScrollToCommentID = target.ID
+	state.ScrollToHeadingID = ""
 	return state, nil
 }
 

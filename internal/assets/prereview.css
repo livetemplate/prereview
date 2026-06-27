@@ -1321,7 +1321,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      "narrower body"). Actual reading content that was too small (comment
      bodies) is bumped explicitly below, not via the body cascade. */
   html { font-size: 16px; }
+  /* The file tree is a persistent sidebar on desktop, so the hamburger is
+     normally hidden. But toggleFiles (the "f" shortcut) sets FileDrawerOpen,
+     which on desktop COLLAPSES the sidebar — the inverse of its mobile meaning
+     (mobile: open=visible overlay). When collapsed we hide the sidebar and
+     reveal the hamburger as the reopen affordance (f toggles it back too). */
   .hamburger { display: none; }
+  header.bar.files-collapsed .hamburger { display: inline-flex; }
+  html body dialog#files-drawer.is-open { display: none; }
   .drawer-backdrop { display: none; }
   .layout { flex-direction: row; }
   html body dialog#files-drawer {
