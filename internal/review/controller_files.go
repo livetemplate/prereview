@@ -139,6 +139,61 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	return state, nil
 }
 
+// NextComment jumps to the next comment in the all-comments order, wrapping
+// from the last back to the first. Keyboard counterpart to clicking a comment
+// in the overview.
+func (c *PrereviewController) NextComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.stepComment(state, +1)
+}
+
+// PrevComment jumps to the previous comment, wrapping from the first to the last.
+func (c *PrereviewController) PrevComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.stepComment(state, -1)
+}
+
+// stepComment walks state.VisibleComments() (same order as the all-comments
+// overview) relative to the last-jumped-to comment (ScrollToCommentID),
+// switching files when needed and scrolling the target into view — mirroring
+// JumpToComment, but stepping by position instead of by id. No-op when there
+// are no visible comments.
+func (c *PrereviewController) stepComment(state PrereviewState, delta int) (PrereviewState, error) {
+	list := state.VisibleComments()
+	if len(list) == 0 {
+		return state, nil
+	}
+	cur := -1
+	for i, cm := range list {
+		if cm.ID == state.ScrollToCommentID {
+			cur = i
+			break
+		}
+	}
+	n := len(list)
+	var next int
+	if cur == -1 {
+		// Nothing focused yet: Next starts at the first comment, Prev at the last.
+		if delta > 0 {
+			next = 0
+		} else {
+			next = n - 1
+		}
+	} else {
+		next = ((cur+delta)%n + n) % n
+	}
+	target := list[next]
+	if target.File != state.SelectedFile {
+		diff, err := c.loadDiffCached(state.Base, target.File)
+		if err != nil {
+			return state, fmt.Errorf("load diff %s: %w", target.File, err)
+		}
+		state.SelectedFile = target.File
+		state.CurrentDiff = diff
+	}
+	state.ShowAllComments = false
+	state.ScrollToCommentID = target.ID
+	return state, nil
+}
+
 // CloseFiles unconditionally hides the file drawer. Distinct from
 // ToggleFiles because the backdrop tap should only close, never open.
 func (c *PrereviewController) CloseFiles(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {

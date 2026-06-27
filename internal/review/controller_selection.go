@@ -127,6 +127,9 @@ func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemp
 	state.EditingCommentID = ""
 	state.ReanchorCommentID = ""
 	state.URLHashScrollAnchor = ""
+	// Esc is the universal "close" key: it also dismisses the keyboard-help
+	// overlay (the one modal not implicitly closed by clearing selection).
+	state.KeyHelpOpen = false
 	return state, nil
 }
 

@@ -219,6 +219,12 @@ type PrereviewState struct {
 	// for the same reason as MoreMenuOpen.
 	TOCOpen bool `json:"toc_open"`
 
+	// KeyHelpOpen drives the keyboard-shortcuts help overlay, toggled by
+	// the "?" key or the toolbar help button (both dispatch
+	// toggleKeyboardHelp). Esc closes it via ClearSelection. Not persisted —
+	// a refresh shouldn't reopen a help panel.
+	KeyHelpOpen bool `json:"key_help_open"`
+
 	// FileView, when true, turns off the diff overlay: deleted lines are
 	// hidden, +/- gutter markers disappear, and add/del row coloring is
 	// dropped. The user sees the file as it currently exists in the

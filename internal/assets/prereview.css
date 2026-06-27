@@ -910,6 +910,41 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .toc-l1 { padding-left: 0.75rem; }
 .toc-l2 { padding-left: 1.25rem; font-size: 0.9rem; }
 .toc-l3 { padding-left: 1.75rem; font-size: 0.85rem; color: var(--pico-muted-color); }
+/* ===== Keyboard-shortcuts help overlay =====
+   Centered modal (works on desktop + mobile), driven by KeyHelpOpen. Reuses
+   the toc-backdrop scrim pattern; the panel itself is a centered card rather
+   than the TOC's edge slide-in, since it's also opened from the desktop bar. */
+.kbd-help-btn { padding: 0.25rem 0.7rem; min-height: auto; line-height: 1; font-weight: 700; }
+.kbd-help-backdrop { position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, 0.35); display: none; }
+.kbd-help-backdrop.is-open { display: block; }
+.kbd-help-modal {
+  position: fixed; z-index: 70; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(460px, calc(100% - 2rem)); max-height: 80vh; overflow-y: auto;
+  background: var(--pico-background-color);
+  border: 1px solid var(--pico-muted-border-color); border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  display: none; flex-direction: column;
+}
+.kbd-help-modal.is-open { display: flex; }
+.kbd-help-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.kbd-help-head strong { font-size: 0.95rem; }
+.kbd-help-head form { margin: 0; }
+.kbd-help-head .close-btn {
+  padding: 0.25rem 0.45rem; min-height: auto; line-height: 1; min-width: 0;
+  background: transparent; color: var(--pico-muted-color); border-color: var(--pico-muted-border-color);
+}
+.kbd-help-list { margin: 0; padding: 0.4rem 0.5rem; }
+.kbd-help-list .kbd-row { display: flex; align-items: center; gap: 1rem; padding: 0.35rem 0.6rem; }
+.kbd-help-list dt { margin: 0; flex: 0 0 5rem; }
+.kbd-help-list dd { margin: 0; flex: 1; font-size: 0.92rem; }
+.kbd-help-list kbd { display: inline-block; min-width: 1.4rem; text-align: center; padding: 0.15rem 0.4rem; font-size: 0.82rem; }
+.kbd-help-note {
+  margin: 0; padding: 0.6rem 1rem 0.9rem; font-size: 0.82rem;
+  color: var(--pico-muted-color); border-top: 1px solid var(--pico-muted-border-color);
+}
 .md-block { margin: 0 0 0.2rem; border-radius: 6px; }
 .md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
 .md-rendered {

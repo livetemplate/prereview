@@ -42,6 +42,16 @@ func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// ToggleKeyboardHelp opens/closes the keyboard-shortcuts help overlay.
+// Triggered by the "?" key and the toolbar help button (both dispatch
+// toggleKeyboardHelp); Esc closes it via ClearSelection. Closes the overflow
+// menu so the two overlays don't stack.
+func (c *PrereviewController) ToggleKeyboardHelp(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.KeyHelpOpen = !state.KeyHelpOpen
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
 // ToggleMoreMenu opens/closes the 3-dots overflow menu in the top bar.
 // Mirrors the file-drawer pattern: state-driven boolean + CSS class
 // toggle. No JS. Backdrop tap submits CloseMoreMenu.
