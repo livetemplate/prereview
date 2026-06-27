@@ -37,8 +37,10 @@ type KeyBinding struct {
 // Enter saves via the composer form — but both are listed so the help overlay
 // is a complete reference.
 var keyBindings = []KeyBinding{
-	{Keys: []string{"j", "ArrowDown"}, Display: "j  ↓", Action: "nextFile", Label: "Next file"},
-	{Keys: []string{"k", "ArrowUp"}, Display: "k  ↑", Action: "prevFile", Label: "Previous file"},
+	{Keys: []string{"j"}, Display: "j", Action: "nextFile", Label: "Next file"},
+	{Keys: []string{"k"}, Display: "k", Action: "prevFile", Label: "Previous file"},
+	{Keys: []string{"ArrowDown"}, Display: "↓", Action: "cursorDown", Label: "Move line cursor down"},
+	{Keys: []string{"ArrowUp"}, Display: "↑", Action: "cursorUp", Label: "Move line cursor up"},
 	{Keys: []string{"n"}, Display: "n", Action: "nextComment", Label: "Next comment"},
 	{Keys: []string{"p"}, Display: "p", Action: "prevComment", Label: "Previous comment"},
 	{Keys: []string{"c"}, Display: "c", Action: "openFileComment", Label: "Comment on this file"},
@@ -48,7 +50,7 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"."}, Display: ".", Action: "toggleFocusMode", Label: "Focus mode (hide side columns)"},
 	{Keys: []string{"?"}, Display: "?", Action: "toggleKeyboardHelp", Label: "Keyboard shortcuts"},
 	{Keys: []string{"Escape"}, Display: "Esc", Action: "", Label: "Cancel / close"},
-	{Keys: []string{"Enter"}, Display: "Enter", Action: "", Label: "Save comment (in composer)"},
+	{Keys: []string{"Enter"}, Display: "Enter", Action: "", Label: "Comment on the line cursor (or save the draft)"},
 }
 
 // KeyBindings exposes the keymap to the template. Zero-arg so livetemplate's

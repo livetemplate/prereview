@@ -77,6 +77,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.RegionSelectArmed = false // the region-select overlay is per-preview; disarm on file switch
 	state.CommentMode = ""          // any file-level / area composer from the prior file is cancelled
 	state.URLHashScrollAnchor = ""  // anchor target was for the previous file; let the new file pick its own
+	state.CursorKey = ""            // line cursor was for the previous file's lines
 	state.FileDrawerOpen = false
 	// Picking a file from the drawer while the all-comments view is
 	// open implies "leave this overview, go look at that file" — same
@@ -135,6 +136,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	state.SelectionSide = ""
 	state.LastDeletedComment = nil
 	state.EditingCommentID = ""
+	state.CursorKey = "" // new file, new lines — drop the line cursor
 	c.relocateSelected(&state)
 	return state, nil
 }

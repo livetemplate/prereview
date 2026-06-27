@@ -790,6 +790,9 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   text-align: left; align-items: flex-start; line-height: 1.2;
 }
 .code button.line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
+/* Keyboard line cursor (ArrowUp/Down). A left accent bar + outline marks the
+   focused line so the user can see where Enter will comment. */
+.code button.line.is-cursor { box-shadow: inset 3px 0 0 0 var(--pico-primary); outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
 .code button.line.add { background: var(--pr-add-bg); color: var(--pr-add); }
 .code button.line.del { background: var(--pr-del-bg); color: var(--pr-del); }
 /* When EVERY line in the file is an add (or every line is a del) the

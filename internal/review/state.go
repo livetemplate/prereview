@@ -225,6 +225,14 @@ type PrereviewState struct {
 	// a refresh shouldn't reopen a help panel.
 	KeyHelpOpen bool `json:"key_help_open"`
 
+	// CursorKey is the data-key ("L<old>-<new>") of the diff line the keyboard
+	// line cursor is on. ArrowUp/ArrowDown move it (CursorUp/CursorDown); the
+	// matching line button is highlighted, scrolled into view, and focused
+	// (lvt-autofocus) so Enter activates it → the line composer. Empty = no
+	// cursor yet (first arrow press seeds it). Not persisted — a transient
+	// navigation aid. Reset when the selected file changes.
+	CursorKey string `json:"cursor_key"`
+
 	// Flash is a transient status message shown as an auto-dismissing toast —
 	// e.g. pressing "r" (Show resolved) when there are no resolved comments,
 	// where toggling would otherwise do nothing visible. Set by the action,

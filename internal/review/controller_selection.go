@@ -133,6 +133,61 @@ func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
+// lineCursorKey is the data-key the template stamps on each diff line button
+// ("L<old>-<new>"), used to match the keyboard line cursor.
+func lineCursorKey(l gitdiff.DiffLine) string {
+	return fmt.Sprintf("L%d-%d", l.OldNum, l.NewNum)
+}
+
+// CursorDown / CursorUp move the keyboard line cursor through the diff (bound to
+// ArrowDown / ArrowUp). The cursor line button is highlighted, scrolled into
+// view, and focused, so Enter activates it (→ the line composer). j/k still
+// switch files.
+func (c *PrereviewController) CursorDown(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.moveCursor(state, +1), nil
+}
+
+func (c *PrereviewController) CursorUp(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.moveCursor(state, -1), nil
+}
+
+// moveCursor steps the cursor over commentable diff lines (fold markers are
+// skipped — they aren't real lines). With no cursor yet, Down lands on the
+// first line and Up on the last. No-op when the view has no diff lines (e.g.
+// the rendered Markdown/HTML views).
+func (c *PrereviewController) moveCursor(state PrereviewState, delta int) PrereviewState {
+	lines := state.VisibleLines()
+	keys := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if l.Kind == "fold" {
+			continue
+		}
+		keys = append(keys, lineCursorKey(l))
+	}
+	if len(keys) == 0 {
+		return state
+	}
+	cur := -1
+	for i, k := range keys {
+		if k == state.CursorKey {
+			cur = i
+			break
+		}
+	}
+	n := len(keys)
+	var next int
+	switch {
+	case cur == -1 && delta > 0:
+		next = 0
+	case cur == -1:
+		next = n - 1
+	default:
+		next = ((cur+delta)%n + n) % n
+	}
+	state.CursorKey = keys[next]
+	return state
+}
+
 // SetURLHash dispatches from the client's url-hash directive when
 // `location.hash` changes (page-load with a hash, address-bar edit,
 // back-button, permalink click). Parses the hash via gitdiff.ParseHash

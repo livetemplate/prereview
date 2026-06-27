@@ -17,7 +17,8 @@ import (
 )
 
 // TestE2E_KeyboardShortcuts exercises the keyboard layer end-to-end:
-//   - j/k and ArrowDown/ArrowUp navigate between files;
+//   - j/k navigate between files (arrows are the line cursor — see
+//     TestE2E_KeyboardLineCursor);
 //   - "c" opens the file composer and focus lands in the textarea (autofocus);
 //   - typing shortcut letters into the composer does NOT navigate (the
 //     lvt-mod:skip-when-typing guard) yet Esc still cancels mid-typing;
@@ -108,18 +109,12 @@ func TestE2E_KeyboardShortcuts(t *testing.T) {
 		t.Fatalf("no file selected after load%s", diag())
 	}
 
-	// --- j / k navigation ---
+	// --- j / k switch files (arrows are the line cursor — see
+	// TestE2E_KeyboardLineCursor) ---
 	fJ := pressAndWaitFileChange("j", f0)
 	fK := pressAndWaitFileChange("k", fJ)
 	if fK != f0 {
 		t.Errorf("k did not return to the original file: start=%q after j=%q after k=%q", f0, fJ, fK)
-	}
-
-	// --- ArrowDown / ArrowUp navigation (the user chose both schemes) ---
-	fDown := pressAndWaitFileChange(kb.ArrowDown, f0)
-	fUp := pressAndWaitFileChange(kb.ArrowUp, fDown)
-	if fUp != f0 {
-		t.Errorf("ArrowUp did not return to the original file: start=%q down=%q up=%q", f0, fDown, fUp)
 	}
 
 	// --- "c" opens the file composer and focus lands in the textarea ---
@@ -599,5 +594,65 @@ func TestE2E_DesktopFilesToggle(t *testing.T) {
 	}
 	if !back {
 		t.Errorf("f again should restore the desktop sidebar")
+	}
+}
+
+// TestE2E_KeyboardLineCursor pins the line-cursor flow: ArrowDown/ArrowUp move
+// a highlighted, focused cursor through the diff lines, and Enter on the cursor
+// line opens the line composer — keyboard-only line commenting.
+func TestE2E_KeyboardLineCursor(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	eval := func(js string) string {
+		var s string
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(js, &s))
+		return strings.TrimSpace(s)
+	}
+	cursorKey := func() string {
+		return eval(`(function(){const el=document.querySelector('.code button.line.is-cursor');return el?el.getAttribute('data-key'):'';})()`)
+	}
+
+	// First ArrowDown seeds the cursor on the first line and focuses it.
+	if err := chromedp.Run(p.ctx,
+		chromedp.KeyEvent(kb.ArrowDown),
+		chromedp.WaitVisible(`.code button.line.is-cursor`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("ArrowDown should create a line cursor: %v\nstderr: %s", err, p.stderr.String())
+	}
+	first := cursorKey()
+	if first == "" {
+		t.Fatalf("no cursor line after ArrowDown")
+	}
+	// The cursor line is focused (so Enter activates it).
+	if foc := eval(`(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('is-cursor'))?'y':'n'`); foc != "y" {
+		t.Errorf("cursor line should be focused, activeElement=%s", eval(`document.activeElement?document.activeElement.className:'?'`))
+	}
+
+	// ArrowDown again moves the cursor to a different line.
+	moved := false
+	for i := 0; i < 20 && !moved; i++ {
+		_ = chromedp.Run(p.ctx, chromedp.KeyEvent(kb.ArrowDown))
+		for j := 0; j < 6; j++ {
+			if cursorKey() != first && cursorKey() != "" {
+				moved = true
+				break
+			}
+			time.Sleep(75 * time.Millisecond)
+		}
+	}
+	if !moved {
+		t.Errorf("ArrowDown did not move the cursor off %q", first)
+	}
+
+	// Enter on the cursor line opens the LINE composer (not the file composer).
+	if err := chromedp.Run(p.ctx,
+		chromedp.KeyEvent(kb.Enter),
+		chromedp.WaitVisible(`.composer textarea[name="body"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("Enter on the cursor line should open the composer: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if heading := eval(`(document.querySelector('.composer strong')||{}).textContent||''`); !strings.Contains(heading, "Comment on") {
+		t.Errorf("composer heading = %q, expected a line comment", heading)
 	}
 }
