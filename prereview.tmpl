@@ -1112,12 +1112,14 @@
          data-key="{{$mbkey}}"
          {{- if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}>
       {{- /* rendered markdown — clicking (or Enter when focused) selects the
-             block's source line span. role+tabindex make it keyboard-operable;
-             it can't be a <button> because it holds arbitrary rendered HTML
-             (including its own links, which stay independently focusable). */ -}}
+             block's source line span. tabindex makes it keyboard-focusable and
+             the keydown makes Enter activate it; it deliberately has NO
+             role="button" — Pico paints every [role=button] as a filled blue
+             button, and this is prose, not a button (it also holds arbitrary
+             rendered HTML incl. its own links, which stay independently
+             focusable). */ -}}
       <div
         class="md-rendered"
-        role="button"
         tabindex="0"
         lvt-on:click="selectBlock"
         lvt-on:keydown="selectBlock"
