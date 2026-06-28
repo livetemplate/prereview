@@ -57,7 +57,7 @@
       <button type="submit" name="selectFile" class="file-btn outline contrast{{if .IsSelected}} is-selected{{end}}" title="{{.Path}}">
         {{- if .Entry.Status}}<span class="status-badge {{.Entry.Status}}">{{.Entry.Status}}</span>{{end -}}
         <span class="tree-file-icon">{{template "iconFile"}}</span>
-        <span class="file-label">{{.Name}}</span>
+        <span class="file-label"><span class="file-name">{{.NameStem}}</span><span class="file-ext">{{.Ext}}</span></span>
         <span class="file-meta">
           {{- if or (gt .Entry.Added 0) (gt .Entry.Deleted 0)}}<small class="diff-stats">
             {{- if gt .Entry.Added 0}}<span class="add">+{{.Entry.Added}}</span>{{end}}

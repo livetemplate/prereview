@@ -198,19 +198,45 @@ header.bar .tb-action button { width: auto; }
 .nav-label { display: none; }
 header.bar .nav-prev button,
 header.bar .nav-next button { gap: 0.3rem; }
-/* Radio-button groups for view-mode toggles (Rendered/Raw, Diff/File).
-   Native <input type="radio"> + <label>, no custom button styling —
-   the browser's radio circle is the cheapest, most universally-
-   recognised "one of N is selected" affordance. `accent-color` recolours
-   the radio dot to match the rest of the dark toolbar chrome. */
-.tb-radios { display: inline-flex; gap: 0.8rem; align-items: center; margin: 0; padding: 0; border: 0; }
-.tb-radios label {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  cursor: pointer; user-select: none; font-size: 1rem;
+/* Segmented switch (issue #62: "radio buttons are misaligned"). The view-mode
+   toggles (Preview/Raw, Diff/File) render as the classic two-position control:
+   a RECESSED track (inset shadow) holding a RAISED neutral thumb for the active
+   segment, so the pair reads as one switch rather than a button beside a label.
+   Equal-min-width segments keep the halves balanced ("Raw" as wide as
+   "Preview"). The radio inputs stay for state, keyboard a11y, and form submit
+   but are visually removed; label:has(:checked) raises the active thumb. */
+/* inline-grid with 1fr auto-columns makes the segments EQUAL width (each sized
+   to the widest label), so the switch is symmetric and each label sits centered
+   in its half. */
+.tb-radios {
+  display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  margin: 0; padding: 3px; gap: 2px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface-muted);
+  box-shadow: inset 0 1px 2px rgba(0, 43, 54, .07);
 }
+.tb-radios label {
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; user-select: none;
+  font-size: 0.8125rem; font-weight: 500; line-height: 1.2;
+  color: var(--text-muted); padding: 4px 12px; border-radius: 6px;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.tb-radios label:hover:not(:has(input:checked)) { color: var(--text-strong); }
+/* Active = raised neutral thumb + accent-blue label: the color cue says which
+   half is on, the raise says it's a switch. */
+.tb-radios label:has(input:checked) {
+  background: var(--surface); color: var(--accent); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 43, 54, .16), 0 1px 3px rgba(0, 43, 54, .10);
+}
+/* Visually removed but still in the layout + tab order (keyboard a11y) and
+   directly clickable (label-forwarding handles pill clicks; direct input
+   clicks must keep working too). */
 .tb-radios input[type="radio"] {
-  margin: 0; width: 1.05rem; height: 1.05rem;
-  accent-color: var(--pico-contrast); cursor: pointer;
+  position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0;
+}
+.tb-radios label:has(input:focus-visible) {
+  outline: 2px solid var(--accent); outline-offset: 1px;
 }
 /* Checkbox controls (comments / resolved counter-toggles). Same
    accent-color + sizing as the radios so the toolbar reads as a
@@ -225,23 +251,24 @@ header.bar .nav-next button { gap: 0.3rem; }
   accent-color: var(--pico-contrast); cursor: pointer;
 }
 
-/* Toolbar button hierarchy (polish pass). The bar used to be a wall of
-   identical solid-dark `class="contrast"` pills, which read as heavy and
-   undifferentiated. Now only the PRIMARY action (Hand off / Quit / End
-   session) stays solid-dark; the secondary controls (Focus, Comment on
-   file, Prev/Next) drop to a low-weight "soft" surface so the eye lands
-   on the primary action.
+/* Toolbar button hierarchy (issue #62: the bar was a wall of identical
+   solid-dark `class="contrast"` pills). One coherent 3-tier system, all
+   keyed off the scheme tokens and targeted by existing selectors/`name=`
+   so there are no markup changes:
 
-   These soft rules fully self-manage background + color + border at every
-   state — they do NOT consume Pico's --pico-color cascade — so the old
-   chip-label-vanishes-on-hover bug (the reason the bar was all-contrast)
-   cannot reappear. Targeted by existing selectors so no markup changes;
-   the leftover `class="contrast"` on these buttons is overridden here at
-   every state via the higher-specificity `header.bar …` prefix.
+     • SECONDARY (soft surface + hairline) — the chrome controls: Focus,
+       Comment on file, Prev/Next, and the "?" help button.
+     • PRIMARY (filled accent) — Hand off, the one forward action, so the
+       eye lands on it.
+     • DANGER (red, ghost) — Quit / End session, which stop the server, so
+       they read as terminal and distinct from the primary.
 
-   State for toggles (Rendered/Raw, File/Diff, ✓/○ resolved) is conveyed
-   by the label text itself, not by chip-tint variants. */
+   These rules fully self-manage background + color + border at every state
+   (they do NOT consume Pico's --pico-color cascade), so the old
+   chip-label-vanishes-on-hover bug cannot reappear. Toggle state
+   (Rendered/Raw, File/Diff) now lives in the segmented control above. */
 header.bar .focus-toggle,
+header.bar .kbd-help-btn,
 header.bar button[name="openFileComment"],
 header.bar .nav-prev button,
 header.bar .nav-next button {
@@ -252,10 +279,12 @@ header.bar .nav-next button {
   transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 header.bar .focus-toggle:hover,
+header.bar .kbd-help-btn:hover,
 header.bar button[name="openFileComment"]:hover,
 header.bar .nav-prev button:hover,
 header.bar .nav-next button:hover,
 header.bar .focus-toggle:focus-visible,
+header.bar .kbd-help-btn:focus-visible,
 header.bar button[name="openFileComment"]:focus-visible,
 header.bar .nav-prev button:focus-visible,
 header.bar .nav-next button:focus-visible {
@@ -268,6 +297,32 @@ header.bar .nav-next button:focus-visible {
 header.bar .focus-toggle[aria-pressed="true"] {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-color: var(--accent); color: var(--accent);
+}
+/* PRIMARY — Hand off. */
+header.bar button[name="handOff"] {
+  background: var(--accent); color: var(--pico-primary-inverse);
+  border: 1px solid var(--accent-press); border-radius: var(--radius-sm);
+  font-weight: 600;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+header.bar button[name="handOff"]:hover,
+header.bar button[name="handOff"]:focus-visible {
+  background: var(--accent-press); box-shadow: var(--shadow-sm);
+}
+/* DANGER — Quit / End session stop the server. */
+header.bar button[name="quit"],
+header.bar button[name="endSession"] {
+  background: none; color: var(--pr-del);
+  border: 1px solid color-mix(in srgb, var(--pr-del) 42%, transparent);
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+header.bar button[name="quit"]:hover,
+header.bar button[name="endSession"]:hover,
+header.bar button[name="quit"]:focus-visible,
+header.bar button[name="endSession"]:focus-visible {
+  background: color-mix(in srgb, var(--pr-del) 10%, transparent);
+  border-color: var(--pr-del); color: var(--pr-del);
 }
 
 /* 3-dots overflow menu trigger — mobile only. The menu itself uses the
@@ -580,12 +635,15 @@ dialog#files-drawer button.file-btn {
   transition: background 100ms ease, color 100ms ease;
 }
 dialog#files-drawer button.file-btn .file-label {
-  flex: 1; min-width: 0;
-  /* Ellipsis instead of break-all so long paths like
-     "cmd/screenshot/main.go" don't wrap mid-character into "g\no".
-     The button's title attribute carries the full path on hover. */
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1; min-width: 0; display: flex; align-items: baseline;
 }
+/* The stem ellipsises; the extension is pinned (flex-shrink:0) so a long name
+   crops as "verylongcompon….tsx" instead of "verylongcomponent.…", keeping the
+   file type visible (issue #56). The button's title carries the full path. */
+dialog#files-drawer button.file-btn .file-name {
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+dialog#files-drawer button.file-btn .file-ext { flex-shrink: 0; }
 dialog#files-drawer button.file-btn .file-meta { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; }
 dialog#files-drawer button.file-btn .file-count {
   margin: 0;
@@ -1525,6 +1583,10 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      already overlays/modals there, so the flag is a no-op. */
   .layout.focus-mode dialog#files-drawer { display: none; }
   .layout.focus-mode .toc-sidebar { display: none; }
+  /* Focus mode reclaims both side columns — let the reading column grow into
+     the freed width (issue #59) instead of staying pinned at the narrow
+     measure. The diff/code surface is already uncapped. */
+  .layout.focus-mode .md-view { max-width: 60rem; }
   /* Pico defaults buttons to width:100% so they fill mobile forms.
      On desktop the composer becomes a card next to the diff — full-
      width Save/Cancel look comically large. Pin them to content size. */

@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
+	"path"
 	"sort"
 	"strings"
 
@@ -66,6 +67,28 @@ type TreeNode struct {
 	Added        int
 	Deleted      int
 	HasChanged   bool // leaf changed vs base, or any changed descendant for a dir
+}
+
+// Ext is the extension of a leaf's label (".go", ".tar.gz" → ".gz"), or "" for
+// directories, extensionless names ("Makefile"), and dotfiles whose only dot is
+// leading (".gitignore"). NameStem is the label minus Ext. The drawer renders
+// them as separate spans so a long filename truncates within the stem while the
+// extension stays visible (issue #56). Zero-arg so the template can call them.
+func (n *TreeNode) Ext() string {
+	if n.IsDir {
+		return ""
+	}
+	base := path.Base(n.Name) // bare filename even when Name is a full path (flat list)
+	if i := strings.LastIndex(base, "."); i > 0 {
+		return base[i:]
+	}
+	return ""
+}
+
+// NameStem is the label (full path in the flat list, bare name in the tree)
+// with Ext trimmed off.
+func (n *TreeNode) NameStem() string {
+	return strings.TrimSuffix(n.Name, n.Ext())
 }
 
 // DepthStyle is the inline style carrying the node's nesting depth as a CSS
