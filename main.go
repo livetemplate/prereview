@@ -11,13 +11,26 @@ import (
 	"strings"
 	"time"
 
-	_ "embed"
+	"embed"
 
 	"github.com/livetemplate/prereview/internal/update"
 )
 
-//go:embed prereview.tmpl
-var prereviewTemplate string
+// templatesFS holds the split template set: page.tmpl (the page shell — the
+// entry template) plus partials.tmpl (reusable comment/region render partials)
+// and icons.tmpl (SVG icon {{define}}s). They are staged to a temp dir at
+// startup because livetemplate.New requires template files on disk
+// (see stageTemplates). The output-equivalence guard concatenates them in
+// templateOrder and stays byte-identical to the pre-split monolith.
+//
+//go:embed templates/*.tmpl
+var templatesFS embed.FS
+
+// templateOrder is the canonical parse order: page.tmpl MUST be first — it is
+// livetemplate's main template (its top-level markup becomes "prereview"); the
+// other files contribute only {{define}} partials and are parsed into the same
+// set. Single source of truth shared by stageTemplates and the signature guard.
+var templateOrder = []string{"page.tmpl", "partials.tmpl", "icons.tmpl"}
 
 // Skill files embedded so `prereview --install-skill` can drop them
 // into ~/.claude/skills/prereview/ without the user hand-copying (and

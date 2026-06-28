@@ -1,0 +1,259 @@
+{{define "blockComments" -}}
+{{$bs := .StartLine}}{{$be := .EndLine}}
+{{- range $.FileComments -}}
+  {{- if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end -}}
+{{- end -}}
+{{- if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be) -}}
+{{template "composer" $}}
+{{- end}}
+{{- end}}
+
+{{/* The comment composer — one block shared by every mode. Branches on $.CommentMode
+     (region / file / area / else = line-or-block selection) for the container class,
+     heading, and textarea placeholder; the tail (draft form + cancel form + Cancel/Save)
+     is identical everywhere. Reads only $ (root state), so invoke as {{template "composer" $}}. */}}
+{{define "composer" -}}
+<div
+  class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}"
+  data-key="composer"
+  {{- if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}
+>
+  {{- /* heading — varies by comment mode */ -}}
+  <strong>
+  {{- if eq $.CommentMode "region" -}}
+    {{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small>
+  {{- else if eq $.CommentMode "file" -}}
+    {{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{$.CurrentDiff.Path}}</code>
+  {{- else if eq $.CommentMode "area" -}}
+    {{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{$.CurrentDiff.Path}}</code>
+  {{- else -}}
+    {{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}
+  {{- end -}}
+  </strong>
+  {{- /* the "extend the selection" hint shows ONLY in the code/line view, not the rendered
+         markdown/html block view; both have CommentMode=="" and can have SelectionAnchor==
+         SelectionEnd (a single-line block), so gate on the view too */ -}}
+  {{- if and
+      (eq $.CommentMode "")
+      (ne $.SelectionAnchor 0)
+      (eq $.SelectionAnchor $.SelectionEnd)
+      (not $.EditingCommentID)
+      (not $.ShowRenderedMarkdown)
+      (not $.ShowRenderedHTML)
+  }} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}
+  {{- /* draft textarea (content kept inline — whitespace-significant) */ -}}
+  <form
+    method="POST"
+    lvt-form:preserve
+    class="composer-add"
+    id="composer-add-form"
+  >
+    <textarea
+      name="body"
+      placeholder="
+      {{- if eq $.CommentMode "region"}}What's wrong with this region?
+      {{- else if eq $.CommentMode "file"}}What's wrong with this file?
+      {{- else if eq $.CommentMode "area"}}What's wrong with this region?
+      {{- else}}What's wrong with these lines?{{end}}"
+      required
+      lvt-autofocus
+    >{{$.DraftBody}}</textarea>
+  </form>
+  {{- /* cancel-form target */ -}}
+  <form method="POST" class="composer-cancel" id="composer-cancel-form"></form>
+  {{- /* cancel / save */ -}}
+  <div class="c-actions">
+    <button
+      type="submit"
+      name="clearSelection"
+      form="composer-cancel-form"
+      class="cancel-btn"
+    >Cancel</button>
+    <button
+      type="submit"
+      name="addComment"
+      form="composer-add-form"
+      class="save-btn"
+    >Save</button>
+  </div>
+{{- /* close composer */ -}}
+</div>
+{{- end}}
+
+{{/* Region-select toggle button — identical in the external-site view and the rendered-HTML
+     view (only the caller's dot differs), so read $.RegionSelectArmed and invoke as
+     {{template "regionToggle" $}}. The region-overlay element (whose selectRegion/selectBlock
+     action differs) lives outside this form and is unaffected. */}}
+{{define "regionToggle" -}}
+<form method="POST" class="region-toggle">
+  <button
+    type="submit"
+    name="toggleRegionSelect"
+    class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}"
+    aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}"
+  >{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
+</form>
+{{- end}}
+
+{{define "deleteDialog" -}}
+<dialog id="confirm-delete-{{.ID}}"><article>
+  {{- /* */ -}}
+  <header><strong>Delete comment?</strong></header>
+  {{- /* */ -}}
+  <p><small><code>{{.File}}</code> {{.LineSpan}}</small></p>
+  {{- /* */ -}}
+  <footer>
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-delete-{{.ID}}"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="deleteComment"
+          class="contrast"
+        >Delete</button>
+      </fieldset>
+    </form>
+  </footer>
+{{- /* */ -}}
+</article></dialog>
+{{- end}}
+
+{{define "deleteDialogTagged" -}}
+<dialog id="confirm-delete-{{.ID}}"><article>
+  {{- /* */ -}}
+  <header><strong>Delete comment?</strong></header>
+  {{- /* */ -}}
+  <p><small>
+    {{- if .IsRegionLevel}}<code>{{.URL}}</code> · region
+    {{- else if .IsAreaLevel}}<code>{{.File}}</code> · area
+    {{- else}}<code>{{.File}}</code> · file{{end -}}
+  </small></p>
+  {{- /* */ -}}
+  <footer>
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-delete-{{.ID}}"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="deleteComment"
+          class="contrast"
+        >Delete</button>
+      </fieldset>
+    </form>
+  </footer>
+{{- /* */ -}}
+</article></dialog>
+{{- end}}
+
+{{define "commentCardFull" -}}
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}"
+     data-key="{{.ID}}"
+     lvt-fx:animate="fade"
+     {{- /* the targeted comment (just saved, or jumped to via n/p) scrolls into
+            view AND takes focus, so after the composer closes the keyboard user
+            lands on their comment instead of <body>. tabindex=-1 = programmatically
+            focusable, not in the Tab order. */ -}}
+     {{- if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}>
+  {{- /* line span · side · status badges */ -}}
+  <header><span>{{.LineSpan}} · <small>{{.Side}}</small>
+    {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
+    {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
+    {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end -}}
+  </span></header>
+  {{- /* comment text */ -}}
+  <div class="body">{{.Body}}</div>
+  {{- if .AnchorOutdated -}}
+  <details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>
+  {{- end -}}
+  {{- /* resolve / re-anchor / edit / delete */ -}}
+  <div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="toggleResolved"
+        class="outline"
+      >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>
+    {{- if and (not .Resolved) .AnchorOutdated -}}
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="reanchorComment"
+        class="outline"
+      >Re-anchor</button>
+    </form>
+    {{- end -}}
+    {{- if and (not .Resolved) (not .AnchorOutdated) -}}
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="editComment"
+        class="outline"
+      >Edit</button>
+    </form>
+    {{- end -}}
+    <button
+      type="button"
+      class="secondary outline"
+      command="show-modal"
+      commandfor="confirm-delete-{{.ID}}"
+    >Delete</button>
+    {{- template "deleteDialog" . -}}
+  </div></div>
+{{- end}}
+
+{{define "commentCardSimple" -}}
+<div
+  class="inline-comment{{if .Resolved}} is-resolved{{end}}"
+  data-key="{{.ID}}"
+  lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}}
+  lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}
+>
+  {{- /* line span · resolved badge */ -}}
+  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header>
+  {{- /* comment text */ -}}
+  <div class="body">{{.Body}}</div>
+  {{- /* resolve / edit / delete */ -}}
+  <div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="toggleResolved"
+        class="outline"
+      >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>
+    {{- if not .Resolved -}}
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="editComment"
+        class="outline"
+      >Edit</button>
+    </form>
+    {{- end -}}
+    <button
+      type="button"
+      class="secondary outline"
+      command="show-modal"
+      commandfor="confirm-delete-{{.ID}}"
+    >Delete</button>
+    {{- template "deleteDialogTagged" . -}}
+  </div></div>
+{{- end}}

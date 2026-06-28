@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"os"
@@ -46,23 +47,32 @@ func resolveStoreRoot(out, defaultRoot string) (string, error) {
 	return abs, nil
 }
 
-// writeTempTemplate stages the embedded template to a deterministic temp
-// path tied to the PID and returns its path plus a cleanup func.
-func writeTempTemplate(content string) (path string, cleanup func(), err error) {
-	f, err := os.CreateTemp("", fmt.Sprintf("prereview-%d-*.tmpl", os.Getpid()))
+// stageTemplates writes the embedded split template set to a fresh temp dir and
+// returns the on-disk paths in templateOrder (page.tmpl first) plus a cleanup
+// func. livetemplate.New requires template files on disk; embedding + staging
+// keeps the binary self-contained. The returned order is load-bearing:
+// page.tmpl is the main template and must be WithParseFiles' first argument
+// (the rest are {{define}}-only partials).
+func stageTemplates(fsys embed.FS) (paths []string, cleanup func(), err error) {
+	dir, err := os.MkdirTemp("", fmt.Sprintf("prereview-%d-*", os.Getpid()))
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
-	if _, err := f.WriteString(content); err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return "", nil, err
+	cleanup = func() { _ = os.RemoveAll(dir) }
+	for _, name := range templateOrder {
+		content, err := fsys.ReadFile("templates/" + name)
+		if err != nil {
+			cleanup()
+			return nil, nil, fmt.Errorf("read embedded template %s: %w", name, err)
+		}
+		dst := filepath.Join(dir, name)
+		if err := os.WriteFile(dst, content, 0o644); err != nil {
+			cleanup()
+			return nil, nil, fmt.Errorf("stage template %s: %w", name, err)
+		}
+		paths = append(paths, dst)
 	}
-	if err := f.Close(); err != nil {
-		os.Remove(f.Name())
-		return "", nil, err
-	}
-	return f.Name(), func() { _ = os.Remove(f.Name()) }, nil
+	return paths, cleanup, nil
 }
 
 // reviewTarget is the classified path argument after normalization.
