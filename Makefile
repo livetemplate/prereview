@@ -22,7 +22,7 @@ build: sync-client
 test:
 	go test ./...
 
-# prereview.tmpl is whitespace-significant — no reflow formatter can touch it
+# the templates/ set is whitespace-significant — no reflow formatter can touch it
 # safely (see CLAUDE.md). This guards a hand-edit: green = rendered output is
 # unchanged (safe reformat); red = the edit changed what the browser renders.
 # After an intentional content change, regenerate the golden:

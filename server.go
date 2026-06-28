@@ -77,17 +77,17 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 		})
 	}
 
-	// livetemplate.New requires templates as files on disk. Write the embedded
-	// template to a temp file for the lifetime of the process. Same workaround
+	// livetemplate.New requires templates as files on disk. Stage the embedded
+	// split set to a temp dir for the lifetime of the process. Same workaround
 	// used by tinkerdown — see tinkerdown/internal/server/websocket.go:465.
-	tmplFile, cleanup, err := writeTempTemplate(prereviewTemplate)
+	tmplFiles, cleanup, err := stageTemplates(templatesFS)
 	if err != nil {
-		return fmt.Errorf("stage template: %w", err)
+		return fmt.Errorf("stage templates: %w", err)
 	}
 	defer cleanup()
 
 	tmpl, err := livetemplate.New("prereview",
-		livetemplate.WithParseFiles(tmplFile),
+		livetemplate.WithParseFiles(tmplFiles...),
 		// Diff payloads are large, highly repetitive HTML (1000+
 		// `<div class="line-row"><button…` rows). permessage-deflate
 		// compresses that ~10x on the wire — the dominant win for the
@@ -298,13 +298,13 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		return fmt.Errorf("read existing csv: %w", err)
 	}
 
-	tmplFile, cleanup, err := writeTempTemplate(prereviewTemplate)
+	tmplFiles, cleanup, err := stageTemplates(templatesFS)
 	if err != nil {
-		return fmt.Errorf("stage template: %w", err)
+		return fmt.Errorf("stage templates: %w", err)
 	}
 	defer cleanup()
 	tmpl, err := livetemplate.New("prereview",
-		livetemplate.WithParseFiles(tmplFile),
+		livetemplate.WithParseFiles(tmplFiles...),
 		livetemplate.WithWebSocketCompression(),
 	)
 	if err != nil {

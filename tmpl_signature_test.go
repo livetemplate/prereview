@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -10,31 +11,45 @@ import (
 	"text/template"
 )
 
-// prereview.tmpl is whitespace-significant: livetemplate emits the template's
-// static text verbatim into the response, so any whitespace a reflow formatter
-// adds or strips lands in the rendered DOM (see CLAUDE.md). No off-the-shelf
-// formatter can touch it safely. This test is the guard that replaces one:
-// it computes a rendering-equivalent SIGNATURE of the template and compares it
-// to a committed golden, so any edit that would change what the browser renders
-// fails — in CI and locally — while a safe reformat stays green.
+// The templates/ set is whitespace-significant: livetemplate emits the
+// template's static text verbatim into the response, so any whitespace a reflow
+// formatter adds or strips lands in the rendered DOM (see CLAUDE.md). No
+// off-the-shelf formatter can touch it safely. This test is the guard that
+// replaces one: it concatenates the split files in templateOrder — byte-for-byte
+// the same source livetemplate parses — computes a rendering-equivalent
+// SIGNATURE, and compares it to a committed golden, so any edit that would
+// change what the browser renders fails (in CI and locally) while a safe
+// reformat stays green.
 //
 // Regenerate the golden after an INTENTIONAL content change:
 //
 //	go test -run TestTemplateOutputSignature -update-sig .
 const (
-	tmplPath   = "prereview.tmpl"
-	goldenPath = "testdata/prereview.tmpl.sig.golden"
+	templateDir = "templates"
+	goldenPath  = "testdata/prereview.tmpl.sig.golden"
 )
 
 var updateSig = flag.Bool("update-sig", false,
-	"regenerate testdata/prereview.tmpl.sig.golden from the current prereview.tmpl")
+	"regenerate testdata/prereview.tmpl.sig.golden from the current templates/ set")
+
+// readTemplateSource concatenates the split template files in templateOrder
+// (page.tmpl first). The concatenation reproduces the pre-split monolith
+// byte-for-byte, so the golden is unchanged by the split.
+func readTemplateSource(t *testing.T) string {
+	t.Helper()
+	var b strings.Builder
+	for _, name := range templateOrder {
+		src, err := os.ReadFile(filepath.Join(templateDir, name))
+		if err != nil {
+			t.Fatalf("reading %s: %v", name, err)
+		}
+		b.Write(src)
+	}
+	return b.String()
+}
 
 func TestTemplateOutputSignature(t *testing.T) {
-	src, err := os.ReadFile(tmplPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", tmplPath, err)
-	}
-	got := templateSignature(t, string(src))
+	got := templateSignature(t, readTemplateSource(t))
 
 	if *updateSig {
 		if err := os.MkdirAll("testdata", 0o755); err != nil {
@@ -124,11 +139,11 @@ func parseWithStubs(t *testing.T, src string) *template.Template {
 		}
 		m := undefinedFuncRe.FindStringSubmatch(err.Error())
 		if m == nil {
-			t.Fatalf("parsing %s: %v", tmplPath, err)
+			t.Fatalf("parsing %s: %v", templateDir, err)
 		}
 		funcs[m[1]] = func(...any) any { return nil }
 	}
-	t.Fatalf("parsing %s: gave up stubbing undefined functions (possible loop)", tmplPath)
+	t.Fatalf("parsing %s: gave up stubbing undefined functions (possible loop)", templateDir)
 	return nil
 }
 
