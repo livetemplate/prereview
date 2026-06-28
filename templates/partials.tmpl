@@ -47,6 +47,14 @@
     lvt-form:preserve
     class="composer-add"
     id="composer-add-form"
+    {{/* Cmd/Ctrl+Enter saves from inside the textarea: the keydown bubbles
+         to the form, so the action carries the form's body. lvt-key="Mod+Enter"
+         (metaKey||ctrlKey) leaves a plain Enter free for newlines; the client
+         preventDefaults the chord so it doesn't also insert one. NOTE: no
+         {{- -}} trims here — they would delete the whitespace separating these
+         attributes from id=, fusing them into one invalid attribute. */}}
+    lvt-on:keydown="addComment"
+    lvt-key="Mod+Enter"
   >
     <textarea
       name="body"
