@@ -198,27 +198,36 @@ header.bar .tb-action button { width: auto; }
 .nav-label { display: none; }
 header.bar .nav-prev button,
 header.bar .nav-next button { gap: 0.3rem; }
-/* Segmented control (issue #62: "radio buttons are misaligned"). The view-mode
-   toggles (Preview/Raw, Diff/File) render as one pill-track with a highlighted
-   active segment instead of raw native radio dots. The radio inputs stay for
-   state, keyboard a11y, and form submit but are visually removed;
-   label:has(:checked) lights the active segment. */
+/* Segmented switch (issue #62: "radio buttons are misaligned"). The view-mode
+   toggles (Preview/Raw, Diff/File) render as the classic two-position control:
+   a RECESSED track (inset shadow) holding a RAISED neutral thumb for the active
+   segment, so the pair reads as one switch rather than a button beside a label.
+   Equal-min-width segments keep the halves balanced ("Raw" as wide as
+   "Preview"). The radio inputs stay for state, keyboard a11y, and form submit
+   but are visually removed; label:has(:checked) raises the active thumb. */
+/* inline-grid with 1fr auto-columns makes the segments EQUAL width (each sized
+   to the widest label), so the switch is symmetric and each label sits centered
+   in its half. */
 .tb-radios {
-  display: inline-flex; align-items: stretch; margin: 0; padding: 2px;
-  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  margin: 0; padding: 3px; gap: 2px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
   background: var(--surface-muted);
+  box-shadow: inset 0 1px 2px rgba(0, 43, 54, .07);
 }
 .tb-radios label {
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; user-select: none;
   font-size: 0.8125rem; font-weight: 500; line-height: 1.2;
-  color: var(--text-muted); padding: 3px 11px; border-radius: 4px;
-  transition: background 120ms ease, color 120ms ease;
+  color: var(--text-muted); padding: 4px 12px; border-radius: 6px;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
-.tb-radios label:hover { color: var(--text-strong); }
+.tb-radios label:hover:not(:has(input:checked)) { color: var(--text-strong); }
+/* Active = raised neutral thumb + accent-blue label: the color cue says which
+   half is on, the raise says it's a switch. */
 .tb-radios label:has(input:checked) {
-  background: var(--accent); color: var(--pico-primary-inverse);
-  box-shadow: 0 1px 2px rgba(0, 43, 54, .18);
+  background: var(--surface); color: var(--accent); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 43, 54, .16), 0 1px 3px rgba(0, 43, 54, .10);
 }
 /* Visually removed but still in the layout + tab order (keyboard a11y) and
    directly clickable (label-forwarding handles pill clicks; direct input
