@@ -546,8 +546,8 @@ func TestRenderMarkdownBlocks_HeadingHasID(t *testing.T) {
 // --- Full GitHub-flavoured Markdown (issue #20) --------------------------
 
 // TestRenderMarkdownBlocks_SyntaxHighlight pins that fenced code is
-// chroma-highlighted with inline styles (the "github" theme, WithClasses
-// false), stays a single commentable block, and keeps its source-line span.
+// chroma-highlighted with inline styles (the "solarized-light" theme,
+// WithClasses false), stays a single commentable block, keeps its span.
 func TestRenderMarkdownBlocks_SyntaxHighlight(t *testing.T) {
 	// 1: ```go
 	// 2: func main() {}
