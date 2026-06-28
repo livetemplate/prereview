@@ -280,7 +280,7 @@
        form their own groups via .tb-group-divider on first-of-group. */}}
   <div class="toolbar-inline">
     <div class="tb-group tb-counters">
-      <small class="auto-saved-long">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed</small>
+      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ViewedCount}}/{{len .Files}} viewed</small>
       {{/* "Show resolved" is a FILTER — modifies which comments appear
            in the current view, semantically a checkbox on/off. The
            view-change "All comments" used to share this row but lived
@@ -535,7 +535,7 @@
   role="menu"
   aria-label="More options"
 >
-  <div class="menu-info">{{len .Files}} files · {{.ViewedCount}}/{{len .Files}} viewed
+  <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ViewedCount}}/{{len .Files}} viewed
     {{- if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end -}}
   </div>
   {{if .CurrentDiff}}
