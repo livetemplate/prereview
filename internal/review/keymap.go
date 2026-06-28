@@ -32,10 +32,11 @@ type KeyBinding struct {
 // keyBindings is the keymap. Every entry with a non-empty Action becomes a
 // global window keydown binding carrying lvt-mod:skip-when-typing, so a
 // shortcut letter typed into the comment box (or any text field) types the
-// letter instead of navigating. Esc and Enter have no Action — Esc has its own
-// guard-free global binding in the template (so it cancels mid-typing) and
-// Enter saves via the composer form — but both are listed so the help overlay
-// is a complete reference.
+// letter instead of navigating. Esc, Enter, and Mod+Enter have no Action —
+// each has its own binding in the template (Esc: guard-free cancel; Enter:
+// comment on the cursor line; Mod+Enter: save from inside the composer, via
+// lvt-key="Mod+Enter" on the form) — but all are listed so the help overlay is
+// a complete reference.
 var keyBindings = []KeyBinding{
 	{Keys: []string{"j"}, Display: "j", Action: "nextFile", Label: "Next file"},
 	{Keys: []string{"k"}, Display: "k", Action: "prevFile", Label: "Previous file"},
@@ -50,7 +51,8 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"."}, Display: ".", Action: "toggleFocusMode", Label: "Focus mode (hide side columns)"},
 	{Keys: []string{"?"}, Display: "?", Action: "toggleKeyboardHelp", Label: "Keyboard shortcuts"},
 	{Keys: []string{"Escape"}, Display: "Esc", Action: "", Label: "Cancel / close"},
-	{Keys: []string{"Enter"}, Display: "Enter", Action: "", Label: "Comment on the line cursor (or save the draft)"},
+	{Keys: []string{"Enter"}, Display: "Enter", Action: "", Label: "Comment on the line cursor"},
+	{Keys: []string{"Mod+Enter"}, Display: "⌘/Ctrl + Enter", Action: "", Label: "Save comment"},
 }
 
 // KeyBindings exposes the keymap to the template. Zero-arg so livetemplate's

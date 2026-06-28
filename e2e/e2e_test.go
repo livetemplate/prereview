@@ -736,6 +736,42 @@ func TestE2E_CommentLifecycle(t *testing.T) {
 	}
 }
 
+// TestE2E_CmdEnterSavesComment verifies the composer's Cmd/Ctrl+Enter shortcut
+// (lvt-key="Mod+Enter" on the form, resolved by the client's modifier matching)
+// saves the draft from INSIDE the textarea — without clicking Save. Pins the
+// cross-repo client patch end-to-end.
+func TestE2E_CmdEnterSavesComment(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+
+	p.clickFile("edited.go")
+	p.clickLine(3, 3) // single-line anchor → composer opens
+
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "saved via keyboard", chromedp.ByQuery),
+		// Ctrl+Enter (Mod = metaKey||ctrlKey) dispatched on the textarea bubbles
+		// to the form's lvt-on:keydown="addComment" lvt-key="Mod+Enter".
+		chromedp.Evaluate(`(() => {
+			const ta = document.querySelector('.composer textarea');
+			ta.focus();
+			ta.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', ctrlKey:true, bubbles:true, cancelable:true}));
+			return true;
+		})()`, nil),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("cmd+enter save: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	rows := p.readCSV()
+	if len(rows) != 2 {
+		t.Fatalf("expected header + 1 saved row, got %d:\n%v", len(rows), rows)
+	}
+	if body := rows[1][5]; !strings.Contains(body, "saved via keyboard") {
+		t.Errorf("saved comment body = %q, missing the typed text", body)
+	}
+}
+
 // TestE2E_HandOffMarker verifies that in skill mode the top-bar button is
 // "Hand off" and clicking it writes the DONE marker — without needing to
 // add or delete any comments first.
@@ -1237,6 +1273,19 @@ func TestE2E_CodeScrollResetsOnFileSwitch(t *testing.T) {
 		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='fresh.go']`, chromedp.BySearch),
 	); err != nil {
 		t.Fatalf("wait fresh.go viewer: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Desktop (≥900px): long code lines SCROLL horizontally — the .content is
+	// white-space:pre, NOT the mobile pre-wrap (the @media split that lets this
+	// scroll-reset be meaningful while mobile keeps wrapping per the Safari fix).
+	var desktopWS string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.code .content')).whiteSpace`, &desktopWS),
+	); err != nil {
+		t.Fatalf("desktop white-space query: %v", err)
+	}
+	if desktopWS != "pre" {
+		t.Errorf("desktop .code .content white-space = %q, want \"pre\" (long lines scroll, not wrap)", desktopWS)
 	}
 
 	// Force-scroll .code horizontally.
@@ -3073,6 +3122,20 @@ func TestE2E_MobileScrollBounds(t *testing.T) {
 		chromedp.WaitVisible(`header.bar`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("mobile boot: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Mobile (<900px): long code lines WRAP (the documented Safari focus-scroll
+	// fix) — the opposite of the desktop white-space:pre. Pins the @media split
+	// both ways so the desktop horizontal-scroll change can't leak to mobile.
+	var mobileWS string
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.code .content`, chromedp.ByQuery),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.code .content')).whiteSpace`, &mobileWS),
+	); err != nil {
+		t.Fatalf("mobile white-space query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if mobileWS != "pre-wrap" {
+		t.Errorf("mobile .code .content white-space = %q, want \"pre-wrap\" (lines wrap on small screens)", mobileWS)
 	}
 
 	var bodyOverflowY, bodyOverflowX, viewerOverflowY, viewerOverscroll string

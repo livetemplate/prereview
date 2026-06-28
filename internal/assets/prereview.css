@@ -1294,7 +1294,13 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 .composer strong { font-size: 0.78rem; color: var(--text-strong); }
 .composer textarea {
-  min-height: 3rem; margin: 0.25rem 0; font-size: 16px; width: 100%;
+  /* field-sizing:content auto-grows the box with the draft (no JS), so a
+     multi-paragraph comment is fully visible while typing instead of
+     scrolling inside a cramped 2-line box. min-height is the empty floor
+     (and the graceful fallback for engines without field-sizing);
+     max-height caps the growth, after which the textarea scrolls. */
+  field-sizing: content;
+  min-height: 3rem; max-height: 45vh; margin: 0.25rem 0; font-size: 16px; width: 100%;
   padding: 0.35rem 0.45rem; line-height: 1.4;
 }
 .composer .composer-add { margin: 0; display: block; }
@@ -1445,6 +1451,16 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      screen. Bump the code and the chrome up to comfortable reading. */
   .code { font-size: 0.95rem; line-height: 1.45; }
   .code .gutter { font-size: 0.85rem; }
+  /* Desktop: long code lines SCROLL horizontally instead of wrapping
+     mid-token. The mobile wrap (.code overflow-x:hidden + .content
+     pre-wrap/anywhere) is a Safari focus-scroll fix that only matters on
+     small screens (see the .code comment up top); on desktop, horizontal
+     scroll keeps long lines scannable. The gutter stays pinned
+     (position:sticky left:0); the line button grows to its content so the
+     row background + cursor outline span the full scroll width. */
+  .code { overflow-x: auto; }
+  .code .content { white-space: pre; overflow-wrap: normal; }
+  .code button.line { width: max-content; min-width: 100%; }
   /* The rendered-Markdown reading surface is the primary desktop view
      (proposal docs). Keep it at the 16px desktop base (1rem): the earlier
      1.25rem (20px) bump read as too big on wide monitors — users were
