@@ -18,13 +18,14 @@
          and the next <form> is a "trim carrier" that emits nothing.
      SVG icons live in iconX define blocks at the bottom, inlined at parse. */ -}}
 <!DOCTYPE html>
-{{/* data-scheme selects the coordinated color scheme (Solarized today;
-     gruvbox/catppuccin attach to the same [data-scheme] CSS later).
-     data-theme=light forces Pico's light-mode palette for now; the
-     Light/Dark/System toggle makes it dynamic alongside the dark token
-     block + a dark chroma syntax sheet. All colors derive from these two
-     attributes — see [data-scheme="solarized"] in prereview.css. */}}
-<html lang="en" data-scheme="solarized" data-theme="light">
+{{/* data-theme=light is PINNED on <html> so Pico's own (un-audited) dark
+     palette never activates. The coordinated scheme (data-scheme) and the
+     Light/Dark mode (data-mode) live on the .theme-root wrapper INSIDE <body>,
+     not here — see that element below and the rationale in prereview.css. Why
+     not <html>: livetemplate morphs its managed subtree, so a data-mode on
+     <html> would only change on a full reload; on the wrapper it updates live.
+     All colors derive from those two attributes — see prereview.css. */}}
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta
@@ -40,13 +41,20 @@
 <body
   data-lvt-loading-debounce-ms="200"
 >
+{{/* .theme-root carries the dynamic theme attributes INSIDE livetemplate's
+     managed subtree so the Light/Dark toggle morphs them live (a data-mode on
+     <html> would need a full reload). display:contents (prereview.css) keeps it
+     boxless so the flex/scroll chain is unchanged; the tokens it sets cascade
+     into the whole UI by custom-property inheritance. data-scheme is static
+     today (Solarized); P6 makes it dynamic on this same element. */}}
+<div class="theme-root" data-scheme="solarized"{{with .DataMode}} data-mode="{{.}}"{{end}}>
 {{/* Global cancel. Esc clears any selection, closes the composer, and
      dismisses the keyboard-help overlay. A guard-free window binding (NOT
      skip-when-typing) so it fires even while the composer textarea is focused,
-     and a direct child of <body> — not gated by the external/repo split — so
-     it works in both modes. The window scan finds it because it's a descendant
-     of the wrapper; a binding on <body> itself would be missed. Listed in the
-     help overlay via the keymap (Esc has Action ""). */}}
+     and a top-level child of .theme-root — not gated by the external/repo
+     split — so it works in both modes. The window scan finds it because it's a
+     descendant of the managed wrapper; a binding on <body> itself would be
+     missed. Listed in the help overlay via the keymap (Esc has Action ""). */}}
 <span class="kbd-esc" hidden aria-hidden="true"
   lvt-on:window:keydown="clearSelection"
   lvt-key="Escape"
@@ -402,6 +410,22 @@
       </form>
     </div>
     {{end}}
+    {{/* Light/Dark/System color mode (#60). One button cycles
+         System → Light → Dark; the icon shows the CURRENT mode (sun/moon/
+         auto) and the title says what a click switches to. Always shown —
+         the mode is a global reading preference, useful before any file is
+         open. The overflow menu carries the same control for narrow widths. */}}
+    <div class="tb-group tb-theme">
+      <form method="POST">
+        <button
+          type="submit"
+          name="cycleTheme"
+          class="contrast theme-toggle"
+          title="Theme: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}"
+          aria-label="Color theme: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}."
+        >{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}</button>
+      </form>
+    </div>
     {{/* Keyboard-shortcuts help. Desktop toolbar affordance (mobile has the
          more-menu item); both submit toggleKeyboardHelp, the same action the
          "?" key fires. Always shown — the help is useful even before a file
@@ -538,6 +562,21 @@
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ViewedCount}}/{{len .Files}} viewed
     {{- if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end -}}
   </div>
+  {{/* Color mode — mirrors the desktop toolbar theme toggle. Cycles
+       System → Light → Dark; meta shows what the next tap switches to.
+       First item so it's always reachable regardless of the open file. */}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="cycleTheme"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}</span>
+      <span class="menu-label">Theme: {{.ThemeModeLabel}}</span>
+      <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
+    </button>
+  </form>
   {{if .CurrentDiff}}
   {{if ne .CommentMode "file"}}
   {{/* "Comment on file" mirrors the desktop toolbar button. Works for
@@ -1334,6 +1373,7 @@
 </footer>
 {{end}}
 
+</div>{{/* .theme-root */}}
 <script defer src="/livetemplate-client.js"></script>
 {{/* Lazy mermaid renderer; standalone file keeps it out of livetemplate's template tree. See internal/assets/mermaid-init.js. */}}
 <script defer src="/mermaid-init.js"></script>

@@ -38,13 +38,19 @@ import (
 // del/add pair render slightly wrong but the common case looks right
 // and the implementation stays simple.
 
-// chromaStyleName is the chroma theme shared by both highlighters: the
+// chromaStyleName is the LIGHT chroma theme shared by both highlighters: the
 // diff view (class-based, served as /syntax.css) and rendered-Markdown code
-// fences (inline-styled, in markdown.go). Kept in one place so a theme
+// fences (class-based too — see markdown.go). Kept in one place so a theme
 // change can't drift between the two. "solarized-light" coordinates the
 // syntax tokens with the Solarized chrome/diff palette (see prereview.css).
-// The matching dark variant is wired up alongside the Light/Dark toggle.
 const chromaStyleName = "solarized-light"
+
+// chromaStyleNameDark is the Dark-mode counterpart. Its rules are emitted
+// into /syntax.css scoped (see scopeSyntax) so they override the light block
+// only when the page is in Dark mode — explicitly ([data-mode="dark"]) or via
+// the OS (System mode → prefers-color-scheme). Token COLORS, not the markup,
+// switch: the same class="chroma .k" span recolors purely through the cascade.
+const chromaStyleNameDark = "solarized-dark"
 
 var (
 	chromaFormatter = html.New(
@@ -66,15 +72,67 @@ var (
 	lexerCache sync.Map // map[string]chroma.Lexer
 )
 
-// HighlightCSS returns the chroma stylesheet for the active style.
-// Computed once at package-init time; main.go serves it as /syntax.css.
+// HighlightCSS is the chroma stylesheet served as /syntax.css. It carries
+// BOTH modes' token colors so the page never refetches CSS on a theme switch:
+//
+//   - the light block, unscoped (`.chroma .k {…}`) — the default;
+//   - the dark block, scoped under `[data-scheme="solarized"][data-mode="dark"]`
+//     so an explicit Dark toggle overrides the light tokens by specificity;
+//   - the same dark block again inside `@media (prefers-color-scheme: dark)`,
+//     scoped to `:not([data-mode="light"])` so System mode follows the OS with
+//     no JS (data-mode is absent in System; an explicit Light opt-out wins).
+//
+// Computed once at package-init; main.go serves it verbatim.
 var HighlightCSS = func() string {
-	var buf bytes.Buffer
-	if err := chromaFormatter.WriteCSS(&buf, chromaStyle); err != nil {
+	var light bytes.Buffer
+	if err := chromaFormatter.WriteCSS(&light, chromaStyle); err != nil {
 		return ""
 	}
-	return buf.String()
+	dark := styles.Get(chromaStyleNameDark)
+	if dark == nil {
+		return light.String() // dark style missing: ship light-only, still valid CSS
+	}
+	var darkBuf bytes.Buffer
+	if err := chromaFormatter.WriteCSS(&darkBuf, dark); err != nil {
+		return light.String()
+	}
+	darkCSS := darkBuf.String()
+	return light.String() +
+		"\n/* Solarized dark — explicit Dark mode */\n" +
+		scopeSyntax(darkCSS, `[data-scheme="solarized"][data-mode="dark"]`) +
+		"\n/* Solarized dark — System mode following the OS */\n" +
+		"@media (prefers-color-scheme: dark) {\n" +
+		scopeSyntax(darkCSS, `[data-scheme="solarized"]:not([data-mode="light"])`) +
+		"\n}\n"
 }()
+
+// scopeSyntax prefixes every chroma rule in a WriteCSS dump with `prefix` so a
+// second style's tokens override the default unscoped block only when the scope
+// selector matches the <html> mode attributes. Chroma's token classes (.k, .s,
+// …) are style-independent, so light and dark collide on the same selectors —
+// scoping is what lets both live in one sheet. The standalone `.bg` rule chroma
+// emits for its background <div> is dropped: PreventSurroundingPre means our
+// markup only ever carries class="chroma", never class="bg".
+func scopeSyntax(css, prefix string) string {
+	var b strings.Builder
+	for line := range strings.SplitSeq(css, "\n") {
+		brace := strings.Index(line, "{")
+		if brace < 0 {
+			continue // blank lines between rules — chroma puts one rule per line
+		}
+		head := line[:brace]
+		comment := ""
+		if i := strings.LastIndex(head, "*/"); i >= 0 {
+			comment, head = head[:i+2]+" ", head[i+2:]
+		}
+		sel := strings.TrimSpace(head)
+		if strings.HasPrefix(sel, ".bg") {
+			continue // unused background-div rule
+		}
+		b.WriteString(comment + prefix + " " + sel + " " + line[brace:] + "\n")
+	}
+	return b.String()
+}
 
 // lexerFor returns a Coalesce-wrapped lexer matched against `filename`,
 // caching the result so repeat calls for the same path skip the

@@ -97,7 +97,7 @@ func TestRenderMarkdownBlocks_NonMermaidFenceStillHighlights(t *testing.T) {
 	if strings.Contains(h, "md-mermaid") {
 		t.Errorf("go fence misrouted to mermaid: %q", h)
 	}
-	if !strings.Contains(h, `<span style="color:`) {
+	if !strings.Contains(h, `class="chroma"`) || !strings.Contains(h, `<span class="`) {
 		t.Errorf("go fence not chroma-highlighted: %q", h)
 	}
 }

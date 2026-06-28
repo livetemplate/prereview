@@ -97,9 +97,10 @@ func TestE2E_MarkdownRendersFullGFM(t *testing.T) {
 		t.Fatalf("rendered markdown never appeared: %v%s", err, diag())
 	}
 
-	// 1. Syntax-highlighted code fence — chroma inline-styled spans.
-	if !strings.Contains(html, `<span style="color:`) {
-		t.Errorf("no chroma-highlighted spans in rendered code fence%s", diag())
+	// 1. Syntax-highlighted code fence — class-based chroma spans (colours in
+	//    /syntax.css, so the fence follows the Light/Dark toggle).
+	if !strings.Contains(html, `<pre class="chroma">`) || !strings.Contains(html, `<span class="`) {
+		t.Errorf("no class-based chroma spans in rendered code fence%s", diag())
 	}
 	// 2. GitHub NOTE alert — the callout box + its octicon, marker not leaked.
 	if !strings.Contains(html, "md-alert-note") {
