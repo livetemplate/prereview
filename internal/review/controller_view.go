@@ -56,6 +56,17 @@ func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// CycleTheme advances the Light/Dark/System color mode (issue #60), cycling
+// System → Light → Dark → System. Persisted per-user; the page re-renders with
+// the new data-mode attribute (omitted for System) and the cascade does the
+// rest — no JS, no CSS refetch (/syntax.css already carries both modes). The
+// overflow menu is left open so a click from inside it can cycle again in
+// place; the toolbar button is the primary control.
+func (c *PrereviewController) CycleTheme(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.ThemeMode = state.NextThemeMode()
+	return state, nil
+}
+
 // ToggleKeyboardHelp opens/closes the keyboard-shortcuts help overlay.
 // Triggered by the "?" key and the toolbar help button (both dispatch
 // toggleKeyboardHelp); Esc closes it via ClearSelection. Closes the overflow

@@ -546,8 +546,9 @@ func TestRenderMarkdownBlocks_HeadingHasID(t *testing.T) {
 // --- Full GitHub-flavoured Markdown (issue #20) --------------------------
 
 // TestRenderMarkdownBlocks_SyntaxHighlight pins that fenced code is
-// chroma-highlighted with inline styles (the "solarized-light" theme,
-// WithClasses false), stays a single commentable block, keeps its span.
+// chroma-highlighted with class-based spans (WithClasses true, so the fence
+// follows the Light/Dark toggle via /syntax.css), stays a single commentable
+// block, keeps its span.
 func TestRenderMarkdownBlocks_SyntaxHighlight(t *testing.T) {
 	// 1: ```go
 	// 2: func main() {}
@@ -561,9 +562,14 @@ func TestRenderMarkdownBlocks_SyntaxHighlight(t *testing.T) {
 	if !strings.Contains(h, "<pre") {
 		t.Errorf("code HTML = %q, want a <pre>", h)
 	}
-	// Inline-styled coloured spans are the signal that highlighting ran.
-	if !strings.Contains(h, `<span style="color:`) {
-		t.Errorf("code HTML = %q, want chroma inline-styled spans", h)
+	// Class-based chroma spans are the signal that highlighting ran; their
+	// colours live in /syntax.css (TestHighlightCSS_ModeScoped covers that),
+	// which is what lets a fence recolor between Light and Dark.
+	if !strings.Contains(h, `class="chroma"`) || !strings.Contains(h, `<span class="`) {
+		t.Errorf("code HTML = %q, want class-based chroma spans", h)
+	}
+	if strings.Contains(h, `<span style="color:`) {
+		t.Errorf("code HTML = %q, still has inline-styled spans (WithClasses regressed)", h)
 	}
 	if !strings.Contains(h, "func") || !strings.Contains(h, "main") {
 		t.Errorf("code HTML = %q, missing keyword/identifier", h)

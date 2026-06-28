@@ -36,8 +36,19 @@
    syntax theme (gitdiff/highlight.go → "solarized-light") form one system,
    so nothing drifts. Body text uses base01/base1 — NOT the softer
    base00/base0 — so it clears WCAG AA on the surface (Solarized's known
-   low-contrast trap). A [data-theme="dark"] block + further [data-scheme]s
-   (gruvbox, catppuccin) attach to this same architecture later. */
+   low-contrast trap). A [data-mode="dark"] block + further [data-scheme]s
+   (gruvbox, catppuccin) attach to this same architecture later.
+
+   WHERE THESE LIVE: data-scheme/data-mode sit on the .theme-root wrapper
+   (page.tmpl), NOT on <html>. Two reasons. (1) Live toggle: livetemplate
+   morphs its managed subtree, not <html>'s attributes — a data-mode on <html>
+   would only change on a full reload. (2) Specificity-free override: Pico sets
+   its --pico-* on :root (html) under `:root:not([data-theme=dark])` = (0,2,0).
+   A custom property set on a descendant wins for that descendant's subtree by
+   inheritance PROXIMITY, regardless of selector specificity — so the wrapper's
+   tokens beat Pico's :root values for all content without any specificity hack.
+   (<body> is an ANCESTOR of the wrapper, so its background does not theme; we
+   cover it by painting .layout with --surface, below, so body never shows.) */
 [data-scheme="solarized"] {
   --surface: #fdf6e3;          /* base3  — page + content + code + cards   */
   --surface-muted: #f1ead4;    /* header / drawer / gutter / fold strips    */
@@ -76,6 +87,21 @@
   --pico-secondary-background: var(--surface-muted);
   --pico-color: var(--text);
   --pico-h1-color: var(--text-strong);
+  /* h2–h6 + form/inline-code text/border default to Pico's LIGHT-mode tones
+     (dark text, light borders). Mapping them to semantic tokens here keeps
+     light coordinated AND auto-flips them in dark — otherwise dark inherits
+     Pico's dark-on-dark heading/input text (the BASE/Filter inputs and
+     rendered-Markdown h2–h6 would be unreadable). */
+  --pico-h2-color: var(--text-strong);
+  --pico-h3-color: var(--text-strong);
+  --pico-h4-color: var(--text-strong);
+  --pico-h5-color: var(--text);
+  --pico-h6-color: var(--text-muted);
+  --pico-form-element-color: var(--text);
+  --pico-form-element-border-color: var(--border-strong);
+  --pico-form-element-active-background-color: var(--surface);
+  --pico-form-element-active-border-color: var(--accent);
+  --pico-code-color: var(--text);
   --pico-muted-color: var(--text-muted);
   --pico-muted-border-color: var(--border);
   --pico-primary: var(--accent);
@@ -84,6 +110,132 @@
   --pico-primary-inverse: var(--surface);
   --pico-contrast: var(--text-strong);
   --pico-contrast-inverse: var(--surface);
+}
+
+/* ── Theme: Solarized — DARK ─────────────────────────────────────────────
+   Dark is driven by data-mode, NOT Pico's data-theme (which stays "light"):
+   that keeps Pico's own un-audited dark palette out of the picture, so these
+   tokens are the single source of truth. Because every --pico-* var is mapped
+   to a semantic token above, redefining the SEMANTIC tokens here re-skins the
+   whole UI through the cascade — no need to restate the mappings.
+
+   Per Solarized, only the base ramp inverts; the accent hues (blue/orange/
+   green/red) are mode-independent, so chrome stays coordinated with the
+   solarized-dark chroma syntax for free. Body text uses base1 (not base0) so
+   it clears WCAG AA on base03.
+
+   TWO entry points share this block: an explicit Dark toggle, and System mode
+   (data-mode absent → the OS preference drives it via the @media copy below,
+   scoped :not([data-mode="light"]) so an explicit Light opt-out still wins).
+   The @media copy MUST stay in sync — it is a verbatim duplicate. */
+[data-scheme="solarized"][data-mode="dark"] {
+  --surface: #002b36;          /* base03 — page + content + code + cards    */
+  --surface-muted: #073642;    /* base02 — header / drawer / gutter / folds  */
+  --surface-card: #06323d;     /* comment + composer surface (slightly up)   */
+  --border: #0e3a46;
+  --border-strong: #1a4d5c;
+  --text: #93a1a1;             /* base1  — body (clears AA on base03)        */
+  --text-strong: #eee8d5;      /* base2  — headings / strong                 */
+  --text-muted: #839496;       /* base0  — meta / gutters                    */
+  --text-faint: #657b83;       /* base00 — lowest-emphasis                   */
+  --accent: #268bd2; --accent-weak: #2a6f9e; --accent-press: #57b6ee;
+  --mark: #cb4b16;             /* orange — the annotation hero / "flagged"   */
+  --mark-wash: rgba(203, 75, 22, .20);
+  --soft-bg: #073642; --soft-bg-hover: #0c4350;
+
+  /* diff — Solarized green/red, washes opened up for the darker surface. */
+  --pr-add: #93a300; --pr-del: #f0524a;
+  --pr-add-bg: rgba(133, 153, 0, .20); --pr-del-bg: rgba(220, 50, 47, .20);
+  --pr-sel-bg: rgba(203, 75, 22, .22);
+  --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .30), 0 1px 3px rgba(0, 0, 0, .35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, .50);
+  --shadow-mark: 0 2px 4px rgba(203, 75, 22, .22), 0 6px 20px rgba(203, 75, 22, .18);
+
+  /* Pico literals not routed through a semantic token. */
+  --pico-code-background-color: #073642;
+  --pico-form-element-background-color: #052f3a;
+  /* Primary buttons keep light text on the blue fill in BOTH modes (in light
+     --surface happens to be light; in dark it is not, so pin it). */
+  --pico-primary-inverse: #fdf6e3;
+
+  /* Component colours that hardcode light Tailwind pastels — re-skinned to
+     translucent Solarized accents so they read on the dark surface. */
+  & .status-badge.A { background: rgba(133, 153, 0, .20); color: #93a300; }
+  & .status-badge.M { background: rgba(181, 137, 0, .24); color: #cc9b16; }
+  & .status-badge.D { background: rgba(220, 50, 47, .20); color: #f0524a; }
+  & .status-badge.R { background: rgba(38, 139, 210, .20); color: #6cb6e6; }
+  & .status-badge.C { background: rgba(108, 113, 196, .26); color: #a3a7ea; }
+  & .status-badge.T { background: rgba(211, 54, 130, .24); color: #e06aa8; }
+  & dialog#files-drawer button.file-btn.is-selected {
+    background: rgba(38, 139, 210, .16); border-color: #1f6fa8; border-left-color: #268bd2;
+  }
+  & dialog#files-drawer button.file-btn .diff-stats .add { color: #93a300; }
+  & dialog#files-drawer button.file-btn .diff-stats .del { color: #f0524a; }
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle,
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: #93a300; }
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle {
+    border-color: #5b6e00; background: rgba(133, 153, 0, .16);
+  }
+  & .all-comments .ac-jump-btn:hover { background: rgba(38, 139, 210, .16); }
+  & .md-rendered .md-alert-note      { --md-alert-accent: #4493f8; }
+  & .md-rendered .md-alert-tip       { --md-alert-accent: #3fb950; }
+  & .md-rendered .md-alert-important { --md-alert-accent: #ab7df8; }
+  & .md-rendered .md-alert-warning   { --md-alert-accent: #d29922; }
+  & .md-rendered .md-alert-caution   { --md-alert-accent: #f85149; }
+}
+@media (prefers-color-scheme: dark) {
+  /* Verbatim duplicate of the [data-mode="dark"] block above — System mode
+     (no data-mode) follows the OS; :not([data-mode="light"]) lets an explicit
+     Light opt-out win. KEEP IN SYNC with the block above. */
+  [data-scheme="solarized"]:not([data-mode="light"]) {
+    --surface: #002b36;
+    --surface-muted: #073642;
+    --surface-card: #06323d;
+    --border: #0e3a46;
+    --border-strong: #1a4d5c;
+    --text: #93a1a1;
+    --text-strong: #eee8d5;
+    --text-muted: #839496;
+    --text-faint: #657b83;
+    --accent: #268bd2; --accent-weak: #2a6f9e; --accent-press: #57b6ee;
+    --mark: #cb4b16;
+    --mark-wash: rgba(203, 75, 22, .20);
+    --soft-bg: #073642; --soft-bg-hover: #0c4350;
+    --pr-add: #93a300; --pr-del: #f0524a;
+    --pr-add-bg: rgba(133, 153, 0, .20); --pr-del-bg: rgba(220, 50, 47, .20);
+    --pr-sel-bg: rgba(203, 75, 22, .22);
+    --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .30), 0 1px 3px rgba(0, 0, 0, .35);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, .50);
+    --shadow-mark: 0 2px 4px rgba(203, 75, 22, .22), 0 6px 20px rgba(203, 75, 22, .18);
+    --pico-code-background-color: #073642;
+    --pico-form-element-background-color: #052f3a;
+    --pico-primary-inverse: #fdf6e3;
+    & .status-badge.A { background: rgba(133, 153, 0, .20); color: #93a300; }
+    & .status-badge.M { background: rgba(181, 137, 0, .24); color: #cc9b16; }
+    & .status-badge.D { background: rgba(220, 50, 47, .20); color: #f0524a; }
+    & .status-badge.R { background: rgba(38, 139, 210, .20); color: #6cb6e6; }
+    & .status-badge.C { background: rgba(108, 113, 196, .26); color: #a3a7ea; }
+    & .status-badge.T { background: rgba(211, 54, 130, .24); color: #e06aa8; }
+    & dialog#files-drawer button.file-btn.is-selected {
+      background: rgba(38, 139, 210, .16); border-color: #1f6fa8; border-left-color: #268bd2;
+    }
+    & dialog#files-drawer button.file-btn .diff-stats .add { color: #93a300; }
+    & dialog#files-drawer button.file-btn .diff-stats .del { color: #f0524a; }
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle,
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: #93a300; }
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle {
+      border-color: #5b6e00; background: rgba(133, 153, 0, .16);
+    }
+    & .all-comments .ac-jump-btn:hover { background: rgba(38, 139, 210, .16); }
+    & .md-rendered .md-alert-note      { --md-alert-accent: #4493f8; }
+    & .md-rendered .md-alert-tip       { --md-alert-accent: #3fb950; }
+    & .md-rendered .md-alert-important { --md-alert-accent: #ab7df8; }
+    & .md-rendered .md-alert-warning   { --md-alert-accent: #d29922; }
+    & .md-rendered .md-alert-caution   { --md-alert-accent: #f85149; }
+  }
 }
 
 /* Self-hosted webfonts (offline over Tailscale/devbox). */
@@ -131,7 +283,16 @@ body { padding: 0; display: flex; flex-direction: column; height: 100dvh; font-f
    no box, so there is no such context and the horizontal axis
    behaves exactly as it did before this rule existed. */
 body > [data-lvt-id] { display: contents; }
-.layout { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+/* .theme-root carries data-scheme/data-mode and re-skins the UI by setting the
+   semantic + --pico-* tokens (see the [data-scheme] block above). It is
+   display:contents — no box — for the same reason the data-lvt-id wrapper is
+   (keep header.bar + .layout as direct flex children of the 100dvh body);
+   custom-property inheritance is unaffected by display:contents, so the tokens
+   still cascade into the whole subtree. */
+.theme-root { display: contents; }
+/* --surface on .layout makes the main column opaque so the un-themeable <body>
+   (an ancestor of .theme-root, stuck on Pico's value) never shows through. */
+.layout { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); }
 
 /* Top bar — sticky on mobile, becomes header row on desktop. The
    block padding (top + bottom) leaves a small but visible breathing
@@ -269,6 +430,7 @@ header.bar .nav-next button { gap: 0.3rem; }
    (Rendered/Raw, File/Diff) now lives in the segmented control above. */
 header.bar .focus-toggle,
 header.bar .kbd-help-btn,
+header.bar .theme-toggle,
 header.bar button[name="openFileComment"],
 header.bar .nav-prev button,
 header.bar .nav-next button {
@@ -280,11 +442,13 @@ header.bar .nav-next button {
 }
 header.bar .focus-toggle:hover,
 header.bar .kbd-help-btn:hover,
+header.bar .theme-toggle:hover,
 header.bar button[name="openFileComment"]:hover,
 header.bar .nav-prev button:hover,
 header.bar .nav-next button:hover,
 header.bar .focus-toggle:focus-visible,
 header.bar .kbd-help-btn:focus-visible,
+header.bar .theme-toggle:focus-visible,
 header.bar button[name="openFileComment"]:focus-visible,
 header.bar .nav-prev button:focus-visible,
 header.bar .nav-next button:focus-visible {
@@ -292,6 +456,14 @@ header.bar .nav-next button:focus-visible {
   color: var(--pico-h1-color);
   border-color: var(--accent);
 }
+/* Theme toggle is icon-only — square it up and centre the glyph so it sits on
+   the same baseline as the "?" help chip beside it. The icon inherits color
+   from the button (currentColor in the SVGs). */
+header.bar .theme-toggle {
+  padding: 0.25rem 0.5rem; min-height: auto; line-height: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+header.bar .theme-toggle svg { display: block; }
 /* The active (pressed) focus-mode toggle reads as "on": tint it with the
    accent so the distraction-free state is visibly engaged. */
 header.bar .focus-toggle[aria-pressed="true"] {

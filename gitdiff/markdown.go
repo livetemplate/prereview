@@ -65,12 +65,13 @@ type Heading struct {
 // the full GitHub-flavoured feature set, not just the strict GFM spec.
 //
 //   - extension.GFM — tables, strikethrough, extended autolinks, task-lists.
-//   - highlighting — chroma syntax-colouring for fenced code, using the
-//     same chromaStyleName theme the diff view uses. WithClasses(false)
-//     emits inline styles rather than the class names the diff view's
-//     /syntax.css carries: it keeps each code block self-contained so its
-//     colours never collide with .md-rendered pre / .chroma rules in the
-//     cascade, at the cost of slightly heavier HTML per block.
+//   - highlighting — chroma syntax-colouring for fenced code via the SAME
+//     class-based /syntax.css the diff view carries (WithClasses(true), no
+//     inline styles). That's what lets fenced code follow the Light/Dark
+//     toggle: inline light colours can't recolor for dark mode; class spans
+//     (`.chroma .k` …) recolor purely through the cascade. The fence's own
+//     surface comes from .md-rendered pre, which outranks chroma's `.chroma`
+//     background rule, so the block still sits on the scheme's code surface.
 //   - extension.Footnote — `[^1]` references + a trailing definition list.
 //   - emoji.Emoji — `:smile:` shortcodes; the default renderer writes the
 //     Unicode codepoint as text (no <img>, no embedded assets), so it keeps
@@ -92,7 +93,7 @@ var mdRenderer = goldmark.New(
 		emoji.Emoji,
 		highlighting.NewHighlighting(
 			highlighting.WithStyle(chromaStyleName),
-			highlighting.WithFormatOptions(chromahtml.WithClasses(false)),
+			highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
 		),
 		alertExtender{},
 	),

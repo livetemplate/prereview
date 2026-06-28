@@ -78,3 +78,41 @@ the enforcement.
 There is no auto-formatter and there won't be one: reflow can't be made safe for
 this file, and a narrow attribute-only splitter doesn't earn its keep now that the
 file is formatted and the guard exists.
+
+## Theming: `data-scheme` / `data-mode` (read before touching colors)
+
+The whole UI is re-skinned by two attributes on the **`.theme-root` wrapper**
+(`page.tmpl`, inside `<body>`), NOT on `<html>`:
+
+- **`data-scheme`** — the coordinated color scheme (`solarized` today; gruvbox/
+  catppuccin attach to the same `[data-scheme]` CSS later).
+- **`data-mode`** — Light/Dark/System (`""` = System; see `state.ThemeMode` /
+  `DataMode()`). Omitted for System so `@media (prefers-color-scheme)` drives it.
+
+Three non-obvious facts that took a while to get right (don't regress them):
+
+1. **Why `.theme-root`, not `<html>`.** livetemplate morphs its managed subtree,
+   not `<html>`'s attributes — a `data-mode` on `<html>` only changes on a full
+   reload. On the wrapper it updates live. The wrapper is `display:contents`
+   (no box) so the flex/scroll chain is unchanged.
+2. **No specificity hack needed.** Pico sets its `--pico-*` on `:root` under
+   `:root:not([data-theme=dark])` = (0,2,0); a bare `[data-scheme]` is (0,1,0)
+   and would LOSE (this was a silent P2 bug — chrome rendered Pico-white). But a
+   custom property set on a *descendant* (the wrapper) wins for that subtree by
+   inheritance PROXIMITY regardless of specificity, so the wrapper's tokens beat
+   Pico's `:root` values for all content. `<body>` is an *ancestor* of the
+   wrapper, so it does NOT theme — `.layout` is painted `var(--surface)` to
+   cover it. `<html data-theme="light">` stays pinned so Pico's own dark palette
+   never activates.
+3. **Dark tokens are duplicated on purpose.** The Solarized-dark block appears
+   twice in `prereview.css` — once `[data-scheme="solarized"][data-mode="dark"]`
+   and once inside `@media (prefers-color-scheme: dark)` for no-JS System mode.
+   They can't be merged (one is in a media query); a `KEEP IN SYNC` comment
+   marks them. Lightness-encoding `--pico-*` vars (heading/form/code text) are
+   mapped to semantic tokens in the light block so they auto-flip in dark.
+
+Syntax colors live in `/syntax.css` (`gitdiff/highlight.go`), which carries BOTH
+modes: the light chroma block unscoped, the dark block scoped (`scopeSyntax`)
+under the same `[data-mode]` selectors — so a fence/diff recolors with no
+refetch. Markdown fences are class-based (`WithClasses(true)`) for the same
+reason; inline-styled fences can't recolor for dark.

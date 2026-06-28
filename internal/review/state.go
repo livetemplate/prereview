@@ -270,6 +270,14 @@ type PrereviewState struct {
 	// Persisted as a per-user reading preference, like FileView.
 	FocusMode bool `json:"focus_mode" lvt:"persist"`
 
+	// ThemeMode is the Light/Dark/System color-mode preference (issue #60),
+	// cycled by the toolbar toggle. "" means System (the default): the page
+	// omits the data-mode attribute and follows the OS via prefers-color-scheme
+	// (see the Solarized-dark block + /syntax.css). "light"/"dark" force the
+	// mode regardless of the OS. Persisted per-user. The scheme axis (Solarized
+	// vs Gruvbox/Catppuccin) is separate and arrives later (data-scheme).
+	ThemeMode string `json:"theme_mode" lvt:"persist"`
+
 	// BaseChoices populates the base-picker dropdown. Computed in
 	// Mount: ["HEAD", "HEAD~1", "HEAD~5", <local branches…>] plus the
 	// current state.Base if it isn't already in the list (so custom
@@ -344,6 +352,52 @@ func (s PrereviewState) scopedFiles() []gitdiff.FileEntry {
 // so the template can label the scope toggle without computing.
 func (s PrereviewState) ChangedFilesCount() int {
 	return gitdiff.ChangedCount(s.Files)
+}
+
+// DataMode is the value for the .theme-root data-mode attribute: "light" or
+// "dark" when the mode is forced, "" for System (in which case the template
+// omits the attribute and prefers-color-scheme drives the theme). Zero-arg so
+// the page template can emit `{{with .DataMode}} data-mode="{{.}}"{{end}}`.
+func (s PrereviewState) DataMode() string {
+	switch s.ThemeMode {
+	case "light", "dark":
+		return s.ThemeMode
+	default:
+		return "" // System (and any unrecognised value) → follow the OS
+	}
+}
+
+// NextThemeMode is the mode the toolbar toggle advances to from the current
+// one, cycling System → Light → Dark → System. Drives both the CycleTheme
+// action and the toggle's label/icon ("show what a click switches TO").
+func (s PrereviewState) NextThemeMode() string {
+	switch s.ThemeMode {
+	case "light":
+		return "dark"
+	case "dark":
+		return "" // back to System
+	default:
+		return "light" // System → Light
+	}
+}
+
+// ThemeModeLabel / NextThemeModeLabel are the human names of the current and
+// next modes, for the toggle's tooltip ("Theme: System — switch to Light") and
+// the overflow-menu item. (The button's icon is chosen by an explicit ladder
+// in the template, since Go templates can't take a dynamic {{template}} name.)
+func (s PrereviewState) ThemeModeLabel() string     { return themeModeLabel(s.ThemeMode) }
+func (s PrereviewState) NextThemeModeLabel() string { return themeModeLabel(s.NextThemeMode()) }
+
+// themeModeLabel names a mode string; "" (and anything unrecognised) is System.
+func themeModeLabel(mode string) string {
+	switch mode {
+	case "light":
+		return "Light"
+	case "dark":
+		return "Dark"
+	default:
+		return "System"
+	}
 }
 
 // VisibleLines is the line set the viewer renders for the selected
