@@ -37,10 +37,19 @@
 <link rel="stylesheet" href="/prereview.css">
 </head>
 <body
-  lvt-on:keydown="clearSelection"
-  lvt-key="Escape"
   data-lvt-loading-debounce-ms="200"
 >
+{{/* Global cancel. Esc clears any selection, closes the composer, and
+     dismisses the keyboard-help overlay. A guard-free window binding (NOT
+     skip-when-typing) so it fires even while the composer textarea is focused,
+     and a direct child of <body> — not gated by the external/repo split — so
+     it works in both modes. The window scan finds it because it's a descendant
+     of the wrapper; a binding on <body> itself would be missed. Listed in the
+     help overlay via the keymap (Esc has Action ""). */}}
+<span class="kbd-esc" hidden aria-hidden="true"
+  lvt-on:window:keydown="clearSelection"
+  lvt-key="Escape"
+></span>
 
 {{if .ExternalMode}}
 {{/* --external (live-site) view. The proxied site renders in a cross-origin
@@ -228,8 +237,20 @@
 <footer class="app-footer" role="contentinfo"><small>prereview
   {{- if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
 {{else}}
+{{/* Keyboard shortcuts — single-sourced from KeyBindings (internal/review/keymap.go),
+     which also feeds the help overlay below so the two can't drift. Each global shortcut
+     is a hidden window keydown binding carrying lvt-mod:skip-when-typing, so a shortcut
+     letter typed into the composer or file filter types the letter instead of firing the
+     shortcut. Esc — which must fire while typing to cancel — stays on <body>, not here. */}}
+<div class="kbd-bindings" hidden aria-hidden="true">
+  {{- range .KeyBindings}}{{$b := .}}{{range $b.Keys}}{{if $b.Action}}<span
+    lvt-on:window:keydown="{{$b.Action}}"
+    lvt-key="{{.}}"
+    lvt-mod:skip-when-typing
+  ></span>{{end}}{{end}}{{end -}}
+</div>
 <header
-  class="bar"
+  class="bar{{if .FileDrawerOpen}} files-collapsed{{end}}"
   lvt-fx:url-hash="setURLHash"
   data-lvt-url-hash="{{.URLHash}}"
 >
@@ -380,6 +401,22 @@
       </form>
     </div>
     {{end}}
+    {{/* Keyboard-shortcuts help. Desktop toolbar affordance (mobile has the
+         more-menu item); both submit toggleKeyboardHelp, the same action the
+         "?" key fires. Always shown — the help is useful even before a file
+         is open. */}}
+    <div class="tb-group tb-help">
+      <form method="POST">
+        <button
+          type="submit"
+          name="toggleKeyboardHelp"
+          class="contrast kbd-help-btn"
+          aria-pressed="{{if .KeyHelpOpen}}true{{else}}false{{end}}"
+          title="Keyboard shortcuts (press ?)"
+          aria-label="Keyboard shortcuts"
+        >?</button>
+      </form>
+    </div>
   </div>
   {{if .CurrentDiff}}
   {{/* Comment on the file as a whole — works on every file type
@@ -650,6 +687,19 @@
     </button>
   </form>
   {{end}}
+  {{/* Keyboard shortcuts — same toggleKeyboardHelp action as the "?" key and
+       the desktop toolbar button. Always available. */}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleKeyboardHelp"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon" aria-hidden="true">?</span>
+      <span class="menu-label">Keyboard shortcuts</span>
+    </button>
+  </form>
 </div>
 
 {{if .Quitting}}
@@ -664,6 +714,25 @@
 </div>
 {{end}}
 
+{{if .Flash}}
+<div
+  class="toast flash-toast"
+  role="status"
+  lvt-fx:auto-click="3000:clearFlash"
+>
+  <span class="toast-msg">{{.Flash}}</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button
+      type="submit"
+      name="clearFlash"
+      class="toast-dismiss"
+      aria-label="Dismiss"
+    >
+      {{template "iconClose14"}}
+    </button>
+  </form>
+</div>
+{{end}}
 {{if .DoneWritten}}
 <div
   class="toast"
@@ -1042,10 +1111,19 @@
     "
          data-key="{{$mbkey}}"
          {{- if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}>
-      {{- /* rendered markdown — clicking selects the block's source line span */ -}}
+      {{- /* rendered markdown — clicking (or Enter when focused) selects the
+             block's source line span. tabindex makes it keyboard-focusable and
+             the keydown makes Enter activate it; it deliberately has NO
+             role="button" — Pico paints every [role=button] as a filled blue
+             button, and this is prose, not a button (it also holds arbitrary
+             rendered HTML incl. its own links, which stay independently
+             focusable). */ -}}
       <div
         class="md-rendered"
+        tabindex="0"
         lvt-on:click="selectBlock"
+        lvt-on:keydown="selectBlock"
+        lvt-key="Enter"
         data-from="{{$bs}}"
         data-to="{{$be}}"
       >{{.HTML}}</div>
@@ -1082,14 +1160,16 @@
     ><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>
     {{- else -}}
     {{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end -}}
-    <div class="line-row">
+    <div class="line-row" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}-composing{{end}}">
       {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
+      {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
       <button type="button"
               lvt-on:click="selectLine"
               data-line="{{$ln}}"
               data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}"
-              class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}"
-              data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span>
+              class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"
+              {{- if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{end}}
+              data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span>
               {{- /* */ -}}<span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>
       {{- /* comments anchored to this line, then the composer when this line is selected */ -}}
       {{- range (index $.CommentsByEndLine $ln)}}{{template "commentCardFull" .}}{{end -}}
@@ -1208,6 +1288,42 @@
   </nav>
 </div>
 {{end}}
+{{/* Keyboard-shortcuts help overlay. Driven by KeyHelpOpen (the "?" key and the
+     toolbar / more-menu help buttons toggle it; Esc closes it via clearSelection).
+     Rows are single-sourced from KeyBindings — the same map that wires the live
+     bindings near the top of the body — so the help can't drift from the shortcuts.
+     Mirrors the TOC modal's backdrop + dialog structure. */}}
+<div
+  class="kbd-help-backdrop{{if .KeyHelpOpen}} is-open{{end}}"
+  lvt-on:click="toggleKeyboardHelp"
+  aria-hidden="true"
+></div>
+<div
+  class="kbd-help-modal{{if .KeyHelpOpen}} is-open{{end}}"
+  role="dialog"
+  aria-label="Keyboard shortcuts"
+  aria-modal="true"
+>
+  <div class="kbd-help-head">
+    <strong>Keyboard shortcuts</strong>
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleKeyboardHelp"
+        class="outline close-btn"
+        aria-label="Close"
+      >
+        {{template "iconClose16"}}
+      </button>
+    </form>
+  </div>
+  <dl class="kbd-help-list">
+    {{- range .KeyBindings}}
+    <div class="kbd-row"><dt><kbd>{{.Display}}</kbd></dt><dd>{{.Label}}</dd></div>
+    {{- end}}
+  </dl>
+  <p class="kbd-help-note">Drawing a precise region on rendered HTML or an image needs a mouse — from the keyboard, comment on the whole block or image instead.</p>
+</div>
 <footer class="app-footer" role="contentinfo">
   prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · built with <a
     href="https://github.com/livetemplate/livetemplate"
@@ -1290,6 +1406,7 @@
       {{- else if eq $.CommentMode "area"}}What's wrong with this region?
       {{- else}}What's wrong with these lines?{{end}}"
       required
+      lvt-autofocus
     >{{$.DraftBody}}</textarea>
   </form>
   {{- /* cancel-form target */ -}}
@@ -1394,7 +1511,11 @@
 <div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}"
      data-key="{{.ID}}"
      lvt-fx:animate="fade"
-     {{- if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}>
+     {{- /* the targeted comment (just saved, or jumped to via n/p) scrolls into
+            view AND takes focus, so after the composer closes the keyboard user
+            lands on their comment instead of <body>. tabindex=-1 = programmatically
+            focusable, not in the Tab order. */ -}}
+     {{- if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}>
   {{- /* line span · side · status badges */ -}}
   <header><span>{{.LineSpan}} · <small>{{.Side}}</small>
     {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
@@ -1451,7 +1572,7 @@
   class="inline-comment{{if .Resolved}} is-resolved{{end}}"
   data-key="{{.ID}}"
   lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}}
-  lvt-fx:scroll="into-view"{{end}}
+  lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}
 >
   {{- /* line span · resolved badge */ -}}
   <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header>

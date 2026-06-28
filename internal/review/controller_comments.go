@@ -135,6 +135,12 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 			AnchorStatus: anchorOK,
 		}
 		state.Comments = append(state.Comments, cm)
+		// Land scroll + focus on the just-saved comment so a keyboard user
+		// lands on it after the composer closes (see commentCardFull/Simple).
+		// Clear any pending heading target — the two scroll intents are
+		// mutually exclusive (else the comment scroll fights a stale heading).
+		state.ScrollToCommentID = cm.ID
+		state.ScrollToHeadingID = ""
 		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
 	}
 
@@ -182,6 +188,12 @@ func (c *PrereviewController) addFileLevelComment(state PrereviewState, body str
 			// keys off of in relocate() and the UI ranges.
 		}
 		state.Comments = append(state.Comments, cm)
+		// Land scroll + focus on the just-saved comment so a keyboard user
+		// lands on it after the composer closes (see commentCardFull/Simple).
+		// Clear any pending heading target — the two scroll intents are
+		// mutually exclusive (else the comment scroll fights a stale heading).
+		state.ScrollToCommentID = cm.ID
+		state.ScrollToHeadingID = ""
 		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
 	}
 
@@ -231,6 +243,12 @@ func (c *PrereviewController) addAreaComment(state PrereviewState, body string) 
 			// keys off of in relocate() and the UI ranges.
 		}
 		state.Comments = append(state.Comments, cm)
+		// Land scroll + focus on the just-saved comment so a keyboard user
+		// lands on it after the composer closes (see commentCardFull/Simple).
+		// Clear any pending heading target — the two scroll intents are
+		// mutually exclusive (else the comment scroll fights a stale heading).
+		state.ScrollToCommentID = cm.ID
+		state.ScrollToHeadingID = ""
 		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
 	}
 
@@ -283,6 +301,12 @@ func (c *PrereviewController) addRegionComment(state PrereviewState, body string
 			// keys off the "no anchor to relocate" contract.
 		}
 		state.Comments = append(state.Comments, cm)
+		// Land scroll + focus on the just-saved comment so a keyboard user
+		// lands on it after the composer closes (see commentCardFull/Simple).
+		// Clear any pending heading target — the two scroll intents are
+		// mutually exclusive (else the comment scroll fights a stale heading).
+		state.ScrollToCommentID = cm.ID
+		state.ScrollToHeadingID = ""
 		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
 	}
 

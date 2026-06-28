@@ -1,7 +1,7 @@
 === blockComments ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === commentCardFull ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -13,7 +13,7 @@
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialog" .}}</div></div>
 === commentCardSimple ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -23,7 +23,7 @@
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>
 === composer ===
 <div class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}" data-key="composer"{{if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}><strong>{{if eq $.CommentMode "region"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small>{{else}}{{if eq $.CommentMode "file"}}{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "area"}}{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if $.ReanchorCommentID}}Re-anchoring comment to {{else}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{end}}{{$.SelectionLabel}}{{end}}{{end}}{{end}}</strong>{{if and (eq $.CommentMode "") (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID) (not $.ShowRenderedMarkdown) (not $.ShowRenderedHTML)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form">
-    <textarea name="body" placeholder="{{if eq $.CommentMode "region"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "file"}}What's wrong with this file?{{else}}{{if eq $.CommentMode "area"}}What's wrong with this region?{{else}}What's wrong with these lines?{{end}}{{end}}{{end}}" required>{{$.DraftBody}}</textarea>
+    <textarea name="body" placeholder="{{if eq $.CommentMode "region"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "file"}}What's wrong with this file?{{else}}{{if eq $.CommentMode "area"}}What's wrong with this region?{{else}}What's wrong with these lines?{{end}}{{end}}{{end}}" required lvt-autofocus>{{$.DraftBody}}</textarea>
   </form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions">
     <button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button>
     <button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button>
@@ -97,7 +97,9 @@
 <link rel="stylesheet" href="/syntax.css">
 <link rel="stylesheet" href="/prereview.css">
 </head>
-<body lvt-on:keydown="clearSelection" lvt-key="Escape" data-lvt-loading-debounce-ms="200">
+<body data-lvt-loading-debounce-ms="200">
+
+<span class="kbd-esc" hidden aria-hidden="true" lvt-on:window:keydown="clearSelection" lvt-key="Escape"></span>
 
 {{if .ExternalMode}}
 
@@ -145,7 +147,9 @@
 </div>
 <footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
 {{else}}
-<header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
+
+<div class="kbd-bindings" hidden aria-hidden="true">{{range .KeyBindings}}{{$b := .}}{{range $b.Keys}}{{if $b.Action}}<span lvt-on:window:keydown="{{$b.Action}}" lvt-key="{{.}}" lvt-mod:skip-when-typing></span>{{end}}{{end}}{{end}}</div>
+<header class="bar{{if .FileDrawerOpen}} files-collapsed{{end}}" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
   <form method="POST">
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
   </form>
@@ -199,6 +203,12 @@
       </form>
     </div>
     {{end}}
+    
+    <div class="tb-group tb-help">
+      <form method="POST">
+        <button type="submit" name="toggleKeyboardHelp" class="contrast kbd-help-btn" aria-pressed="{{if .KeyHelpOpen}}true{{else}}false{{end}}" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts">?</button>
+      </form>
+    </div>
   </div>
   {{if .CurrentDiff}}
   
@@ -347,6 +357,13 @@
     </button>
   </form>
   {{end}}
+  
+  <form method="POST">
+    <button type="submit" name="toggleKeyboardHelp" class="menu-item" role="menuitem">
+      <span class="menu-icon" aria-hidden="true">?</span>
+      <span class="menu-label">Keyboard shortcuts</span>
+    </button>
+  </form>
 </div>
 
 {{if .Quitting}}
@@ -361,6 +378,16 @@
 </div>
 {{end}}
 
+{{if .Flash}}
+<div class="toast flash-toast" role="status" lvt-fx:auto-click="3000:clearFlash">
+  <span class="toast-msg">{{.Flash}}</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="clearFlash" class="toast-dismiss" aria-label="Dismiss">
+      {{template "iconClose14"}}
+    </button>
+  </form>
+</div>
+{{end}}
 {{if .DoneWritten}}
 <div class="toast" role="status" lvt-fx:auto-click="5000:dismissBanner">
   <span class="toast-msg">✓ Handed off → Claude is acting on your comments</span>
@@ -526,10 +553,10 @@
   <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-same-origin" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:iframe-autoheight title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}</div>{{end}}</div>
   {{else}}{{if $.ShowRenderedMarkdown}}
   
-  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$mbkey}}"{{if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}><div class="md-rendered" lvt-on:click="selectBlock" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}</div>{{end}}</div>
+  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$mbkey}}"{{if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}><div class="md-rendered" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}</div>{{end}}</div>
   {{else}}{{if .Lines}}
   
-  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row"><button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}" data-key="L{{.OldNum}}-{{.NewNum}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}{{template "commentCardFull" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}{{template "composer" $}}{{end}}</div>
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}<div class="line-row" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}-composing{{end}}">{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<button type="button" lvt-on:click="selectLine" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma">{{if .HighlightedContent}}{{.HighlightedContent}}{{else}}{{.Content}}{{end}}</span></button>{{range (index $.CommentsByEndLine $ln)}}{{template "commentCardFull" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln)}}{{template "composer" $}}{{end}}</div>
 {{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
@@ -595,6 +622,22 @@
   </nav>
 </div>
 {{end}}
+
+<div class="kbd-help-backdrop{{if .KeyHelpOpen}} is-open{{end}}" lvt-on:click="toggleKeyboardHelp" aria-hidden="true"></div>
+<div class="kbd-help-modal{{if .KeyHelpOpen}} is-open{{end}}" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
+  <div class="kbd-help-head">
+    <strong>Keyboard shortcuts</strong>
+    <form method="POST">
+      <button type="submit" name="toggleKeyboardHelp" class="outline close-btn" aria-label="Close">
+        {{template "iconClose16"}}
+      </button>
+    </form>
+  </div>
+  <dl class="kbd-help-list">{{range .KeyBindings}}
+    <div class="kbd-row"><dt><kbd>{{.Display}}</kbd></dt><dd>{{.Label}}</dd></div>{{end}}
+  </dl>
+  <p class="kbd-help-note">Drawing a precise region on rendered HTML or an image needs a mouse — from the keyboard, comment on the whole block or image instead.</p>
+</div>
 <footer class="app-footer" role="contentinfo">
   prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
 </footer>

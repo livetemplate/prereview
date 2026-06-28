@@ -790,6 +790,9 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   text-align: left; align-items: flex-start; line-height: 1.2;
 }
 .code button.line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
+/* Keyboard line cursor (ArrowUp/Down). A left accent bar + outline marks the
+   focused line so the user can see where Enter will comment. */
+.code button.line.is-cursor { box-shadow: inset 3px 0 0 0 var(--pico-primary); outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
 .code button.line.add { background: var(--pr-add-bg); color: var(--pr-add); }
 .code button.line.del { background: var(--pr-del-bg); color: var(--pr-del); }
 /* When EVERY line in the file is an add (or every line is a del) the
@@ -910,6 +913,41 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .toc-l1 { padding-left: 0.75rem; }
 .toc-l2 { padding-left: 1.25rem; font-size: 0.9rem; }
 .toc-l3 { padding-left: 1.75rem; font-size: 0.85rem; color: var(--pico-muted-color); }
+/* ===== Keyboard-shortcuts help overlay =====
+   Centered modal (works on desktop + mobile), driven by KeyHelpOpen. Reuses
+   the toc-backdrop scrim pattern; the panel itself is a centered card rather
+   than the TOC's edge slide-in, since it's also opened from the desktop bar. */
+.kbd-help-btn { padding: 0.25rem 0.7rem; min-height: auto; line-height: 1; font-weight: 700; }
+.kbd-help-backdrop { position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, 0.35); display: none; }
+.kbd-help-backdrop.is-open { display: block; }
+.kbd-help-modal {
+  position: fixed; z-index: 70; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(460px, calc(100% - 2rem)); max-height: 80vh; overflow-y: auto;
+  background: var(--pico-background-color);
+  border: 1px solid var(--pico-muted-border-color); border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  display: none; flex-direction: column;
+}
+.kbd-help-modal.is-open { display: flex; }
+.kbd-help-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 1rem; border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.kbd-help-head strong { font-size: 0.95rem; }
+.kbd-help-head form { margin: 0; }
+.kbd-help-head .close-btn {
+  padding: 0.25rem 0.45rem; min-height: auto; line-height: 1; min-width: 0;
+  background: transparent; color: var(--pico-muted-color); border-color: var(--pico-muted-border-color);
+}
+.kbd-help-list { margin: 0; padding: 0.4rem 0.5rem; }
+.kbd-help-list .kbd-row { display: flex; align-items: center; gap: 1rem; padding: 0.35rem 0.6rem; }
+.kbd-help-list dt { margin: 0; flex: 0 0 5rem; }
+.kbd-help-list dd { margin: 0; flex: 1; font-size: 0.92rem; }
+.kbd-help-list kbd { display: inline-block; min-width: 1.4rem; text-align: center; padding: 0.15rem 0.4rem; font-size: 0.82rem; }
+.kbd-help-note {
+  margin: 0; padding: 0.6rem 1rem 0.9rem; font-size: 0.82rem;
+  color: var(--pico-muted-color); border-top: 1px solid var(--pico-muted-border-color);
+}
 .md-block { margin: 0 0 0.2rem; border-radius: 6px; }
 .md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
 .md-rendered {
@@ -1286,7 +1324,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      "narrower body"). Actual reading content that was too small (comment
      bodies) is bumped explicitly below, not via the body cascade. */
   html { font-size: 16px; }
+  /* The file tree is a persistent sidebar on desktop, so the hamburger is
+     normally hidden. But toggleFiles (the "f" shortcut) sets FileDrawerOpen,
+     which on desktop COLLAPSES the sidebar — the inverse of its mobile meaning
+     (mobile: open=visible overlay). When collapsed we hide the sidebar and
+     reveal the hamburger as the reopen affordance (f toggles it back too). */
   .hamburger { display: none; }
+  header.bar.files-collapsed .hamburger { display: inline-flex; }
+  html body dialog#files-drawer.is-open { display: none; }
   .drawer-backdrop { display: none; }
   .layout { flex-direction: row; }
   html body dialog#files-drawer {

@@ -219,6 +219,27 @@ type PrereviewState struct {
 	// for the same reason as MoreMenuOpen.
 	TOCOpen bool `json:"toc_open"`
 
+	// KeyHelpOpen drives the keyboard-shortcuts help overlay, toggled by
+	// the "?" key or the toolbar help button (both dispatch
+	// toggleKeyboardHelp). Esc closes it via ClearSelection. Not persisted —
+	// a refresh shouldn't reopen a help panel.
+	KeyHelpOpen bool `json:"key_help_open"`
+
+	// CursorKey is the data-key ("L<old>-<new>") of the diff line the keyboard
+	// line cursor is on. ArrowUp/ArrowDown move it (CursorUp/CursorDown); the
+	// matching line button is highlighted, scrolled into view, and focused
+	// (lvt-autofocus) so Enter activates it → the line composer. Empty = no
+	// cursor yet (first arrow press seeds it). Not persisted — a transient
+	// navigation aid. Reset when the selected file changes.
+	CursorKey string `json:"cursor_key"`
+
+	// Flash is a transient status message shown as an auto-dismissing toast —
+	// e.g. pressing "r" (Show resolved) when there are no resolved comments,
+	// where toggling would otherwise do nothing visible. Set by the action,
+	// cleared by clearFlash (auto after a few seconds, or manual dismiss). Not
+	// persisted; a refresh shouldn't resurrect a stale notice.
+	Flash string `json:"flash"`
+
 	// FileView, when true, turns off the diff overlay: deleted lines are
 	// hidden, +/- gutter markers disappear, and add/del row coloring is
 	// dropped. The user sees the file as it currently exists in the
