@@ -5,37 +5,39 @@ import (
 	"testing"
 )
 
-// TestHighlightCSS_ModeScoped pins the three-block structure of /syntax.css:
-// an unscoped light block, an explicit-Dark block scoped to [data-mode="dark"],
-// and a System-dark copy inside @media (prefers-color-scheme: dark). This is
-// what lets one stylesheet recolor both modes with no JS and no refetch — and
-// it guards against a chroma upgrade silently changing WriteCSS's output shape
-// such that scopeSyntax stops prefixing (which would leak dark tokens into
-// light mode).
+// TestHighlightCSS_ModeScoped pins the per-scheme three-block structure of
+// /syntax.css: for EVERY registered scheme, a light block scoped to its
+// [data-scheme], an explicit-Dark block scoped to [data-mode="dark"], and a
+// System-dark copy inside @media (prefers-color-scheme: dark). This is what
+// lets one stylesheet recolor every scheme × mode with no JS and no refetch —
+// and it guards against (a) a chroma upgrade changing WriteCSS's output shape
+// so scopeSyntax stops prefixing, and (b) a scheme leaking unscoped rules that
+// would bleed across schemes.
 func TestHighlightCSS_ModeScoped(t *testing.T) {
 	css := HighlightCSS
 	if css == "" {
 		t.Fatal("HighlightCSS empty")
 	}
-
-	// Light tokens are unscoped — the default block.
-	if !strings.Contains(css, ".chroma .k {") {
-		t.Error("missing unscoped light keyword rule `.chroma .k {`")
-	}
-
-	// Dark tokens carry the explicit-mode scope.
-	const darkPrefix = `[data-scheme="solarized"][data-mode="dark"] .chroma`
-	if !strings.Contains(css, darkPrefix) {
-		t.Errorf("missing explicit-dark scoped rules (%q)", darkPrefix)
-	}
-
-	// System-dark repeats the dark block inside the media query, scoped so an
-	// explicit Light opt-out still wins.
 	if !strings.Contains(css, "@media (prefers-color-scheme: dark) {") {
 		t.Error("missing System-dark media query")
 	}
-	if !strings.Contains(css, `[data-scheme="solarized"]:not([data-mode="light"]) .chroma`) {
-		t.Error("missing System-dark scoped rules")
+	for _, s := range Schemes {
+		light := `[data-scheme="` + s.Name + `"] .chroma`
+		dark := `[data-scheme="` + s.Name + `"][data-mode="dark"] .chroma`
+		sys := `[data-scheme="` + s.Name + `"]:not([data-mode="light"]) .chroma`
+		if !strings.Contains(css, light) {
+			t.Errorf("%s: missing scoped light rules (%q)", s.Name, light)
+		}
+		if !strings.Contains(css, dark) {
+			t.Errorf("%s: missing explicit-dark scoped rules (%q)", s.Name, dark)
+		}
+		if !strings.Contains(css, sys) {
+			t.Errorf("%s: missing System-dark scoped rules (%q)", s.Name, sys)
+		}
+	}
+	// No scheme may emit an UNscoped chroma rule (would bleed across schemes).
+	if strings.Contains(css, "\n.chroma ") || strings.HasPrefix(css, ".chroma ") {
+		t.Error("found an unscoped `.chroma` rule — a scheme is leaking across [data-scheme]")
 	}
 }
 
