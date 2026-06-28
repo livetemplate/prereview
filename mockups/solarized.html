@@ -1,0 +1,252 @@
+<!doctype html>
+<!--
+  P2 DIRECTION MOCKUP — Solarized design system for prereview.
+  Static, not the shipped app. Tokens here mirror the real architecture:
+  scoped under [data-scheme="solarized"] with a [data-theme="dark"] override,
+  so this file doubles as the token reference for the real CSS.
+  Fonts: Geist (sans → chrome + prose), JetBrains Mono (mono → code only).
+-->
+<html lang="en" data-scheme="solarized" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>prereview · Solarized mockup</title>
+<style>
+@font-face{font-family:Geist;font-weight:400;font-display:swap;src:url("../internal/assets/fonts/Geist-Regular.woff2") format("woff2")}
+@font-face{font-family:Geist;font-weight:500;font-display:swap;src:url("../internal/assets/fonts/Geist-Medium.woff2") format("woff2")}
+@font-face{font-family:Geist;font-weight:600;font-display:swap;src:url("../internal/assets/fonts/Geist-SemiBold.woff2") format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:400;font-display:swap;src:url("../internal/assets/fonts/JetBrainsMono-Regular.woff2") format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:700;font-display:swap;src:url("../internal/assets/fonts/JetBrainsMono-Bold.woff2") format("woff2")}
+
+/* ── Solarized token system ───────────────────────────────────────────── */
+[data-scheme="solarized"]{
+  --sans:Geist,ui-sans-serif,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  /* light = Solarized light. Body text uses base01 (not the softer base00)
+     so it clears WCAG AA on base3 — the documented low-contrast risk. */
+  --surface:#fdf6e3;          /* base3  */
+  --surface-muted:#f3ecd7;    /* base3→base2 lift: panels, gutter, header */
+  --surface-card:#fbf3df;     /* comment card body */
+  --border:#e3dcc4;           /* derived hairline */
+  --border-strong:#d7cfb2;
+  --text:#586e75;             /* base01 — body */
+  --text-strong:#073642;      /* base02 — headings / strong */
+  --text-muted:#93a1a1;       /* base1  — gutters, meta */
+  --accent:#268bd2;           /* blue — links, focus, primary */
+  --accent-press:#1f6fa8;
+  --mark:#cb4b16;             /* orange — the annotation hero / "flagged" */
+  --mark-wash:rgba(203,75,22,.10);
+  --add-text:#5b6e00; --add-bg:rgba(133,153,0,.16);
+  --del-text:#b21f1c; --del-bg:rgba(220,50,47,.13);
+  /* syntax (Solarized) */
+  --s-key:#859900; --s-fn:#268bd2; --s-str:#2aa198; --s-num:#d33682;
+  --s-type:#b58900; --s-com:#93a1a1; --s-punc:#586e75;
+
+  --radius:7px; --radius-sm:5px;
+  --shadow:0 1px 2px rgba(0,43,54,.05),0 4px 14px rgba(0,43,54,.06);
+  --shadow-mark:0 2px 4px rgba(203,75,22,.10),0 6px 20px rgba(203,75,22,.10);
+}
+[data-scheme="solarized"][data-theme="dark"]{
+  --surface:#002b36;          /* base03 */
+  --surface-muted:#06303b;    /* between base03/base02 */
+  --surface-card:#073642;     /* base02 */
+  --border:#0d3a45;
+  --border-strong:#16454f;
+  --text:#93a1a1;             /* base1 — body (clears AA on base03) */
+  --text-strong:#eee8d5;      /* base2 */
+  --text-muted:#586e75;       /* base01 */
+  --accent:#268bd2; --accent-press:#3aa3e8;
+  --mark:#cb4b16; --mark-wash:rgba(203,75,22,.18);
+  --add-text:#9aab2e; --add-bg:rgba(133,153,0,.15);
+  --del-text:#e7706b; --del-bg:rgba(220,50,47,.16);
+  --s-key:#859900; --s-fn:#268bd2; --s-str:#2aa198; --s-num:#d33682;
+  --s-type:#b58900; --s-com:#586e75; --s-punc:#93a1a1;
+  --shadow:0 1px 2px rgba(0,0,0,.25),0 6px 20px rgba(0,0,0,.30);
+  --shadow-mark:0 2px 6px rgba(0,0,0,.30),0 8px 24px rgba(203,75,22,.16);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--surface);color:var(--text);
+  font-family:var(--sans);font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.app{max-width:1180px;margin:0 auto;padding:18px}
+
+/* ── Toolbar (sans chrome, coherent button system) ────────────────────── */
+.bar{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 12px;background:var(--surface-muted);
+  border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.bar .title{font-weight:600;color:var(--text-strong);font-size:14px}
+.bar .title .muted{color:var(--text-muted);font-weight:400}
+.spacer{flex:1}
+/* segmented control (replaces raw radios) */
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:var(--radius-sm);padding:2px;gap:2px}
+.seg button{border:0;background:none;font:inherit;font-size:12.5px;font-weight:500;
+  color:var(--text-muted);padding:3px 11px;border-radius:4px;cursor:pointer}
+.seg button.on{background:var(--accent);color:#fdf6e3;box-shadow:0 1px 2px rgba(0,43,54,.18)}
+/* buttons: 4-tier system */
+.btn{font:inherit;font-size:12.5px;font-weight:500;border-radius:var(--radius-sm);
+  padding:5px 12px;cursor:pointer;border:1px solid transparent;line-height:1.3}
+.btn-secondary{background:var(--surface);border-color:var(--border-strong);color:var(--text-strong)}
+.btn-secondary:hover{border-color:var(--accent)}
+.btn-primary{background:var(--accent);color:#fdf6e3;border-color:var(--accent-press)}
+.btn-ghost{background:none;color:var(--text-muted)}
+.btn-danger{background:none;border-color:var(--del-text);color:var(--del-text)}
+.chip{font-size:11px;color:var(--text-muted);border-left:1px solid var(--border);padding-left:10px}
+
+/* ── Layout: file tree | viewer ───────────────────────────────────────── */
+.layout{display:grid;grid-template-columns:230px 1fr;gap:14px;margin-top:14px}
+.panel{background:var(--surface-muted);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow)}
+
+/* file tree */
+.tree{padding:8px}
+.tree .base{font-size:11px;color:var(--text-muted);padding:2px 8px 8px;letter-spacing:.04em}
+.file{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-sm);
+  font-size:13px;color:var(--text);cursor:pointer;border-left:2px solid transparent}
+.file:hover{background:var(--surface)}
+.file.sel{background:var(--surface);border-left-color:var(--accent);
+  color:var(--text-strong);font-weight:500}
+.badge{font-size:10px;font-weight:600;width:17px;height:17px;display:grid;place-items:center;
+  border-radius:3px;font-family:var(--sans)}
+.badge.A{background:rgba(133,153,0,.18);color:var(--add-text)}
+.badge.M{background:rgba(181,137,0,.20);color:#9a6700}
+.fcount{margin-left:auto;font-size:10.5px;color:var(--text-muted);font-family:var(--mono)}
+
+/* viewer */
+.viewer{overflow:hidden}
+.fhead{padding:9px 14px;border-bottom:1px solid var(--border);font-family:var(--mono);
+  font-size:13px;color:var(--text-strong);background:var(--surface-muted);font-weight:700}
+.code{font-family:var(--mono);font-size:13px;line-height:1.6;background:var(--surface)}
+.ln{display:flex;align-items:flex-start}
+.ln .g{flex:0 0 46px;text-align:right;padding:1px 10px 1px 0;color:var(--text-muted);
+  font-size:12px;user-select:none;border-right:1px solid var(--border)}
+.ln .c{padding:1px 0 1px 12px;white-space:pre;flex:1;min-width:0;color:var(--s-punc)}
+.ln.add{background:var(--add-bg)} .ln.add .c{color:var(--s-punc)}
+.ln.add .g{color:var(--add-text)}
+.ln.del{background:var(--del-bg)} .ln.del .g{color:var(--del-text)}
+.ln.cur{box-shadow:inset 3px 0 0 0 var(--accent)}
+/* the line(s) the comment is anchored to — keyed to --mark (hero) */
+.ln.marked{background:var(--mark-wash);box-shadow:inset 3px 0 0 0 var(--mark)}
+.k{color:var(--s-key)} .fn{color:var(--s-fn)} .str{color:var(--s-str)}
+.num{color:var(--s-num)} .ty{color:var(--s-type)} .com{color:var(--s-com)}
+.fold{text-align:center;color:var(--text-muted);font-size:11px;font-family:var(--mono);
+  padding:3px;background:var(--surface-muted);border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);letter-spacing:.03em}
+
+/* ── Annotation as HERO ───────────────────────────────────────────────── */
+.comment{margin:10px 14px;background:var(--surface-card);
+  border:1px solid var(--border-strong);border-left:3px solid var(--mark);
+  border-radius:var(--radius);box-shadow:var(--shadow-mark);overflow:hidden;
+  /* comments live INSIDE the mono .code container — force prose back to sans
+     (the real .inline-comment needs this too; inline `code` stays mono). */
+  font-family:var(--sans)}
+.comment .chead{display:flex;align-items:center;gap:8px;padding:8px 13px 0;
+  font-size:11.5px;color:var(--text-muted)}
+.flag{display:inline-flex;align-items:center;gap:5px;color:var(--mark);font-weight:600;
+  font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.flag::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--mark)}
+.comment .loc{font-family:var(--mono);color:var(--text-muted)}
+.comment .body{padding:5px 13px 4px;color:var(--text-strong);font-size:14px;line-height:1.6}
+.comment .body code{font-family:var(--mono);font-size:12.5px;background:var(--surface-muted);
+  padding:1px 5px;border-radius:4px;color:var(--text)}
+.comment .cact{display:flex;gap:7px;padding:6px 13px 11px}
+
+/* ── Rendered Markdown (sans prose + real heading hierarchy) ───────────── */
+.md{padding:20px 26px;max-width:62ch}
+.md h2{font-size:21px;font-weight:600;color:var(--text-strong);line-height:1.3;
+  margin:0 0 4px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.md h3{font-size:15.5px;font-weight:600;color:var(--text-strong);margin:18px 0 4px}
+.md p{margin:9px 0;color:var(--text)}
+.md a{color:var(--accent);text-decoration:none}
+.md code{font-family:var(--mono);font-size:12.5px;background:var(--surface-muted);
+  padding:1px 5px;border-radius:4px;color:var(--text)}
+.md pre{font-family:var(--mono);font-size:12.5px;line-height:1.55;background:var(--surface-muted);
+  border:1px solid var(--border);border-radius:var(--radius);padding:11px 13px;overflow:auto;color:var(--s-punc)}
+.md blockquote{margin:10px 0;padding:2px 14px;border-left:3px solid var(--border-strong);
+  color:var(--text-muted)}
+.caption{font-size:11px;color:var(--text-muted);margin:22px 0 7px;letter-spacing:.06em;
+  text-transform:uppercase}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOOLBAR -->
+  <div class="bar">
+    <span class="title">payment.go <span class="muted">· prereview</span></span>
+    <span class="chip">3 files · 1 changed</span>
+    <div class="spacer"></div>
+    <div class="seg"><button class="on">Diff</button><button>File</button></div>
+    <button class="btn btn-secondary">Focus</button>
+    <button class="btn btn-secondary">Comment on file</button>
+    <button class="btn btn-primary">Hand off →</button>
+  </div>
+
+  <div class="layout">
+    <!-- FILE TREE -->
+    <div class="panel tree">
+      <div class="base">BASE · HEAD</div>
+      <div class="file"><span class="badge A">A</span>architecture.png<span class="fcount">+3</span></div>
+      <div class="file"><span class="badge M">M</span>guide.md<span class="fcount">+4</span></div>
+      <div class="file sel"><span class="badge M">M</span>payment.go<span class="fcount">+6−1</span></div>
+    </div>
+
+    <!-- VIEWER: diff + hero comment -->
+    <div class="panel viewer">
+      <div class="fhead">payment.go</div>
+      <div class="code">
+        <div class="fold">··· 9 unchanged lines ···</div>
+        <div class="ln"><span class="g">10</span><span class="c">    <span class="k">if</span> orderID <span class="k">==</span> <span class="str">""</span> {</span></div>
+        <div class="ln"><span class="g">11</span><span class="c">        <span class="k">return</span> errors.<span class="fn">New</span>(<span class="str">"missing order id"</span>)</span></div>
+        <div class="ln"><span class="g">12</span><span class="c">    }</span></div>
+        <div class="ln del"><span class="g">13</span><span class="c">    <span class="k">return</span> gateway.<span class="fn">Submit</span>(orderID, cents)</span></div>
+        <div class="ln add marked"><span class="g">13</span><span class="c">    <span class="k">for</span> attempt <span class="k">:=</span> <span class="num">0</span>; attempt &lt; maxRetries; attempt<span class="k">++</span> {</span></div>
+        <div class="ln add marked"><span class="g">14</span><span class="c">        <span class="k">if</span> err <span class="k">:=</span> gateway.<span class="fn">Submit</span>(orderID, cents); err <span class="k">!=</span> <span class="num">nil</span> {</span></div>
+        <div class="ln add marked"><span class="g">15</span><span class="c">            <span class="k">return</span> <span class="num">nil</span></span></div>
+        <div class="ln add marked"><span class="g">16</span><span class="c">        }</span></div>
+
+        <!-- HERO: the annotation is the focal point -->
+        <div class="comment">
+          <div class="chead"><span class="flag">flagged</span><span class="loc">L13–L16 · new</span></div>
+          <div class="body">Retry loop has no backoff or <code>ctx</code> — a failing gateway gets hammered. Wrap <code>gateway.Submit</code> in an exponential backoff and honour the request context.</div>
+          <div class="cact">
+            <button class="btn btn-secondary">Resolve</button>
+            <button class="btn btn-secondary">Edit</button>
+            <button class="btn btn-danger">Delete</button>
+          </div>
+        </div>
+
+        <div class="ln add"><span class="g">17</span><span class="c">    }</span></div>
+        <div class="ln add"><span class="g">18</span><span class="c">    <span class="k">return</span> errors.<span class="fn">New</span>(<span class="str">"charge failed after retries"</span>)</span></div>
+        <div class="ln"><span class="g">19</span><span class="c">}</span></div>
+        <div class="ln"><span class="g">20</span><span class="c"></span></div>
+        <div class="ln"><span class="g">21</span><span class="c"><span class="com">// Refund reverses a prior capture in full.</span></span></div>
+        <div class="fold">··· 3 unchanged lines ···</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENDERED MARKDOWN — sans prose, mono code -->
+  <div class="caption">Rendered Markdown · prose in Geist, code in JetBrains Mono</div>
+  <div class="panel md">
+    <h2>Payments guide</h2>
+    <p>The charge flow moves money in three hops: <code>Charge</code> → <code>Gateway</code> → <code>Refund</code>. Each hop is idempotent on the <code>orderID</code>, so a retried request never double-charges.</p>
+    <h3>Retry policy</h3>
+    <p>Transient gateway failures should retry with <a href="#">exponential backoff</a>, capped at five attempts. Always thread the caller's context so a cancelled request stops retrying:</p>
+    <pre><span class="k">for</span> attempt <span class="k">:=</span> <span class="num">0</span>; attempt &lt; <span class="num">5</span>; attempt<span class="k">++</span> {
+    <span class="k">if</span> err <span class="k">:=</span> submit(ctx, charge); err <span class="k">==</span> <span class="num">nil</span> { <span class="k">return</span> <span class="num">nil</span> }
+    backoff(attempt)
+}</pre>
+    <blockquote>Note: refunds bypass the retry loop — a failed refund is surfaced to the operator immediately.</blockquote>
+  </div>
+
+</div>
+</body>
+</html>

@@ -225,6 +225,9 @@ func registerAssetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/prereview.css", serveBytes("text/css", assets.PrereviewCSS()))
 	mux.HandleFunc("/fonts/jetbrains-mono-regular.woff2", serveBytes("font/woff2", assets.FontRegular()))
 	mux.HandleFunc("/fonts/jetbrains-mono-bold.woff2", serveBytes("font/woff2", assets.FontBold()))
+	mux.HandleFunc("/fonts/geist-regular.woff2", serveBytes("font/woff2", assets.GeistRegular()))
+	mux.HandleFunc("/fonts/geist-medium.woff2", serveBytes("font/woff2", assets.GeistMedium()))
+	mux.HandleFunc("/fonts/geist-semibold.woff2", serveBytes("font/woff2", assets.GeistSemiBold()))
 }
 
 // serveAndWait runs the UI server (and an optional secondary server, e.g. the

@@ -50,6 +50,20 @@ var fontRegular []byte
 //go:embed fonts/JetBrainsMono-Bold.woff2
 var fontBold []byte
 
+// Geist (SIL OFL 1.1, see fonts/Geist-OFL.txt) is the reading sans: the UI
+// chrome and ALL prose (comment bodies, rendered Markdown) use it, while
+// JetBrains Mono is reserved for code, diffs, and inline `code` spans. Three
+// weights ship — 400/500/600 cover body, medium chrome, and headings/strong.
+//
+//go:embed fonts/Geist-Regular.woff2
+var geistRegular []byte
+
+//go:embed fonts/Geist-Medium.woff2
+var geistMedium []byte
+
+//go:embed fonts/Geist-SemiBold.woff2
+var geistSemiBold []byte
+
 // mermaidJS is the pinned mermaid UMD bundle (v11.15.0). It is self-contained
 // (no dynamic import()), so every bundled diagram type renders offline. The
 // browser fetches it lazily — only when a page contains a ```mermaid fence.
@@ -82,6 +96,15 @@ func FontRegular() []byte { return fontRegular }
 
 // FontBold returns the embedded JetBrains Mono Bold (700) woff2.
 func FontBold() []byte { return fontBold }
+
+// GeistRegular returns the embedded Geist 400 (body/prose) woff2.
+func GeistRegular() []byte { return geistRegular }
+
+// GeistMedium returns the embedded Geist 500 (chrome/buttons) woff2.
+func GeistMedium() []byte { return geistMedium }
+
+// GeistSemiBold returns the embedded Geist 600 (headings/strong) woff2.
+func GeistSemiBold() []byte { return geistSemiBold }
 
 // MermaidJS returns the embedded mermaid UMD bundle.
 func MermaidJS() []byte { return mermaidJS }

@@ -18,12 +18,13 @@
          and the next <form> is a "trim carrier" that emits nothing.
      SVG icons live in iconX define blocks at the bottom, inlined at parse. */ -}}
 <!DOCTYPE html>
-{{/* data-theme=light forces Pico's light-mode palette regardless of the
-     OS color scheme. The diff colors (chroma github theme + the
-     hardcoded add/del/ctx backgrounds + status-badge tints) all assume
-     a light background; auto-darkmode breaks contrast for chroma's
-     non-bright tokens and leaves status badges invisible on dark. */}}
-<html lang="en" data-theme="light">
+{{/* data-scheme selects the coordinated color scheme (Solarized today;
+     gruvbox/catppuccin attach to the same [data-scheme] CSS later).
+     data-theme=light forces Pico's light-mode palette for now; the
+     Light/Dark/System toggle makes it dynamic alongside the dark token
+     block + a dark chroma syntax sheet. All colors derive from these two
+     attributes — see [data-scheme="solarized"] in prereview.css. */}}
+<html lang="en" data-scheme="solarized" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta

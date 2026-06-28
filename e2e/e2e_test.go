@@ -945,10 +945,11 @@ func TestE2E_Footer(t *testing.T) {
 	mu.Unlock()
 }
 
-// TestE2E_DesktopReadingSurface pins the desktop reading fixes: the
-// self-hosted JetBrains Mono webfont actually loads (200 + applied as
-// the computed family), the rendered-Markdown prose is bumped well
-// past the cramped 14px mobile base, and the reading column uses the
+// TestE2E_DesktopReadingSurface pins the desktop reading fixes + the
+// two-typeface model: the self-hosted Geist (prose sans) and JetBrains
+// Mono (code) webfonts both load (200 + applied), prose computes to Geist
+// while inline/diff code stays mono, the rendered-Markdown prose is bumped
+// well past the cramped 14px mobile base, and the reading column uses the
 // available width centered (no longer a narrow left-hugging 60rem).
 func TestE2E_DesktopReadingSurface(t *testing.T) {
 	// Wide viewport (1920): the prose reading cap (56rem ≈ 896px) only
@@ -999,25 +1000,27 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 
 	p.waitReadyAt(1920, 1000)
 
-	// JetBrains Mono actually loaded (woff2 fetched + decoded), applied
-	// as the computed family, and the desktop prose size is comfortable.
-	var fontLoaded bool
+	// Two-typeface model: rendered Markdown PROSE is Geist (sans); code
+	// stays JetBrains Mono (asserted on the code surfaces below). Check the
+	// sans face actually loaded (woff2 fetched + decoded), is the computed
+	// family on the prose, and the desktop prose size is comfortable.
+	var geistLoaded bool
 	var renderedFamily string
 	var proseFontPx float64
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.md-rendered`, chromedp.ByQuery),
-		chromedp.Evaluate(`(async()=>{await document.fonts.ready;return document.fonts.check('1em "JetBrains Mono"');})()`, &fontLoaded,
+		chromedp.Evaluate(`(async()=>{await document.fonts.ready;return document.fonts.check('1em "Geist"');})()`, &geistLoaded,
 			func(ep *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams { return ep.WithAwaitPromise(true) }),
 		chromedp.Evaluate(`getComputedStyle(document.querySelector('.md-rendered')).fontFamily`, &renderedFamily),
 		chromedp.Evaluate(`parseFloat(getComputedStyle(document.querySelector('.md-rendered')).fontSize)`, &proseFontPx),
 	); err != nil {
 		t.Fatalf("font/prose query: %v%s", err, diag())
 	}
-	if !fontLoaded {
-		t.Errorf("document.fonts.check failed — JetBrains Mono did not load%s", diag())
+	if !geistLoaded {
+		t.Errorf("document.fonts.check failed — Geist (prose sans) did not load%s", diag())
 	}
-	if !strings.Contains(renderedFamily, "JetBrains Mono") {
-		t.Errorf("rendered Markdown computed font-family = %q, want it to start with \"JetBrains Mono\"%s", renderedFamily, diag())
+	if !strings.Contains(renderedFamily, "Geist") {
+		t.Errorf("rendered Markdown computed font-family = %q, want it to start with \"Geist\" (prose is sans)%s", renderedFamily, diag())
 	}
 	// Desktop prose tracks the 16px desktop html base (1rem). An earlier
 	// 1.25rem (20px) bump read as too large on wide monitors — users
@@ -1027,19 +1030,24 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 		t.Errorf("desktop prose font-size = %.1fpx, want ≈16 (the 1rem desktop base; 20px read as too large)%s", proseFontPx, diag())
 	}
 
-	// The woff2 was served by our own route with a 200 (self-hosted, no
-	// CDN). At least the Regular face is requested for the prose.
+	// Both faces are served by our own routes with a 200 (self-hosted, no
+	// CDN): Geist for the prose, JetBrains Mono for the inline code spans.
 	mu.Lock()
-	var fontOK bool
+	var geistOK, jbmOK bool
 	for _, r := range netResponses {
-		if strings.Contains(r, "/fonts/jetbrains-mono-") && strings.HasPrefix(r, "200 ") {
-			fontOK = true
-			break
+		if strings.HasPrefix(r, "200 ") && strings.Contains(r, "/fonts/geist-") {
+			geistOK = true
+		}
+		if strings.HasPrefix(r, "200 ") && strings.Contains(r, "/fonts/jetbrains-mono-") {
+			jbmOK = true
 		}
 	}
 	mu.Unlock()
-	if !fontOK {
-		t.Errorf("expected a 200 for a /fonts/jetbrains-mono-*.woff2 route%s", diag())
+	if !geistOK {
+		t.Errorf("expected a 200 for a /fonts/geist-*.woff2 route (prose sans)%s", diag())
+	}
+	if !jbmOK {
+		t.Errorf("expected a 200 for a /fonts/jetbrains-mono-*.woff2 route (code mono)%s", diag())
 	}
 
 	// Reading column (issue #27 "narrower body for breathing space"):
@@ -1076,20 +1084,21 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 		t.Errorf("md-view reading column is too narrow (<560px) — not the intended comfortable measure%s", diag())
 	}
 
-	// Issue 4: code must use the SAME font as prose. The Markdown code
-	// block and the raw diff view both resolve to JetBrains Mono now
-	// (Pico's separate --pico-font-family-monospace + every explicit
-	// declaration point at --jbm). Also the toolbar is bumped.
+	// Two-typeface split: an inline `code` span inside the (sans) prose
+	// stays JetBrains Mono — Pico's --pico-font-family-monospace governs
+	// code/kbd/samp/pre regardless of the sans body family. This is the
+	// anti-regression that proves prose and code diverged correctly. Also
+	// the toolbar font is bumped on desktop.
 	var mdCodeFam string
 	var btnFontPx float64
 	if err := chromedp.Run(p.ctx,
 		chromedp.Evaluate(`getComputedStyle(document.querySelector('.md-rendered code')).fontFamily`, &mdCodeFam),
 		chromedp.Evaluate(`parseFloat(getComputedStyle(document.querySelector('header.bar button')).fontSize)`, &btnFontPx),
 	); err != nil {
-		t.Fatalf("font-unify query: %v%s", err, diag())
+		t.Fatalf("font-split query: %v%s", err, diag())
 	}
 	if !strings.Contains(mdCodeFam, "JetBrains Mono") {
-		t.Errorf("Markdown code block font = %q, want JetBrains Mono (must match prose)%s", mdCodeFam, diag())
+		t.Errorf("inline Markdown code font = %q, want JetBrains Mono (code stays mono while prose is sans)%s", mdCodeFam, diag())
 	}
 	if btnFontPx < 15 {
 		t.Errorf("toolbar button font-size = %.1fpx, want >=15 (desktop bump)%s", btnFontPx, diag())
@@ -1104,7 +1113,7 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 		t.Fatalf("raw-view font query: %v%s", err, diag())
 	}
 	if !strings.Contains(codeFam, "JetBrains Mono") {
-		t.Errorf("raw diff/code view font = %q, want JetBrains Mono (must match Markdown)%s", codeFam, diag())
+		t.Errorf("raw diff/code view font = %q, want JetBrains Mono (code surfaces stay mono)%s", codeFam, diag())
 	}
 
 	mu.Lock()
