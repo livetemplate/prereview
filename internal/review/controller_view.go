@@ -67,6 +67,17 @@ func (c *PrereviewController) CycleTheme(state PrereviewState, ctx *livetemplate
 	return state, nil
 }
 
+// CycleScheme advances the curated color scheme (the Theme axis, issue from
+// the UI-overhaul plan), cycling through gitdiff.Schemes in registry order.
+// Persisted per-user; the page re-renders with the new data-scheme attribute
+// and the cascade re-skins chrome + diff — no JS, no CSS refetch (/syntax.css
+// carries every scheme). Like CycleTheme, leaves the overflow menu open so a
+// click from inside it can cycle again in place.
+func (c *PrereviewController) CycleScheme(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.SchemeName = state.NextScheme()
+	return state, nil
+}
+
 // ToggleKeyboardHelp opens/closes the keyboard-shortcuts help overlay.
 // Triggered by the "?" key and the toolbar help button (both dispatch
 // toggleKeyboardHelp); Esc closes it via ClearSelection. Closes the overflow

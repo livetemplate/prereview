@@ -81,13 +81,18 @@ file is formatted and the guard exists.
 
 ## Theming: `data-scheme` / `data-mode` (read before touching colors)
 
-The whole UI is re-skinned by two attributes on the **`.theme-root` wrapper**
-(`page.tmpl`, inside `<body>`), NOT on `<html>`:
+The whole UI is re-skinned by two **orthogonal** attributes on the
+**`.theme-root` wrapper** (`page.tmpl`, inside `<body>`), NOT on `<html>`:
 
-- **`data-scheme`** — the coordinated color scheme (`solarized` today; gruvbox/
-  catppuccin attach to the same `[data-scheme]` CSS later).
+- **`data-scheme`** — the coordinated color scheme. Three ship today —
+  `solarized` (default) / `gruvbox` / `catppuccin` — cycled by the toolbar
+  palette button (`cycleScheme` → `state.CycleScheme`). The registry is
+  `gitdiff.Schemes` (one row = Name + Label + the two chroma styles); the state
+  helpers (`DataScheme`/`NextScheme`/`SchemeLabel`) loop it, so **adding a
+  scheme = one registry row + one CSS token block** (light + dark + @media).
 - **`data-mode`** — Light/Dark/System (`""` = System; see `state.ThemeMode` /
-  `DataMode()`). Omitted for System so `@media (prefers-color-scheme)` drives it.
+  `DataMode()`, cycled by `cycleTheme`). Omitted for System so `@media
+  (prefers-color-scheme)` drives it.
 
 Three non-obvious facts that took a while to get right (don't regress them):
 
@@ -104,12 +109,31 @@ Three non-obvious facts that took a while to get right (don't regress them):
    wrapper, so it does NOT theme — `.layout` is painted `var(--surface)` to
    cover it. `<html data-theme="light">` stays pinned so Pico's own dark palette
    never activates.
-3. **Dark tokens are duplicated on purpose.** The Solarized-dark block appears
-   twice in `prereview.css` — once `[data-scheme="solarized"][data-mode="dark"]`
-   and once inside `@media (prefers-color-scheme: dark)` for no-JS System mode.
+3. **Dark tokens are duplicated on purpose.** Each scheme's dark block appears
+   twice in `prereview.css` — once `[data-scheme="x"][data-mode="dark"]` and
+   once inside `@media (prefers-color-scheme: dark)` for no-JS System mode.
    They can't be merged (one is in a media query); a `KEEP IN SYNC` comment
    marks them. Lightness-encoding `--pico-*` vars (heading/form/code text) are
-   mapped to semantic tokens in the light block so they auto-flip in dark.
+   mapped to semantic tokens in **the light block** (which always matches) so
+   they auto-flip when dark redefines those semantic tokens — forget them in a
+   new scheme's light block and dark renders dark-on-dark headings/inputs.
+
+Two more per-scheme gotchas when adding a scheme (gruvbox/catppuccin are the
+worked examples):
+
+- **`--pico-primary-inverse` (filled-button label) flips per scheme×mode.** If a
+  scheme's *dark* accent is light (gruvbox `#83a598`, catppuccin `#cba6f7`), its
+  dark block needs a *dark* inverse (`#282828` / `#1e1e2e`) or the Save/Hand-off
+  label goes invisible. `TestE2E_SchemePicker` asserts this per scheme — don't
+  remove that check. Light blocks can keep `var(--surface)` (both new light
+  accents are dark).
+- **Light-mode component colors fall through to global GitHub-pastel defaults**
+  (status badges, diff-stats, md-alerts further down the file). New schemes only
+  re-skin them in their **dark** block — wherever the dark color already lives in
+  a semantic token (`--pr-add`/`--pr-del`/`--accent`) reference the token via
+  `color-mix(...)` rather than re-hardcoding; only genuinely-distinct status hues
+  (yellow/violet/magenta + the 5 alert accents) are literals. Solarized predates
+  this and hardcodes its dark hex — leave it alone (it's screenshot-guarded).
 
 Syntax colors live in `/syntax.css` (`gitdiff/highlight.go`), which carries BOTH
 modes: the light chroma block unscoped, the dark block scoped (`scopeSyntax`)

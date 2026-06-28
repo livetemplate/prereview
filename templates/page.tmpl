@@ -45,9 +45,9 @@
      managed subtree so the Light/Dark toggle morphs them live (a data-mode on
      <html> would need a full reload). display:contents (prereview.css) keeps it
      boxless so the flex/scroll chain is unchanged; the tokens it sets cascade
-     into the whole UI by custom-property inheritance. data-scheme is static
-     today (Solarized); P6 makes it dynamic on this same element. */}}
-<div class="theme-root" data-scheme="solarized"{{with .DataMode}} data-mode="{{.}}"{{end}}>
+     into the whole UI by custom-property inheritance. Both axes are dynamic:
+     data-scheme (the curated scheme) and data-mode (Light/Dark/System). */}}
+<div class="theme-root" data-scheme="{{.DataScheme}}"{{with .DataMode}} data-mode="{{.}}"{{end}}>
 {{/* Global cancel. Esc clears any selection, closes the composer, and
      dismisses the keyboard-help overlay. A guard-free window binding (NOT
      skip-when-typing) so it fires even while the composer textarea is focused,
@@ -410,19 +410,29 @@
       </form>
     </div>
     {{end}}
-    {{/* Light/Dark/System color mode (#60). One button cycles
-         System → Light → Dark; the icon shows the CURRENT mode (sun/moon/
-         auto) and the title says what a click switches to. Always shown —
-         the mode is a global reading preference, useful before any file is
-         open. The overflow menu carries the same control for narrow widths. */}}
+    {{/* Two orthogonal color controls. The PALETTE cycles the curated scheme
+         (Solarized → Gruvbox → Catppuccin); the SUN/MOON cycles the mode
+         (System → Light → Dark). Each icon-only button shows the current
+         value and its title says what a click switches to. Always shown —
+         both are global reading preferences, useful before any file is open.
+         The overflow menu mirrors both for narrow widths. */}}
     <div class="tb-group tb-theme">
+      <form method="POST">
+        <button
+          type="submit"
+          name="cycleScheme"
+          class="contrast theme-toggle"
+          title="Color scheme: {{.SchemeLabel}} — switch to {{.NextSchemeLabel}}"
+          aria-label="Color scheme: {{.SchemeLabel}}. Switch to {{.NextSchemeLabel}}."
+        >{{template "iconPalette"}}</button>
+      </form>
       <form method="POST">
         <button
           type="submit"
           name="cycleTheme"
           class="contrast theme-toggle"
-          title="Theme: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}"
-          aria-label="Color theme: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}."
+          title="Color mode: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}"
+          aria-label="Color mode: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}."
         >{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}</button>
       </form>
     </div>
@@ -562,9 +572,22 @@
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ViewedCount}}/{{len .Files}} viewed
     {{- if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end -}}
   </div>
-  {{/* Color mode — mirrors the desktop toolbar theme toggle. Cycles
+  {{/* Color scheme + mode — mirror the desktop toolbar palette + sun/moon.
+       Scheme cycles Solarized → Gruvbox → Catppuccin; mode cycles
        System → Light → Dark; meta shows what the next tap switches to.
-       First item so it's always reachable regardless of the open file. */}}
+       First items so they're always reachable regardless of the open file. */}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="cycleScheme"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon">{{template "iconPalette"}}</span>
+      <span class="menu-label">Scheme: {{.SchemeLabel}}</span>
+      <span class="menu-meta">{{.NextSchemeLabel}} →</span>
+    </button>
+  </form>
   <form method="POST">
     <button
       type="submit"
@@ -573,7 +596,7 @@
       role="menuitem"
     >
       <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}</span>
-      <span class="menu-label">Theme: {{.ThemeModeLabel}}</span>
+      <span class="menu-label">Mode: {{.ThemeModeLabel}}</span>
       <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
     </button>
   </form>

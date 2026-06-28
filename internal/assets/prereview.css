@@ -238,6 +238,359 @@
   }
 }
 
+/* ── Theme: Gruvbox (warm) ───────────────────────────────────────────────
+   Second curated scheme — Pawel Pacholec's Gruvbox. Same architecture as
+   Solarized above: tokens on [data-scheme="gruvbox"] (the .theme-root
+   wrapper), light here, dark in the two blocks below. Component colours
+   (status badges, diff-stats, alerts) inherit the global LIGHT defaults in
+   light mode and are re-skinned per-scheme in dark — wherever a dark
+   component colour already lives in a semantic token (--pr-add/--pr-del/
+   --accent) we reference the token instead of re-hardcoding it, so only the
+   genuinely-distinct status hues (yellow/violet/magenta) stay literal.
+   Body #3c3836 on #fbf1c7 = 10.2 (AAA); accent-as-link #076678 = 5.8 (AA). */
+[data-scheme="gruvbox"] {
+  --surface: #fbf1c7;          /* bg0    — page + content + code + cards    */
+  --surface-muted: #ebdbb2;    /* bg2    — header / drawer / gutter / folds  */
+  --surface-card: #f4ead0;     /* comment + composer surface (slightly up)   */
+  --border: #d5c4a1;
+  --border-strong: #bdae93;
+  --text: #3c3836;             /* fg1    — body                              */
+  --text-strong: #282828;      /* fg0    — headings / strong                 */
+  --text-muted: #665c54;       /* fg3    — readable muted (meta, gutters)    */
+  --text-faint: #7c6f64;       /* fg4    — lowest-emphasis                   */
+  --accent: #076678;           /* faded blue — links, focus, primary        */
+  --accent-weak: #458588;      /* neutral blue — selected-file hairline      */
+  --accent-press: #054d5a;
+  --mark: #d65d0e;             /* orange — the annotation hero / "flagged"   */
+  --mark-wash: rgba(214, 93, 14, .12);
+  --soft-bg: #f2e5bc;          /* bg0_s — secondary-button surface           */
+  --soft-bg-hover: #ecdcae;
+
+  /* diff — desaturated Gruvbox green/red washes; text tones for contrast. */
+  --pr-add: #6f6a0d; --pr-del: #9d0006;
+  --pr-add-bg: rgba(152, 151, 26, .18); --pr-del-bg: rgba(204, 36, 29, .13);
+  --pr-sel-bg: rgba(214, 93, 14, .15);   /* selection ties to --mark         */
+  --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+
+  --shadow-sm: 0 1px 2px rgba(60, 56, 54, .05), 0 1px 3px rgba(60, 56, 54, .06);
+  --shadow-md: 0 8px 24px rgba(60, 56, 54, .12);
+  --shadow-mark: 0 2px 4px rgba(214, 93, 14, .10), 0 6px 20px rgba(214, 93, 14, .10);
+
+  /* Re-skin Pico's framework vars so the whole UI follows the scheme.
+     The h2–h6 / form / code mappings MUST be in this (always-matching)
+     light block, not the dark one: they re-point Pico's lightness-encoding
+     vars at semantic tokens so dark auto-flips them through the cascade. */
+  --pico-background-color: var(--surface);
+  --pico-card-background-color: var(--surface);
+  --pico-card-sectioning-background-color: var(--surface-muted);
+  --pico-code-background-color: #f2e5bc;
+  --pico-form-element-background-color: #fcf6d8;
+  --pico-secondary-background: var(--surface-muted);
+  --pico-color: var(--text);
+  --pico-h1-color: var(--text-strong);
+  --pico-h2-color: var(--text-strong);
+  --pico-h3-color: var(--text-strong);
+  --pico-h4-color: var(--text-strong);
+  --pico-h5-color: var(--text);
+  --pico-h6-color: var(--text-muted);
+  --pico-form-element-color: var(--text);
+  --pico-form-element-border-color: var(--border-strong);
+  --pico-form-element-active-background-color: var(--surface);
+  --pico-form-element-active-border-color: var(--accent);
+  --pico-code-color: var(--text);
+  --pico-muted-color: var(--text-muted);
+  --pico-muted-border-color: var(--border);
+  --pico-primary: var(--accent);
+  --pico-primary-hover: var(--accent-press);
+  --pico-primary-border: var(--accent-press);
+  --pico-primary-inverse: var(--surface);
+  --pico-contrast: var(--text-strong);
+  --pico-contrast-inverse: var(--surface);
+}
+
+/* ── Theme: Gruvbox — DARK ───────────────────────────────────────────────
+   Same two-entry-point structure as Solarized dark: an explicit Dark toggle
+   block + a verbatim @media copy for System mode. Body #ebdbb2 on #282828 =
+   10.8 (AAA). NOTE the --pico-primary-inverse FLIP: Gruvbox's dark accent
+   #83a598 is LIGHT, so primary-button text must be DARK (#282828) — the
+   opposite of Solarized, whose accent stays dark in both modes. */
+[data-scheme="gruvbox"][data-mode="dark"] {
+  --surface: #282828;          /* bg0    — page + content + code + cards    */
+  --surface-muted: #3c3836;    /* bg1    — header / drawer / gutter / folds  */
+  --surface-card: #32302f;     /* comment + composer surface (slightly up)   */
+  --border: #504945;
+  --border-strong: #665c54;
+  --text: #ebdbb2;             /* fg1    — body (clears AA on bg0)           */
+  --text-strong: #fbf1c7;      /* fg0    — headings / strong                 */
+  --text-muted: #bdae93;       /* fg3    — meta / gutters                    */
+  --text-faint: #a89984;       /* gray   — lowest-emphasis                   */
+  --accent: #83a598; --accent-weak: #4e6b60; --accent-press: #a3c0b5;
+  --mark: #fe8019;             /* bright orange — annotation hero            */
+  --mark-wash: rgba(254, 128, 25, .20);
+  --soft-bg: #3c3836; --soft-bg-hover: #504945;
+
+  /* diff — bright Gruvbox green/red, washes opened up for the dark surface. */
+  --pr-add: #b8bb26; --pr-del: #fb4934;
+  --pr-add-bg: rgba(184, 187, 38, .20); --pr-del-bg: rgba(251, 73, 52, .18);
+  --pr-sel-bg: rgba(254, 128, 25, .22);
+  --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .30), 0 1px 3px rgba(0, 0, 0, .35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, .50);
+  --shadow-mark: 0 2px 4px rgba(254, 128, 25, .22), 0 6px 20px rgba(254, 128, 25, .18);
+
+  --pico-code-background-color: #32302f;
+  --pico-form-element-background-color: #1d2021;
+  --pico-primary-inverse: #282828; /* accent is light → dark button text */
+
+  /* Status hues not carried by a semantic token (bright Gruvbox palette). */
+  --c-yellow: #fabd2f; --c-violet: #d3869b; --c-magenta: #d3869b;
+  & .status-badge.A { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
+  & .status-badge.M { background: color-mix(in srgb, var(--c-yellow) 22%, transparent); color: var(--c-yellow); }
+  & .status-badge.D { background: color-mix(in srgb, var(--pr-del) 20%, transparent); color: var(--pr-del); }
+  & .status-badge.R { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+  & .status-badge.C { background: color-mix(in srgb, var(--c-violet) 24%, transparent); color: var(--c-violet); }
+  & .status-badge.T { background: color-mix(in srgb, var(--c-magenta) 24%, transparent); color: var(--c-magenta); }
+  & dialog#files-drawer button.file-btn.is-selected {
+    background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent-press); border-left-color: var(--accent);
+  }
+  & dialog#files-drawer button.file-btn .diff-stats .add { color: var(--pr-add); }
+  & dialog#files-drawer button.file-btn .diff-stats .del { color: var(--pr-del); }
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle,
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: var(--pr-add); }
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle {
+    border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, transparent);
+  }
+  & .all-comments .ac-jump-btn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  & .md-rendered .md-alert-note      { --md-alert-accent: var(--accent); }
+  & .md-rendered .md-alert-tip       { --md-alert-accent: var(--pr-add); }
+  & .md-rendered .md-alert-important { --md-alert-accent: var(--c-violet); }
+  & .md-rendered .md-alert-warning   { --md-alert-accent: var(--c-yellow); }
+  & .md-rendered .md-alert-caution   { --md-alert-accent: var(--pr-del); }
+}
+@media (prefers-color-scheme: dark) {
+  /* Verbatim duplicate of the Gruvbox [data-mode="dark"] block above for
+     System mode. KEEP IN SYNC with the block above. */
+  [data-scheme="gruvbox"]:not([data-mode="light"]) {
+    --surface: #282828;
+    --surface-muted: #3c3836;
+    --surface-card: #32302f;
+    --border: #504945;
+    --border-strong: #665c54;
+    --text: #ebdbb2;
+    --text-strong: #fbf1c7;
+    --text-muted: #bdae93;
+    --text-faint: #a89984;
+    --accent: #83a598; --accent-weak: #4e6b60; --accent-press: #a3c0b5;
+    --mark: #fe8019;
+    --mark-wash: rgba(254, 128, 25, .20);
+    --soft-bg: #3c3836; --soft-bg-hover: #504945;
+    --pr-add: #b8bb26; --pr-del: #fb4934;
+    --pr-add-bg: rgba(184, 187, 38, .20); --pr-del-bg: rgba(251, 73, 52, .18);
+    --pr-sel-bg: rgba(254, 128, 25, .22);
+    --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .30), 0 1px 3px rgba(0, 0, 0, .35);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, .50);
+    --shadow-mark: 0 2px 4px rgba(254, 128, 25, .22), 0 6px 20px rgba(254, 128, 25, .18);
+    --pico-code-background-color: #32302f;
+    --pico-form-element-background-color: #1d2021;
+    --pico-primary-inverse: #282828;
+    --c-yellow: #fabd2f; --c-violet: #d3869b; --c-magenta: #d3869b;
+    & .status-badge.A { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
+    & .status-badge.M { background: color-mix(in srgb, var(--c-yellow) 22%, transparent); color: var(--c-yellow); }
+    & .status-badge.D { background: color-mix(in srgb, var(--pr-del) 20%, transparent); color: var(--pr-del); }
+    & .status-badge.R { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+    & .status-badge.C { background: color-mix(in srgb, var(--c-violet) 24%, transparent); color: var(--c-violet); }
+    & .status-badge.T { background: color-mix(in srgb, var(--c-magenta) 24%, transparent); color: var(--c-magenta); }
+    & dialog#files-drawer button.file-btn.is-selected {
+      background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent-press); border-left-color: var(--accent);
+    }
+    & dialog#files-drawer button.file-btn .diff-stats .add { color: var(--pr-add); }
+    & dialog#files-drawer button.file-btn .diff-stats .del { color: var(--pr-del); }
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle,
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: var(--pr-add); }
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle {
+      border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, transparent);
+    }
+    & .all-comments .ac-jump-btn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+    & .md-rendered .md-alert-note      { --md-alert-accent: var(--accent); }
+    & .md-rendered .md-alert-tip       { --md-alert-accent: var(--pr-add); }
+    & .md-rendered .md-alert-important { --md-alert-accent: var(--c-violet); }
+    & .md-rendered .md-alert-warning   { --md-alert-accent: var(--c-yellow); }
+    & .md-rendered .md-alert-caution   { --md-alert-accent: var(--pr-del); }
+  }
+}
+
+/* ── Theme: Catppuccin (cool) ────────────────────────────────────────────
+   Third curated scheme — Catppuccin Latte (light) / Mocha (dark). Body
+   #4c4f69 on #eff1f5 = 7.1 (AAA); accent-as-link mauve #8839ef = 4.8 (AA).
+   Warm marks were nudged darker for contrast (mark #c75312 = 4.0, add
+   #2f7d1e = 4.6) — see the locked WCAG table. */
+[data-scheme="catppuccin"] {
+  --surface: #eff1f5;          /* base   — page + content + code + cards    */
+  --surface-muted: #e6e9ef;    /* mantle — header / drawer / gutter / folds  */
+  --surface-card: #e9ecf2;     /* comment + composer surface (slightly up)   */
+  --border: #ccd0da;           /* surface0                                   */
+  --border-strong: #bcc0cc;    /* surface1                                   */
+  --text: #4c4f69;             /* text   — body                              */
+  --text-strong: #3c3e54;      /* headings / strong (darkened from text)     */
+  --text-muted: #6c6f85;       /* subtext0 — readable muted                  */
+  --text-faint: #8c8fa1;       /* overlay1 — lowest-emphasis                 */
+  --accent: #8839ef;           /* mauve — links, focus, primary             */
+  --accent-weak: #b46ef5;      /* selected-file hairline                     */
+  --accent-press: #6f24cf;
+  --mark: #c75312;             /* peach (darkened) — annotation hero         */
+  --mark-wash: rgba(199, 83, 18, .12);
+  --soft-bg: #e6e9ef;          /* secondary-button surface                   */
+  --soft-bg-hover: #dce0e8;
+
+  /* diff — Catppuccin green/red washes; text tones darkened for contrast. */
+  --pr-add: #2f7d1e; --pr-del: #d20f39;
+  --pr-add-bg: rgba(64, 160, 43, .16); --pr-del-bg: rgba(210, 15, 57, .12);
+  --pr-sel-bg: rgba(199, 83, 18, .15);   /* selection ties to --mark         */
+  --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+
+  --shadow-sm: 0 1px 2px rgba(76, 79, 105, .05), 0 1px 3px rgba(76, 79, 105, .06);
+  --shadow-md: 0 8px 24px rgba(76, 79, 105, .12);
+  --shadow-mark: 0 2px 4px rgba(199, 83, 18, .10), 0 6px 20px rgba(199, 83, 18, .10);
+
+  --pico-background-color: var(--surface);
+  --pico-card-background-color: var(--surface);
+  --pico-card-sectioning-background-color: var(--surface-muted);
+  --pico-code-background-color: #e6e9ef;
+  --pico-form-element-background-color: #f3f5f8;
+  --pico-secondary-background: var(--surface-muted);
+  --pico-color: var(--text);
+  --pico-h1-color: var(--text-strong);
+  --pico-h2-color: var(--text-strong);
+  --pico-h3-color: var(--text-strong);
+  --pico-h4-color: var(--text-strong);
+  --pico-h5-color: var(--text);
+  --pico-h6-color: var(--text-muted);
+  --pico-form-element-color: var(--text);
+  --pico-form-element-border-color: var(--border-strong);
+  --pico-form-element-active-background-color: var(--surface);
+  --pico-form-element-active-border-color: var(--accent);
+  --pico-code-color: var(--text);
+  --pico-muted-color: var(--text-muted);
+  --pico-muted-border-color: var(--border);
+  --pico-primary: var(--accent);
+  --pico-primary-hover: var(--accent-press);
+  --pico-primary-border: var(--accent-press);
+  --pico-primary-inverse: var(--surface);
+  --pico-contrast: var(--text-strong);
+  --pico-contrast-inverse: var(--surface);
+}
+
+/* ── Theme: Catppuccin — DARK (Mocha) ────────────────────────────────────
+   Body #cdd6f4 on #1e1e2e = 11.3 (AAA). --pico-primary-inverse FLIP again:
+   Mocha mauve #cba6f7 is LIGHT, so primary-button text must be DARK. */
+[data-scheme="catppuccin"][data-mode="dark"] {
+  --surface: #1e1e2e;          /* base   — page + content + code + cards    */
+  --surface-muted: #181825;    /* mantle — header / drawer / gutter / folds  */
+  --surface-card: #313244;     /* surface0 — comment + composer surface      */
+  --border: #313244;
+  --border-strong: #45475a;
+  --text: #cdd6f4;             /* text   — body (clears AA on base)          */
+  --text-strong: #e6ebf9;      /* headings / strong (lightened from text)    */
+  --text-muted: #a6adc8;       /* subtext0 — meta / gutters                  */
+  --text-faint: #7f849c;       /* overlay1 — lowest-emphasis                 */
+  --accent: #cba6f7; --accent-weak: #9a78c4; --accent-press: #ddc4fb;
+  --mark: #fab387;             /* peach — annotation hero                    */
+  --mark-wash: rgba(250, 179, 135, .20);
+  --soft-bg: #313244; --soft-bg-hover: #45475a;
+
+  /* diff — Catppuccin green/red, washes opened up for the dark surface. */
+  --pr-add: #a6e3a1; --pr-del: #f38ba8;
+  --pr-add-bg: rgba(166, 227, 161, .18); --pr-del-bg: rgba(243, 139, 168, .18);
+  --pr-sel-bg: rgba(250, 179, 135, .20);
+  --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .30), 0 1px 3px rgba(0, 0, 0, .35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, .50);
+  --shadow-mark: 0 2px 4px rgba(250, 179, 135, .22), 0 6px 20px rgba(250, 179, 135, .18);
+
+  --pico-code-background-color: #313244;
+  --pico-form-element-background-color: #181825;
+  --pico-primary-inverse: #1e1e2e; /* accent is light → dark button text */
+
+  --c-yellow: #f9e2af; --c-blue: #89b4fa; --c-magenta: #f5c2e7;
+  & .status-badge.A { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
+  & .status-badge.M { background: color-mix(in srgb, var(--c-yellow) 22%, transparent); color: var(--c-yellow); }
+  & .status-badge.D { background: color-mix(in srgb, var(--pr-del) 20%, transparent); color: var(--pr-del); }
+  & .status-badge.R { background: color-mix(in srgb, var(--c-blue) 22%, transparent); color: var(--c-blue); }
+  & .status-badge.C { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--accent); }
+  & .status-badge.T { background: color-mix(in srgb, var(--c-magenta) 24%, transparent); color: var(--c-magenta); }
+  & dialog#files-drawer button.file-btn.is-selected {
+    background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent-press); border-left-color: var(--accent);
+  }
+  & dialog#files-drawer button.file-btn .diff-stats .add { color: var(--pr-add); }
+  & dialog#files-drawer button.file-btn .diff-stats .del { color: var(--pr-del); }
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle,
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: var(--pr-add); }
+  & dialog#files-drawer .file-row.is-viewed .viewed-toggle {
+    border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, transparent);
+  }
+  & .all-comments .ac-jump-btn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  & .md-rendered .md-alert-note      { --md-alert-accent: var(--c-blue); }
+  & .md-rendered .md-alert-tip       { --md-alert-accent: var(--pr-add); }
+  & .md-rendered .md-alert-important { --md-alert-accent: var(--accent); }
+  & .md-rendered .md-alert-warning   { --md-alert-accent: var(--c-yellow); }
+  & .md-rendered .md-alert-caution   { --md-alert-accent: var(--pr-del); }
+}
+@media (prefers-color-scheme: dark) {
+  /* Verbatim duplicate of the Catppuccin [data-mode="dark"] block above for
+     System mode. KEEP IN SYNC with the block above. */
+  [data-scheme="catppuccin"]:not([data-mode="light"]) {
+    --surface: #1e1e2e;
+    --surface-muted: #181825;
+    --surface-card: #313244;
+    --border: #313244;
+    --border-strong: #45475a;
+    --text: #cdd6f4;
+    --text-strong: #e6ebf9;
+    --text-muted: #a6adc8;
+    --text-faint: #7f849c;
+    --accent: #cba6f7; --accent-weak: #9a78c4; --accent-press: #ddc4fb;
+    --mark: #fab387;
+    --mark-wash: rgba(250, 179, 135, .20);
+    --soft-bg: #313244; --soft-bg-hover: #45475a;
+    --pr-add: #a6e3a1; --pr-del: #f38ba8;
+    --pr-add-bg: rgba(166, 227, 161, .18); --pr-del-bg: rgba(243, 139, 168, .18);
+    --pr-sel-bg: rgba(250, 179, 135, .20);
+    --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .30), 0 1px 3px rgba(0, 0, 0, .35);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, .50);
+    --shadow-mark: 0 2px 4px rgba(250, 179, 135, .22), 0 6px 20px rgba(250, 179, 135, .18);
+    --pico-code-background-color: #313244;
+    --pico-form-element-background-color: #181825;
+    --pico-primary-inverse: #1e1e2e;
+    --c-yellow: #f9e2af; --c-blue: #89b4fa; --c-magenta: #f5c2e7;
+    & .status-badge.A { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
+    & .status-badge.M { background: color-mix(in srgb, var(--c-yellow) 22%, transparent); color: var(--c-yellow); }
+    & .status-badge.D { background: color-mix(in srgb, var(--pr-del) 20%, transparent); color: var(--pr-del); }
+    & .status-badge.R { background: color-mix(in srgb, var(--c-blue) 22%, transparent); color: var(--c-blue); }
+    & .status-badge.C { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--accent); }
+    & .status-badge.T { background: color-mix(in srgb, var(--c-magenta) 24%, transparent); color: var(--c-magenta); }
+    & dialog#files-drawer button.file-btn.is-selected {
+      background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent-press); border-left-color: var(--accent);
+    }
+    & dialog#files-drawer button.file-btn .diff-stats .add { color: var(--pr-add); }
+    & dialog#files-drawer button.file-btn .diff-stats .del { color: var(--pr-del); }
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle,
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle svg { color: var(--pr-add); }
+    & dialog#files-drawer .file-row.is-viewed .viewed-toggle {
+      border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, transparent);
+    }
+    & .all-comments .ac-jump-btn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+    & .md-rendered .md-alert-note      { --md-alert-accent: var(--c-blue); }
+    & .md-rendered .md-alert-tip       { --md-alert-accent: var(--pr-add); }
+    & .md-rendered .md-alert-important { --md-alert-accent: var(--accent); }
+    & .md-rendered .md-alert-warning   { --md-alert-accent: var(--c-yellow); }
+    & .md-rendered .md-alert-caution   { --md-alert-accent: var(--pr-del); }
+  }
+}
+
 /* Self-hosted webfonts (offline over Tailscale/devbox). */
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/jetbrains-mono-regular.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/jetbrains-mono-bold.woff2") format("woff2"); }
