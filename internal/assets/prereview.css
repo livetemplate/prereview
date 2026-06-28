@@ -7,50 +7,91 @@
      gives heading prose 1-2 lines instead of the old cramped 3+. */
   --pr-drawer-w: 280px;
   --pr-toc-w: 340px;
-  --pr-add: #1f4e1f; --pr-del: #4e1f1f;
-  --pr-add-bg: #d9f5d9; --pr-del-bg: #f5d9d9;
-  --pr-sel-bg: #fff3a8;
-  --pr-comment-bg: #eef4ff;
-  --pr-comment-bd: #b9cdf0;
-  /* ── Design tokens (added in the polish pass) ──────────────────────
-     A small, consistent scale so radii / shadows / the accent blue stop
-     drifting per-component. Values are tuned for the all-monospace,
-     light-theme chrome; the diff/status colors above are intentionally
-     left as-is (their contrast pairings are documented and load-bearing). */
+
+  /* ── Typography ────────────────────────────────────────────────────
+     Two faces, by role. Geist (sans) is the reading face for UI chrome
+     AND all prose — comment bodies + rendered Markdown. JetBrains Mono
+     is reserved for code, diffs, fenced blocks, and inline `code` spans.
+     Pico v2 has two family vars: --pico-font-family (body/articles/forms)
+     → sans, and --pico-font-family-monospace (pre/code/kbd/samp) → mono;
+     the few explicit var(--jbm) selectors are all code/path/ref contexts.
+     Both woff2 are self-hosted (offline over Tailscale/devbox), so
+     font-display:swap renders a fallback instantly until they load. */
+  --sans: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --jbm: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --pico-font-family: var(--sans);
+  --pico-font-family-monospace: var(--jbm);
+
+  /* Scheme-agnostic shape + spacing scale. */
   --radius-sm: 5px;   /* chips, badges, list rows, comment cards, inputs */
   --radius-md: 8px;   /* cards, menus, composer, callouts */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
-  --shadow-md: 0 8px 24px rgba(15, 23, 42, .12);
-  --accent: #2563eb;          /* one blue for focus rings + soft-button hover */
-  --accent-weak: #93c5fd;     /* hairline accent (selected file border) */
-  --soft-bg: #f1f4f9;         /* low-weight (secondary) button surface */
-  --soft-bg-hover: #e6ecf5;
-  /* JetBrains Mono is the single reading font for the WHOLE app — prose
-     and code alike (the user reviews docs + diffs and wants them
-     identical). Pico v2 has TWO family vars: --pico-font-family (body,
-     articles, forms) and --pico-font-family-monospace (pre/code/kbd/
-     samp). BOTH must point at --jbm or the diff/code view renders in a
-     different mono than the rendered Markdown. Every explicit
-     font-family in this sheet also uses var(--jbm). ui-monospace
-     fallback renders instantly (font-display:swap) until the woff2
-     loads. */
-  --jbm: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  --pico-font-family: var(--jbm);
-  --pico-font-family-monospace: var(--jbm);
+  --space-1: 4px; --space-2: 8px; --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px;
 }
 
-/* Self-hosted (offline over Tailscale/devbox). Only 400 + 700 are
-   bundled — prose uses just those; other weights/italics synthesize. */
-@font-face {
-  font-family: "JetBrains Mono"; font-style: normal; font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/jetbrains-mono-regular.woff2") format("woff2");
+/* ── Theme: Solarized ───────────────────────────────────────────────────
+   The whole design is keyed off ONE coordinated, low-fatigue developer
+   color scheme — Ethan Schoonover's Solarized — selected via the
+   [data-scheme] attribute on <html>. Chrome, diff tints, and the chroma
+   syntax theme (gitdiff/highlight.go → "solarized-light") form one system,
+   so nothing drifts. Body text uses base01/base1 — NOT the softer
+   base00/base0 — so it clears WCAG AA on the surface (Solarized's known
+   low-contrast trap). A [data-theme="dark"] block + further [data-scheme]s
+   (gruvbox, catppuccin) attach to this same architecture later. */
+[data-scheme="solarized"] {
+  --surface: #fdf6e3;          /* base3  — page + content + code + cards   */
+  --surface-muted: #f1ead4;    /* header / drawer / gutter / fold strips    */
+  --surface-card: #fbf3df;     /* comment + composer surface (slightly up)  */
+  --border: #ddd5bd;           /* hairline                                  */
+  --border-strong: #d0c8ac;
+  --text: #586e75;             /* base01 — body                             */
+  --text-strong: #073642;      /* base02 — headings / strong                */
+  --text-muted: #657b83;       /* base00 — readable muted (meta, gutters)   */
+  --text-faint: #93a1a1;       /* base1  — lowest-emphasis                  */
+  --accent: #268bd2;           /* blue — links, focus, primary              */
+  --accent-weak: #7fb3dd;      /* selected-file hairline                    */
+  --accent-press: #1f6fa8;
+  --mark: #cb4b16;             /* orange — the annotation hero / "flagged"  */
+  --mark-wash: rgba(203, 75, 22, .12);
+  --soft-bg: #efe7d1;          /* secondary-button surface                  */
+  --soft-bg-hover: #e7dec3;
+
+  /* diff — desaturated Solarized green/red washes (verified to keep the
+     chroma token text readable on top); text tones darkened for contrast. */
+  --pr-add: #5b6e00; --pr-del: #b21f1c;
+  --pr-add-bg: rgba(133, 153, 0, .16); --pr-del-bg: rgba(220, 50, 47, .13);
+  --pr-sel-bg: rgba(203, 75, 22, .15);   /* selection ties to --mark        */
+  --pr-comment-bg: var(--surface-card); --pr-comment-bd: var(--border-strong);
+
+  --shadow-sm: 0 1px 2px rgba(0, 43, 54, .05), 0 1px 3px rgba(0, 43, 54, .06);
+  --shadow-md: 0 8px 24px rgba(0, 43, 54, .12);
+  --shadow-mark: 0 2px 4px rgba(203, 75, 22, .10), 0 6px 20px rgba(203, 75, 22, .10);
+
+  /* Re-skin Pico's framework vars so the whole UI follows the scheme. */
+  --pico-background-color: var(--surface);
+  --pico-card-background-color: var(--surface);
+  --pico-card-sectioning-background-color: var(--surface-muted);
+  --pico-code-background-color: #ece4ce;
+  --pico-form-element-background-color: #fbf4e0;
+  --pico-secondary-background: var(--surface-muted);
+  --pico-color: var(--text);
+  --pico-h1-color: var(--text-strong);
+  --pico-muted-color: var(--text-muted);
+  --pico-muted-border-color: var(--border);
+  --pico-primary: var(--accent);
+  --pico-primary-hover: var(--accent-press);
+  --pico-primary-border: var(--accent-press);
+  --pico-primary-inverse: var(--surface);
+  --pico-contrast: var(--text-strong);
+  --pico-contrast-inverse: var(--surface);
 }
-@font-face {
-  font-family: "JetBrains Mono"; font-style: normal; font-weight: 700;
-  font-display: swap;
-  src: url("/fonts/jetbrains-mono-bold.woff2") format("woff2");
-}
+
+/* Self-hosted webfonts (offline over Tailscale/devbox). */
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/jetbrains-mono-regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/jetbrains-mono-bold.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/geist-regular.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/geist-medium.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/geist-semibold.woff2") format("woff2"); }
 
 /* ===== Mobile-first base ===== */
 
@@ -826,23 +867,28 @@ main.viewer > article > header.file-head small { color: var(--pico-muted-color);
   white-space: pre-wrap; overflow-wrap: anywhere;
   flex: 1; min-width: 0; padding-left: 0.35rem; min-height: 1em;
 }
+/* The Solarized chroma stylesheet paints .chroma with the scheme's own
+   background; on a diff line that would mask the per-line add/del tint
+   (which lives on the parent button.line). Strip it so the line color
+   shows through — the syntax token colors still apply. (The old github
+   chroma theme emitted no background, so this is new with Solarized.) */
+.code .content.chroma { background: transparent; }
 
 /* Rendered-Markdown view. Each .md-block is a click target that
    selects its source line range (SelectBlock). The rendered HTML
    lives in .md-rendered; inline comment cards / the composer are
    siblings inside .md-block so they sit BELOW the block, not inside
    the clickable area. */
-/* Reading surface: capped at 56rem (≈896px at the 16px desktop html
-   base) — a comfortable readable line length (issue #27 "narrower body
-   for breathing space"). Expressed in rem (tracks the 16px desktop html
-   base) rather than ch: ch would resolve against the .md-view container's
-   font and read as misleadingly tight, too narrow on wide monitors.
-   margin-inline:auto centres it, so on a wide viewer
-   (focus mode or an ultrawide display) the prose sits in a comfortable
-   column with symmetric gutters instead of running edge to edge; on a
-   typical laptop the column fills most of the viewer. The diff/code
-   surface (.code) is deliberately NOT capped — code needs full width. */
-.md-view { padding: 0.6rem 1.8rem 2rem; max-width: 56rem; margin-inline: auto; }
+/* Reading surface: capped at 44rem (≈704px at the 16px desktop html base) —
+   a comfortable measure for the proportional sans prose (issue #27 "narrower
+   body for breathing space"). The old 56rem cap was tuned for monospace; the
+   sans face packs ~30% more characters per rem, so the column is tightened to
+   keep the line length readable. Expressed in rem (not ch) so it doesn't
+   shift with the container font. margin-inline:auto centres it, so on a wide
+   viewer (focus mode / ultrawide) the prose sits in a comfortable column with
+   symmetric gutters; the diff/code surface (.code) is deliberately NOT capped
+   — code needs full width. */
+.md-view { padding: 0.6rem 1.8rem 2rem; max-width: 44rem; margin-inline: auto; }
 /* HTML preview: the whole file renders in one sandboxed iframe (full
    document fidelity), with the comments list stacked below it. The
    client auto-heights .html-preview from its content; the fallback
@@ -961,13 +1007,20 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    viewer). Scoped to .md-rendered so it can't leak to app chrome. */
 .md-rendered > :first-child { margin-top: 0; }
 .md-rendered > :last-child { margin-bottom: 0; }
-.md-rendered :is(h1,h2,h3,h4,h5,h6) { margin: 0.6em 0 0.3em; line-height: 1.25; }
-/* A hairline under the top two heading levels gives rendered docs a clear
-   sectioned structure (GitHub-style) without changing the monospace font —
-   the all-mono identity is preserved; only the rhythm reads as "rendered". */
+.md-rendered :is(h1,h2,h3,h4,h5,h6) {
+  margin: 1.1em 0 0.4em; line-height: 1.25;
+  font-weight: 600; color: var(--text-strong); letter-spacing: -0.01em;
+}
+.md-rendered h1 { font-size: 1.7em; }
+.md-rendered h2 { font-size: 1.35em; }
+.md-rendered h3 { font-size: 1.12em; }
+.md-rendered :is(h4,h5,h6) { font-size: 1em; }
+/* Prose now renders in the sans face, so weight + size carry the heading
+   hierarchy; the hairline under the top two levels just punctuates the
+   section break (GitHub/Primer-style). */
 .md-rendered :is(h1,h2) {
-  padding-bottom: 0.2em;
-  border-bottom: 1px solid var(--pico-muted-border-color);
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
 }
 .md-rendered > :is(h1,h2):first-child { margin-top: 0; }
 .md-rendered p, .md-rendered ul, .md-rendered ol, .md-rendered blockquote, .md-rendered table { margin: 0.4em 0; }
@@ -1035,13 +1088,20 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .md-block:has(.md-solo-table) { margin-bottom: 0; border-radius: 0; }
 
 /* Inline comment cards — between the diff lines */
+/* Annotation-as-hero: the comment is the point of the tool, so it reads as
+   the dominant element on the line — a warm --mark (flagged) left rule, a
+   lifted card surface, and a soft mark-tinted shadow. It also lives INSIDE
+   the monospace .code container, so prose is forced back to the sans face
+   (inline `code` in rendered Markdown stays mono via Pico's code rule). */
 .inline-comment {
-  margin: 0.3rem 0.4rem; padding: 0.45rem 0.6rem;
+  margin: 0.45rem 0.4rem; padding: 0.5rem 0.7rem;
   background: var(--pr-comment-bg);
   border: 1px solid var(--pr-comment-bd);
-  border-left: 3px solid var(--pr-comment-bd);
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem; line-height: 1.35;
+  border-left: 3px solid var(--mark);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-mark);
+  font-family: var(--sans);
+  font-size: 0.82rem; line-height: 1.5;
 }
 /* File-level comments section. Lives between the file-head and the
    body branch so it's visible above every preview mode (line view,
@@ -1217,17 +1277,22 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 /* Inline composer — sticky on mobile, static on desktop. Save and Cancel
    live in separate <form> elements (siblings, not nested) so Cancel can't
    get blocked by the required-textarea validation on the add form. */
+/* The composer is the nascent annotation, so it echoes the comment hero:
+   the lifted card surface + a --mark left rule. Sans because it (like the
+   comment) sits inside the monospace .code container. */
 .composer {
   position: sticky; bottom: 0; z-index: 10;
   margin: 0.4rem;
   padding: 0.5rem 0.6rem;
-  background: var(--pico-card-background-color);
-  border: 1px solid var(--pico-muted-border-color);
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--mark);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
+  font-family: var(--sans);
   display: flex; flex-direction: column;
 }
-.composer strong { font-size: 0.78rem; }
+.composer strong { font-size: 0.78rem; color: var(--text-strong); }
 .composer textarea {
   min-height: 3rem; margin: 0.25rem 0; font-size: 16px; width: 100%;
   padding: 0.35rem 0.45rem; line-height: 1.4;

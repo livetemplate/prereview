@@ -41,8 +41,10 @@ import (
 // chromaStyleName is the chroma theme shared by both highlighters: the
 // diff view (class-based, served as /syntax.css) and rendered-Markdown code
 // fences (inline-styled, in markdown.go). Kept in one place so a theme
-// change can't drift between the two.
-const chromaStyleName = "github"
+// change can't drift between the two. "solarized-light" coordinates the
+// syntax tokens with the Solarized chrome/diff palette (see prereview.css).
+// The matching dark variant is wired up alongside the Light/Dark toggle.
+const chromaStyleName = "solarized-light"
 
 var (
 	chromaFormatter = html.New(
