@@ -30,15 +30,7 @@ func TestE2E_QuitConfirmDialog(t *testing.T) {
 	var consoleLines []string
 	chromedp.ListenTarget(p.ctx, func(ev any) {
 		if e, ok := ev.(*cdpruntime.EventConsoleAPICalled); ok {
-			parts := []string{string(e.Type)}
-			for _, a := range e.Args {
-				if a.Value != nil {
-					parts = append(parts, string(a.Value))
-				} else {
-					parts = append(parts, a.Description)
-				}
-			}
-			consoleLines = append(consoleLines, strings.Join(parts, " "))
+			consoleLines = append(consoleLines, string(e.Type)+" "+joinArgs(e.Args))
 		}
 	})
 

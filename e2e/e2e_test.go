@@ -1170,10 +1170,14 @@ func TestE2E_QuitShutsServer(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 	p.waitReady()
 
+	// Quit now routes through a confirm dialog (#58): the toolbar button is the
+	// trigger (still labelled "Quit"); the dialog's own button does the shutdown.
 	var btnText string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Text(`header.bar button[name='quit']`, &btnText, chromedp.ByQuery),
-		chromedp.Click(`header.bar button[name='quit']`, chromedp.ByQuery),
+		chromedp.Text(`header.bar button[commandfor='confirm-quit']`, &btnText, chromedp.ByQuery),
+		chromedp.Click(`header.bar button[commandfor='confirm-quit']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#confirm-quit[open] button[name='quit']`, chromedp.ByQuery),
+		chromedp.Click(`#confirm-quit button[name='quit']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.banner-stopping`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("quit click: %v\nstderr: %s", err, p.stderr.String())
