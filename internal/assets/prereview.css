@@ -818,15 +818,19 @@ header.bar .nav-next button:focus-visible {
   color: var(--pico-h1-color);
   border-color: var(--accent);
 }
-/* Theme toggle is icon-only — centre the glyph but keep the SAME height as the
-   text buttons beside it (don't shrink with min-height:auto, which made it read
-   as a shorter, mismatched chip). The icon inherits color from the button
-   (currentColor in the SVGs). */
-header.bar .theme-toggle {
-  padding: 0.25rem 0.6rem;
-  display: inline-flex; align-items: center; justify-content: center;
+/* Scheme / mode / help: icon + current-value label (e.g. "🎨 Solarized",
+   "◑ System", "? Help"), so they read as icon+text like the rest of the bar
+   rather than bare icon chips. inline-flex + gap lays out icon and label; no
+   padding override, so they inherit the standard button padding/height. */
+header.bar .theme-toggle,
+header.bar .kbd-help-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
 }
 header.bar .theme-toggle svg { display: block; }
+header.bar .tb-label { white-space: nowrap; }
+/* The help "?" stands in for an icon — give it a little presence next to the
+   16px SVG glyphs of its neighbours. */
+header.bar .kbd-help-glyph { font-size: 1rem; font-weight: 600; line-height: 1; }
 /* The active (pressed) focus-mode toggle reads as "on": tint it with the
    accent so the distraction-free state is visibly engaged. */
 header.bar .focus-toggle[aria-pressed="true"] {

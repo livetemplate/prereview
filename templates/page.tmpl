@@ -427,7 +427,7 @@
           class="contrast theme-toggle"
           title="Color scheme: {{.SchemeLabel}} — switch to {{.NextSchemeLabel}}"
           aria-label="Color scheme: {{.SchemeLabel}}. Switch to {{.NextSchemeLabel}}."
-        >{{template "iconPalette"}}</button>
+        >{{template "iconPalette"}}<span class="tb-label">{{.SchemeLabel}}</span></button>
       </form>
       <form method="POST">
         <button
@@ -436,7 +436,7 @@
           class="contrast theme-toggle"
           title="Color mode: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}"
           aria-label="Color mode: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}."
-        >{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}</button>
+        >{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}<span class="tb-label">{{.ThemeModeLabel}}</span></button>
       </form>
     </div>
     {{/* Keyboard-shortcuts help. Desktop toolbar affordance (mobile has the
@@ -452,7 +452,7 @@
           aria-pressed="{{if .KeyHelpOpen}}true{{else}}false{{end}}"
           title="Keyboard shortcuts (press ?)"
           aria-label="Keyboard shortcuts"
-        >?</button>
+        ><span class="kbd-help-glyph" aria-hidden="true">?</span><span class="tb-label">Help</span></button>
       </form>
     </div>
   </div>
