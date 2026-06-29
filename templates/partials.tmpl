@@ -165,6 +165,68 @@
 </article></dialog>
 {{- end}}
 
+{{/* Confirm dialogs for the irreversible session terminators (issue #58). Same
+     no-JS native-<dialog> pattern as deleteDialog: a trigger button elsewhere
+     opens it with command="show-modal"; Cancel closes it with command="close";
+     the confirm button submits the real action. These MUST render at the page
+     top level (outside any <form>) — a <form> nested in a <form> is invalid and
+     the inner POST misbehaves, and the toolbar triggers already sit in forms. */}}
+{{define "endSessionDialog" -}}
+<dialog id="confirm-end-session"><article>
+  {{- /* */ -}}
+  <header><strong>End session?</strong></header>
+  {{- /* */ -}}
+  <p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p>
+  {{- /* */ -}}
+  <footer>
+    <form method="POST">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-end-session"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="endSession"
+          class="contrast"
+        >End session</button>
+      </fieldset>
+    </form>
+  </footer>
+{{- /* */ -}}
+</article></dialog>
+{{- end}}
+
+{{define "quitDialog" -}}
+<dialog id="confirm-quit"><article>
+  {{- /* */ -}}
+  <header><strong>Quit prereview?</strong></header>
+  {{- /* */ -}}
+  <p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p>
+  {{- /* */ -}}
+  <footer>
+    <form method="POST">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-quit"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="quit"
+          class="contrast"
+        >Quit</button>
+      </fieldset>
+    </form>
+  </footer>
+{{- /* */ -}}
+</article></dialog>
+{{- end}}
+
 {{define "commentCardFull" -}}
 <div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}"
      data-key="{{.ID}}"

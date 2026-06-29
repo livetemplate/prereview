@@ -92,11 +92,13 @@
         title="Send the current annotations to your agent as a handoff event (session stays open)"
       >Hand off →</button>
     </form>
-    {{- /* session terminator */ -}}
+    {{- /* session terminator — opens the confirm dialog (#58) instead of ending
+           immediately; the dialog's button fires endSession. */ -}}
     <form method="POST" style="margin:0">
       <button
-        type="submit"
-        name="endSession"
+        type="button"
+        command="show-modal"
+        commandfor="confirm-end-session"
         class="contrast"
         title="Emit session_end and stop the server — your agent stops consuming the stream"
       >End session</button>
@@ -113,8 +115,9 @@
     {{- else -}}
     <form method="POST" style="margin:0">
       <button
-        type="submit"
-        name="quit"
+        type="button"
+        command="show-modal"
+        commandfor="confirm-quit"
         class="contrast"
         title="Stop the prereview server"
       >Quit</button>
@@ -507,8 +510,9 @@
          narrow bar isn't crowded by two action buttons — hidden here via
          .end-session-inline in the mobile media query. */}}
     <button
-      type="submit"
-      name="endSession"
+      type="button"
+      command="show-modal"
+      commandfor="confirm-end-session"
       class="contrast end-session-inline"
       title="Emit session_end and stop the server — your agent stops consuming the stream"
     >End session</button>
@@ -521,8 +525,9 @@
     >Hand off →</button>
     {{else}}
     <button
-      type="submit"
-      name="quit"
+      type="button"
+      command="show-modal"
+      commandfor="confirm-quit"
       class="contrast"
       title="Stop the prereview server"
     >Quit</button>
@@ -740,8 +745,9 @@
        action buttons. Last item, so it's not an accidental tap target. */}}
   <form method="POST">
     <button
-      type="submit"
-      name="endSession"
+      type="button"
+      command="show-modal"
+      commandfor="confirm-end-session"
       class="menu-item"
       role="menuitem"
     >
@@ -1395,6 +1401,14 @@
   >livetemplate</a>
 </footer>
 {{end}}
+
+{{/* Confirm dialogs for the session terminators (#58), rendered ONCE here at the
+     top level — outside every <form> — so the toolbar/overflow/external triggers
+     can all open them by id. End session shows in stream mode; Quit in standalone
+     (the skill-mode "Hand off" is the intended primary action, so it isn't
+     gated). Hidden until a trigger fires command="show-modal". */}}
+{{if .StreamMode}}{{template "endSessionDialog" .}}{{end}}
+{{if and (not .SkillMode) (not .StreamMode)}}{{template "quitDialog" .}}{{end}}
 
 </div>{{/* .theme-root */}}
 <script defer src="/livetemplate-client.js"></script>
