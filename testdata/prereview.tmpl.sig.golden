@@ -572,8 +572,8 @@
   {{$kind := $.BinaryKind}}
   {{if eq $kind "image"}}
   
-  <div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-{{.Path}}">
-    <img src="/{{.Path}}" alt="{{.Path}}" lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;">
+  {{template "regionToggle" $}}{{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
+    <img src="/{{.Path}}" alt="{{.Path}}" {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}>
     {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}"></div>{{end}}
     {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
   </div></div>

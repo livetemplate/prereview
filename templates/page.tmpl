@@ -1067,18 +1067,23 @@
        still fall back to the cannot-display copy. */}}
   {{$kind := $.BinaryKind}}
   {{if eq $kind "image"}}
-  {{/* image-with-areas wrapper: position:relative so .area-overlay
-       children (saved areas + the pending selection) land at the
-       right CSS coords. lvt-fx:area-select arms the upstream
-       directive — pointer-drag → final-coords action via the client's
-       send() pipeline. touch-action:none on the img stops iOS Safari
-       from interpreting the drag as a pinch/scroll. */}}
-  <div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-{{.Path}}">
+  {{/* Annotable image with two modes via the shared region toggle (issue #57).
+       DISARMED (default): the <img> carries no capture directive and no
+       touch-action lock, so touch pinch-zooms / scrolls to examine the image
+       natively (the viewport allows user scaling) — previously every touch
+       started a comment and the image couldn't be zoomed. ARMED: the
+       lvt-fx:area-select directive + touch-action:none capture a pointer drag
+       into a region comment. Mirrors how the rendered-HTML / external views
+       gate their capture overlay. The saved-area overlays render in BOTH modes
+       so existing comments stay visible while zooming; only NEW capture is
+       gated. position:relative on .image-with-areas anchors the % overlays. */}}
+  {{template "regionToggle" $}}
+  {{- if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end -}}
+  <div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
     <img
       src="/{{.Path}}"
       alt="{{.Path}}"
-      lvt-fx:area-select="selectImageArea"
-      style="touch-action:none;user-select:none;-webkit-user-select:none;"
+      {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}
     >
     {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}"
         data-key="ao-{{.ID}}"

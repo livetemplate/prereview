@@ -1706,7 +1706,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    Pending area: dashed border + slightly brighter fill so the
    not-yet-saved selection is visually distinct from saved ones. */
 .image-with-areas { position: relative; display: inline-block; max-width: 100%; }
-.image-with-areas img { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+/* Default (examine) cursor — only the armed/comment mode draws a crosshair, so a
+   disarmed image doesn't look like it's waiting for a click-drag (issue #57). */
+.image-with-areas img { display: block; max-width: 100%; height: auto; cursor: default; }
+.image-with-areas.is-armed img { cursor: crosshair; }
+/* Zoom/comment hint under the region toggle on an image (issue #57). */
+.region-hint { display: block; margin: 0 0 0.5rem; color: var(--text-muted); font-size: 0.8rem; }
 
 /* Region-select overlay (issue #26 region comments). A transparent layer
    in the PARENT document laid over the rendered-HTML preview iframe — the
