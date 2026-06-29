@@ -274,9 +274,17 @@ type PrereviewState struct {
 	// cycled by the toolbar toggle. "" means System (the default): the page
 	// omits the data-mode attribute and follows the OS via prefers-color-scheme
 	// (see the Solarized-dark block + /syntax.css). "light"/"dark" force the
-	// mode regardless of the OS. Persisted per-user. The scheme axis (Solarized
-	// vs Gruvbox/Catppuccin) is separate and arrives later (data-scheme).
+	// mode regardless of the OS. Persisted per-user. Orthogonal to SchemeName.
 	ThemeMode string `json:"theme_mode" lvt:"persist"`
+
+	// SchemeName is the curated color-scheme preference — the Theme axis,
+	// orthogonal to ThemeMode's Light/Dark/System. "" (and any unregistered
+	// value) means the default scheme, gitdiff.Schemes[0] (Solarized). Cycled
+	// by the toolbar theme picker; the page re-renders with the new data-scheme
+	// attribute on .theme-root and the cascade re-skins chrome + diff —
+	// /syntax.css already carries every registered scheme × mode, so there is
+	// no JS and no CSS refetch. Persisted per-user.
+	SchemeName string `json:"scheme_name" lvt:"persist"`
 
 	// BaseChoices populates the base-picker dropdown. Computed in
 	// Mount: ["HEAD", "HEAD~1", "HEAD~5", <local branches…>] plus the
@@ -398,6 +406,50 @@ func themeModeLabel(mode string) string {
 	default:
 		return "System"
 	}
+}
+
+// DataScheme is the value for the .theme-root data-scheme attribute: the
+// persisted SchemeName when it names a registered scheme, else the default
+// (gitdiff.Schemes[0]). Always non-empty so the wrapper always carries a
+// scheme — mirrors DataMode's fall-through-to-default contract. Zero-arg so
+// the page template can emit `data-scheme="{{.DataScheme}}"`.
+func (s PrereviewState) DataScheme() string {
+	for _, sc := range gitdiff.Schemes {
+		if sc.Name == s.SchemeName {
+			return sc.Name
+		}
+	}
+	return gitdiff.Schemes[0].Name
+}
+
+// NextScheme is the scheme the picker advances to from the current one,
+// cycling gitdiff.Schemes in registry order and wrapping back to the first.
+// Drives both the CycleScheme action and the picker's "switch to" label.
+func (s PrereviewState) NextScheme() string {
+	cur := s.DataScheme()
+	for i, sc := range gitdiff.Schemes {
+		if sc.Name == cur {
+			return gitdiff.Schemes[(i+1)%len(gitdiff.Schemes)].Name
+		}
+	}
+	return gitdiff.Schemes[0].Name
+}
+
+// SchemeLabel / NextSchemeLabel are the human names (gitdiff.Scheme.Label) of
+// the current and next schemes, for the picker's tooltip ("Theme: Solarized —
+// switch to Gruvbox") and the overflow-menu item.
+func (s PrereviewState) SchemeLabel() string     { return schemeLabel(s.DataScheme()) }
+func (s PrereviewState) NextSchemeLabel() string { return schemeLabel(s.NextScheme()) }
+
+// schemeLabel maps a scheme name to its registry Label; an unknown name
+// echoes back unchanged (defensive — DataScheme/NextScheme never produce one).
+func schemeLabel(name string) string {
+	for _, sc := range gitdiff.Schemes {
+		if sc.Name == name {
+			return sc.Label
+		}
+	}
+	return name
 }
 
 // VisibleLines is the line set the viewer renders for the selected

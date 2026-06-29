@@ -2,6 +2,7 @@ package gitdiff
 
 import (
 	"bytes"
+	"fmt"
 	htmlpkg "html"
 	"html/template"
 	"strings"
@@ -38,19 +39,34 @@ import (
 // del/add pair render slightly wrong but the common case looks right
 // and the implementation stays simple.
 
-// chromaStyleName is the LIGHT chroma theme shared by both highlighters: the
-// diff view (class-based, served as /syntax.css) and rendered-Markdown code
-// fences (class-based too — see markdown.go). Kept in one place so a theme
-// change can't drift between the two. "solarized-light" coordinates the
-// syntax tokens with the Solarized chrome/diff palette (see prereview.css).
-const chromaStyleName = "solarized-light"
+// Scheme is one curated, fully-coordinated color scheme: a data-scheme value,
+// a human label for the picker, and the chroma styles that color its syntax in
+// each mode. The chrome tokens (surfaces, diff tints) for the same scheme live
+// beside it in prereview.css under the matching [data-scheme="name"] block, so
+// syntax and chrome stay one system. Adding a scheme = one row here + one CSS
+// token block (light + dark + @media).
+type Scheme struct {
+	Name        string // data-scheme value on .theme-root (and the CSS scope)
+	Label       string // picker display name
+	chromaLight string // chroma style for Light mode (and System-light)
+	chromaDark  string // chroma style for Dark mode (and System-dark)
+}
 
-// chromaStyleNameDark is the Dark-mode counterpart. Its rules are emitted
-// into /syntax.css scoped (see scopeSyntax) so they override the light block
-// only when the page is in Dark mode — explicitly ([data-mode="dark"]) or via
-// the OS (System mode → prefers-color-scheme). Token COLORS, not the markup,
-// switch: the same class="chroma .k" span recolors purely through the cascade.
-const chromaStyleNameDark = "solarized-dark"
+// Schemes is the registry. Order is the picker's cycle order; Schemes[0] is the
+// default (see state.SchemeName / DataScheme). internal/review reads Name+Label
+// for the picker; this package reads the chroma styles for /syntax.css.
+var Schemes = []Scheme{
+	{"solarized", "Solarized", "solarized-light", "solarized-dark"},
+	{"gruvbox", "Gruvbox", "gruvbox-light", "gruvbox"},
+	{"catppuccin", "Catppuccin", "catppuccin-latte", "catppuccin-mocha"},
+}
+
+// chromaStyleName is the style whose CLASS names the highlighters emit. With
+// WithClasses(true) the markup carries only style-independent token classes
+// (`.chroma .k` …) — colors come entirely from /syntax.css — so a single style
+// drives class emission for every scheme; the per-scheme colors are layered in
+// HighlightCSS. Kept on solarized-light, the default scheme's light style.
+const chromaStyleName = "solarized-light"
 
 var (
 	chromaFormatter = html.New(
@@ -72,39 +88,63 @@ var (
 	lexerCache sync.Map // map[string]chroma.Lexer
 )
 
-// HighlightCSS is the chroma stylesheet served as /syntax.css. It carries
-// BOTH modes' token colors so the page never refetches CSS on a theme switch:
+// HighlightCSS is the chroma stylesheet served as /syntax.css. It carries every
+// registered scheme × both modes so the page never refetches CSS on a theme or
+// mode switch. For each scheme, all rules are scoped to that scheme's
+// [data-scheme] so the three schemes' (colliding) token classes don't leak into
+// one another. Per scheme:
 //
-//   - the light block, unscoped (`.chroma .k {…}`) — the default;
-//   - the dark block, scoped under `[data-scheme="solarized"][data-mode="dark"]`
-//     so an explicit Dark toggle overrides the light tokens by specificity;
-//   - the same dark block again inside `@media (prefers-color-scheme: dark)`,
-//     scoped to `:not([data-mode="light"])` so System mode follows the OS with
-//     no JS (data-mode is absent in System; an explicit Light opt-out wins).
+//   - light, scoped `[data-scheme="x"]` — applies unless a dark rule overrides;
+//   - dark, scoped `[data-scheme="x"][data-mode="dark"]` (higher specificity)
+//     for an explicit Dark toggle;
+//   - the dark block again inside `@media (prefers-color-scheme: dark)`, scoped
+//     `[data-scheme="x"]:not([data-mode="light"])` so System mode follows the OS
+//     with no JS (an explicit Light opt-out still wins).
 //
 // Computed once at package-init; main.go serves it verbatim.
 var HighlightCSS = func() string {
-	var light bytes.Buffer
-	if err := chromaFormatter.WriteCSS(&light, chromaStyle); err != nil {
+	var b strings.Builder
+	for _, s := range Schemes {
+		b.WriteString(schemeSyntaxCSS(s))
+	}
+	return b.String()
+}()
+
+// schemeSyntaxCSS emits one scheme's scoped light + dark chroma blocks. A
+// missing/failed style degrades to whatever did render (still valid CSS) rather
+// than dropping the whole sheet.
+func schemeSyntaxCSS(s Scheme) string {
+	var b strings.Builder
+	q := func(sel string) string { return fmt.Sprintf(sel, s.Name) }
+	if light := styleCSS(s.chromaLight); light != "" {
+		fmt.Fprintf(&b, "\n/* %s — light */\n", s.Label)
+		b.WriteString(scopeSyntax(light, q(`[data-scheme=%q]`)))
+	}
+	dark := styleCSS(s.chromaDark)
+	if dark == "" {
+		return b.String() // dark style missing: ship this scheme light-only
+	}
+	fmt.Fprintf(&b, "/* %s — explicit Dark mode */\n", s.Label)
+	b.WriteString(scopeSyntax(dark, q(`[data-scheme=%q][data-mode="dark"]`)))
+	fmt.Fprintf(&b, "/* %s — System mode following the OS */\n@media (prefers-color-scheme: dark) {\n", s.Label)
+	b.WriteString(scopeSyntax(dark, q(`[data-scheme=%q]:not([data-mode="light"])`)))
+	b.WriteString("\n}\n")
+	return b.String()
+}
+
+// styleCSS renders a chroma style's class-based CSS, or "" if the style is
+// unknown or fails to render.
+func styleCSS(name string) string {
+	st := styles.Get(name)
+	if st == nil {
 		return ""
 	}
-	dark := styles.Get(chromaStyleNameDark)
-	if dark == nil {
-		return light.String() // dark style missing: ship light-only, still valid CSS
+	var buf bytes.Buffer
+	if err := chromaFormatter.WriteCSS(&buf, st); err != nil {
+		return ""
 	}
-	var darkBuf bytes.Buffer
-	if err := chromaFormatter.WriteCSS(&darkBuf, dark); err != nil {
-		return light.String()
-	}
-	darkCSS := darkBuf.String()
-	return light.String() +
-		"\n/* Solarized dark — explicit Dark mode */\n" +
-		scopeSyntax(darkCSS, `[data-scheme="solarized"][data-mode="dark"]`) +
-		"\n/* Solarized dark — System mode following the OS */\n" +
-		"@media (prefers-color-scheme: dark) {\n" +
-		scopeSyntax(darkCSS, `[data-scheme="solarized"]:not([data-mode="light"])`) +
-		"\n}\n"
-}()
+	return buf.String()
+}
 
 // scopeSyntax prefixes every chroma rule in a WriteCSS dump with `prefix` so a
 // second style's tokens override the default unscoped block only when the scope

@@ -72,6 +72,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconHamburger ===
 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
+=== iconPalette ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round" /><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg>
 === iconRendered ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
 === iconStop ===
@@ -105,7 +107,7 @@
 </head>
 <body data-lvt-loading-debounce-ms="200">
 
-<div class="theme-root" data-scheme="solarized"{{with .DataMode}} data-mode="{{.}}"{{end}}>
+<div class="theme-root" data-scheme="{{.DataScheme}}"{{with .DataMode}} data-mode="{{.}}"{{end}}>
 
 <span class="kbd-esc" hidden aria-hidden="true" lvt-on:window:keydown="clearSelection" lvt-key="Escape"></span>
 
@@ -214,7 +216,10 @@
     
     <div class="tb-group tb-theme">
       <form method="POST">
-        <button type="submit" name="cycleTheme" class="contrast theme-toggle" title="Theme: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}" aria-label="Color theme: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}.">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}</button>
+        <button type="submit" name="cycleScheme" class="contrast theme-toggle" title="Color scheme: {{.SchemeLabel}} — switch to {{.NextSchemeLabel}}" aria-label="Color scheme: {{.SchemeLabel}}. Switch to {{.NextSchemeLabel}}.">{{template "iconPalette"}}</button>
+      </form>
+      <form method="POST">
+        <button type="submit" name="cycleTheme" class="contrast theme-toggle" title="Color mode: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}" aria-label="Color mode: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}.">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}</button>
       </form>
     </div>
     
@@ -272,9 +277,16 @@
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ViewedCount}}/{{len .Files}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
   
   <form method="POST">
+    <button type="submit" name="cycleScheme" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconPalette"}}</span>
+      <span class="menu-label">Scheme: {{.SchemeLabel}}</span>
+      <span class="menu-meta">{{.NextSchemeLabel}} →</span>
+    </button>
+  </form>
+  <form method="POST">
     <button type="submit" name="cycleTheme" class="menu-item" role="menuitem">
       <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}</span>
-      <span class="menu-label">Theme: {{.ThemeModeLabel}}</span>
+      <span class="menu-label">Mode: {{.ThemeModeLabel}}</span>
       <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
     </button>
   </form>
