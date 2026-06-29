@@ -1,5 +1,5 @@
 :root {
-  --pr-bar-h: 52px;
+  --pr-bar-h: 43px;
   /* Three-column desktop layout (≥900px): file drawer | viewer | TOC.
      Drawer at 280px holds most filenames intact (mockups/, docs/
      prefixed paths fit); on the rare longer path, the button's
@@ -656,7 +656,7 @@ header.bar {
   position: sticky; top: 0; z-index: 30;
   min-height: var(--pr-bar-h);
   display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.3rem 0.5rem;
   background: var(--pico-card-background-color);
   border-bottom: 1px solid var(--pico-muted-border-color);
 }
@@ -726,7 +726,7 @@ header.bar .nav-next button { gap: 0.3rem; }
   display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   /* Match the toolbar buttons' height so the control doesn't read as a shorter
      element in the row; the segments (labels) stretch to fill the track. */
-  min-height: 44px; align-content: stretch;
+  min-height: 33px; align-content: stretch;
   margin: 0; padding: 3px; gap: 2px;
   border: 1px solid var(--border-strong); border-radius: 8px;
   background: var(--surface-muted);
@@ -2077,11 +2077,13 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      pure duplication on desktop — drop just the filename, keep the
      "pick a file" / "all comments" prompts. */
   header.bar .title-file { display: none; }
-  /* Toolbar controls: 0.9rem/38px was still miniature on desktop —
-     match the 1rem body and a 44px touch target. */
-  header.bar button { padding: 0.5rem 0.9rem; font-size: 1rem; min-height: 44px; }
-  header.bar .nav-prev button, header.bar .nav-next button { min-width: 0; min-height: 44px; padding: 0.5rem 0.8rem !important; }
-  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 18px; height: 18px; }
+  /* Toolbar controls — a compact ~33px row (≈25% shorter than the old 44px) so
+     the bar reads as chrome, not a chunky button strip. The height drop comes
+     from lighter vertical padding, NOT a smaller font: keep font ≥15px (0.95rem)
+     so the desktop label stays legible (guarded by TestE2E_DesktopReadingSurface). */
+  header.bar button { padding: 0.2rem 0.85rem; font-size: 0.95rem; min-height: 33px; }
+  header.bar .nav-prev button, header.bar .nav-next button { min-width: 0; min-height: 33px; padding: 0.2rem 0.7rem !important; }
+  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 16px; height: 16px; }
   /* Desktop has the horizontal room — surface the Prev/Next label so
      the buttons aren't bare arrows. Aria-label stays as the SR text;
      the visible label is the explicit affordance per issue #11. */
