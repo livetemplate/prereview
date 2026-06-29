@@ -1170,10 +1170,14 @@ func TestE2E_QuitShutsServer(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 	p.waitReady()
 
+	// Quit now routes through a confirm dialog (#58): the toolbar button is the
+	// trigger (still labelled "Quit"); the dialog's own button does the shutdown.
 	var btnText string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Text(`header.bar button[name='quit']`, &btnText, chromedp.ByQuery),
-		chromedp.Click(`header.bar button[name='quit']`, chromedp.ByQuery),
+		chromedp.Text(`header.bar button[commandfor='confirm-quit']`, &btnText, chromedp.ByQuery),
+		chromedp.Click(`header.bar button[commandfor='confirm-quit']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#confirm-quit[open] button[name='quit']`, chromedp.ByQuery),
+		chromedp.Click(`#confirm-quit button[name='quit']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.banner-stopping`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("quit click: %v\nstderr: %s", err, p.stderr.String())
@@ -4529,10 +4533,20 @@ func TestE2E_ImageAreaComment(t *testing.T) {
 
 	p.clickFile("diagram.png")
 
-	// Wait for the image-with-areas wrapper to render so the directive
+	// Image area-commenting now requires arming the region toggle first (#57):
+	// when disarmed the image carries no area-select directive (so touch can
+	// pinch-zoom/scroll to examine it). Arm it → the directive attaches.
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("arm region toggle on image: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Wait for the armed image-with-areas wrapper to render so the directive
 	// has had its FIRE-ON-CHANGE pass to attach pointer handlers.
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.image-with-areas img[lvt-fx\:area-select]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.image-with-areas.is-armed img[lvt-fx\:area-select]`, chromedp.ByQuery),
 		chromedp.Sleep(300*time.Millisecond),
 	); err != nil {
 		t.Fatalf("wait img: %v\nstderr: %s", err, p.stderr.String())
@@ -4611,6 +4625,99 @@ func TestE2E_ImageAreaComment(t *testing.T) {
 	}
 	if !strings.Contains(row[11], `"x":`) || !strings.Contains(row[11], `"w":`) {
 		t.Errorf("area JSON malformed: %q", row[11])
+	}
+}
+
+// TestE2E_ImageZoomGating pins issue #57: an annotable image must not capture
+// every touch as a comment. Disarmed (the default) the image carries no
+// area-select directive and no touch-action lock, so a touch pinch-zooms /
+// scrolls to examine it; the region toggle arms capture on demand and a hint
+// makes the mode discoverable. Headless chromedp can't perform a real pinch,
+// so this asserts the GATING that enables native zoom — not the gesture itself
+// (that's phone signoff) — plus the arm/disarm transitions.
+func TestE2E_ImageZoomGating(t *testing.T) {
+	repo := setupFixtureRepo(t)
+	body, err := os.ReadFile(filepath.Join("testdata", "areacomments", "diagram.png"))
+	if err != nil {
+		t.Fatalf("read testdata/areacomments/diagram.png: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "diagram.png"), body, 0o644); err != nil {
+		t.Fatalf("write diagram.png into fixture repo: %v", err)
+	}
+	p := bootChromeAgainstRepo(t, repo, 1200, 800)
+	p.waitReady()
+	p.clickFile("diagram.png")
+
+	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.binary-image img`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("image not rendered: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	has := func(sel string) bool {
+		var v bool
+		if err := chromedp.Run(p.ctx, chromedp.Evaluate(fmt.Sprintf(`!!document.querySelector('%s')`, sel), &v)); err != nil {
+			t.Fatalf("eval has(%q): %v", sel, err)
+		}
+		return v
+	}
+	// hasAttribute avoids CSS-escaping the colon in the directive's attribute name.
+	hasDirective := func() bool {
+		var v bool
+		if err := chromedp.Run(p.ctx, chromedp.Evaluate(
+			`(()=>{const i=document.querySelector('.image-with-areas img');return !!i&&i.hasAttribute('lvt-fx:area-select')})()`, &v)); err != nil {
+			t.Fatalf("eval hasDirective: %v", err)
+		}
+		return v
+	}
+	touchAction := func() string {
+		var v string
+		if err := chromedp.Run(p.ctx, chromedp.Evaluate(
+			`getComputedStyle(document.querySelector('.image-with-areas img')).touchAction`, &v)); err != nil {
+			t.Fatalf("read touch-action: %v", err)
+		}
+		return v
+	}
+
+	// 1. Disarmed default: no capture directive, zoomable touch-action, hint +
+	//    toggle present, not is-armed.
+	if hasDirective() {
+		t.Error("disarmed image carries the area-select capture directive — every touch would start a comment (#57)")
+	}
+	if ta := touchAction(); ta == "none" {
+		t.Errorf("disarmed image touch-action = %q, want a zoomable value (not none)", ta)
+	}
+	if has(`.image-with-areas.is-armed`) {
+		t.Error("image is-armed on load; it should default to examine (zoom) mode")
+	}
+	if !has(`.region-hint`) {
+		t.Error("zoom hint missing on disarmed image (#57 discoverability)")
+	}
+	if !has(`button[name="toggleRegionSelect"]`) {
+		t.Error("region toggle (the comment affordance) missing on image")
+	}
+
+	// 2. Arm → capture directive attaches, touch-action locks to none, hint hidden.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.image-with-areas.is-armed img[lvt-fx\:area-select]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("arm region toggle: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if ta := touchAction(); ta != "none" {
+		t.Errorf("armed image touch-action = %q, want none (capture the drag)", ta)
+	}
+	if has(`.region-hint`) {
+		t.Error("zoom hint still shown while armed")
+	}
+
+	// 3. Disarm → back to examine mode (directive gone, zoomable again).
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.image-with-areas img[lvt-fx\:area-select]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("disarm region toggle: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if ta := touchAction(); ta == "none" {
+		t.Errorf("re-disarmed image touch-action = %q, want zoomable", ta)
 	}
 }
 

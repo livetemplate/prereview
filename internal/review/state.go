@@ -689,3 +689,24 @@ func (s PrereviewState) ViewedCount() int {
 	}
 	return n
 }
+
+// ScopeFileCount / ScopeViewedCount drive the "X/Y viewed" toolbar progress so
+// it counts against the files actually in the review SCOPE (what the drawer
+// shows) — changed-only by default. So a repo with 144 tracked files and 1
+// changed reads "0/1 viewed", not "0/144". Falls back to all files when the
+// scope is all (clean tree or ShowAllFiles), consistent with scopedFiles.
+// Zero-arg so the template can read them directly.
+func (s PrereviewState) ScopeFileCount() int { return len(s.scopedFiles()) }
+
+func (s PrereviewState) ScopeViewedCount() int {
+	if len(s.ViewedFiles) == 0 {
+		return 0
+	}
+	n := 0
+	for _, f := range s.scopedFiles() {
+		if s.ViewedFiles[f.Path] {
+			n++
+		}
+	}
+	return n
+}

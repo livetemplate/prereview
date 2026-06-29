@@ -92,11 +92,13 @@
         title="Send the current annotations to your agent as a handoff event (session stays open)"
       >Hand off →</button>
     </form>
-    {{- /* session terminator */ -}}
+    {{- /* session terminator — opens the confirm dialog (#58) instead of ending
+           immediately; the dialog's button fires endSession. */ -}}
     <form method="POST" style="margin:0">
       <button
-        type="submit"
-        name="endSession"
+        type="button"
+        command="show-modal"
+        commandfor="confirm-end-session"
         class="contrast"
         title="Emit session_end and stop the server — your agent stops consuming the stream"
       >End session</button>
@@ -113,8 +115,9 @@
     {{- else -}}
     <form method="POST" style="margin:0">
       <button
-        type="submit"
-        name="quit"
+        type="button"
+        command="show-modal"
+        commandfor="confirm-quit"
         class="contrast"
         title="Stop the prereview server"
       >Quit</button>
@@ -288,7 +291,7 @@
        form their own groups via .tb-group-divider on first-of-group. */}}
   <div class="toolbar-inline">
     <div class="tb-group tb-counters">
-      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ViewedCount}}/{{len .Files}} viewed</small>
+      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
       {{/* "Show resolved" is a FILTER — modifies which comments appear
            in the current view, semantically a checkbox on/off. The
            view-change "All comments" used to share this row but lived
@@ -424,7 +427,7 @@
           class="contrast theme-toggle"
           title="Color scheme: {{.SchemeLabel}} — switch to {{.NextSchemeLabel}}"
           aria-label="Color scheme: {{.SchemeLabel}}. Switch to {{.NextSchemeLabel}}."
-        >{{template "iconPalette"}}</button>
+        >{{template "iconPalette"}}<span class="tb-label">{{.SchemeLabel}}</span></button>
       </form>
       <form method="POST">
         <button
@@ -433,7 +436,7 @@
           class="contrast theme-toggle"
           title="Color mode: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}"
           aria-label="Color mode: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}."
-        >{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}</button>
+        >{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}<span class="tb-label">{{.ThemeModeLabel}}</span></button>
       </form>
     </div>
     {{/* Keyboard-shortcuts help. Desktop toolbar affordance (mobile has the
@@ -449,7 +452,7 @@
           aria-pressed="{{if .KeyHelpOpen}}true{{else}}false{{end}}"
           title="Keyboard shortcuts (press ?)"
           aria-label="Keyboard shortcuts"
-        >?</button>
+        ><span class="kbd-help-glyph" aria-hidden="true">?</span><span class="tb-label">Help</span></button>
       </form>
     </div>
   </div>
@@ -507,8 +510,9 @@
          narrow bar isn't crowded by two action buttons — hidden here via
          .end-session-inline in the mobile media query. */}}
     <button
-      type="submit"
-      name="endSession"
+      type="button"
+      command="show-modal"
+      commandfor="confirm-end-session"
       class="contrast end-session-inline"
       title="Emit session_end and stop the server — your agent stops consuming the stream"
     >End session</button>
@@ -521,8 +525,9 @@
     >Hand off →</button>
     {{else}}
     <button
-      type="submit"
-      name="quit"
+      type="button"
+      command="show-modal"
+      commandfor="confirm-quit"
       class="contrast"
       title="Stop the prereview server"
     >Quit</button>
@@ -569,7 +574,7 @@
   role="menu"
   aria-label="More options"
 >
-  <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ViewedCount}}/{{len .Files}} viewed
+  <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed
     {{- if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end -}}
   </div>
   {{/* Color scheme + mode — mirror the desktop toolbar palette + sun/moon.
@@ -740,8 +745,9 @@
        action buttons. Last item, so it's not an accidental tap target. */}}
   <form method="POST">
     <button
-      type="submit"
-      name="endSession"
+      type="button"
+      command="show-modal"
+      commandfor="confirm-end-session"
       class="menu-item"
       role="menuitem"
     >
@@ -1061,18 +1067,23 @@
        still fall back to the cannot-display copy. */}}
   {{$kind := $.BinaryKind}}
   {{if eq $kind "image"}}
-  {{/* image-with-areas wrapper: position:relative so .area-overlay
-       children (saved areas + the pending selection) land at the
-       right CSS coords. lvt-fx:area-select arms the upstream
-       directive — pointer-drag → final-coords action via the client's
-       send() pipeline. touch-action:none on the img stops iOS Safari
-       from interpreting the drag as a pinch/scroll. */}}
-  <div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-{{.Path}}">
+  {{/* Annotable image with two modes via the shared region toggle (issue #57).
+       DISARMED (default): the <img> carries no capture directive and no
+       touch-action lock, so touch pinch-zooms / scrolls to examine the image
+       natively (the viewport allows user scaling) — previously every touch
+       started a comment and the image couldn't be zoomed. ARMED: the
+       lvt-fx:area-select directive + touch-action:none capture a pointer drag
+       into a region comment. Mirrors how the rendered-HTML / external views
+       gate their capture overlay. The saved-area overlays render in BOTH modes
+       so existing comments stay visible while zooming; only NEW capture is
+       gated. position:relative on .image-with-areas anchors the % overlays. */}}
+  {{template "regionToggle" $}}
+  {{- if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end -}}
+  <div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
     <img
       src="/{{.Path}}"
       alt="{{.Path}}"
-      lvt-fx:area-select="selectImageArea"
-      style="touch-action:none;user-select:none;-webkit-user-select:none;"
+      {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}
     >
     {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}"
         data-key="ao-{{.ID}}"
@@ -1395,6 +1406,14 @@
   >livetemplate</a>
 </footer>
 {{end}}
+
+{{/* Confirm dialogs for the session terminators (#58), rendered ONCE here at the
+     top level — outside every <form> — so the toolbar/overflow/external triggers
+     can all open them by id. End session shows in stream mode; Quit in standalone
+     (the skill-mode "Hand off" is the intended primary action, so it isn't
+     gated). Hidden until a trigger fires command="show-modal". */}}
+{{if .StreamMode}}{{template "endSessionDialog" .}}{{end}}
+{{if and (not .SkillMode) (not .StreamMode)}}{{template "quitDialog" .}}{{end}}
 
 </div>{{/* .theme-root */}}
 <script defer src="/livetemplate-client.js"></script>

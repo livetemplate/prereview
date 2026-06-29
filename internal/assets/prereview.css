@@ -1,5 +1,5 @@
 :root {
-  --pr-bar-h: 52px;
+  --pr-bar-h: 43px;
   /* Three-column desktop layout (≥900px): file drawer | viewer | TOC.
      Drawer at 280px holds most filenames intact (mockups/, docs/
      prefixed paths fit); on the rare longer path, the button's
@@ -656,7 +656,7 @@ header.bar {
   position: sticky; top: 0; z-index: 30;
   min-height: var(--pr-bar-h);
   display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.3rem 0.5rem;
   background: var(--pico-card-background-color);
   border-bottom: 1px solid var(--pico-muted-border-color);
 }
@@ -724,12 +724,21 @@ header.bar .nav-next button { gap: 0.3rem; }
    in its half. */
 .tb-radios {
   display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  /* Match the toolbar buttons' height so the control doesn't read as a shorter
+     element in the row; the segments (labels) stretch to fill the track. */
+  min-height: 33px; align-content: stretch;
   margin: 0; padding: 3px; gap: 2px;
   border: 1px solid var(--border-strong); border-radius: 8px;
   background: var(--surface-muted);
   box-shadow: inset 0 1px 2px rgba(0, 43, 54, .07);
 }
 .tb-radios label {
+  /* Reset Pico's base `label { margin-bottom }`. Our radio sits INSIDE the
+     label, so Pico's `[type=radio]~label` margin-reset doesn't match and a ~6px
+     bottom margin lands in the grid cell; the cell then sizes to the label's
+     MARGIN box, pinning the visible pill to the top of the track — the segments
+     read as "not vertically centered" (spotted in P7 signoff). */
+  margin: 0;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; user-select: none;
   font-size: 0.8125rem; font-weight: 500; line-height: 1.2;
@@ -809,14 +818,19 @@ header.bar .nav-next button:focus-visible {
   color: var(--pico-h1-color);
   border-color: var(--accent);
 }
-/* Theme toggle is icon-only — square it up and centre the glyph so it sits on
-   the same baseline as the "?" help chip beside it. The icon inherits color
-   from the button (currentColor in the SVGs). */
-header.bar .theme-toggle {
-  padding: 0.25rem 0.5rem; min-height: auto; line-height: 0;
-  display: inline-flex; align-items: center; justify-content: center;
+/* Scheme / mode / help: icon + current-value label (e.g. "🎨 Solarized",
+   "◑ System", "? Help"), so they read as icon+text like the rest of the bar
+   rather than bare icon chips. inline-flex + gap lays out icon and label; no
+   padding override, so they inherit the standard button padding/height. */
+header.bar .theme-toggle,
+header.bar .kbd-help-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
 }
 header.bar .theme-toggle svg { display: block; }
+header.bar .tb-label { white-space: nowrap; }
+/* The help "?" stands in for an icon — give it a little presence next to the
+   16px SVG glyphs of its neighbours. */
+header.bar .kbd-help-glyph { font-size: 1rem; font-weight: 600; line-height: 1; }
 /* The active (pressed) focus-mode toggle reads as "on": tint it with the
    accent so the distraction-free state is visibly engaged. */
 header.bar .focus-toggle[aria-pressed="true"] {
@@ -1706,7 +1720,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    Pending area: dashed border + slightly brighter fill so the
    not-yet-saved selection is visually distinct from saved ones. */
 .image-with-areas { position: relative; display: inline-block; max-width: 100%; }
-.image-with-areas img { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+/* Default (examine) cursor — only the armed/comment mode draws a crosshair, so a
+   disarmed image doesn't look like it's waiting for a click-drag (issue #57). */
+.image-with-areas img { display: block; max-width: 100%; height: auto; cursor: default; }
+.image-with-areas.is-armed img { cursor: crosshair; }
+/* Zoom/comment hint under the region toggle on an image (issue #57). */
+.region-hint { display: block; margin: 0 0 0.5rem; color: var(--text-muted); font-size: 0.8rem; }
 
 /* Region-select overlay (issue #26 region comments). A transparent layer
    in the PARENT document laid over the rendered-HTML preview iframe — the
@@ -2058,11 +2077,13 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      pure duplication on desktop — drop just the filename, keep the
      "pick a file" / "all comments" prompts. */
   header.bar .title-file { display: none; }
-  /* Toolbar controls: 0.9rem/38px was still miniature on desktop —
-     match the 1rem body and a 44px touch target. */
-  header.bar button { padding: 0.5rem 0.9rem; font-size: 1rem; min-height: 44px; }
-  header.bar .nav-prev button, header.bar .nav-next button { min-width: 0; min-height: 44px; padding: 0.5rem 0.8rem !important; }
-  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 18px; height: 18px; }
+  /* Toolbar controls — a compact ~33px row (≈25% shorter than the old 44px) so
+     the bar reads as chrome, not a chunky button strip. The height drop comes
+     from lighter vertical padding, NOT a smaller font: keep font ≥15px (0.95rem)
+     so the desktop label stays legible (guarded by TestE2E_DesktopReadingSurface). */
+  header.bar button { padding: 0.2rem 0.85rem; font-size: 0.95rem; min-height: 33px; }
+  header.bar .nav-prev button, header.bar .nav-next button { min-width: 0; min-height: 33px; padding: 0.2rem 0.7rem !important; }
+  header.bar .nav-prev button svg, header.bar .nav-next button svg { width: 16px; height: 16px; }
   /* Desktop has the horizontal room — surface the Prev/Next label so
      the buttons aren't bare arrows. Aria-label stays as the SR text;
      the visible label is the explicit affordance per issue #11. */

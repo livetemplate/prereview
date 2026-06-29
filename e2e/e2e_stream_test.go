@@ -248,11 +248,14 @@ func TestE2E_StreamHandoff(t *testing.T) {
 		t.Errorf("events.jsonl has %d handoff events, want >= 3", got)
 	}
 
-	// End session: flush + session_end terminator, then the server shuts down.
+	// End session now goes through a confirm dialog (#58): the toolbar button
+	// opens the native <dialog>; its confirm button fires the real endSession.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`header.bar button[name='endSession']`, chromedp.ByQuery),
+		chromedp.Click(`header.bar button[commandfor='confirm-end-session']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#confirm-end-session[open] button[name='endSession']`, chromedp.ByQuery),
+		chromedp.Click(`#confirm-end-session button[name='endSession']`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("click End session: %v%s", err, diag())
+		t.Fatalf("confirm End session: %v%s", err, diag())
 	}
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		return len(evs) > 0 && evs[len(evs)-1].Event == "session_end"
