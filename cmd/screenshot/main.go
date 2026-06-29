@@ -394,6 +394,10 @@ func seedAreaComment(allocCtx context.Context, url, frag, body string) {
 		acts = append(acts,
 			chromedp.WaitVisible(imgSel, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
+			// #57: image area-select is gated behind the region toggle (images
+			// pinch-zoom by default), so arm it before the drag can capture.
+			chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.image-with-areas.is-armed`, chromedp.ByQuery),
 			chromedp.Evaluate(`(()=>{const im=document.querySelector('`+imgSel+`');const b=im.getBoundingClientRect();return {X:b.x,Y:b.y,W:b.width,H:b.height};})()`, &r),
 			chromedp.ActionFunc(func(ctx context.Context) error {
 				return mouseDrag(ctx, r.X+r.W*0.15, r.Y+r.H*0.15, r.X+r.W*0.62, r.Y+r.H*0.58)

@@ -360,7 +360,15 @@ func gifImage(allocCtx context.Context, url, outDir string) {
 		); err != nil {
 			return err
 		}
-		_ = rec.capture(ctx, 130) // the image, before annotation
+		_ = rec.capture(ctx, 130) // the image, before annotation (examine/zoom mode)
+		// #57: arm the region toggle — images pinch-zoom by default, so capture
+		// the gesture only after switching to comment mode.
+		_ = chromedp.Run(ctx,
+			chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.image-with-areas.is-armed`, chromedp.ByQuery),
+			chromedp.Sleep(200*time.Millisecond),
+		)
+		_ = rec.capture(ctx, 80) // armed — "Select a region to comment" engaged
 		// Drag a rectangle → pending box + composer.
 		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 			return mouseDrag(ctx, r.X+r.W*0.15, r.Y+r.H*0.15, r.X+r.W*0.62, r.Y+r.H*0.58)
