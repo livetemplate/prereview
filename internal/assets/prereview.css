@@ -724,6 +724,9 @@ header.bar .nav-next button { gap: 0.3rem; }
    in its half. */
 .tb-radios {
   display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  /* Match the toolbar buttons' height so the control doesn't read as a shorter
+     element in the row; the segments (labels) stretch to fill the track. */
+  min-height: 44px; align-content: stretch;
   margin: 0; padding: 3px; gap: 2px;
   border: 1px solid var(--border-strong); border-radius: 8px;
   background: var(--surface-muted);
@@ -815,11 +818,12 @@ header.bar .nav-next button:focus-visible {
   color: var(--pico-h1-color);
   border-color: var(--accent);
 }
-/* Theme toggle is icon-only — square it up and centre the glyph so it sits on
-   the same baseline as the "?" help chip beside it. The icon inherits color
-   from the button (currentColor in the SVGs). */
+/* Theme toggle is icon-only — centre the glyph but keep the SAME height as the
+   text buttons beside it (don't shrink with min-height:auto, which made it read
+   as a shorter, mismatched chip). The icon inherits color from the button
+   (currentColor in the SVGs). */
 header.bar .theme-toggle {
-  padding: 0.25rem 0.5rem; min-height: auto; line-height: 0;
+  padding: 0.25rem 0.6rem;
   display: inline-flex; align-items: center; justify-content: center;
 }
 header.bar .theme-toggle svg { display: block; }
