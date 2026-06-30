@@ -1,25 +1,48 @@
 # prereview
 
-**You spot what's wrong; the LLM fixes it — locally, before you push.** Review any change — a diff line, a Markdown or HTML block, a region of an image, even a box on a live local site — and hand the fixes to your coding agent. Works with any LLM CLI. All local, before anything leaves your machine.
+**Point, fix, repeat** — steer your agent's output, across code, docs, images,
+and UI, to what you actually meant. Local, works with any LLM CLI; nothing
+leaves your machine.
+
+**Tests tell you if it's correct. prereview is how you make it *good*** — the
+clarity, judgment, and taste no test can check.
 
 <p align="center">
   <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
 </p>
-<p align="center"><sub><em>Comment on what's wrong and hand off — Claude reads it and edits the file, the fix lands in the diff, you resolve. You stay in the loop; the output gets better.</em></sub></p>
+<p align="center"><sub><em>Point at what's off and hand off — Claude reads it, edits the file, the fix lands in the diff, you resolve. You stay the judgment; the output gets better.</em></sub></p>
 
-A tiny local webapp for **reviewing your working tree and handing the
-fixes to an LLM** — no commit, no PR, no GitHub round-trip. Run
-`prereview` in your repo (or point it at any file or directory), click
-what you want changed — a line or range in a diff, a rendered Markdown or
-HTML block, a region of an image, or a box on a running dev site — and
-leave a comment; a CSV is written that you (or an LLM) act on. It ships
-with a turnkey [Claude Code](https://claude.com/claude-code) skill —
-`/prereview` launches a session, you comment, hit **"Hand off →"**, and
-your agent applies the changes — and works with **any other coding agent**
-(OpenAI Codex CLI, Gemini CLI, aider, opencode, cursor-agent) through the
-same open comment protocol; see **[Works with any LLM CLI](#works-with-any-llm-cli)**.
-On a remote box it auto-binds your Tailscale address — review from your
-phone over the tailnet, before anything is pushed.
+**Why now.** You used to write the code yourself, then push a PR for your peers
+to review. Now the agent writes it — fast, in bulk, often not quite what you
+meant. Tests and CI catch what's *measurable*; they can't tell you whether it's
+clear, whether it's right, whether it's what you actually asked for. On a
+finished agent change, you're the only thing checking that — so the review that
+matters moved *before* the PR, onto your machine.
+
+prereview is where you do it: go over the whole change and point at what's off —
+a diff line, a Markdown or HTML block, a region of an image, a box on a running
+dev site — then hand the batch back. The agent fixes; you look again. Every pass
+is cheap, so you iterate until it's actually good — then push something your
+reviewers barely have to touch.
+
+**Sometimes there's no PR at all.** A doc, a spec, a draft that never touches
+git — your local pass is the *only* review it gets; nothing downstream catches
+what you miss. prereview runs the same review-fix loop on those: `prereview
+./PLAN.md`, or point it at any folder.
+
+**Who it's for.** Anyone writing with a coding agent — especially in auto /
+full-auto mode, where it finishes before you ever see the edits — who wants a
+fast, deliberate pass over the whole thing before it ships: code headed for a PR,
+or a doc headed straight out the door. One tool for code *and everything around
+it*: no commit, no PR, no round-trip required.
+
+It ships with a turnkey [Claude Code](https://claude.com/claude-code) skill —
+`/prereview` launches a session, you comment, hit **"Hand off →"**, and your
+agent applies the changes — and works with **any other coding agent** (OpenAI
+Codex CLI, Gemini CLI, aider, opencode, cursor-agent) through the same open
+comment protocol; see **[Works with any LLM CLI](#works-with-any-llm-cli)**. On a
+remote box it auto-binds your Tailscale address — review from your phone over the
+tailnet, before anything is pushed.
 
 ## Features
 
@@ -46,21 +69,32 @@ phone over the tailnet, before anything is pushed.
 - **Single Go binary** — every asset embedded (Pico, fonts, client JS,
   mermaid); no Node, no JS runtime; works fully offline.
 
-## How it's different
+## The idea
 
-Most "AI code review" tools have the model *find* the problems for you to
-read. prereview inverts that: **you** spot what's wrong — across any
-artifact, not just code — and the LLM does the *fixing*, locally, before
-you push.
+Generating the change is the cheap part now — and tests, CI, even running
+several agents and keeping the best, all optimize for what's *measurable*.
+None of them can tell you whether it reads well, whether the judgment is right,
+or whether it's what you actually meant. That's the part only you can steer.
 
-- **vs. AI reviewers** (CodeRabbit, Gito, Ollama pre-commit hooks, Qodo) —
-  they generate the review; prereview captures *your* judgment as
-  structured comments an LLM then acts on.
-- **vs. team review tools** (Gerrit, ReviewBoard, `arc diff`) — those are
-  multi-person, server-side, and code-only; prereview is single-user,
-  local, and reviews any artifact.
-- **vs. diff viewers** (lazygit, tig, delta, difftastic) — they show
-  changes; prereview captures anchored comments and hands them to an LLM.
+prereview is that steering layer. After the agent is done — or after you've
+picked the best of a few — you go over the whole thing, point at what's off
+across code, docs, images, and live UI, and direct it to your bar, one cheap
+pass at a time. You stay the judgment; the agent stays the hands.
+
+- **Downstream of generation, not competing with it** — let tests catch bugs
+  and best-of-N find a strong draft; prereview is how you take that draft to
+  *yours*.
+- **Your judgment, captured as structured comments** — anchored to real lines,
+  regions, or a box on a page; the agent acts on them directly.
+- **One cheap pass at a time** — each round is low-friction, so you iterate
+  until it's actually good instead of stopping when you're tired of fighting
+  the tooling.
+- **Before the PR, not in it** — a pull request is a *publishing* surface, not
+  an iteration one: reviewing there means a commit, a push, and a CI run on
+  every half-formed round, in front of your reviewers. prereview keeps the loop
+  local, before the change is public; the PR you eventually open is already good.
+- **Code and everything around it** — diffs, Markdown/HTML, images, and a live
+  local site, in one place.
 
 ## Works with any LLM CLI
 
