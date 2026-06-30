@@ -4147,8 +4147,10 @@ func setupFixtureHTMLRepo(t *testing.T) string {
 // TestE2E_HTMLPreviewRendersAndAutoHeights pins the iframe preview (issue
 // #26): a .html file renders once in a sandboxed iframe whose top-level
 // <body> children carry their real source line range (data-from/data-to),
-// and lvt-fx:iframe-autoheight sizes the iframe to its content. The raw ↔
-// rendered toggle swaps the iframe for the code line view and back.
+// and lvt-fx:preview-bridge sizes the iframe from the height its in-iframe
+// beacon posts out (the opaque-origin sandbox blocks reading scrollHeight
+// directly). The raw ↔ rendered toggle swaps the iframe for the code line
+// view and back.
 //
 // Selecting a region of the preview to anchor a comment is driven by a
 // parent-document overlay (lvt-fx:region-select) and is covered end-to-end
@@ -4197,25 +4199,18 @@ func TestE2E_HTMLPreviewRendersAndAutoHeights(t *testing.T) {
 
 	p.clickFile("index.html")
 
-	// Wait for the preview iframe and its document to populate with the
-	// data-from blocks that carry the source line ranges.
+	// The preview iframe is opaque-origin (sandbox="allow-scripts"), so the
+	// parent can't read its contentDocument — wait on the iframe element only;
+	// the height poll below proves the bridge round-trip completed.
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`iframe.html-preview`, chromedp.ByQuery),
-		chromedp.Poll(
-			`(() => {
-				const fr = document.querySelector('iframe.html-preview');
-				const d = fr && fr.contentDocument;
-				return !!(d && d.querySelector('[data-from]'));
-			})()`,
-			nil,
-			chromedp.WithPollingTimeout(10*time.Second),
-		),
 	); err != nil {
 		t.Fatalf("wait preview iframe: %v%s", err, diag())
 	}
 
-	// Auto-height: the directive sets an explicit pixel height from the
-	// content's scrollHeight (iframes don't size to content on their own).
+	// Auto-height: the preview-bridge sets an explicit pixel height from the
+	// content's scrollHeight POSTED OUT by the in-iframe beacon (the parent
+	// can't read scrollHeight directly under the opaque-origin sandbox).
 	var heightPx float64
 	if err := chromedp.Run(p.ctx, chromedp.Poll(
 		`(() => {
@@ -4267,8 +4262,36 @@ func TestE2E_HTMLPreviewRendersAndAutoHeights(t *testing.T) {
 // that source line range — round-tripping with the raw view + CSV. The
 // drag is synthesized via Chrome's Input.dispatchMouseEvent so the shared
 // drag spine's pointerdown/move/up handlers fire like a real gesture.
+// setupFixtureHTMLRegionRepo writes a preview fixture with two tall, FIXED-
+// height top-level blocks so region-select geometry is deterministic: the top
+// <section> is source line 4, the bottom line 5, each 240px. A box dragged over
+// the iframe's top quarter therefore always resolves to the top block (line 4),
+// independent of fonts or async layout — the geometry the opaque-origin bridge
+// posts out is stable. (Static inline CSS only — NEVER a JS framework whose JIT
+// would shift layout after the rects are cached.)
+func setupFixtureHTMLRegionRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+	mustWrite(t, dir, "keep.go", "package keep\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+	// Line 4 = top section, line 5 = bottom section (data-from is the source line).
+	mustWrite(t, dir, "region.html",
+		"<!doctype html>\n"+
+			"<html><head><style>body{margin:0}section{height:240px;margin:0}</style></head>\n"+
+			"<body>\n"+
+			"<section style=\"background:#eef\">Top block</section>\n"+
+			"<section style=\"background:#fee\">Bottom block</section>\n"+
+			"</body></html>\n")
+	return dir
+}
+
 func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
-	p := bootChromeAgainstRepo(t, setupFixtureHTMLRepo(t), 1200, 800)
+	p := bootChromeAgainstRepo(t, setupFixtureHTMLRegionRepo(t), 1200, 800)
 	p.waitReady()
 
 	var mu sync.Mutex
@@ -4307,23 +4330,12 @@ func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
 			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
 	}
 
-	p.clickFile("index.html")
+	p.clickFile("region.html")
 
-	// Preview renders; wait for the iframe's data-from blocks to populate.
-	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`iframe.html-preview`, chromedp.ByQuery),
-		chromedp.Poll(
-			`(() => {
-				const fr = document.querySelector('iframe.html-preview');
-				const d = fr && fr.contentDocument;
-				return !!(d && d.querySelector('[data-from]'));
-			})()`,
-			nil,
-			chromedp.WithPollingTimeout(10*time.Second),
-		),
-	); err != nil {
-		t.Fatalf("wait preview iframe: %v%s", err, diag())
-	}
+	// The opaque-origin preview iframe can't be read from the parent; wait for
+	// the bridge to size it (height>0 ⇒ the beacon posted height AND block
+	// rects, so region-select has rects to hit-test).
+	waitPreviewBridgeReady(t, p)
 
 	// Arm the "Select region" toggle → the parent overlay appears.
 	if err := chromedp.Run(p.ctx,
@@ -4334,36 +4346,27 @@ func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
 		t.Fatalf("arm region toggle: %v%s", err, diag())
 	}
 
-	// Read the first iframe block's VIEWPORT rect (its in-iframe rect plus
-	// the iframe's own offset) + its source line range, so we drag a box
-	// we know overlaps it.
-	var blk struct {
-		From, To            int
-		X, Y, Width, Height float64
-	}
+	// Read the iframe's OWN viewport rect (parent-readable — no contentDocument
+	// needed). The fixture's top block is the first 240px of content, so a box
+	// over the iframe's top ~100px always resolves to it (source line 4).
+	const topBlockLine = 4
+	var ir struct{ Left, Top, Width, Height float64 }
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
-		const fr = document.querySelector('iframe.html-preview');
-		const ir = fr.getBoundingClientRect();
-		const el = fr.contentDocument.querySelector('[data-from]');
-		const b = el.getBoundingClientRect();
-		return {
-			From: parseInt(el.getAttribute('data-from'), 10),
-			To: parseInt(el.getAttribute('data-to') || el.getAttribute('data-from'), 10),
-			X: ir.left + b.left, Y: ir.top + b.top, Width: b.width, Height: b.height,
-		};
-	})()`, &blk)); err != nil {
-		t.Fatalf("read target block rect: %v%s", err, diag())
+		const r = document.querySelector('iframe.html-preview').getBoundingClientRect();
+		return { Left: r.left, Top: r.top, Width: r.width, Height: r.height };
+	})()`, &ir)); err != nil {
+		t.Fatalf("read iframe rect: %v%s", err, diag())
 	}
-	if blk.From <= 0 || blk.Width < 10 || blk.Height < 4 {
-		t.Fatalf("target block looks wrong: %+v%s", blk, diag())
+	if ir.Width < 50 || ir.Height < 200 {
+		t.Fatalf("iframe rect looks wrong: %+v%s", ir, diag())
 	}
 
-	// Drag a box across the block: wide (most of its width) and tall
-	// enough to clear the click threshold, comfortably inside its bounds.
-	x1 := blk.X + blk.Width*0.10
-	y1 := blk.Y + 2
-	x2 := blk.X + blk.Width*0.80
-	y2 := blk.Y + blk.Height - 2
+	// Drag a box over the top block: wide, and from just inside the top down to
+	// ~100px (well within the 240px top section), clearing the click threshold.
+	x1 := ir.Left + ir.Width*0.10
+	y1 := ir.Top + 12
+	x2 := ir.Left + ir.Width*0.80
+	y2 := ir.Top + 100
 	if err := chromedp.Run(p.ctx,
 		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).
 			WithButton(cdpinput.Left).WithClickCount(1),
@@ -4402,9 +4405,9 @@ func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
 	if from <= 0 || to < from {
 		t.Errorf("bad persisted line range from=%q to=%q", row[2], row[3])
 	}
-	// The resolved range must intersect the block we targeted.
-	if to < blk.From || from > blk.To {
-		t.Errorf("persisted range [%d,%d] does not overlap target block [%d,%d]", from, to, blk.From, blk.To)
+	// The resolved range must cover the top block (source line 4) we dragged over.
+	if from > topBlockLine || to < topBlockLine {
+		t.Errorf("persisted range [%d,%d] does not cover the top block (line %d)", from, to, topBlockLine)
 	}
 
 	mu.Lock()

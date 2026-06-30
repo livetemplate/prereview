@@ -62,18 +62,28 @@ func TestRenderHTMLPreview_BaseHrefForSubdir(t *testing.T) {
 	}
 }
 
-func TestRenderHTMLPreview_StripsScripts(t *testing.T) {
+// Scripts now PASS THROUGH — the page's own JS must run (that is the #63 fix:
+// JS-generated CSS like the Tailwind Play CDN). The opaque-origin sandbox
+// (sandbox="allow-scripts", no allow-same-origin; set in the template) is the
+// execution boundary, not content stripping. A body-level <script> still must
+// NOT become a commentable block (no visual content).
+func TestRenderHTMLPreview_ScriptsPassThrough(t *testing.T) {
 	src := []byte(`<html><body>
 <h1>Title</h1>
-<script>alert("xss")</script>
+<script>window.x=1</script>
 <p>After script</p>
 </body></html>`)
 	doc, blocks := RenderHTMLPreview(src, "")
 	if len(blocks) != 2 {
 		t.Fatalf("got %d blocks, want 2 (h1, p) — script must not become a block", len(blocks))
 	}
-	if strings.Contains(doc, "alert") || strings.Contains(doc, "<script") {
-		t.Errorf("script content leaked into doc: %q", doc)
+	if !strings.Contains(doc, "window.x=1") {
+		t.Errorf("body <script> was stripped — it must pass through to run: %q", doc)
+	}
+	// The bridge beacon must be injected so the opaque iframe can post its
+	// height + block rects out.
+	if !strings.Contains(doc, "__lvtPreview") {
+		t.Errorf("preview bridge beacon not injected: %q", doc)
 	}
 }
 

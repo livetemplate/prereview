@@ -47,7 +47,7 @@ type rawAttr struct {
 //
 // The document is passed through almost verbatim so the iframe renders a
 // real page (real <body>, <head> styles, var()/@media/vw/sticky all
-// resolve against the iframe viewport). Three transforms apply:
+// resolve against the iframe viewport). These transforms apply:
 //
 //   - A <base href="/<dir>/"> is injected (the file's directory, URL-
 //     encoded) so relative href/src resolve to server-absolute paths the
@@ -56,10 +56,15 @@ type rawAttr struct {
 //   - Each top-level <body> child element gets data-from/data-to
 //     attributes carrying its source line range; the client maps a click
 //     inside the iframe to the matching range via closest('[data-from]').
-//   - <script> elements, on* event-handler attributes, and javascript:
-//     URLs are stripped. The iframe sandbox (allow-same-origin, no
-//     allow-scripts) already blocks script execution; this is defense in
-//     depth so a future sandbox relaxation can't silently re-enable them.
+//   - The preview bridge beacon (previewBridgeJS) is injected so the iframe can
+//     post its height + block rects out (the iframe is opaque-origin, so the
+//     parent can't read its contentDocument).
+//   - on* event-handler attributes and javascript: URLs are still stripped
+//     (serializeTag). <script> elements are NOT stripped — the page's own
+//     scripts must run (that is the whole point: JS-generated CSS like the
+//     Tailwind Play CDN). The execution boundary is the opaque-origin sandbox
+//     (sandbox="allow-scripts", NO allow-same-origin), which lets scripts run
+//     but blocks all access to the parent app — never the two together.
 //
 // currentPath is the file's repo-relative path (drives the <base> dir).
 // Empty input, or input without a <body>, yields an empty document and
@@ -68,19 +73,23 @@ type rawAttr struct {
 // The document is returned as a plain string: the template places it in
 // the iframe's `srcdoc="…"` attribute, where html/template's contextual
 // autoescaper applies the correct escaping. The browser reconstitutes the
-// document from the attribute; the sandbox (no allow-scripts) is the
-// execution boundary.
+// document from the attribute; the opaque-origin sandbox (allow-scripts, no
+// allow-same-origin) is the security boundary — scripts run but can't reach
+// the parent app.
 func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 	if len(bytes.TrimSpace(src)) == 0 {
 		return "", nil
 	}
 
 	// Injected into the head: a <base> so relative assets resolve to the
-	// file's server directory, and a cursor:pointer rule on the block
-	// elements so they read as tappable AND so iOS Safari treats a tap on
-	// them as a click (it only fires click on "clickable" elements).
+	// file's server directory, a cursor:pointer rule on the block elements so
+	// they read as tappable AND so iOS Safari treats a tap on them as a click
+	// (it only fires click on "clickable" elements), and the preview bridge
+	// beacon (previewBridgeJS) — the iframe is an opaque-origin sandbox that
+	// runs the page's own scripts, so it posts its height + block rects out to
+	// the parent rather than the parent reading its contentDocument.
 	headInject := `<base href="` + htmlpkg.EscapeString(previewBaseHref(currentPath)) + `">` +
-		`<style>[data-from]{cursor:pointer}</style>`
+		`<style>[data-from]{cursor:pointer}</style>` + previewBridgeJS
 
 	z := html.NewTokenizer(bytes.NewReader(src))
 	line := 1
@@ -149,10 +158,6 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 				attrs = readAttrs(z)
 			}
 
-			if name == "script" {
-				skipUntilCloseTag(z, "script", &line)
-				continue
-			}
 			if !inHead && !inBody && name == "head" {
 				out.Write(serializeTag(name, attrs, false))
 				out.WriteString(headInject)
@@ -171,6 +176,14 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 				continue
 			}
 			if inBody && depthInBody == 0 {
+				// A <script> as a direct <body> child passes through to run, but
+				// is NOT a commentable block (no visual content). Leaving
+				// depthInBody at 0 lets its rawtext + </script> flow to `out` as
+				// passthrough, and the next real child starts fresh.
+				if name == "script" {
+					out.Write(serializeTag(name, attrs, false))
+					continue
+				}
 				// A new top-level <body> child opens: start buffering it so
 				// emitChild can stamp data-to once we know the end line.
 				childName = name
@@ -196,10 +209,13 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 			if hasAttr {
 				attrs = readAttrs(z)
 			}
-			if name == "script" {
-				continue
-			}
 			if inBody && depthInBody == 0 {
+				// Self-closing <script/> as a body child: pass through, no block
+				// (mirrors the start-tag case above).
+				if name == "script" {
+					out.Write(serializeTag(name, attrs, true))
+					continue
+				}
 				childName = name
 				childAttrs = attrs
 				childStartLine = startLine
@@ -328,31 +344,4 @@ func isURLAttr(name string) bool {
 // insensitive, ASCII whitespace only (matches the HTML5 parser's view).
 func hasJavascriptScheme(val string) bool {
 	return strings.HasPrefix(strings.TrimSpace(strings.ToLower(val)), "javascript:")
-}
-
-// skipUntilCloseTag consumes tokenizer events until the matching close tag
-// for tagName, advancing line. Drops <script> content wholesale so its
-// rawtext bytes never land in the surrounding output.
-func skipUntilCloseTag(z *html.Tokenizer, tagName string, line *int) {
-	depth := 1
-	for depth > 0 {
-		tt := z.Next()
-		if tt == html.ErrorToken {
-			return
-		}
-		raw := z.Raw()
-		*line += bytes.Count(raw, []byte("\n"))
-		switch tt {
-		case html.StartTagToken:
-			name, _ := z.TagName()
-			if string(name) == tagName {
-				depth++
-			}
-		case html.EndTagToken:
-			name, _ := z.TagName()
-			if string(name) == tagName {
-				depth--
-			}
-		}
-	}
 }
