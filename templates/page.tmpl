@@ -1306,17 +1306,22 @@
 {{if and .LastDeletedComment (not .Quitting)}}
 <div class="undo-toast" role="status">
   <span>Comment on <code>{{.LastDeletedComment.File}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
-  <form method="POST" style="margin:0;display:inline">
-    <button type="submit" name="undoDelete" class="undo-btn">Undo</button>
-  </form>
+  <span class="toast-actions">
+    <form method="POST" style="margin:0;display:inline">
+      <button type="submit" name="undoDelete" class="undo-btn">Undo</button>
+    </form>
+    <form method="POST" class="toast-dismiss-form">
+      <button type="submit" name="dismissUndo" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
+    </form>
+  </span>
 </div>
 {{end}}
 
 {{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
 <div class="reanchor-prompt" role="status">
   <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
-  <form method="POST" style="margin:0;display:inline">
-    <button type="submit" name="clearSelection" class="undo-btn">Cancel</button>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="clearSelection" class="toast-dismiss" aria-label="Cancel re-anchoring">{{template "iconClose14"}}</button>
   </form>
 </div>
 {{end}}

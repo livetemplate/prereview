@@ -995,6 +995,11 @@ header.bar button[name="endSession"]:focus-visible {
   margin: 0; padding: 0.2rem 0.7rem; font-size: 0.78rem;
   background: var(--pico-primary); color: var(--pico-primary-inverse); border: 0;
 }
+/* Keep Undo + the ✕ dismiss grouped on the right (the toast is
+   justify-content:space-between, so without this the two would scatter). The
+   generic .toast-dismiss rule below styles the ✕ itself (color:inherit, so it
+   picks up the toast's text color). */
+.toast-actions { display: inline-flex; align-items: center; gap: 0.4rem; }
 header.bar form { margin: 0; }
 header.bar button { margin: 0; padding: 0.25rem 0.55rem; font-size: 0.85rem; min-height: 32px; }
 .hamburger {
@@ -1128,7 +1133,10 @@ dialog#files-drawer .scope-toggle.is-on {
 dialog#files-drawer .scope-toggle.is-on:hover, dialog#files-drawer .scope-toggle.is-on:focus-visible {
   --pico-color: #1e40af; color: var(--pico-color); border-color: #1e40af;
 }
-dialog#files-drawer .drawer-body { flex: 1; overflow-y: auto; padding: 0.4rem 0.4rem 0.5rem; }
+/* Size container for the file list so rows can respond to the drawer's
+   dragged width (--pr-drawer-w). inline-size contains only the horizontal
+   axis, so the vertical overflow-y scroll is unaffected. */
+dialog#files-drawer .drawer-body { flex: 1; overflow-y: auto; padding: 0.4rem 0.4rem 0.5rem; container: drawer / inline-size; }
 dialog#files-drawer .file-row { display: flex; gap: 0.25rem; align-items: stretch; }
 dialog#files-drawer .file-select-form { flex: 1; margin: 0; min-width: 0; }
 dialog#files-drawer .file-viewed-form { margin: 0; }
@@ -1207,6 +1215,11 @@ dialog#files-drawer button.file-btn {
 }
 dialog#files-drawer button.file-btn .file-label {
   flex: 1; min-width: 0; display: flex; align-items: baseline;
+  /* Clip the label box so that when the drawer is dragged narrow enough that
+     even the pinned extension can't fit, .file-ext is cropped here instead of
+     overflowing rightward onto .file-meta (the diff-stats + count badge),
+     which read as garbled overlapping text (the stem already ellipsises). */
+  overflow: hidden;
 }
 /* The stem ellipsises; the extension is pinned (flex-shrink:0) so a long name
    crops as "verylongcompon….tsx" instead of "verylongcomponent.…", keeping the
@@ -1228,6 +1241,13 @@ dialog#files-drawer button.file-btn .diff-stats {
 }
 dialog#files-drawer button.file-btn .diff-stats .add { color: #166534; margin-right: 0.2rem; }
 dialog#files-drawer button.file-btn .diff-stats .del { color: #991b1b; }
+/* When the drawer is dragged narrow the filename matters more than the churn
+   counts, so drop .diff-stats and let the name reclaim the width (otherwise the
+   stem truncates to almost nothing). The count badge stays — it's narrow and
+   flags unresolved comment threads. Keyed on the .drawer-body size container. */
+@container drawer (max-width: 240px) {
+  dialog#files-drawer button.file-btn .diff-stats { display: none; }
+}
 
 /* Status badges — colored pills instead of dark-text-in-brackets so the
    user can scan diff status at a glance. Slot is fixed-width (~18px) so
@@ -1536,8 +1556,10 @@ header.file-head .file-head-comment button svg { display: block; }
    shift with the container font. margin-inline:auto centres it, so on a wide
    viewer (focus mode / ultrawide) the prose sits in a comfortable column with
    symmetric gutters; the diff/code surface (.code) is deliberately NOT capped
-   — code needs full width. */
-.md-view { padding: 0.6rem 1.8rem 2rem; max-width: 44rem; margin-inline: auto; }
+   — code needs full width. The cap is 60rem (up from 44rem): when the file
+   drawer is dragged narrow the freed horizontal space should reach the prose,
+   not pool entirely in the gutters. Focus mode goes wider still (below). */
+.md-view { padding: 0.6rem 1.8rem 2rem; max-width: 60rem; margin-inline: auto; }
 /* HTML preview: the whole file renders in one sandboxed iframe (full
    document fidelity), with the comments list stacked below it. The
    client auto-heights .html-preview from its content; the fallback
@@ -1927,10 +1949,6 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border: 1px solid var(--pr-del); border-radius: 4px;
   font-size: 0.8rem; box-shadow: 0 -2px 8px rgba(0,0,0,.08); z-index: 8;
 }
-.reanchor-prompt .undo-btn {
-  margin: 0; padding: 0.2rem 0.7rem; font-size: 0.78rem;
-  background: var(--pico-primary); color: var(--pico-primary-inverse); border: 0;
-}
 
 /* Inline composer — sticky on mobile, static on desktop. Save and Cancel
    live in separate <form> elements (siblings, not nested) so Cancel can't
@@ -2189,8 +2207,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   .layout.focus-mode .toc-sidebar { display: none; }
   /* Focus mode reclaims both side columns — let the reading column grow into
      the freed width (issue #59) instead of staying pinned at the narrow
-     measure. The diff/code surface is already uncapped. */
-  .layout.focus-mode .md-view { max-width: 60rem; }
+     measure. The diff/code surface is already uncapped. Kept wider than the
+     base 60rem cap so focus mode still visibly widens the prose. */
+  .layout.focus-mode .md-view { max-width: 72rem; }
   /* Pico defaults buttons to width:100% so they fill mobile forms.
      On desktop the composer becomes a card next to the diff — full-
      width Save/Cancel look comically large. Pin them to content size. */

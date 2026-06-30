@@ -488,3 +488,12 @@ func (c *PrereviewController) UndoDelete(state PrereviewState, ctx *livetemplate
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
 }
+
+// DismissUndo clears the undo affordance WITHOUT restoring the comment — the
+// deletion stands. This backs the undo toast's ✕ button, the manual
+// counterpart to UndoDelete's restore. Mirror of ClearFlash: a one-field clear
+// with no persistence (the CSV already reflects the deletion).
+func (c *PrereviewController) DismissUndo(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.LastDeletedComment = nil
+	return state, nil
+}
