@@ -136,6 +136,35 @@ func FormatHash(path string, fromLine, toLine int, anchor string) string {
 	return out
 }
 
+// urlSchemes are the URL scheme prefixes that mark a link/src target as
+// external (passed through unchanged, never resolved as a repo-relative path).
+// Shared by ResolveRelativeLink and the image-src checks (htmlimage.go,
+// linkrewrite.go) so "what counts as external" has one definition.
+var urlSchemes = []string{"http:", "https:", "mailto:", "tel:", "data:", "javascript:", "ftp:", "ssh:"}
+
+// hasURLScheme reports whether t begins with one of urlSchemes (case-
+// insensitive, after a leading-whitespace trim).
+func hasURLScheme(t string) bool {
+	lower := strings.ToLower(strings.TrimSpace(t))
+	for _, scheme := range urlSchemes {
+		if strings.HasPrefix(lower, scheme) {
+			return true
+		}
+	}
+	return false
+}
+
+// isExternalTarget reports whether t is NOT a repo-relative path and so must
+// pass through unresolved: a URL scheme (urlSchemes), a protocol-relative
+// `//host`, a server-absolute `/path`, or a `?query` we can't represent in the
+// hash grammar. An intra-doc `#anchor` is deliberately NOT external (callers
+// resolve it against the current file).
+func isExternalTarget(t string) bool {
+	t = strings.TrimSpace(t)
+	return hasURLScheme(t) || strings.HasPrefix(t, "//") ||
+		strings.HasPrefix(t, "/") || strings.Contains(t, "?")
+}
+
 // ResolveRelativeLink rewrites a link target from inside currentFile
 // to a prereview hash URL when it points at a relative path inside
 // the repo, or returns the original target unchanged when it points
@@ -160,24 +189,8 @@ func ResolveRelativeLink(currentFile, target string) (string, bool) {
 		return target, true
 	}
 
-	// External schemes — pass through.
-	lower := strings.ToLower(t)
-	for _, scheme := range []string{"http:", "https:", "mailto:", "tel:", "data:", "javascript:", "ftp:", "ssh:"} {
-		if strings.HasPrefix(lower, scheme) {
-			return target, true
-		}
-	}
-	// Protocol-relative (`//host/...`).
-	if strings.HasPrefix(t, "//") {
-		return target, true
-	}
-	// Absolute path (`/foo/bar`) — could be a server route, not a
-	// repo file; pass through.
-	if strings.HasPrefix(t, "/") {
-		return target, true
-	}
-	// Query string in target — not representable in our hash grammar.
-	if strings.Contains(t, "?") {
+	// Scheme / protocol-relative / server-absolute / query — pass through.
+	if isExternalTarget(t) {
 		return target, true
 	}
 

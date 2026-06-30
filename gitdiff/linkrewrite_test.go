@@ -5,53 +5,53 @@ import (
 	"testing"
 )
 
-func TestRewriteAnchorHrefs_MarkdownLinkBecomesHash(t *testing.T) {
+func TestRewriteRelativeURLs_MarkdownLinkBecomesHash(t *testing.T) {
 	in := `<p>See <a href="OTHER.md">other</a> for details.</p>`
-	out := rewriteAnchorHrefs(in, "README.md")
+	out := rewriteRelativeURLs(in, "README.md")
 	if !strings.Contains(out, `href="#OTHER.md"`) {
 		t.Errorf("got %q, want href rewritten to #OTHER.md", out)
 	}
 }
 
-func TestRewriteAnchorHrefs_IntraDocAnchor(t *testing.T) {
+func TestRewriteRelativeURLs_IntraDocAnchor(t *testing.T) {
 	in := `<p>Jump to <a href="#architecture">arch</a>.</p>`
-	out := rewriteAnchorHrefs(in, "README.md")
+	out := rewriteRelativeURLs(in, "README.md")
 	if !strings.Contains(out, `href="#README.md:h-architecture"`) {
 		t.Errorf("got %q, want intra-doc anchor rewrite", out)
 	}
 }
 
-func TestRewriteAnchorHrefs_ExternalUnchanged(t *testing.T) {
+func TestRewriteRelativeURLs_ExternalUnchanged(t *testing.T) {
 	in := `<p><a href="https://example.com/x">ext</a></p>`
-	out := rewriteAnchorHrefs(in, "README.md")
+	out := rewriteRelativeURLs(in, "README.md")
 	if !strings.Contains(out, `href="https://example.com/x"`) {
 		t.Errorf("got %q, external URL should pass through", out)
 	}
 }
 
-func TestRewriteAnchorHrefs_EmptyPath_NoRewrite(t *testing.T) {
+func TestRewriteRelativeURLs_EmptyPath_NoRewrite(t *testing.T) {
 	in := `<p><a href="OTHER.md">x</a></p>`
-	out := rewriteAnchorHrefs(in, "")
+	out := rewriteRelativeURLs(in, "")
 	if out != in {
 		t.Errorf("got %q, want unchanged when currentPath is empty", out)
 	}
 }
 
-func TestRewriteAnchorHrefs_NoAnchorTags_FastPath(t *testing.T) {
+func TestRewriteRelativeURLs_NoAnchorTags_FastPath(t *testing.T) {
 	in := `<p>no links here</p>`
-	out := rewriteAnchorHrefs(in, "README.md")
+	out := rewriteRelativeURLs(in, "README.md")
 	if out != in {
 		t.Errorf("got %q, want unchanged", out)
 	}
 }
 
-func TestRewriteAnchorAttrs_PreservesOtherAttrs(t *testing.T) {
+func TestRewriteTagAttrs_PreservesOtherAttrs(t *testing.T) {
 	attrs := []rawAttr{
 		{key: "href", val: "OTHER.md"},
 		{key: "class", val: "btn"},
 		{key: "title", val: "click me"},
 	}
-	out := rewriteAnchorAttrs("a", attrs, "README.md")
+	out := rewriteTagAttrs("a", attrs, "README.md")
 	if out[0].val != "#OTHER.md" {
 		t.Errorf("href = %q, want #OTHER.md", out[0].val)
 	}
@@ -60,9 +60,9 @@ func TestRewriteAnchorAttrs_PreservesOtherAttrs(t *testing.T) {
 	}
 }
 
-func TestRewriteAnchorAttrs_NotAnchor_NoOp(t *testing.T) {
+func TestRewriteTagAttrs_NotAnchor_NoOp(t *testing.T) {
 	attrs := []rawAttr{{key: "href", val: "OTHER.md"}}
-	out := rewriteAnchorAttrs("link", attrs, "README.md")
+	out := rewriteTagAttrs("link", attrs, "README.md")
 	if out[0].val != "OTHER.md" {
 		t.Errorf("non-<a> href was rewritten: %+v", out)
 	}
@@ -85,5 +85,63 @@ func TestRenderMarkdownBlocks_LinkRewritingFlow(t *testing.T) {
 
 // Anchor-href rewriting in the HTML preview was retired with the move to
 // the sandboxed iframe (in-iframe links are inert; <base> handles relative
-// resolution). The rewriteAnchorHrefs tests above still cover the markdown
+// resolution). The rewriteRelativeURLs tests above still cover the markdown
 // renderer, which is the only remaining consumer.
+
+// resolveImageSrc turns a relative <img> src server-absolute so it loads from
+// any directory — the fix for #49's subdir-README case, applied to both
+// raw-HTML and Markdown-syntax images.
+func TestResolveImageSrc(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		currentPath string
+		src         string
+		wantVal     string
+		wantKeep    bool
+	}{
+		{"root sibling", "README.md", "hero.gif", "/hero.gif", true},
+		{"subdir sibling", "docs/README.md", "hero.gif", "/docs/hero.gif", true},
+		{"subdir nested", "docs/README.md", "img/x.png", "/docs/img/x.png", true},
+		{"dot-slash", "docs/README.md", "./x.png", "/docs/x.png", true},
+		{"up one valid", "docs/guide/README.md", "../x.png", "/docs/x.png", true},
+		{"space encoded", "README.md", "my image.png", "/my%20image.png", true},
+		{"http passthrough", "docs/README.md", "https://ex.com/x.png", "https://ex.com/x.png", true},
+		{"protocol-relative passthrough", "docs/README.md", "//ex.com/x.png", "//ex.com/x.png", true},
+		{"server-absolute passthrough", "docs/README.md", "/already/abs.png", "/already/abs.png", true},
+		{"data passthrough", "README.md", "data:image/gif;base64,AAAA", "data:image/gif;base64,AAAA", true},
+		{"query passthrough", "docs/README.md", "x.png?v=2", "x.png?v=2", true},
+		{"escape root dropped", "README.md", "../../etc/passwd", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			val, keep := resolveImageSrc(tc.currentPath, tc.src)
+			if keep != tc.wantKeep || (keep && val != tc.wantVal) {
+				t.Errorf("resolveImageSrc(%q, %q) = (%q, %v), want (%q, %v)",
+					tc.currentPath, tc.src, val, keep, tc.wantVal, tc.wantKeep)
+			}
+		})
+	}
+}
+
+// An <img src> in a rendered fragment is resolved server-absolute; an escaping
+// src has its attribute dropped entirely (no traversal request reaches the
+// static fallback).
+func TestRewriteRelativeURLs_ImageSrc(t *testing.T) {
+	got := rewriteRelativeURLs(`<p><img src="hero.gif" alt="x"></p>`, "docs/README.md")
+	if !strings.Contains(got, `src="/docs/hero.gif"`) {
+		t.Errorf("img src not resolved server-absolute: %q", got)
+	}
+	if !strings.Contains(got, `alt="x"`) {
+		t.Errorf("alt attr lost: %q", got)
+	}
+
+	escaped := rewriteRelativeURLs(`<img src="../../secret.png">`, "README.md")
+	if strings.Contains(escaped, "secret.png") {
+		t.Errorf("escaping img src not dropped: %q", escaped)
+	}
+
+	// Fast path: a fragment with neither <a nor <img is returned verbatim.
+	plain := `<p>nothing to rewrite</p>`
+	if rewriteRelativeURLs(plain, "README.md") != plain {
+		t.Errorf("fast-path fragment was modified")
+	}
+}

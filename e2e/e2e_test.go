@@ -4001,13 +4001,18 @@ func TestE2E_RelativeImageInMarkdown(t *testing.T) {
 	// elements report naturalWidth > 0 — which is the browser's signal
 	// that it actually decoded a real image, NOT that the network
 	// request returned HTML (which gives naturalWidth == 0).
+	//
+	// The markdown renderer now rewrites every relative image src
+	// server-absolute (resolveImageSrc, gitdiff/linkrewrite.go), so the
+	// rendered src is `/pixel.png`, not `pixel.png` — which is exactly what
+	// lets a subdirectory README's images resolve. Query by that resolved src.
 	deadline := time.Now().Add(5 * time.Second)
 	var pixelW, dashW int
 	for time.Now().Before(deadline) {
 		if err := chromedp.Run(p.ctx,
 			chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
-			chromedp.Evaluate(`(document.querySelector('img[src="pixel.png"]')||{}).naturalWidth||0`, &pixelW),
-			chromedp.Evaluate(`(document.querySelector('img[src="mockups/screenshots/dash.png"]')||{}).naturalWidth||0`, &dashW),
+			chromedp.Evaluate(`(document.querySelector('img[src="/pixel.png"]')||{}).naturalWidth||0`, &pixelW),
+			chromedp.Evaluate(`(document.querySelector('img[src="/mockups/screenshots/dash.png"]')||{}).naturalWidth||0`, &dashW),
 		); err != nil {
 			t.Fatalf("query images: %v\nstderr: %s", err, p.stderr.String())
 		}
