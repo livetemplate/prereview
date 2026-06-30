@@ -3243,6 +3243,59 @@ func TestE2E_UndoDelete(t *testing.T) {
 	}
 }
 
+// TestE2E_DismissUndo verifies the undo-toast's ✕ dismiss button hides the
+// toast WITHOUT restoring the comment — the deletion must stand. This is the
+// semantic opposite of Undo: same toast, but the comment stays gone. A test
+// that only checked the toast vanished would also pass for the (wrong) restore
+// handler, so it asserts the CSV stays header-only afterward.
+func TestE2E_DismissUndo(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.clickLine(3, 3)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "to be dismissed", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment: %v", err)
+	}
+
+	// Delete it (via the dialog) → undo toast appears.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('dialog[id^="confirm-delete-"]').showModal()`, nil),
+		chromedp.WaitVisible(`dialog[id^='confirm-delete-'][open] button[name='deleteComment']`, chromedp.ByQuery),
+		chromedp.Click(`dialog[id^='confirm-delete-'][open] button[name='deleteComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.undo-toast`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("delete + see toast: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Click the ✕ dismiss (NOT Undo) → toast goes away, deletion stands.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.undo-toast button[name='dismissUndo']`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.undo-toast`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("click dismiss: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// The comment must remain deleted (no inline comment, CSV header-only).
+	var commentCount int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('.inline-comment').length`, &commentCount),
+	); err != nil {
+		t.Fatalf("count inline comments: %v", err)
+	}
+	if commentCount != 0 {
+		t.Errorf("after dismiss: %d inline comments rendered, want 0 (deletion should stand)", commentCount)
+	}
+	rows := p.readCSV()
+	if len(rows) != 1 {
+		t.Errorf("after dismiss: CSV has %d rows, want 1 (header only — comment stays deleted)", len(rows))
+	}
+}
+
 // setupNoGitPlanDir creates a NON-git temp directory holding a
 // one-sentence-per-line Markdown plan plus a sibling note — the exact
 // shape of the user's core case: reviewing a Claude plan that lives
