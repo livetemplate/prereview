@@ -656,6 +656,12 @@ header.bar {
   position: sticky; top: 0; z-index: 30;
   min-height: var(--pr-bar-h);
   display: flex; align-items: center; gap: 0.4rem;
+  /* Defensive backstop: the "View ▾" dropdown keeps the inline chip set narrow
+     enough to stay on one line, but if a future addition (or a very long
+     filename + every conditional button) still overflows, wrap to a second row
+     instead of clipping off the right under body{overflow-x:hidden}. Wrap only
+     engages when even a zero-width .title can't fit the fixed buttons. */
+  flex-wrap: wrap;
   padding: 0.3rem 0.5rem;
   background: var(--pico-card-background-color);
   border-bottom: 1px solid var(--pico-muted-border-color);
@@ -761,26 +767,13 @@ header.bar .nav-next button { gap: 0.3rem; }
 .tb-radios label:has(input:focus-visible) {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
-/* Checkbox controls (comments / resolved counter-toggles). Same
-   accent-color + sizing as the radios so the toolbar reads as a
-   coherent palette of native form controls. */
-.tb-checkbox {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  cursor: pointer; user-select: none; font-size: 1rem;
-  white-space: nowrap;
-}
-.tb-checkbox input[type="checkbox"] {
-  margin: 0; width: 1.05rem; height: 1.05rem;
-  accent-color: var(--pico-contrast); cursor: pointer;
-}
-
 /* Toolbar button hierarchy (issue #62: the bar was a wall of identical
    solid-dark `class="contrast"` pills). One coherent 3-tier system, all
    keyed off the scheme tokens and targeted by existing selectors/`name=`
    so there are no markup changes:
 
-     • SECONDARY (soft surface + hairline) — the chrome controls: Focus,
-       Comment on file, Prev/Next, and the "?" help button.
+     • SECONDARY (soft surface + hairline) — the chrome controls: the
+       "View ▾" dropdown trigger, Comment on file, and Prev/Next.
      • PRIMARY (filled accent) — Hand off, the one forward action, so the
        eye lands on it.
      • DANGER (red, ghost) — Quit / End session, which stop the server, so
@@ -789,9 +782,8 @@ header.bar .nav-next button { gap: 0.3rem; }
    These rules fully self-manage background + color + border at every state
    (they do NOT consume Pico's --pico-color cascade), so the old
    chip-label-vanishes-on-hover bug cannot reappear. Toggle state
-   (Rendered/Raw, File/Diff) now lives in the segmented control above. */
-header.bar .focus-toggle,
-header.bar .kbd-help-btn,
+   (Rendered/Raw, File/Diff) now lives in the segmented control above; the
+   focus / scheme / mode / help controls live in the "View ▾" dropdown. */
 header.bar .theme-toggle,
 header.bar button[name="openFileComment"],
 header.bar .nav-prev button,
@@ -802,14 +794,10 @@ header.bar .nav-next button {
   border-radius: var(--radius-sm);
   transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
-header.bar .focus-toggle:hover,
-header.bar .kbd-help-btn:hover,
 header.bar .theme-toggle:hover,
 header.bar button[name="openFileComment"]:hover,
 header.bar .nav-prev button:hover,
 header.bar .nav-next button:hover,
-header.bar .focus-toggle:focus-visible,
-header.bar .kbd-help-btn:focus-visible,
 header.bar .theme-toggle:focus-visible,
 header.bar button[name="openFileComment"]:focus-visible,
 header.bar .nav-prev button:focus-visible,
@@ -818,25 +806,15 @@ header.bar .nav-next button:focus-visible {
   color: var(--pico-h1-color);
   border-color: var(--accent);
 }
-/* Scheme / mode / help: icon + current-value label (e.g. "🎨 Solarized",
-   "◑ System", "? Help"), so they read as icon+text like the rest of the bar
-   rather than bare icon chips. inline-flex + gap lays out icon and label; no
-   padding override, so they inherit the standard button padding/height. */
-header.bar .theme-toggle,
-header.bar .kbd-help-btn {
+/* The "View ▾" trigger reuses .theme-toggle so it reads as icon+text like the
+   rest of the bar rather than a bare chip. inline-flex + gap lays out the label
+   and chevron; no padding override, so it inherits the standard button
+   padding/height. */
+header.bar .theme-toggle {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
 }
 header.bar .theme-toggle svg { display: block; }
 header.bar .tb-label { white-space: nowrap; }
-/* The help "?" stands in for an icon — give it a little presence next to the
-   16px SVG glyphs of its neighbours. */
-header.bar .kbd-help-glyph { font-size: 1rem; font-weight: 600; line-height: 1; }
-/* The active (pressed) focus-mode toggle reads as "on": tint it with the
-   accent so the distraction-free state is visibly engaged. */
-header.bar .focus-toggle[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-color: var(--accent); color: var(--accent);
-}
 /* PRIMARY — Hand off. */
 header.bar button[name="handOff"] {
   background: var(--accent); color: var(--pico-primary-inverse);
@@ -934,6 +912,60 @@ header.bar button[name="endSession"]:focus-visible {
   display: none;
 }
 .more-menu-backdrop.is-open { display: block; }
+
+/* "View ▾" dropdown (desktop). Docs lvt-el client pattern: the trigger toggles
+   `.open` on the wrapper, click-away removes it (no server state, no JS). The
+   panel is absolutely positioned under the trigger (unlike .more-menu's fixed
+   placement) — see the note on .tb-dropdown-panel for why that's clip-safe. */
+.tb-dropdown { position: relative; display: inline-flex; margin: 0; }
+.tb-dropdown-trigger { gap: 0.3rem; }
+.tb-dropdown-trigger svg { display: block; opacity: 0.8; }
+/* Rotate the chevron up while the panel is open as an affordance. */
+.tb-dropdown.open .tb-dropdown-trigger svg { transform: rotate(180deg); }
+.tb-dropdown-panel {
+  display: none;
+  /* Anchored under the trigger (right-aligned so a near-edge trigger opens
+     leftward and stays on-screen). position:absolute is safe here: no toolbar
+     ancestor sets overflow, and the panel sits within the viewport vertically
+     (body is full-height), so body{overflow-x:hidden} doesn't clip it. */
+  position: absolute; top: calc(100% + 0.35rem); right: 0;
+  min-width: 14rem; max-width: calc(100vw - 1rem); width: max-content;
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  padding: 0.35rem;
+  z-index: 50;
+}
+.tb-dropdown.open .tb-dropdown-panel { display: block; }
+.tb-dropdown-panel form { margin: 0; }
+.tb-dropdown-panel button.menu-item {
+  display: flex; align-items: center; justify-content: flex-start; gap: 0.6rem;
+  width: 100%; margin: 0; padding: 0.55rem 0.65rem;
+  background: none;
+  --pico-color: var(--pico-h1-color);
+  color: var(--pico-color);
+  border: 0; border-radius: 4px;
+  font-size: 0.9rem; font-weight: 500; min-height: 0;
+  text-align: left; cursor: pointer;
+}
+.tb-dropdown-panel button.menu-item:hover,
+.tb-dropdown-panel button.menu-item:focus { background: var(--pico-card-sectioning-background-color); }
+.tb-dropdown-panel button.menu-item .menu-icon {
+  flex: 0 0 1.2rem; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--pico-muted-color);
+}
+.tb-dropdown-panel button.menu-item .menu-icon svg { display: block; }
+.tb-dropdown-panel button.menu-item .menu-label { flex: 1; white-space: nowrap; }
+.tb-dropdown-panel button.menu-item .menu-meta {
+  margin-left: auto; white-space: nowrap; font-size: 0.72rem; color: var(--pico-muted-color); font-weight: 600;
+  padding: 0.05rem 0.4rem; background: var(--pico-card-sectioning-background-color);
+  border-radius: 999px;
+}
+/* Active toggle items (Focus on, Show-resolved on) tint like the mobile menu's
+   .is-on so an engaged state is visible in the dropdown too. */
+.tb-dropdown-panel button.menu-item.is-on .menu-icon,
+.tb-dropdown-panel button.menu-item.is-on .menu-label { color: var(--pr-add); font-weight: 600; }
 .banner-stopping {
   padding: 0.5rem 0.75rem; background: var(--pr-del-bg); color: var(--pr-del);
   border-bottom: 1px solid var(--pr-del); font-size: 0.85rem; text-align: center;
@@ -1351,6 +1383,26 @@ main.viewer > article > header.file-head strong {
   word-break: break-all; font-size: 0.9rem; padding-left: 0;
 }
 main.viewer > article > header.file-head small { color: var(--pico-muted-color); font-size: 0.75rem; }
+/* "Comment on file" lives in the sticky file header (moved out of the toolbar).
+   Left group is the filename (+ note); the button is pushed right by the
+   header's space-between. Secondary-button look, matching the bar's chrome
+   controls. The label is icon-only on mobile to keep the header uncluttered. */
+header.file-head .file-head-name { display: inline-flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
+header.file-head .file-head-comment { margin: 0; flex-shrink: 0; }
+header.file-head .file-head-comment button {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin: 0; padding: 0.2rem 0.55rem; min-height: 0;
+  font-size: 0.8rem; font-weight: 500; white-space: nowrap;
+  background: var(--soft-bg); color: var(--pico-h1-color);
+  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
+}
+header.file-head .file-head-comment button:hover,
+header.file-head .file-head-comment button:focus-visible {
+  background: var(--soft-bg-hover); border-color: var(--accent);
+}
+header.file-head .file-head-comment button svg { display: block; }
+.file-head-comment-label { display: none; }
 
 /* Diff viewer container — was <pre> but that preserves whitespace which
    made every template-loop newline a visible blank line. Now a <div>
@@ -1559,8 +1611,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 /* ===== Keyboard-shortcuts help overlay =====
    Centered modal (works on desktop + mobile), driven by KeyHelpOpen. Reuses
    the toc-backdrop scrim pattern; the panel itself is a centered card rather
-   than the TOC's edge slide-in, since it's also opened from the desktop bar. */
-.kbd-help-btn { padding: 0.25rem 0.7rem; min-height: auto; line-height: 1; font-weight: 700; }
+   than the TOC's edge slide-in, since it's also opened from the View dropdown. */
 .kbd-help-backdrop { position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, 0.35); display: none; }
 .kbd-help-backdrop.is-open { display: block; }
 .kbd-help-modal {
@@ -2077,6 +2128,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   .md-rendered { font-size: 1rem; line-height: 1.75; }
   main.viewer > article > header.file-head strong { font-size: 1.05rem; }
   main.viewer > article > header.file-head small { font-size: 0.85rem; }
+  /* Desktop has room for the "Comment on file" text label; mobile stays icon-only. */
+  .file-head-comment-label { display: inline; }
   /* The filename already headlines the diff (.file-head) and the
      all-comments view (.ac-head). Showing it again in the top bar is
      pure duplication on desktop — drop just the filename, keep the

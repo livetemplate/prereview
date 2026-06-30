@@ -173,9 +173,9 @@ func TestE2E_KeyboardShortcuts(t *testing.T) {
 		chromedp.WaitNotPresent(`.kbd-help-modal.is-open`, chromedp.ByQuery),
 	)
 
-	// --- the toolbar button opens the help overlay too ---
-	step("toolbar button opens help overlay",
-		chromedp.Click(`header.bar button[name="toggleKeyboardHelp"]`, chromedp.ByQuery),
+	// --- the View dropdown's "Keyboard shortcuts" item opens the overlay too ---
+	p.openViewItem("toggleKeyboardHelp")
+	step("View dropdown opens help overlay",
 		chromedp.WaitVisible(`.kbd-help-modal.is-open`, chromedp.ByQuery),
 	)
 
