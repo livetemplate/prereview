@@ -258,7 +258,8 @@ func TestE2E_SchemePicker(t *testing.T) {
 	//    no surface assertion or standalone screenshot would surface.
 	setOSDark(true)
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelector('header.bar button[name="openFileComment"]').click()`, nil),
+		// "Comment on file" lives in the sticky file header now, not the toolbar.
+		chromedp.Evaluate(`document.querySelector('.file-head-comment button[name="openFileComment"]').click()`, nil),
 		chromedp.WaitVisible(`.composer .save-btn`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("open file composer: %v%s", err, diag())

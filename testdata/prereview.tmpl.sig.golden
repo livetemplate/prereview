@@ -63,6 +63,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconCheck ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
+=== iconChevronDown ===
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" /></svg>
 === iconChevronLeft ===
 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
 === iconChevronRight ===
@@ -79,6 +81,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 4h7v16H4zM13 4h7v16h-7z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M6 11h3M6 13h3M16 9v6M14 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
 === iconFile ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
+=== iconFocus ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" /></svg>
 === iconHamburger ===
 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
 === iconPalette ===
@@ -101,6 +105,8 @@
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" /></svg>
 === iconViewedCircle ===
 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none" /></svg>
+=== iconWarning ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 4l9 15H3z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round" /><path d="M12 10v4M12 16.5v.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
 === prereview ===
 <!DOCTYPE html>
 
@@ -178,18 +184,8 @@
   
   <div class="toolbar-inline">
     <div class="tb-group tb-counters">
-      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
       
-      {{if gt .ResolvedCount 0}}
-      <form method="POST">
-        <label class="tb-checkbox" title="Include resolved comments in the view"><input type="checkbox" {{if .ShowResolved}}checked{{end}} lvt-on:change="toggleShowResolved">Show resolved comments ({{.ResolvedCount}})</label>
-      </form>
-      {{end}}
-      {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
-      <form method="POST">
-        <button type="submit" name="toggleCommentList" class="contrast" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">⚠ {{.OutdatedCount}} outdated</button>
-      </form>
-      {{end}}
+      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
     </div>
     {{if .CurrentDiff}}
     <div class="tb-group tb-toggles">
@@ -215,40 +211,74 @@
     </div>
     {{end}}
     
-    {{if .CurrentDiff}}
-    <div class="tb-group tb-focus">
-      <form method="POST">
-        <button type="submit" name="toggleFocusMode" class="contrast focus-toggle" aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}" title="{{if .FocusMode}}Show the file list and outline columns{{else}}Hide the side columns for distraction-free reading{{end}}">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}</button>
-      </form>
-    </div>
-    {{end}}
-    
-    <div class="tb-group tb-theme">
-      <form method="POST">
-        <button type="submit" name="cycleScheme" class="contrast theme-toggle" title="Color scheme: {{.SchemeLabel}} — switch to {{.NextSchemeLabel}}" aria-label="Color scheme: {{.SchemeLabel}}. Switch to {{.NextSchemeLabel}}.">{{template "iconPalette"}}<span class="tb-label">{{.SchemeLabel}}</span></button>
-      </form>
-      <form method="POST">
-        <button type="submit" name="cycleTheme" class="contrast theme-toggle" title="Color mode: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}" aria-label="Color mode: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}.">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}<span class="tb-label">{{.ThemeModeLabel}}</span></button>
-      </form>
-    </div>
-    
-    <div class="tb-group tb-help">
-      <form method="POST">
-        <button type="submit" name="toggleKeyboardHelp" class="contrast kbd-help-btn" aria-pressed="{{if .KeyHelpOpen}}true{{else}}false{{end}}" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts"><span class="kbd-help-glyph" aria-hidden="true">?</span><span class="tb-label">Help</span></button>
-      </form>
+    <div class="tb-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="contrast theme-toggle tb-dropdown-trigger" aria-haspopup="menu" title="View options — focus, color scheme &amp; mode, comment filters, help"><span class="tb-label">View</span>{{template "iconChevronDown"}}</button>
+      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
+        {{if .CurrentDiff}}
+        
+        <form method="POST">
+          <button type="submit" name="toggleFocusMode" class="menu-item{{if .FocusMode}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{template "iconFocus"}}</span>
+            <span class="menu-label">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        <form method="POST">
+          <button type="submit" name="cycleScheme" class="menu-item" role="menuitem">
+            <span class="menu-icon">{{template "iconPalette"}}</span>
+            <span class="menu-label">Scheme: {{.SchemeLabel}}</span>
+            <span class="menu-meta">{{.NextSchemeLabel}} →</span>
+          </button>
+        </form>
+        <form method="POST">
+          <button type="submit" name="cycleTheme" class="menu-item" role="menuitem">
+            <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}</span>
+            <span class="menu-label">Mode: {{.ThemeModeLabel}}</span>
+            <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
+          </button>
+        </form>
+        
+        {{if gt (len .Comments) 0}}
+        <form method="POST">
+          <button type="submit" name="toggleCommentList" class="menu-item{{if .ShowAllComments}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{template "iconComments"}}</span>
+            <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}</span>
+            <span class="menu-meta">{{len .Comments}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if gt .ResolvedCount 0}}
+        <form method="POST">
+          <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{if .ShowResolved}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+            <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}</span>
+            <span class="menu-meta">{{.ResolvedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
+        <form method="POST">
+          <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">
+            <span class="menu-icon">{{template "iconWarning"}}</span>
+            <span class="menu-label">Outdated</span>
+            <span class="menu-meta">{{.OutdatedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        <form method="POST">
+          <button type="submit" name="toggleKeyboardHelp" class="menu-item" role="menuitem">
+            <span class="menu-icon" aria-hidden="true">?</span>
+            <span class="menu-label">Keyboard shortcuts</span>
+          </button>
+        </form>
+      </div>
     </div>
   </div>
-  {{if .CurrentDiff}}
   
-  {{if ne .CommentMode "file"}}
-  <form method="POST" class="tb-action">
-    <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">
-      {{template "iconChat14"}}
-      <span class="nav-label">Comment on file</span>
-    </button>
-  </form>
-  {{end}}
-  {{end}}
   {{if gt (len .Files) 1}}
   <form method="POST" class="nav-prev">
     <button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast">{{template "iconChevronLeft"}}<span class="nav-label">Prev</span></button>
@@ -300,15 +330,7 @@
     </button>
   </form>
   {{if .CurrentDiff}}
-  {{if ne .CommentMode "file"}}
   
-  <form method="POST">
-    <button type="submit" name="openFileComment" class="menu-item" role="menuitem">
-      <span class="menu-icon">{{template "iconChat16"}}</span>
-      <span class="menu-label">Comment on file</span>
-    </button>
-  </form>
-  {{end}}
   {{with .RenderedHeadings}}
   
   <form method="POST">
@@ -554,8 +576,13 @@
 {{with .CurrentDiff}}
 <article>
   <header class="file-head">
-    <strong>{{.Path}}</strong>
-    {{if .Note}}<small>{{.Note}}</small>{{end}}
+    <span class="file-head-name"><strong>{{.Path}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    
+    {{if ne $.CommentMode "file"}}
+    <form method="POST" class="file-head-comment">
+      <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file</span></button>
+    </form>
+    {{end}}
   </header>
   
   {{$fcs := $.FileLevelComments}}

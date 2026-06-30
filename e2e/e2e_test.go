@@ -463,6 +463,27 @@ func (p *runningPrereview) clickFile(path string) {
 	}
 }
 
+// openViewItem opens the toolbar "View ▾" overflow dropdown and fires one of
+// its panel items by button name. The trigger is clicked for real (so the
+// item's reachability through the dropdown is exercised); WaitVisible proves
+// the panel opened and holds the item; then a JS .click() fires the form submit
+// robustly — the same click also closes the panel (the wrapper's
+// lvt-el:toggleClass), which is exactly the production behaviour. The dropdown's
+// own open/close/click-away mechanics are covered by TestE2E_ToolbarViewDropdown.
+// Desktop-width only (the dropdown lives in .toolbar-inline, hidden <900px where
+// the .more-menu takes over).
+func (p *runningPrereview) openViewItem(name string) {
+	p.t.Helper()
+	itemSel := fmt.Sprintf(`.tb-dropdown-panel button[name=%q]`, name)
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.tb-dropdown-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.tb-dropdown.open `+itemSel, chromedp.ByQuery),
+		chromedp.Evaluate(fmt.Sprintf(`document.querySelector('.tb-dropdown-panel button[name="%s"]').click()`, name), nil),
+	); err != nil {
+		p.t.Fatalf("openViewItem %s: %v\nstderr: %s", name, err, p.stderr.String())
+	}
+}
+
 // clickLine selects the diff line identified by old/new line numbers.
 // Pass (0, N) for an add at new=N, (N, 0) for a del at old=N, (N, N) for a
 // ctx line. The function disambiguates same-numbered del/add pairs by
@@ -1934,9 +1955,10 @@ func TestE2E_ResolveComment(t *testing.T) {
 		t.Errorf("resolved column = %q, want 'true'", rows[1][7])
 	}
 
-	// Toggle "Show resolved" → the resolved comment reappears with is-resolved.
+	// Toggle "Show resolved" (now in the View dropdown) → the resolved comment
+	// reappears with is-resolved.
+	p.openViewItem("toggleShowResolved")
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.tb-checkbox input[type="checkbox"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("toggle show resolved: %v\nstderr: %s", err, p.stderr.String())
@@ -3664,9 +3686,11 @@ func TestE2E_FocusModeDesktop(t *testing.T) {
 		t.Error("focus-mode class should be absent by default")
 	}
 
-	// Enable focus mode → class present, BOTH columns hidden.
+	// Enable focus mode (now in the View dropdown) → class present, BOTH columns
+	// hidden. The toolbar stays visible in focus mode, so the dropdown is still
+	// reachable as the restore affordance.
+	p.openViewItem("toggleFocusMode")
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleFocusMode']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.layout.focus-mode`, chromedp.ByQuery),
 		chromedp.Poll(
 			`getComputedStyle(document.querySelector('#files-drawer')).display === 'none' && getComputedStyle(document.querySelector('.toc-sidebar')).display === 'none'`,
@@ -3677,8 +3701,8 @@ func TestE2E_FocusModeDesktop(t *testing.T) {
 	}
 
 	// Disable focus mode → class gone, both columns visible again.
+	p.openViewItem("toggleFocusMode")
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='toggleFocusMode']`, chromedp.ByQuery),
 		chromedp.Poll(
 			`!document.querySelector('.layout.focus-mode') && getComputedStyle(document.querySelector('#files-drawer')).display !== 'none' && getComputedStyle(document.querySelector('.toc-sidebar')).display !== 'none'`,
 			nil, chromedp.WithPollingTimeout(5*time.Second),
@@ -4443,8 +4467,8 @@ func TestE2E_FileLevelComment(t *testing.T) {
 	p := bootChromeAgainstRepo(t, repo, 1200, 800)
 	p.waitReady()
 
-	// 1) Comment on a text file (edited.go). The toolbar button must
-	// be present even without any line clicked.
+	// 1) Comment on a text file (edited.go). The file-header "Comment on
+	// file" button must be present even without any line clicked.
 	p.clickFile("edited.go")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`button[name='openFileComment']`, chromedp.ByQuery),

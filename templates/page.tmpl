@@ -291,37 +291,12 @@
        form their own groups via .tb-group-divider on first-of-group. */}}
   <div class="toolbar-inline">
     <div class="tb-group tb-counters">
+      {{/* File-count status text. The "Show resolved" filter and the
+           "⚠ outdated" button used to sit here; they now live in the
+           "View ▾" dropdown below (their toggleShowResolved /
+           toggleCommentList actions are unchanged), keeping the inline
+           bar to one short text chip so it can't crop the right edge. */}}
       <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
-      {{/* "Show resolved" is a FILTER — modifies which comments appear
-           in the current view, semantically a checkbox on/off. The
-           view-change "All comments" used to share this row but lived
-           an entire UI level apart (replaces the file viewer); it now
-           lives in the file drawer as a clearly-distinct button so the
-           two semantics don't get conflated under identical chrome.
-           change events flow through the existing toggleShowResolved
-           action unchanged. */}}
-      {{if gt .ResolvedCount 0}}
-      <form method="POST">
-        <label
-          class="tb-checkbox"
-          title="Include resolved comments in the view"
-        ><input
-          type="checkbox"
-          {{if .ShowResolved}}checked{{end}}
-          lvt-on:change="toggleShowResolved"
-        >Show resolved comments ({{.ResolvedCount}})</label>
-      </form>
-      {{end}}
-      {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
-      <form method="POST">
-        <button
-          type="submit"
-          name="toggleCommentList"
-          class="contrast"
-          title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix"
-        >⚠ {{.OutdatedCount}} outdated</button>
-      </form>
-      {{end}}
     </div>
     {{if .CurrentDiff}}
     <div class="tb-group tb-toggles">
@@ -390,94 +365,142 @@
       {{end}}
     </div>
     {{end}}
-    {{/* Focus mode — desktop-only reading toggle. Hides both side columns
-         (file drawer + TOC) via a class on .layout so the center surface
-         gets full width. The button is the restore affordance too (label
-         flips), so no separate reopen rail is needed. Gated on a file
-         being open (matches the sibling tb-toggles group): with no file
-         selected the drawer is the only way to pick one, so hiding it
-         would strand the user — focus is a "while reading" affordance. */}}
-    {{if .CurrentDiff}}
-    <div class="tb-group tb-focus">
-      <form method="POST">
-        <button
-          type="submit"
-          name="toggleFocusMode"
-          class="contrast focus-toggle"
-          aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}"
-          title="
-          {{- if .FocusMode}}Show the file list and outline columns
-          {{- else}}Hide the side columns for distraction-free reading{{end -}}
-          "
-        >{{if .FocusMode}}Exit focus{{else}}Focus{{end}}</button>
-      </form>
-    </div>
-    {{end}}
-    {{/* Two orthogonal color controls. The PALETTE cycles the curated scheme
-         (Solarized → Gruvbox → Catppuccin); the SUN/MOON cycles the mode
-         (System → Light → Dark). Each icon-only button shows the current
-         value and its title says what a click switches to. Always shown —
-         both are global reading preferences, useful before any file is open.
-         The overflow menu mirrors both for narrow widths. */}}
-    <div class="tb-group tb-theme">
-      <form method="POST">
-        <button
-          type="submit"
-          name="cycleScheme"
-          class="contrast theme-toggle"
-          title="Color scheme: {{.SchemeLabel}} — switch to {{.NextSchemeLabel}}"
-          aria-label="Color scheme: {{.SchemeLabel}}. Switch to {{.NextSchemeLabel}}."
-        >{{template "iconPalette"}}<span class="tb-label">{{.SchemeLabel}}</span></button>
-      </form>
-      <form method="POST">
-        <button
-          type="submit"
-          name="cycleTheme"
-          class="contrast theme-toggle"
-          title="Color mode: {{.ThemeModeLabel}} — switch to {{.NextThemeModeLabel}}"
-          aria-label="Color mode: {{.ThemeModeLabel}}. Switch to {{.NextThemeModeLabel}}."
-        >{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}<span class="tb-label">{{.ThemeModeLabel}}</span></button>
-      </form>
-    </div>
-    {{/* Keyboard-shortcuts help. Desktop toolbar affordance (mobile has the
-         more-menu item); both submit toggleKeyboardHelp, the same action the
-         "?" key fires. Always shown — the help is useful even before a file
-         is open. */}}
-    <div class="tb-group tb-help">
-      <form method="POST">
-        <button
-          type="submit"
-          name="toggleKeyboardHelp"
-          class="contrast kbd-help-btn"
-          aria-pressed="{{if .KeyHelpOpen}}true{{else}}false{{end}}"
-          title="Keyboard shortcuts (press ?)"
-          aria-label="Keyboard shortcuts"
-        ><span class="kbd-help-glyph" aria-hidden="true">?</span><span class="tb-label">Help</span></button>
-      </form>
+    {{/* "View ▾" dropdown — groups the low-frequency toolbar controls (focus,
+         color scheme/mode, comment filters, help) so the inline bar stays to a
+         few primary chips and never crops the right edge. Built on the docs'
+         client primitive (reference/client-attributes.md): the trigger toggles
+         `.open` on the wrapper (closest-match click delegation), click-away
+         removes it — NO server state, NO custom JS. The `.open` class lives only
+         client-side; prereview has no background re-render, so every morph is
+         user-initiated and coincides with a click that already closed the menu
+         (item click, click-away, or keyboard action) — hence no lvt-ignore-attrs.
+         The same six actions are mirrored in the mobile .more-menu below; this is
+         the desktop presentation (the wrapper sits in desktop-only .toolbar-inline).
+         aria-expanded is intentionally omitted: a client class-toggle can't keep
+         it in sync. */}}
+    <div
+      class="tb-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="contrast theme-toggle tb-dropdown-trigger"
+        aria-haspopup="menu"
+        title="View options — focus, color scheme &amp; mode, comment filters, help"
+      ><span class="tb-label">View</span>{{template "iconChevronDown"}}</button>
+      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
+        {{if .CurrentDiff}}
+        {{/* Focus — hide the side columns for distraction-free reading. Gated
+             on an open file (with none open the drawer is the only way to pick
+             one). Label flips, same as the old inline button. */}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleFocusMode"
+            class="menu-item{{if .FocusMode}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconFocus"}}</span>
+            <span class="menu-label">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Color scheme + mode — cycle Solarized → Gruvbox → Catppuccin and
+             System → Light → Dark; meta shows what the next click switches to.
+             Always shown (global reading preferences, useful before any file). */}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="cycleScheme"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconPalette"}}</span>
+            <span class="menu-label">Scheme: {{.SchemeLabel}}</span>
+            <span class="menu-meta">{{.NextSchemeLabel}} →</span>
+          </button>
+        </form>
+        <form method="POST">
+          <button
+            type="submit"
+            name="cycleTheme"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}</span>
+            <span class="menu-label">Mode: {{.ThemeModeLabel}}</span>
+            <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
+          </button>
+        </form>
+        {{/* All comments — the desktop view-all entry, mirroring the file
+             drawer's "All comments" button and the mobile menu (same
+             toggleCommentList action). Surfacing it here also makes it reachable
+             in Focus mode, where the drawer is hidden. Label flips to "Back"
+             while the all-comments view is open. */}}
+        {{if gt (len .Comments) 0}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleCommentList"
+            class="menu-item{{if .ShowAllComments}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconComments"}}</span>
+            <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}</span>
+            <span class="menu-meta">{{len .Comments}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Show-resolved FILTER — toggles whether resolved comments appear in
+             the view (toggleShowResolved, unchanged from the old inline checkbox). */}}
+        {{if gt .ResolvedCount 0}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleShowResolved"
+            class="menu-item{{if .ShowResolved}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{if .ShowResolved}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+            <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}</span>
+            <span class="menu-meta">{{.ResolvedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Outdated comments needing re-anchoring (toggleCommentList, unchanged). */}}
+        {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleCommentList"
+            class="menu-item"
+            role="menuitem"
+            title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix"
+          >
+            <span class="menu-icon">{{template "iconWarning"}}</span>
+            <span class="menu-label">Outdated</span>
+            <span class="menu-meta">{{.OutdatedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Keyboard shortcuts — same toggleKeyboardHelp action as the "?" key. */}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleKeyboardHelp"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon" aria-hidden="true">?</span>
+            <span class="menu-label">Keyboard shortcuts</span>
+          </button>
+        </form>
+      </div>
     </div>
   </div>
-  {{if .CurrentDiff}}
-  {{/* Comment on the file as a whole — works on every file type
-       including binaries (image/PDF/video), deleted files, and files
-       past the "too large to review" cap, since the composer doesn't
-       need any line content to function. The action clears any in-
-       progress line selection. Hidden when the composer is already
-       open in file-mode to avoid a self-toggle loop. */}}
-  {{if ne .CommentMode "file"}}
-  <form method="POST" class="tb-action">
-    <button
-      type="submit"
-      name="openFileComment"
-      class="contrast"
-      title="Add a comment about the whole file"
-      aria-label="Comment on file"
-    >
-      {{template "iconChat14"}}
-      <span class="nav-label">Comment on file</span>
-    </button>
-  </form>
-  {{end}}
-  {{end}}
+  {{/* "Comment on file" used to live here; it now sits in the file header
+       (.file-head) next to the filename, which declutters the toolbar. */}}
   {{if gt (len .Files) 1}}
   <form method="POST" class="nav-prev">
     <button
@@ -606,21 +629,8 @@
     </button>
   </form>
   {{if .CurrentDiff}}
-  {{if ne .CommentMode "file"}}
-  {{/* "Comment on file" mirrors the desktop toolbar button. Works for
-       binary / deleted / too-large files where no line is clickable. */}}
-  <form method="POST">
-    <button
-      type="submit"
-      name="openFileComment"
-      class="menu-item"
-      role="menuitem"
-    >
-      <span class="menu-icon">{{template "iconChat16"}}</span>
-      <span class="menu-label">Comment on file</span>
-    </button>
-  </form>
-  {{end}}
+  {{/* "Comment on file" now lives in the sticky file header (.file-head),
+       reachable on mobile too — so it's no longer mirrored in this menu. */}}
   {{with .RenderedHeadings}}
   {{/* Mobile-only entry — desktop renders the TOC as a permanent right
        sidebar, so this is `display: none` ≥900px via the media query.
@@ -1039,8 +1049,25 @@
 {{with .CurrentDiff}}
 <article>
   <header class="file-head">
-    <strong>{{.Path}}</strong>
-    {{if .Note}}<small>{{.Note}}</small>{{end}}
+    <span class="file-head-name"><strong>{{.Path}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    {{/* Comment on the whole file — moved here from the toolbar to declutter
+         it and to sit in context next to the filename. The .file-head is
+         sticky, so it stays reachable while scrolling; it works for every file
+         type (text, binary, deleted, too-large). Hidden while the file composer
+         is already open to avoid a self-toggle loop. This is the single home for
+         the action on both desktop and mobile (the old toolbar + more-menu
+         copies are gone). */}}
+    {{if ne $.CommentMode "file"}}
+    <form method="POST" class="file-head-comment">
+      <button
+        type="submit"
+        name="openFileComment"
+        class="contrast"
+        title="Add a comment about the whole file"
+        aria-label="Comment on file"
+      >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file</span></button>
+    </form>
+    {{end}}
   </header>
   {{/* File-level comments + composer. Lives above the body branch so
        it's visible for every preview mode (line view, markdown blocks,
