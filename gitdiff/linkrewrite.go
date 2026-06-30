@@ -7,15 +7,29 @@ import (
 	"golang.org/x/net/html"
 )
 
-// rewriteAnchorAttrs returns a copy of attrs with the `href` rewritten
-// via ResolveRelativeLink when tagName is "a" and currentPath is non-
-// empty. Other tag names and other attribute names pass through
-// unchanged. The returned slice is independent of the input — caller
-// can pass it straight to serializeTag.
-func rewriteAnchorAttrs(tagName string, attrs []rawAttr, currentPath string) []rawAttr {
-	if currentPath == "" || strings.ToLower(tagName) != "a" {
+// rewriteTagAttrs returns a copy of attrs with relative URLs rewritten for the
+// repo-aware tags, when currentPath is non-empty:
+//   - <a href>   → ResolveRelativeLink (in-SPA deep-link hash).
+//   - <img src>  → resolveImageSrc (server-absolute static path).
+//
+// Other tags and other attributes pass through unchanged. The returned slice is
+// independent of the input — caller can pass it straight to serializeTag.
+func rewriteTagAttrs(tagName string, attrs []rawAttr, currentPath string) []rawAttr {
+	if currentPath == "" {
 		return attrs
 	}
+	switch strings.ToLower(tagName) {
+	case "a":
+		return rewriteAnchorAttrs(attrs, currentPath)
+	case "img":
+		return rewriteImageAttrs(attrs, currentPath)
+	default:
+		return attrs
+	}
+}
+
+// rewriteAnchorAttrs rewrites an <a>'s href to an in-SPA deep-link hash.
+func rewriteAnchorAttrs(attrs []rawAttr, currentPath string) []rawAttr {
 	// Footnote links (`#fn:1` / `#fnref:1`, emitted by extension.Footnote)
 	// are intra-document anchors to ids that live in the SAME rendered page,
 	// not repo-file links. Routing them through ResolveRelativeLink would
@@ -37,6 +51,57 @@ func rewriteAnchorAttrs(tagName string, attrs []rawAttr, currentPath string) []r
 	return out
 }
 
+// rewriteImageAttrs rewrites an <img>'s src server-absolute (resolveImageSrc),
+// dropping a src that escapes the repo root so it can't request an outside
+// file. Other attributes pass through.
+func rewriteImageAttrs(attrs []rawAttr, currentPath string) []rawAttr {
+	out := make([]rawAttr, 0, len(attrs))
+	for _, a := range attrs {
+		if strings.ToLower(a.key) == "src" {
+			newVal, keep := resolveImageSrc(currentPath, a.val)
+			if !keep {
+				continue // src escapes the repo root — drop it
+			}
+			out = append(out, rawAttr{key: a.key, val: newVal})
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// resolveImageSrc turns a repo-relative image src into a server-absolute path
+// (`/dir/file.png`) so it loads from any directory — the static fallback
+// (server.go) then serves it. This fixes both the re-admitted raw-HTML <img>
+// (htmlimage.go) and plain Markdown-syntax `![](x.png)` images, which otherwise
+// resolve browser-relative to the SPA root `/` and 404 from a subdirectory
+// README. Mirrors previewBaseHref (htmlpreview.go), which gives the HTML
+// preview the same any-directory resolution via <base>.
+//
+// External srcs — a URL scheme, protocol-relative `//host`, already server-
+// absolute `/path`, or a `?query` we can't represent — pass through unchanged,
+// so a Markdown-syntax remote image keeps working. keep=false signals a
+// relative src that escapes the repo root via `../`; the caller drops it.
+func resolveImageSrc(currentPath, src string) (val string, keep bool) {
+	t := strings.TrimSpace(src)
+	if t == "" || isExternalTarget(t) {
+		return src, true
+	}
+	// Strip a fragment (rare on an image) before resolving the path part.
+	path := t
+	if h := strings.Index(path, "#"); h >= 0 {
+		path = path[:h]
+	}
+	if path == "" {
+		return src, true // fragment-only src — nothing to resolve
+	}
+	resolved := resolveRelativePath(currentPath, path)
+	if resolved == "" {
+		return "", false // escapes the repo root
+	}
+	return "/" + encodePath(resolved), true
+}
+
 // isFootnoteAnchor reports whether attrs carry goldmark's footnote class
 // ("footnote-ref" on a `[^1]` reference, "footnote-backref" on the ↩ link
 // back from a definition). Matched as a whitespace-delimited token so a
@@ -55,18 +120,20 @@ func isFootnoteAnchor(attrs []rawAttr) bool {
 	return false
 }
 
-// rewriteAnchorHrefs walks a fragment of rendered HTML and rewrites
-// every `<a href="...">` value through ResolveRelativeLink. Used by
-// the markdown renderer to post-process goldmark's output (goldmark's
-// renderer is a package-level global, so per-call rewriting is
-// cheaper here than installing a per-call NodeRendererFunc).
+// rewriteRelativeURLs walks a fragment of rendered HTML and rewrites the
+// repo-aware relative URLs — `<a href>` (deep-link hash) and `<img src>`
+// (server-absolute static path) — via rewriteTagAttrs. Used by the markdown
+// renderer to post-process goldmark's output (goldmark's renderer is a
+// package-level global, so per-call rewriting is cheaper here than installing a
+// per-call NodeRendererFunc).
 //
 // Tolerant: malformed HTML round-trips through the tokenizer; an
 // unparseable fragment returns unchanged (the markdown renderer
 // always produces well-formed HTML in practice, so this is a
 // defensive fallback for the renderProseLine escaped-text path).
-func rewriteAnchorHrefs(htmlFragment, currentPath string) string {
-	if currentPath == "" || !strings.Contains(htmlFragment, "<a ") {
+func rewriteRelativeURLs(htmlFragment, currentPath string) string {
+	if currentPath == "" ||
+		(!strings.Contains(htmlFragment, "<a ") && !strings.Contains(htmlFragment, "<img")) {
 		return htmlFragment
 	}
 	z := html.NewTokenizer(strings.NewReader(htmlFragment))
@@ -85,7 +152,7 @@ func rewriteAnchorHrefs(htmlFragment, currentPath string) string {
 				attrs = readAttrs(z)
 			}
 			selfClose := tt == html.SelfClosingTagToken
-			out.Write(serializeTag(tagName, rewriteAnchorAttrs(tagName, attrs, currentPath), selfClose))
+			out.Write(serializeTag(tagName, rewriteTagAttrs(tagName, attrs, currentPath), selfClose))
 		default:
 			out.Write(z.Raw())
 		}

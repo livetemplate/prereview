@@ -1637,6 +1637,11 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 .md-rendered pre code { word-break: normal; background: none; padding: 0; }
 .md-rendered img { max-width: 100%; height: auto; }
+/* The centered-hero pattern: a raw-HTML <img> wrapped in <p align="center">/
+   <div align="center"> (re-admitted by gitdiff/htmlimage.go). The align
+   attribute is an obsolete presentational hint; make the centering explicit so
+   it doesn't depend on UA quirks. */
+.md-rendered p[align="center"], .md-rendered div[align="center"] { text-align: center; }
 .md-mermaid { margin: 0.4em 0; text-align: center; overflow-x: auto; }
 .md-mermaid > pre.mermaid { display: none; }
 .md-mermaid svg { max-width: 100%; height: auto; }

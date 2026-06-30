@@ -77,11 +77,15 @@ type Heading struct {
 //     Unicode codepoint as text (no <img>, no embedded assets), so it keeps
 //     the single-binary / no-JS promise and adds no new HTML/XSS surface.
 //   - alertExtender — GitHub `> [!NOTE]` callouts (local, no dependency).
+//   - imageExtender — re-admits ONE raw-HTML construct, a local <img> (the
+//     centered-hero pattern), via an allowlisting NodeRenderer override; see
+//     htmlimage.go. Everything else raw stays dropped.
 //
 // None of these enable html.WithUnsafe, so the safe default still holds:
-// raw HTML in the source is not passed through, so untrusted repo content
-// can't inject <script>/onerror/etc. No separate sanitizer needed — same
-// choice the sibling modules (tinkerdown, devbox-dash) make.
+// raw HTML in the source is not passed through (the imageExtender allowlist is
+// the one, audited exception), so untrusted repo content can't inject
+// <script>/onerror/etc. No separate sanitizer needed — same choice the sibling
+// modules (tinkerdown, devbox-dash) make.
 //
 // WithAutoHeadingID slugifies headings into stable `id` attributes so
 // the TOC sidebar can deep-link to each section, and ExtractHeadings
@@ -96,6 +100,7 @@ var mdRenderer = goldmark.New(
 			highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
 		),
 		alertExtender{},
+		imageExtender{},
 	),
 	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
 )
@@ -146,7 +151,7 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 			return
 		}
 		if currentPath != "" {
-			htmlStr = rewriteAnchorHrefs(htmlStr, currentPath)
+			htmlStr = rewriteRelativeURLs(htmlStr, currentPath)
 		}
 		start, stop := segmentSpan(node)
 		var startLine, endLine int
@@ -163,7 +168,7 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 		}
 		cursor = endLine + 1
 		out = append(out, MarkdownBlock{
-			HTML:      template.HTML(htmlStr), //nolint:gosec // goldmark safe-mode output; raw HTML not passed through
+			HTML:      template.HTML(htmlStr), //nolint:gosec // goldmark safe-mode output; only an allowlisted local <img> passes raw (htmlimage.go)
 			StartLine: startLine,
 			EndLine:   endLine,
 		})
@@ -213,7 +218,7 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 				seg := ls.At(i)
 				if h := renderProseLine(src[seg.Start:seg.Stop]); h != "" {
 					if currentPath != "" {
-						h = rewriteAnchorHrefs(h, currentPath)
+						h = rewriteRelativeURLs(h, currentPath)
 					}
 					ln := lineAt(seg.Start)
 					out = append(out, MarkdownBlock{
