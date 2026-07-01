@@ -178,3 +178,25 @@ keyboard). Anatomy:
 - **Drift.** `kind=text` reuses the line-anchor `relocate` for its line range,
   then `relocateTextColumns` re-finds `Anchor.Snippet` in the moved line to
   re-track the columns (single-line; multi-line keeps its columns).
+
+### Two surfaces: code vs. rendered (`data-surface`)
+
+`lvt-fx:text-select` runs on two surfaces, chosen by the host's `data-surface`:
+
+- **`code`** (default; the `.code` diff/Raw view) — character precision. Rendered
+  `.content` `textContent` equals the raw line, so the client computes rune
+  columns and the server `<mark>`s `[FromCol,ToCol)`. Includes the keyboard block
+  caret.
+- **`block`** (the `.md-view` rendered-Markdown view) — line precision. Rendered
+  Markdown text ≠ source (`**b**` shows as `b`), so columns CANNOT map; a
+  selection resolves to the touched `[data-from]`/`[data-to]` blocks' source line
+  range with `FromCol==ToCol==0`, and the exact rendered **phrase** is captured
+  in `Anchor.Snippet` (quoted on the card via `Comment.Snippet()`, surfaced to the
+  handoff via `StreamComment.Text`, and used for drift). No caret; arrow keys are
+  left alone. `LineSpan`/`SelectionLabel` render text comments with 0 columns as a
+  plain line span (`L42`, not `L42:0-0`).
+
+**The rendered-HTML preview (`ShowRenderedHTML`) has NO text-select**: its content
+is inside a sandboxed cross-origin `<iframe srcdoc>`, so the parent can't read a
+selection across the boundary — that view keeps its draw-a-region (`region-select
+data-surface="html"`) mechanism. Images/binaries have no text.

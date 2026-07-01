@@ -1787,6 +1787,23 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    lifted card surface, and a soft mark-tinted shadow. It also lives INSIDE
    the monospace .code container, so prose is forced back to the sans face
    (inline `code` in rendered Markdown stays mono via Pico's code rule). */
+/* The selected phrase quoted on a kind=text comment card: a compact, single-
+   line, monospace snippet with an accent bar, clamped so a long selection can't
+   blow out the card. */
+.inline-comment .ic-snippet {
+  margin: 0 0 0.35rem 0;
+  padding: 0.1rem 0.4rem;
+  border-left: 2px solid var(--accent, var(--pico-primary));
+  background: var(--pr-sel-bg);
+  font-family: var(--jbm);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+.inline-comment .ic-snippet::before { content: "“"; }
+.inline-comment .ic-snippet::after { content: "”"; }
 .inline-comment {
   margin: 0.45rem 0.4rem; padding: 0.5rem 0.7rem;
   background: var(--pr-comment-bg);

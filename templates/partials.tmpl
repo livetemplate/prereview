@@ -245,6 +245,9 @@
     {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
     {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end -}}
   </span></header>
+  {{- /* selected phrase (kind=text) — shows what the comment is about, esp. for
+         rendered-view comments that anchor line-level */ -}}
+  {{- if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end -}}
   {{- /* comment text */ -}}
   <div class="body">{{.Body}}</div>
   {{- if .AnchorOutdated -}}

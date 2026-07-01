@@ -312,6 +312,14 @@ func (s PrereviewState) SelectionLabel() string {
 	// selection reads precisely (the columns pair with anchor/end, which
 	// SelectText stores doc-ordered — do not swap lines without the cols).
 	if s.CommentMode == commentKindText {
+		// Rendered-origin (Preview) selections carry no columns — show a plain
+		// line span, matching Comment.LineSpan.
+		if s.SelectionFromCol == 0 && s.SelectionToCol == 0 {
+			if s.SelectionAnchor == s.SelectionEnd {
+				return fmt.Sprintf("L%d", s.SelectionAnchor)
+			}
+			return fmt.Sprintf("L%d-L%d", s.SelectionAnchor, s.SelectionEnd)
+		}
 		if s.SelectionAnchor == s.SelectionEnd {
 			return fmt.Sprintf("L%d:%d-%d", s.SelectionAnchor, s.SelectionFromCol, s.SelectionToCol)
 		}

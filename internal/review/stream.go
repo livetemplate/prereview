@@ -73,6 +73,11 @@ type StreamComment struct {
 	Area         *Area  `json:"area"`
 	CreatedAt    string `json:"created_at"`
 	AnchorStatus string `json:"anchor_status"`
+	// Text is the exact selected substring for kind=text comments (the phrase
+	// the reviewer highlighted). Lets the consuming LLM see WHAT was commented
+	// on — essential for rendered-view (Preview) comments, which anchor at
+	// line level (no columns) so the phrase is the only sub-line signal.
+	Text string `json:"text,omitempty"`
 }
 
 // toStreamComment maps a Comment to its consumer-facing shape. Area is set
@@ -96,6 +101,9 @@ func toStreamComment(c Comment) StreamComment {
 	if !c.Area.Empty() {
 		a := c.Area
 		sc.Area = &a
+	}
+	if c.IsTextLevel() {
+		sc.Text = c.Anchor.Snippet
 	}
 	return sc
 }
