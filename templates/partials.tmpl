@@ -26,6 +26,8 @@
     {{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{$.CurrentDiff.Path}}</code>
   {{- else if eq $.CommentMode "area" -}}
     {{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{$.CurrentDiff.Path}}</code>
+  {{- else if eq $.CommentMode "text" -}}
+    {{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}} · “<span class="selection-snippet">{{$.SelectionText}}</span>”
   {{- else -}}
     {{if $.ReanchorCommentID}}Re-anchoring comment to {{else if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}}
   {{- end -}}
@@ -62,6 +64,7 @@
       {{- if eq $.CommentMode "region"}}What's wrong with this region?
       {{- else if eq $.CommentMode "file"}}What's wrong with this file?
       {{- else if eq $.CommentMode "area"}}What's wrong with this region?
+      {{- else if eq $.CommentMode "text"}}What's wrong with this text?
       {{- else}}What's wrong with these lines?{{end}}"
       required
       lvt-autofocus

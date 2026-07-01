@@ -46,11 +46,18 @@ const (
 	// app-relative (pathname+query, no proxy origin — the proxy port is
 	// random per run). Empty for every file-based kind.
 	ColURL = "url"
+	// `from_col` / `to_col` delimit the selected character range for
+	// `kind=text` comments: a half-open [from_col, to_col) offset in raw
+	// line coordinates (0-based rune index into the line). from_col binds
+	// from_line, to_col binds to_line; interior lines are fully covered.
+	// "0" for every other kind (line comments cover whole lines).
+	ColFromCol = "from_col"
+	ColToCol   = "to_col"
 )
 
 // Header is the row written before any data. Position-stable: only ever
 // append new columns (readers tolerate short legacy rows by length).
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
-	ColAnchor, ColAnchorStatus, ColKind, ColArea, ColURL,
+	ColAnchor, ColAnchorStatus, ColKind, ColArea, ColURL, ColFromCol, ColToCol,
 }

@@ -610,13 +610,13 @@ func TestE2E_KeyboardLineCursor(t *testing.T) {
 		return strings.TrimSpace(s)
 	}
 	cursorKey := func() string {
-		return eval(`(function(){const el=document.querySelector('.code button.line.is-cursor');return el?el.getAttribute('data-key'):'';})()`)
+		return eval(`(function(){const el=document.querySelector('.code .line.is-cursor');return el?el.getAttribute('data-key'):'';})()`)
 	}
 
 	// First ArrowDown seeds the cursor on the first line and focuses it.
 	if err := chromedp.Run(p.ctx,
 		chromedp.KeyEvent(kb.ArrowDown),
-		chromedp.WaitVisible(`.code button.line.is-cursor`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code .line.is-cursor`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("ArrowDown should create a line cursor: %v\nstderr: %s", err, p.stderr.String())
 	}

@@ -2,8 +2,16 @@ package review
 
 import (
 	"fmt"
+	"html/template"
 	"path/filepath"
+
+	"github.com/livetemplate/prereview/gitdiff"
 )
+
+// lineEndSentinel is a "to end of line" upper bound for a multi-line text
+// comment's mark on its first / interior lines; gitdiff.MarkRanges clamps it to
+// the actual line length.
+const lineEndSentinel = 1 << 30
 
 // CSVBasename returns just the filename portion of CSVPath — useful for
 // compact toast/banner display where the full repo path is noise.
@@ -68,6 +76,84 @@ func (s PrereviewState) FileComments() []Comment {
 			continue
 		}
 		out = append(out, c)
+	}
+	return out
+}
+
+// LineDisplay maps each visible diff line's key ("L<old>-<new>", matching the
+// template's $lkey) to its rendered content with every character-range
+// (kind=text) comment wrapped in a <mark class="comment-span">. Zero-arg so
+// livetemplate pre-computes it into the data map (it only pre-computes zero-arg
+// methods — a method taking the line as an argument does NOT render); the
+// template indexes it with {{index $.LineDisplay $lkey}}, mirroring how
+// CommentsByEndLine / SelectedLines are consumed. (OldNum,NewNum) is unique per
+// line — adds are (0,n), dels (m,0), ctx (m,n) — so the key never collides.
+func (s PrereviewState) LineDisplay() map[string]template.HTML {
+	lines := s.VisibleLines()
+	out := make(map[string]template.HTML, len(lines))
+	for _, line := range lines {
+		if line.Kind == "fold" {
+			continue // fold rows render their own label, no code content
+		}
+		out[fmt.Sprintf("L%d-%d", line.OldNum, line.NewNum)] = s.markedLineContent(line)
+	}
+	return out
+}
+
+// markedLineContent returns a diff line's rendered content with every
+// character-range (kind=text) comment on that line wrapped in a
+// <mark class="comment-span">. Falls back to the escaped raw content when the
+// line carries no chroma highlight, and returns the fragment untouched when no
+// text comment covers the line — so an ordinary line pays only a slice scan.
+func (s PrereviewState) markedLineContent(line gitdiff.DiffLine) template.HTML {
+	frag := line.HighlightedContent
+	if frag == "" {
+		frag = template.HTML(template.HTMLEscapeString(line.Content))
+	}
+	ranges := s.textMarksForLine(line)
+	if len(ranges) == 0 {
+		return frag
+	}
+	return gitdiff.MarkRanges(frag, ranges)
+}
+
+// textMarksForLine collects the rune ranges to highlight on one diff line from
+// the selected file's visible kind=text comments. A comment spanning several
+// lines contributes [FromCol, end) on its first line, the whole line on
+// interiors, and [0, ToCol) on its last; a single-line comment contributes
+// [FromCol, ToCol). Outdated comments are skipped — their stored columns no
+// longer point at the intended content, so marking them would highlight the
+// wrong text (the card still shows, flagged, via CommentsByEndLine).
+func (s PrereviewState) textMarksForLine(line gitdiff.DiffLine) []gitdiff.ColRange {
+	if s.SelectedFile == "" {
+		return nil
+	}
+	side, ln := "new", line.NewNum
+	if line.Kind == "del" {
+		side, ln = "old", line.OldNum
+	}
+	if ln == 0 {
+		return nil
+	}
+	var out []gitdiff.ColRange
+	for _, c := range s.Comments {
+		if !c.IsTextLevel() || c.File != s.SelectedFile || c.Side != side {
+			continue
+		}
+		if c.AnchorOutdated() || (c.Resolved && !s.ShowResolved) {
+			continue
+		}
+		if ln < c.FromLine || ln > c.ToLine {
+			continue
+		}
+		from, to := 0, lineEndSentinel
+		if ln == c.FromLine {
+			from = c.FromCol
+		}
+		if ln == c.ToLine {
+			to = c.ToCol
+		}
+		out = append(out, gitdiff.ColRange{From: from, To: to})
 	}
 	return out
 }
@@ -215,10 +301,21 @@ func (s PrereviewState) SelectedLines() map[int]bool {
 }
 
 // SelectionLabel returns the human-readable form of the current selection
-// (e.g. "L42" or "L42-L48"). Empty string when nothing is selected.
+// (e.g. "L42" or "L42-L48"; for a text selection "L42:6-12" or "L42:6-L48:3").
+// Empty string when nothing is selected. Kept consistent with
+// Comment.LineSpan so the composer heading matches the saved card's badge.
 func (s PrereviewState) SelectionLabel() string {
 	if s.SelectionAnchor == 0 {
 		return ""
+	}
+	// Text mode carries character offsets; render them so a word/phrase
+	// selection reads precisely (the columns pair with anchor/end, which
+	// SelectText stores doc-ordered — do not swap lines without the cols).
+	if s.CommentMode == commentKindText {
+		if s.SelectionAnchor == s.SelectionEnd {
+			return fmt.Sprintf("L%d:%d-%d", s.SelectionAnchor, s.SelectionFromCol, s.SelectionToCol)
+		}
+		return fmt.Sprintf("L%d:%d-L%d:%d", s.SelectionAnchor, s.SelectionFromCol, s.SelectionEnd, s.SelectionToCol)
 	}
 	lo, hi := s.SelectionAnchor, s.SelectionEnd
 	if lo > hi {

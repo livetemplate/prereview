@@ -45,6 +45,16 @@ type PrereviewState struct {
 	SelectionEnd    int    `json:"selection_end"    lvt:"persist"`
 	SelectionSide   string `json:"selection_side"   lvt:"persist"` // "new"|"old"|"both"
 
+	// SelectionFromCol/ToCol/Text hold the in-progress CHARACTER range for a
+	// kind=text comment (composer CommentMode == "text"): rune offsets into
+	// FromLine/ToLine and the exact selected substring, set by SelectText
+	// (dispatched from the client's lvt-fx:text-select directive) and cleared
+	// by AddComment / ClearSelection / SelectFile. Persisted so the composer
+	// survives a WebSocket reconnect mid-compose.
+	SelectionFromCol int    `json:"selection_from_col" lvt:"persist"`
+	SelectionToCol   int    `json:"selection_to_col"   lvt:"persist"`
+	SelectionText    string `json:"selection_text"     lvt:"persist"`
+
 	// Comment composer.
 	DraftBody string `json:"draft_body" lvt:"persist"`
 

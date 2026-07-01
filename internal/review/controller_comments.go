@@ -45,6 +45,11 @@ func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate
 	if state.CommentMode == commentKindArea {
 		return c.addAreaComment(state, body)
 	}
+	// Text (character-range) comments take a dedicated path: a line span PLUS
+	// FromCol/ToCol and the selected snippet (set by SelectText). kind="text".
+	if state.CommentMode == commentKindText {
+		return c.addTextComment(state, body)
+	}
 	if state.SelectionAnchor == 0 {
 		return state, fmt.Errorf("no line selected")
 	}
@@ -321,6 +326,79 @@ func (c *PrereviewController) addRegionComment(state PrereviewState, body string
 	state.EditingCommentID = ""
 	state.LastDeletedComment = nil
 	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
+// addTextComment is the AddComment branch for character-range (kind=text)
+// comments. It carries a line span like a line comment — so it reuses the
+// line-anchor drift machinery (Anchor.Text is the whole-line join, relocate
+// shifts the lines) — plus FromCol/ToCol and the exact selected substring
+// (Anchor.Snippet) that pin the sub-line range. Edits update body + range +
+// columns in place when EditingCommentID is set.
+func (c *PrereviewController) addTextComment(state PrereviewState, body string) (PrereviewState, error) {
+	if state.SelectionAnchor == 0 || state.SelectionText == "" {
+		return state, fmt.Errorf("no text selected")
+	}
+	// Client dispatches doc-ordered (fromLine<=toLine); keep the pairing.
+	from, to := state.SelectionAnchor, state.SelectionEnd
+	side := state.SelectionSide
+	anchor := captureAnchor(state.CurrentDiff, from, to, side)
+	anchor.Snippet = state.SelectionText
+
+	var rollback func()
+	if state.EditingCommentID != "" {
+		idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == state.EditingCommentID })
+		if idx >= 0 {
+			prev := state.Comments[idx]
+			state.Comments[idx].Body = body
+			state.Comments[idx].FromLine = from
+			state.Comments[idx].ToLine = to
+			state.Comments[idx].FromCol = state.SelectionFromCol
+			state.Comments[idx].ToCol = state.SelectionToCol
+			state.Comments[idx].Side = side
+			state.Comments[idx].Anchor = anchor
+			state.Comments[idx].AnchorStatus = anchorOK
+			rollback = func() { state.Comments[idx] = prev }
+		}
+	}
+	if rollback == nil {
+		cm := Comment{
+			ID:           newCommentID(),
+			File:         state.SelectedFile,
+			FromLine:     from,
+			ToLine:       to,
+			FromCol:      state.SelectionFromCol,
+			ToCol:        state.SelectionToCol,
+			Side:         side,
+			Body:         body,
+			Created:      time.Now().UTC(),
+			Kind:         commentKindText,
+			Anchor:       anchor,
+			AnchorStatus: anchorOK,
+		}
+		state.Comments = append(state.Comments, cm)
+		state.ScrollToCommentID = cm.ID
+		state.ScrollToHeadingID = ""
+		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
+	}
+
+	if err := c.persist(state.Comments); err != nil {
+		rollback()
+		return state, fmt.Errorf("persist text comment: %w", err)
+	}
+
+	state.CommentMode = ""
+	state.SelectionAnchor = 0
+	state.SelectionEnd = 0
+	state.SelectionSide = ""
+	state.SelectionFromCol = 0
+	state.SelectionToCol = 0
+	state.SelectionText = ""
+	state.DraftBody = ""
+	state.EditingCommentID = ""
+	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
 }
 

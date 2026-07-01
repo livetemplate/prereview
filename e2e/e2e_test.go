@@ -504,7 +504,7 @@ func (p *runningPrereview) clickLine(oldNum, newNum int) {
 	default:
 		p.t.Fatalf("clickLine: ambiguous old=%d new=%d", oldNum, newNum)
 	}
-	sel := fmt.Sprintf(`.code button.line[data-line="%d"][data-side="%s"]`, displayLine, side)
+	sel := fmt.Sprintf(`.code .line[data-line="%d"][data-side="%s"]`, displayLine, side)
 	js := fmt.Sprintf(`
 		(() => {
 			const b = document.querySelector(%q);
@@ -1164,7 +1164,7 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 	var codeFam string
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.code button.line`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
 		chromedp.Evaluate(`getComputedStyle(document.querySelector('.code .content')).fontFamily`, &codeFam),
 	); err != nil {
 		t.Fatalf("raw-view font query: %v%s", err, diag())
@@ -2004,7 +2004,7 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	p.clickFile("edited.go")
 
 	delRowsVisible := `Array.from(document.querySelectorAll('.line-row'))
-		.filter(r => r.querySelector('button.line.del') && getComputedStyle(r).display !== 'none').length`
+		.filter(r => r.querySelector('.line.del') && getComputedStyle(r).display !== 'none').length`
 
 	// Diff mode default: .code lacks .file-view; del lines are visible.
 	var fvBefore bool
@@ -2099,15 +2099,15 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureRepoBigDiff(t), 1200, 800)
 	p.waitReady()
 
-	lineBtns := `document.querySelectorAll('.code button.line').length`
+	lineBtns := `document.querySelectorAll('.code .line').length`
 	foldRows := `document.querySelectorAll('.code .fold-row').length`
-	delRows := `document.querySelectorAll('.code button.line.del').length`
+	delRows := `document.querySelectorAll('.code .line.del').length`
 
 	// Diff view (default): folded — only a few real lines, >=1 fold.
 	var diffBtns, diffFolds int
 	var foldText string
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.code button.line`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
 		chromedp.Evaluate(lineBtns, &diffBtns),
 		chromedp.Evaluate(foldRows, &diffFolds),
 		chromedp.Evaluate(`(document.querySelector('.code .fold-label')||{}).textContent||''`, &foldText),
@@ -2443,7 +2443,7 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 		chromedp.Evaluate(`!!document.querySelector('.md-rendered h1')`, &hasH1),
 		chromedp.Evaluate(`(document.querySelector('.md-rendered h1')||{}).textContent||''`, &h1Text),
 		chromedp.Evaluate(`document.querySelectorAll('.md-rendered script').length`, &scriptCount),
-		chromedp.Evaluate(`document.querySelectorAll('.code button.line').length`, &lineBtns),
+		chromedp.Evaluate(`document.querySelectorAll('.code .line').length`, &lineBtns),
 		chromedp.Evaluate(`!!document.querySelector('form[aria-label="Markdown view"]')`, &hasMdRadios),
 		chromedp.Evaluate(`(document.querySelector('form[aria-label="Markdown view"] input:checked')||{}).value||''`, &checkedView),
 		chromedp.Evaluate(`!!document.querySelector('form[aria-label="File view"]')`, &hasFileRadios),
@@ -2502,7 +2502,7 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
 		chromedp.Sleep(350*time.Millisecond),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &rawHasMdView),
-		chromedp.Evaluate(`document.querySelectorAll('.code button.line').length`, &rawLineBtns),
+		chromedp.Evaluate(`document.querySelectorAll('.code .line').length`, &rawLineBtns),
 		chromedp.Evaluate(`!!document.querySelector('.code .inline-comment')`, &rawHasComment),
 	); err != nil {
 		t.Fatalf("toggle to raw: %v\nstderr: %s", err, p.stderr.String())
@@ -2975,9 +2975,9 @@ func TestE2E_AllFilesOnCleanTree(t *testing.T) {
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`//button[@name='selectFile' and contains(., 'alpha.go')]`, chromedp.BySearch),
 		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='alpha.go']`, chromedp.BySearch),
-		chromedp.Evaluate(`document.querySelectorAll('.code button.line.add').length`, &addClassCount),
-		chromedp.Evaluate(`document.querySelectorAll('.code button.line.del').length`, &delClassCount),
-		chromedp.Evaluate(`document.querySelectorAll('.code button.line.ctx').length`, &ctxClassCount),
+		chromedp.Evaluate(`document.querySelectorAll('.code .line.add').length`, &addClassCount),
+		chromedp.Evaluate(`document.querySelectorAll('.code .line.del').length`, &delClassCount),
+		chromedp.Evaluate(`document.querySelectorAll('.code .line.ctx').length`, &ctxClassCount),
 	); err != nil {
 		t.Fatalf("select unchanged file: %v\nstderr: %s", err, p.stderr.String())
 	}

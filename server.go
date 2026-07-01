@@ -70,6 +70,8 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 			File:     r.File,
 			FromLine: r.FromLine,
 			ToLine:   r.ToLine,
+			FromCol:  r.FromCol,
+			ToCol:    r.ToCol,
 			Side:     r.Side,
 			Body:     r.Body,
 			Created:  r.CreatedAt,

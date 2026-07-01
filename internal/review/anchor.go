@@ -3,6 +3,7 @@ package review
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/livetemplate/prereview/gitdiff"
 )
@@ -38,6 +39,13 @@ const (
 	commentKindFile   = "file"
 	commentKindArea   = "area"
 	commentKindRegion = "region"
+	// commentKindText anchors a comment to a character range within a
+	// line (or across lines): FromLine/ToLine + FromCol/ToCol delimit the
+	// exact selected substring. It reuses the line-anchor drift machinery
+	// (Anchor.Text is still the whole-line join, so relocate shifts the
+	// line range); Anchor.Snippet holds the exact selected substring for
+	// sub-line re-location and disambiguation.
+	commentKindText = "text"
 )
 
 // CommentAnchor is the content fingerprint captured when a comment is
@@ -47,6 +55,11 @@ type CommentAnchor struct {
 	Text   string   `json:"text"`             // normalized join of FromLine..ToLine
 	Before []string `json:"before,omitempty"` // <=3 normalized lines before FromLine (source order)
 	After  []string `json:"after,omitempty"`  // <=3 normalized lines after ToLine (source order)
+	// Snippet is the exact selected substring for kind=text comments
+	// (raw, un-normalized, spanning FromCol..ToCol across FromLine..ToLine).
+	// Empty for every other kind. Used to re-locate the character range
+	// after edits and to disambiguate a substring that repeats on a line.
+	Snippet string `json:"snippet,omitempty"`
 }
 
 // Empty reports whether there is nothing to re-locate against (legacy
@@ -198,6 +211,22 @@ func relocate(diff *gitdiff.FileDiff, c *Comment) bool {
 		return false
 	}
 	lines := sideContent(diff, c.Side)
+	changed := relocateLineRange(lines, c)
+	// A kind=text comment's LINE range drifts via the line anchor above; its
+	// sub-line COLUMNS then re-track by locating the exact selected snippet
+	// within the (possibly moved) line — so inserting text earlier on the line
+	// keeps the highlight on the right characters. Only for a placed
+	// (non-outdated) single-line span; multi-line spans keep their columns.
+	if c.IsTextLevel() && !c.AnchorOutdated() && relocateTextColumns(lines, c) {
+		changed = true
+	}
+	return changed
+}
+
+// relocateLineRange re-anchors c's FromLine/ToLine + AnchorStatus against the
+// side's live lines via the whole-line content fingerprint. Reports whether the
+// range or status changed.
+func relocateLineRange(lines []string, c *Comment) bool {
 	span := max(c.ToLine-c.FromLine, 0)
 	prevStatus := c.AnchorStatus
 
@@ -264,4 +293,31 @@ func (c *Comment) moveTo(start1, span int, prevStatus string) bool {
 		c.AnchorStatus = anchorOK
 	}
 	return moved || c.AnchorStatus != prevStatus
+}
+
+// relocateTextColumns re-locates a single-line kind=text comment's FromCol/ToCol
+// by finding the exact selected snippet (Anchor.Snippet) inside its line's live
+// content. Returns whether the columns changed. It is best-effort: no snippet,
+// a multi-line span, or a snippet no longer found verbatim (e.g. whitespace on
+// the line changed) leaves the columns as-is — the line anchor already placed
+// the comment, and marking it outdated for a cosmetic column shift would be
+// noisier than a slightly-off highlight.
+func relocateTextColumns(lines []string, c *Comment) bool {
+	if c.Anchor.Snippet == "" || c.FromLine != c.ToLine {
+		return false
+	}
+	if c.FromLine < 1 || c.FromLine > len(lines) {
+		return false
+	}
+	byteIdx := strings.Index(lines[c.FromLine-1], c.Anchor.Snippet)
+	if byteIdx < 0 {
+		return false
+	}
+	from := utf8.RuneCountInString(lines[c.FromLine-1][:byteIdx])
+	to := from + utf8.RuneCountInString(c.Anchor.Snippet)
+	if from == c.FromCol && to == c.ToCol {
+		return false
+	}
+	c.FromCol, c.ToCol = from, to
+	return true
 }

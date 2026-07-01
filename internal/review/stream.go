@@ -65,6 +65,8 @@ type StreamComment struct {
 	File         string `json:"file"`
 	FromLine     int    `json:"from_line"`
 	ToLine       int    `json:"to_line"`
+	FromCol      int    `json:"from_col"`
+	ToCol        int    `json:"to_col"`
 	Side         string `json:"side"`
 	Body         string `json:"body"`
 	URL          string `json:"url"`
@@ -83,6 +85,8 @@ func toStreamComment(c Comment) StreamComment {
 		File:         c.File,
 		FromLine:     c.FromLine,
 		ToLine:       c.ToLine,
+		FromCol:      c.FromCol,
+		ToCol:        c.ToCol,
 		Side:         c.Side,
 		Body:         c.Body,
 		URL:          c.URL,

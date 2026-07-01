@@ -63,13 +63,22 @@ func (a Area) PercentH() string { return fmt.Sprintf("%.4f%%", a.H*100) }
 
 // Comment is one row in the CSV output (and one entry in state).
 type Comment struct {
-	ID       string    `json:"id"`
-	File     string    `json:"file"`
-	FromLine int       `json:"from_line"`
-	ToLine   int       `json:"to_line"`
-	Side     string    `json:"side"`
-	Body     string    `json:"body"`
-	Created  time.Time `json:"created"`
+	ID       string `json:"id"`
+	File     string `json:"file"`
+	FromLine int    `json:"from_line"`
+	ToLine   int    `json:"to_line"`
+	Side     string `json:"side"`
+	// FromCol/ToCol delimit the selected character range for kind=text
+	// comments: a half-open [FromCol, ToCol) offset in *raw line*
+	// coordinates (0-based rune count into the line's Content, matching
+	// the rendered .content textContent — see gitdiff textcontent_test).
+	// FromCol binds FromLine, ToCol binds ToLine; interior lines are fully
+	// covered. Zero for every other kind (a line comment covers whole
+	// lines, so it needs no column offsets).
+	FromCol int       `json:"from_col"`
+	ToCol   int       `json:"to_col"`
+	Body    string    `json:"body"`
+	Created time.Time `json:"created"`
 	// Resolved marks the comment as "addressed; keep as history". The skill
 	// should act only on unresolved comments. Toggled via ResolveComment.
 	Resolved bool `json:"resolved"`
@@ -115,6 +124,12 @@ func (c Comment) IsAreaLevel() bool { return c.Kind == commentKindArea }
 // relocate" contract.
 func (c Comment) IsRegionLevel() bool { return c.Kind == commentKindRegion }
 
+// IsTextLevel reports whether this comment anchors to a character range
+// (kind="text" with FromCol/ToCol delimiting the selected substring).
+// Unlike file/area/region, a text comment DOES drift — it reuses the
+// line-anchor relocate machinery, so it is not skipped there.
+func (c Comment) IsTextLevel() bool { return c.Kind == commentKindText }
+
 // AnchorOutdated reports that re-location could not confidently place
 // the comment — its line numbers no longer point at the intended
 // content and a human (or the skill) must re-anchor or resolve it.
@@ -138,6 +153,12 @@ func (c Comment) LineSpan() string {
 	}
 	if c.IsFileLevel() {
 		return "file"
+	}
+	if c.IsTextLevel() {
+		if c.FromLine == c.ToLine {
+			return fmt.Sprintf("L%d:%d-%d", c.FromLine, c.FromCol, c.ToCol)
+		}
+		return fmt.Sprintf("L%d:%d-L%d:%d", c.FromLine, c.FromCol, c.ToLine, c.ToCol)
 	}
 	if c.FromLine == c.ToLine {
 		return fmt.Sprintf("L%d", c.FromLine)
