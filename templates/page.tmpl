@@ -1204,7 +1204,13 @@
        the CSV — nothing is renumbered. Comments/composer interleave
        by source line the same way the line view does, just matched to
        a block's [StartLine,EndLine] span. */}}
-  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3">
+  {{- /* text-select on the rendered view: a native selection resolves to the
+         touched blocks' source line range (data-surface="block"), so a phrase
+         can be commented on in Preview too — not just the raw/code view. Columns
+         don't apply (rendered text != source), so it anchors line-level with the
+         phrase quoted. */ -}}
+  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3"
+       lvt-fx:text-select="selectText" data-surface="block">
     {{- range $.RenderedMarkdown -}}
     {{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be -}}
     <div class="md-block

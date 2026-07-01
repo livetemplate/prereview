@@ -130,6 +130,17 @@ func (c Comment) IsRegionLevel() bool { return c.Kind == commentKindRegion }
 // line-anchor relocate machinery, so it is not skipped there.
 func (c Comment) IsTextLevel() bool { return c.Kind == commentKindText }
 
+// Snippet returns the exact selected phrase for a kind=text comment (empty
+// otherwise) — shown as a quote on the card so the reviewer sees what the
+// comment is about, especially for rendered-view (Preview) comments that anchor
+// line-level.
+func (c Comment) Snippet() string {
+	if c.IsTextLevel() {
+		return c.Anchor.Snippet
+	}
+	return ""
+}
+
 // AnchorOutdated reports that re-location could not confidently place
 // the comment — its line numbers no longer point at the intended
 // content and a human (or the skill) must re-anchor or resolve it.
@@ -155,6 +166,15 @@ func (c Comment) LineSpan() string {
 		return "file"
 	}
 	if c.IsTextLevel() {
+		// Rendered-origin (Preview) text comments carry no source columns
+		// (rendered text can't map to source offsets) — FromCol==ToCol==0 — so
+		// they read as a plain line span, same as a line comment.
+		if c.FromCol == 0 && c.ToCol == 0 {
+			if c.FromLine == c.ToLine {
+				return fmt.Sprintf("L%d", c.FromLine)
+			}
+			return fmt.Sprintf("L%d-L%d", c.FromLine, c.ToLine)
+		}
 		if c.FromLine == c.ToLine {
 			return fmt.Sprintf("L%d:%d-%d", c.FromLine, c.FromCol, c.ToCol)
 		}

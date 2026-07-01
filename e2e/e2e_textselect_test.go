@@ -436,3 +436,110 @@ func TestE2E_TextSelectModifiedLineSingleComposer(t *testing.T) {
 		t.Errorf("modified line showed %d composers, want exactly 1 (side-agnostic gate regressed)", composerCount)
 	}
 }
+
+// TestE2E_TextSelectRenderedMarkdown is the regression for the reported bug:
+// text selection produced no Comment button in the rendered Markdown (Preview)
+// view. Selecting rendered prose must show the button, open a text composer, and
+// persist a kind=text comment anchored to the block's SOURCE line range with the
+// selected phrase quoted (columns are 0 — rendered text has no source columns).
+func TestE2E_TextSelectRenderedMarkdown(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureGFMRepo(t), 1200, 900)
+	p.waitReady()
+	p.clickFile("gfm.md")
+
+	// rect of a rendered prose block (the footnote paragraph "A claim …")
+	var box []float64
+	rectJS := `(() => {
+		for (const b of document.querySelectorAll('.md-rendered [data-from], .md-rendered')) {}
+		// pick the .md-rendered block whose text contains "claim"
+		const blocks = [...document.querySelectorAll('.md-rendered')];
+		const el = blocks.find(b => b.textContent.includes('claim')) || blocks[0];
+		if (!el) return [];
+		const p = el.querySelector('p') || el;
+		const r = p.getBoundingClientRect();
+		return [r.left, r.top, r.width, r.height];
+	})()`
+
+	drag := chromedp.ActionFunc(func(ctx context.Context) error {
+		x0 := box[0] + 4
+		y := box[1] + box[3]/2
+		x1 := box[0] + box[2]*0.5
+		for _, s := range []struct {
+			t input.MouseType
+			x float64
+		}{
+			{input.MousePressed, x0}, {input.MouseMoved, x0 + 10}, {input.MouseMoved, (x0 + x1) / 2}, {input.MouseMoved, x1}, {input.MouseReleased, x1},
+		} {
+			if err := input.DispatchMouseEvent(s.t, s.x, y).WithButton(input.Left).WithClickCount(1).Do(ctx); err != nil {
+				return err
+			}
+			time.Sleep(60 * time.Millisecond)
+		}
+		return nil
+	})
+
+	ctx, cancel := context.WithTimeout(p.ctx, 15*time.Second)
+	err := chromedp.Run(ctx,
+		chromedp.WaitVisible(`.md-rendered`, chromedp.ByQuery),
+		chromedp.Evaluate(rectJS, &box),
+	)
+	cancel()
+	if err != nil || len(box) < 4 {
+		t.Fatalf("no rendered block rect: %v box=%v\nserver: %s", err, box, p.stderr.String())
+	}
+
+	var headingText string
+	openCtx, openCancel := context.WithTimeout(p.ctx, 12*time.Second)
+	err = chromedp.Run(openCtx,
+		drag,
+		chromedp.Sleep(400*time.Millisecond),
+		chromedp.WaitVisible(`[data-lvt-text-select-button]`, chromedp.ByQuery),
+		chromedp.Click(`[data-lvt-text-select-button]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.composer`, chromedp.ByQuery),
+		chromedp.Text(`.composer strong`, &headingText, chromedp.ByQuery),
+	)
+	openCancel()
+	if err != nil {
+		t.Fatalf("rendered-view select → composer failed: %v\nserver: %s", err, p.stderr.String())
+	}
+	// Heading shows a plain line label (no :columns) and the quoted phrase.
+	if !strings.Contains(headingText, "Comment on L") {
+		t.Errorf("composer heading missing line label, got %q", headingText)
+	}
+	if strings.Contains(headingText, ":") && strings.Contains(headingText, "-") {
+		// crude guard against "L3:0-0" style column rendering
+		if strings.Contains(headingText, ":0-") {
+			t.Errorf("rendered comment should not show columns, got %q", headingText)
+		}
+	}
+
+	var cardText, snippet string
+	saveCtx, saveCancel := context.WithTimeout(p.ctx, 12*time.Second)
+	err = chromedp.Run(saveCtx,
+		chromedp.SendKeys(`.composer textarea[name="body"]`, "tighten this claim", chromedp.ByQuery),
+		chromedp.Click(`.composer .save-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+		chromedp.Text(`.inline-comment`, &cardText, chromedp.ByQuery),
+		chromedp.Text(`.inline-comment .ic-snippet`, &snippet, chromedp.ByQuery),
+	)
+	saveCancel()
+	if err != nil {
+		t.Fatalf("saving rendered text comment failed: %v\nserver: %s", err, p.stderr.String())
+	}
+	if strings.TrimSpace(snippet) == "" {
+		t.Errorf("saved card missing quoted snippet; card=%q", cardText)
+	}
+
+	// CSV: a kind=text row with 0 columns (rendered-origin) + the body.
+	raw, readErr := os.ReadFile(filepath.Join(p.repo, ".prereview", "comments.csv"))
+	if readErr != nil {
+		t.Fatalf("read csv: %v", readErr)
+	}
+	csv := string(raw)
+	if !strings.Contains(csv, ",text,,,0,0") {
+		t.Errorf("CSV text row (rendered) should have 0 columns (…,text,,,0,0):\n%s", csv)
+	}
+	if !strings.Contains(csv, "tighten this claim") {
+		t.Errorf("CSV missing body:\n%s", csv)
+	}
+}
