@@ -39,6 +39,11 @@ type Row struct {
 	// URL is the proxied page (app-relative) for Kind=="region"; ""
 	// otherwise.
 	URL string
+	// FromCol/ToCol delimit the selected character range for Kind=="text"
+	// (half-open [FromCol, ToCol), 0-based rune offsets in raw line
+	// coordinates); 0 for every other kind.
+	FromCol int
+	ToCol   int
 }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
@@ -149,5 +154,7 @@ func rowToRecord(r Row) []string {
 		r.Kind,
 		r.Area,
 		r.URL,
+		strconv.Itoa(r.FromCol),
+		strconv.Itoa(r.ToCol),
 	}
 }

@@ -17,6 +17,7 @@ func TestRead_RoundTrip(t *testing.T) {
 	originals := []Row{
 		{ID: "A", File: "main.go", FromLine: 10, ToLine: 12, Side: "new", Body: "extract this\nto a helper", CreatedAt: created},
 		{ID: "B", File: "x.go", FromLine: 1, ToLine: 1, Side: "old", Body: "remove?", CreatedAt: created.Add(time.Minute)},
+		{ID: "T", File: "main.go", FromLine: 7, ToLine: 7, Side: "new", Body: "unsafe cast", CreatedAt: created.Add(2 * time.Minute), Kind: "text", FromCol: 6, ToCol: 12},
 	}
 	if err := w.Write(originals); err != nil {
 		t.Fatalf("write: %v", err)
@@ -33,6 +34,7 @@ func TestRead_RoundTrip(t *testing.T) {
 		if got[i].ID != want.ID || got[i].File != want.File ||
 			got[i].FromLine != want.FromLine || got[i].ToLine != want.ToLine ||
 			got[i].Side != want.Side || got[i].Body != want.Body ||
+			got[i].Kind != want.Kind || got[i].FromCol != want.FromCol || got[i].ToCol != want.ToCol ||
 			!got[i].CreatedAt.Equal(want.CreatedAt) {
 			t.Errorf("row %d: got %+v, want %+v", i, got[i], want)
 		}
@@ -104,9 +106,10 @@ func TestRead_SkipsMalformedRow(t *testing.T) {
 	}
 }
 
-// TestRead_BackCompatColumnCounts pins that 7/8/9/10-column rows all
-// load with correct defaults so older CSVs round-trip after the anchor
-// migration (no false "outdated" on pre-migration data — empty status).
+// TestRead_BackCompatColumnCounts pins that every historical column count
+// (7 through the current 15) loads with correct defaults so older CSVs
+// round-trip across each schema migration (no false "outdated" on
+// pre-migration data — empty status; new text columns default to 0).
 func TestRead_BackCompatColumnCounts(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "comments.csv")
@@ -119,6 +122,7 @@ func TestRead_BackCompatColumnCounts(t *testing.T) {
 		`c11,a.go,0,0,,eleven,2026-05-14T10:00:00Z,false,,,file`,                                                      // 11 cols (file-level)
 		`c12,img.png,0,0,,twelve,2026-05-14T10:00:00Z,false,,,area,"{""x"":0.1,""y"":0.2,""w"":0.3,""h"":0.15}"`,      // 12 cols (area)
 		`c13,,0,0,,thirteen,2026-05-14T10:00:00Z,false,,,region,"{""x"":0.4,""y"":0.5,""w"":0.2,""h"":0.1}",/pricing`, // 13 cols (region)
+		`c15,a.go,7,7,new,fifteen,2026-05-14T10:00:00Z,false,,,text,,,6,12`,                                           // 15 cols (text)
 	}, "\n") + "\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -127,8 +131,8 @@ func TestRead_BackCompatColumnCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if len(got) != 7 {
-		t.Fatalf("got %d rows, want 7: %+v", len(got), got)
+	if len(got) != 8 {
+		t.Fatalf("got %d rows, want 8: %+v", len(got), got)
 	}
 	// 7-col: resolved false, no anchor, no status, no kind, no area.
 	if got[0].Resolved || got[0].Anchor != "" || got[0].AnchorStatus != "" || got[0].Kind != "" || got[0].Area != "" {
@@ -156,9 +160,16 @@ func TestRead_BackCompatColumnCounts(t *testing.T) {
 		t.Errorf("12-col area row wrong: %+v", got[5])
 	}
 	// 13-col: region — kind="region", area JSON + url populated, file empty.
+	// New from_col/to_col columns are absent → default 0.
 	if got[6].Kind != "region" || got[6].Area != `{"x":0.4,"y":0.5,"w":0.2,"h":0.1}` ||
-		got[6].URL != "/pricing" || got[6].File != "" || got[6].Anchor != "" {
+		got[6].URL != "/pricing" || got[6].File != "" || got[6].Anchor != "" ||
+		got[6].FromCol != 0 || got[6].ToCol != 0 {
 		t.Errorf("13-col region row wrong: %+v", got[6])
+	}
+	// 15-col: text — kind="text", from_col/to_col populated, area/url empty.
+	if got[7].Kind != "text" || got[7].FromCol != 6 || got[7].ToCol != 12 ||
+		got[7].FromLine != 7 || got[7].ToLine != 7 || got[7].Area != "" || got[7].URL != "" {
+		t.Errorf("15-col text row wrong: %+v", got[7])
 	}
 }
 

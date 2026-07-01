@@ -28,6 +28,52 @@ func mk(orig *gitdiff.FileDiff, from, to int) Comment {
 	}
 }
 
+// mkText builds a single-line kind=text comment anchored at (line, [fromCol,
+// toCol)) with the given selected snippet, ready to relocate.
+func mkText(orig *gitdiff.FileDiff, line, fromCol, toCol int, snippet string) Comment {
+	a := captureAnchor(orig, line, line, "new")
+	a.Snippet = snippet
+	return Comment{
+		ID: "t1", File: "d.go", Kind: commentKindText,
+		FromLine: line, ToLine: line, FromCol: fromCol, ToCol: toCol, Side: "new",
+		Anchor: a, AnchorStatus: anchorOK,
+	}
+}
+
+// TestRelocate_TextColumns covers kind=text sub-line drift: the line anchor
+// places the comment (normLine ignores the added whitespace), then the columns
+// re-track by locating the snippet in the live line.
+func TestRelocate_TextColumns(t *testing.T) {
+	orig := fd("A", "foo bar baz", "C")
+	c := mkText(orig, 2, 4, 7, "bar") // "bar" at runes [4,7)
+
+	// Line moved down one AND gained 2 spaces before "bar": normLine collapses
+	// them so the line still anchors, and the raw column shifts 4 → 6.
+	if changed := relocate(fd("X", "A", "foo   bar baz", "C"), &c); !changed {
+		t.Fatal("expected relocate to report a change")
+	}
+	if c.FromLine != 3 || c.ToLine != 3 {
+		t.Errorf("line = %d-%d, want 3-3", c.FromLine, c.ToLine)
+	}
+	if c.FromCol != 6 || c.ToCol != 9 {
+		t.Errorf("cols = %d-%d, want 6-9 (re-located snippet)", c.FromCol, c.ToCol)
+	}
+	if c.AnchorStatus != anchorMoved {
+		t.Errorf("status = %q, want moved", c.AnchorStatus)
+	}
+
+	// When the line's content genuinely changed (snippet gone), the line anchor
+	// goes outdated and the columns are left untouched — no cosmetic re-place.
+	c2 := mkText(fd("foo bar"), 1, 4, 7, "bar")
+	relocate(fd("foo qux"), &c2)
+	if c2.AnchorStatus != anchorOutdated {
+		t.Errorf("edited line should be outdated, got %q", c2.AnchorStatus)
+	}
+	if c2.FromCol != 4 || c2.ToCol != 7 {
+		t.Errorf("columns should be untouched when outdated, got %d-%d", c2.FromCol, c2.ToCol)
+	}
+}
+
 func TestRelocate_Table(t *testing.T) {
 	cases := []struct {
 		name             string

@@ -83,6 +83,41 @@ func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplat
 	return state, nil
 }
 
+// SelectText opens the composer for a CHARACTER range (a word / phrase / span
+// across lines), dispatched from the client's lvt-fx:text-select directive when
+// a native selection settles inside the diff. Payload: from_line/from_col +
+// to_line/to_col (rune offsets, doc-ordered so from precedes to), side, and the
+// exact selected text. It reuses the line composer's placement — SelectionAnchor
+// /End are the line span, so the existing SelectionEndMax gate renders the
+// composer under the range's last line — and adds the columns + snippet that
+// distinguish a kind=text comment from a whole-line one.
+func (c *PrereviewController) SelectText(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	fromLine := ctx.GetInt("fromLine")
+	toLine := ctx.GetInt("toLine")
+	if fromLine <= 0 || toLine < fromLine {
+		return state, fmt.Errorf("selectText: invalid line range from=%d to=%d", fromLine, toLine)
+	}
+	side := ctx.GetString("side")
+	if side != "old" {
+		side = "new"
+	}
+	text := ctx.GetString("text")
+	if text == "" {
+		return state, fmt.Errorf("selectText: empty selection")
+	}
+	state.SelectionAnchor = fromLine
+	state.SelectionEnd = toLine
+	state.SelectionSide = side
+	state.SelectionFromCol = ctx.GetInt("fromCol")
+	state.SelectionToCol = ctx.GetInt("toCol")
+	state.SelectionText = text
+	state.CommentMode = commentKindText
+	// A fresh selection replaces any prior edit/re-anchor intent.
+	state.EditingCommentID = ""
+	state.ReanchorCommentID = ""
+	return state, nil
+}
+
 // ToggleRegionSelect flips the "draw a box to comment" overlay for the
 // current preview on/off. Bound to the "Select region" toggle button.
 // Off by default so one-finger gestures scroll; on, the parent-document
@@ -120,6 +155,9 @@ func (c *PrereviewController) ClearSelection(state PrereviewState, ctx *livetemp
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
+	state.SelectionFromCol = 0
+	state.SelectionToCol = 0
+	state.SelectionText = ""
 	state.SelectionArea = Area{}
 	state.RegionSelectArmed = false
 	state.CommentMode = ""

@@ -1369,7 +1369,7 @@ dialog#files-drawer .resize-handle { display: none; }
 .drawer-backdrop.open { cursor: pointer; }
 
 /* Main viewer — must have min-width: 0 so flex shrink works and a wide
-   button.line inside .code doesn't push article past the viewer's width.
+   .line inside .code doesn't push article past the viewer's width.
    Without this, the file-head inherits the wider article width and gets
    clipped at the left edge of the viewport (negative x). */
 /* min-height: 0 is load-bearing: a flex item's default min-height is
@@ -1430,7 +1430,7 @@ header.file-head .file-head-comment button svg { display: block; }
 .code {
   background: var(--pico-card-background-color);
   /* Lines WRAP (see .code .content) instead of scrolling horizontally.
-     A focusable button.line wider than this container made mobile
+     A focusable .line wider than this container made mobile
      Safari/Chrome device-mode scroll .code sideways on focus, leaving
      every line (and the inline composer) clipped on the left. Wrapping
      removes horizontal scroll entirely, so that whole class of bug
@@ -1438,6 +1438,10 @@ header.file-head .file-head-comment button svg { display: block; }
   padding: 0; margin: 0; overflow-x: hidden;
   font-size: 0.8rem; line-height: 1.2;
   font-family: var(--jbm);
+  /* Positioning context for the client keyboard block caret
+     ([data-lvt-text-caret]), an absolutely-positioned overlay the text-select
+     directive draws over the character at the cursor. */
+  position: relative;
 }
 .code form { margin: 0; padding: 0; display: block; line-height: 1.2; }
 /* Performance: content-visibility: auto lets the browser skip painting
@@ -1455,7 +1459,7 @@ header.file-head .file-head-comment button svg { display: block; }
    Previously this rule also set `contain: layout style` on every
    .line-row for an extra isolation guard. Removed because `contain:
    layout` clips descendants' overflow from the parent's reported
-   dimensions — and the button.line inside has `width: max-content`
+   dimensions — and the .line inside has `width: max-content`
    that can be MUCH wider than the .code container. With layout
    containment, the parent .line-row's width stayed at the .code
    width, and `.code`'s `overflow-x: auto` had nothing to scroll past.
@@ -1489,7 +1493,7 @@ header.file-head .file-head-comment button svg { display: block; }
 /* Legacy horizontal-scroll-extent spacer. Lines wrap now, so .code
    has no horizontal scroll and this must contribute no width. */
 .code .code-sentinel { display: none; }
-.code button.line {
+.code .line {
   display: flex; padding: 0; margin: 0; min-height: 0;
   /* Exactly the container width — never wider. A focusable element
      wider than .code is what let mobile browsers scroll .code
@@ -1499,27 +1503,27 @@ header.file-head .file-head-comment button svg { display: block; }
   border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
   text-align: left; align-items: flex-start; line-height: 1.2;
 }
-.code button.line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
+.code .line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
 /* Keyboard line cursor (ArrowUp/Down). A left accent bar + outline marks the
    focused line so the user can see where Enter will comment. */
-.code button.line.is-cursor { box-shadow: inset 3px 0 0 0 var(--pico-primary); outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
-.code button.line.add { background: var(--pr-add-bg); color: var(--pr-add); }
-.code button.line.del { background: var(--pr-del-bg); color: var(--pr-del); }
+.code .line.is-cursor { box-shadow: inset 3px 0 0 0 var(--pico-primary); outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
+.code .line.add { background: var(--pr-add-bg); color: var(--pr-add); }
+.code .line.del { background: var(--pr-del-bg); color: var(--pr-del); }
 /* When EVERY line in the file is an add (or every line is a del) the
    per-line background carries no information — the [A]/[D] badge in the
    file list already signals the file-level state. Drop the noise. */
-.code.pure-add button.line.add { background: none; color: inherit; }
-.code.pure-del button.line.del { background: none; color: inherit; }
+.code.pure-add .line.add { background: none; color: inherit; }
+.code.pure-del .line.del { background: none; color: inherit; }
 /* File view mode — same effect as pure-add/pure-del but applied unconditionally,
    plus deleted lines disappear (they don't exist in the working-tree file).
    The :has() pseudo hides the whole .line-row (button + any inline comments
    anchored to that del line), which is correct: a comment on a deleted line
    has no anchor in file-view mode. Switching back to diff view restores them. */
-.code.file-view button.line.add,
-.code.file-view button.line.del { background: none; color: inherit; }
-.code.file-view .line-row:has(button.line.del) { display: none; }
+.code.file-view .line.add,
+.code.file-view .line.del { background: none; color: inherit; }
+.code.file-view .line-row:has(.line.del) { display: none; }
 .code.file-view .gutter-mark { display: none; }
-.code button.line.selected { background: var(--pr-sel-bg) !important; outline: 1px solid var(--pico-primary); outline-offset: -1px; }
+.code .line.selected { background: var(--pr-sel-bg) !important; outline: 1px solid var(--pico-primary); outline-offset: -1px; }
 .code .gutter {
   flex: 0 0 5.5ch; color: var(--pico-muted-color); user-select: none;
   text-align: right; padding-right: 0.4rem; font-size: 0.75rem;
@@ -1535,13 +1539,28 @@ header.file-head .file-head-comment button svg { display: block; }
      child shrink so wrapping actually engages. */
   white-space: pre-wrap; overflow-wrap: anywhere;
   flex: 1; min-width: 0; padding-left: 0.35rem; min-height: 1em;
+  /* Selectable so a reviewer can drag/keyboard-select a word or phrase to
+     comment on it (lvt-fx:text-select on .code). The gutter stays
+     user-select:none so line numbers never join the selection. */
+  user-select: text; -webkit-user-select: text;
 }
 /* The Solarized chroma stylesheet paints .chroma with the scheme's own
    background; on a diff line that would mask the per-line add/del tint
-   (which lives on the parent button.line). Strip it so the line color
+   (which lives on the parent .line). Strip it so the line color
    shows through — the syntax token colors still apply. (The old github
    chroma theme emitted no background, so this is new with Solarized.) */
 .code .content.chroma { background: transparent; }
+/* A saved text (character-range) comment highlights its exact span. <mark>'s UA
+   yellow-on-black would clash with every scheme, so re-skin it with the
+   selection tint + accent underline; color:inherit keeps the syntax token
+   colour underneath. Scheme tokens (--pr-sel-bg/--accent) carry it through
+   Light/Dark and every scheme automatically. */
+.code .content mark.comment-span {
+  background: var(--pr-sel-bg);
+  color: inherit;
+  border-radius: 2px;
+  box-shadow: inset 0 -2px 0 0 var(--accent, var(--pico-primary));
+}
 
 /* Rendered-Markdown view. Each .md-block is a click target that
    selects its source line range (SelectBlock). The rendered HTML
@@ -1969,6 +1988,22 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   display: flex; flex-direction: column;
 }
 .composer strong { font-size: 0.78rem; color: var(--text-strong); }
+/* The selected-text preview in a kind=text composer heading: a compact,
+   single-line snippet with an ellipsis — a multi-line or long selection must
+   not flood the heading with the whole selection (which also drags in the
+   gutter line numbers). The quotes live in the template, outside this span, so
+   the closing quote survives the overflow clip. */
+.composer .selection-snippet {
+  display: inline-block;
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.85;
+}
 .composer textarea {
   /* field-sizing:content auto-grows the box with the draft (no JS), so a
      multi-paragraph comment is fully visible while typing instead of
@@ -2136,7 +2171,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      row background + cursor outline span the full scroll width. */
   .code { overflow-x: auto; }
   .code .content { white-space: pre; overflow-wrap: normal; }
-  .code button.line { width: max-content; min-width: 100%; }
+  .code .line { width: max-content; min-width: 100%; }
   /* The rendered-Markdown reading surface is the primary desktop view
      (proposal docs). Keep it at the 16px desktop base (1rem): the earlier
      1.25rem (20px) bump read as too big on wide monitors — users were

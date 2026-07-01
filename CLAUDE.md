@@ -140,3 +140,41 @@ modes: the light chroma block unscoped, the dark block scoped (`scopeSyntax`)
 under the same `[data-mode]` selectors — so a fence/diff recolors with no
 refetch. Markdown fences are class-based (`WithClasses(true)`) for the same
 reason; inline-styled fences can't recolor for dark.
+
+## Text (character-range) comments — `kind=text`
+
+Beyond whole-line comments, a reviewer can select a **word / phrase / multi-line
+span** and comment on exactly those characters (mouse drag, iOS long-press, or
+keyboard). Anatomy:
+
+- **Model.** `Comment.FromCol/ToCol` (0-based, half-open, **rune** offsets) +
+  `Kind="text"` + `CommentAnchor.Snippet` (the exact selected substring, stored
+  in the opaque `anchor` JSON — no CSV column). CSV gains `from_col`/`to_col`
+  (reader is length-tolerant, 7→15 cols).
+- **The load-bearing invariant** (`gitdiff/textcontent_test.go`): a rendered
+  line's `.content` `textContent` **equals the raw line rune-for-rune**. Offsets
+  are stored in raw-line coords but computed in the browser from the DOM; they
+  only agree because of this. Offsets are **rune counts** (client `[...s].length`,
+  server `[]rune`), NOT UTF-16 — an emoji is one column on both sides. A chroma
+  upgrade that breaks the invariant fails that test loudly.
+- **Highlight = server-side `<mark>`.** `gitdiff.MarkRanges` walks the chroma
+  token spans and wraps `[FromCol,ToCol)` in `<mark class="comment-span">`,
+  splitting across tokens. It's driven from the template by the **zero-arg**
+  `PrereviewState.LineDisplay() map[string]HTML` (keyed `L<old>-<new>`) via
+  `{{index $.LineDisplay $lkey}}` — livetemplate only pre-computes zero-arg
+  methods, so a method-with-arg (`{{$.Foo .}}`) silently breaks rendering.
+- **Side-awareness.** A modified line's number exists on BOTH the del(old) and
+  add(new) rows, so the composer / cards / `<mark>` gate on `$lside` (== the
+  selection's side), or they render twice.
+- **Client** (`../client` `dom/directives.ts`, `lvt-fx:text-select` on `.code`):
+  native selection → floating Comment button (positioned BELOW the selection on
+  a coarse pointer, so iOS's OS-level Copy callout — which always beats z-index —
+  doesn't cover it). Keyboard is a **client-only block caret** overlay
+  (`[data-lvt-text-caret]`, absolute in the now-`position:relative` `.code`) over
+  the char at (is-cursor line, client column): ←/→ move the column, ↑/↓ reuse the
+  server `CursorUp/Down` line cursor (the caret re-syncs via `entry.sync()` on
+  every render), Shift+arrows extend a selection via `getSelection().modify()` on
+  the non-editable text (no contenteditable), Enter commits.
+- **Drift.** `kind=text` reuses the line-anchor `relocate` for its line range,
+  then `relocateTextColumns` re-finds `Anchor.Snippet` in the moved line to
+  re-track the columns (single-line; multi-line keeps its columns).
