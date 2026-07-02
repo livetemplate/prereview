@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/livetemplate/prereview/internal/review"
 )
 
 func TestResolveStoreRoot(t *testing.T) {
@@ -52,5 +54,26 @@ func TestOpenStoreLayout(t *testing.T) {
 	}
 	if _, err := os.Stat(donePath); !os.IsNotExist(err) {
 		t.Errorf("stale DONE not cleared (stat err = %v)", err)
+	}
+}
+
+// TestOpenStoreResetsStatusFile ensures a stale agent-status file from a
+// previous session is cleared on launch, so the UI doesn't show a leftover
+// "working"/"done" before the agent writes anything this session.
+func TestOpenStoreResetsStatusFile(t *testing.T) {
+	root := t.TempDir()
+	csvPath, _, _, err := openStore(root)
+	if err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+	statusPath := review.LLMStatusPath(csvPath)
+	if err := os.WriteFile(statusPath, []byte(`{"state":"working"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := openStore(root); err != nil {
+		t.Fatalf("re-openStore: %v", err)
+	}
+	if _, err := os.Stat(statusPath); !os.IsNotExist(err) {
+		t.Errorf("stale llm-status.json not cleared (stat err = %v)", err)
 	}
 }

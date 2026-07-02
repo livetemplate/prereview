@@ -90,6 +90,26 @@ type PrereviewState struct {
 	LastSaved   string `json:"last_saved"`
 	DoneWritten bool   `json:"done_written" lvt:"persist"`
 
+	// LLMState mirrors the agent's inbound status signal
+	// (.prereview/llm-status.json): "working" while the agent applies a handoff
+	// batch, "done" once finished, "" idle. LLMMessage is the optional detail
+	// shown in the pill. Written by the agent (skill), watched by the server, and
+	// pushed to every open tab via the llm-status watcher → LLMStatusChanged
+	// fan-out; also refreshed from the file on each connect so a late/reconnecting
+	// tab shows current status. Not persisted — the file is the source of truth
+	// (like Comments), re-read every connect. (The file also carries updated_at;
+	// it's a debug field, not surfaced in the UI, so it isn't mirrored here.)
+	LLMState   string `json:"llm_state"`
+	LLMMessage string `json:"llm_message"`
+
+	// PendingRefresh is set when the agent's status transitions working→done:
+	// the agent just edited files, so this tab's diff is now stale. It drives a
+	// non-intrusive "Changes applied — Refresh diff" affordance the user clicks
+	// to reload (RefreshDiff), preserving scroll + any in-progress draft until
+	// then. Per-connection and NOT persisted: a reconnect re-runs Mount, which
+	// rebuilds the diff fresh, so the nudge is moot after a reload.
+	PendingRefresh bool `json:"pending_refresh"`
+
 	// Mobile drawer visibility. Persisted so a reconnect mid-drawer doesn't
 	// surprise the user with a closed drawer. The desktop CSS ignores this
 	// field (sidebar is always visible above 900px).

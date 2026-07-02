@@ -188,6 +188,15 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	// READY/REPO parse is never interleaved with JSON. No-op when not streaming.
 	emitReady(emitter, storeRoot, csvPath)
 
+	// Watch the agent's inbound status file (.prereview/llm-status.json) and
+	// push each change to every open tab. Skill/stream mode only — that's when
+	// an agent is running the skill and writing status. Stops on shutdown.
+	if skillMode {
+		stopWatch := make(chan struct{})
+		defer close(stopWatch)
+		go controller.WatchLLMStatus(stopWatch, review.LLMStatusPollInterval)
+	}
+
 	return serveAndWait(srv, ln, nil, shutdownReq)
 }
 
@@ -386,6 +395,14 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	slog.Info("prereview started (external)", "url", uiURL, "proxy", proxyBaseURL, "target", externalURL, "out", absOut, "bindHost", bindHost)
 
 	emitReady(emitter, absOut, csvPath)
+
+	// Watch the agent's inbound status file and push changes to every open tab
+	// (skill/stream mode only). Stops on shutdown.
+	if skillMode {
+		stopWatch := make(chan struct{})
+		defer close(stopWatch)
+		go controller.WatchLLMStatus(stopWatch, review.LLMStatusPollInterval)
+	}
 
 	return serveAndWait(uiSrv, uiLn, proxySrv, shutdownReq)
 }

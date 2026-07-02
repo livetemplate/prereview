@@ -74,6 +74,24 @@ type PrereviewController struct {
 	// concurrent reads of the same file are racy but the worst case is
 	// re-doing the work, not a stale read of stale data.
 	diffCache sync.Map // map[string]cachedDiff
+
+	// sessionMu guards session. The controller is a singleton shared by all
+	// sessions, so OnConnect (any connection) writes it while the llm-status
+	// watcher goroutine reads it.
+	sessionMu sync.Mutex
+	// session is the most recent connected group's Session handle, captured in
+	// OnConnect. The watcher uses it to fan llm-status changes out to every open
+	// tab. This deliberately bends the "never store per-user data on the
+	// controller" rule above: a Session is group-scoped, and #78 targets multi-tab
+	// of ONE browser (= one groupID), so a single latest-wins handle is correct
+	// for the whole session — the handle re-resolves live connections at
+	// TriggerAction time, so within one browser latest-wins is a no-op. The only
+	// consequence is multi-*browser* (two groupIDs): the earlier browser stops
+	// getting live fan-out until it reconnects — acceptable for a single-user
+	// local tool, out of scope for #78. There is no OnDisconnect: the watcher
+	// treats ErrSessionDisconnected (no tabs) as a skip, so nothing needs
+	// clearing.
+	session livetemplate.Session
 }
 
 type cachedDiff struct {
@@ -169,6 +187,12 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// tagged, and we don't want it to be — comments can be large).
 	// The CSV file is the source of truth.
 	state.Comments = c.loadCommentsFromDisk()
+
+	// Refresh the agent's inbound status (.prereview/llm-status.json) on every
+	// connect so a newly-opened or reconnecting tab renders current status
+	// without waiting for the next watcher tick. Covers repo and external mode
+	// (both short-circuit below).
+	c.applyLLMStatus(&state)
 
 	// SkillMode is mirror-only: refresh from the controller every connect
 	// so a binary launched with --skill renders the right button even after

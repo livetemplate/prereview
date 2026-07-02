@@ -120,7 +120,9 @@ is iterative.
   relationships, conflicts), never row-by-row. Then tell the user this round is
   done and to leave more or click **End session**. **Dedupe by `id`** across
   rounds — a comment reappears only while it's unresolved. `comments` is always
-  present (`[]` when nothing is actionable).
+  present (`[]` when nothing is actionable). Right after reading a handoff, echo
+  your status so the reviewer's UI shows you're working — see [Echo your
+  status](#echo-your-status-so-the-reviewer-sees-progress).
 - `{"event":"session_end","seq":N}` — stop consuming. The review is over (the
   server also exits right after, so a backgrounded launch's job completes too).
 
@@ -141,7 +143,43 @@ fingerprint. Interpret `kind` exactly as in [Comment kinds](#comment-kinds) belo
 
 Then drive a **single, coherent change** across the affected files: each comment is an *input* to that holistic change, not a standalone instruction. Use `from_line`/`to_line`/`side` only to locate each anchor; the *intent* comes from reading the `body` in the context of the full open-comment set. See [Comment kinds](#comment-kinds), [Resolved comments](#resolved-comments), and [Re-anchoring](#re-anchoring) for how to interpret each row.
 
-When you've processed the batch, report back and go read the next event (§3). The session ends — and the backgrounded server exits — when the user clicks **End session**; you don't need to kill it yourself.
+When you've processed the batch, mark yourself done (`prereview_status done`, below), report back, and go read the next event (§3). The session ends — and the backgrounded server exits — when the user clicks **End session**; you don't need to kill it yourself.
+
+### Echo your status (so the reviewer sees progress)
+
+While you work a handoff, write a tiny status file that the running review UI
+watches and shows live in the browser — **across every open tab** — so the user
+knows you picked up their comments and when you're done (instead of staring at a
+silent page). This is a one-way *echo*, completely separate from the §3 event
+read; skipping it never breaks the review, but always do it — it's what makes the
+handoff feel responsive.
+
+Write `<REPO>/.prereview/llm-status.json` (same `<REPO>` dir as `events.jsonl`)
+with a `state` of `working` (you're applying a batch) or `done` (batch finished).
+Write it **atomically** (temp file + `mv`) so the server never reads a half-written
+file:
+
+```bash
+# usage: prereview_status <working|done> [short message]
+prereview_status() {
+  local dir="<REPO>/.prereview"
+  printf '{"state":"%s","message":"%s","updated_at":"%s"}\n' \
+    "$1" "${2:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    > "$dir/.llm-status.tmp" && mv "$dir/.llm-status.tmp" "$dir/llm-status.json"
+}
+```
+
+- **On each `handoff`** (right after you read it in §3, before you start editing):
+  `prereview_status working "Applying your review"`. Keep the message short and
+  plain (no quotes/newlines — it's echoed verbatim into JSON). **Do not put a
+  comment count in it** — the user can hand off again while you work (queuing more
+  comments), so any number goes stale; write a brief description of what you're
+  doing (e.g. `"Refactoring auth.go"`) or omit the message entirely.
+- **When the batch is done** (after §4, before you read the next event):
+  `prereview_status done`. On the next handoff, set `working` again.
+
+The file resets on each fresh launch, so a new session starts with no stale
+status. You don't write anything on `session_end` — the server is shutting down.
 
 ## Comment data reference
 

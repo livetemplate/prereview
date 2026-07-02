@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/internal/review"
 )
 
 // openStore prepares the .prereview/ store (comments.csv + DONE marker) under
@@ -30,6 +31,10 @@ func openStore(storeRoot string) (csvPath, donePath string, w *csv.Writer, err e
 	// rather than appending onto a previous run's events (same intent as the
 	// DONE reset above). Harmless when not streaming — the file won't exist.
 	_ = os.Remove(filepath.Join(dir, "events.jsonl"))
+	// Clear any stale agent-status file so a fresh session doesn't start showing
+	// a "working"/"done" left over from the previous run (same intent as the
+	// DONE/events reset above). It's the agent's to recreate.
+	_ = os.Remove(filepath.Join(dir, review.LLMStatusFileName))
 	return csvPath, donePath, csv.NewWriter(csvPath), nil
 }
 
