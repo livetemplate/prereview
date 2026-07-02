@@ -47,6 +47,39 @@ func TestKeyBindings_NonEmpty(t *testing.T) {
 	}
 }
 
+// TestKeyHint pins the button-hint lookup (issue #89): every action-bearing
+// binding is reachable by its Action and returns its Display key, and the
+// help-only rows (Esc/Enter/Mod+Enter, empty Action) are excluded — a button
+// never fires those, so a chip for them would be a lie.
+func TestKeyHint(t *testing.T) {
+	hint := PrereviewState{}.KeyHint()
+	// A representative action-bearing binding resolves to its key.
+	if got := hint["toggleFocusMode"]; got != "." {
+		t.Errorf(`KeyHint["toggleFocusMode"] = %q, want "."`, got)
+	}
+	if got := hint["nextFile"]; got != "j" {
+		t.Errorf(`KeyHint["nextFile"] = %q, want "j"`, got)
+	}
+	// Every action-bearing binding is present; no empty-action row leaks in.
+	for _, b := range keyBindings {
+		if b.Action == "" {
+			continue
+		}
+		if hint[b.Action] != b.Display {
+			t.Errorf("KeyHint[%q] = %q, want %q (must match keymap Display)", b.Action, hint[b.Action], b.Display)
+		}
+	}
+	if len(hint) == 0 {
+		t.Fatal("KeyHint is empty")
+	}
+	// Esc has an empty Action (help-only) — it must not appear as a button hint.
+	for action := range hint {
+		if action == "" {
+			t.Error("KeyHint contains an empty-action entry (help-only row leaked in)")
+		}
+	}
+}
+
 // TestToggleKeyboardHelp_Flips pins the help overlay as a pure on/off flip,
 // and that it closes the more-menu so the two overlays don't stack.
 func TestToggleKeyboardHelp_Flips(t *testing.T) {

@@ -1679,6 +1679,28 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .kbd-help-list dt { margin: 0; flex: 0 0 5rem; }
 .kbd-help-list dd { margin: 0; flex: 1; font-size: 0.92rem; }
 .kbd-help-list kbd { display: inline-block; min-width: 1.4rem; text-align: center; padding: 0.15rem 0.4rem; font-size: 0.82rem; }
+/* In-button shortcut hint (issue #89): a small monospace chip echoing the key
+   that fires the same action (e.g. Focus `.`), single-sourced from the keymap
+   via KeyHint. currentColor + color-mix means one rule reads well on every
+   button surface — the light menu items AND the filled `.contrast` nav buttons
+   — because the chip tints itself from whatever text color it inherits.
+   Hidden on a COARSE pointer (touch) only: a phone/tablet has no keyboard, so
+   the chip would be noise there. Shown everywhere else (mouse, or unknown), so
+   it never silently vanishes on a device that does have keys. */
+.kbd-hint {
+  /* color:inherit takes the button's text color — Pico's own `kbd` rule paints
+     it light (for a dark chip), which would vanish on our light chip; inherit
+     also makes the currentColor-derived surface/border track the button. */
+  display: inline-block; margin-left: 0.3rem; min-width: 1.15rem;
+  padding: 0.04rem 0.34rem; border-radius: 4px;
+  font-family: var(--jbm); font-size: 0.72rem; font-weight: 500; line-height: 1.5;
+  text-align: center; vertical-align: baseline; color: inherit;
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+}
+@media (pointer: coarse) {
+  .kbd-hint { display: none; }
+}
 .kbd-help-note {
   margin: 0; padding: 0.6rem 1rem 0.9rem; font-size: 0.82rem;
   color: var(--pico-muted-color); border-top: 1px solid var(--pico-muted-border-color);

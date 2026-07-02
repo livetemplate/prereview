@@ -59,3 +59,22 @@ var keyBindings = []KeyBinding{
 // evaluator auto-invokes it; the template ranges over it for both the hidden
 // window bindings and the help overlay.
 func (s PrereviewState) KeyBindings() []KeyBinding { return keyBindings }
+
+// KeyHint maps a shortcut's Action to its Display key, so a button that fires
+// an action can surface the same shortcut in its label (issue #89) —
+// {{with index $.KeyHint "toggleFocusMode"}}<kbd>{{.}}</kbd>{{end}}. Only
+// action-bearing rows are included (the ones actually wired to a button);
+// Enter/Esc/Mod+Enter are documented in the help overlay but have no toolbar
+// button, so they're omitted. Single-sourced from the same keyBindings slice
+// as the live bindings and the help overlay, so a chip can never show a stale
+// key. Zero-arg so livetemplate auto-invokes it (a method-with-arg would
+// silently break rendering).
+func (s PrereviewState) KeyHint() map[string]string {
+	m := make(map[string]string, len(keyBindings))
+	for _, b := range keyBindings {
+		if b.Action != "" {
+			m[b.Action] = b.Display
+		}
+	}
+	return m
+}
