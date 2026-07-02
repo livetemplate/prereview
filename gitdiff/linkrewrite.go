@@ -174,3 +174,62 @@ func rewriteRelativeURLs(htmlFragment, currentPath string) string {
 func looksWellFormed(out, in string) bool {
 	return strings.Count(out, "<") == strings.Count(in, "<")
 }
+
+// OpenExternalLinksInNewTab adds target="_blank" rel="noopener noreferrer" to
+// every <a> whose href carries a URL scheme (http/https/mailto/…), so an
+// external link opens in a new tab instead of navigating the current page
+// away. Anchors that already declare a target, and in-page anchors (`#id`),
+// are left untouched. It reuses the same tokenizer round-trip as
+// rewriteRelativeURLs, so a fragment with no external anchors — or a malformed
+// one — returns unchanged.
+//
+// Used by the standalone Usage page (RenderMarkdownDoc): that page is served
+// on its own route, so a same-tab click on a doc link would drop the reader
+// out of the app. The review-view renderer deliberately does NOT call this —
+// its links deep-link within the SPA.
+func OpenExternalLinksInNewTab(htmlFragment string) string {
+	if !strings.Contains(htmlFragment, "<a ") {
+		return htmlFragment
+	}
+	z := html.NewTokenizer(strings.NewReader(htmlFragment))
+	var out bytes.Buffer
+	for {
+		tt := z.Next()
+		if tt == html.ErrorToken {
+			break
+		}
+		if tt == html.StartTagToken {
+			nameBytes, hasAttr := z.TagName()
+			if string(nameBytes) == "a" && hasAttr {
+				out.Write(serializeTag("a", externalAnchorAttrs(readAttrs(z)), false))
+				continue
+			}
+		}
+		out.Write(z.Raw())
+	}
+	if !looksWellFormed(out.String(), htmlFragment) {
+		return htmlFragment
+	}
+	return out.String()
+}
+
+// externalAnchorAttrs returns attrs with target + rel added when the href is
+// external and no target is already set; otherwise it returns attrs unchanged.
+func externalAnchorAttrs(attrs []rawAttr) []rawAttr {
+	var href string
+	for _, a := range attrs {
+		switch strings.ToLower(a.key) {
+		case "target":
+			return attrs // author-set target wins
+		case "href":
+			href = a.val
+		}
+	}
+	if !hasURLScheme(href) {
+		return attrs
+	}
+	return append(attrs,
+		rawAttr{key: "target", val: "_blank"},
+		rawAttr{key: "rel", val: "noopener noreferrer"},
+	)
+}

@@ -239,6 +239,10 @@ func registerAssetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/fonts/geist-regular.woff2", serveBytes("font/woff2", assets.GeistRegular()))
 	mux.HandleFunc("/fonts/geist-medium.woff2", serveBytes("font/woff2", assets.GeistMedium()))
 	mux.HandleFunc("/fonts/geist-semibold.woff2", serveBytes("font/woff2", assets.GeistSemiBold()))
+	// The in-app usage guide. An exact pattern outranks the "/" SPA catch-all,
+	// and the extension-less path is never claimed by staticFallback, so a repo
+	// file named usage/usage.md can't shadow it (issue #75).
+	mux.HandleFunc("/_usage", serveBytes("text/html; charset=utf-8", usagePage))
 }
 
 // serveAndWait runs the UI server (and an optional secondary server, e.g. the

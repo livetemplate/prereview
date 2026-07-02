@@ -145,3 +145,44 @@ func TestRewriteRelativeURLs_ImageSrc(t *testing.T) {
 		t.Errorf("fast-path fragment was modified")
 	}
 }
+
+func TestOpenExternalLinksInNewTab(t *testing.T) {
+	cases := []struct {
+		name, in string
+		want     string // substring that must be present
+	}{
+		{"external gets target+rel",
+			`<p><a href="https://github.com/x/y">docs</a></p>`,
+			`<a href="https://github.com/x/y" target="_blank" rel="noopener noreferrer">`},
+		{"mailto is external too",
+			`<a href="mailto:a@b.com">mail</a>`,
+			`target="_blank"`},
+		{"in-page anchor untouched",
+			`<a href="#section">jump</a>`,
+			`<a href="#section">`},
+		{"author target preserved",
+			`<a href="https://x.com" target="_self">x</a>`,
+			`target="_self"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := OpenExternalLinksInNewTab(c.in)
+			if !strings.Contains(got, c.want) {
+				t.Errorf("in=%q got=%q, want substring %q", c.in, got, c.want)
+			}
+		})
+	}
+
+	// In-page anchor must NOT gain a target.
+	if strings.Contains(OpenExternalLinksInNewTab(`<a href="#x">j</a>`), "target=") {
+		t.Error("in-page anchor should not open in a new tab")
+	}
+	// Author-set target must not be doubled.
+	if got := OpenExternalLinksInNewTab(`<a href="https://x.com" target="_self">x</a>`); strings.Contains(got, "_blank") {
+		t.Errorf("author target overridden: %q", got)
+	}
+	// No anchors → fast-path unchanged.
+	if in := `<p>plain</p>`; OpenExternalLinksInNewTab(in) != in {
+		t.Error("fragment with no anchors should be unchanged")
+	}
+}

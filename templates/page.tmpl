@@ -496,6 +496,12 @@
             <span class="menu-label">Keyboard shortcuts</span>
           </button>
         </form>
+        {{/* Usage guide — a standalone page (/_usage), new tab so the review
+             session is left intact. A plain link, not a POST action. */}}
+        <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
+          <span class="menu-icon">{{template "iconBook"}}</span>
+          <span class="menu-label">Usage guide</span>
+        </a>
       </div>
     </div>
   </div>
@@ -779,6 +785,11 @@
       <span class="menu-label">Keyboard shortcuts</span>
     </button>
   </form>
+  {{/* Usage guide — standalone /_usage page, opened in a new tab. */}}
+  <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
+    <span class="menu-icon">{{template "iconBook"}}</span>
+    <span class="menu-label">Usage guide</span>
+  </a>
 </div>
 
 {{if .Quitting}}
@@ -1470,6 +1481,10 @@
     {{- end}}
   </dl>
   <p class="kbd-help-note">Drawing a precise region on rendered HTML or an image needs a mouse — from the keyboard, comment on the whole block or image instead.</p>
+  {{/* The full usage guide is a standalone page (/_usage), opened in a new tab
+       so the review session is left intact. The reserved "_" path can't be
+       shadowed by a repo file named usage/usage.md — see registerAssetRoutes. */}}
+  <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
 </div>
 <footer class="app-footer" role="contentinfo">
   prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · built with <a
