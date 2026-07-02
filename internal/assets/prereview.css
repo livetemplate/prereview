@@ -1986,6 +1986,22 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   font-size: 0.8rem; box-shadow: 0 -2px 8px rgba(0,0,0,.08); z-index: 8;
 }
 
+/* Refresh-on-done affordance: reuses .reanchor-prompt's sticky layout but in the
+   accent color (a positive "changes applied" nudge, not the del-red re-anchor
+   warning). The button is accent-outlined to avoid the per-scheme filled-button
+   inverse-label pitfall (see CLAUDE.md). */
+.refresh-prompt {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent); border-color: var(--accent);
+}
+.refresh-btn {
+  margin: 0; padding: 0.2rem 0.6rem; flex: none;
+  background: transparent; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 4px;
+  font-size: 0.8rem; font-weight: 600; cursor: pointer;
+}
+.refresh-btn:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+
 /* Inline composer — sticky on mobile, static on desktop. Save and Cancel
    live in separate <form> elements (siblings, not nested) so Cancel can't
    get blocked by the required-textarea validation on the add form. */
@@ -2094,6 +2110,32 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   box-shadow: 0 2px 8px rgba(0,0,0,.1);
   z-index: 25;
 }
+/* Agent-working status (llm-status.json "working"): a persistent, non-dismissable
+   indicator in the accent color, distinct from the green success toasts. It
+   clears itself when the status file flips state and the next fan-out re-renders.
+   Placed BOTTOM-RIGHT (not the top-right toast slot) so it never collides with the
+   crowded top toolbar / "Hand off →" button, nor with the always-visible left
+   file-tree sidebar on desktop — it floats over the diff content area, free on
+   both viewports. Kept compact + single-line so it reads as a small "agent is
+   working" pill rather than a full-width banner. */
+.toast.llm-working {
+  top: auto; bottom: 0.75rem; left: auto; right: 0.75rem;
+  max-width: min(72vw, 320px);
+  box-shadow: 0 -2px 8px rgba(0,0,0,.1);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.toast.llm-working .toast-msg { white-space: nowrap; }
+.llm-spinner {
+  width: 12px; height: 12px; flex: none;
+  border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: llm-spin 0.8s linear infinite;
+}
+@keyframes llm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .llm-spinner { animation: none; } }
 .toast .toast-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .toast .toast-msg code { font-size: 0.75rem; background: rgba(255,255,255,.5); padding: 0 0.25rem; border-radius: 3px; }
 .toast-dismiss-form { margin: 0; }

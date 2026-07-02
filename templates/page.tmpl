@@ -831,6 +831,12 @@
   </form>
 </div>
 {{end}}
+{{if eq .LLMState "working"}}
+<div class="toast llm-working" role="status" aria-live="polite">
+  <span class="llm-spinner" aria-hidden="true"></span>
+  <span class="toast-msg">{{if .LLMMessage}}{{.LLMMessage}}{{else}}Working on your handoff…{{end}}</span>
+</div>
+{{end}}
 
 {{/* Backdrop is rendered when the drawer is open on mobile. Any tap submits
      CloseFiles via lvt-on:click — simpler and more reliable than a form-wrapped
@@ -1346,6 +1352,14 @@
   <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="clearSelection" class="toast-dismiss" aria-label="Cancel re-anchoring">{{template "iconClose14"}}</button>
+  </form>
+</div>
+{{end}}
+{{if .PendingRefresh}}
+<div class="reanchor-prompt refresh-prompt" role="status">
+  <span>✓ Changes applied — refresh to see the agent's edits.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
   </form>
 </div>
 {{end}}

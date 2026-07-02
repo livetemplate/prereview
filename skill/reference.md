@@ -80,8 +80,17 @@ Everything prereview writes lives under `<REPO>/.prereview/`, where
 └── .prereview/
     ├── comments.csv     ← source of truth, rewritten atomically on every change
     ├── DONE             ← written ONLY on "Hand off → Claude" (skill mode); contents = absolute path to comments.csv
-    └── events.jsonl     ← stream mode only (--stream); append-only JSON event log, reset each launch
+    ├── events.jsonl     ← stream mode only (--stream); append-only JSON event log, reset each launch
+    └── llm-status.json  ← INBOUND: written by the agent, watched by the server; agent-status echo, reset each launch
 ```
+
+`llm-status.json` is the one file the **agent writes and the server reads** (the
+reverse of every other file here). The agent (via the skill) writes
+`{"state":"working"|"done","message":"…","updated_at":"<RFC3339>"}` — atomically
+(temp file + `mv`) — while applying a handoff; the server polls it (~0.75s) and
+pushes the status to every open browser tab so the reviewer sees live progress.
+Missing/blank `state` is idle. Reset on each fresh launch, like `DONE` and
+`events.jsonl`.
 
 For a git repo or non-git directory `<REPO>` is the path argument.
 For a single-file review `<REPO>` is the file's **parent** directory, so
