@@ -1994,6 +1994,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
 }
+/* "worked on" = the coding agent addressed this comment (issue #88), driven by
+   the .prereview/processed.jsonl markers. Uses the theme accent so it reads as a
+   distinct, positive state next to resolved (green) / moved / outdated (red). */
+.inline-comment .processed-badge, .all-comments .processed-badge {
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
 .inline-comment.is-outdated { border-left: 3px solid var(--pr-del); }
 .anchor-orig { margin: 0.25rem 0 0; font-size: 0.72rem; color: var(--pico-muted-color); }
 .anchor-orig summary { cursor: pointer; }

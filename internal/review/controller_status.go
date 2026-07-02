@@ -21,6 +21,14 @@ func (c *PrereviewController) statusPath() string {
 	return LLMStatusPath(c.CSVPath)
 }
 
+// agentSignalFingerprint is a cheap combined change key for the two inbound
+// agent-written files the watcher fans out on: the global status file and the
+// per-comment processed-markers file. Either changing flips the key, so a single
+// watcher covers both without a second goroutine.
+func (c *PrereviewController) agentSignalFingerprint() string {
+	return statusFingerprint(c.statusPath()) + "|" + statusFingerprint(c.processedPath())
+}
+
 // applyLLMStatus refreshes the LLM-status fields on state from the status file.
 // A missing file resets to idle; a malformed/torn read leaves the previous good
 // value intact so the UI doesn't flicker (the agent writes atomically and the
@@ -63,6 +71,10 @@ func (c *PrereviewController) OnConnect(state PrereviewState, ctx *livetemplate.
 func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	prev := state.LLMState
 	c.applyLLMStatus(&state)
+	// The watcher also fires this on a processed.jsonl change (the agent marked a
+	// comment "worked on"), so refresh the per-comment badges here too — a cheap
+	// by-ID flag flip on the existing comments (no reload/re-anchor).
+	c.applyProcessed(&state)
 	switch {
 	case prev == LLMStateWorking && state.LLMState == LLMStateDone:
 		// The agent just finished a batch and edited files, so this tab's diff is
@@ -99,14 +111,17 @@ func (c *PrereviewController) RefreshDiff(state PrereviewState, ctx *livetemplat
 func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Duration) {
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
-	path := c.statusPath()
-	last := statusFingerprint(path) // don't broadcast the pre-existing state at startup
+	// Watch BOTH inbound agent signals with one goroutine: the global status file
+	// (llm-status.json) and the per-comment markers (processed.jsonl). Either
+	// changing fans out LLMStatusChanged, which refreshes status AND the "worked
+	// on" badges. Combining the fingerprints keeps this a single cheap stat pair.
+	last := c.agentSignalFingerprint() // don't broadcast the pre-existing state at startup
 	for {
 		select {
 		case <-stop:
 			return
 		case <-ticker.C:
-			fp := statusFingerprint(path)
+			fp := c.agentSignalFingerprint()
 			if fp == last {
 				continue
 			}

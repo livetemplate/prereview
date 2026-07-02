@@ -208,6 +208,11 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// external short-circuit so themed external-mode sessions pick up the scheme.
 	c.applyUIPrefs(&state)
 
+	// Overlay the agent's per-comment "worked on" markers (.prereview/
+	// processed.jsonl) onto the just-loaded comments — before the external
+	// short-circuit so region comments get badged too. Cheap by-ID flag flip.
+	c.applyProcessed(&state)
+
 	// SkillMode is mirror-only: refresh from the controller every connect
 	// so a binary launched with --skill renders the right button even after
 	// a session-storage reconnect.

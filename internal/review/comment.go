@@ -89,6 +89,11 @@ type Comment struct {
 	// resolved comments (commentHiddenFromView ignores it otherwise). Durable in
 	// the CSV `hidden` column; ignored by the skill/handoff.
 	Hidden bool `json:"hidden"`
+	// Processed marks that the agent has addressed this comment (issue #88): it
+	// drives the "worked on" badge. Derived, NOT persisted in the CSV — set by
+	// applyProcessed from the agent-written .prereview/processed.jsonl markers on
+	// every Mount and on each markers-file change (see processed.go).
+	Processed bool `json:"processed"`
 	// Anchor is the content fingerprint captured at create/edit time so
 	// the comment can be re-located when the file changes (see anchor.go).
 	// AnchorStatus is "ok" | "moved" | "outdated" (empty == ok for
