@@ -82,6 +82,13 @@ type Comment struct {
 	// Resolved marks the comment as "addressed; keep as history". The skill
 	// should act only on unresolved comments. Toggled via ResolveComment.
 	Resolved bool `json:"resolved"`
+	// Hidden is a reviewer-only VIEW flag (issue #88): an individually re-hidden
+	// RESOLVED comment stays out of the diff + overview even when "Show resolved"
+	// is on, without turning the whole resolved group back off. Set by
+	// HideComment, cleared in bulk by UnhideAllResolved. Only meaningful for
+	// resolved comments (commentHiddenFromView ignores it otherwise). Durable in
+	// the CSV `hidden` column; ignored by the skill/handoff.
+	Hidden bool `json:"hidden"`
 	// Anchor is the content fingerprint captured at create/edit time so
 	// the comment can be re-located when the file changes (see anchor.go).
 	// AnchorStatus is "ok" | "moved" | "outdated" (empty == ok for

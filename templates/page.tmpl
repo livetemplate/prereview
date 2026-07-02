@@ -468,6 +468,22 @@
           </button>
         </form>
         {{end}}
+        {{/* Unhide individually-hidden resolved comments (issue #88). Only while
+             Show-resolved is ON and at least one resolved comment is re-hidden. */}}
+        {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="unhideAllResolved"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconCircle16"}}</span>
+            <span class="menu-label">Unhide</span>
+            <span class="menu-meta">{{.HiddenResolvedCount}}</span>
+          </button>
+        </form>
+        {{end}}
         {{/* Outdated comments needing re-anchoring (toggleCommentList, unchanged). */}}
         {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
         <form method="POST">
@@ -749,6 +765,21 @@
     </button>
   </form>
   {{end}}
+  {{/* Unhide individually-hidden resolved comments (issue #88). */}}
+  {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="unhideAllResolved"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon">{{template "iconCircle16"}}</span>
+      <span class="menu-label">Unhide</span>
+      <span class="menu-meta">{{.HiddenResolvedCount}}</span>
+    </button>
+  </form>
+  {{end}}
   {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
   <div
     class="menu-info"
@@ -1009,6 +1040,16 @@
         class="outline"
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
+        {{if .Resolved -}}
+        <form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button
+            type="submit"
+            name="hideComment"
+            class="outline"
+          >Hide</button>
+        </form>
+        {{- end}}
         {{if and (not .Resolved) .AnchorOutdated -}}
         <form method="POST">
           <input type="hidden" name="id" value="{{.ID}}">

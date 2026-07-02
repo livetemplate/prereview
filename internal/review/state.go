@@ -329,28 +329,51 @@ type PrereviewState struct {
 	BaseChoices []string `json:"base_choices"`
 }
 
-// VisibleComments returns Comments filtered by ShowResolved. Zero-arg so
-// the framework eagerly evaluates and the template iterates the filtered
-// list directly.
+// commentHiddenFromView is the single visibility rule for resolved/hidden
+// state, replacing the copy-pasted `c.Resolved && !s.ShowResolved` guards
+// scattered across the view helpers (issue #88). A RESOLVED comment is omitted
+// from every view when either the whole resolved group is hidden (ShowResolved
+// off) OR it has been individually re-hidden (Hidden). Non-resolved comments are
+// never hidden by this rule — Hidden is meaningless on them.
+func (s PrereviewState) commentHiddenFromView(c Comment) bool {
+	return c.Resolved && (!s.ShowResolved || c.Hidden)
+}
+
+// VisibleComments returns Comments filtered by the resolved/hidden view rule.
+// Zero-arg so the framework eagerly evaluates and the template iterates the
+// filtered list directly. Note there is no `if ShowResolved { return all }`
+// fast-path: an individually-hidden resolved comment must stay out even when the
+// group is shown.
 func (s PrereviewState) VisibleComments() []Comment {
-	if s.ShowResolved {
-		return s.Comments
-	}
 	out := make([]Comment, 0, len(s.Comments))
 	for _, c := range s.Comments {
-		if !c.Resolved {
-			out = append(out, c)
+		if s.commentHiddenFromView(c) {
+			continue
 		}
+		out = append(out, c)
 	}
 	return out
 }
 
 // ResolvedCount returns how many of the current comments are resolved —
-// useful for "(N resolved hidden)" status copy.
+// useful for "(N resolved hidden)" status copy. Counts every resolved comment,
+// individually-hidden or not (it gates the "Show resolved" toggle's visibility).
 func (s PrereviewState) ResolvedCount() int {
 	n := 0
 	for _, c := range s.Comments {
 		if c.Resolved {
+			n++
+		}
+	}
+	return n
+}
+
+// HiddenResolvedCount returns how many resolved comments have been individually
+// re-hidden — drives the "Unhide N" affordance next to the Show-resolved toggle.
+func (s PrereviewState) HiddenResolvedCount() int {
+	n := 0
+	for _, c := range s.Comments {
+		if c.Resolved && c.Hidden {
 			n++
 		}
 	}

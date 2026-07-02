@@ -122,7 +122,8 @@ func TestRead_BackCompatColumnCounts(t *testing.T) {
 		`c11,a.go,0,0,,eleven,2026-05-14T10:00:00Z,false,,,file`,                                                      // 11 cols (file-level)
 		`c12,img.png,0,0,,twelve,2026-05-14T10:00:00Z,false,,,area,"{""x"":0.1,""y"":0.2,""w"":0.3,""h"":0.15}"`,      // 12 cols (area)
 		`c13,,0,0,,thirteen,2026-05-14T10:00:00Z,false,,,region,"{""x"":0.4,""y"":0.5,""w"":0.2,""h"":0.1}",/pricing`, // 13 cols (region)
-		`c15,a.go,7,7,new,fifteen,2026-05-14T10:00:00Z,false,,,text,,,6,12`,                                           // 15 cols (text)
+		`c15,a.go,7,7,new,fifteen,2026-05-14T10:00:00Z,false,,,text,,,6,12`,                                           // 15 cols (text, pre-hidden)
+		`c16,a.go,3,3,new,sixteen,2026-05-14T10:00:00Z,true,,,,,,0,0,true`,                                            // 16 cols (current, hidden)
 	}, "\n") + "\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -131,8 +132,8 @@ func TestRead_BackCompatColumnCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if len(got) != 8 {
-		t.Fatalf("got %d rows, want 8: %+v", len(got), got)
+	if len(got) != 9 {
+		t.Fatalf("got %d rows, want 9: %+v", len(got), got)
 	}
 	// 7-col: resolved false, no anchor, no status, no kind, no area.
 	if got[0].Resolved || got[0].Anchor != "" || got[0].AnchorStatus != "" || got[0].Kind != "" || got[0].Area != "" {
@@ -167,9 +168,15 @@ func TestRead_BackCompatColumnCounts(t *testing.T) {
 		t.Errorf("13-col region row wrong: %+v", got[6])
 	}
 	// 15-col: text — kind="text", from_col/to_col populated, area/url empty.
+	// The new `hidden` column is absent → default false.
 	if got[7].Kind != "text" || got[7].FromCol != 6 || got[7].ToCol != 12 ||
-		got[7].FromLine != 7 || got[7].ToLine != 7 || got[7].Area != "" || got[7].URL != "" {
+		got[7].FromLine != 7 || got[7].ToLine != 7 || got[7].Area != "" || got[7].URL != "" ||
+		got[7].Hidden {
 		t.Errorf("15-col text row wrong: %+v", got[7])
+	}
+	// 16-col: current schema — hidden column parsed true.
+	if !got[8].Hidden || !got[8].Resolved {
+		t.Errorf("16-col hidden row wrong: %+v", got[8])
 	}
 }
 

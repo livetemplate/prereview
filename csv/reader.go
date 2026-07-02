@@ -25,7 +25,7 @@ func Read(path string) ([]Row, error) {
 	defer f.Close()
 
 	r := stdcsv.NewReader(f)
-	r.FieldsPerRecord = -1 // variable: tolerate 7..13-col legacy + 15-col current schema
+	r.FieldsPerRecord = -1 // variable: tolerate 7..15-col legacy + 16-col current schema
 
 	// Discard header.
 	if _, err := r.Read(); err != nil {
@@ -60,14 +60,15 @@ func recordToRow(rec []string) (Row, bool) {
 	// Accept 7-col (pre-resolve), 8-col (pre-anchor), 9-col (anchor, no
 	// status), 10-col (pre-kind), 11-col (pre-area), 12-col (pre-url),
 	// 13-col (pre-text-cols), 14-col (from_col, no to_col — never written,
-	// tolerated for safety) and 15-col (current) rows so old CSVs
-	// round-trip cleanly. Missing resolved → false; missing anchor → "";
-	// missing status → "" (treated as "ok"); missing kind → "" (treated as
+	// tolerated for safety), 15-col (pre-hidden) and 16-col (current) rows so
+	// old CSVs round-trip cleanly. Missing resolved → false; missing anchor →
+	// ""; missing status → "" (treated as "ok"); missing kind → "" (treated as
 	// "line"); missing area → "" (only meaningful for kind=area/region);
 	// missing url → "" (only meaningful for kind=region); missing
-	// from_col/to_col → 0 (only meaningful for kind=text).
+	// from_col/to_col → 0 (only meaningful for kind=text); missing hidden →
+	// false.
 	switch len(rec) {
-	case 7, 8, 9, 10, 11, 12, 13, 14, 15:
+	case 7, 8, 9, 10, 11, 12, 13, 14, 15, 16:
 	default:
 		return Row{}, false
 	}
@@ -118,6 +119,10 @@ func recordToRow(rec []string) (Row, bool) {
 	if len(rec) >= 15 {
 		toCol, _ = strconv.Atoi(rec[14])
 	}
+	hidden := false
+	if len(rec) >= 16 {
+		hidden = rec[15] == "true"
+	}
 	return Row{
 		ID:           rec[0],
 		File:         rec[1],
@@ -134,5 +139,6 @@ func recordToRow(rec []string) (Row, bool) {
 		URL:          url,
 		FromCol:      fromCol,
 		ToCol:        toCol,
+		Hidden:       hidden,
 	}, true
 }
