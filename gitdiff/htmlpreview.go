@@ -34,6 +34,19 @@ var voidElements = map[string]bool{
 	"param": true, "source": true, "track": true, "wbr": true,
 }
 
+// headMetaElements is the HTML5 metadata-content set: elements that belong
+// in <head>. In a document written without explicit <head>/<body> tags
+// (both are optional in HTML5), these still count as head content and pass
+// through untouched; the FIRST element NOT in this set implicitly opens the
+// body — matching the parser's own "the body element start tag can be
+// omitted" rule. Tracking them is what lets a body-less page still render a
+// preview instead of falling through to the raw view (issue #79).
+var headMetaElements = map[string]bool{
+	"base": true, "basefont": true, "bgsound": true, "link": true,
+	"meta": true, "noscript": true, "script": true, "style": true,
+	"template": true, "title": true,
+}
+
 // rawAttr is one HTML attribute pulled from the tokenizer, kept in the
 // parsed (entity-decoded) form. Re-emitting goes through
 // htmlpkg.EscapeString so any & " < > in the value round-trip safely.
@@ -66,9 +79,15 @@ type rawAttr struct {
 //     (sandbox="allow-scripts", NO allow-same-origin), which lets scripts run
 //     but blocks all access to the parent app — never the two together.
 //
+// <head> and <body> are both optional in HTML5, so the tokenizer also
+// synthesizes an implicit body: outside any explicit structural element,
+// head-metadata tags (style/link/script/…) pass through as head content
+// and the first flow element opens the body (see headMetaElements). A
+// body-less page therefore renders a preview like any other.
+//
 // currentPath is the file's repo-relative path (drives the <base> dir).
-// Empty input, or input without a <body>, yields an empty document and
-// nil blocks (no commentable surface).
+// Empty input, or input with no flow content at all (e.g. head-only),
+// yields an empty document and nil blocks (no commentable surface).
 //
 // The document is returned as a plain string: the template places it in
 // the iframe's `srcdoc="…"` attribute, where html/template's contextual
@@ -132,6 +151,26 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 		childBuf.Reset()
 	}
 
+	// openImplicitStructure handles a start/self-closing tag seen while
+	// outside <head>/<body> (and past <html>): a document with the optional
+	// <head>/<body> tags omitted. It injects the head payload once, then
+	// reports whether name is head-metadata (isHeadMeta → caller writes it
+	// as head-content passthrough and continues) or a flow element that
+	// implicitly opens the body (isHeadMeta false → inBody is now set, so
+	// the caller treats the tag as the first top-level body child).
+	openImplicitStructure := func(name string) (isHeadMeta bool) {
+		if !baseDone {
+			out.WriteString(headInject)
+			baseDone = true
+		}
+		if headMetaElements[name] {
+			return true
+		}
+		inBody = true
+		depthInBody = 0
+		return false
+	}
+
 	for {
 		tt := z.Next()
 		if tt == html.ErrorToken {
@@ -175,6 +214,15 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 				depthInBody = 0
 				continue
 			}
+			// No explicit <head>/<body> yet: a head-metadata tag is head
+			// content (passthrough); the first flow tag opens the body and
+			// falls through to the top-level-child logic below.
+			if !inHead && !inBody && name != "html" {
+				if openImplicitStructure(name) {
+					out.Write(serializeTag(name, attrs, false))
+					continue
+				}
+			}
 			if inBody && depthInBody == 0 {
 				// A <script> as a direct <body> child passes through to run, but
 				// is NOT a commentable block (no visual content). Leaving
@@ -208,6 +256,15 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 			var attrs []rawAttr
 			if hasAttr {
 				attrs = readAttrs(z)
+			}
+			// Mirror the start-tag path: a self-closing head-metadata tag
+			// (e.g. <link/>, <meta/>) is head content; the first flow tag
+			// implicitly opens the body.
+			if !inHead && !inBody && name != "html" {
+				if openImplicitStructure(name) {
+					out.Write(serializeTag(name, attrs, true))
+					continue
+				}
 			}
 			if inBody && depthInBody == 0 {
 				// Self-closing <script/> as a body child: pass through, no block

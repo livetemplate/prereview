@@ -144,6 +144,39 @@ func TestE2E_HTMLPreviewRunsScripts(t *testing.T) {
 	}
 }
 
+// TestE2E_HTMLPreviewImplicitBody is issue #79: an HTML5 page that omits the
+// optional <head>/<body> tags must still render a preview (not fall back to the
+// raw line view). The fixture is the issue's exact repro — doctype + <html>, a
+// head <style>, an <h1> flow element, no <body> — plus a min-height so the green
+// body background has area to sample. A visible iframe proves ShowRenderedHTML()
+// flipped; the green pixels prove the page's CSS applied inside it.
+func TestE2E_HTMLPreviewImplicitBody(t *testing.T) {
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "t@e.com")
+	runCmd(t, dir, "git", "config", "user.name", "T")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+	mustWrite(t, dir, "keep.go", "package keep\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+	mustWrite(t, dir, "nobody.html",
+		"<!doctype html><html>\n"+
+			"<style>html,body{margin:0;min-height:300px}body{background:rgb(0,128,0)}</style>\n"+
+			"<h1>hi</h1>\n"+
+			"</html>\n")
+
+	p := bootChromeAgainstRepo(t, dir, 1200, 800)
+	p.waitReady()
+	p.clickFile("nobody.html")
+	// If the fix regressed, no iframe would ever appear (raw view instead) and
+	// this wait fails loudly rather than silently passing.
+	waitPreviewBridgeReady(t, p)
+	frac, info := previewFractionGreen(t, p)
+	if frac < 0.5 {
+		t.Errorf("body-less page did not render a styled preview — %s (want majority green)\nstderr: %s", info, p.stderr.String())
+	}
+}
+
 func TestE2E_HTMLPreviewRendersOwnCSS(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureCSSRepo(t), 1200, 800)
 	p.waitReady()
