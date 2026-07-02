@@ -207,10 +207,79 @@ func TestRenderHTMLPreview_EmptyInput(t *testing.T) {
 	}
 }
 
-func TestRenderHTMLPreview_NoBody(t *testing.T) {
+func TestRenderHTMLPreview_HeadOnlyNoFlow(t *testing.T) {
+	// A head-only document has no flow content, so there is nothing
+	// commentable — the viewer falls back to the raw/line view.
 	src := []byte(`<html><head><title>nothing</title></head></html>`)
 	doc, blocks := RenderHTMLPreview(src, "")
 	if doc != "" || blocks != nil {
-		t.Errorf("RenderHTMLPreview (no body) = (%q, %v), want (\"\", nil)", doc, blocks)
+		t.Errorf("RenderHTMLPreview (head-only) = (%q, %v), want (\"\", nil)", doc, blocks)
+	}
+}
+
+// TestRenderHTMLPreview_ImplicitBody covers issue #79: <head>/<body> are
+// optional in HTML5, so a page that omits them must still render a preview.
+func TestRenderHTMLPreview_ImplicitBody(t *testing.T) {
+	// The exact repro from issue #79: doctype + <html>, a head <style>, and
+	// an <h1> flow element — no <head> or <body> tag anywhere.
+	src := []byte(`<!doctype html><html>
+<style>body{background:rgb(0,128,0)}</style>
+<h1>hi</h1>
+</html>`)
+	doc, blocks := RenderHTMLPreview(src, "index.html")
+	if len(blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1 (the <h1>): %q", len(blocks), doc)
+	}
+	// The <h1> is line 3; the head <style> is passthrough, not a block.
+	if blocks[0].StartLine != 3 || blocks[0].EndLine != 3 {
+		t.Errorf("h1 block lines = (%d, %d), want (3, 3)", blocks[0].StartLine, blocks[0].EndLine)
+	}
+	if !strings.Contains(doc, `<h1 data-from="3" data-to="3">hi</h1>`) {
+		t.Errorf("h1 block missing/unstamped: %q", doc)
+	}
+	// The head payload (<base>) is still injected, once, and the page's own
+	// <style> is preserved for the iframe.
+	if !strings.Contains(doc, `<base href="/">`) {
+		t.Errorf("doc missing injected <base>: %q", doc)
+	}
+	if strings.Count(doc, "<base ") != 1 {
+		t.Errorf("want exactly one injected <base>, got %d: %q", strings.Count(doc, "<base "), doc)
+	}
+	if !strings.Contains(doc, `background:rgb(0,128,0)`) {
+		t.Errorf("doc missing page <style>: %q", doc)
+	}
+}
+
+// A document with no <html>/<head>/<body> at all — just head-metadata then
+// flow — still opens the body implicitly.
+func TestRenderHTMLPreview_ImplicitBodyNoHTMLTag(t *testing.T) {
+	src := []byte(`<link rel="stylesheet" href="a.css">
+<h1>one</h1>
+<p>two</p>`)
+	doc, blocks := RenderHTMLPreview(src, "")
+	if len(blocks) != 2 {
+		t.Fatalf("got %d blocks, want 2 (h1, p): %q", len(blocks), doc)
+	}
+	if blocks[0].StartLine != 2 || blocks[1].StartLine != 3 {
+		t.Errorf("block lines = (%d, %d), want start (2, 3)", blocks[0].StartLine, blocks[1].StartLine)
+	}
+	// The <link> is head content (passthrough), not a commentable block.
+	if !strings.Contains(doc, `rel="stylesheet"`) {
+		t.Errorf("doc missing head <link>: %q", doc)
+	}
+}
+
+// Explicit <head> but omitted <body> — the other half of the optional-tag
+// rule — also opens the body implicitly after </head>.
+func TestRenderHTMLPreview_ExplicitHeadImplicitBody(t *testing.T) {
+	src := []byte(`<html><head><title>t</title></head>
+<h1>hi</h1>
+</html>`)
+	doc, blocks := RenderHTMLPreview(src, "")
+	if len(blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1 (the <h1>): %q", len(blocks), doc)
+	}
+	if blocks[0].StartLine != 2 {
+		t.Errorf("h1 block start = %d, want 2", blocks[0].StartLine)
 	}
 }
