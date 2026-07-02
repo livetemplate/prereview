@@ -56,6 +56,18 @@ func reviewPath(args []string) string {
 }
 
 func main() {
+	// `prereview processed [--out <dir>] <id>...` — the coding agent marks
+	// comments it has addressed so the live review UI badges them "worked on".
+	// A bare positional verb, so intercept it before flag parsing (which would
+	// otherwise treat "processed" as the review path).
+	if len(os.Args) > 1 && os.Args[1] == "processed" {
+		if err := runProcessed(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview processed:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	flag.Usage = func() {
 		fmt.Fprint(flag.CommandLine.Output(),
 			"Usage: prereview [flags] [path]\n\n"+

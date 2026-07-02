@@ -364,6 +364,7 @@ type runningPrereview struct {
 	t      *testing.T
 	url    string
 	repo   string
+	binary string // path to the built prereview binary (for `prereview processed …`)
 	cmd    *exec.Cmd
 	stderr *bytesBuf
 	ctx    context.Context
@@ -411,7 +412,7 @@ func bootChromeAgainstRepo(t *testing.T, repo string, viewportW, viewportH int, 
 	})
 
 	return &runningPrereview{
-		t: t, url: url, repo: repo, cmd: srv, stderr: stderr,
+		t: t, url: url, repo: repo, binary: binary, cmd: srv, stderr: stderr,
 		ctx: ctx, cancel: cancel,
 	}
 }

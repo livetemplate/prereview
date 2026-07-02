@@ -181,6 +181,26 @@ prereview_status() {
 The file resets on each fresh launch, so a new session starts with no stale
 status. You don't write anything on `session_end` — the server is shutting down.
 
+### Mark each comment you addressed (so the reviewer sees a "worked on" badge)
+
+Separately from the whole-batch `prereview_status` echo above, tell prereview
+which **specific** comments you handled, so the review UI badges each of them
+**worked on**. As you apply each comment's change (or once, listing the batch's
+ids at the end), run:
+
+```bash
+# usage: prereview processed --out <REPO> <comment-id> [<comment-id>...]
+prereview processed --out "<REPO>" 01J... 01K...
+```
+
+`<REPO>` is the directory prereview printed at launch (the same one the
+`prereview_status` helper writes into); the `<comment-id>` values are the `id`
+column/field of the comments you addressed. This appends to
+`<REPO>/.prereview/processed.jsonl` (append-only — never hand-edit it or
+`comments.csv`), and the badge appears live across every open tab. It's a
+one-way signal that you acted on the comment: the human still **resolves**
+comments themselves, so keep acting only on unresolved rows.
+
 ## Comment data reference
 
 These rules apply to both the streaming snapshot and the [fallback](#fallback-one-shot-handoff---skill-without---stream) CSV — a streaming `comments[]` entry mirrors the CSV columns (minus the opaque `anchor` and `resolved`, which the snapshot has already filtered on).

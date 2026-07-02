@@ -1025,7 +1025,8 @@
           <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>
             {{- if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}
             {{- if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}
-            {{- if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end -}}
+            {{- if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}
+            {{- if .Processed}} <small class="processed-badge">worked on</small>{{end -}}
           </div>
           <div class="ac-body">{{.Body}}</div>
         </button>
