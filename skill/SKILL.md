@@ -94,9 +94,23 @@ tail -n +"$n" -f <REPO>/.prereview/events.jsonl | head -n 1
 there (catch-up / replay after a context reset), or whenever the user's next
 click appends it — then exits and stops `tail`. Parse the returned JSON,
 increment `n`, and read the next one. Run it with a **long Bash timeout** (e.g.
-600s); if it times out because the user is idle, just re-issue it for the same
-`n`. **The loop's only exit is `{"event":"session_end"}`** — do **not** stop
-after the first handoff; a review is iterative.
+600s).
+
+**Always re-arm — a returned read is never "no event".** This read is live only
+*while the command is running*, and it runs in the foreground, so **between
+rounds — whenever you step away to apply fixes, reply, or do anything else — no
+reader is listening**, and a Hand off clicked then isn't noticed until you read
+again. So after **every** exit (a timed-out idle wait, or simply having done
+other work since the last read) and whenever you resume, re-issue the **same**
+command for the current `n`. Because `tail -n +"$n"` starts *at* line `n` (not
+"only new lines"), an event that landed while nothing was armed comes back
+**instantly** on the next read — the same catch-up noted above. If the user says
+they handed off, don't second-guess it: just re-run for the current `n`.
+(`wc -l < <REPO>/.prereview/events.jsonl` vs `n` tells you
+whether an event is already waiting, but you always consume it with the one
+command above — never a second reader.) **The loop's only exit is
+`{"event":"session_end"}`** — do **not** stop after the first handoff; a review
+is iterative.
 
 - `{"event":"ready",...}` — session is live; tell the user to review.
 - `{"event":"handoff","seq":N,"comments":[…]}` — the user clicked Hand off.
