@@ -35,6 +35,7 @@ func (c *PrereviewController) ToggleShowResolved(state PrereviewState, ctx *live
 	}
 	state.ShowResolved = !state.ShowResolved
 	state.Flash = ""
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -53,6 +54,7 @@ func (c *PrereviewController) ClearFlash(state PrereviewState, ctx *livetemplate
 func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.FocusMode = !state.FocusMode
 	state.MoreMenuOpen = false
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -64,6 +66,7 @@ func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetem
 // place; the toolbar button is the primary control.
 func (c *PrereviewController) CycleTheme(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.ThemeMode = state.NextThemeMode()
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -75,6 +78,7 @@ func (c *PrereviewController) CycleTheme(state PrereviewState, ctx *livetemplate
 // click from inside it can cycle again in place.
 func (c *PrereviewController) CycleScheme(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.SchemeName = state.NextScheme()
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -132,6 +136,7 @@ func (c *PrereviewController) CloseTOC(state PrereviewState, ctx *livetemplate.C
 func (c *PrereviewController) ToggleFileView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.FileView = !state.FileView
 	state.MoreMenuOpen = false
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -149,6 +154,7 @@ func (c *PrereviewController) ToggleFileScope(state PrereviewState, ctx *livetem
 func (c *PrereviewController) ToggleRawMarkdown(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RawMarkdown = !state.RawMarkdown
 	state.MoreMenuOpen = false
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -160,6 +166,7 @@ func (c *PrereviewController) ToggleRawMarkdown(state PrereviewState, ctx *livet
 func (c *PrereviewController) SetMarkdownView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RawMarkdown = ctx.GetString("view") == "raw"
 	state.MoreMenuOpen = false
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -170,6 +177,7 @@ func (c *PrereviewController) SetMarkdownView(state PrereviewState, ctx *livetem
 func (c *PrereviewController) ToggleRawHTML(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RawHTML = !state.RawHTML
 	state.MoreMenuOpen = false
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -179,6 +187,7 @@ func (c *PrereviewController) ToggleRawHTML(state PrereviewState, ctx *livetempl
 func (c *PrereviewController) SetHTMLView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RawHTML = ctx.GetString("view") == "raw"
 	state.MoreMenuOpen = false
+	c.savePrefs(state)
 	return state, nil
 }
 
@@ -188,6 +197,7 @@ func (c *PrereviewController) SetHTMLView(state PrereviewState, ctx *livetemplat
 func (c *PrereviewController) SetFileViewMode(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.FileView = ctx.GetString("view") == "file"
 	state.MoreMenuOpen = false
+	c.savePrefs(state)
 	return state, nil
 }
 

@@ -83,6 +83,7 @@ func startPrereviewExternal(t *testing.T, binary, target, out string) (string, *
 	cmd := exec.Command(binary,
 		"--external", target, "--out", out,
 		"--port", "0", "--host", "127.0.0.1", "--no-update")
+	cmd.Env = prefsIsolatedEnv(out)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("stdout pipe: %v", err)

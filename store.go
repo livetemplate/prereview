@@ -38,6 +38,26 @@ func openStore(storeRoot string) (csvPath, donePath string, w *csv.Writer, err e
 	return csvPath, donePath, csv.NewWriter(csvPath), nil
 }
 
+// uiPrefsPath returns the durable per-user view-prefs file (see
+// internal/review/uiprefs.go). It is deliberately per-USER, not per-repo:
+// theme/mode/focus/file-view/raw/show-resolved mean the same thing in every repo,
+// so they live under the OS user-config dir, shared across every prereview
+// session. PREREVIEW_UI_PREFS_PATH overrides the location — used by e2e tests to
+// isolate each run from the real config (and available to users who want a custom
+// path). Returns "" when the user-config dir can't be resolved, which disables
+// durable prefs (session-only) rather than failing — a prefs file must never
+// block launching a review.
+func uiPrefsPath() string {
+	if p := os.Getenv("PREREVIEW_UI_PREFS_PATH"); p != "" {
+		return p
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "prereview", "ui-prefs.json")
+}
+
 // resolveStoreRoot picks the directory whose .prereview/ holds annotations:
 // --out when set (available in every mode so it's never a silently-ignored
 // flag), else the default review root.

@@ -131,6 +131,18 @@ func mustWrite(t *testing.T, dir, path, content string) {
 	}
 }
 
+// prefsIsolatedEnv returns the child env with PREREVIEW_UI_PREFS_PATH pointed at
+// a per-repo file OUTSIDE the review dir. This keeps e2e hermetic: the durable
+// per-user view prefs (theme/mode/focus/show-resolved) never touch the real
+// ~/.config (no pollution) and never leak between tests (each test has its own
+// repo temp dir). Deriving the path from `repo` — not t.TempDir() — is deliberate:
+// two launches against the SAME repo (the relaunch test) share one prefs file,
+// which is exactly the cross-relaunch behaviour under test.
+func prefsIsolatedEnv(repo string) []string {
+	prefs := filepath.Join(filepath.Dir(repo), "prereview-ui-prefs.json")
+	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+prefs)
+}
+
 // startPrereview launches the binary against repo and returns the READY URL,
 // the running cmd, and a captured stderr buffer. Caller must kill the cmd.
 // Pass extraArgs to enable --skill mode for tests asserting Hand off behavior.
@@ -149,6 +161,7 @@ func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (str
 	args := append([]string{"--base", "HEAD", "--port", "0", "--host", "127.0.0.1"}, extraArgs...)
 	args = append(args, repo)
 	cmd := exec.Command(binary, args...)
+	cmd.Env = prefsIsolatedEnv(repo)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("stdout pipe: %v", err)

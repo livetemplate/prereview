@@ -233,8 +233,11 @@ type PrereviewState struct {
 
 	// ShowResolved, when true, includes resolved comments in the inline
 	// comment stream + all-comments view. Default false so the viewer
-	// focuses on what's still actionable. Persisted across reconnects.
-	ShowResolved bool `json:"show_resolved" lvt:"persist"`
+	// focuses on what's still actionable. A durable per-user view pref: NOT
+	// lvt:"persist" — it lives in the on-disk prefs file (see uiprefs.go) so it
+	// survives a server relaunch, not just a reload; applyUIPrefs reloads it on
+	// every Mount/OnConnect.
+	ShowResolved bool `json:"show_resolved"`
 
 	// MoreMenuOpen drives the 3-dots overflow menu in the top bar where
 	// secondary controls (All comments, Show resolved) live on narrow
@@ -273,23 +276,23 @@ type PrereviewState struct {
 	// FileView, when true, turns off the diff overlay: deleted lines are
 	// hidden, +/- gutter markers disappear, and add/del row coloring is
 	// dropped. The user sees the file as it currently exists in the
-	// working tree. Equivalent to GitHub's "View file" toggle. Persisted
-	// as a per-user preference. Defaults false (diff is the primary
-	// reviewing mode).
-	FileView bool `json:"file_view" lvt:"persist"`
+	// working tree. Equivalent to GitHub's "View file" toggle. A durable
+	// per-user view pref (see uiprefs.go / ShowResolved) — not lvt:"persist".
+	// Defaults false (diff is the primary reviewing mode).
+	FileView bool `json:"file_view"`
 
 	// RawMarkdown shows a .md/.markdown file as the raw line view
-	// instead of the rendered default. Persisted per-user. Defaults
-	// false: Markdown renders by default; the user toggles to raw to
+	// instead of the rendered default. Durable per-user view pref (uiprefs.go).
+	// Defaults false: Markdown renders by default; the user toggles to raw to
 	// see the source lines. Non-Markdown files ignore this.
-	RawMarkdown bool `json:"raw_markdown" lvt:"persist"`
+	RawMarkdown bool `json:"raw_markdown"`
 
 	// RawHTML is the .html/.htm equivalent of RawMarkdown: when true the
 	// viewer shows the syntax-highlighted source instead of the
-	// sandboxed-iframe preview. Persisted per-user. Defaults false.
-	// Independent of RawMarkdown so a user's preference for one format
-	// doesn't drag the other along. Non-HTML files ignore this.
-	RawHTML bool `json:"raw_html" lvt:"persist"`
+	// sandboxed-iframe preview. Durable per-user view pref (uiprefs.go).
+	// Defaults false. Independent of RawMarkdown so a user's preference for one
+	// format doesn't drag the other along. Non-HTML files ignore this.
+	RawHTML bool `json:"raw_html"`
 
 	// FocusMode, when true, hides both desktop side columns (the file
 	// drawer on the left and the TOC sidebar on the right) so the center
@@ -297,15 +300,16 @@ type PrereviewState struct {
 	// view for long docs/diffs. Desktop-only in effect: the hiding CSS
 	// lives behind the ≥900px media query; on mobile the columns are
 	// already overlays/modals, so the flag is a harmless no-op there.
-	// Persisted as a per-user reading preference, like FileView.
-	FocusMode bool `json:"focus_mode" lvt:"persist"`
+	// Durable per-user view pref (uiprefs.go), like FileView.
+	FocusMode bool `json:"focus_mode"`
 
 	// ThemeMode is the Light/Dark/System color-mode preference (issue #60),
 	// cycled by the toolbar toggle. "" means System (the default): the page
 	// omits the data-mode attribute and follows the OS via prefers-color-scheme
 	// (see the Solarized-dark block + /syntax.css). "light"/"dark" force the
-	// mode regardless of the OS. Persisted per-user. Orthogonal to SchemeName.
-	ThemeMode string `json:"theme_mode" lvt:"persist"`
+	// mode regardless of the OS. Durable per-user view pref (uiprefs.go).
+	// Orthogonal to SchemeName.
+	ThemeMode string `json:"theme_mode"`
 
 	// SchemeName is the curated color-scheme preference — the Theme axis,
 	// orthogonal to ThemeMode's Light/Dark/System. "" (and any unregistered
@@ -313,8 +317,8 @@ type PrereviewState struct {
 	// by the toolbar theme picker; the page re-renders with the new data-scheme
 	// attribute on .theme-root and the cascade re-skins chrome + diff —
 	// /syntax.css already carries every registered scheme × mode, so there is
-	// no JS and no CSS refetch. Persisted per-user.
-	SchemeName string `json:"scheme_name" lvt:"persist"`
+	// no JS and no CSS refetch. Durable per-user view pref (uiprefs.go).
+	SchemeName string `json:"scheme_name"`
 
 	// BaseChoices populates the base-picker dropdown. Computed in
 	// Mount: ["HEAD", "HEAD~1", "HEAD~5", <local branches…>] plus the

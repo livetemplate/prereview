@@ -24,6 +24,13 @@ type PrereviewController struct {
 	CSVPath  string
 	DonePath string
 
+	// UIPrefsPath is the per-user view-prefs file (see uiprefs.go): the durable
+	// home for theme/mode/focus/file-view/raw/show-resolved so they survive a
+	// server relaunch, not just a reload. Set once by main.go; "" disables
+	// durable prefs (session-only) and is never an error. NOT per-repo — these
+	// prefs mean the same thing in every repo.
+	UIPrefsPath string
+
 	// NoGit is true when the path was a single file or a directory with no
 	// .git: the file list and per-file diff are synthesized from the
 	// filesystem (gitdiff.ListFilesNoGit / LoadDiffNoGit) instead of git,
@@ -193,6 +200,13 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// without waiting for the next watcher tick. Covers repo and external mode
 	// (both short-circuit below).
 	c.applyLLMStatus(&state)
+
+	// Overlay the durable per-user view prefs (theme/mode/focus/file-view/raw/
+	// show-resolved). These are no longer lvt:"persist", so the session store
+	// carries them as zero on a reconnect — disk is the single source of truth,
+	// loaded here on every connect (like applyLLMStatus). Applied before the
+	// external short-circuit so themed external-mode sessions pick up the scheme.
+	c.applyUIPrefs(&state)
 
 	// SkillMode is mirror-only: refresh from the controller every connect
 	// so a binary launched with --skill renders the right button even after
