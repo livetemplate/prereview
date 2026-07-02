@@ -402,7 +402,7 @@
             role="menuitem"
           >
             <span class="menu-icon">{{template "iconFocus"}}</span>
-            <span class="menu-label">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}</span>
+            <span class="menu-label">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
           </button>
         </form>
         {{end}}
@@ -447,7 +447,7 @@
             role="menuitem"
           >
             <span class="menu-icon">{{template "iconComments"}}</span>
-            <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}</span>
+            <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
             <span class="menu-meta">{{len .Comments}}</span>
           </button>
         </form>
@@ -463,7 +463,7 @@
             role="menuitem"
           >
             <span class="menu-icon">{{if .ShowResolved}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
-            <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}</span>
+            <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
             <span class="menu-meta">{{.ResolvedCount}}</span>
           </button>
         </form>
@@ -515,7 +515,7 @@
       title="Previous file"
       aria-label="Previous file"
       class="contrast"
-    >{{template "iconChevronLeft"}}<span class="nav-label">Prev</span></button>
+    >{{template "iconChevronLeft"}}<span class="nav-label">Prev{{with index $.KeyHint "prevFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
   </form>
   <form method="POST" class="nav-next">
     <button
@@ -524,7 +524,7 @@
       title="Next file"
       aria-label="Next file"
       class="contrast"
-    ><span class="nav-label">Next</span>{{template "iconChevronRight"}}</button>
+    ><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
   </form>
   {{end}}
   <form method="POST" class="tb-action">
@@ -724,7 +724,7 @@
       role="menuitem"
     >
       <span class="menu-icon">{{template "iconComments"}}</span>
-      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}</span>
+      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
       <span class="menu-meta">{{len .Comments}}</span>
     </button>
   </form>
@@ -744,7 +744,7 @@
         {{template "iconCircle16"}}
         {{end}}
       </span>
-      <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}</span>
+      <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
       <span class="menu-meta">{{.ResolvedCount}}</span>
     </button>
   </form>
@@ -1082,7 +1082,7 @@
         class="contrast"
         title="Add a comment about the whole file"
         aria-label="Comment on file"
-      >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file</span></button>
+      >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
     {{end}}
   </header>
