@@ -549,6 +549,56 @@ func (c *PrereviewController) ToggleResolved(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
+// HideComment individually re-hides a RESOLVED comment (issue #88): it stays out
+// of the diff + overview even while "Show resolved" is on, without turning the
+// whole resolved group back off. A view-only flag — the comment is untouched
+// otherwise (still resolved, still in the CSV, already excluded from the
+// handoff). Recovered in bulk via UnhideAllResolved. Mirrors ToggleResolved's
+// persist-and-rollback shape.
+func (c *PrereviewController) HideComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("hideComment: missing id")
+	}
+	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
+	if idx < 0 {
+		return state, fmt.Errorf("hideComment: id %s not found", id)
+	}
+	state.Comments[idx].Hidden = true
+	if err := c.persist(state.Comments); err != nil {
+		state.Comments[idx].Hidden = false // roll back so disk and memory match
+		return state, fmt.Errorf("persist after hide: %w", err)
+	}
+	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
+// UnhideAllResolved clears the individual-hide flag on every comment at once —
+// the recovery for HideComment, surfaced as "Unhide N" next to the Show-resolved
+// toggle. Rewrites the CSV; rolls back the in-memory flags on a write error so
+// disk and memory stay in sync.
+func (c *PrereviewController) UnhideAllResolved(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	hiddenIdx := make([]int, 0)
+	for i := range state.Comments {
+		if state.Comments[i].Hidden {
+			state.Comments[i].Hidden = false
+			hiddenIdx = append(hiddenIdx, i)
+		}
+	}
+	if len(hiddenIdx) == 0 {
+		return state, nil
+	}
+	if err := c.persist(state.Comments); err != nil {
+		for _, i := range hiddenIdx {
+			state.Comments[i].Hidden = true // roll back
+		}
+		return state, fmt.Errorf("persist after unhide all: %w", err)
+	}
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
 // UndoDelete restores the most recently deleted comment to state.Comments
 // and rewrites the CSV. No-op if LastDeletedComment is nil (the undo
 // affordance shouldn't even render in that case, but defending in depth).

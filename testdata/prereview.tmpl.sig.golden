@@ -5,7 +5,10 @@
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if and (not .Resolved) .AnchorOutdated}}<form method="POST">
+    </form>{{if .Resolved}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="hideComment" class="outline">Hide</button>
+    </form>{{end}}{{if and (not .Resolved) .AnchorOutdated}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="reanchorComment" class="outline">Re-anchor</button>
     </form>{{end}}{{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST">
@@ -17,7 +20,10 @@
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if not .Resolved}}<form method="POST">
+    </form>{{if .Resolved}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="hideComment" class="outline">Hide</button>
+    </form>{{end}}{{if not .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>
@@ -261,6 +267,16 @@
         </form>
         {{end}}
         
+        {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
+        <form method="POST">
+          <button type="submit" name="unhideAllResolved" class="menu-item" role="menuitem">
+            <span class="menu-icon">{{template "iconCircle16"}}</span>
+            <span class="menu-label">Unhide</span>
+            <span class="menu-meta">{{.HiddenResolvedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
         {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
         <form method="POST">
           <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">
@@ -417,6 +433,16 @@
     </button>
   </form>
   {{end}}
+  
+  {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
+  <form method="POST">
+    <button type="submit" name="unhideAllResolved" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconCircle16"}}</span>
+      <span class="menu-label">Unhide</span>
+      <span class="menu-meta">{{.HiddenResolvedCount}}</span>
+    </button>
+  </form>
+  {{end}}
   {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
   <div class="menu-info" style="border-bottom: 0; margin-bottom: 0; font-style: italic;">No comments yet — tap a line to add one.</div>
   {{end}}
@@ -566,6 +592,10 @@
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
+        {{if .Resolved}}<form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="hideComment" class="outline">Hide</button>
+        </form>{{end}}
         {{if and (not .Resolved) .AnchorOutdated}}<form method="POST">
           <input type="hidden" name="id" value="{{.ID}}">
           <button type="submit" name="reanchorComment" class="outline">Re-anchor</button>

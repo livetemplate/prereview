@@ -42,7 +42,7 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 		if c.IsFileLevel() || c.IsAreaLevel() {
 			continue
 		}
-		if c.Resolved && !s.ShowResolved {
+		if s.commentHiddenFromView(c) {
 			continue
 		}
 		out[c.ToLine] = append(out[c.ToLine], c)
@@ -72,7 +72,7 @@ func (s PrereviewState) FileComments() []Comment {
 		if c.IsFileLevel() || c.IsAreaLevel() {
 			continue
 		}
-		if c.Resolved && !s.ShowResolved {
+		if s.commentHiddenFromView(c) {
 			continue
 		}
 		out = append(out, c)
@@ -140,7 +140,7 @@ func (s PrereviewState) textMarksForLine(line gitdiff.DiffLine) []gitdiff.ColRan
 		if !c.IsTextLevel() || c.File != s.SelectedFile || c.Side != side {
 			continue
 		}
-		if c.AnchorOutdated() || (c.Resolved && !s.ShowResolved) {
+		if c.AnchorOutdated() || s.commentHiddenFromView(c) {
 			continue
 		}
 		if ln < c.FromLine || ln > c.ToLine {
@@ -174,7 +174,7 @@ func (s PrereviewState) FileLevelComments() []Comment {
 		if !c.IsFileLevel() {
 			continue
 		}
-		if c.Resolved && !s.ShowResolved {
+		if s.commentHiddenFromView(c) {
 			continue
 		}
 		out = append(out, c)
@@ -199,7 +199,7 @@ func (s PrereviewState) AreaComments() []Comment {
 		if !c.IsAreaLevel() {
 			continue
 		}
-		if c.Resolved && !s.ShowResolved {
+		if s.commentHiddenFromView(c) {
 			continue
 		}
 		out = append(out, c)
@@ -221,7 +221,7 @@ func (s PrereviewState) RegionComments() []Comment {
 		if !c.IsRegionLevel() || c.URL != s.CurrentURL {
 			continue
 		}
-		if c.Resolved && !s.ShowResolved {
+		if s.commentHiddenFromView(c) {
 			continue
 		}
 		out = append(out, c)
@@ -257,7 +257,7 @@ func (s PrereviewState) AllRegionComments() []Comment {
 		if !c.IsRegionLevel() {
 			continue
 		}
-		if c.Resolved && !s.ShowResolved {
+		if s.commentHiddenFromView(c) {
 			continue
 		}
 		out = append(out, c)

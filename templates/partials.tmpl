@@ -263,6 +263,16 @@
         class="outline"
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
+    {{- if .Resolved -}}
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="hideComment"
+        class="outline"
+      >Hide</button>
+    </form>
+    {{- end -}}
     {{- if and (not .Resolved) .AnchorOutdated -}}
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
@@ -314,6 +324,16 @@
         class="outline"
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
+    {{- if .Resolved -}}
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="hideComment"
+        class="outline"
+      >Hide</button>
+    </form>
+    {{- end -}}
     {{- if not .Resolved -}}
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">

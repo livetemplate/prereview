@@ -39,6 +39,7 @@ func TestWriter_HeaderAndRows(t *testing.T) {
 		{ID: "01R", File: "diagram.png", Body: "wrong label", CreatedAt: created, Kind: "area", Area: areaJSON},
 		{ID: "01G", Body: "CTA too low", CreatedAt: created, Kind: "region", Area: regionJSON, URL: "/pricing"},
 		{ID: "01T", File: "main.go", FromLine: 7, ToLine: 7, Side: "new", Body: "this cast is unsafe", CreatedAt: created, Kind: "text", FromCol: 6, ToCol: 12},
+		{ID: "01H", File: "main.go", FromLine: 3, ToLine: 3, Side: "new", Body: "nit, addressed", CreatedAt: created, Resolved: true, Hidden: true},
 	}
 	if err := w.Write(rows); err != nil {
 		t.Fatalf("write: %v", err)
@@ -46,13 +47,14 @@ func TestWriter_HeaderAndRows(t *testing.T) {
 
 	got := readCSV(t, w.Path())
 	want := [][]string{
-		{"id", "file", "from_line", "to_line", "side", "body", "created_at", "resolved", "anchor", "anchor_status", "kind", "area", "url", "from_col", "to_col"},
-		{"01A", "main.go", "10", "12", "new", "extract this", "2026-05-14T10:00:00Z", "false", "", "", "", "", "", "0", "0"},
-		{"01B", "x.go", "1", "1", "old", "remove?", "2026-05-14T10:00:00Z", "false", "", "", "", "", "", "0", "0"},
-		{"01F", "logo.png", "0", "0", "", "wrong file", "2026-05-14T10:00:00Z", "false", "", "", "file", "", "", "0", "0"},
-		{"01R", "diagram.png", "0", "0", "", "wrong label", "2026-05-14T10:00:00Z", "false", "", "", "area", areaJSON, "", "0", "0"},
-		{"01G", "", "0", "0", "", "CTA too low", "2026-05-14T10:00:00Z", "false", "", "", "region", regionJSON, "/pricing", "0", "0"},
-		{"01T", "main.go", "7", "7", "new", "this cast is unsafe", "2026-05-14T10:00:00Z", "false", "", "", "text", "", "", "6", "12"},
+		{"id", "file", "from_line", "to_line", "side", "body", "created_at", "resolved", "anchor", "anchor_status", "kind", "area", "url", "from_col", "to_col", "hidden"},
+		{"01A", "main.go", "10", "12", "new", "extract this", "2026-05-14T10:00:00Z", "false", "", "", "", "", "", "0", "0", "false"},
+		{"01B", "x.go", "1", "1", "old", "remove?", "2026-05-14T10:00:00Z", "false", "", "", "", "", "", "0", "0", "false"},
+		{"01F", "logo.png", "0", "0", "", "wrong file", "2026-05-14T10:00:00Z", "false", "", "", "file", "", "", "0", "0", "false"},
+		{"01R", "diagram.png", "0", "0", "", "wrong label", "2026-05-14T10:00:00Z", "false", "", "", "area", areaJSON, "", "0", "0", "false"},
+		{"01G", "", "0", "0", "", "CTA too low", "2026-05-14T10:00:00Z", "false", "", "", "region", regionJSON, "/pricing", "0", "0", "false"},
+		{"01T", "main.go", "7", "7", "new", "this cast is unsafe", "2026-05-14T10:00:00Z", "false", "", "", "text", "", "", "6", "12", "false"},
+		{"01H", "main.go", "3", "3", "new", "nit, addressed", "2026-05-14T10:00:00Z", "true", "", "", "", "", "", "0", "0", "true"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d rows, want %d: %v", len(got), len(want), got)

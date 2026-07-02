@@ -53,11 +53,17 @@ const (
 	// "0" for every other kind (line comments cover whole lines).
 	ColFromCol = "from_col"
 	ColToCol   = "to_col"
+	// `hidden` is "true" or "false". A reviewer-only VIEW flag: an individually
+	// re-hidden RESOLVED comment (issue #88) stays out of the diff/overview even
+	// when "Show resolved" is on. The skill MUST ignore it — it never changes
+	// which comments are actionable (resolved comments are already excluded from
+	// the handoff); it only declutters the human's view.
+	ColHidden = "hidden"
 )
 
 // Header is the row written before any data. Position-stable: only ever
 // append new columns (readers tolerate short legacy rows by length).
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
-	ColAnchor, ColAnchorStatus, ColKind, ColArea, ColURL, ColFromCol, ColToCol,
+	ColAnchor, ColAnchorStatus, ColKind, ColArea, ColURL, ColFromCol, ColToCol, ColHidden,
 }

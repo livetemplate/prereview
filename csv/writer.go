@@ -44,6 +44,10 @@ type Row struct {
 	// coordinates); 0 for every other kind.
 	FromCol int
 	ToCol   int
+	// Hidden is a reviewer-only VIEW flag: an individually re-hidden RESOLVED
+	// comment (issue #88) stays out of the view even when "Show resolved" is on.
+	// The main package owns the semantics; the skill ignores this column.
+	Hidden bool
 }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
@@ -140,6 +144,10 @@ func rowToRecord(r Row) []string {
 	if r.Resolved {
 		resolved = "true"
 	}
+	hidden := "false"
+	if r.Hidden {
+		hidden = "true"
+	}
 	return []string{
 		r.ID,
 		r.File,
@@ -156,5 +164,6 @@ func rowToRecord(r Row) []string {
 		r.URL,
 		strconv.Itoa(r.FromCol),
 		strconv.Itoa(r.ToCol),
+		hidden,
 	}
 }

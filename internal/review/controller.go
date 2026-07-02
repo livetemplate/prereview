@@ -334,6 +334,7 @@ func (c *PrereviewController) persist(comments []Comment) error {
 			URL:          cm.URL,
 			FromCol:      cm.FromCol,
 			ToCol:        cm.ToCol,
+			Hidden:       cm.Hidden,
 		})
 	}
 	return c.CSVWriter.Write(rows)
@@ -387,7 +388,7 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 			Side: r.Side, Body: r.Body, Created: r.CreatedAt, Resolved: r.Resolved,
 			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus,
 			Kind: r.Kind, Area: parseArea(r.Area), URL: r.URL,
-			FromCol: r.FromCol, ToCol: r.ToCol,
+			FromCol: r.FromCol, ToCol: r.ToCol, Hidden: r.Hidden,
 		})
 	}
 	return out
