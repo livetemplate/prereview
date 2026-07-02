@@ -33,6 +33,7 @@ func startPrereviewStream(t *testing.T, binary, repo string) (url string, cmd *e
 	cmd = exec.Command(binary,
 		"--base", "HEAD", "--port", "0", "--host", "127.0.0.1", "--no-update",
 		"--skill", "--stream", repo)
+	cmd.Env = prefsIsolatedEnv(repo)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("stdout pipe: %v", err)

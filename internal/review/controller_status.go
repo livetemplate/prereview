@@ -48,6 +48,11 @@ func (c *PrereviewController) OnConnect(state PrereviewState, ctx *livetemplate.
 	c.session = ctx.Session()
 	c.sessionMu.Unlock()
 	c.applyLLMStatus(&state)
+	// Same reasoning as applyLLMStatus above: the view prefs are no longer
+	// lvt:"persist", so the restored connect-time state has them zeroed — reload
+	// them from the per-user file so the connect render matches the initial
+	// GET/SSR (the durable choice, not the default).
+	c.applyUIPrefs(&state)
 	return state, nil
 }
 
