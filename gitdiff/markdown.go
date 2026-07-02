@@ -250,6 +250,31 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 	return out
 }
 
+// RenderMarkdownDoc renders a whole Markdown document to a single safe-HTML
+// string using the SAME goldmark instance as the review view (mdRenderer):
+// GFM, class-based chroma fences (so /syntax.css and the Light/Dark toggle
+// apply), footnotes, emoji, and GitHub alert callouts. Unlike
+// RenderMarkdownBlocks it does not split into commentable units — it's for
+// standalone, non-reviewable docs (the in-app Usage page). Empty input → "".
+//
+// Safe-mode still holds: no html.WithUnsafe, so raw HTML in src is dropped
+// (the one audited exception is a local <img>, htmlimage.go); this content is
+// first-party (an embedded doc), but the guarantee is the renderer's, not the
+// caller's.
+func RenderMarkdownDoc(src []byte) template.HTML {
+	if len(bytes.TrimSpace(src)) == 0 {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := mdRenderer.Convert(src, &buf); err != nil {
+		return ""
+	}
+	// Standalone page: open external links (the doc's GitHub references) in a
+	// new tab so a click doesn't navigate the reader out of the app.
+	out := OpenExternalLinksInNewTab(buf.String())
+	return template.HTML(out) //nolint:gosec // goldmark safe-mode output; only an allowlisted local <img> passes raw (htmlimage.go)
+}
+
 // ExtractHeadings walks src as Markdown and returns each heading in
 // document order, with the `id` attribute goldmark's WithAutoHeadingID
 // transformer attached during parse. Callers filter by Level for TOC

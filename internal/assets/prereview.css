@@ -1683,6 +1683,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   margin: 0; padding: 0.6rem 1rem 0.9rem; font-size: 0.82rem;
   color: var(--pico-muted-color); border-top: 1px solid var(--pico-muted-border-color);
 }
+.kbd-help-usage {
+  margin: 0; padding: 0 1rem 0.9rem; font-size: 0.85rem;
+}
 .md-block { margin: 0 0 0.2rem; border-radius: 6px; }
 .md-block.selected { box-shadow: 0 0 0 2px var(--pico-primary); }
 .md-rendered {

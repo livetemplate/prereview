@@ -703,3 +703,47 @@ func TestRenderMarkdownBlocks_Emoji(t *testing.T) {
 		t.Errorf("unknown shortcode should stay literal: %q", h)
 	}
 }
+
+// TestRenderMarkdownDoc pins the standalone whole-document render used by the
+// in-app Usage page: one HTML string (not per-line blocks), class-based chroma
+// fences so /syntax.css + the Light/Dark toggle apply, GitHub alert callouts,
+// and safe-mode (raw HTML dropped). Empty input → "".
+func TestRenderMarkdownDoc(t *testing.T) {
+	if got := RenderMarkdownDoc(nil); got != "" {
+		t.Errorf("nil src = %q, want empty", got)
+	}
+	if got := RenderMarkdownDoc([]byte("   \n\n")); got != "" {
+		t.Errorf("blank src = %q, want empty", got)
+	}
+
+	src := "# Usage\n\nText.\n\n" +
+		"```go\nfunc main() {}\n```\n\n" +
+		"> [!TIP]\n> see [the docs](https://github.com/x/y/blob/main/docs/cli.md)\n\n" +
+		"<script>alert(1)</script>\n"
+	html := string(RenderMarkdownDoc([]byte(src)))
+
+	if !strings.Contains(html, "<h1") {
+		t.Errorf("no heading rendered: %q", html)
+	}
+	// Class-based chroma output (WithClasses) — the styling hook /syntax.css
+	// targets; inline `style=` colours can't recolor for dark mode.
+	if !strings.Contains(html, `class="chroma"`) {
+		t.Errorf("fenced code not chroma class-highlighted: %q", html)
+	}
+	if strings.Contains(html, "style=\"color:") {
+		t.Errorf("chroma emitted inline styles (should be class-based): %q", html)
+	}
+	// GitHub alert callout wired via alertExtender.
+	if !strings.Contains(html, "md-alert") {
+		t.Errorf("GitHub alert not rendered as callout: %q", html)
+	}
+	// Safe mode: raw HTML must be dropped, never passed through.
+	if strings.Contains(html, "<script>") {
+		t.Errorf("raw <script> passed through (safe mode broken): %q", html)
+	}
+	// External links open in a new tab so a click doesn't navigate the
+	// standalone page away from the app.
+	if !strings.Contains(html, `href="https://github.com/x/y/blob/main/docs/cli.md" target="_blank" rel="noopener noreferrer"`) {
+		t.Errorf("external link not opened in a new tab: %q", html)
+	}
+}
