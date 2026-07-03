@@ -510,7 +510,7 @@
             role="menuitem"
           >
             <span class="menu-icon">{{template "iconSuggestion"}}</span>
-            <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}</span>
+            <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
             <span class="menu-meta">{{.SuggestionCount}}</span>
           </button>
         </form>

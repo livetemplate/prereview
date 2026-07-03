@@ -118,22 +118,43 @@ func TestE2E_Suggestions(t *testing.T) {
 		t.Fatalf("code view: want exactly 1 suggestion box, got %d", countBoxes())
 	}
 
-	// Toggle OFF via the view menu → the box disappears; toggle ON → returns.
-	toggle := func() {
+	// Toggle OFF via the view-menu button → the box disappears; toggle ON → returns.
+	clickToggle := func() {
 		if err := chromedp.Run(p.ctx,
 			chromedp.Evaluate(`document.querySelector('button[name="toggleSuggestions"]').click()`, nil),
 			chromedp.Sleep(250*time.Millisecond),
 		); err != nil {
-			t.Fatalf("toggle suggestions: %v\nstderr: %s", err, p.stderr.String())
+			t.Fatalf("toggle suggestions (click): %v\nstderr: %s", err, p.stderr.String())
 		}
 	}
-	toggle()
+	clickToggle()
 	if countBoxes() != 0 {
 		t.Fatalf("after hide toggle: want 0 boxes, got %d", countBoxes())
 	}
-	toggle()
+	clickToggle()
 	if countBoxes() != 1 {
 		t.Fatalf("after show toggle: want 1 box, got %d", countBoxes())
+	}
+
+	// The `s` keyboard shortcut toggles suggestions too (window binding, fired from
+	// outside any text field). Focus the body first so skip-when-typing doesn't
+	// swallow it.
+	keyToggle := func() {
+		if err := chromedp.Run(p.ctx,
+			chromedp.Evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`, nil),
+			chromedp.KeyEvent("s"),
+			chromedp.Sleep(250*time.Millisecond),
+		); err != nil {
+			t.Fatalf("toggle suggestions (key): %v\nstderr: %s", err, p.stderr.String())
+		}
+	}
+	keyToggle()
+	if countBoxes() != 0 {
+		t.Fatalf("after `s` key: want 0 boxes, got %d", countBoxes())
+	}
+	keyToggle()
+	if countBoxes() != 1 {
+		t.Fatalf("after `s` key again: want 1 box, got %d", countBoxes())
 	}
 
 	// Rendered-Markdown block view: the doc suggestion renders inside .md-view.

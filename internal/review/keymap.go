@@ -49,6 +49,7 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"Mod+k"}, Display: "⌘/Ctrl + K", Action: "openSearch", Label: "Search files"},
 	{Keys: []string{"a"}, Display: "a", Action: "toggleCommentList", Label: "All comments"},
 	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved comments"},
+	{Keys: []string{"s"}, Display: "s", Action: "toggleSuggestions", Label: "Show / hide suggestions"},
 	{Keys: []string{"."}, Display: ".", Action: "toggleFocusMode", Label: "Focus mode (hide side columns)"},
 	{Keys: []string{"?"}, Display: "?", Action: "toggleKeyboardHelp", Label: "Keyboard shortcuts"},
 	{Keys: []string{"Escape"}, Display: "Esc", Action: "", Label: "Cancel / close"},
