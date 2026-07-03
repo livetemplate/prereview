@@ -17,8 +17,12 @@ func (c *PrereviewController) flushHandoff(state *PrereviewState) error {
 	if err := c.persist(state.Comments); err != nil {
 		return fmt.Errorf("final csv write: %w", err)
 	}
+	// Re-anchor suggestions across all files too, so the decisions we emit carry
+	// accurate line numbers + anchor_status: an accepted edit the LLM already
+	// applied re-anchors as outdated and drops from the snapshot (#98 Phase 3).
+	c.relocateSuggestionsAll(state)
 	if c.Emitter != nil {
-		if err := c.Emitter.EmitHandoff(state.Comments, time.Now()); err != nil {
+		if err := c.Emitter.EmitHandoff(state.Comments, state.Suggestions, state.DecisionsBySuggestion(), time.Now()); err != nil {
 			return fmt.Errorf("emit handoff event: %w", err)
 		}
 	}

@@ -162,6 +162,18 @@ func relocateSuggestion(diff *gitdiff.FileDiff, s *Suggestion) bool {
 	return relocateLineRange(lines, &s.FromLine, &s.ToLine, &s.AnchorStatus, s.Anchor)
 }
 
+// relocateSuggestions re-anchors every suggestion whose File == file against
+// diff, in place. The suggestion analogue of relocateComments; no bool return
+// because suggestions are never persisted (the file is agent-owned).
+func relocateSuggestions(suggestions []Suggestion, file string, diff *gitdiff.FileDiff) {
+	for i := range suggestions {
+		if suggestions[i].File != file {
+			continue
+		}
+		relocateSuggestion(diff, &suggestions[i])
+	}
+}
+
 // applySuggestions loads the agent-written suggestions into state and derives each
 // one's drift anchor from its OriginalText (stateless — recomputed every load,
 // since the append-only file can't hold a server-captured anchor). The span is
@@ -196,11 +208,26 @@ func (c *PrereviewController) relocateSuggestionsSelected(state *PrereviewState)
 	if state.CurrentDiff == nil || state.SelectedFile == "" {
 		return
 	}
-	for i := range state.Suggestions {
-		if state.Suggestions[i].File != state.SelectedFile {
+	relocateSuggestions(state.Suggestions, state.SelectedFile, state.CurrentDiff)
+}
+
+// relocateSuggestionsAll re-anchors EVERY file's suggestions (loading each file's
+// diff via the per-file cache), so the decisions emitted at hand-off carry
+// accurate line numbers + anchor_status even for files the reviewer never opened —
+// the suggestion analogue of relocateAll for comments. Used only at hand-off (the
+// CSV/stream become a contract there). Read-only: nothing is persisted.
+func (c *PrereviewController) relocateSuggestionsAll(state *PrereviewState) {
+	seen := map[string]bool{}
+	for _, sg := range state.Suggestions {
+		if sg.Anchor.Empty() || seen[sg.File] {
 			continue
 		}
-		relocateSuggestion(state.CurrentDiff, &state.Suggestions[i])
+		seen[sg.File] = true
+		diff, err := c.loadDiffCached(state.Base, sg.File)
+		if err != nil {
+			continue
+		}
+		relocateSuggestions(state.Suggestions, sg.File, diff)
 	}
 }
 

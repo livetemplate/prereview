@@ -78,14 +78,19 @@ Everything prereview writes lives under `<REPO>/.prereview/`, where
 ```
 <REPO>/
 └── .prereview/
-    ├── comments.csv     ← source of truth, rewritten atomically on every change
-    ├── DONE             ← written ONLY on "Hand off → Claude" (skill mode); contents = absolute path to comments.csv
-    ├── events.jsonl     ← stream mode only (--stream); append-only JSON event log, reset each launch
-    └── llm-status.json  ← INBOUND: written by the agent, watched by the server; agent-status echo, reset each launch
+    ├── comments.csv                ← source of truth, rewritten atomically on every change
+    ├── DONE                        ← written ONLY on "Hand off → Claude" (skill mode); contents = absolute path to comments.csv
+    ├── events.jsonl                ← stream mode only (--stream); append-only JSON event log, reset each launch
+    ├── llm-status.json             ← INBOUND: written by the agent, watched by the server; agent-status echo, reset each launch
+    ├── suggestions.jsonl           ← INBOUND: LLM's proposed edits (`prereview suggest`); append-only, durable across launches (#98)
+    └── suggestion-decisions.jsonl  ← reviewer's accept/reject/revise verdicts; server-owned, rewritten atomically, durable (#98)
 ```
 
-`llm-status.json` is the one file the **agent writes and the server reads** (the
-reverse of every other file here). The agent (via the skill) writes
+`llm-status.json` and `suggestions.jsonl` are the files the **agent writes and the
+server reads** (the reverse of `comments.csv` et al.). `suggestion-decisions.jsonl`
+is the reviewer's reply — server-owned — and its verdicts ship back to the agent in
+each `handoff` event's `suggestions` array (see [Stream mode](#stream-mode---stream)).
+The agent (via the skill) writes
 `{"state":"working"|"done","message":"…","updated_at":"<RFC3339>"}` — atomically
 (temp file + `mv`) — while applying a handoff; the server polls it (~0.75s) and
 pushes the status to every open browser tab so the reviewer sees live progress.
@@ -185,8 +190,10 @@ continuously until the user explicitly ends the session:
 
 - `ready` — emitted once, after the stdout preamble.
 - `handoff` — emitted on every **Hand off** click; carries the full snapshot of
-  actionable comments (unresolved, non-outdated). Dedupe by `id` across rounds,
-  so the human's resolve-clicks prune later rounds.
+  actionable **comments** (unresolved, non-outdated) AND the reviewer's decisions
+  on **suggestions** you proposed. Dedupe by `id` across rounds, so the human's
+  resolve-clicks (comments) and applied/reworked edits (suggestions) prune later
+  rounds.
 - `session_end` — emitted once on **End session**; the **only** event the
   consumer loop should treat as "stop". The server shuts down right after.
 
@@ -195,7 +202,11 @@ the idempotent DONE marker can't do this), and an RFC-3339 `ts`. Each comment
 in a `handoff` snapshot mirrors the CSV columns **minus** the opaque `anchor`
 fingerprint and `resolved` (the snapshot is already filtered to actionable
 rows), with `area` as a nested object (or `null`) — no nested
-JSON-in-a-string to parse:
+JSON-in-a-string to parse. `suggestions[]` carries one entry per decided,
+non-outdated suggestion (`verdict` = `accept`|`reject`|`revise`, plus `note`,
+`original`, `proposed`, `anchor_status`); act on it per SKILL.md §
+[Suggested edits](./SKILL.md#suggested-edits-prereview-suggest). Both `comments`
+and `suggestions` are always present on a `handoff` (`[]` when empty):
 
 ```jsonc
 {"event":"ready","seq":0,"ts":"…","repo":"/abs/dir","csv":"/abs/dir/.prereview/comments.csv"}
@@ -203,6 +214,10 @@ JSON-in-a-string to parse:
   {"id":"01J…","kind":"line","file":"main.go","from_line":42,"to_line":42,
    "side":"new","body":"rename this","url":"","area":null,
    "created_at":"…","anchor_status":"ok"}
+],"suggestions":[
+  {"id":"s1","file":"docs/readme.md","from_line":12,"to_line":12,"side":"new",
+   "verdict":"accept","original":"The API might returns an error.",
+   "proposed":"The API may return an error.","anchor_status":"ok"}
 ]}
 {"event":"session_end","seq":2,"ts":"…"}
 ```
