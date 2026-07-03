@@ -1,6 +1,6 @@
 ---
 name: prereview
-description: Launch an interactive review session over the working tree (or any file/directory) — code diffs, Markdown, HTML, images, and live local sites, by line, block, or region. The user leaves comments in a browser and hands off batches to you; you read each batch and apply the fixes.
+description: Launch an interactive review session over the working tree (or any file/directory) — code diffs, Markdown, HTML, images, and live local sites, by line, block, or region. The user leaves comments in a browser and hands off batches to you; you read each batch and apply the fixes. You can also submit suggested edits (`prereview suggest`) that render inline for the user to accept / reject / revise.
 triggers:
   - prereview
   - review my changes
@@ -8,6 +8,8 @@ triggers:
   - review before push
   - leave comments on diff
   - review before commit
+  - suggest edits in prereview
+  - review the doc and suggest edits
 ---
 
 # prereview
@@ -113,16 +115,18 @@ command above — never a second reader.) **The loop's only exit is
 is iterative.
 
 - `{"event":"ready",...}` — session is live; tell the user to review.
-- `{"event":"handoff","seq":N,"comments":[…]}` — the user clicked Hand off.
-  Each handoff is a **full snapshot of every still-actionable comment** (not a
-  delta), so `comments` *is* the complete open set — read it as one whole and
-  drive a single coherent change exactly as in §4 "Act on the comments" (themes,
-  relationships, conflicts), never row-by-row. Then tell the user this round is
-  done and to leave more or click **End session**. **Dedupe by `id`** across
-  rounds — a comment reappears only while it's unresolved. `comments` is always
-  present (`[]` when nothing is actionable). Right after reading a handoff, echo
-  your status so the reviewer's UI shows you're working — see [Echo your
-  status](#echo-your-status-so-the-reviewer-sees-progress).
+- `{"event":"handoff","seq":N,"comments":[…],"suggestions":[…]}` — the user
+  clicked Hand off. Each handoff is a **full snapshot of every still-actionable
+  comment** (not a delta), so `comments` *is* the complete open set — read it as
+  one whole and drive a single coherent change exactly as in §4 "Act on the
+  comments" (themes, relationships, conflicts), never row-by-row. Then tell the
+  user this round is done and to leave more or click **End session**. **Dedupe by
+  `id`** across rounds — a comment reappears only while it's unresolved. `comments`
+  is always present (`[]` when nothing is actionable). `suggestions` carries the
+  reviewer's **decisions on edits you proposed** (accept / reject / revise) — also
+  a full snapshot, `[]` when none; act on it per [Suggested edits](#suggested-edits-prereview-suggest).
+  Right after reading a handoff, echo your status so the reviewer's UI shows you're
+  working — see [Echo your status](#echo-your-status-so-the-reviewer-sees-progress).
 - `{"event":"session_end","seq":N}` — stop consuming. The review is over (the
   server also exits right after, so a backgrounded launch's job completes too).
 
@@ -200,6 +204,88 @@ column/field of the comments you addressed. This appends to
 `comments.csv`), and the badge appears live across every open tab. It's a
 one-way signal that you acted on the comment: the human still **resolves**
 comments themselves, so keep acting only on unresolved rows.
+
+## Suggested edits (`prereview suggest`)
+
+Comments flow **user → you**. Suggestions flow the other way: **you propose an
+edit, the user accepts / rejects / asks you to revise it.** Reach for this when the
+user asks you to *suggest edits* rather than just review — e.g. "review the doc to
+remove ambiguity and **suggest edits in prereview**", "propose tighter wording",
+"suggest fixes for these functions". Each suggestion renders as an inline
+suggestion box (a before→after mini-diff, visually distinct from a comment) that
+the user acts on, and their decision comes back to you on the next Hand off.
+
+### Submitting suggestions (you → user)
+
+Run `prereview suggest` with a JSON payload — a single object, a JSON array, or
+newline-delimited objects — on stdin or via `--file`. It appends to
+`<REPO>/.prereview/suggestions.jsonl`; the running review UI picks them up **live**
+(no restart), so the boxes appear in the user's browser as you write them.
+
+```bash
+prereview suggest --out "<REPO>" <<'JSON'
+[
+  {"id":"s1","file":"docs/readme.md","from_line":12,"to_line":12,
+   "original":"The API might returns an error.",
+   "proposed":"The API may return an error.",
+   "note":"subject–verb agreement"}
+]
+JSON
+```
+
+Fields per suggestion:
+
+- `id` — **stable, your choice.** Re-submitting the same `id` *revises* that
+  suggestion (last write wins); a new `id` adds one. Use a fresh `id` per distinct
+  edit. (Omit it and prereview generates one, but then you can't revise it — so
+  always set your own.)
+- `file` — repo-relative path (same `file` value as the comments use).
+- `from_line` / `to_line` — 1-based line range on the **new** side the edit
+  replaces. `to_line` defaults to `from_line`.
+- `original` — the exact current text at those lines. This is the anchor: prereview
+  re-locates it if the file changed, and marks the suggestion `outdated` if it's
+  gone — so paste it verbatim.
+- `proposed` — the replacement text (multi-line is fine). For a pure insertion,
+  leave `original` empty.
+- `note` — optional one-line rationale, shown on the box.
+
+`<REPO>` is the directory prereview printed at launch (same as `prereview_status` /
+`prereview processed`). Never hand-edit `suggestions.jsonl` — always append via the
+subcommand.
+
+### Applying the reviewer's decisions (user → you)
+
+On each Hand off, the event's `suggestions[]` is a **full snapshot of every decided
+suggestion** (dedupe by `id`, exactly like comments). Each entry:
+
+```
+{"id","file","from_line","to_line","side","verdict","note","original","proposed","anchor_status"}
+```
+
+Act by `verdict`:
+
+- **`accept`** — apply the edit: replace `original` with `proposed` at
+  `file`:`from_line`–`to_line`. You own the file write (prereview never edits the
+  user's files). Once applied, the suggestion re-anchors as `outdated` and **drops
+  off future handoffs** automatically — so you won't re-apply it.
+- **`reject`** — the user declined it. **Drop it** — do not apply, and do not
+  re-submit the same edit. (It keeps reappearing in the snapshot; dedupe by `id`
+  and skip it, like a comment you've already handled.)
+- **`revise`** — the user wants a different take; `note` says how. Rework the edit
+  and **re-submit via `prereview suggest` with the SAME `id`** and new `proposed`
+  text. That revision resets the decision (the box goes back to undecided) and
+  replaces the old snapshot entry, so the user reviews your new proposal.
+
+Every emitted entry has `anchor_status` **`ok`** or **`moved`** — both carry
+**trustworthy** `from_line`/`to_line` (a `moved` suggestion's lines were already
+re-anchored to follow the content after the file changed, so apply at the numbers
+given). A suggestion whose target text vanished (`outdated`) is **never** emitted —
+so once you apply an `accept`, its `original` is gone from the file and it simply
+stops appearing on later handoffs (that's the "drops off future handoffs" above);
+you never receive an outdated decision to second-guess.
+
+After processing, echo `prereview_status done` and go read the next event (§3), the
+same loop as comments.
 
 ## Comment data reference
 

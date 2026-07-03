@@ -74,13 +74,19 @@ func startPrereviewStream(t *testing.T, binary, repo string) (url string, cmd *e
 // and a channel that delivers the process's exit (single-owner Wait, so the
 // test can detect End-session shutdown without racing t.Cleanup).
 func bootChromeStream(t *testing.T) (*runningPrereview, *bytesBuf, <-chan error) {
+	return bootChromeStreamRepo(t, setupFixtureRepo(t))
+}
+
+// bootChromeStreamRepo is bootChromeStream against a caller-supplied repo (e.g.
+// setupSuggestionRepo for the suggestion round-trip). Sets runningPrereview.binary
+// so the test can invoke `prereview suggest`.
+func bootChromeStreamRepo(t *testing.T, repo string) (*runningPrereview, *bytesBuf, <-chan error) {
 	t.Helper()
 	chromium := findChromium(t)
 	binary := filepath.Join(t.TempDir(), "prereview")
 	if out, err := exec.Command("go", "build", "-o", binary, "..").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
-	repo := setupFixtureRepo(t)
 	url, srv, stderr, stdoutBuf := startPrereviewStream(t, binary, repo)
 
 	waitCh := make(chan error, 1)
@@ -102,7 +108,7 @@ func bootChromeStream(t *testing.T) (*runningPrereview, *bytesBuf, <-chan error)
 		allocCancel()
 		_ = srv.Process.Kill() // the Wait goroutine reaps it
 	})
-	return &runningPrereview{t: t, url: url, repo: repo, cmd: srv, stderr: stderr, ctx: ctx, cancel: cancel}, stdoutBuf, waitCh
+	return &runningPrereview{t: t, url: url, repo: repo, binary: binary, cmd: srv, stderr: stderr, ctx: ctx, cancel: cancel}, stdoutBuf, waitCh
 }
 
 // parseStreamEvents extracts the JSON event lines from a stdout capture,

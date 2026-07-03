@@ -43,6 +43,11 @@ type StreamEvent struct {
 	// empty, never absent — while ready/session_end (nil) omit it. A consumer
 	// keying event["comments"] on a handoff never chokes on a missing field.
 	Comments *[]StreamComment `json:"comments,omitempty"` // handoff
+	// Suggestions carries the reviewer's decisions on the LLM's suggested edits
+	// (issue #98): the decided, non-outdated suggestions the LLM should act on —
+	// apply accepts, rework revises, drop rejects. Same pointer convention as
+	// Comments: always present on a handoff (`[]` when none), absent elsewhere.
+	Suggestions *[]StreamDecision `json:"suggestions,omitempty"` // handoff
 }
 
 // CommentList returns the event's comment snapshot, or nil for events that
@@ -52,6 +57,62 @@ func (e StreamEvent) CommentList() []StreamComment {
 		return nil
 	}
 	return *e.Comments
+}
+
+// DecisionList returns the event's suggestion-decision snapshot, or nil for
+// events that carry none.
+func (e StreamEvent) DecisionList() []StreamDecision {
+	if e.Suggestions == nil {
+		return nil
+	}
+	return *e.Suggestions
+}
+
+// StreamDecision is the consumer-facing shape of a reviewer's decision on one LLM
+// suggestion: the verdict + note joined with the suggestion's content and location,
+// so the LLM has everything it needs to act without reading any file itself.
+// Emitted only for decided, non-outdated suggestions (see actionableDecisions).
+type StreamDecision struct {
+	ID           string `json:"id"`
+	File         string `json:"file"`
+	FromLine     int    `json:"from_line"`
+	ToLine       int    `json:"to_line"`
+	Side         string `json:"side"`
+	Verdict      string `json:"verdict"` // accept | reject | revise
+	Note         string `json:"note,omitempty"`
+	Original     string `json:"original"`
+	Proposed     string `json:"proposed"`
+	AnchorStatus string `json:"anchor_status"`
+}
+
+// actionableDecisions returns the decided suggestions the LLM should act on:
+// every fingerprint-matched decision (from state.DecisionsBySuggestion) whose
+// suggestion is not outdated, mapped to its stream shape. Outdated is excluded so
+// an accepted edit, once the LLM applies it, drops off the next handoff (the
+// original text is gone → the suggestion re-anchors as outdated); a reworked
+// revise drops because its fingerprint no longer matches. The consumer dedupes by
+// id, exactly like comments.
+func actionableDecisions(suggestions []Suggestion, decided map[string]SuggestionDecision) []StreamDecision {
+	out := make([]StreamDecision, 0, len(decided))
+	for _, sg := range suggestions {
+		d, ok := decided[sg.ID]
+		if !ok || sg.AnchorOutdated() {
+			continue
+		}
+		out = append(out, StreamDecision{
+			ID:           sg.ID,
+			File:         sg.File,
+			FromLine:     sg.FromLine,
+			ToLine:       sg.ToLine,
+			Side:         sg.Side,
+			Verdict:      d.Verdict,
+			Note:         d.Note,
+			Original:     sg.OriginalText,
+			Proposed:     sg.ProposedText,
+			AnchorStatus: sg.AnchorStatus,
+		})
+	}
+	return out
 }
 
 // StreamComment is the consumer-facing shape of a Comment: the CSV fields
@@ -167,12 +228,15 @@ func (e *EventStream) EmitReady(repo, csvPath string, ts time.Time) error {
 	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath}, ts)
 }
 
-// EmitHandoff emits a full actionable snapshot — one per "Hand off" click.
-// The snapshot is always a non-nil slice so the comments key is always present
-// (`[]` when nothing is actionable).
-func (e *EventStream) EmitHandoff(comments []Comment, ts time.Time) error {
-	snap := actionableComments(comments)
-	return e.emit(StreamEvent{Event: "handoff", Comments: &snap}, ts)
+// EmitHandoff emits a full actionable snapshot — one per "Hand off" click:
+// the open comments AND the reviewer's decisions on the LLM's suggestions.
+// Both snapshots are always non-nil slices so their keys are always present
+// (`[]` when nothing is actionable). decided is the fingerprint-matched decision
+// map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
+func (e *EventStream) EmitHandoff(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, ts time.Time) error {
+	csnap := actionableComments(comments)
+	dsnap := actionableDecisions(suggestions, decided)
+	return e.emit(StreamEvent{Event: "handoff", Comments: &csnap, Suggestions: &dsnap}, ts)
 }
 
 // EmitSessionEnd emits the single terminator — the only event the consumer

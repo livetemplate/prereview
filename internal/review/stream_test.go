@@ -38,7 +38,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
-	if err := es.EmitHandoff(nil, fixedTS); err != nil {
+	if err := es.EmitHandoff(nil, nil, nil, fixedTS); err != nil {
 		t.Fatalf("EmitHandoff: %v", err)
 	}
 	if err := es.EmitSessionEnd(fixedTS); err != nil {
@@ -81,7 +81,7 @@ func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	if err := es.EmitReady("/r", "/r/c.csv", fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
-	if err := es.EmitHandoff(nil, fixedTS); err != nil { // no actionable comments
+	if err := es.EmitHandoff(nil, nil, nil, fixedTS); err != nil { // no actionable comments
 		t.Fatalf("handoff: %v", err)
 	}
 	if err := es.EmitSessionEnd(fixedTS); err != nil {
@@ -97,8 +97,51 @@ func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	if !strings.Contains(lines[1], `"comments":[]`) {
 		t.Errorf("empty handoff must carry comments:[] (not absent): %s", lines[1])
 	}
-	if strings.Contains(lines[2], "comments") {
-		t.Errorf("session_end should omit comments: %s", lines[2])
+	// Same contract for the suggestions key (issue #98).
+	if !strings.Contains(lines[1], `"suggestions":[]`) {
+		t.Errorf("empty handoff must carry suggestions:[] (not absent): %s", lines[1])
+	}
+	if strings.Contains(lines[2], "comments") || strings.Contains(lines[2], "suggestions") {
+		t.Errorf("session_end should omit comments/suggestions: %s", lines[2])
+	}
+}
+
+// TestActionableDecisions_FiltersAndMaps pins the handoff decision payload: only
+// fingerprint-matched, non-outdated decided suggestions ship, carrying the
+// verdict + note joined with the suggestion's content/location.
+func TestActionableDecisions_FiltersAndMaps(t *testing.T) {
+	sgOK := Suggestion{ID: "ok", File: "a.md", FromLine: 3, ToLine: 3, Side: "new",
+		OriginalText: "old", ProposedText: "new", AnchorStatus: anchorOK}
+	// A moved suggestion IS emitted (unlike outdated) — its lines were already
+	// re-anchored to follow the content, so from_line/to_line are trustworthy.
+	sgMoved := Suggestion{ID: "moved", File: "a.md", FromLine: 9, ToLine: 9, Side: "new",
+		OriginalText: "shifted", ProposedText: "SHIFTED", AnchorStatus: anchorMoved}
+	sgOutdated := Suggestion{ID: "stale", File: "a.md", OriginalText: "gone", ProposedText: "x",
+		AnchorStatus: anchorOutdated}
+	sgUndecided := Suggestion{ID: "none", File: "a.md", OriginalText: "p", ProposedText: "q"}
+	st := PrereviewState{
+		Suggestions: []Suggestion{sgOK, sgMoved, sgOutdated, sgUndecided},
+		Decisions: []SuggestionDecision{
+			{SuggestionID: "ok", Verdict: verdictAccept, Fingerprint: suggestionFingerprint(sgOK)},
+			{SuggestionID: "moved", Verdict: verdictAccept, Fingerprint: suggestionFingerprint(sgMoved)},
+			{SuggestionID: "stale", Verdict: verdictReject, Fingerprint: suggestionFingerprint(sgOutdated)},
+			// "none" has no decision.
+		},
+	}
+	got := actionableDecisions(st.Suggestions, st.DecisionsBySuggestion())
+	byID := map[string]StreamDecision{}
+	for _, d := range got {
+		byID[d.ID] = d
+	}
+	if len(got) != 2 || byID["stale"].ID != "" || byID["none"].ID != "" {
+		t.Fatalf("want only the ok+moved decided suggestions, got %d: %+v", len(got), got)
+	}
+	if d := byID["ok"]; d.Verdict != verdictAccept || d.Original != "old" || d.Proposed != "new" || d.File != "a.md" || d.FromLine != 3 || d.AnchorStatus != anchorOK {
+		t.Errorf("mapped ok decision wrong: %+v", d)
+	}
+	// The moved suggestion ships with its re-anchored line + moved status.
+	if d := byID["moved"]; d.AnchorStatus != anchorMoved || d.FromLine != 9 {
+		t.Errorf("moved suggestion should ship with re-anchored lines + moved status: %+v", d)
 	}
 }
 
