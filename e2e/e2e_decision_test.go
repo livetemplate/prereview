@@ -100,10 +100,40 @@ func TestE2E_SuggestionDecisions(t *testing.T) {
 	); err != nil {
 		t.Fatalf("revision-requested badge/note never appeared: %v\nstderr: %s", err, p.stderr.String())
 	}
-	var note string
-	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(document.querySelector('.sg-revise-note')?.textContent||"").trim()`, &note))
-	if note != "please keep it formal" {
-		t.Errorf("revision note text = %q, want %q", note, "please keep it formal")
+	readNote := func() string {
+		var note string
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(document.querySelector('.sg-revise-note')?.textContent||"").trim()`, &note))
+		return note
+	}
+	if got := readNote(); got != "please keep it formal" {
+		t.Errorf("revision note text = %q, want %q", got, "please keep it formal")
+	}
+
+	// Edit the note in place: the Edit-note button re-opens the form pre-filled with
+	// the existing note; the reviewer can amend and re-send.
+	click(`button[name="requestRevision"]`)
+	var prefill string
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.sg-revise-form textarea`, chromedp.ByQuery),
+		chromedp.Value(`.sg-revise-form textarea`, &prefill, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("edit-note form: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if prefill != "please keep it formal" {
+		t.Errorf("edit form should pre-fill the existing note, got %q", prefill)
+	}
+	// Replace the textarea value (the form POST serializes the current DOM value, so
+	// no input-event/debounce race), then send.
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(
+		`document.querySelector('.sg-revise-form textarea').value = "on second thought, keep it casual"`, nil)); err != nil {
+		t.Fatalf("amend note: %v", err)
+	}
+	click(`button[name="submitRevision"]`)
+	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.sg-revise-note`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("amended note missing: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if got := readNote(); got != "on second thought, keep it casual" {
+		t.Errorf("amended note = %q, want the edited text", got)
 	}
 
 	// Fingerprint drop: the LLM revises the suggestion (same id, new proposed text).

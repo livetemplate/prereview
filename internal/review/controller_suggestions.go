@@ -73,10 +73,19 @@ func (c *PrereviewController) RejectSuggestion(state PrereviewState, ctx *livete
 
 // RequestRevision opens the inline note form on a suggestion (mirrors
 // EditComment arming EditingCommentID). The verdict is only recorded once the
-// note is submitted (SubmitRevision).
+// note is submitted (SubmitRevision). If a revision note was already recorded for
+// this suggestion, the form opens pre-filled with it so the reviewer can EDIT the
+// note in place rather than undo-and-retype.
 func (c *PrereviewController) RequestRevision(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RevisingSuggestionID = ctx.GetString("id")
+	id := ctx.GetString("id")
+	state.RevisingSuggestionID = id
 	state.RevisionDraft = ""
+	for _, d := range state.Decisions {
+		if d.SuggestionID == id && d.Verdict == verdictRevise {
+			state.RevisionDraft = d.Note // edit the existing note
+			break
+		}
+	}
 	return state, nil
 }
 

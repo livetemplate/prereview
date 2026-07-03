@@ -154,4 +154,16 @@ func TestRequestRevision_NoteFlow(t *testing.T) {
 	if st.RevisingSuggestionID != "" {
 		t.Error("form should close after a successful submit")
 	}
+
+	// Re-opening the form on a suggestion that already has a revision note pre-fills
+	// the draft, so the reviewer edits it in place instead of retyping.
+	st, _ = c.RequestRevision(st, decisionCtx("requestRevision", "s1", ""))
+	if st.RevisionDraft != "please soften the tone" {
+		t.Errorf("RequestRevision should pre-fill the existing note, got %q", st.RevisionDraft)
+	}
+	// Editing to a new note updates the recorded decision.
+	st, _ = c.SubmitRevision(st, decisionCtx("submitRevision", "s1", "actually, make it terse"))
+	if got := st.DecisionsBySuggestion()["s1"].Note; got != "actually, make it terse" {
+		t.Errorf("edited note not saved, got %q", got)
+	}
 }

@@ -369,6 +369,7 @@
   </form>
   {{- else if $d.Verdict -}}
   <div class="sg-actions">
+    {{- if eq $d.Verdict "revise"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevision" class="outline">Edit note</button></form>{{end -}}
     <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="clearSuggestionDecision" class="outline">Undo</button></form>
   </div>
   {{- else -}}

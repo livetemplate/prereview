@@ -915,8 +915,7 @@
       <button type="submit" name="cancelRevision" class="secondary outline">Cancel</button>
       <button type="submit" name="submitRevision">Send revision</button>
     </div>
-  </form>{{else}}{{if $d.Verdict}}<div class="sg-actions">
-    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="clearSuggestionDecision" class="outline">Undo</button></form>
+  </form>{{else}}{{if $d.Verdict}}<div class="sg-actions">{{if eq $d.Verdict "revise"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevision" class="outline">Edit note</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="clearSuggestionDecision" class="outline">Undo</button></form>
   </div>{{else}}<div class="sg-actions">
     <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="acceptSuggestion" class="outline sg-accept-btn">Accept</button></form>
     <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="rejectSuggestion" class="outline sg-reject-btn">Reject</button></form>
