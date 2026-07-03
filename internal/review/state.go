@@ -98,6 +98,18 @@ type PrereviewState struct {
 	// affect the underlying suggestions.
 	HideSuggestions bool `json:"hide_suggestions" lvt:"persist"`
 
+	// Decisions are the reviewer's recorded verdicts on suggestions (issue #98
+	// Phase 2), loaded from the server-owned .prereview/suggestion-decisions.jsonl
+	// every Mount (the file is the source of truth — not lvt:"persist"). Overlaid
+	// onto suggestions by ID + content fingerprint in DecisionsBySuggestion.
+	Decisions []SuggestionDecision `json:"decisions"`
+
+	// RevisingSuggestionID is the suggestion whose inline "request revision" note
+	// form is open (mirrors EditingCommentID); RevisionDraft holds the in-progress
+	// note so it survives reconnects. Empty = no revision form open.
+	RevisingSuggestionID string `json:"revising_suggestion_id" lvt:"persist"`
+	RevisionDraft        string `json:"revision_draft" lvt:"persist"`
+
 	// UI status.
 	LastSaved   string `json:"last_saved"`
 	DoneWritten bool   `json:"done_written" lvt:"persist"`

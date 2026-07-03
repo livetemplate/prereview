@@ -299,6 +299,10 @@
         </form>
         {{end}}
         
+        {{if gt .DecisionCount 0}}
+        <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
+        {{end}}
+        
         {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
         <form method="POST">
           <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">
@@ -474,6 +478,9 @@
       <span class="menu-meta">{{.SuggestionCount}}</span>
     </button>
   </form>
+  {{end}}
+  {{if gt .DecisionCount 0}}
+  <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
   {{end}}
   {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
   <div class="menu-info" style="border-bottom: 0; margin-bottom: 0; font-style: italic;">No comments yet — tap a line to add one.</div>
@@ -900,5 +907,17 @@
   <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
 </form>
 === suggestionCard ===
-<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span> · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}<pre class="sg-new">{{.ProposedText}}</pre>
-  </div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}</div>
+{{$d := index $.DecisionsBySuggestion .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span> · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject">rejected</small>{{end}}{{if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end}}</header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}<pre class="sg-new">{{.ProposedText}}</pre>
+  </div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{if and (eq $d.Verdict "revise") $d.Note}}<div class="sg-revise-note">{{$d.Note}}</div>{{end}}{{if not .AnchorOutdated}}{{if eq $.RevisingSuggestionID .ID}}<form method="POST" class="sg-revise-form" lvt-form:preserve lvt-on:keydown="submitRevision" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea name="note" placeholder="What should change?" lvt-on:input="saveRevisionDraft" lvt-mod:debounce="200" lvt-autofocus>{{$.RevisionDraft}}</textarea>
+    <div class="sg-actions">
+      <button type="submit" name="cancelRevision" class="secondary outline">Cancel</button>
+      <button type="submit" name="submitRevision">Send revision</button>
+    </div>
+  </form>{{else}}{{if $d.Verdict}}<div class="sg-actions">{{if eq $d.Verdict "revise"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevision" class="outline">Edit note</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="clearSuggestionDecision" class="outline">Undo</button></form>
+  </div>{{else}}<div class="sg-actions">
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="acceptSuggestion" class="outline sg-accept-btn">Accept</button></form>
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="rejectSuggestion" class="outline sg-reject-btn">Reject</button></form>
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevision" class="outline">Request revision</button></form>
+  </div>{{end}}{{end}}{{end}}</div>
