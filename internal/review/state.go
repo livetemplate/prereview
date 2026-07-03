@@ -258,6 +258,28 @@ type PrereviewState struct {
 	// a refresh shouldn't reopen a help panel.
 	KeyHelpOpen bool `json:"key_help_open"`
 
+	// SearchOpen drives the cmd+k search palette (issue #91), toggled by the
+	// Mod+k binding / the toolbar magnifier (openSearch) and closed by Esc
+	// (ClearSelection) or the close button. SearchQuery is the live-debounced
+	// text; SearchScopeAll switches between the changed set (default) and all
+	// files; SearchHits is the computed result list (filled by the controller —
+	// a zero-arg state method can't reach loadDiffCached). None persisted: a
+	// reopened tab shouldn't resurrect a stale palette (mirrors KeyHelpOpen).
+	SearchOpen     bool        `json:"search_open"`
+	SearchQuery    string      `json:"search_query"`
+	SearchScopeAll bool        `json:"search_scope_all"`
+	SearchHits     []SearchHit `json:"search_hits"`
+
+	// RevealFile is a search-jump's transient "show this file's full RAW source"
+	// override: JumpToSearchResult sets it to the hit's path so the exact matched
+	// line exists in the DOM to scroll to — even in an unchanged region diff-view
+	// would fold, and even for Markdown/HTML (which otherwise render as blocks /
+	// preview with no L<old>-<new> rows). Honoured by Revealing() → VisibleLines
+	// (full file) + ShowRenderedMarkdown/ShowRenderedHTML (fall to line view). It
+	// deliberately does NOT touch the durable FileView pref. Cleared on SelectFile
+	// so it never leaks onto later navigation. Not persisted.
+	RevealFile string `json:"reveal_file"`
+
 	// CursorKey is the data-key ("L<old>-<new>") of the diff line the keyboard
 	// line cursor is on. ArrowUp/ArrowDown move it (CursorUp/CursorDown); the
 	// matching line button is highlighted, scrolled into view, and focused
@@ -528,7 +550,10 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	if s.CurrentDiff == nil {
 		return nil
 	}
-	if s.FileView {
+	// FileView (durable pref) OR Revealing() (a transient search-jump reveal)
+	// shows the whole file so an arbitrary matched line is present to scroll to;
+	// otherwise diff view collapses unchanged runs into folds.
+	if s.FileView || s.Revealing() {
 		out := make([]gitdiff.DiffLine, 0, len(s.CurrentDiff.Lines))
 		for _, l := range s.CurrentDiff.Lines {
 			if l.NewNum > 0 { // exists in the working-tree file
@@ -587,7 +612,9 @@ func (s PrereviewState) BinaryKind() string {
 // not toggled to raw, with at least one rendered block. Zero-arg so
 // the template can branch on `$.ShowRenderedMarkdown`.
 func (s PrereviewState) ShowRenderedMarkdown() bool {
-	return s.IsMarkdown() && !s.RawMarkdown && len(s.CurrentDiff.MarkdownBlocks) > 0
+	// Revealing() forces the raw line view so a search-jump lands on the exact
+	// source line (rendered blocks carry no L<old>-<new> rows to scroll to).
+	return s.IsMarkdown() && !s.RawMarkdown && !s.Revealing() && len(s.CurrentDiff.MarkdownBlocks) > 0
 }
 
 // ShowRenderedHTML is true when the viewer should swap the line view
@@ -596,8 +623,35 @@ func (s PrereviewState) ShowRenderedMarkdown() bool {
 // empty file falls through to the line view (showing the diff)
 // instead of an empty preview pane.
 func (s PrereviewState) ShowRenderedHTML() bool {
-	return s.IsHTML() && !s.RawHTML &&
+	// Revealing() forces the raw line view so a search-jump lands on the exact
+	// source line (the preview iframe has no L<old>-<new> rows to scroll to).
+	return s.IsHTML() && !s.RawHTML && !s.Revealing() &&
 		s.CurrentDiff != nil && len(s.CurrentDiff.HTMLBlocks) > 0
+}
+
+// Revealing reports whether the currently-selected file is being shown as its
+// full RAW source because a search-jump set RevealFile to it — see RevealFile.
+// Zero-arg so VisibleLines / ShowRendered* can gate on it.
+func (s PrereviewState) Revealing() bool {
+	return s.RevealFile != "" && s.CurrentDiff != nil && s.CurrentDiff.Path == s.RevealFile
+}
+
+// SearchScopeCount is the number of files the current search scope covers —
+// changed files by default, or every file when SearchScopeAll. Drives the scope
+// toggle's count. Zero-arg for the template.
+func (s PrereviewState) SearchScopeCount() int {
+	if s.SearchScopeAll {
+		return len(s.Files)
+	}
+	return s.ChangedFilesCount()
+}
+
+// SearchScopeLabel is the human label for the current search scope toggle.
+func (s PrereviewState) SearchScopeLabel() string {
+	if s.SearchScopeAll {
+		return "All files"
+	}
+	return "Changed files"
 }
 
 // RenderedHTML is the block list for the rendered HTML view (nil unless

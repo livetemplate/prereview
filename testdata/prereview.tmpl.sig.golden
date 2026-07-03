@@ -97,6 +97,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round" /><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg>
 === iconRendered ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+=== iconSearch ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7" fill="none" /><path d="M16 16l5 5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" /></svg>
 === iconStop ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8" fill="none" /></svg>
 === iconTOC ===
@@ -186,6 +188,12 @@
   <form method="POST">
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
   </form>
+  
+  {{if not .ExternalMode}}
+  <form method="POST">
+    <button type="submit" name="openSearch" class="search-btn outline contrast" aria-label="Search files" title="Search files (⌘/Ctrl + K)">{{template "iconSearch"}}</button>
+  </form>
+  {{end}}
   <div class="title">
     <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}</span>
   </div>
@@ -770,6 +778,46 @@
   
   <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
 </div>
+
+{{if not .ExternalMode}}
+<div class="search-backdrop{{if .SearchOpen}} is-open{{end}}" lvt-on:click="closeSearch" aria-hidden="true"></div>
+<div class="search-modal{{if .SearchOpen}} is-open{{end}}" role="dialog" aria-label="Search files" aria-modal="true">
+  {{if .SearchOpen}}
+  <div class="search-head">
+    <span class="search-head-icon">{{template "iconSearch"}}</span>
+    <form method="POST" lvt-form:preserve class="search-input-form">
+      <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search file names & contents…" lvt-autofocus lvt-on:input="setSearchQuery" lvt-mod:debounce="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    </form>
+    <form method="POST">
+      <button type="submit" name="toggleSearchScope" class="search-scope outline" title="Toggle search scope (changed files vs all files)">{{.SearchScopeLabel}} <span class="search-scope-count">{{.SearchScopeCount}}</span></button>
+    </form>
+    <form method="POST">
+      <button type="submit" name="closeSearch" class="outline close-btn" aria-label="Close">{{template "iconClose16"}}</button>
+    </form>
+  </div>
+  <div class="search-body">
+    {{if .SearchHits}}
+    <ul class="search-list">{{range .SearchHits}}
+      <li class="search-item{{if eq .Kind "file"}} is-file{{end}}">
+        <form method="POST">
+          <input type="hidden" name="file" value="{{.File}}">
+          <input type="hidden" name="old" value="{{.OldNum}}">
+          <input type="hidden" name="new" value="{{.NewNum}}">
+          <button type="submit" name="jumpToSearchResult" class="search-hit">
+            <span class="search-where"><code>{{.File}}</code>{{if eq .Kind "line"}} <small>L{{.NewNum}}</small>{{else}} <small class="search-filematch">file name</small>{{end}}</span>{{if eq .Kind "line"}}<span class="search-line">{{.Line}}</span>{{end}}</button>
+        </form>
+      </li>{{end}}
+    </ul>
+    {{if .SearchTruncated}}<p class="search-note">Showing the first {{len .SearchHits}} matches — narrow your search.</p>{{end}}
+    {{else}}{{if .SearchQuery}}
+    <p class="search-empty">No matches for “{{.SearchQuery}}”.</p>
+    {{else}}
+    <p class="search-empty">Type to search file names and contents.</p>
+    {{end}}{{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
 <footer class="app-footer" role="contentinfo">
   prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
 </footer>
