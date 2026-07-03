@@ -219,6 +219,12 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// happens after the diff loads (relocateSuggestionsSelected below).
 	c.applySuggestions(&state)
 
+	// Load the reviewer's recorded decisions on those suggestions (#98 Phase 2)
+	// from the server-owned .prereview/suggestion-decisions.jsonl. Overlaid onto
+	// suggestions (by ID + content fingerprint) at render time in
+	// DecisionsBySuggestion, so a revised suggestion drops its stale verdict.
+	c.applyDecisions(&state)
+
 	// SkillMode is mirror-only: refresh from the controller every connect
 	// so a binary launched with --skill renders the right button even after
 	// a session-storage reconnect.

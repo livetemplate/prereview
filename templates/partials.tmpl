@@ -317,17 +317,24 @@
 
 {{/* suggestionCard — one LLM-proposed edit (issue #98), rendered inline like a
      comment but visually distinct (sparkle icon, accent-tinted chrome, a
-     before→after mini-diff). Phase 1 is read-only: no accept/reject/revise actions
-     yet (those arrive in Phase 2). The <pre> bodies are whitespace-significant, so
-     the value actions are trim-wrapped to hold exactly the original/proposed text. */}}
+     before→after mini-diff). Phase 2 adds the reviewer's decision: accept / reject /
+     request-revision (with a note), shown as a verdict badge + action row. $d is the
+     live decision (fingerprint-matched via $.DecisionsBySuggestion) or a zero value
+     (undecided). Nothing is applied to files — a decision is pending until hand-off
+     (Phase 3). The <pre> bodies are whitespace-significant, so the value actions are
+     trim-wrapped to hold exactly the original/proposed text. */}}
 {{define "suggestionCard" -}}
-<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}"
+{{$d := index $.DecisionsBySuggestion .ID -}}
+<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}"
      data-key="sg-{{.ID}}"
      lvt-fx:animate="fade">
-  {{- /* sparkle label · line span · drift status */ -}}
+  {{- /* sparkle label · line span · drift status · verdict */ -}}
   <header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span> · <small>{{.LineSpan}}</small>
     {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
-    {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end -}}
+    {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
+    {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}
+    {{- if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject">rejected</small>{{end}}
+    {{- if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end -}}
   </header>
   {{- if .Note}}<div class="sg-note">{{.Note}}</div>{{end -}}
   {{- /* before → after; the original is omitted for a pure insertion */ -}}
@@ -337,6 +344,40 @@
   </div>
   {{- if .AnchorOutdated -}}
   <details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{- .OriginalText -}}</pre></details>
+  {{- end -}}
+  {{- /* the reviewer's requested-revision note, if any */ -}}
+  {{- if and (eq $d.Verdict "revise") $d.Note}}<div class="sg-revise-note">{{$d.Note}}</div>{{end -}}
+  {{- /* decision surface — hidden for outdated suggestions (can't act on a stale
+         target; the LLM re-derives it on hand-off) */ -}}
+  {{- if not .AnchorOutdated -}}
+  {{- if eq $.RevisingSuggestionID .ID -}}
+  {{- /* inline "request revision" note form. Not `required` so Cancel doesn't trip
+         HTML validation; SubmitRevision re-opens the form on an empty note. */ -}}
+  <form method="POST" class="sg-revise-form" lvt-form:preserve lvt-on:keydown="submitRevision" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea
+      name="note"
+      placeholder="What should change?"
+      lvt-on:input="saveRevisionDraft"
+      lvt-mod:debounce="200"
+      lvt-autofocus
+    >{{$.RevisionDraft}}</textarea>
+    <div class="sg-actions">
+      <button type="submit" name="cancelRevision" class="secondary outline">Cancel</button>
+      <button type="submit" name="submitRevision">Send revision</button>
+    </div>
+  </form>
+  {{- else if $d.Verdict -}}
+  <div class="sg-actions">
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="clearSuggestionDecision" class="outline">Undo</button></form>
+  </div>
+  {{- else -}}
+  <div class="sg-actions">
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="acceptSuggestion" class="outline sg-accept-btn">Accept</button></form>
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="rejectSuggestion" class="outline sg-reject-btn">Reject</button></form>
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevision" class="outline">Request revision</button></form>
+  </div>
+  {{- end -}}
   {{- end -}}
 </div>
 {{- end}}

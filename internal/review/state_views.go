@@ -85,6 +85,35 @@ func (s PrereviewState) SuggestionCount() int {
 	return n
 }
 
+// DecisionsBySuggestion maps each CURRENT suggestion's ID to its recorded decision,
+// but ONLY when the decision's fingerprint still matches the suggestion's content.
+// A same-id revision (new proposed text) changes the fingerprint, so its stale
+// decision drops and the suggestion reads as undecided again; orphan decisions
+// (the suggestion is gone) are dropped too. Zero-arg so the framework pre-computes
+// it; the suggestionCard looks up its own ID via {{index $.DecisionsBySuggestion .ID}}.
+func (s PrereviewState) DecisionsBySuggestion() map[string]SuggestionDecision {
+	if len(s.Decisions) == 0 || len(s.Suggestions) == 0 {
+		return nil
+	}
+	byID := make(map[string]SuggestionDecision, len(s.Decisions))
+	for _, d := range s.Decisions {
+		byID[d.SuggestionID] = d
+	}
+	out := make(map[string]SuggestionDecision)
+	for _, sg := range s.Suggestions {
+		if d, ok := byID[sg.ID]; ok && d.Fingerprint == suggestionFingerprint(sg) {
+			out[sg.ID] = d
+		}
+	}
+	return out
+}
+
+// DecisionCount is the number of current suggestions carrying a live (fingerprint-
+// matching) decision — drives the "N decisions recorded" status. Zero-arg.
+func (s PrereviewState) DecisionCount() int {
+	return len(s.DecisionsBySuggestion())
+}
+
 // FileSuggestions returns the selected file's suggestions as a flat slice (nil
 // when toggled off), so the rendered-Markdown view can, per block, show the
 // suggestions whose ToLine falls in that block's source range — the parallel of
