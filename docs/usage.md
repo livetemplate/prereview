@@ -41,7 +41,14 @@ live page and comment; the annotation re-pins as the page scrolls.
 
 **See every comment in one place.** The **All comments** chip lists every
 comment across all files — line, text, file, and region kinds — each with a jump
-back to its source.
+back to its source. **Show / hide resolved** keeps addressed comments out of the
+way (or hide a single resolved one to declutter without turning the whole group
+off).
+
+**Search across files.** Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>)
+to open a search palette that matches both file names and line contents across
+the changed files — toggle it to search every file. Picking a result opens the
+file and jumps to the line, revealing it even if it's inside a folded region.
 
 ## Sending work to your agent
 
@@ -58,6 +65,33 @@ an agent's `/prereview` command sets for you) the primary button is
 any agent can consume it. With `--stream`, each hand-off instead emits a JSON
 snapshot on a continuous event stream for a multi-round LLM loop — see the CLI
 reference below.
+
+While the agent works a batch, its **live status** (working / done) shows in the
+toolbar, and each comment it addresses gets a **worked on** badge — so you can
+see progress without leaving the page.
+
+## Suggested edits
+
+The hand-off also runs the other way: your agent can *propose* edits and you
+decide on them. Ask it to review something and suggest edits (e.g. "review the
+doc for ambiguity and suggest edits in prereview"); it submits them with
+`prereview suggest`, and each appears inline as a **before → after** box —
+visually distinct from a comment.
+
+On each box:
+
+- **Accept** — take the edit.
+- **Reject** — drop it.
+- **Request revision** — send it back with a note (you can edit the note before
+  it goes).
+
+Decisions are **pending until you hand off** — exactly like comments. On the
+next **Hand off →** they ship to the agent, which applies the accepted edits,
+drops the rejected ones, and reworks the ones you asked to revise (a reworked
+suggestion comes back for a fresh look). prereview never edits your files
+itself; the agent does, so an accepted edit shows up as a normal diff you can
+commit. Use **Show / hide suggestions** (or press <kbd>s</kbd>) to toggle the
+boxes while you read.
 
 ## Themes & modes
 
@@ -102,6 +136,10 @@ commentable), with no diff and no base picker.
 
 Run-and-exit actions (they don't start the server): `--version`,
 `--install-skill` / `--client`, `--update`, `--uninstall`, `--no-update`.
+
+The agent side uses two subcommands you rarely run by hand: `prereview suggest`
+(submit proposed edits) and `prereview processed` (mark comments worked-on). See
+[`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md).
 
 > [!TIP]
 > The full reference — every flag, mode, and combination — lives in

@@ -13,10 +13,15 @@ cd "$(dirname "$0")/../.." # repo root
 bin=$(mktemp -u /tmp/prereview-shot.XXXXXX)
 demo=$(mktemp -d /tmp/prereview-demo.XXXXXX)
 log=$(mktemp /tmp/prereview-shot-log.XXXXXX)
+# Isolate the per-user view prefs so shots use the default scheme/mode and
+# rendered (not raw) Markdown regardless of the developer's real config (same as
+# the e2e suite / the gif script).
+prefs=$(mktemp -u /tmp/prereview-shotprefs.XXXXXX)
+export PREREVIEW_UI_PREFS_PATH="$prefs"
 srv=""
 cleanup() {
 	[ -n "$srv" ] && kill "$srv" 2>/dev/null || true
-	rm -rf "$demo" "$bin" "$log"
+	rm -rf "$demo" "$bin" "$log" "$prefs"
 }
 trap cleanup EXIT
 

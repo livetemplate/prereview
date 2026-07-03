@@ -1,6 +1,6 @@
 # prereview
 
-**You spot what's wrong; the LLM fixes it — locally, before you push.** Review any change — a diff line, a Markdown or HTML block, a region of an image, even a box on a live local site — and hand the fixes to your coding agent. Works with any LLM CLI. All local, before anything leaves your machine.
+**You spot what's wrong; the LLM fixes it — locally, before you push.** Review any change — a diff line, a Markdown or HTML block, a region of an image, even a box on a live local site — and hand the fixes to your coding agent. It works the other way too: the agent can propose edits inline, and you accept, reject, or send each back with a note. Works with any LLM CLI. All local, before anything leaves your machine.
 
 <p align="center">
   <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
@@ -19,7 +19,9 @@ your agent applies the changes — and works with **any other coding agent**
 (OpenAI Codex CLI, Gemini CLI, aider, opencode, cursor-agent) through the
 same open comment protocol; see **[Works with any LLM CLI](#works-with-any-llm-cli)**.
 On a remote box it auto-binds your Tailscale address — review from your
-phone over the tailnet, before anything is pushed.
+phone over the tailnet, before anything is pushed. The agent can also
+**suggest edits** back to you (`prereview suggest`) — inline boxes you
+accept, reject, or ask it to revise, then hand the batch back.
 
 ## Features
 
@@ -35,6 +37,17 @@ phone over the tailnet, before anything is pushed.
   like, ending only when you click **End session**. No re-invocation, no
   hand-written CSV parser. (Streaming is the Claude Code default; other
   agents use a one-shot-per-batch flow — see [Works with any LLM CLI](#works-with-any-llm-cli).)
+- **Suggested edits, the other direction** — the agent proposes edits
+  inline (`prereview suggest`) as before → after boxes; you **accept**,
+  **reject**, or **ask for a revision** (with a note), and hand the batch
+  back. Accepted edits are the agent's to apply — prereview never touches
+  your files on its own.
+- **Comment on a word or phrase, not just a line** — select any span of
+  text (or a rendered Markdown phrase) and the comment anchors to exactly
+  those characters. **⌘K / Ctrl-K** searches file names and contents across
+  the changed set (or all files) and jumps to a hit.
+- **Themes** — Solarized, Gruvbox, and Catppuccin colour schemes ×
+  Light / Dark / System, from the toolbar.
 - **Full GitHub-flavoured Markdown & HTML render** — tables, task-lists,
   syntax-highlighted code, `> [!NOTE]` alerts, footnotes, `:emoji:` and
   mermaid diagrams render the way GitHub shows them; formatted by default,
@@ -51,7 +64,8 @@ phone over the tailnet, before anything is pushed.
 Most "AI code review" tools have the model *find* the problems for you to
 read. prereview inverts that: **you** spot what's wrong — across any
 artifact, not just code — and the LLM does the *fixing*, locally, before
-you push.
+you push. The loop runs both ways: the agent can also propose edits, and
+you're the one who accepts, rejects, or asks for a revision.
 
 - **vs. AI reviewers** (CodeRabbit, Gito, Ollama pre-commit hooks, Qodo) —
   they generate the review; prereview captures *your* judgment as
@@ -117,7 +131,7 @@ scoop install prereview/prereview
 go install github.com/livetemplate/prereview@latest
 ```
 
-Quick-install knobs: `PREREVIEW_INSTALL_DIR=/path`, `PREREVIEW_VERSION=v0.4.0`.
+Quick-install knobs: `PREREVIEW_INSTALL_DIR=/path`, `PREREVIEW_VERSION=vX.Y.Z` (pin a specific release; omit for latest).
 
 <details>
 <summary>Behind a corporate proxy, upgrading, or uninstalling</summary>
@@ -249,6 +263,15 @@ sidebar.
 <p align="center"><img src="docs/markdown-block.gif" alt="Clicking a rendered Markdown block; the comment anchors to its source line" width="760"></p>
 <p align="center"><sub><em>Markdown renders with a TOC; click a block and the comment anchors to its source line.</em></sub></p>
 
+**Take the agent's suggested edits.** Your agent can propose edits with
+`prereview suggest`; each renders inline as a before → after box. **Accept**
+to take it, **Reject** to drop it, or **Request revision** to send it back
+with a note — the decisions ride the next hand-off, and the agent applies
+the ones you accepted. Nothing is written to your files until then.
+
+<p align="center"><img src="docs/suggestion.gif" alt="An LLM-proposed edit shown inline as a before-after box; the reviewer clicks Accept and a verdict badge appears" width="760"></p>
+<p align="center"><sub><em>The agent suggests an edit; you accept, reject, or ask for a revision.</em></sub></p>
+
 **Annotate a live local site** (`--external`). Point prereview at a
 running dev server; it proxies the page so you can drag a box on any
 region and comment — the annotation re-pins to the page as it scrolls.
@@ -257,11 +280,25 @@ region and comment — the annotation re-pins to the page as it scrolls.
 <p align="center"><sub><em>Review a running site: drag a region on the live page and comment.</em></sub></p>
 
 **See every comment in one place** — the **All comments** chip lists
-comments across all files (line, file, and area kinds), each with a jump
-back to its source.
+comments across all files (line, text, file, and area kinds), each with a
+jump back to its source.
 
-<p align="center"><img src="docs/all-comments.png" alt="The all-comments overview listing line, file, and area comments across files" width="760"></p>
+<p align="center"><img src="docs/all-comments.png" alt="The all-comments overview listing line, text, file, and area comments across files" width="760"></p>
 <p align="center"><sub><em>Every comment across files in one list.</em></sub></p>
+
+**Search across files.** **⌘K** (Ctrl-K) opens a palette that matches file
+names and line contents across the changed set — toggle to search every
+file — and jumping to a hit reveals its line, even inside a folded region.
+
+<p align="center"><img src="docs/search.gif" alt="The Cmd-K search palette matching text across files and jumping to a hit" width="760"></p>
+<p align="center"><sub><em>⌘K searches file names and contents, then jumps to the match.</em></sub></p>
+
+**Pick a theme.** The toolbar cycles three colour schemes — Solarized,
+Gruvbox, Catppuccin — each with Light / Dark / System modes; syntax
+highlighting recolours with them, no reload.
+
+<p align="center"><img src="docs/themes.gif" alt="Cycling the Solarized, Gruvbox, and Catppuccin colour schemes from the toolbar" width="760"></p>
+<p align="center"><sub><em>Three colour schemes × Light / Dark / System.</em></sub></p>
 
 **Review from your phone.** On a remote box prereview binds your
 Tailscale IP, so the same review + hand-off works from the Claude mobile
@@ -274,21 +311,31 @@ app over the tailnet.
 file (line numbers match, so comments resolve across both) · the base
 **dropdown** picks `HEAD~N`, branches, or remotes (pass anything else via
 `--base`) · each comment has **Edit / Resolve / Delete** (Resolve keeps
-an audit trail; Delete has Undo) · **Esc** clears a selection.
+an audit trail; Delete has Undo) · **show / hide resolved** and hide a
+single resolved comment to declutter · the agent badges each comment it
+**worked on** and its live status (working / done) shows in the toolbar ·
+**Esc** clears a selection.
 
 ## Output
 
 `<repo>/.prereview/comments.csv` is the source of truth — RFC-4180
-quoted, 13 columns, one row per comment:
+quoted, 16 columns, one row per comment:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden
 ```
 
-`kind` is `line` (default), `file`, `area`, or `region` (a live-site
-rectangle from `--external`, anchored to a `url`); `area` carries the
-rectangle as `{x,y,w,h}` fractions. See
-[skill/reference.md](skill/reference.md) for the full column docs.
+`kind` is `line` (default), `text` (a character range within a line —
+`from_col`/`to_col`), `file`, `area`, or `region` (a live-site rectangle
+from `--external`, anchored to a `url`); `area` carries the rectangle as
+`{x,y,w,h}` fractions. See [skill/reference.md](skill/reference.md) for the
+full column docs.
+
+Alongside the CSV, `.prereview/` holds a few sidecar files: the agent's
+proposed edits (`suggestions.jsonl`) and your verdicts on them
+(`suggestion-decisions.jsonl`); the comments it marked worked-on
+(`processed.jsonl`); and its live status (`llm-status.json`). See
+[docs/cli.md](docs/cli.md#output) for the inventory.
 
 ## Architecture (at a glance)
 

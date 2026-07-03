@@ -375,7 +375,7 @@ func seedFileComment(allocCtx context.Context, url, frag, body string) {
 	withCtx(allocCtx, "seed-file:"+frag, func(ctx context.Context) error {
 		acts := base(url, frag, 1280, 800)
 		acts = append(acts,
-			chromedp.Click(`.tb-action button[name="openFileComment"]`, chromedp.ByQuery),
+			chromedp.Click(`button[name="openFileComment"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
 			chromedp.Sleep(150*time.Millisecond),

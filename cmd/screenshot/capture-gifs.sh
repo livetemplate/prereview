@@ -19,10 +19,17 @@ extout=$(mktemp -d /tmp/prereview-gifext.XXXXXX)
 log=$(mktemp /tmp/prereview-gif-log.XXXXXX)
 sitelog=$(mktemp /tmp/prereview-site-log.XXXXXX)
 extlog=$(mktemp /tmp/prereview-extui-log.XXXXXX)
+# Isolate the per-USER view prefs so captures are deterministic (default
+# scheme/mode, rendered — not raw — Markdown) regardless of the developer's real
+# ~/.config/prereview/ui-prefs.json, and so the themes flow's scheme changes
+# don't pollute it. Same trick the e2e suite uses (prefsIsolatedEnv). A -u path
+# doesn't exist yet, so the server starts from clean defaults and writes here.
+prefs=$(mktemp -u /tmp/prereview-gifprefs.XXXXXX)
+export PREREVIEW_UI_PREFS_PATH="$prefs"
 srv=""; site=""; ext=""
 cleanup() {
 	for p in "$srv" "$site" "$ext"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
-	rm -rf "$demo" "$extout" "$bin" "$log" "$sitelog" "$extlog"
+	rm -rf "$demo" "$extout" "$bin" "$log" "$sitelog" "$extlog" "$prefs"
 }
 trap cleanup EXIT
 
@@ -45,10 +52,20 @@ srv=$!
 url=$(wait_ready "$log")
 [ -n "$url" ] || { echo "server failed:"; cat "$log"; exit 1; }
 
-# image/markdown first — they read the pristine demo tree. hero runs LAST
-# because it edits payment.go on disk (the scripted "Claude fix") to show the
-# review→fix loop close; running it after the others keeps their diffs pristine.
-for flow in image markdown; do
+# Seed a suggestion (agent → user, issue #98) for the suggestion flow: the
+# `suggest` subcommand appends to .prereview/suggestions.jsonl, which the server
+# surfaces as an inline before→after box on guide.md.
+echo "› seeding a suggestion"
+"$bin" suggest --out "$demo" <<'JSON'
+{"id":"sg-guide","file":"guide.md","from_line":12,"to_line":12,"original":"Transient gateway errors are retried with backoff.","proposed":"Transient gateway errors are retried with exponential backoff, up to maxRetries attempts.","note":"be specific about the backoff strategy"}
+JSON
+
+# image + the read-only flows (suggestion/search/themes) first — they read the
+# pristine demo tree. hero runs LAST because it edits payment.go on disk (the
+# scripted "Claude fix"); running it after the others keeps their diffs pristine.
+# suggestion runs before markdown so guide.md carries only the suggestion box
+# (no stray comment) in that capture.
+for flow in image suggestion search themes markdown; do
 	echo "› capturing gif:$flow"
 	GOWORK=off go run ./cmd/screenshot --gif "$flow" --url "$url" --out docs
 done

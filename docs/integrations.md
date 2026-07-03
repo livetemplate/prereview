@@ -28,18 +28,21 @@ When you run `prereview`, it writes everything to a `.prereview/` directory
 
 ### 1. `.prereview/comments.csv` — the source of truth
 
-RFC-4180 quoted, one row per comment, 13 columns:
+RFC-4180 quoted, one row per comment, 16 columns:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden
 ```
 
 An agent applying a review reads this file and acts on every row where
 **`resolved` is not `true`** and **`anchor_status` is not `outdated`** — that
 filtered set is the complete list of still-actionable comments. `kind` is `line`
-(default), `file`, `area` (an image rectangle, `area` column holds
+(default), `text` (a character range within a line; `from_col`/`to_col` are the
+0-based rune offsets), `file`, `area` (an image rectangle, `area` column holds
 `{x,y,w,h}` fractions), or `region` (a live-site rectangle anchored to `url`).
-Full column docs: [skill/reference.md](../skill/reference.md).
+`hidden` is a reviewer-only view flag — ignore it. Older CSVs may have fewer
+trailing columns; index by position and default missing ones to empty. Full
+column docs: [skill/reference.md](../skill/reference.md).
 
 This file alone is enough to drive a fix — no stream required. That is what
 makes prereview agent-agnostic.
@@ -50,9 +53,11 @@ With `--stream`, prereview emits one JSON object per line to stdout and to
 `.prereview/events.jsonl`:
 
 - `{"event":"ready",...}` — session is live.
-- `{"event":"handoff","seq":N,"comments":[…]}` — the user clicked **Hand off →**;
-  `comments` is a full snapshot of every still-actionable comment (already
-  filtered as above).
+- `{"event":"handoff","seq":N,"comments":[…],"suggestions":[…]}` — the user clicked
+  **Hand off →**. `comments` is a full snapshot of every still-actionable comment
+  (already filtered as above); `suggestions` is the user's decisions on edits *you*
+  proposed (see [Suggesting edits](#suggesting-edits)). Both arrays are always
+  present (`[]` when empty); dedupe by `id`.
 - `{"event":"session_end","seq":N}` — the user clicked **End session**; the
   server exits.
 
@@ -68,6 +73,27 @@ off writes `.prereview/DONE`. An agent launches the server, tells you the URL,
 waits until you've commented and clicked Hand off, then reads `comments.csv` and
 applies the open comments. This is the portable flow every non-Claude agent
 uses.
+
+### Suggesting edits
+
+The protocol also runs the other way: an agent can **propose** edits the user
+accepts, rejects, or asks to revise.
+
+- **Submit** proposals with `prereview suggest` (a JSON payload on stdin or
+  `--file`) — they append to `.prereview/suggestions.jsonl` and render inline as
+  before → after boxes. Each: `{id, file, from_line, to_line, side, original,
+  proposed, note}`; re-use an `id` to revise that suggestion.
+- **Receive** the user's decisions in each `--stream` hand-off's `suggestions[]`
+  array (one entry per decided, non-outdated suggestion): `{id, file, from_line,
+  to_line, side, verdict, note, original, proposed, anchor_status}`. Act by
+  `verdict`: **`accept`** → apply the edit (replace `original` with `proposed` at
+  those lines — *you* write the file); **`reject`** → drop it; **`revise`** →
+  rework it and re-submit with the same `id` and new `proposed`. Only `ok`/`moved`
+  statuses are emitted (both have trustworthy line numbers); an applied accept
+  drops off later hand-offs on its own.
+
+`prereview processed <id>…` marks comments **worked on** (a UI badge), the same
+append-only, agent-writes / server-reads shape.
 
 ## Why most agents use one-shot mode
 
@@ -230,7 +256,11 @@ generic instruction is:
 > coherent change. Use `file` + `from_line`/`to_line` to locate each comment and
 > `body` for intent. Repeat per hand-off; stop when the user is finished.
 
-Drop that into your agent's instruction/command/rules file and you're done.
+Drop that into your agent's instruction/command/rules file and you're done. To
+also **propose** edits, add: *submit suggestions with `prereview suggest`
+(a JSON payload), and on each hand-off apply the `suggestions[]` decisions —
+`accept` → make the edit, `reject` → skip, `revise` → re-submit the same `id`
+with new `proposed` text.*
 
 ## Status summary
 
