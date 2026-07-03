@@ -211,7 +211,7 @@ func relocate(diff *gitdiff.FileDiff, c *Comment) bool {
 		return false
 	}
 	lines := sideContent(diff, c.Side)
-	changed := relocateLineRange(lines, c)
+	changed := relocateLineRange(lines, &c.FromLine, &c.ToLine, &c.AnchorStatus, c.Anchor)
 	// A kind=text comment's LINE range drifts via the line anchor above; its
 	// sub-line COLUMNS then re-track by locating the exact selected snippet
 	// within the (possibly moved) line — so inserting text earlier on the line
@@ -223,48 +223,51 @@ func relocate(diff *gitdiff.FileDiff, c *Comment) bool {
 	return changed
 }
 
-// relocateLineRange re-anchors c's FromLine/ToLine + AnchorStatus against the
-// side's live lines via the whole-line content fingerprint. Reports whether the
-// range or status changed.
-func relocateLineRange(lines []string, c *Comment) bool {
-	span := max(c.ToLine-c.FromLine, 0)
-	prevStatus := c.AnchorStatus
+// relocateLineRange re-anchors a line range (*fromLine/*toLine + *status,
+// mutated through the given pointers) against the side's live lines via the
+// whole-line content fingerprint in anchor. Reports whether the range or status
+// changed. Sharing the engine through pointers (rather than a *Comment) lets
+// suggestion drift (relocateSuggestion) reuse it verbatim, so the two never
+// diverge.
+func relocateLineRange(lines []string, fromLine, toLine *int, status *string, anchor CommentAnchor) bool {
+	span := max(*toLine-*fromLine, 0)
+	prevStatus := *status
 
 	// Fast path: content still at the recorded position. Note `moved`
-	// is STICKY — once a comment has drifted from where the user
-	// authored it, that stays surfaced (the SSR+WS double-Mount would
+	// is STICKY — once an anchor has drifted from where it was
+	// authored, that stays surfaced (the SSR+WS double-Mount would
 	// otherwise settle it back to ok within one page load, so the badge
 	// would never be seen). It clears only via an explicit user action
 	// (Edit re-capture / Re-anchor). outdated→ok here means the content
 	// genuinely came back to the recorded lines.
-	if joinNorm(lines, c.FromLine, c.ToLine) == c.Anchor.Text {
-		if c.AnchorStatus != anchorMoved {
-			c.AnchorStatus = anchorOK
+	if joinNorm(lines, *fromLine, *toLine) == anchor.Text {
+		if *status != anchorMoved {
+			*status = anchorOK
 		}
-		return c.AnchorStatus != prevStatus
+		return *status != prevStatus
 	}
 
 	// Find every position where the exact anchored text still appears.
 	var starts []int
 	for i := 1; i+span <= len(lines); i++ {
-		if joinNorm(lines, i, i+span) == c.Anchor.Text {
+		if joinNorm(lines, i, i+span) == anchor.Text {
 			starts = append(starts, i)
 		}
 	}
 
 	switch len(starts) {
 	case 0:
-		c.AnchorStatus = anchorOutdated
-		return c.AnchorStatus != prevStatus
+		*status = anchorOutdated
+		return *status != prevStatus
 	case 1:
-		return c.moveTo(starts[0], span, prevStatus)
+		return moveRangeTo(fromLine, toLine, status, starts[0], span, prevStatus)
 	default:
 		// Duplicate content: disambiguate with the before/after context
 		// window. Move only if exactly one candidate scores highest.
 		best, bestScore, tie := -1, -1, false
 		for _, s := range starts {
-			sc := neighborScore(lines, s-1, -1, c.Anchor.Before) +
-				neighborScore(lines, s+span+1, +1, c.Anchor.After)
+			sc := neighborScore(lines, s-1, -1, anchor.Before) +
+				neighborScore(lines, s+span+1, +1, anchor.After)
 			switch {
 			case sc > bestScore:
 				best, bestScore, tie = s, sc, false
@@ -273,26 +276,26 @@ func relocateLineRange(lines []string, c *Comment) bool {
 			}
 		}
 		if tie || bestScore <= 0 {
-			c.AnchorStatus = anchorOutdated
-			return c.AnchorStatus != prevStatus
+			*status = anchorOutdated
+			return *status != prevStatus
 		}
-		return c.moveTo(best, span, prevStatus)
+		return moveRangeTo(fromLine, toLine, status, best, span, prevStatus)
 	}
 }
 
-// moveTo shifts the comment to start1 (keeping its span) and marks it
-// moved (or ok if it did not actually move). Reports whether the
-// line range or status changed.
-func (c *Comment) moveTo(start1, span int, prevStatus string) bool {
+// moveRangeTo shifts [*fromLine,*toLine] to start1 (keeping span) and marks it
+// moved (or ok if it did not actually move). Reports whether the line range or
+// status changed.
+func moveRangeTo(fromLine, toLine *int, status *string, start1, span int, prevStatus string) bool {
 	newFrom, newTo := start1, start1+span
-	moved := newFrom != c.FromLine || newTo != c.ToLine
-	c.FromLine, c.ToLine = newFrom, newTo
+	moved := newFrom != *fromLine || newTo != *toLine
+	*fromLine, *toLine = newFrom, newTo
 	if moved {
-		c.AnchorStatus = anchorMoved
+		*status = anchorMoved
 	} else {
-		c.AnchorStatus = anchorOK
+		*status = anchorOK
 	}
-	return moved || c.AnchorStatus != prevStatus
+	return moved || *status != prevStatus
 }
 
 // relocateTextColumns re-locates a single-line kind=text comment's FromCol/ToCol

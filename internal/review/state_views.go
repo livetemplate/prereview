@@ -50,6 +50,58 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 	return out
 }
 
+// SuggestionsByEndLine groups the selected file's suggestions by ToLine, so the
+// template can inline each suggestion box right after its trailing line — exactly
+// like CommentsByEndLine does for comments. Zero-arg (the framework only
+// pre-computes zero-arg methods). Returns nil when suggestions are toggled off
+// (HideSuggestions) so the whole surface disappears with one flag.
+func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
+	if s.SelectedFile == "" || s.HideSuggestions {
+		return nil
+	}
+	out := make(map[int][]Suggestion)
+	for _, sg := range s.Suggestions {
+		if sg.File != s.SelectedFile {
+			continue
+		}
+		out[sg.ToLine] = append(out[sg.ToLine], sg)
+	}
+	return out
+}
+
+// SuggestionCount is the number of suggestions on the selected file, used to
+// label the toolbar toggle and gate its visibility. Counts regardless of the
+// HideSuggestions toggle (it's the total available, not the shown count).
+func (s PrereviewState) SuggestionCount() int {
+	if s.SelectedFile == "" {
+		return 0
+	}
+	n := 0
+	for _, sg := range s.Suggestions {
+		if sg.File == s.SelectedFile {
+			n++
+		}
+	}
+	return n
+}
+
+// FileSuggestions returns the selected file's suggestions as a flat slice (nil
+// when toggled off), so the rendered-Markdown view can, per block, show the
+// suggestions whose ToLine falls in that block's source range — the parallel of
+// FileComments for the block view. The line/code view uses SuggestionsByEndLine.
+func (s PrereviewState) FileSuggestions() []Suggestion {
+	if s.SelectedFile == "" || s.HideSuggestions {
+		return nil
+	}
+	var out []Suggestion
+	for _, sg := range s.Suggestions {
+		if sg.File == s.SelectedFile {
+			out = append(out, sg)
+		}
+	}
+	return out
+}
+
 // FileComments returns the selected file's visible LINE-anchored
 // comments (honoring ShowResolved) as a flat slice. Zero-arg so the
 // rendered-Markdown view can, per block, show the comments whose

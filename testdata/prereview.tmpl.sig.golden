@@ -1,5 +1,7 @@
 === blockComments ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
+=== blockSuggestions ===
+{{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}
 === commentCardFull ===
 <div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
     <form method="POST">
@@ -101,6 +103,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7" fill="none" /><path d="M16 16l5 5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" /></svg>
 === iconStop ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.8" fill="none" /></svg>
+=== iconSuggestion ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3l1.8 4.9L18.7 9.7 13.8 11.5 12 16.4 10.2 11.5 5.3 9.7 10.2 7.9 12 3z" fill="currentColor" /><path d="M18 15l.8 2.2 2.2.8-2.2.8L18 21l-.8-2.2-2.2-.8 2.2-.8L18 15z" fill="currentColor" /></svg>
 === iconTOC ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
 === iconThemeDark ===
@@ -285,6 +289,16 @@
         </form>
         {{end}}
         
+        {{if gt .SuggestionCount 0}}
+        <form method="POST">
+          <button type="submit" name="toggleSuggestions" class="menu-item{{if not .HideSuggestions}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{template "iconSuggestion"}}</span>
+            <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.SuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
         {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
         <form method="POST">
           <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">
@@ -448,6 +462,16 @@
       <span class="menu-icon">{{template "iconCircle16"}}</span>
       <span class="menu-label">Unhide</span>
       <span class="menu-meta">{{.HiddenResolvedCount}}</span>
+    </button>
+  </form>
+  {{end}}
+  
+  {{if gt .SuggestionCount 0}}
+  <form method="POST">
+    <button type="submit" name="toggleSuggestions" class="menu-item{{if not .HideSuggestions}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">{{template "iconSuggestion"}}</span>
+      <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}</span>
+      <span class="menu-meta">{{.SuggestionCount}}</span>
     </button>
   </form>
   {{end}}
@@ -676,12 +700,12 @@
   {{end}}{{end}}{{end}}{{end}}
   {{else}}{{if $.ShowRenderedHTML}}
   
-  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}</div>{{end}}</div>
+  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>
   {{else}}{{if $.ShowRenderedMarkdown}}
-  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$mbkey}}"{{if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}><div class="md-rendered" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}</div>{{end}}</div>
+  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$mbkey}}"{{if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}><div class="md-rendered" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>
   {{else}}{{if .Lines}}
   
-  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}<div class="line-row" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}<div class="line-row" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
 {{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
@@ -856,6 +880,12 @@
 
 
 
+
+
+
+
+
+
 === quitDialog ===
 <dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
     <form method="POST">
@@ -869,3 +899,6 @@
 <form method="POST" class="region-toggle">
   <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
 </form>
+=== suggestionCard ===
+<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span> · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}</header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}<pre class="sg-new">{{.ProposedText}}</pre>
+  </div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}</div>

@@ -499,6 +499,22 @@
           </button>
         </form>
         {{end}}
+        {{/* Suggestions toggle (issue #98) — show/hide the LLM's inline suggestion
+             boxes on this file. Only when the file has suggestions. */}}
+        {{if gt .SuggestionCount 0}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleSuggestions"
+            class="menu-item{{if not .HideSuggestions}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconSuggestion"}}</span>
+            <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.SuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}
         {{/* Outdated comments needing re-anchoring (toggleCommentList, unchanged). */}}
         {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
         <form method="POST">
@@ -792,6 +808,21 @@
       <span class="menu-icon">{{template "iconCircle16"}}</span>
       <span class="menu-label">Unhide</span>
       <span class="menu-meta">{{.HiddenResolvedCount}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{/* Suggestions toggle (issue #98) — mobile more-menu mirror. */}}
+  {{if gt .SuggestionCount 0}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleSuggestions"
+      class="menu-item{{if not .HideSuggestions}} is-on{{end}}"
+      role="menuitem"
+    >
+      <span class="menu-icon">{{template "iconSuggestion"}}</span>
+      <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}</span>
+      <span class="menu-meta">{{.SuggestionCount}}</span>
     </button>
   </form>
   {{end}}
@@ -1267,7 +1298,7 @@
           (le $.SelectionEndMax $be)}} selected{{end -}}
       "
       data-key="{{$hbkey}}"
-    >{{template "blockComments" .}}</div>
+    >{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>
     {{- end -}}
   </div>
   {{else if $.ShowRenderedMarkdown}}
@@ -1312,6 +1343,7 @@
         data-to="{{$be}}"
       >{{.HTML}}</div>
       {{- template "blockComments" . -}}
+      {{- template "blockSuggestions" . -}}
     </div>
     {{- end -}}
   </div>
@@ -1375,6 +1407,8 @@
              this line+side is selected — both gated on $lside so a modified line's
              old/new rows don't each render the same card/composer */ -}}
       {{- range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end -}}
+      {{- /* LLM suggestion boxes anchored to this line (on THIS side) */ -}}
+      {{- range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end -}}
       {{- if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside) -}}
       {{template "composer" $}}
       {{- end -}}</div>

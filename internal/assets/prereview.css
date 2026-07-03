@@ -1900,6 +1900,45 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   font-family: var(--sans);
   font-size: 0.82rem; line-height: 1.5;
 }
+
+/* LLM suggestion boxes (issue #98). Rendered inline like .inline-comment but
+   deliberately distinct: an accent left-border + accent-tinted fill + sparkle
+   label mark it as an agent-PROPOSED edit (vs the reviewer's own comment), and a
+   red→green before/after mini-diff shows the change. Read-only in Phase 1 — the
+   accept/reject/revise action row arrives in Phase 2. Themes across schemes×modes
+   via the --accent / --pr-add / --pr-del tokens (never hard-coded). */
+.inline-suggestion {
+  margin: 0.45rem 0.4rem; padding: 0.5rem 0.7rem;
+  background: color-mix(in srgb, var(--accent) 8%, var(--pr-comment-bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--pr-comment-bd));
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-mark);
+  font-family: var(--sans);
+  font-size: 0.82rem; line-height: 1.5;
+}
+.inline-suggestion > header {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem;
+  color: var(--text-muted); margin-bottom: 0.4rem;
+}
+.inline-suggestion .sg-label {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-weight: 600; color: var(--accent);
+}
+.inline-suggestion .sg-label svg { flex: none; }
+.inline-suggestion .sg-note { margin-bottom: 0.45rem; }
+.inline-suggestion .sg-diff {
+  display: flex; flex-direction: column; gap: 2px;
+  border-radius: var(--radius-sm); overflow: hidden;
+}
+.inline-suggestion .sg-diff pre {
+  margin: 0; padding: 0.25rem 0.5rem;
+  font-family: var(--jbm); font-size: 0.78rem; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word;
+}
+.inline-suggestion .sg-old { background: var(--pr-del-bg); color: var(--pr-del); }
+.inline-suggestion .sg-new { background: var(--pr-add-bg); color: var(--pr-add); }
+.inline-suggestion.is-outdated { border-left-color: var(--pr-del); opacity: 0.9; }
 /* File-level comments section. Lives between the file-head and the
    body branch so it's visible above every preview mode (line view,
    markdown blocks, html blocks, binary placeholder). Reuses the

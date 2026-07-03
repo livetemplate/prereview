@@ -250,3 +250,15 @@
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"
   /></svg>
 {{- end -}}
+
+{{- /* iconSuggestion — a sparkle, signalling an LLM-proposed edit; distinguishes
+       the suggestion surface from the comment (chat) surface. */ -}}
+{{- define "iconSuggestion" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M12 3l1.8 4.9L18.7 9.7 13.8 11.5 12 16.4 10.2 11.5 5.3 9.7 10.2 7.9 12 3z"
+    fill="currentColor"
+  /><path
+    d="M18 15l.8 2.2 2.2.8-2.2.8L18 21l-.8-2.2-2.2-.8 2.2-.8L18 15z"
+    fill="currentColor"
+  /></svg>
+{{- end -}}
