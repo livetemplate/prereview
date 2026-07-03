@@ -46,6 +46,7 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"p"}, Display: "p", Action: "prevComment", Label: "Previous comment"},
 	{Keys: []string{"c"}, Display: "c", Action: "openFileComment", Label: "Comment on this file"},
 	{Keys: []string{"f"}, Display: "f", Action: "toggleFiles", Label: "Toggle file tree"},
+	{Keys: []string{"Mod+k"}, Display: "⌘/Ctrl + K", Action: "openSearch", Label: "Search files"},
 	{Keys: []string{"a"}, Display: "a", Action: "toggleCommentList", Label: "All comments"},
 	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved comments"},
 	{Keys: []string{"."}, Display: ".", Action: "toggleFocusMode", Label: "Focus mode (hide side columns)"},

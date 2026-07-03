@@ -78,6 +78,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.CommentMode = ""          // any file-level / area composer from the prior file is cancelled
 	state.URLHashScrollAnchor = ""  // anchor target was for the previous file; let the new file pick its own
 	state.CursorKey = ""            // line cursor was for the previous file's lines
+	state.RevealFile = ""           // a search-jump's full-file reveal was for the previous file
 	state.FileDrawerOpen = false
 	// Picking a file from the drawer while the all-comments view is
 	// open implies "leave this overview, go look at that file" — same
