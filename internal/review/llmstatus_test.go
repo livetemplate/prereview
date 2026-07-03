@@ -215,7 +215,16 @@ func TestWatchLLMStatusSkipsWhenNoSession(t *testing.T) {
 
 func writeStatus(t *testing.T, path, body string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+	// Write atomically (temp + rename), exactly as the agent's skill does. A plain
+	// os.WriteFile truncates-then-writes, briefly exposing a size-0 file; the
+	// watcher's mtime+size fingerprint can catch that intermediate and fan out
+	// twice — which flaked assertNoFire ("unchanged file") intermittently. rename is
+	// atomic, so the poller only ever observes the final content.
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
 		t.Fatal(err)
 	}
 }

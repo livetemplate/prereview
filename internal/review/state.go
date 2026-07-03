@@ -86,6 +86,18 @@ type PrereviewState struct {
 	// Comments accumulated during this session.
 	Comments []Comment `json:"comments"`
 
+	// Suggestions are the LLM's proposed edits (issue #98), loaded from the
+	// agent-owned .prereview/suggestions.jsonl on every Mount (like Comments from
+	// the CSV — not lvt:"persist"; the file is the source of truth). Rendered
+	// inline as suggestion boxes on the selected file.
+	Suggestions []Suggestion `json:"suggestions"`
+
+	// HideSuggestions toggles the inline suggestion boxes off for the current
+	// view (a declutter, so the reviewer can read the doc without the proposed
+	// edits overlaid). Session-scoped (survives reconnect via persist); does not
+	// affect the underlying suggestions.
+	HideSuggestions bool `json:"hide_suggestions" lvt:"persist"`
+
 	// UI status.
 	LastSaved   string `json:"last_saved"`
 	DoneWritten bool   `json:"done_written" lvt:"persist"`
@@ -550,10 +562,15 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	if s.CurrentDiff == nil {
 		return nil
 	}
-	// FileView (durable pref) OR Revealing() (a transient search-jump reveal)
-	// shows the whole file so an arbitrary matched line is present to scroll to;
-	// otherwise diff view collapses unchanged runs into folds.
-	if s.FileView || s.Revealing() {
+	// FileView (durable pref) OR Revealing() (a transient search-jump reveal) OR
+	// a file carrying visible LLM suggestions shows the whole file so an arbitrary
+	// target line is present; otherwise diff view collapses unchanged runs into
+	// folds. The suggestion case is load-bearing (#98): the LLM emits arbitrary
+	// line numbers, so a suggestion can land on an unchanged line that diff-view
+	// would fold away — hiding the box with no hint. Revealing the full file keeps
+	// every suggestion visible (no effect when suggestions are toggled off —
+	// FileSuggestions returns nil then).
+	if s.FileView || s.Revealing() || len(s.FileSuggestions()) > 0 {
 		out := make([]gitdiff.DiffLine, 0, len(s.CurrentDiff.Lines))
 		for _, l := range s.CurrentDiff.Lines {
 			if l.NewNum > 0 { // exists in the working-tree file

@@ -8,6 +8,17 @@
 {{- end}}
 {{- end}}
 
+{{/* blockSuggestions — the suggestion parallel of blockComments for the rendered
+     Markdown / HTML block views (#98). Same shape: `.` is the block (StartLine/
+     EndLine), `$` stays the root state, so it inlines each of $.FileSuggestions
+     whose ToLine falls in the block's source range. */}}
+{{define "blockSuggestions" -}}
+{{$bs := .StartLine}}{{$be := .EndLine}}
+{{- range $.FileSuggestions -}}
+  {{- if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end -}}
+{{- end -}}
+{{- end}}
+
 {{/* The comment composer — one block shared by every mode. Branches on $.CommentMode
      (region / file / area / else = line-or-block selection) for the container class,
      heading, and textarea placeholder; the tail (draft form + cancel form + Cancel/Save)
@@ -302,6 +313,32 @@
     >Delete</button>
     {{- template "deleteDialog" . -}}
   </div></div>
+{{- end}}
+
+{{/* suggestionCard — one LLM-proposed edit (issue #98), rendered inline like a
+     comment but visually distinct (sparkle icon, accent-tinted chrome, a
+     before→after mini-diff). Phase 1 is read-only: no accept/reject/revise actions
+     yet (those arrive in Phase 2). The <pre> bodies are whitespace-significant, so
+     the value actions are trim-wrapped to hold exactly the original/proposed text. */}}
+{{define "suggestionCard" -}}
+<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}"
+     data-key="sg-{{.ID}}"
+     lvt-fx:animate="fade">
+  {{- /* sparkle label · line span · drift status */ -}}
+  <header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span> · <small>{{.LineSpan}}</small>
+    {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
+    {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end -}}
+  </header>
+  {{- if .Note}}<div class="sg-note">{{.Note}}</div>{{end -}}
+  {{- /* before → after; the original is omitted for a pure insertion */ -}}
+  <div class="sg-diff">
+    {{- if .OriginalText}}<pre class="sg-old">{{- .OriginalText -}}</pre>{{end -}}
+    <pre class="sg-new">{{- .ProposedText -}}</pre>
+  </div>
+  {{- if .AnchorOutdated -}}
+  <details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{- .OriginalText -}}</pre></details>
+  {{- end -}}
+</div>
 {{- end}}
 
 {{define "commentCardSimple" -}}

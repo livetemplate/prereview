@@ -213,6 +213,12 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// short-circuit so region comments get badged too. Cheap by-ID flag flip.
 	c.applyProcessed(&state)
 
+	// Load the LLM's proposed edits (.prereview/suggestions.jsonl, #98) so they
+	// render inline as suggestion boxes. Their drift anchors are derived from the
+	// original text here; actual re-location against the selected file's live diff
+	// happens after the diff loads (relocateSuggestionsSelected below).
+	c.applySuggestions(&state)
+
 	// SkillMode is mirror-only: refresh from the controller every connect
 	// so a binary launched with --skill renders the right button even after
 	// a session-storage reconnect.
@@ -312,6 +318,9 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// (live working-tree) diff so a doc edited since the comment was
 	// made shows the comment on its content, not a stale line.
 	c.relocateSelected(&state)
+	// Same for the selected file's suggestions (#98): a suggestion whose target
+	// text was edited away renders `outdated`; one whose text moved follows it.
+	c.relocateSuggestionsSelected(&state)
 	return state, nil
 }
 

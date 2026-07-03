@@ -68,6 +68,18 @@ func main() {
 		return
 	}
 
+	// `prereview suggest [--out <dir>] [--file <f>]` — the coding agent submits
+	// proposed edits (from a JSON payload on stdin/--file) that the live review UI
+	// renders as inline suggestion boxes (#98). A bare positional verb like
+	// `processed`, so intercept it before flag parsing.
+	if len(os.Args) > 1 && os.Args[1] == "suggest" {
+		if err := runSuggest(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview suggest:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	flag.Usage = func() {
 		fmt.Fprint(flag.CommandLine.Output(),
 			"Usage: prereview [flags] [path]\n\n"+

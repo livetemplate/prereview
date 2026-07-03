@@ -148,6 +148,17 @@ func (c *PrereviewController) ToggleFileScope(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// ToggleSuggestions shows/hides the inline LLM suggestion boxes for the current
+// view (issue #98). A declutter toggle only — it never touches the underlying
+// suggestions. Session-scoped (HideSuggestions is lvt:"persist"), so it isn't a
+// durable per-user pref; closes the overflow menu so the effect is visible on
+// mobile.
+func (c *PrereviewController) ToggleSuggestions(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.HideSuggestions = !state.HideSuggestions
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
 // ToggleRawMarkdown flips a Markdown file between the rendered view
 // (default) and the raw line view. Closes the overflow menu so the
 // effect is immediately visible on mobile.

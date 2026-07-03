@@ -21,12 +21,15 @@ func (c *PrereviewController) statusPath() string {
 	return LLMStatusPath(c.CSVPath)
 }
 
-// agentSignalFingerprint is a cheap combined change key for the two inbound
-// agent-written files the watcher fans out on: the global status file and the
-// per-comment processed-markers file. Either changing flips the key, so a single
-// watcher covers both without a second goroutine.
+// agentSignalFingerprint is a cheap combined change key for the inbound
+// agent-written files the watcher fans out on: the global status file, the
+// per-comment processed-markers file, and the LLM's suggestions file (#98). Any
+// one changing flips the key, so a single watcher covers all three without extra
+// goroutines — a new suggestion appears live with no server restart.
 func (c *PrereviewController) agentSignalFingerprint() string {
-	return statusFingerprint(c.statusPath()) + "|" + statusFingerprint(c.processedPath())
+	return statusFingerprint(c.statusPath()) + "|" +
+		statusFingerprint(c.processedPath()) + "|" +
+		statusFingerprint(c.suggestionsPath())
 }
 
 // applyLLMStatus refreshes the LLM-status fields on state from the status file.
@@ -75,6 +78,11 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// comment "worked on"), so refresh the per-comment badges here too — a cheap
 	// by-ID flag flip on the existing comments (no reload/re-anchor).
 	c.applyProcessed(&state)
+	// ...and on a suggestions.jsonl change (the LLM proposed an edit): reload the
+	// suggestions and re-anchor the selected file's against the live in-memory
+	// CurrentDiff, so a new suggestion box appears inline with no reload.
+	c.applySuggestions(&state)
+	c.relocateSuggestionsSelected(&state)
 	switch {
 	case prev == LLMStateWorking && state.LLMState == LLMStateDone:
 		// The agent just finished a batch and edited files, so this tab's diff is
