@@ -26,6 +26,13 @@ from your phone over the tailnet. The agent can also propose edits back to
 you (`prereview suggest`): inline boxes you accept, reject, or send back for
 a revision.
 
+**Get started** — install, then run in any repo:
+
+```bash
+brew install livetemplate/prereview/prereview   # or: curl -fsSL https://raw.githubusercontent.com/livetemplate/prereview/main/install.sh | sh
+cd your-repo && prereview                        # opens the review UI and prints its URL
+```
+
 ## Features
 
 - **Review any artifact, at the granularity that fits** — a line or range
@@ -93,36 +100,6 @@ Other tools in the "review your agent's changes locally" space — worth a look:
   your agent.
 - **[parley](https://parley.cloudflavor.io/)** — a code-review tool in the same
   space.
-
-## Works with any LLM CLI
-
-prereview's hand-off is an **open protocol, not an API** — comments are
-written to `.prereview/comments.csv` (and, with `--stream`, a JSON event
-stream). Any coding agent that can read that CSV and edit files can apply
-your review. Claude Code is the turnkey path; the others are one command to
-wire up.
-
-| Agent | Install | Then |
-|---|---|---|
-| **Claude Code** | `prereview --install-skill --client=claude` | `/prereview` (streaming, multi-round) |
-| **OpenAI Codex CLI** | `prereview --install-skill --client=codex` | `$prereview` / `/skills` |
-| **Gemini CLI** | `prereview --install-skill --client=gemini` | `/prereview` |
-| **opencode** | `prereview --install-skill --client=opencode` | `/prereview` or `opencode run --command prereview` |
-| **aider** | `prereview --install-skill --client=aider` | `~/.config/prereview/aider/prereview-aider.sh <files>` |
-| **cursor-agent** | `prereview --install-skill --client=cursor` | `cursor-agent -p --force "use prereview"` |
-
-Run `prereview --install-skill` with **no `--client`** to pick from a menu.
-Only Claude Code gets the live streaming loop; every other agent uses a
-**one-shot-per-batch** flow (you hand off, the agent re-reads the CSV and
-applies the open comments).
-
-> **Maturity** (smoke-tested 2026-06-21, all keyless): **Claude Code**,
-> **opencode** (free models), and **aider** (local ollama model) are tested
-> end-to-end. **codex** (skill loads from both dirs) and **gemini**
-> (`/prereview` discovered in headless) are verified short of the model call.
-> **cursor-agent** is install/format-verified (a real run needs `CURSOR_API_KEY`).
-> Exact paths, per-agent caveats, and a "bring your own agent" recipe are in
-> **[docs/integrations.md](docs/integrations.md)**.
 
 ## Install
 
@@ -207,7 +184,9 @@ cp skill/SKILL.md .claude/skills/prereview/SKILL.md
 > filesystem contract) is optional but handy to copy alongside.
 </details>
 
-## Quick start
+## Usage
+
+### Quick start
 
 ```bash
 cd <your-repo>
@@ -229,7 +208,7 @@ loop; other agents follow the same protocol — see
 [docs/integrations.md](docs/integrations.md), and
 [skill/SKILL.md](skill/SKILL.md) / [skill/reference.md](skill/reference.md).
 
-## CLI usage
+### Command line
 
 The review target is the **positional path** (default: current dir);
 everything else has a sane default, so a bare `prereview` just works.
@@ -249,7 +228,7 @@ A non-git directory or single file is auto-detected: it's shown whole
 **before** the path. Full reference — every flag, mode, and combination —
 in **[docs/cli.md](docs/cli.md)**.
 
-## Usage
+### What you can review
 
 **Comment on lines.** Tap a line to anchor, tap another to extend the
 range (tap again to reseat), then type and save. The gutter line numbers
@@ -343,6 +322,36 @@ single resolved comment to declutter · the agent badges each comment it
 **worked on** and its live status (working / done) shows in the toolbar ·
 **show / hide the agent's suggestions** (or press `s`) · **Esc** clears a
 selection.
+
+### Works with any LLM CLI
+
+prereview's hand-off is an **open protocol, not an API** — comments are
+written to `.prereview/comments.csv` (and, with `--stream`, a JSON event
+stream). Any coding agent that can read that CSV and edit files can apply
+your review. Claude Code is the turnkey path; the others are one command to
+wire up.
+
+| Agent | Install | Then |
+|---|---|---|
+| **Claude Code** | `prereview --install-skill --client=claude` | `/prereview` (streaming, multi-round) |
+| **OpenAI Codex CLI** | `prereview --install-skill --client=codex` | `$prereview` / `/skills` |
+| **Gemini CLI** | `prereview --install-skill --client=gemini` | `/prereview` |
+| **opencode** | `prereview --install-skill --client=opencode` | `/prereview` or `opencode run --command prereview` |
+| **aider** | `prereview --install-skill --client=aider` | `~/.config/prereview/aider/prereview-aider.sh <files>` |
+| **cursor-agent** | `prereview --install-skill --client=cursor` | `cursor-agent -p --force "use prereview"` |
+
+Run `prereview --install-skill` with **no `--client`** to pick from a menu.
+Only Claude Code gets the live streaming loop; every other agent uses a
+**one-shot-per-batch** flow (you hand off, the agent re-reads the CSV and
+applies the open comments).
+
+> **Maturity** (smoke-tested 2026-06-21, all keyless): **Claude Code**,
+> **opencode** (free models), and **aider** (local ollama model) are tested
+> end-to-end. **codex** (skill loads from both dirs) and **gemini**
+> (`/prereview` discovered in headless) are verified short of the model call.
+> **cursor-agent** is install/format-verified (a real run needs `CURSOR_API_KEY`).
+> Exact paths, per-agent caveats, and a "bring your own agent" recipe are in
+> **[docs/integrations.md](docs/integrations.md)**.
 
 ## Output
 
