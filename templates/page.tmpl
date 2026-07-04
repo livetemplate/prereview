@@ -84,13 +84,15 @@
       >💬 {{len $.AllRegionComments}}</button>
     </form>
     {{- if .StreamMode -}}
+    {{/* Continuous enqueue (#119): annotations stream automatically; this toggle
+         pauses/resumes the agent. Mirrors the repo-mode toolbar. */}}
     <form method="POST" style="margin:0">
       <button
         type="submit"
-        name="handOff"
-        class="contrast"
-        title="Send the current annotations to your agent as a handoff event (session stays open)"
-      >Hand off →</button>
+        name="toggleAgentPause"
+        class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}"
+        title="{{if .AgentPaused}}Resume the agent — release the queued batch{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}"
+      >{{if .AgentPaused}}▶ Resume agent{{else}}⏸ Pause agent{{end}}</button>
     </form>
     {{- /* session terminator — opens the confirm dialog (#58) instead of ending
            immediately; the dialog's button fires endSession. */ -}}
@@ -631,7 +633,7 @@
       name="toggleAgentPause"
       class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}"
       title="{{if .AgentPaused}}Resume the agent — release the queued batch to it{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}"
-    >{{if .AgentPaused}}▶ Resume agent{{else}}⏸ Pause agent{{end}}</button>
+    >{{if .AgentPaused}}▶ Resume agent{{if .QueuedCount}} <span class="tb-pause-count">{{.QueuedCount}}</span>{{end}}{{else}}⏸ Pause agent{{end}}</button>
     {{/* On mobile End session moves to the ⋮ overflow menu (below) so the
          narrow bar isn't crowded by two action buttons — hidden here via
          .end-session-inline in the mobile media query. */}}

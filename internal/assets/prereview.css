@@ -1024,6 +1024,12 @@ header.file-head .file-head-actions {
   background: color-mix(in srgb, var(--pr-del) 22%, var(--soft-bg));
   border-color: color-mix(in srgb, var(--pr-del) 50%, transparent);
 }
+/* Batch count on the paused button — how many items are held for the agent. */
+.tb-pause-count {
+  display: inline-block; margin-left: 0.15rem; padding: 0 0.35rem;
+  font-size: 0.72rem; font-weight: 700; border-radius: 999px;
+  background: color-mix(in srgb, var(--pr-del) 30%, transparent);
+}
 
 /* Work-queue panel (#119): the toolbar Queue chip + its dropdown of rows. */
 .queue-counts { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0 0.15rem 0 0.35rem; font-size: 0.78rem; }

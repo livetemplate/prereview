@@ -154,8 +154,9 @@
   <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
   <span class="bar-actions"><form method="POST" style="margin:0">
       <button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button>
-    </form>{{if .StreamMode}}<form method="POST" style="margin:0">
-      <button type="submit" name="handOff" class="contrast" title="Send the current annotations to your agent as a handoff event (session stays open)">Hand off →</button>
+    </form>{{if .StreamMode}}
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Resume the agent — release the queued batch{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}">{{if .AgentPaused}}▶ Resume agent{{else}}⏸ Pause agent{{end}}</button>
     </form><form method="POST" style="margin:0">
       <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
     </form>{{else}}{{if .SkillMode}}<form method="POST" style="margin:0">
@@ -374,7 +375,7 @@
   <form method="POST" class="tb-action">
     {{if .StreamMode}}
     
-    <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Resume the agent — release the queued batch to it{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}">{{if .AgentPaused}}▶ Resume agent{{else}}⏸ Pause agent{{end}}</button>
+    <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Resume the agent — release the queued batch to it{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}">{{if .AgentPaused}}▶ Resume agent{{if .QueuedCount}} <span class="tb-pause-count">{{.QueuedCount}}</span>{{end}}{{else}}⏸ Pause agent{{end}}</button>
     
     <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast end-session-inline" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
     {{else}}{{if .SkillMode}}

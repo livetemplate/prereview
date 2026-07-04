@@ -31,7 +31,7 @@ prereview --stream "$(pwd)" &
 #         {"event":"ready","seq":0,...}             (then JSON event lines)
 ```
 
-`--stream` **implies `--skill`** — it shows the "Hand off →" / "End session" buttons. (Without either flag the UI shows a "Quit" button and no handoff is ever emitted — that's standalone mode, not for skill use.)
+`--stream` **implies `--skill`** — the UI streams comments to you continuously (a **⏸ Pause / ▶ Resume** toggle holds/releases the queue) and offers **End session**. (Without either flag the UI shows a "Quit" button and nothing is emitted — that's standalone mode, not for skill use.)
 
 The review path is the **positional argument** (here `"$(pwd)"`); it defaults to the current directory if omitted. Flags must come **before** the path (Go's flag parser stops at the first non-flag). `--base` defaults to `HEAD` (working tree vs last commit); pass `--base main` (before the path) for branch-vs-base review, `--base HEAD~3` for last-3-commits review, etc.
 
@@ -69,64 +69,72 @@ An explicitly requested base (`--base main`, `HEAD~3`, a tag, …) is always hon
 
 The first stdout line is `READY <url>` — the canonical, always-reachable URL (loopback locally; the Tailscale IP on a remote box). Zero or more `ALT <url>` lines may follow with friendlier equivalents, notably the MagicDNS hostname.
 
-Present the URL as a **Markdown link**, never bare text. The user is frequently on the mobile Claude app, where a bare URL can't be tapped and copy-pasting is painful — a `[url](url)` link is one tap. Tell the user the **two-button flow** up front: Hand off after each batch (you'll process it and report back), End session when they're fully done:
+Present the URL as a **Markdown link**, never bare text. The user is frequently on the mobile Claude app, where a bare URL can't be tapped and copy-pasting is painful — a `[url](url)` link is one tap. Tell them the flow up front: their comments stream to you **automatically** as they go (no hand-off button); **⏸ Pause** the agent to batch up work, **▶ Resume** to release it; **End session** when done:
 
 > I've opened a review session — tap to open: **[http://100.x.y.z:PORT](http://100.x.y.z:PORT)**
 > (hostname: [http://host.tailnet.ts.net:PORT](http://host.tailnet.ts.net:PORT))
-> Click **"Hand off →"** after each batch of comments and I'll address them, then **"End session"** when you're done.
+> Just leave comments as you go — I'll pick them up automatically and address them. Hit **⏸ Pause agent** if you want to batch up a few first, and **End session** when you're done.
 
 When an `ALT` MagicDNS hostname is present, make **that** the headline link (stable and readable); otherwise use the `READY` URL. Always wrap as `[url](url)` — including any `ALT` you also surface. Comments auto-save on every add/edit/delete — the user doesn't need to "save" before handing off.
 
-### 3. Consume the stream — block for each event, exit ONLY on `session_end`
+### 3. Consume the stream — drain to the LATEST snapshot, exit ONLY on `session_end`
 
-Events are appended to `<REPO>/.prereview/events.jsonl` (one JSON object per
-line; the same events also print to stdout). `<REPO>` is the directory from the
-printed `REPO` line (equals the path argument for a git repo; the file's parent
-directory for a single-file review). Read the **next** event with a **blocking**
-read so you wait across rounds without busy-polling — a single tool call that
-returns the instant the user clicks Hand off (or End session), and otherwise
-just waits:
+The reviewer's comments/suggestions now **stream to you continuously** as they
+work — there is no explicit "Hand off" button. The server emits a fresh event
+whenever the queue changes (debounced), each appended to
+`<REPO>/.prereview/events.jsonl` (one JSON object per line; also printed to
+stdout). `<REPO>` is the directory from the printed `REPO` line.
+
+**Every `snapshot`/`handoff` event is a FULL snapshot of the still-actionable
+set — a superset, not a delta.** So when several have queued up while you were
+working, only the **latest** matters. Don't process them one at a time: **drain
+to EOF and act on the last snapshot**, advancing your cursor past all of them.
 
 ```bash
-# n = next line to read (1-based); start at 1, increment after each event.
-tail -n +"$n" -f <REPO>/.prereview/events.jsonl | head -n 1
+# n = next line to read (1-based); start at 1.
+total=$(wc -l < <REPO>/.prereview/events.jsonl)
+if [ "$n" -le "$total" ]; then
+  # Events are waiting: read lines n..EOF at once, keep the LAST snapshot, and
+  # jump the cursor past every line consumed.
+  batch=$(tail -n +"$n" <REPO>/.prereview/events.jsonl)
+  n=$((total + 1))
+else
+  # Nothing waiting → block (no busy-poll) until the next event lands.
+  batch=$(tail -n +"$n" -f <REPO>/.prereview/events.jsonl | head -n 1)
+  n=$((n + 1))
+fi
 ```
 
-`head -n 1` returns as soon as line `n` exists — immediately if it's already
-there (catch-up / replay after a context reset), or whenever the user's next
-click appends it — then exits and stops `tail`. Parse the returned JSON,
-increment `n`, and read the next one. Run it with a **long Bash timeout** (e.g.
-600s).
+From `batch`: if any line is `{"event":"session_end"}`, **stop** (see below).
+Otherwise take the **last** `snapshot`/`handoff` line and act on its `comments`
+as one whole (§4) — ignore the earlier ones, they're subsumed. Run the blocking
+read with a **long Bash timeout** (e.g. 600s).
 
-**Always re-arm — a returned read is never "no event".** This read is live only
-*while the command is running*, and it runs in the foreground, so **between
-rounds — whenever you step away to apply fixes, reply, or do anything else — no
-reader is listening**, and a Hand off clicked then isn't noticed until you read
-again. So after **every** exit (a timed-out idle wait, or simply having done
-other work since the last read) and whenever you resume, re-issue the **same**
-command for the current `n`. Because `tail -n +"$n"` starts *at* line `n` (not
-"only new lines"), an event that landed while nothing was armed comes back
-**instantly** on the next read — the same catch-up noted above. If the user says
-they handed off, don't second-guess it: just re-run for the current `n`.
-(`wc -l < <REPO>/.prereview/events.jsonl` vs `n` tells you
-whether an event is already waiting, but you always consume it with the one
-command above — never a second reader.) **The loop's only exit is
-`{"event":"session_end"}`** — do **not** stop after the first handoff; a review
-is iterative.
+**Always re-arm.** The blocking read is live only *while running*, and between
+rounds nothing is listening — but because `tail -n +"$n"` starts *at* line `n`,
+anything that landed while you were away comes back instantly on the next read.
+After every exit (idle timeout, or having done other work), re-run the drain for
+the current `n`. **The loop's only exit is `session_end`** — never stop after a
+snapshot; the review is continuous.
+
+**Frozen-view contract (important):** you apply fixes to files on disk as you go,
+but the reviewer's diff **does not auto-refresh** — it stays frozen until they
+click Refresh. So the same comment can reappear in later snapshots with
+**re-anchored** line numbers (the server re-anchors every snapshot against live
+disk). Trust the latest snapshot's numbers and **dedupe by `id`**; don't be
+thrown that a comment you already handled is still present (it leaves the set
+only when the reviewer resolves it, or its anchor is edited away → dropped).
 
 - `{"event":"ready",...}` — session is live; tell the user to review.
-- `{"event":"handoff","seq":N,"comments":[…],"suggestions":[…]}` — the user
-  clicked Hand off. Each handoff is a **full snapshot of every still-actionable
-  comment** (not a delta), so `comments` *is* the complete open set — read it as
-  one whole and drive a single coherent change exactly as in §4 "Act on the
-  comments" (themes, relationships, conflicts), never row-by-row. Then tell the
-  user this round is done and to leave more or click **End session**. **Dedupe by
-  `id`** across rounds — a comment reappears only while it's unresolved. `comments`
-  is always present (`[]` when nothing is actionable). `suggestions` carries the
-  reviewer's **decisions on edits you proposed** (accept / reject / revise) — also
-  a full snapshot, `[]` when none; act on it per [Suggested edits](#suggested-edits-prereview-suggest).
-  Right after reading a handoff, echo your status so the reviewer's UI shows you're
-  working — see [Echo your status](#echo-your-status-so-the-reviewer-sees-progress).
+- `{"event":"handoff","seq":N,"comments":[…],"suggestions":[…]}` — a snapshot
+  (the wire keeps the `handoff` name). `comments` *is* the complete actionable
+  set; read it as one whole and drive a single coherent change per §4, never
+  row-by-row. **Dedupe by `id`.** `comments` is always present (`[]` when empty).
+  `suggestions` carries the reviewer's **decisions on your proposed edits**
+  (accept / reject / revise) — a full snapshot too; act on it per
+  [Suggested edits](#suggested-edits-prereview-suggest). Right after reading,
+  echo your status so the reviewer's UI shows you're working — see
+  [Echo your status](#echo-your-status-so-the-reviewer-sees-progress).
 - `{"event":"session_end","seq":N}` — stop consuming. The review is over (the
   server also exits right after, so a backgrounded launch's job completes too).
 
