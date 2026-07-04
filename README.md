@@ -1,6 +1,6 @@
 # prereview
 
-**You spot what's wrong; the LLM fixes it — locally, before you push.** Review any change — a diff line, a Markdown or HTML block, a region of an image, even a box on a live local site — then hand it off, and your coding agent makes the fixes. It works the other way too: the agent can propose edits inline, and you accept, reject, or send each back with a note. Works with any LLM CLI. All local, before anything leaves your machine.
+A quick local pass over your changes before they ship. Comment on what needs fixing — in a diff, a rendered doc, an image, or a running dev site — and your coding agent applies it; no commit, no PR. The agent can propose edits too, which you accept, reject, or send back. Works with any LLM CLI, all local.
 
 <p align="center">
   <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
