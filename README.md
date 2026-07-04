@@ -1,25 +1,41 @@
 # prereview
 
-**You spot what's wrong; the LLM fixes it — locally, before you push.** Review any change — a diff line, a Markdown or HTML block, a region of an image, even a box on a live local site — and hand the fixes to your coding agent. Works with any LLM CLI. All local, before anything leaves your machine.
+prereview speeds up planning and refining what your coding agent produces. Instead of copy-pasting vague pointers into chat, comment right on the artifact — a plan, a diff, a rendered doc, an image, or a live dev site — and the agent applies the fixes. It runs both ways: you can also ask the agent to suggest alternatives and accept or reject them inline, cutting the rounds it takes to get something right. Review from your desk or your phone; works with any LLM CLI, all local.
 
 <p align="center">
   <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
 </p>
+
 <p align="center"><sub><em>Comment on what's wrong and hand off — Claude reads it and edits the file, the fix lands in the diff, you resolve. You stay in the loop; the output gets better.</em></sub></p>
 
-A tiny local webapp for **reviewing your working tree and handing the
-fixes to an LLM** — no commit, no PR, no GitHub round-trip. Run
-`prereview` in your repo (or point it at any file or directory), click
-what you want changed — a line or range in a diff, a rendered Markdown or
-HTML block, a region of an image, or a box on a running dev site — and
-leave a comment; a CSV is written that you (or an LLM) act on. It ships
-with a turnkey [Claude Code](https://claude.com/claude-code) skill —
-`/prereview` launches a session, you comment, hit **"Hand off →"**, and
-your agent applies the changes — and works with **any other coding agent**
-(OpenAI Codex CLI, Gemini CLI, aider, opencode, cursor-agent) through the
-same open comment protocol; see **[Works with any LLM CLI](#works-with-any-llm-cli)**.
-On a remote box it auto-binds your Tailscale address — review from your
-phone over the tailnet, before anything is pushed.
+Run `prereview` in your repo — or point it at any file or directory — and
+it opens a local web UI. Click what you want changed (a line or range in a
+diff, a rendered Markdown or HTML block, a region of an image, or a box on
+a running dev site) and leave a comment; each is saved to a plain
+`.prereview/comments.csv`. Hand the batch to your coding agent and it reads
+the comments and makes the changes. It's all local — no commit, no PR, no
+GitHub round-trip.
+
+The turnkey [Claude Code](https://claude.com/claude-code) skill runs the
+whole loop: `/prereview` starts a session, you comment, you hit **"Hand
+off →"**, and the agent applies the changes. Any other agent (OpenAI Codex
+CLI, Gemini CLI, aider, opencode, cursor-agent) works through the same open
+comment protocol — see **[Works with any LLM CLI](#works-with-any-llm-cli)**.
+On a remote box prereview binds your Tailscale address, so you can review
+from your phone over the tailnet. It also runs the other way: ask the agent
+to **suggest edits** (`prereview suggest`) and they appear as inline
+before → after boxes you accept or reject — refining an artifact in a few
+taps instead of several rounds of copy-paste.
+
+**Get started** — install, then run standalone or drive it from your agent:
+
+```bash
+brew install livetemplate/prereview/prereview   # or: curl -fsSL https://raw.githubusercontent.com/livetemplate/prereview/main/install.sh | sh
+cd your-repo && prereview                        # standalone: opens the review UI, prints the URL
+
+prereview --install-skill --client=claude        # one-time: install the Claude Code skill
+# then just say  /prereview  in Claude Code — it launches a session, you comment, it applies the fixes
+```
 
 ## Features
 
@@ -35,6 +51,17 @@ phone over the tailnet, before anything is pushed.
   like, ending only when you click **End session**. No re-invocation, no
   hand-written CSV parser. (Streaming is the Claude Code default; other
   agents use a one-shot-per-batch flow — see [Works with any LLM CLI](#works-with-any-llm-cli).)
+- **Suggested edits, the other direction** — the agent proposes edits
+  inline (`prereview suggest`) as before → after boxes; you **accept**,
+  **reject**, or **ask for a revision** (with a note), and hand the batch
+  back. Accepted edits are the agent's to apply — prereview never touches
+  your files on its own.
+- **Comment on a word or phrase, not just a line** — select any span of
+  text (or a rendered Markdown phrase) and the comment anchors to exactly
+  those characters. **⌘K / Ctrl-K** searches file names and contents across
+  the changed set (or all files) and jumps to a hit.
+- **Themes** — Solarized, Gruvbox, and Catppuccin colour schemes ×
+  Light / Dark / System, from the toolbar.
 - **Full GitHub-flavoured Markdown & HTML render** — tables, task-lists,
   syntax-highlighted code, `> [!NOTE]` alerts, footnotes, `:emoji:` and
   mermaid diagrams render the way GitHub shows them; formatted by default,
@@ -51,7 +78,8 @@ phone over the tailnet, before anything is pushed.
 Most "AI code review" tools have the model *find* the problems for you to
 read. prereview inverts that: **you** spot what's wrong — across any
 artifact, not just code — and the LLM does the *fixing*, locally, before
-you push.
+you push. The loop runs both ways: the agent can also propose edits, and
+you're the one who accepts, rejects, or asks for a revision.
 
 - **vs. AI reviewers** (CodeRabbit, Gito, Ollama pre-commit hooks, Qodo) —
   they generate the review; prereview captures *your* judgment as
@@ -62,35 +90,20 @@ you push.
 - **vs. diff viewers** (lazygit, tig, delta, difftastic) — they show
   changes; prereview captures anchored comments and hands them to an LLM.
 
-## Works with any LLM CLI
+### Alternatives
 
-prereview's hand-off is an **open protocol, not an API** — comments are
-written to `.prereview/comments.csv` (and, with `--stream`, a JSON event
-stream). Any coding agent that can read that CSV and edit files can apply
-your review. Claude Code is the turnkey path; the others are one command to
-wire up.
+Other tools in the "review your agent's changes locally" space — worth a look:
 
-| Agent | Install | Then |
-|---|---|---|
-| **Claude Code** | `prereview --install-skill --client=claude` | `/prereview` (streaming, multi-round) |
-| **OpenAI Codex CLI** | `prereview --install-skill --client=codex` | `$prereview` / `/skills` |
-| **Gemini CLI** | `prereview --install-skill --client=gemini` | `/prereview` |
-| **opencode** | `prereview --install-skill --client=opencode` | `/prereview` or `opencode run --command prereview` |
-| **aider** | `prereview --install-skill --client=aider` | `~/.config/prereview/aider/prereview-aider.sh <files>` |
-| **cursor-agent** | `prereview --install-skill --client=cursor` | `cursor-agent -p --force "use prereview"` |
-
-Run `prereview --install-skill` with **no `--client`** to pick from a menu.
-Only Claude Code gets the live streaming loop; every other agent uses a
-**one-shot-per-batch** flow (you hand off, the agent re-reads the CSV and
-applies the open comments).
-
-> **Maturity** (smoke-tested 2026-06-21, all keyless): **Claude Code**,
-> **opencode** (free models), and **aider** (local ollama model) are tested
-> end-to-end. **codex** (skill loads from both dirs) and **gemini**
-> (`/prereview` discovered in headless) are verified short of the model call.
-> **cursor-agent** is install/format-verified (a real run needs `CURSOR_API_KEY`).
-> Exact paths, per-agent caveats, and a "bring your own agent" recipe are in
-> **[docs/integrations.md](docs/integrations.md)**.
+- **[crit.md](https://crit.md/)** — browser-based review of an agent's code
+  changes: inline line comments, round-to-round diffs, single local binary,
+  any agent (closest to prereview).
+- **[diffx](https://github.com/wong2/diffx)** — a local code-review tool built
+  for the coding-agent workflow.
+- **[tuicr](https://tuicr.dev/)** — a terminal UI (vim keybindings) for reviewing
+  a GitHub-style diff; pushes a real PR review or copies structured Markdown for
+  your agent.
+- **[parley](https://parley.cloudflavor.io/)** — a code-review tool in the same
+  space.
 
 ## Install
 
@@ -117,7 +130,7 @@ scoop install prereview/prereview
 go install github.com/livetemplate/prereview@latest
 ```
 
-Quick-install knobs: `PREREVIEW_INSTALL_DIR=/path`, `PREREVIEW_VERSION=v0.4.0`.
+Quick-install knobs: `PREREVIEW_INSTALL_DIR=/path`, `PREREVIEW_VERSION=vX.Y.Z` (pin a specific release; omit for latest).
 
 <details>
 <summary>Behind a corporate proxy, upgrading, or uninstalling</summary>
@@ -175,7 +188,9 @@ cp skill/SKILL.md .claude/skills/prereview/SKILL.md
 > filesystem contract) is optional but handy to copy alongside.
 </details>
 
-## Quick start
+## Usage
+
+### Quick start
 
 ```bash
 cd <your-repo>
@@ -197,7 +212,7 @@ loop; other agents follow the same protocol — see
 [docs/integrations.md](docs/integrations.md), and
 [skill/SKILL.md](skill/SKILL.md) / [skill/reference.md](skill/reference.md).
 
-## CLI usage
+### Command line
 
 The review target is the **positional path** (default: current dir);
 everything else has a sane default, so a bare `prereview` just works.
@@ -217,7 +232,7 @@ A non-git directory or single file is auto-detected: it's shown whole
 **before** the path. Full reference — every flag, mode, and combination —
 in **[docs/cli.md](docs/cli.md)**.
 
-## Usage
+### What you can review
 
 **Comment on lines.** Tap a line to anchor, tap another to extend the
 range (tap again to reseat), then type and save. The gutter line numbers
@@ -231,6 +246,7 @@ exposes the full tree when you want to comment on something that didn't
 change.
 
 <p align="center"><img src="docs/file-comment.png" alt="A file-level comment shown above the diff" width="760"></p>
+
 <p align="center"><sub><em>Comment a whole file — changed or not.</em></sub></p>
 
 **Annotate an image region.** On a binary image, drag a rectangle to
@@ -238,6 +254,7 @@ select an area and comment on it; the box is stored as fractions, so it
 survives re-encoding.
 
 <p align="center"><img src="docs/image-area.gif" alt="Dragging a rectangle on an image and saving a region comment" width="760"></p>
+
 <p align="center"><sub><em>Drag a box on an image to annotate a region.</em></sub></p>
 
 **Markdown & HTML render** by default; tap a rendered block (heading,
@@ -247,50 +264,131 @@ Raw** toggle switches to source. Long docs get a table-of-contents
 sidebar.
 
 <p align="center"><img src="docs/markdown-block.gif" alt="Clicking a rendered Markdown block; the comment anchors to its source line" width="760"></p>
+
 <p align="center"><sub><em>Markdown renders with a TOC; click a block and the comment anchors to its source line.</em></sub></p>
+
+**Take the agent's suggested edits.** Ask for suggestions two ways: in your
+LLM chat (*"review this doc and suggest edits in prereview"*), or right in a
+**comment** — leave one like *"suggest alternatives for this phrasing"* and
+hand off. Either way the agent submits them with `prereview suggest` and each
+renders inline as a before → after box. **Accept** to take it, **Reject** to
+drop it, or **Request revision** to send it back with a note — the decisions
+ride the next hand-off, and the agent applies the ones you accepted. Nothing
+is written to your files until then.
+
+<p align="center"><img src="docs/suggestion.gif" alt="An LLM-proposed edit shown inline as a before-after box; the reviewer clicks Accept and a verdict badge appears" width="760"></p>
+
+<p align="center"><sub><em>The agent suggests an edit; you accept, reject, or ask for a revision.</em></sub></p>
 
 **Annotate a live local site** (`--external`). Point prereview at a
 running dev server; it proxies the page so you can drag a box on any
 region and comment — the annotation re-pins to the page as it scrolls.
 
 <p align="center"><img src="docs/external-region.gif" alt="Dragging a region on a proxied live local site and saving a comment" width="760"></p>
+
 <p align="center"><sub><em>Review a running site: drag a region on the live page and comment.</em></sub></p>
 
 **See every comment in one place** — the **All comments** chip lists
-comments across all files (line, file, and area kinds), each with a jump
-back to its source.
+comments across all files (line, text, file, and area kinds), each with a
+jump back to its source.
 
-<p align="center"><img src="docs/all-comments.png" alt="The all-comments overview listing line, file, and area comments across files" width="760"></p>
+<p align="center"><img src="docs/all-comments.png" alt="The all-comments overview listing line, text, file, and area comments across files" width="760"></p>
+
 <p align="center"><sub><em>Every comment across files in one list.</em></sub></p>
+
+**Search across files.** **⌘K** (Ctrl-K) opens a palette that matches file
+names and line contents across the changed set — toggle to search every
+file — and jumping to a hit reveals its line, even inside a folded region.
+
+<p align="center"><img src="docs/search.gif" alt="The Cmd-K search palette matching text across files and jumping to a hit" width="760"></p>
+
+<p align="center"><sub><em>⌘K searches file names and contents, then jumps to the match.</em></sub></p>
+
+**Pick a theme.** The toolbar cycles three colour schemes — Solarized,
+Gruvbox, Catppuccin — each with Light / Dark / System modes; syntax
+highlighting recolours with them, no reload.
+
+<p align="center"><img src="docs/themes.gif" alt="Cycling the Solarized, Gruvbox, and Catppuccin colour schemes from the toolbar" width="760"></p>
+
+<p align="center"><sub><em>Three colour schemes × Light / Dark / System.</em></sub></p>
 
 **Review from your phone.** On a remote box prereview binds your
 Tailscale IP, so the same review + hand-off works from the Claude mobile
 app over the tailnet.
 
 <p align="center"><img src="docs/review-mobile.png" alt="prereview reviewing a diff on a phone-sized screen" width="300"></p>
+
 <p align="center"><sub><em>Review and hand off from your phone.</em></sub></p>
 
 **More:** **Diff ⇄ File** toggles changed-hunks-with-context vs the whole
 file (line numbers match, so comments resolve across both) · the base
 **dropdown** picks `HEAD~N`, branches, or remotes (pass anything else via
 `--base`) · each comment has **Edit / Resolve / Delete** (Resolve keeps
-an audit trail; Delete has Undo) · **Esc** clears a selection.
+an audit trail; Delete has Undo) · **show / hide resolved** and hide a
+single resolved comment to declutter · the agent badges each comment it
+**worked on** and its live status (working / done) shows in the toolbar ·
+**show / hide the agent's suggestions** (or press `s`) · **Esc** clears a
+selection.
+
+### Works with any LLM CLI
+
+prereview's hand-off is an **open protocol, not an API** — comments are
+written to `.prereview/comments.csv` (and, with `--stream`, a JSON event
+stream). Any coding agent that can read that CSV and edit files can apply
+your review. Claude Code is the turnkey path; the others are one command to
+wire up.
+
+| Agent | Install | Then |
+|---|---|---|
+| **Claude Code** | `prereview --install-skill --client=claude` | `/prereview` (streaming, multi-round) |
+| **OpenAI Codex CLI** | `prereview --install-skill --client=codex` | `$prereview` / `/skills` |
+| **Gemini CLI** | `prereview --install-skill --client=gemini` | `/prereview` |
+| **opencode** | `prereview --install-skill --client=opencode` | `/prereview` or `opencode run --command prereview` |
+| **aider** | `prereview --install-skill --client=aider` | `~/.config/prereview/aider/prereview-aider.sh <files>` |
+| **cursor-agent** | `prereview --install-skill --client=cursor` | `cursor-agent -p --force "use prereview"` |
+
+Run `prereview --install-skill` with **no `--client`** to pick from a menu.
+Only Claude Code gets the live streaming loop; every other agent uses a
+**one-shot-per-batch** flow (you hand off, the agent re-reads the CSV and
+applies the open comments).
+
+> **Maturity** (smoke-tested 2026-06-21, all keyless): **Claude Code**,
+> **opencode** (free models), and **aider** (local ollama model) are tested
+> end-to-end. **codex** (skill loads from both dirs) and **gemini**
+> (`/prereview` discovered in headless) are verified short of the model call.
+> **cursor-agent** is install/format-verified (a real run needs `CURSOR_API_KEY`).
+> Exact paths, per-agent caveats, and a "bring your own agent" recipe are in
+> **[docs/integrations.md](docs/integrations.md)**.
 
 ## Output
 
 `<repo>/.prereview/comments.csv` is the source of truth — RFC-4180
-quoted, 13 columns, one row per comment:
+quoted, 16 columns, one row per comment:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden
 ```
 
-`kind` is `line` (default), `file`, `area`, or `region` (a live-site
-rectangle from `--external`, anchored to a `url`); `area` carries the
-rectangle as `{x,y,w,h}` fractions. See
-[skill/reference.md](skill/reference.md) for the full column docs.
+`kind` is `line` (default), `text` (a character range within a line —
+`from_col`/`to_col`), `file`, `area`, or `region` (a live-site rectangle
+from `--external`, anchored to a `url`); `area` carries the rectangle as
+`{x,y,w,h}` fractions. See [skill/reference.md](skill/reference.md) for the
+full column docs.
+
+Alongside the CSV, `.prereview/` holds a few sidecar files: the agent's
+proposed edits (`suggestions.jsonl`) and your verdicts on them
+(`suggestion-decisions.jsonl`); the comments it marked worked-on
+(`processed.jsonl`); and its live status (`llm-status.json`). See
+[docs/cli.md](docs/cli.md#output) for the inventory.
 
 ## Architecture (at a glance)
+
+prereview is built entirely on **[livetemplate](https://github.com/livetemplate/livetemplate)**
+and is a real-world dogfood of it: the whole interactive UI is server-rendered
+Go driving livetemplate's client, with **no custom JavaScript**. When a screen
+needs a primitive the framework doesn't have yet, it gets added to livetemplate
+rather than worked around here — so prereview doubles as the framework's proving
+ground.
 
 - **Single binary**, embeds all assets (incl. the livetemplate client JS)
   via `//go:embed`.

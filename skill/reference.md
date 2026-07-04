@@ -111,10 +111,10 @@ File: `<repo>/.prereview/comments.csv`. RFC-4180 quoted; encoding is UTF-8.
 ### Header (load-bearing — column order is the contract)
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden
 ```
 
-Older CSVs may have 7–12 columns (pre-`resolved`/`anchor`/`anchor_status`/`kind`/`area`/`url`);
+Older CSVs may have 7–15 columns (pre-`resolved`/`anchor`/`anchor_status`/`kind`/`area`/`url`/`from_col`/`to_col`/`hidden`);
 columns 0–7 are stable, so index by position and treat missing trailing
 columns as empty/default. Columns are only ever appended.
 
@@ -132,9 +132,12 @@ columns as empty/default. Columns are only ever appended.
 | `resolved` | bool | `true`, `false` | Lowercase. `true` = human marked the comment as already addressed; **skip these as directives**. |
 | `anchor` | JSON string | `{"text":"…","before":[…],"after":[…]}` | **Internal — do not parse or act on.** The content fingerprint prereview uses to re-locate a comment when the doc changes. May be empty for legacy rows. |
 | `anchor_status` | enum | `ok`, `moved`, `outdated`, *(empty)* | `ok`/empty = line numbers are trustworthy. `moved` = the doc was edited and prereview already auto-corrected `from_line`/`to_line` to follow the content (still trustworthy). `outdated` = the anchored content changed or vanished and prereview could **not** confidently re-place it — `from_line`/`to_line` are stale. **Treat `outdated` like `resolved=true`: skip as a directive** (may still use as context). |
-| `kind` | enum | `line`, `file`, `area`, `region`, *(empty)* | What the comment anchors to. `line` (default; empty for pre-migration rows) = a line range. `file` = the whole file. `area` = a rectangle on a binary image. `region` = a rectangle on a live page (from `--external`). For `file`/`area`/`region` the line/side/anchor columns are empty/zero. |
+| `kind` | enum | `line`, `text`, `file`, `area`, `region`, *(empty)* | What the comment anchors to. `line` (default; empty for pre-migration rows) = a line range. `text` = a character range within a line (see `from_col`/`to_col`). `file` = the whole file. `area` = a rectangle on a binary image. `region` = a rectangle on a live page (from `--external`). For `file`/`area`/`region` the line/side/anchor columns are empty/zero. |
 | `area` | JSON string | `{"x":0.1,"y":0.2,"w":0.3,"h":0.15}` | Rectangle as 0..1 fractions — of the **image** (`kind=area`) or of the live page's **document** (`kind=region`, so a re-pin survives scroll). Empty for every other kind. |
 | `url` | string (app-relative path) | `/pricing` | The proxied page for a `kind=region` comment. App-relative (the proxy port is random per run, so no absolute URL is stored). **Empty for every file-based kind.** |
+| `from_col` | int (0-based rune) | `6` | Start of the character range for `kind=text` — a rune offset into the raw line (matches the on-screen text). `0` for every other kind. |
+| `to_col` | int (0-based rune) | `12` | End (exclusive) of the `kind=text` range. `0` for every other kind. |
+| `hidden` | bool | `true`, `false` | Reviewer-only view flag (an individually re-hidden resolved comment). **Ignore it as a directive** — it never affects whether a row is actionable. |
 
 ### Parsing example
 

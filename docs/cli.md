@@ -96,10 +96,14 @@ after the usual `READY`/`REPO` preamble) and mirrors it to
 `.prereview/events.jsonl` (append-only, for replay):
 
 - `ready` — once, after the preamble.
-- `handoff` — on every **Hand off** click; a full snapshot of the actionable
-  comments (unresolved, non-outdated), each as ready-to-use JSON (the opaque
-  `anchor` is dropped and `area` is a nested object, not a string). The consumer
-  dedupes by `id` across rounds.
+- `handoff` — on every **Hand off** click; a full snapshot of both the actionable
+  **comments** (unresolved, non-outdated) and your **decisions on suggestions** the
+  agent proposed, each as ready-to-use JSON (the opaque `anchor` is dropped and
+  `area` is a nested object, not a string). Shape:
+  `{"event":"handoff","seq":N,"comments":[…],"suggestions":[…]}` — both arrays
+  always present (`[]` when empty). Each `suggestions[]` entry carries the
+  `verdict` (`accept`/`reject`/`revise`), `note`, `original`, `proposed`, and
+  `anchor_status`. The consumer dedupes by `id` across rounds.
 - `session_end` — once, on **End session**; the only terminator. The server
   shuts down right after.
 
@@ -132,6 +136,31 @@ These do one thing and exit — they don't start the server:
 | `--update` | Download and install the latest GitHub release (defers to brew/scoop if one manages the binary). |
 | `--uninstall` | Remove the binary (your `.prereview/` review comments are left untouched; defers to brew/scoop). |
 | `--no-update` | Skip the on-run update check (also via `PREREVIEW_NO_UPDATE=1`). |
+
+## Subcommands
+
+Two **bare-verb subcommands** (not flags) let a coding agent talk back to a
+running review. They write into the same `.prereview/` store the server watches,
+so their effect shows up live. You rarely run them by hand — the skill does.
+
+```
+prereview suggest   [--out <dir>] [--file <payload.json>]
+prereview processed [--out <dir>] <comment-id>...
+```
+
+- **`prereview suggest`** — submit **proposed edits** that render inline as
+  suggestion boxes the reviewer accepts / rejects / revises. Reads a JSON payload
+  from `--file` or stdin — a single object, a JSON array, or newline-delimited
+  objects — and appends them to `.prereview/suggestions.jsonl`. Each object:
+  `{"id":"…","file":"…","from_line":N,"to_line":N,"side":"new","original":"…","proposed":"…","note":"…"}`
+  (`id` optional but recommended — re-using it *revises* that suggestion;
+  `side` defaults to `new`; `to_line` defaults to `from_line`). The reviewer's
+  verdicts come back on the next `--stream` hand-off (see [Stream mode](#stream-mode---stream)).
+- **`prereview processed`** — mark one or more comments **worked on** (a badge in
+  the UI). Appends the given comment `id`s to `.prereview/processed.jsonl`.
+
+`--out` is the store root the review is running against (the `REPO` line), matching
+the `--out` flag; it defaults to the current directory.
 
 ## Composing flags
 
@@ -166,11 +195,24 @@ MagicDNS hostname) may follow.
 
 ## Output
 
-`<store-root>/.prereview/comments.csv` is the source of truth (RFC-4180, 13
+`<store-root>/.prereview/comments.csv` is the source of truth (RFC-4180, 16
 columns, atomically written). The store root is the review path by default; `--out`
 redirects it in any mode (and is required with `--external`). For a single-file
 review the `.prereview/` dir is the file's **parent** directory. The `REPO` line on
-stdout always points at the resolved store root. The 13th column, `url`, carries the
+stdout always points at the resolved store root. The `url` column carries the
 proxied page for `kind=region` rows (from `--external`); it's empty for every
-file-based kind. See [skill/reference.md](../skill/reference.md) for the column
+file-based kind, and `kind` also includes `text` (a character range, with
+`from_col`/`to_col`). See [skill/reference.md](../skill/reference.md) for the column
 schema and the stdout protocol.
+
+Alongside `comments.csv` and the `DONE` marker, `.prereview/` may hold:
+
+| File | Written by | Purpose |
+|---|---|---|
+| `comments.csv` | server | the comments (source of truth) |
+| `DONE` | server | one-shot hand-off marker (`--skill` without `--stream`) |
+| `events.jsonl` | server | the `--stream` event log (reset each launch) |
+| `suggestions.jsonl` | **agent** (`prereview suggest`) | proposed edits, rendered as suggestion boxes (durable) |
+| `suggestion-decisions.jsonl` | server | your accept/reject/revise verdicts on suggestions (durable) |
+| `processed.jsonl` | **agent** (`prereview processed`) | comment ids marked worked-on (durable) |
+| `llm-status.json` | **agent** | the agent's live working/done status (reset each launch) |

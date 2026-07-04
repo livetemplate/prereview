@@ -148,8 +148,14 @@ func runGif(allocCtx context.Context, url, name, repo, outDir string) {
 		gifMarkdown(allocCtx, url, outDir)
 	case "external":
 		gifExternal(allocCtx, url, outDir)
+	case "suggestion":
+		gifSuggestion(allocCtx, url, outDir)
+	case "search":
+		gifSearch(allocCtx, url, outDir)
+	case "themes":
+		gifThemes(allocCtx, url, outDir)
 	default:
-		log.Fatalf("unknown gif flow %q (have: hero|image|markdown|external)", name)
+		log.Fatalf("unknown gif flow %q (have: hero|image|markdown|external|suggestion|search|themes)", name)
 	}
 }
 
@@ -330,11 +336,58 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		chromedp.Evaluate(`(()=>{const c=document.querySelector('.inline-comment.is-resolved')||document.querySelector('.inline-comment');if(c)c.scrollIntoView({block:'center'});})()`, nil),
 		chromedp.Sleep(250*time.Millisecond),
 	)
-	_ = rec.captureComposite(bctx, tctx, 260) // loop closed: comment resolved, held longest
+	_ = rec.captureComposite(bctx, tctx, 220) // loop closed: comment resolved
+
+	// --- The other direction (issue #98): the agent PROPOSES a follow-up edit and
+	// the human accepts it inline. Seed a suggestion on the now-fixed payment.go
+	// (line 8, the doc comment); the running server surfaces it on the next load. ---
+	_ = appendSuggestion(repo, `{"id":"hero-sg","file":"payment.go","from_line":8,"to_line":8,"original":"// Charge captures a payment for an order. Amount is in minor units (cents).","proposed":"// Charge captures a payment for an order, retrying transient gateway errors. Amount is in minor units (cents).","note":"note the retry behaviour"}`+"\n")
+	propose := append(done[:len(done):len(done)],
+		termLine{"", "sp"},
+		termLine{"● Suggested an edit — payment.go:8", "bullet"},
+		termLine{"  note the retry behaviour in the doc comment", "dim"},
+	)
+	_ = termRender(tctx, propose)
+	_ = chromedp.Run(bctx,
+		chromedp.Navigate("about:blank"),
+		chromedp.Sleep(150*time.Millisecond),
+		chromedp.Navigate(navURL(url, "payment.go")),
+		chromedp.WaitVisible(`.inline-suggestion`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		chromedp.Sleep(300*time.Millisecond),
+	)
+	_ = rec.captureComposite(bctx, tctx, 220) // the before→after suggestion box, agent waiting
+
+	_ = chromedp.Run(bctx,
+		chromedp.Click(`.inline-suggestion button[name="acceptSuggestion"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-suggestion.is-decided.sg-accept`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		chromedp.Sleep(150*time.Millisecond),
+	)
+	_ = rec.captureComposite(bctx, tctx, 300) // accepted — the reverse loop closed, held longest
 
 	if err := rec.encode(filepath.Join(outDir, "hero.gif")); err != nil {
 		log.Printf("[gif:hero] encode: %v", err)
 	}
+}
+
+// appendSuggestion writes one suggestion JSON line to the demo repo's
+// .prereview/suggestions.jsonl so the hero flow can show the agent proposing an
+// edit that the human then accepts (issue #98). The running server surfaces it on
+// the next navigation (Mount re-reads the file).
+func appendSuggestion(repo, line string) error {
+	dir := filepath.Join(repo, ".prereview")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "suggestions.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString(line)
+	return err
 }
 
 // applyHeroFix writes the scripted "Claude edit" into the demo repo's working
@@ -464,5 +517,147 @@ func gifExternal(allocCtx context.Context, url, outDir string) {
 		)
 		_ = rec.capture(ctx, 190) // pinned annotation on the live page
 		return rec.encode(filepath.Join(outDir, "external-region.gif"))
+	})
+}
+
+// gifSuggestion — the REVERSE loop (issue #98): the agent proposes an edit
+// (terminal, `prereview suggest`), it renders inline as a before→after box
+// (browser), and the human accepts it (browser). Composite (browser over
+// terminal), like gifHero, to show both sides of the round-trip. The suggestion
+// is seeded by capture-gifs.sh before this flow runs (a suggest subcommand call),
+// so the box is already present when the browser opens guide.md.
+func gifSuggestion(allocCtx context.Context, url, outDir string) {
+	bctx, bcancel := chromedp.NewContext(allocCtx)
+	defer bcancel()
+	bctx, bt := context.WithTimeout(bctx, 90*time.Second)
+	defer bt()
+	tctx, tcancel := chromedp.NewContext(allocCtx)
+	defer tcancel()
+	tctx, tt := context.WithTimeout(tctx, 90*time.Second)
+	defer tt()
+
+	rec := &gifRec{}
+
+	// Terminal: the agent was asked to review the doc and proposed one edit.
+	proposed := []termLine{
+		{"$ claude", "dim"},
+		{"> review guide.md and suggest edits in prereview", "prompt"},
+		{"● Submitted 1 suggestion — guide.md:12", "bullet"},
+		{`-   Transient gateway errors are retried with backoff.`, "del"},
+		{`+   …retried with exponential backoff, up to maxRetries attempts.`, "add"},
+		{"", "sp"},
+		{"waiting for your decision…", "dim"},
+	}
+	if err := chromedp.Run(tctx, chromedp.EmulateViewport(termW, termH)); err != nil {
+		log.Printf("[gif:suggestion] term viewport: %v", err)
+		return
+	}
+	if err := termInit(tctx); err != nil {
+		log.Printf("[gif:suggestion] term init: %v", err)
+		return
+	}
+	if err := termRender(tctx, proposed); err != nil {
+		log.Printf("[gif:suggestion] term render: %v", err)
+		return
+	}
+
+	// Browser: open guide.md (rendered), where the suggestion box renders inline.
+	if err := chromedp.Run(bctx, base(url, "guide.md", 1280, 800)...); err != nil {
+		log.Printf("[gif:suggestion] open guide.md: %v", err)
+		return
+	}
+	if err := chromedp.Run(bctx,
+		chromedp.WaitVisible(`.inline-suggestion`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		log.Printf("[gif:suggestion] await box: %v", err)
+		return
+	}
+	_ = rec.captureComposite(bctx, tctx, 220) // the before→after box, agent waiting
+	_ = rec.captureComposite(bctx, tctx, 90)  // hold on the decision row
+
+	// Human clicks Accept → the verdict badge appears.
+	_ = chromedp.Run(bctx,
+		chromedp.Click(`.inline-suggestion button[name="acceptSuggestion"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-suggestion.is-decided.sg-accept`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		chromedp.Sleep(150*time.Millisecond),
+	)
+
+	// Terminal: acknowledge the accept ships on the next hand-off.
+	accepted := append(proposed[:5:5],
+		termLine{"", "sp"},
+		termLine{"✓ Accepted — will apply on your next hand-off", "bullet"},
+	)
+	_ = termRender(tctx, accepted)
+	_ = rec.captureComposite(bctx, tctx, 260) // accepted, held longest
+
+	if err := rec.encode(filepath.Join(outDir, "suggestion.gif")); err != nil {
+		log.Printf("[gif:suggestion] encode: %v", err)
+	}
+}
+
+// gifSearch — ⌘K search across files (issue #91): open the palette, type a
+// query, jump to a hit. Browser-only.
+func gifSearch(allocCtx context.Context, url, outDir string) {
+	withCtx(allocCtx, "gif:search", func(ctx context.Context) error {
+		rec := &gifRec{}
+		if err := chromedp.Run(ctx, base(url, "payment.go", 1280, 800)...); err != nil {
+			return err
+		}
+		_ = rec.capture(ctx, 120) // the diff, before search
+		// Open the palette via the toolbar button (reliable in headless; the
+		// ⌘K chord is skip-when-typing and flaky to synthesize).
+		if err := chromedp.Run(ctx,
+			chromedp.Click(`button[name="openSearch"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.search-modal input[name="q"]`, chromedp.ByQuery),
+			chromedp.Sleep(200*time.Millisecond),
+		); err != nil {
+			return err
+		}
+		_ = rec.capture(ctx, 90) // empty palette
+		// Type a query that matches across files → results stream in.
+		_ = chromedp.Run(ctx,
+			chromedp.SendKeys(`.search-modal input[name="q"]`, "gateway", chromedp.ByQuery),
+			chromedp.WaitVisible(`.search-hit`, chromedp.ByQuery),
+			chromedp.Sleep(400*time.Millisecond),
+		)
+		_ = rec.capture(ctx, 200) // results with highlighted matches
+		// Jump to the first hit → the file opens at the matched line.
+		_ = chromedp.Run(ctx,
+			chromedp.Click(`.search-hit`, chromedp.ByQuery),
+			chromedp.Sleep(700*time.Millisecond),
+			chromedp.Evaluate(`document.querySelector('.line.is-cursor')?.scrollIntoView({block:'center'})`, nil),
+			chromedp.Sleep(200*time.Millisecond),
+		)
+		_ = rec.capture(ctx, 220) // landed on the match
+		return rec.encode(filepath.Join(outDir, "search.gif"))
+	})
+}
+
+// gifThemes — cycle the colour schemes (Solarized → Gruvbox → Catppuccin) and
+// flip the mode, showing the whole UI + syntax recolour live. Browser-only.
+func gifThemes(allocCtx context.Context, url, outDir string) {
+	withCtx(allocCtx, "gif:themes", func(ctx context.Context) error {
+		rec := &gifRec{}
+		if err := chromedp.Run(ctx, base(url, "payment.go", 1280, 800)...); err != nil {
+			return err
+		}
+		_ = chromedp.Run(ctx, chromedp.WaitVisible(`.code`, chromedp.ByQuery), chromedp.Sleep(200*time.Millisecond))
+		_ = rec.capture(ctx, 180) // Solarized (default)
+		// Cycle the scheme twice: Gruvbox, then Catppuccin. The scheme/mode buttons
+		// live in the desktop "View ▾" dropdown, so a chromedp.Click would block on
+		// visibility — clickJS fires the DOM click directly and the whole UI
+		// recolours regardless of whether the dropdown is open.
+		for range 2 {
+			_ = chromedp.Run(ctx, clickJS(`button[name="cycleScheme"]`), chromedp.Sleep(600*time.Millisecond))
+			_ = rec.capture(ctx, 180)
+		}
+		// Flip the mode to Dark on the current scheme.
+		_ = chromedp.Run(ctx, clickJS(`button[name="cycleTheme"]`), chromedp.Sleep(600*time.Millisecond))
+		_ = rec.capture(ctx, 240) // dark mode, held longest
+		return rec.encode(filepath.Join(outDir, "themes.gif"))
 	})
 }

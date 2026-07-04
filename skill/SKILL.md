@@ -350,7 +350,7 @@ parse it directly in the [fallback](#fallback-one-shot-handoff---skill-without--
 flow; streaming hands you JSON. **Columns** (load-bearing — order is the contract):
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden
 ```
 
 - `id`: opaque per-comment identifier
@@ -361,10 +361,12 @@ id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kin
 - `resolved`: `true` | `false` — see "Resolved comments" above
 - `anchor`: internal JSON fingerprint — **do not parse or act on it**. Empty when `kind=file`, `kind=area`, or `kind=region`.
 - `anchor_status`: `ok` | `moved` | `outdated` | *(empty)* — see "Re-anchoring" above. Always empty for `kind=file` / `kind=area` / `kind=region` (nothing to drift).
-- `kind`: `line` | `file` | `area` | `region` | *(empty)* — see "Comment kinds" above. Empty means `line` for pre-migration rows.
+- `kind`: `line` | `text` | `file` | `area` | `region` | *(empty)* — see "Comment kinds" above. Empty means `line` for pre-migration rows. `text` = a character range within a line (`from_col`/`to_col`).
 - `area`: JSON blob `{"x":0.1,"y":0.2,"w":0.3,"h":0.15}` (0..1 fractions) when `kind=area` (of the image) or `kind=region` (of the live page's document); empty otherwise.
 - `url`: the proxied page (app-relative, e.g. `/pricing`) when `kind=region` (`--external` live-site review); empty for every file-based kind.
-- Older CSVs may have fewer trailing columns (7–12); index by position and default missing ones to empty.
+- `from_col` / `to_col`: 0-based rune offsets delimiting a `kind=text` character range; `0` for every other kind.
+- `hidden`: `true` | `false` — a reviewer-only view flag; **ignore it** (never affects whether a row is actionable).
+- Older CSVs may have fewer trailing columns (7–15); index by position and default missing ones to empty.
 
 Multi-line bodies use standard CSV quoting; use `encoding/csv` or any RFC-4180-compliant parser.
 
