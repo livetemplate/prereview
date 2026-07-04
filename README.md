@@ -90,7 +90,7 @@ you're the one who accepts, rejects, or asks for a revision.
 - **vs. diff viewers** (lazygit, tig, delta, difftastic) — they show
   changes; prereview captures anchored comments and hands them to an LLM.
 
-## Alternatives
+### Alternatives
 
 Other tools in the "review your agent's changes locally" space — worth a look:
 
