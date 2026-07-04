@@ -333,14 +333,23 @@
         {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
         <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
         {{range .QueueItems}}
-        <form method="POST" class="queue-row queue-{{.State}}">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
-            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
-            <span class="queue-body">{{.Body}}</span>
-            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
-          </button>
-        </form>
+        <div class="queue-row queue-{{.State}}">
+          <form method="POST" class="queue-jump-form">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
+              <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
+              <span class="queue-body">{{.Body}}</span>
+              <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
+            </button>
+          </form>
+          {{- if eq .State "done"}}
+          {{/* Re-enqueue (#119): put a done item back on the queue for the agent to redo. */}}
+          <form method="POST" class="queue-reenqueue-form">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
+          </form>
+          {{- end}}
+        </div>
         {{end}}
       </div>
     </div>

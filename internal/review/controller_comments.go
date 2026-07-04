@@ -15,6 +15,25 @@ func (c *PrereviewController) SaveDraft(state PrereviewState, ctx *livetemplate.
 	return state, nil
 }
 
+// AddDraft creates a comment held as a draft (#119): it runs the normal add path
+// (any kind) and then flips the freshly-added comment to Draft, re-persisting.
+// Building on AddComment avoids threading a draft flag through all five
+// kind-specific adders; the brief enqueued window never reaches the agent because
+// emission is debounced and reloads from disk (where the final state is Draft).
+func (c *PrereviewController) AddDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	before := len(state.Comments)
+	state, err := c.AddComment(state, ctx)
+	if err != nil || len(state.Comments) <= before {
+		return state, err // failed, or an in-place edit/re-anchor (no new comment)
+	}
+	last := len(state.Comments) - 1
+	state.Comments[last].Draft = true
+	if perr := c.persist(state.Comments); perr != nil {
+		return state, fmt.Errorf("persist draft: %w", perr)
+	}
+	return state, nil
+}
+
 // AddComment validates body+selection, appends a Comment, writes the CSV
 // atomically, and clears selection + draft for the next round.
 func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
@@ -585,6 +604,17 @@ func (c *PrereviewController) EnqueueComment(state PrereviewState, ctx *livetemp
 // out of the agent's snapshot while the reviewer keeps working on it.
 func (c *PrereviewController) MoveToDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	return c.setCommentDraft(state, ctx.GetString("id"), true)
+}
+
+// ReenqueueComment moves a "done" comment back to "queued" (#119): the agent
+// marked it worked-on but the reviewer wants it redone. Records an un-processed
+// tombstone so the comment leaves the done bucket and re-arms the snapshot.
+func (c *PrereviewController) ReenqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if err := c.reenqueueComment(&state, ctx.GetString("id")); err != nil {
+		return state, err
+	}
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
 }
 
 // HideComment individually re-hides a RESOLVED comment (issue #88): it stays out

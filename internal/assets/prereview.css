@@ -1038,7 +1038,15 @@ header.file-head .file-head-actions {
 .queue-panel { left: 0; right: auto; min-width: 22rem; max-width: min(30rem, calc(100vw - 1rem)); padding: 0.3rem; }
 .queue-working { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
 .queue-legend { padding: 0.25rem 0.5rem 0.4rem; font-size: 0.75rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-card-sectioning-background-color); margin-bottom: 0.2rem; }
-.queue-row { margin: 0; }
+.queue-row { margin: 0; display: flex; align-items: center; gap: 0.15rem; }
+.queue-jump-form { margin: 0; flex: 1 1 auto; min-width: 0; }
+.queue-reenqueue-form { margin: 0; flex: 0 0 auto; }
+.queue-reenqueue {
+  margin: 0; padding: 0.2rem 0.45rem; min-height: 0; font-size: 1rem; line-height: 1;
+  background: none; border: 1px solid var(--pico-muted-border-color); border-radius: 5px;
+  color: var(--pico-muted-color); cursor: pointer;
+}
+.queue-reenqueue:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 .queue-item {
   display: flex; align-items: center; gap: 0.5rem; width: 100%;
   margin: 0; padding: 0.4rem 0.5rem; min-height: 0;
@@ -2230,6 +2238,19 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
 }
+/* Draft badge (#119): a held, not-yet-enqueued comment. Muted so it reads as
+   "parked" rather than active. */
+.inline-comment .draft-badge, .all-comments .draft-badge {
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.composer .save-draft-btn {
+  margin: 0; padding: 0.3rem 0.8rem; font-size: 0.85rem; min-height: 30px;
+  background: none; color: var(--pico-h1-color);
+  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm); cursor: pointer;
+}
+.composer .save-draft-btn:hover { background: var(--soft-bg-hover); }
 .inline-comment.is-outdated { border-left: 3px solid var(--pr-del); }
 .anchor-orig { margin: 0.25rem 0 0; font-size: 0.72rem; color: var(--pico-muted-color); }
 .anchor-orig summary { cursor: pointer; }

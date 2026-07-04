@@ -3,6 +3,7 @@ package review
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -25,6 +26,14 @@ import (
 // file under .prereview/. Durable across launches (openStore does NOT reset it).
 const ProcessedFileName = "processed.jsonl"
 
+// ReenqueuedFileName holds the server-owned "un-processed" tombstones (#119): a
+// reviewer who re-enqueues a done comment appends its id here. A comment counts
+// as done only while its processed-marks OUTNUMBER its re-enqueue marks, so a
+// process → re-enqueue → re-process cycle resolves correctly (each re-enqueue
+// cancels one process mark). Append-only, same one-id-per-line shape as
+// processed.jsonl.
+const ReenqueuedFileName = "reenqueued.jsonl"
+
 // ProcessedMark is one line of processed.jsonl: the comment ID the agent
 // addressed plus an informational timestamp (the server only uses ID).
 type ProcessedMark struct {
@@ -40,20 +49,22 @@ func ProcessedPath(csvPath string) string {
 	return filepath.Join(filepath.Dir(csvPath), ProcessedFileName)
 }
 
-// loadProcessedIDs reads the append-only markers file into a set of comment IDs.
-// Tolerant by design: a missing file (no agent has marked anything) yields an
-// empty set, and any unparseable/torn line is skipped rather than failing the
-// whole load — the file is agent-appended and a review must never break on it.
-func loadProcessedIDs(path string) map[string]bool {
+// ReenqueuePath is the re-enqueue tombstone file alongside processed.jsonl.
+func ReenqueuePath(csvPath string) string {
+	return filepath.Join(filepath.Dir(csvPath), ReenqueuedFileName)
+}
+
+// loadMarkCounts reads an append-only {"id":…} marks file into per-id counts.
+// Shared by processed.jsonl and reenqueued.jsonl; tolerant of a missing file
+// (nil) and torn lines (skipped), so a review never breaks on it.
+func loadMarkCounts(path string) map[string]int {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil // missing (common) or unreadable → nothing marked
+		return nil
 	}
 	defer f.Close()
-	ids := make(map[string]bool)
+	counts := make(map[string]int)
 	sc := bufio.NewScanner(f)
-	// Comment bodies aren't in this file (only IDs), but be generous so a long
-	// line never silently truncates a valid mark.
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
 		line := sc.Bytes()
@@ -62,11 +73,11 @@ func loadProcessedIDs(path string) map[string]bool {
 		}
 		var m ProcessedMark
 		if err := json.Unmarshal(line, &m); err != nil || m.ID == "" {
-			continue // torn/partial/blank line — skip, next line may be fine
+			continue
 		}
-		ids[m.ID] = true
+		counts[m.ID]++
 	}
-	return ids
+	return counts
 }
 
 // applyProcessed flips Comment.Processed on the comments already in state to
@@ -75,18 +86,56 @@ func loadProcessedIDs(path string) map[string]bool {
 // LLMStatusChanged fan-out (existing comments). Markers are append-only, so this
 // only ever turns the badge ON.
 func (c *PrereviewController) applyProcessed(state *PrereviewState) {
-	ids := loadProcessedIDs(c.processedPath())
-	if len(ids) == 0 {
+	pc := loadMarkCounts(c.processedPath())
+	if len(pc) == 0 {
 		return
 	}
+	rc := loadMarkCounts(c.reenqueuedPath()) // re-enqueue tombstones (#119)
 	for i := range state.Comments {
-		if ids[state.Comments[i].ID] {
-			state.Comments[i].Processed = true
-		}
+		id := state.Comments[i].ID
+		// Done only while processed marks outnumber re-enqueue marks.
+		state.Comments[i].Processed = pc[id] > rc[id]
 	}
+}
+
+// reenqueueComment records a re-enqueue tombstone (#119) so a done comment moves
+// back to "queued", then refreshes the derived Processed flags and re-arms the
+// snapshot emit so the agent sees the fresh set.
+func (c *PrereviewController) reenqueueComment(state *PrereviewState, id string) error {
+	if id == "" {
+		return fmt.Errorf("reenqueue: missing id")
+	}
+	if err := appendMark(c.reenqueuedPath(), id); err != nil {
+		return err
+	}
+	c.applyProcessed(state)
+	c.scheduleEmit()
+	return nil
+}
+
+// appendMark appends one {"id":…} line to an append-only marks file.
+func appendMark(path, id string) error {
+	line, err := json.Marshal(ProcessedMark{ID: id})
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", filepath.Base(path), err)
+	}
+	defer f.Close()
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		return fmt.Errorf("append %s: %w", filepath.Base(path), err)
+	}
+	return nil
 }
 
 // processedPath is the .prereview/processed.jsonl path for this session's store.
 func (c *PrereviewController) processedPath() string {
 	return ProcessedPath(c.CSVPath)
+}
+
+// reenqueuedPath is the .prereview/reenqueued.jsonl tombstone path.
+func (c *PrereviewController) reenqueuedPath() string {
+	return ReenqueuePath(c.CSVPath)
 }

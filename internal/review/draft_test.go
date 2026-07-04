@@ -65,6 +65,33 @@ func TestDraftLifecycle(t *testing.T) {
 	}
 }
 
+// TestAddDraft_CreatesHeldComment: "Save draft" creates a comment that is a draft
+// (held out of the actionable snapshot) rather than enqueued.
+func TestAddDraft_CreatesHeldComment(t *testing.T) {
+	c := draftController(t)
+	// File-level add is the simplest kind to drive without a diff/selection.
+	st := PrereviewState{SelectedFile: "a.go", CommentMode: commentKindFile}
+	ctx := livetemplate.NewContext(context.TODO(), "addDraft", map[string]interface{}{"body": "hold this thought"})
+
+	st, err := c.AddDraft(st, ctx)
+	if err != nil {
+		t.Fatalf("AddDraft: %v", err)
+	}
+	if len(st.Comments) != 1 {
+		t.Fatalf("want 1 comment, got %d", len(st.Comments))
+	}
+	if !st.Comments[0].Draft {
+		t.Error("AddDraft should create a Draft comment")
+	}
+	if got := actionableComments(st.Comments); len(got) != 0 {
+		t.Errorf("a drafted comment must not be actionable, got %d", len(got))
+	}
+	// Persisted as a draft (survives reload).
+	if reloaded := c.loadCommentsFromDisk(); len(reloaded) != 1 || !reloaded[0].Draft {
+		t.Errorf("draft must persist: %+v", reloaded)
+	}
+}
+
 // TestDraftToggle_IdempotentAndMissing: toggling to the current state is a no-op;
 // an unknown id errors.
 func TestDraftToggle_IdempotentAndMissing(t *testing.T) {
