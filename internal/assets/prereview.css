@@ -1037,6 +1037,9 @@ header.file-head .file-head-actions {
 .q-queued { color: var(--accent); }
 .q-done { color: var(--pr-add); }
 .q-draft { color: var(--pico-muted-color); }
+/* Keep the whole chip (label · counts · chevron) on one line — it was wrapping
+   the chevron to a second row on a narrow bar. */
+.queue-trigger { display: inline-flex; align-items: center; white-space: nowrap; flex: 0 0 auto; }
 .queue-trigger.is-working { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
 /* The Queue chip sits at the LEFT of the toolbar, so its panel opens
    left-aligned (the shared .tb-dropdown-panel default is right:0 for the
@@ -2195,7 +2198,6 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      filename (it's in the sticky .file-head right below). Skill-mode's inline
      "Hand off →" is left alone (it has no .tb-pause class). */
   header.bar .tb-action .end-session-inline,
-  header.bar .tb-action .tb-pause,
   header.bar .nav-prev,
   header.bar .nav-next,
   header.bar .title-file { display: none; }

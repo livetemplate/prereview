@@ -706,18 +706,10 @@
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed
     {{- if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end -}}
   </div>
-  {{/* Primary actions moved here from the bar on mobile (#119) so the narrow bar
-       stays to ☰ 🔍 Queue ⋮. Desktop keeps them inline (this menu is
-       display:none ≥900px). Their bar copies are hidden <900px via CSS. */}}
-  {{if .StreamMode}}
-  <form method="POST">
-    <button type="submit" name="toggleAgentPause" class="menu-item" role="menuitem">
-      <span class="menu-icon">{{if .AgentPaused}}▶{{else}}⏸{{end}}</span>
-      <span class="menu-label">{{if .AgentPaused}}Resume agent{{else}}Pause agent{{end}}</span>
-      {{if and .AgentPaused .QueuedCount}}<span class="menu-meta">{{.QueuedCount}} held</span>{{end}}
-    </button>
-  </form>
-  {{end}}
+  {{/* Prev/Next file moved here from the bar on mobile (#119) so the narrow bar
+       stays tidy (☰ 🔍 Queue Pause ⋮). Pause/resume + End session stay inline
+       (there's room). Desktop keeps these inline (this menu is display:none
+       ≥900px); their bar copies are hidden <900px via CSS. */}}
   {{if gt (len .Files) 1}}
   <form method="POST">
     <button type="submit" name="prevFile" class="menu-item" role="menuitem">
