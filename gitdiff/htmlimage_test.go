@@ -51,10 +51,28 @@ func TestSanitizeImageHTML(t *testing.T) {
 			want: []string{`<div>`, `<img src="x.png"`}}, // wrapper kept but style dropped
 		{name: "non-img/non-wrapper tag", raw: `<a href="x"><img src="x.png"></a>`, ok: false},
 		{name: "two images", raw: `<p><img src="a.png"><img src="b.png"></p>`, ok: false},
-		{name: "text alongside image", raw: `<p>caption <img src="x.png"></p>`, ok: false},
 		{name: "unclosed wrapper", raw: `<p><img src="x.png">`, ok: false},
 		{name: "stray close tag", raw: `<img src="x.png"></span>`, ok: false},
 		{name: "comment in block", raw: `<p><!-- evil --><img src="x.png"></p>`, ok: false},
+
+		// --- extracted: the image survives an inert caption sibling (#104) ---
+		// goldmark merges adjacent <p> blocks (no blank line) into one HTMLBlock,
+		// so a "centered image + caption" hero lands here as a single block. The
+		// caption is dropped; the image renders instead of the whole block being
+		// vetoed.
+		{name: "caption after image (merged block)",
+			raw: `<p align="center"><img src="docs/hero.gif" alt="hi" width="820"></p>` +
+				`<p align="center"><sub><em>a caption</em></sub></p>`, ok: true,
+			want: []string{`<p align="center">`, `<img src="docs/hero.gif"`, `width="820"`, `</p>`}},
+		{name: "caption before image (merged block)",
+			raw:  `<p align="center"><em>a caption</em></p><p align="center"><img src="x.png"></p>`,
+			ok:   true,
+			want: []string{`<p align="center">`, `<img src="x.png"`}},
+		{name: "inline caption text in image paragraph",
+			raw: `<p>caption <img src="x.png"></p>`, ok: true,
+			want: []string{`<img src="x.png"`}},
+		{name: "caption sibling does not veto — script still does",
+			raw: `<p><img src="x.png"></p><p>ok</p><script>alert(1)</script>`, ok: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, ok := sanitizeImageHTML(tc.raw)
@@ -110,6 +128,39 @@ func TestRenderMarkdownBlocks_RawHTMLImage(t *testing.T) {
 	}
 	if strings.Contains(joined, "<script") || strings.Contains(joined, "alert('xss')") {
 		t.Errorf("script not dropped: %q", joined)
+	}
+}
+
+// Regression for #104: the GitHub hero pattern — a centered image <p> followed
+// IMMEDIATELY (no blank line) by a caption <p>. CommonMark type-6 HTML blocks
+// run until a blank line, so goldmark groups BOTH <p> elements into a single
+// ast.HTMLBlock. The caption must not veto the image: the image renders (resolved
+// server-absolute, centered) and the caption text is dropped. The no-blank-line
+// spacing is load-bearing — with a blank line the two <p>s parse as separate
+// blocks and this never exercises the merged-block extraction path.
+func TestRenderMarkdownBlocks_ImageWithAdjacentCaption(t *testing.T) {
+	src := `<p align="center"><img src="docs/hero.gif" alt="hero" width="820"></p>` + "\n" +
+		`<p align="center"><sub><em>a caption</em></sub></p>` + "\n"
+	blocks := RenderMarkdownBlocks([]byte(src), "README.md")
+	var joined string
+	for _, b := range blocks {
+		joined += string(b.HTML)
+	}
+	if !strings.Contains(joined, `<img src="/docs/hero.gif"`) {
+		t.Errorf("caption-adjacent hero img not rendered/resolved: %q", joined)
+	}
+	if !strings.Contains(joined, `align="center"`) {
+		t.Errorf("hero centering lost: %q", joined)
+	}
+	// Only the image + wrapper are emitted — the caption text is dropped, never
+	// re-emitted as raw HTML.
+	if strings.Contains(joined, "a caption") {
+		t.Errorf("caption text leaked into output: %q", joined)
+	}
+	// And the omitted-comment placeholder must NOT stand in for the whole block
+	// (that's the bug — the block dropped instead of the image rendering).
+	if strings.Contains(joined, rawHTMLOmitted) {
+		t.Errorf("merged image+caption block dropped as omitted raw HTML: %q", joined)
 	}
 }
 
