@@ -1,6 +1,6 @@
 # prereview
 
-**You spot what's wrong; the LLM fixes it — locally, before you push.** Review any change — a diff line, a Markdown or HTML block, a region of an image, even a box on a live local site — and hand the fixes to your coding agent. It works the other way too: the agent can propose edits inline, and you accept, reject, or send each back with a note. Works with any LLM CLI. All local, before anything leaves your machine.
+**You spot what's wrong; the LLM fixes it — locally, before you push.** Review any change — a diff line, a Markdown or HTML block, a region of an image, even a box on a live local site — then hand it off, and your coding agent makes the fixes. It works the other way too: the agent can propose edits inline, and you accept, reject, or send each back with a note. Works with any LLM CLI. All local, before anything leaves your machine.
 
 <p align="center">
   <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
@@ -8,21 +8,23 @@
 
 <p align="center"><sub><em>Comment on what's wrong and hand off — Claude reads it and edits the file, the fix lands in the diff, you resolve. You stay in the loop; the output gets better.</em></sub></p>
 
-A tiny local webapp for **reviewing your working tree and handing the
-fixes to an LLM** — no commit, no PR, no GitHub round-trip. Run
-`prereview` in your repo (or point it at any file or directory), click
-what you want changed — a line or range in a diff, a rendered Markdown or
-HTML block, a region of an image, or a box on a running dev site — and
-leave a comment; a CSV is written that you (or an LLM) act on. It ships
-with a turnkey [Claude Code](https://claude.com/claude-code) skill —
-`/prereview` launches a session, you comment, hit **"Hand off →"**, and
-your agent applies the changes — and works with **any other coding agent**
-(OpenAI Codex CLI, Gemini CLI, aider, opencode, cursor-agent) through the
-same open comment protocol; see **[Works with any LLM CLI](#works-with-any-llm-cli)**.
-On a remote box it auto-binds your Tailscale address — review from your
-phone over the tailnet, before anything is pushed. The agent can also
-**suggest edits** back to you (`prereview suggest`) — inline boxes you
-accept, reject, or ask it to revise, then hand the batch back.
+Run `prereview` in your repo — or point it at any file or directory — and
+it opens a local web UI. Click what you want changed (a line or range in a
+diff, a rendered Markdown or HTML block, a region of an image, or a box on
+a running dev site) and leave a comment; each is saved to a plain
+`.prereview/comments.csv`. Hand the batch to your coding agent and it reads
+the comments and makes the changes. It's all local — no commit, no PR, no
+GitHub round-trip.
+
+The turnkey [Claude Code](https://claude.com/claude-code) skill runs the
+whole loop: `/prereview` starts a session, you comment, you hit **"Hand
+off →"**, and the agent applies the changes. Any other agent (OpenAI Codex
+CLI, Gemini CLI, aider, opencode, cursor-agent) works through the same open
+comment protocol — see **[Works with any LLM CLI](#works-with-any-llm-cli)**.
+On a remote box prereview binds your Tailscale address, so you can review
+from your phone over the tailnet. The agent can also propose edits back to
+you (`prereview suggest`): inline boxes you accept, reject, or send back for
+a revision.
 
 ## Features
 
@@ -324,7 +326,8 @@ file (line numbers match, so comments resolve across both) · the base
 an audit trail; Delete has Undo) · **show / hide resolved** and hide a
 single resolved comment to declutter · the agent badges each comment it
 **worked on** and its live status (working / done) shows in the toolbar ·
-**Esc** clears a selection.
+**show / hide the agent's suggestions** (or press `s`) · **Esc** clears a
+selection.
 
 ## Output
 
@@ -348,6 +351,13 @@ proposed edits (`suggestions.jsonl`) and your verdicts on them
 [docs/cli.md](docs/cli.md#output) for the inventory.
 
 ## Architecture (at a glance)
+
+prereview is built entirely on **[livetemplate](https://github.com/livetemplate/livetemplate)**
+and is a real-world dogfood of it: the whole interactive UI is server-rendered
+Go driving livetemplate's client, with **no custom JavaScript**. When a screen
+needs a primitive the framework doesn't have yet, it gets added to livetemplate
+rather than worked around here — so prereview doubles as the framework's proving
+ground.
 
 - **Single binary**, embeds all assets (incl. the livetemplate client JS)
   via `//go:embed`.
