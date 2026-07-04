@@ -1048,9 +1048,13 @@ header.file-head .file-head-actions {
   background: none; color: var(--pico-muted-color);
 }
 .queue-end-btn:hover { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 45%, transparent); }
+/* One-line explainer under the Pause toggle: which send-mode you're in (#119).
+   Live vs Batching — the button says the action, this says the state. */
+.queue-mode { padding: 0 0.5rem 0.35rem; font-size: 0.73rem; line-height: 1.3; color: var(--pico-muted-color); }
+.queue-mode.is-batching { color: color-mix(in srgb, var(--pr-del) 70%, var(--pico-muted-color)); }
 /* Pause/resume toggle at the top of the queue panel (merged in — it gates the
    queue). Full-width; the paused state is red so it reads as "held". */
-.queue-pause-form { margin: 0 0 0.3rem; }
+.queue-pause-form { margin: 0 0 0.15rem; }
 .queue-pause-btn {
   display: block; width: 100%; margin: 0; padding: 0.45rem 0.6rem; min-height: 0;
   font-size: 0.85rem; font-weight: 600; text-align: center; cursor: pointer;

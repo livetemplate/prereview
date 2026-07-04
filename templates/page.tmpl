@@ -84,15 +84,16 @@
       >💬 {{len $.AllRegionComments}}</button>
     </form>
     {{- if .StreamMode -}}
-    {{/* Continuous enqueue (#119): annotations stream automatically; this toggle
-         pauses/resumes the agent. Mirrors the repo-mode toolbar. */}}
+    {{/* Continuous enqueue (#119): annotations stream to the agent as you make
+         them; pausing BATCHES them instead (held, sent together on resume) — not
+         a stop. Mirrors the repo-mode toolbar. */}}
     <form method="POST" style="margin:0">
       <button
         type="submit"
         name="toggleAgentPause"
         class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}"
-        title="{{if .AgentPaused}}Resume the agent — release the queued batch{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}"
-      >{{if .AgentPaused}}▶ Resume agent{{else}}⏸ Pause agent{{end}}</button>
+        title="{{if .AgentPaused}}Batching — annotations held, not sent. Resume to send the batch.{{else}}Live — each annotation is sent as you make it. Pause to batch them instead.{{end}}"
+      >{{if .AgentPaused}}▶ Resume — send batch{{else}}⏸ Pause — batch{{end}}</button>
     </form>
     {{- /* session terminator — opens the confirm dialog (#58) instead of ending
            immediately; the dialog's button fires endSession. */ -}}
@@ -597,14 +598,17 @@
       type="button"
       class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}"
       aria-haspopup="menu"
-      title="{{if .AgentPaused}}Agent paused — {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"
+      title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"
     >{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
     <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
-      {{/* Pause/resume lives with the queue it gates: pausing holds the drain so
-           you can batch up; resuming ships the accumulated batch. */}}
+      {{/* Pause = batch, not stop (#119). Live: each comment is sent to the agent
+           as you save it. Paused: comments are held and batched; resume sends the
+           accumulated batch in one go. The button says what it does; the mode line
+           below says which state you're in. */}}
       <form method="POST" class="queue-pause-form">
-        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume agent{{if .QueuedCount}} · {{.QueuedCount}} held{{end}}{{else}}⏸ Pause agent{{end}}</button>
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}</button>
       </form>
+      <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
       {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
       {{if .HasQueue}}
       <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
@@ -1561,12 +1565,15 @@
 </div>
 {{end}}
 {{if .AgentPaused}}
-{{/* Rollback force-pauses the agent (#90) so it stops applying while you
-     re-steer. Resume clears the pause; M2's continuous drain honours it. */}}
+{{/* Paused = batching (#119): comments are held, not sent one-by-one. Shown for
+     BOTH triggers — the manual Pause toggle and a rollback's auto-pause (#90,
+     which holds the drain so the agent can't undo the version you restored).
+     The wording describes the STATE (batching), not the cause, so it's true
+     either way. Resume releases the held batch in one snapshot. */}}
 <div class="reanchor-prompt paused-prompt" role="status">
-  <span>⏸ Agent paused after a rollback.</span>
+  <span>⏸ Batching — comments are held, not sent to the agent yet.</span>
   <form method="POST" class="toast-dismiss-form">
-    <button type="submit" name="resumeAgent" class="refresh-btn">Resume agent</button>
+    <button type="submit" name="resumeAgent" class="refresh-btn">Resume — send batch</button>
   </form>
 </div>
 {{end}}
