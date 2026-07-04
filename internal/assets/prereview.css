@@ -1024,6 +1024,38 @@ header.file-head .file-head-actions {
   background: color-mix(in srgb, var(--pr-del) 22%, var(--soft-bg));
   border-color: color-mix(in srgb, var(--pr-del) 50%, transparent);
 }
+
+/* Work-queue panel (#119): the toolbar Queue chip + its dropdown of rows. */
+.queue-counts { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0 0.15rem 0 0.35rem; font-size: 0.78rem; }
+.q-num { font-weight: 700; }
+.q-queued { color: var(--accent); }
+.q-done { color: var(--pr-add); }
+.q-draft { color: var(--pico-muted-color); }
+.queue-trigger.is-working { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+/* The Queue chip sits at the LEFT of the toolbar, so its panel opens
+   left-aligned (the shared .tb-dropdown-panel default is right:0 for the
+   right-side View/Versions dropdowns). */
+.queue-panel { left: 0; right: auto; min-width: 22rem; max-width: min(30rem, calc(100vw - 1rem)); padding: 0.3rem; }
+.queue-working { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
+.queue-legend { padding: 0.25rem 0.5rem 0.4rem; font-size: 0.75rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-card-sectioning-background-color); margin-bottom: 0.2rem; }
+.queue-row { margin: 0; }
+.queue-item {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%;
+  margin: 0; padding: 0.4rem 0.5rem; min-height: 0;
+  background: none; border: 0; border-radius: 5px;
+  color: var(--pico-h1-color); font-size: 0.82rem; text-align: left; cursor: pointer;
+}
+.queue-item:hover, .queue-item:focus { background: var(--pico-card-sectioning-background-color); }
+.queue-badge {
+  flex: 0 0 auto; font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;
+  padding: 0.08rem 0.4rem; border-radius: 999px;
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color);
+}
+.queue-badge-queued { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.queue-badge-done { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
+.queue-badge-draft { background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color); }
+.queue-body { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-loc { flex: 0 0 auto; font-size: 0.7rem; color: var(--pico-muted-color); font-family: var(--font-mono, monospace); }
 /* Active toggle items (Focus on, Show-resolved on) tint like the mobile menu's
    .is-on so an engaged state is visible in the dropdown too. */
 .tb-dropdown-panel button.menu-item.is-on .menu-icon,
