@@ -267,11 +267,14 @@ sidebar.
 
 <p align="center"><sub><em>Markdown renders with a TOC; click a block and the comment anchors to its source line.</em></sub></p>
 
-**Take the agent's suggested edits.** Your agent can propose edits with
-`prereview suggest`; each renders inline as a before → after box. **Accept**
-to take it, **Reject** to drop it, or **Request revision** to send it back
-with a note — the decisions ride the next hand-off, and the agent applies
-the ones you accepted. Nothing is written to your files until then.
+**Take the agent's suggested edits.** Ask for suggestions two ways: in your
+LLM chat (*"review this doc and suggest edits in prereview"*), or right in a
+**comment** — leave one like *"suggest alternatives for this phrasing"* and
+hand off. Either way the agent submits them with `prereview suggest` and each
+renders inline as a before → after box. **Accept** to take it, **Reject** to
+drop it, or **Request revision** to send it back with a note — the decisions
+ride the next hand-off, and the agent applies the ones you accepted. Nothing
+is written to your files until then.
 
 <p align="center"><img src="docs/suggestion.gif" alt="An LLM-proposed edit shown inline as a before-after box; the reviewer clicks Accept and a verdict badge appears" width="760"></p>
 
