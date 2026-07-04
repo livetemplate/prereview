@@ -581,12 +581,16 @@
   {{end}}
   <form method="POST" class="tb-action">
     {{if .StreamMode}}
+    {{/* Continuous enqueue (#119): comments/suggestions auto-enqueue and stream to
+         the agent as you go — no explicit hand-off. This toggle pauses the drain so
+         you can batch up a region before letting the agent run; resuming releases
+         the accumulated batch in one snapshot. */}}
     <button
       type="submit"
-      name="handOff"
-      class="contrast"
-      title="Send the current comments to your agent as a handoff event (session stays open)"
-    >Hand off →</button>
+      name="toggleAgentPause"
+      class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}"
+      title="{{if .AgentPaused}}Resume the agent — release the queued batch to it{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}"
+    >{{if .AgentPaused}}▶ Resume agent{{else}}⏸ Pause agent{{end}}</button>
     {{/* On mobile End session moves to the ⋮ overflow menu (below) so the
          narrow bar isn't crowded by two action buttons — hidden here via
          .end-session-inline in the mobile media query. */}}

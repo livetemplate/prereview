@@ -270,12 +270,26 @@ func (c *PrereviewController) RestoreVersion(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
-// ResumeAgent clears the rollback-induced pause. In M1 there is no continuous
-// drain to release, so this just removes the marker + banner; M2's emitter also
-// re-emits the latest snapshot on resume.
+// ToggleAgentPause flips the agent between paused and running (#119). Pausing
+// holds the drain so the reviewer can batch up work; resuming releases it and
+// re-arms the emit so the accumulated batch ships in one snapshot.
+func (c *PrereviewController) ToggleAgentPause(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	paused := !state.AgentPaused
+	c.setAgentPaused(paused)
+	state.AgentPaused = paused
+	if !paused {
+		c.scheduleEmit() // resume flushes the batch accumulated while paused
+	}
+	return state, nil
+}
+
+// ResumeAgent clears the pause and releases the drain: the batch accumulated
+// while paused ships on the next emit. Bound to the "Resume agent" banner button
+// shown after a rollback-induced pause.
 func (c *PrereviewController) ResumeAgent(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	c.setAgentPaused(false)
 	state.AgentPaused = false
+	c.scheduleEmit() // release: flush the held batch
 	return state, nil
 }
 

@@ -340,7 +340,8 @@
   {{end}}
   <form method="POST" class="tb-action">
     {{if .StreamMode}}
-    <button type="submit" name="handOff" class="contrast" title="Send the current comments to your agent as a handoff event (session stays open)">Hand off →</button>
+    
+    <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Resume the agent — release the queued batch to it{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}">{{if .AgentPaused}}▶ Resume agent{{else}}⏸ Pause agent{{end}}</button>
     
     <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast end-session-inline" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
     {{else}}{{if .SkillMode}}

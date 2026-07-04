@@ -1018,6 +1018,12 @@ header.file-head .file-head-actions {
   border-radius: 6px; font-size: 0.85rem;
 }
 .paused-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
+/* Pause/resume toggle (#119): the paused state is visually distinct so it's
+   obvious the agent is held. */
+.tb-pause.is-paused {
+  background: color-mix(in srgb, var(--pr-del) 22%, var(--soft-bg));
+  border-color: color-mix(in srgb, var(--pr-del) 50%, transparent);
+}
 /* Active toggle items (Focus on, Show-resolved on) tint like the mobile menu's
    .is-on so an engaged state is visible in the dropdown too. */
 .tb-dropdown-panel button.menu-item.is-on .menu-icon,

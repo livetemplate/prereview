@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/livetemplate/livetemplate"
@@ -106,6 +107,17 @@ type PrereviewController struct {
 	// treats ErrSessionDisconnected (no tabs) as a skip, so nothing needs
 	// clearing.
 	session livetemplate.Session
+
+	// Continuous emission (#119). A single debounced timer coalesces a burst of
+	// mutations into one snapshot emit (see controller_emit.go). emitMu guards the
+	// timer. inEmit is set while emitSnapshot runs so its own self-heal persist
+	// can't reschedule (avoiding a feedback loop). emitDisabled is set at session
+	// end so no snapshot fires after session_end (which the skill treats as
+	// terminal).
+	emitMu       sync.Mutex
+	emitTimer    *time.Timer
+	inEmit       atomic.Bool
+	emitDisabled atomic.Bool
 }
 
 type cachedDiff struct {
@@ -401,7 +413,14 @@ func (c *PrereviewController) persist(comments []Comment) error {
 			Draft:        cm.Draft,
 		})
 	}
-	return c.CSVWriter.Write(rows)
+	if err := c.CSVWriter.Write(rows); err != nil {
+		return err
+	}
+	// Continuous enqueue (#119): a persisted comment change (re)arms the debounced
+	// snapshot emit. inEmit-guarded, so the self-heal persist inside emitSnapshot
+	// doesn't re-arm and spin; no-op in non-stream mode.
+	c.scheduleEmit()
+	return nil
 }
 
 // writeDoneMarker writes csvPath into donePath atomically, so a skill that
