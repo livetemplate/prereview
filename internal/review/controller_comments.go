@@ -2,10 +2,12 @@ package review
 
 import (
 	"fmt"
-	"github.com/livetemplate/livetemplate"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/livetemplate/livetemplate"
 )
 
 // SaveDraft updates DraftBody as the user types. Bound to the textarea's
@@ -15,29 +17,48 @@ func (c *PrereviewController) SaveDraft(state PrereviewState, ctx *livetemplate.
 	return state, nil
 }
 
-// AddDraft creates a comment held as a draft (#119): it runs the normal add path
-// (any kind) and then flips the freshly-added comment to Draft, re-persisting.
-// Building on AddComment avoids threading a draft flag through all five
-// kind-specific adders; the brief enqueued window never reaches the agent because
-// emission is debounced and reloads from disk (where the final state is Draft).
-func (c *PrereviewController) AddDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+// materializeDraft turns the composer's in-progress text into a DRAFT comment
+// instead of discarding it, so navigating away (switching files, jumping to a
+// comment) WITHOUT clicking Save doesn't lose the note (#105/#119). It reuses the
+// normal add path (any kind) then flips the new comment to Draft. A no-op when
+// there's no pending text, when editing/re-anchoring an existing comment, or when
+// the add can't anchor. The materialized draft is enqueue-able / deletable from
+// its card; explicit Cancel (clearSelection) still discards.
+//
+// Called at the START of the composer-abandon navigation actions — NOT from
+// clearSelection (Cancel/Esc), which the reviewer chose to keep as "discard".
+func (c *PrereviewController) materializeDraft(state PrereviewState) PrereviewState {
+	if state.EditingCommentID != "" || state.ReanchorCommentID != "" {
+		return state // editing an existing comment — abandoning reverts, doesn't draft
+	}
+	body := strings.TrimSpace(state.DraftBody)
+	if body == "" {
+		return state
+	}
 	before := len(state.Comments)
-	state, err := c.AddComment(state, ctx)
-	if err != nil || len(state.Comments) <= before {
-		return state, err // failed, or an in-place edit/re-anchor (no new comment)
+	st, err := c.addCommentBody(state, body)
+	if err != nil || len(st.Comments) <= before {
+		return state // couldn't anchor (no live selection) — leave the composer as-is
 	}
-	last := len(state.Comments) - 1
-	state.Comments[last].Draft = true
-	if perr := c.persist(state.Comments); perr != nil {
-		return state, fmt.Errorf("persist draft: %w", perr)
+	st.Comments[len(st.Comments)-1].Draft = true
+	if perr := c.persist(st.Comments); perr != nil {
+		slog.Warn("materialize draft", "err", perr)
+		return state
 	}
-	return state, nil
+	return st
 }
 
 // AddComment validates body+selection, appends a Comment, writes the CSV
-// atomically, and clears selection + draft for the next round.
+// atomically, and clears selection + draft for the next round. Save enqueues
+// (the comment is actionable); the draft path is materializeDraft.
 func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	body := strings.TrimSpace(ctx.GetString("body"))
+	return c.addCommentBody(state, strings.TrimSpace(ctx.GetString("body")))
+}
+
+// addCommentBody is AddComment's core, parameterized on the body so
+// materializeDraft can reuse the full kind-dispatch with the autosaved DraftBody
+// instead of a form value.
+func (c *PrereviewController) addCommentBody(state PrereviewState, body string) (PrereviewState, error) {
 	if body == "" {
 		return state, fmt.Errorf("comment body cannot be empty")
 	}

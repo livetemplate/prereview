@@ -64,6 +64,9 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	if path == "" {
 		return state, fmt.Errorf("selectFile: missing path")
 	}
+	// Keep any unsaved composer text as a draft before leaving this file (#105) —
+	// navigating away isn't clicking Save, so the note shouldn't be lost.
+	state = c.materializeDraft(state)
 	diff, err := c.loadDiffCached(state.Base, path)
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
@@ -115,6 +118,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	if len(files) == 0 {
 		return state, nil
 	}
+	state = c.materializeDraft(state) // keep unsaved composer text on file switch (#105)
 	cur := -1
 	for i, f := range files {
 		if f.Path == state.SelectedFile {

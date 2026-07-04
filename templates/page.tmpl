@@ -291,6 +291,48 @@
     >{{template "iconSearch"}}</button>
   </form>
   {{end}}
+  {{/* Work queue (#119): what's queued (remaining), done (agent worked on it),
+       and held as drafts. Derived from the comment set + processed markers +
+       llm-status — no server state. A direct child of the bar (like search) so
+       it's reachable on a phone, NOT inside the desktop-only toolbar-inline.
+       Stream mode only; reuses the View-dropdown client primitive. */}}
+  {{if and .StreamMode .HasQueue}}
+  <div
+    class="tb-dropdown queue-dropdown"
+    lvt-el:toggleClass:on:click="open"
+    lvt-el:removeClass:on:click-away="open"
+  >
+    <button
+      type="button"
+      class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}"
+      aria-haspopup="menu"
+      title="Work queue — what's queued for the agent, what it's worked on, and drafts held back"
+    ><span class="tb-label">Queue</span><span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{template "iconChevronDown"}}</button>
+    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
+      {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      {{range .QueueItems}}
+      <div class="queue-row queue-{{.State}}">
+        <form method="POST" class="queue-jump-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
+            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
+            <span class="queue-body">{{.Body}}</span>
+            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
+          </button>
+        </form>
+        {{- if eq .State "done"}}
+        {{/* Re-enqueue (#119): put a done item back on the queue for the agent to redo. */}}
+        <form method="POST" class="queue-reenqueue-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
+        </form>
+        {{- end}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
   <div class="title">
     <span class="title-main">
       {{- if .ShowAllComments}}{{/* No title in all-comments mode — the "Show all comments (N) ☑" checkbox in the toolbar already conveys the view. */}}
@@ -315,47 +357,6 @@
            bar to one short text chip so it can't crop the right edge. */}}
       <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
     </div>
-    {{/* Work queue (#119): what's queued (remaining), done (agent worked on it),
-         and held as drafts. Derived from the comment set + processed markers +
-         llm-status — no server state. Stream mode only (the continuous-enqueue
-         mode); reuses the View-dropdown client primitive. */}}
-    {{if and .StreamMode .HasQueue}}
-    <div
-      class="tb-group tb-dropdown queue-dropdown"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
-      <button
-        type="button"
-        class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}"
-        aria-haspopup="menu"
-        title="Work queue — what's queued for the agent, what it's worked on, and drafts held back"
-      ><span class="tb-label">Queue</span><span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{template "iconChevronDown"}}</button>
-      <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
-        {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
-        <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
-        {{range .QueueItems}}
-        <div class="queue-row queue-{{.State}}">
-          <form method="POST" class="queue-jump-form">
-            <input type="hidden" name="id" value="{{.ID}}">
-            <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
-              <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
-              <span class="queue-body">{{.Body}}</span>
-              <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
-            </button>
-          </form>
-          {{- if eq .State "done"}}
-          {{/* Re-enqueue (#119): put a done item back on the queue for the agent to redo. */}}
-          <form method="POST" class="queue-reenqueue-form">
-            <input type="hidden" name="id" value="{{.ID}}">
-            <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
-          </form>
-          {{- end}}
-        </div>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
     {{if .CurrentDiff}}
     <div class="tb-group tb-toggles">
       {{/* Native HTML radio groups for view-mode toggles. Auto-submit

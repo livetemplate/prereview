@@ -65,30 +65,35 @@ func TestDraftLifecycle(t *testing.T) {
 	}
 }
 
-// TestAddDraft_CreatesHeldComment: "Save draft" creates a comment that is a draft
-// (held out of the actionable snapshot) rather than enqueued.
-func TestAddDraft_CreatesHeldComment(t *testing.T) {
+// TestMaterializeDraft_KeepsUnsavedText: navigating away with unsaved composer
+// text turns it into a held draft (not lost), rather than requiring a Save click.
+func TestMaterializeDraft_KeepsUnsavedText(t *testing.T) {
 	c := draftController(t)
-	// File-level add is the simplest kind to drive without a diff/selection.
-	st := PrereviewState{SelectedFile: "a.go", CommentMode: commentKindFile}
-	ctx := livetemplate.NewContext(context.TODO(), "addDraft", map[string]interface{}{"body": "hold this thought"})
+	// A file-level composer with unsaved text (DraftBody), no Save clicked.
+	st := PrereviewState{SelectedFile: "a.go", CommentMode: commentKindFile, DraftBody: "hold this thought"}
 
-	st, err := c.AddDraft(st, ctx)
-	if err != nil {
-		t.Fatalf("AddDraft: %v", err)
-	}
+	st = c.materializeDraft(st)
 	if len(st.Comments) != 1 {
-		t.Fatalf("want 1 comment, got %d", len(st.Comments))
+		t.Fatalf("want 1 draft comment, got %d", len(st.Comments))
 	}
 	if !st.Comments[0].Draft {
-		t.Error("AddDraft should create a Draft comment")
+		t.Error("materialized comment should be a Draft")
 	}
 	if got := actionableComments(st.Comments); len(got) != 0 {
-		t.Errorf("a drafted comment must not be actionable, got %d", len(got))
+		t.Errorf("a draft must not be actionable, got %d", len(got))
 	}
-	// Persisted as a draft (survives reload).
 	if reloaded := c.loadCommentsFromDisk(); len(reloaded) != 1 || !reloaded[0].Draft {
 		t.Errorf("draft must persist: %+v", reloaded)
+	}
+
+	// No pending text → no-op.
+	if got := c.materializeDraft(PrereviewState{SelectedFile: "a.go", CommentMode: commentKindFile}); len(got.Comments) != 0 {
+		t.Error("materializeDraft with empty DraftBody should be a no-op")
+	}
+	// Editing an existing comment → no-op (abandoning an edit reverts, not drafts).
+	editing := PrereviewState{SelectedFile: "a.go", CommentMode: commentKindFile, DraftBody: "x", EditingCommentID: "e1"}
+	if got := c.materializeDraft(editing); len(got.Comments) != 0 {
+		t.Error("materializeDraft while editing should be a no-op")
 	}
 }
 
