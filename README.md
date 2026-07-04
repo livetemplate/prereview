@@ -79,6 +79,21 @@ you're the one who accepts, rejects, or asks for a revision.
 - **vs. diff viewers** (lazygit, tig, delta, difftastic) — they show
   changes; prereview captures anchored comments and hands them to an LLM.
 
+## Alternatives
+
+Other tools in the "review your agent's changes locally" space — worth a look:
+
+- **[crit.md](https://crit.md/)** — browser-based review of an agent's code
+  changes: inline line comments, round-to-round diffs, single local binary,
+  any agent (closest to prereview).
+- **[diffx](https://github.com/wong2/diffx)** — a local code-review tool built
+  for the coding-agent workflow.
+- **[tuicr](https://tuicr.dev/)** — a terminal UI (vim keybindings) for reviewing
+  a GitHub-style diff; pushes a real PR review or copies structured Markdown for
+  your agent.
+- **[parley](https://parley.cloudflavor.io/)** — a code-review tool in the same
+  space.
+
 ## Works with any LLM CLI
 
 prereview's hand-off is an **open protocol, not an API** — comments are
