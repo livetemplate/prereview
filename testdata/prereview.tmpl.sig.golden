@@ -399,6 +399,30 @@
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
   
+  {{if .StreamMode}}
+  <form method="POST">
+    <button type="submit" name="toggleAgentPause" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{if .AgentPaused}}▶{{else}}⏸{{end}}</span>
+      <span class="menu-label">{{if .AgentPaused}}Resume agent{{else}}Pause agent{{end}}</span>
+      {{if and .AgentPaused .QueuedCount}}<span class="menu-meta">{{.QueuedCount}} held</span>{{end}}
+    </button>
+  </form>
+  {{end}}
+  {{if gt (len .Files) 1}}
+  <form method="POST">
+    <button type="submit" name="prevFile" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconChevronLeft"}}</span>
+      <span class="menu-label">Previous file</span>
+    </button>
+  </form>
+  <form method="POST">
+    <button type="submit" name="nextFile" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconChevronRight"}}</span>
+      <span class="menu-label">Next file</span>
+    </button>
+  </form>
+  {{end}}
+  
   <form method="POST">
     <button type="submit" name="cycleScheme" class="menu-item" role="menuitem">
       <span class="menu-icon">{{template "iconPalette"}}</span>

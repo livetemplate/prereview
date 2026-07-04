@@ -2189,10 +2189,16 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   /* On a phone the open drawer slides over the live site rather than pushing
      it below the fold. */
   .ext-sidebar.is-open { position: fixed; inset: 0 0 0 auto; width: min(88vw, 360px); z-index: 50; background: var(--pico-background-color, #fff); border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); box-shadow: -8px 0 24px rgba(0,0,0,0.18); }
-  /* Stream mode adds a second top-bar action (End session). Two contrast
-     buttons overflow the narrow bar and wrap, so on mobile keep only
-     "Hand off →" inline and surface End session in the ⋮ overflow menu. */
-  header.bar .tb-action .end-session-inline { display: none; }
+  /* Mobile declutter (#119): the continuous-enqueue toolbar had too many chips
+     and wrapped to two rows. Keep the bar to ☰ 🔍 Queue ⋮ and move prev/next,
+     pause/resume, and end-session into the ⋮ overflow menu; drop the redundant
+     filename (it's in the sticky .file-head right below). Skill-mode's inline
+     "Hand off →" is left alone (it has no .tb-pause class). */
+  header.bar .tb-action .end-session-inline,
+  header.bar .tb-action .tb-pause,
+  header.bar .nav-prev,
+  header.bar .nav-next,
+  header.bar .title-file { display: none; }
   /* The external bar has no overflow menu — keep its actions compact so
      💬 + Hand off + End session fit on one row. */
   .bar-external .bar-actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
