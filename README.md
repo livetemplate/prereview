@@ -1,6 +1,6 @@
 # prereview
 
-prereview speeds up planning and refining what your coding agent produces. Instead of copy-pasting vague pointers into chat, comment right on the artifact — a plan, a diff, a rendered doc, an image, or a live dev site — and the agent applies the fixes. Review from your desk or your phone; works with any LLM CLI, all local.
+prereview speeds up planning and refining what your coding agent produces. Instead of copy-pasting vague pointers into chat, comment right on the artifact — a plan, a diff, a rendered doc, an image, or a live dev site — and the agent applies the fixes. It runs both ways: you can also ask the agent to suggest alternatives and accept or reject them inline, cutting the rounds it takes to get something right. Review from your desk or your phone; works with any LLM CLI, all local.
 
 <p align="center">
   <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
