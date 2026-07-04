@@ -95,6 +95,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" /></svg>
 === iconHamburger ===
 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
+=== iconHistory14 ===
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
 === iconPalette ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round" /><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg>
 === iconRendered ===
@@ -665,12 +667,42 @@
   <header class="file-head">
     <span class="file-head-name"><strong>{{.Path}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
     
-    {{if ne $.CommentMode "file"}}
+    <span class="file-head-actions">
+    
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
     <form method="POST" class="file-head-comment">
       <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
     {{end}}
+    
+    {{if $.Versions}}
+    <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="versions-trigger" aria-haspopup="menu" title="Versions of this file — view or roll back to a previous version">{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
+      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
+        {{range $.Versions}}
+        <div class="version-row{{if .Viewing}} viewing{{end}}">
+          <span class="version-meta">
+            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
+            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
+          </span>
+          <span class="version-actions">
+            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn"{{if .Viewing}} disabled{{end}}>View</button></form>
+            {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+          </span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    </span>
   </header>
+  {{if $.ViewingVersion}}
+  
+  <div class="version-view-banner" role="status">
+    <span>Viewing a previous version (read-only).</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
+  </div>
+  {{end}}
   
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
@@ -757,6 +789,15 @@
   <span>✓ Changes applied — refresh to see the agent's edits.</span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
+  </form>
+</div>
+{{end}}
+{{if .AgentPaused}}
+
+<div class="reanchor-prompt paused-prompt" role="status">
+  <span>⏸ Agent paused after a rollback.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="resumeAgent" class="refresh-btn">Resume agent</button>
   </form>
 </div>
 {{end}}

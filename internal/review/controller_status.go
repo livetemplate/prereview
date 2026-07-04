@@ -124,6 +124,10 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 	// changing fans out LLMStatusChanged, which refreshes status AND the "worked
 	// on" badges. Combining the fingerprints keeps this a single cheap stat pair.
 	last := c.agentSignalFingerprint() // don't broadcast the pre-existing state at startup
+	// Track the agent's status state so we can checkpoint a version on the
+	// working→done transition. openStore removes llm-status.json on launch, so a
+	// fresh session starts idle and the first real "done" is a genuine transition.
+	prevState := c.currentLLMState()
 	for {
 		select {
 		case <-stop:
@@ -134,6 +138,17 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 				continue
 			}
 			last = fp
+			// Checkpoint an artifact version when the agent finishes a batch
+			// (working→done): its edits are now on disk, so this is the natural
+			// "one version per work-cycle" boundary. Done in this single per-server
+			// goroutine, BEFORE the session/fan-out guard below, so a version is
+			// recorded exactly once even if no tab is open — unlike the per-tab
+			// LLMStatusChanged handler, which would checkpoint once per open tab.
+			curState := c.currentLLMState()
+			if prevState == LLMStateWorking && curState == LLMStateDone {
+				c.checkpointVersions(VersionTriggerLLMDone)
+			}
+			prevState = curState
 			c.sessionMu.Lock()
 			session := c.session
 			c.sessionMu.Unlock()

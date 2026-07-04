@@ -87,6 +87,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	// selected (but invisible) file behind it.
 	state.ShowAllComments = false
 	c.relocateSelected(&state)
+	c.applyVersionList(&state) // per-file version timeline (#90) — refresh for the new file
 	return state, nil
 }
 
@@ -139,6 +140,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	state.EditingCommentID = ""
 	state.CursorKey = "" // new file, new lines — drop the line cursor
 	c.relocateSelected(&state)
+	c.applyVersionList(&state) // per-file version timeline (#90)
 	return state, nil
 }
 
@@ -191,6 +193,7 @@ func (c *PrereviewController) stepComment(state PrereviewState, delta int) (Prer
 		}
 		state.SelectedFile = target.File
 		state.CurrentDiff = diff
+		c.applyVersionList(&state) // per-file version timeline (#90)
 	}
 	state.ShowAllComments = false
 	state.ScrollToCommentID = target.ID

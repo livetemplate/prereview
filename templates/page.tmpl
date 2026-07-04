@@ -1163,14 +1163,14 @@
 <article>
   <header class="file-head">
     <span class="file-head-name"><strong>{{.Path}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
-    {{/* Comment on the whole file — moved here from the toolbar to declutter
-         it and to sit in context next to the filename. The .file-head is
-         sticky, so it stays reachable while scrolling; it works for every file
-         type (text, binary, deleted, too-large). Hidden while the file composer
-         is already open to avoid a self-toggle loop. This is the single home for
-         the action on both desktop and mobile (the old toolbar + more-menu
-         copies are gone). */}}
-    {{if ne $.CommentMode "file"}}
+    {{/* Right-aligned action group: comment-on-file + the versions control. Both
+         are compact chips sharing one row so the sticky header stays a single
+         thin line on every viewport. */}}
+    <span class="file-head-actions">
+    {{/* Comment on the whole file — sits in context next to the filename. Hidden
+         while the file composer is already open (self-toggle loop) or while
+         viewing a historical version (read-only). */}}
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
     <form method="POST" class="file-head-comment">
       <button
         type="submit"
@@ -1181,7 +1181,49 @@
       >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
     {{end}}
+    {{/* Versions panel (#90): the selected file's version timeline with view +
+         rollback. Reuses the View-dropdown client primitive (lvt-el toggle +
+         click-away, no server state, no custom JS). A compact chip (history icon
+         + count) matching the comment button; label hides on mobile. Only shows
+         once the file has recorded history. */}}
+    {{if $.Versions}}
+    <div
+      class="tb-dropdown versions-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="versions-trigger"
+        aria-haspopup="menu"
+        title="Versions of this file — view or roll back to a previous version"
+      >{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
+      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
+        {{range $.Versions}}
+        <div class="version-row{{if .Viewing}} viewing{{end}}">
+          <span class="version-meta">
+            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
+            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
+          </span>
+          <span class="version-actions">
+            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn"{{if .Viewing}} disabled{{end}}>View</button></form>
+            {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+          </span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    </span>
   </header>
+  {{if $.ViewingVersion}}
+  {{/* Read-only banner while viewing a historical version. Commenting is gated
+       off (line coords don't match disk); this is the way back to the live diff. */}}
+  <div class="version-view-banner" role="status">
+    <span>Viewing a previous version (read-only).</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
+  </div>
+  {{end}}
   {{/* File-level comments + composer. Lives above the body branch so
        it's visible for every preview mode (line view, markdown blocks,
        HTML blocks, binary preview, "no diff content" placeholder).
@@ -1470,6 +1512,16 @@
   <span>✓ Changes applied — refresh to see the agent's edits.</span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
+  </form>
+</div>
+{{end}}
+{{if .AgentPaused}}
+{{/* Rollback force-pauses the agent (#90) so it stops applying while you
+     re-steer. Resume clears the pause; M2's continuous drain honours it. */}}
+<div class="reanchor-prompt paused-prompt" role="status">
+  <span>⏸ Agent paused after a rollback.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="resumeAgent" class="refresh-btn">Resume agent</button>
   </form>
 </div>
 {{end}}

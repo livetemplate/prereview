@@ -68,6 +68,13 @@ type PrereviewController struct {
 	// EndSession guard on nil so non-stream sessions emit nothing.
 	Emitter *EventStream
 
+	// Versions is the artifact version store (#90): content-addressed snapshots
+	// of the reviewed files as the LLM edits them on disk, enabling view / diff /
+	// rollback of uncommitted work. Non-nil only in repo / single-file mode
+	// (external mode has no file scope). Every caller nil-guards it, so a failed
+	// init just disables versioning rather than breaking the review.
+	Versions *VersionStore
+
 	// ShutdownReq receives a struct{} when the user clicks Quit. main.go
 	// listens for it and triggers graceful HTTP shutdown.
 	ShutdownReq chan<- struct{}
@@ -327,6 +334,12 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// Same for the selected file's suggestions (#98): a suggestion whose target
 	// text was edited away renders `outdated`; one whose text moved follows it.
 	c.relocateSuggestionsSelected(&state)
+	// Artifact versioning (#90): populate the selected file's version timeline
+	// and the paused state. Mount always shows the LIVE diff (ViewingVersion
+	// defaults false and isn't persisted), so a reconnect naturally leaves any
+	// historical view and lands back on current.
+	c.applyVersionList(&state)
+	c.applyPaused(&state)
 	return state, nil
 }
 

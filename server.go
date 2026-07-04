@@ -121,6 +121,20 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 		Emitter:     emitter,
 		ShutdownReq: shutdownReq,
 	}
+
+	// Artifact version store (#90): the safety net that makes the agent's
+	// continuous, uncommitted edits reversible. Baseline v0 is captured now —
+	// once, at startup, BEFORE the agent touches anything and before any tab
+	// connects — so the reviewer can always roll back to the original working
+	// tree. (Mount re-runs per connect/refresh and must NOT re-baseline.) A store
+	// that fails to open just disables versioning; it never blocks a review.
+	if vs, verr := review.NewVersionStore(review.VersionsDir(csvPath)); verr != nil {
+		slog.Warn("version store init failed; versioning disabled", "err", verr)
+	} else {
+		controller.Versions = vs
+		controller.CheckpointBaseline()
+	}
+
 	initial := &review.PrereviewState{
 		RepoPath:   absRepo,
 		Base:       base,

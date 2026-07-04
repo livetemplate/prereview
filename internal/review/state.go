@@ -38,6 +38,24 @@ type PrereviewState struct {
 	SelectedFile string              `json:"selected_file" lvt:"persist"`
 	CurrentDiff  *gitdiff.FileDiff   `json:"current_diff"`
 
+	// Artifact versioning (#90). Versions is the selected file's version
+	// timeline (newest first), populated from the version store each Mount /
+	// version action for the Versions panel. When ViewingVersion is true the
+	// right pane shows a historical version (VersionViewSeq) of SelectedFile
+	// read-only instead of the live diff — CurrentDiff holds the rendered
+	// historical content. ViewingVersion is deliberately NOT lvt:"persist": it
+	// is a transient view mode that every live-diff rebuild (Mount, SelectFile,
+	// RefreshDiff) must clear, so a reconnect or background re-render lands back
+	// on the live diff rather than stale history mislabeled as current.
+	Versions       []VersionListItem `json:"versions"`
+	ViewingVersion bool              `json:"viewing_version"`
+	VersionViewSeq int               `json:"version_view_seq"`
+
+	// AgentPaused mirrors the .prereview/paused marker: a rollback force-pauses
+	// the agent so it stops applying while the reviewer re-steers (#90). Read
+	// from disk each Mount; M2's continuous drain gates emission on it.
+	AgentPaused bool `json:"agent_paused"`
+
 	// Two-click selection (anchor → end). 0 = nothing selected; first
 	// click sets both to the same line; second click moves end; third
 	// click reseats anchor.
