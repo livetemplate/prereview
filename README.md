@@ -5,6 +5,7 @@
 <p align="center">
   <img src="docs/hero.gif" alt="prereview closing the loop: a human comments on a Go diff and hands off; the Claude Code skill reads the comment and edits the file; the fixed diff appears and the human resolves the comment" width="820">
 </p>
+
 <p align="center"><sub><em>Comment on what's wrong and hand off — Claude reads it and edits the file, the fix lands in the diff, you resolve. You stay in the loop; the output gets better.</em></sub></p>
 
 A tiny local webapp for **reviewing your working tree and handing the
@@ -245,6 +246,7 @@ exposes the full tree when you want to comment on something that didn't
 change.
 
 <p align="center"><img src="docs/file-comment.png" alt="A file-level comment shown above the diff" width="760"></p>
+
 <p align="center"><sub><em>Comment a whole file — changed or not.</em></sub></p>
 
 **Annotate an image region.** On a binary image, drag a rectangle to
@@ -252,6 +254,7 @@ select an area and comment on it; the box is stored as fractions, so it
 survives re-encoding.
 
 <p align="center"><img src="docs/image-area.gif" alt="Dragging a rectangle on an image and saving a region comment" width="760"></p>
+
 <p align="center"><sub><em>Drag a box on an image to annotate a region.</em></sub></p>
 
 **Markdown & HTML render** by default; tap a rendered block (heading,
@@ -261,6 +264,7 @@ Raw** toggle switches to source. Long docs get a table-of-contents
 sidebar.
 
 <p align="center"><img src="docs/markdown-block.gif" alt="Clicking a rendered Markdown block; the comment anchors to its source line" width="760"></p>
+
 <p align="center"><sub><em>Markdown renders with a TOC; click a block and the comment anchors to its source line.</em></sub></p>
 
 **Take the agent's suggested edits.** Your agent can propose edits with
@@ -270,6 +274,7 @@ with a note — the decisions ride the next hand-off, and the agent applies
 the ones you accepted. Nothing is written to your files until then.
 
 <p align="center"><img src="docs/suggestion.gif" alt="An LLM-proposed edit shown inline as a before-after box; the reviewer clicks Accept and a verdict badge appears" width="760"></p>
+
 <p align="center"><sub><em>The agent suggests an edit; you accept, reject, or ask for a revision.</em></sub></p>
 
 **Annotate a live local site** (`--external`). Point prereview at a
@@ -277,6 +282,7 @@ running dev server; it proxies the page so you can drag a box on any
 region and comment — the annotation re-pins to the page as it scrolls.
 
 <p align="center"><img src="docs/external-region.gif" alt="Dragging a region on a proxied live local site and saving a comment" width="760"></p>
+
 <p align="center"><sub><em>Review a running site: drag a region on the live page and comment.</em></sub></p>
 
 **See every comment in one place** — the **All comments** chip lists
@@ -284,6 +290,7 @@ comments across all files (line, text, file, and area kinds), each with a
 jump back to its source.
 
 <p align="center"><img src="docs/all-comments.png" alt="The all-comments overview listing line, text, file, and area comments across files" width="760"></p>
+
 <p align="center"><sub><em>Every comment across files in one list.</em></sub></p>
 
 **Search across files.** **⌘K** (Ctrl-K) opens a palette that matches file
@@ -291,6 +298,7 @@ names and line contents across the changed set — toggle to search every
 file — and jumping to a hit reveals its line, even inside a folded region.
 
 <p align="center"><img src="docs/search.gif" alt="The Cmd-K search palette matching text across files and jumping to a hit" width="760"></p>
+
 <p align="center"><sub><em>⌘K searches file names and contents, then jumps to the match.</em></sub></p>
 
 **Pick a theme.** The toolbar cycles three colour schemes — Solarized,
@@ -298,6 +306,7 @@ Gruvbox, Catppuccin — each with Light / Dark / System modes; syntax
 highlighting recolours with them, no reload.
 
 <p align="center"><img src="docs/themes.gif" alt="Cycling the Solarized, Gruvbox, and Catppuccin colour schemes from the toolbar" width="760"></p>
+
 <p align="center"><sub><em>Three colour schemes × Light / Dark / System.</em></sub></p>
 
 **Review from your phone.** On a remote box prereview binds your
@@ -305,6 +314,7 @@ Tailscale IP, so the same review + hand-off works from the Claude mobile
 app over the tailnet.
 
 <p align="center"><img src="docs/review-mobile.png" alt="prereview reviewing a diff on a phone-sized screen" width="300"></p>
+
 <p align="center"><sub><em>Review and hand off from your phone.</em></sub></p>
 
 **More:** **Diff ⇄ File** toggles changed-hunks-with-context vs the whole
