@@ -205,33 +205,6 @@
     <button type="submit" name="openSearch" class="search-btn outline contrast" aria-label="Search files" title="Search files (⌘/Ctrl + K)">{{template "iconSearch"}}</button>
   </form>
   {{end}}
-  
-  {{if and .StreamMode .HasQueue}}
-  <div class="tb-dropdown queue-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-    <button type="button" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}" aria-haspopup="menu" title="Work queue — what's queued for the agent, what it's worked on, and drafts held back"><span class="tb-label">Queue</span><span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{template "iconChevronDown"}}</button>
-    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
-      {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
-      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
-      {{range .QueueItems}}
-      <div class="queue-row queue-{{.State}}">
-        <form method="POST" class="queue-jump-form">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
-            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
-            <span class="queue-body">{{.Body}}</span>
-            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
-          </button>
-        </form>{{if eq .State "done"}}
-        
-        <form method="POST" class="queue-reenqueue-form">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
-        </form>{{end}}
-      </div>
-      {{end}}
-    </div>
-  </div>
-  {{end}}
   <div class="title">
     <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}</span>
   </div>
@@ -370,18 +343,51 @@
     <button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
   </form>
   {{end}}
+  
+  {{if .StreamMode}}
+  <div class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+    <button type="button" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Agent paused — {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
+    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
+      
+      <form method="POST" class="queue-pause-form">
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume agent{{if .QueuedCount}} · {{.QueuedCount}} held{{end}}{{else}}⏸ Pause agent{{end}}</button>
+      </form>
+      {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      {{if .HasQueue}}
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      {{range .QueueItems}}
+      <div class="queue-row queue-{{.State}}">
+        <form method="POST" class="queue-jump-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
+            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
+            <span class="queue-body">{{.Body}}</span>
+            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
+          </button>
+        </form>{{if eq .State "done"}}
+        
+        <form method="POST" class="queue-reenqueue-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
+        </form>{{end}}
+      </div>
+      {{end}}
+      {{else}}
+      <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
+      {{end}}
+      
+      <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
+    </div>
+  </div>
+  {{else}}
   <form method="POST" class="tb-action">
-    {{if .StreamMode}}
-    
-    <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Resume the agent — release the queued batch to it{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}">{{if .AgentPaused}}▶ Resume agent{{if .QueuedCount}} <span class="tb-pause-count">{{.QueuedCount}}</span>{{end}}{{else}}⏸ Pause agent{{end}}</button>
-    
-    <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast end-session-inline" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
-    {{else}}{{if .SkillMode}}
+    {{if .SkillMode}}
     <button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button>
     {{else}}
     <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
-    {{end}}{{end}}
+    {{end}}
   </form>
+  {{end}}
   
   <form method="POST" style="margin:0">
     <button type="submit" name="toggleMoreMenu" class="more-trigger" aria-label="More options" aria-haspopup="menu" aria-expanded="{{if .MoreMenuOpen}}true{{else}}false{{end}}">
@@ -535,15 +541,7 @@
   {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
   <div class="menu-info" style="border-bottom: 0; margin-bottom: 0; font-style: italic;">No comments yet — tap a line to add one.</div>
   {{end}}
-  {{if .StreamMode}}
   
-  <form method="POST">
-    <button type="button" command="show-modal" commandfor="confirm-end-session" class="menu-item" role="menuitem">
-      <span class="menu-icon">{{template "iconStop"}}</span>
-      <span class="menu-label">End session</span>
-    </button>
-  </form>
-  {{end}}
   
   <form method="POST">
     <button type="submit" name="toggleKeyboardHelp" class="menu-item" role="menuitem">

@@ -1019,16 +1019,11 @@ header.file-head .file-head-actions {
 }
 .paused-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
 /* Pause/resume toggle (#119): the paused state is visually distinct so it's
-   obvious the agent is held. */
+   obvious the agent is held. Used by the --external bar's inline Pause button
+   (repo-mode's Pause moved into the Queue dropdown as .queue-pause-btn). */
 .tb-pause.is-paused {
   background: color-mix(in srgb, var(--pr-del) 22%, var(--soft-bg));
   border-color: color-mix(in srgb, var(--pr-del) 50%, transparent);
-}
-/* Batch count on the paused button — how many items are held for the agent. */
-.tb-pause-count {
-  display: inline-block; margin-left: 0.15rem; padding: 0 0.35rem;
-  font-size: 0.72rem; font-weight: 700; border-radius: 999px;
-  background: color-mix(in srgb, var(--pr-del) 30%, transparent);
 }
 
 /* Work-queue panel (#119): the toolbar Queue chip + its dropdown of rows. */
@@ -1041,10 +1036,36 @@ header.file-head .file-head-actions {
    the chevron to a second row on a narrow bar. */
 .queue-trigger { display: inline-flex; align-items: center; white-space: nowrap; flex: 0 0 auto; }
 .queue-trigger.is-working { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
-/* The Queue chip sits at the LEFT of the toolbar, so its panel opens
-   left-aligned (the shared .tb-dropdown-panel default is right:0 for the
-   right-side View/Versions dropdowns). */
-.queue-panel { left: 0; right: auto; min-width: 22rem; max-width: min(30rem, calc(100vw - 1rem)); padding: 0.3rem; }
+/* The Queue chip sits on the RIGHT of the bar (after the flex:1 title), so its
+   panel opens right-aligned (the shared .tb-dropdown-panel default) — over the
+   content area, clear of the file drawer. */
+.queue-panel { min-width: 22rem; max-width: min(30rem, calc(100vw - 1rem)); padding: 0.3rem; }
+/* End session at the bottom of the queue panel — a full-width, quiet terminator. */
+.queue-end-btn {
+  display: block; width: 100%; margin: 0.3rem 0 0; padding: 0.4rem 0.6rem; min-height: 0;
+  font-size: 0.82rem; font-weight: 500; text-align: center; cursor: pointer;
+  border-radius: 5px; border: 1px solid var(--pico-muted-border-color);
+  background: none; color: var(--pico-muted-color);
+}
+.queue-end-btn:hover { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 45%, transparent); }
+/* Pause/resume toggle at the top of the queue panel (merged in — it gates the
+   queue). Full-width; the paused state is red so it reads as "held". */
+.queue-pause-form { margin: 0 0 0.3rem; }
+.queue-pause-btn {
+  display: block; width: 100%; margin: 0; padding: 0.45rem 0.6rem; min-height: 0;
+  font-size: 0.85rem; font-weight: 600; text-align: center; cursor: pointer;
+  border-radius: 5px; border: 1px solid var(--pico-muted-border-color);
+  background: var(--soft-bg); color: var(--pico-h1-color);
+}
+.queue-pause-btn:hover { background: var(--soft-bg-hover); border-color: var(--accent); }
+.queue-pause-btn.is-paused {
+  background: color-mix(in srgb, var(--pr-del) 20%, var(--soft-bg));
+  border-color: color-mix(in srgb, var(--pr-del) 50%, transparent);
+}
+/* Paused indicator on the trigger so you know at a glance without opening it. */
+.queue-paused-dot { margin-right: 0.2rem; }
+.queue-trigger.is-paused { border-color: color-mix(in srgb, var(--pr-del) 55%, transparent); }
+.queue-empty { padding: 0.5rem; font-size: 0.8rem; color: var(--pico-muted-color); }
 .queue-working { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
 .queue-legend { padding: 0.25rem 0.5rem 0.4rem; font-size: 0.75rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-card-sectioning-background-color); margin-bottom: 0.2rem; }
 .queue-row { margin: 0; display: flex; align-items: center; gap: 0.15rem; }
@@ -2193,11 +2214,10 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      it below the fold. */
   .ext-sidebar.is-open { position: fixed; inset: 0 0 0 auto; width: min(88vw, 360px); z-index: 50; background: var(--pico-background-color, #fff); border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); box-shadow: -8px 0 24px rgba(0,0,0,0.18); }
   /* Mobile declutter (#119): the continuous-enqueue toolbar had too many chips
-     and wrapped to two rows. Keep the bar to ☰ 🔍 Queue ⋮ and move prev/next,
-     pause/resume, and end-session into the ⋮ overflow menu; drop the redundant
-     filename (it's in the sticky .file-head right below). Skill-mode's inline
-     "Hand off →" is left alone (it has no .tb-pause class). */
-  header.bar .tb-action .end-session-inline,
+     and wrapped to two rows. Keep the bar to ☰ 🔍 Queue ⋮ — pause/resume and
+     end-session now live inside the Queue dropdown; prev/next move to the ⋮
+     overflow menu; drop the redundant filename (it's in the sticky .file-head
+     right below). */
   header.bar .nav-prev,
   header.bar .nav-next,
   header.bar .title-file { display: none; }

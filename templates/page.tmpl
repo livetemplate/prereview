@@ -291,48 +291,6 @@
     >{{template "iconSearch"}}</button>
   </form>
   {{end}}
-  {{/* Work queue (#119): what's queued (remaining), done (agent worked on it),
-       and held as drafts. Derived from the comment set + processed markers +
-       llm-status — no server state. A direct child of the bar (like search) so
-       it's reachable on a phone, NOT inside the desktop-only toolbar-inline.
-       Stream mode only; reuses the View-dropdown client primitive. */}}
-  {{if and .StreamMode .HasQueue}}
-  <div
-    class="tb-dropdown queue-dropdown"
-    lvt-el:toggleClass:on:click="open"
-    lvt-el:removeClass:on:click-away="open"
-  >
-    <button
-      type="button"
-      class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}"
-      aria-haspopup="menu"
-      title="Work queue — what's queued for the agent, what it's worked on, and drafts held back"
-    ><span class="tb-label">Queue</span><span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{template "iconChevronDown"}}</button>
-    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
-      {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
-      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
-      {{range .QueueItems}}
-      <div class="queue-row queue-{{.State}}">
-        <form method="POST" class="queue-jump-form">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
-            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
-            <span class="queue-body">{{.Body}}</span>
-            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
-          </button>
-        </form>
-        {{- if eq .State "done"}}
-        {{/* Re-enqueue (#119): put a done item back on the queue for the agent to redo. */}}
-        <form method="POST" class="queue-reenqueue-form">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
-        </form>
-        {{- end}}
-      </div>
-      {{end}}
-    </div>
-  </div>
-  {{end}}
   <div class="title">
     <span class="title-main">
       {{- if .ShowAllComments}}{{/* No title in all-comments mode — the "Show all comments (N) ☑" checkbox in the toolbar already conveys the view. */}}
@@ -623,29 +581,63 @@
     ><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
   </form>
   {{end}}
-  <form method="POST" class="tb-action">
-    {{if .StreamMode}}
-    {{/* Continuous enqueue (#119): comments/suggestions auto-enqueue and stream to
-         the agent as you go — no explicit hand-off. This toggle pauses the drain so
-         you can batch up a region before letting the agent run; resuming releases
-         the accumulated batch in one snapshot. */}}
-    <button
-      type="submit"
-      name="toggleAgentPause"
-      class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}"
-      title="{{if .AgentPaused}}Resume the agent — release the queued batch to it{{else}}Pause the agent — hold queued work while you keep reviewing{{end}}"
-    >{{if .AgentPaused}}▶ Resume agent{{if .QueuedCount}} <span class="tb-pause-count">{{.QueuedCount}}</span>{{end}}{{else}}⏸ Pause agent{{end}}</button>
-    {{/* On mobile End session moves to the ⋮ overflow menu (below) so the
-         narrow bar isn't crowded by two action buttons — hidden here via
-         .end-session-inline in the mobile media query. */}}
+  {{/* Work queue (#119) — the hub for a continuous-enqueue session: what's queued
+       / worked-on / held as drafts, PLUS Pause/Resume and End session. A direct
+       child of the bar (reachable on mobile) placed AFTER the flex:1 .title so it
+       sits on the RIGHT — its panel opens over the content, clear of the file
+       drawer (the bar's z-index sits below the drawer's, so a left-opening panel
+       would render behind it). */}}
+  {{if .StreamMode}}
+  <div
+    class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}"
+    lvt-el:toggleClass:on:click="open"
+    lvt-el:removeClass:on:click-away="open"
+  >
     <button
       type="button"
-      command="show-modal"
-      commandfor="confirm-end-session"
-      class="contrast end-session-inline"
-      title="Emit session_end and stop the server — your agent stops consuming the stream"
-    >End session</button>
-    {{else if .SkillMode}}
+      class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}"
+      aria-haspopup="menu"
+      title="{{if .AgentPaused}}Agent paused — {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"
+    >{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
+    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
+      {{/* Pause/resume lives with the queue it gates: pausing holds the drain so
+           you can batch up; resuming ships the accumulated batch. */}}
+      <form method="POST" class="queue-pause-form">
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume agent{{if .QueuedCount}} · {{.QueuedCount}} held{{end}}{{else}}⏸ Pause agent{{end}}</button>
+      </form>
+      {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      {{if .HasQueue}}
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      {{range .QueueItems}}
+      <div class="queue-row queue-{{.State}}">
+        <form method="POST" class="queue-jump-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
+            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
+            <span class="queue-body">{{.Body}}</span>
+            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
+          </button>
+        </form>
+        {{- if eq .State "done"}}
+        {{/* Re-enqueue (#119): put a done item back on the queue for the agent to redo. */}}
+        <form method="POST" class="queue-reenqueue-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
+        </form>
+        {{- end}}
+      </div>
+      {{end}}
+      {{else}}
+      <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
+      {{end}}
+      {{/* End session — the terminator, grouped at the bottom of the hub. Opens
+           the confirm dialog (endSession fires from there). */}}
+      <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
+    </div>
+  </div>
+  {{else}}
+  <form method="POST" class="tb-action">
+    {{if .SkillMode}}
     <button
       type="submit"
       name="handOff"
@@ -662,6 +654,7 @@
     >Quit</button>
     {{end}}
   </form>
+  {{end}}
   {{/* 3-dots trigger — mobile only (hidden on desktop via CSS). Placed
        last so it visually anchors the right edge of the toolbar; the
        menu opens directly below it (also right-edge aligned). Uses an
@@ -906,23 +899,8 @@
     style="border-bottom: 0; margin-bottom: 0; font-style: italic;"
   >No comments yet — tap a line to add one.</div>
   {{end}}
-  {{if .StreamMode}}
-  {{/* Stream-mode terminator. Inline in the top bar on desktop; on mobile it
-       lives here (the inline copy is hidden) so the bar isn't crowded by two
-       action buttons. Last item, so it's not an accidental tap target. */}}
-  <form method="POST">
-    <button
-      type="button"
-      command="show-modal"
-      commandfor="confirm-end-session"
-      class="menu-item"
-      role="menuitem"
-    >
-      <span class="menu-icon">{{template "iconStop"}}</span>
-      <span class="menu-label">End session</span>
-    </button>
-  </form>
-  {{end}}
+  {{/* End session now lives in the Queue dropdown (the session hub) — reachable
+       on mobile too since that dropdown is a direct child of the bar. */}}
   {{/* Keyboard shortcuts — same toggleKeyboardHelp action as the "?" key and
        the desktop toolbar button. Always available. */}}
   <form method="POST">
