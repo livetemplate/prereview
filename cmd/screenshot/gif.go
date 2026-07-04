@@ -336,11 +336,58 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		chromedp.Evaluate(`(()=>{const c=document.querySelector('.inline-comment.is-resolved')||document.querySelector('.inline-comment');if(c)c.scrollIntoView({block:'center'});})()`, nil),
 		chromedp.Sleep(250*time.Millisecond),
 	)
-	_ = rec.captureComposite(bctx, tctx, 260) // loop closed: comment resolved, held longest
+	_ = rec.captureComposite(bctx, tctx, 220) // loop closed: comment resolved
+
+	// --- The other direction (issue #98): the agent PROPOSES a follow-up edit and
+	// the human accepts it inline. Seed a suggestion on the now-fixed payment.go
+	// (line 8, the doc comment); the running server surfaces it on the next load. ---
+	_ = appendSuggestion(repo, `{"id":"hero-sg","file":"payment.go","from_line":8,"to_line":8,"original":"// Charge captures a payment for an order. Amount is in minor units (cents).","proposed":"// Charge captures a payment for an order, retrying transient gateway errors. Amount is in minor units (cents).","note":"note the retry behaviour"}`+"\n")
+	propose := append(done[:len(done):len(done)],
+		termLine{"", "sp"},
+		termLine{"● Suggested an edit — payment.go:8", "bullet"},
+		termLine{"  note the retry behaviour in the doc comment", "dim"},
+	)
+	_ = termRender(tctx, propose)
+	_ = chromedp.Run(bctx,
+		chromedp.Navigate("about:blank"),
+		chromedp.Sleep(150*time.Millisecond),
+		chromedp.Navigate(navURL(url, "payment.go")),
+		chromedp.WaitVisible(`.inline-suggestion`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		chromedp.Sleep(300*time.Millisecond),
+	)
+	_ = rec.captureComposite(bctx, tctx, 220) // the before→after suggestion box, agent waiting
+
+	_ = chromedp.Run(bctx,
+		chromedp.Click(`.inline-suggestion button[name="acceptSuggestion"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-suggestion.is-decided.sg-accept`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		chromedp.Sleep(150*time.Millisecond),
+	)
+	_ = rec.captureComposite(bctx, tctx, 300) // accepted — the reverse loop closed, held longest
 
 	if err := rec.encode(filepath.Join(outDir, "hero.gif")); err != nil {
 		log.Printf("[gif:hero] encode: %v", err)
 	}
+}
+
+// appendSuggestion writes one suggestion JSON line to the demo repo's
+// .prereview/suggestions.jsonl so the hero flow can show the agent proposing an
+// edit that the human then accepts (issue #98). The running server surfaces it on
+// the next navigation (Mount re-reads the file).
+func appendSuggestion(repo, line string) error {
+	dir := filepath.Join(repo, ".prereview")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "suggestions.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString(line)
+	return err
 }
 
 // applyHeroFix writes the scripted "Claude edit" into the demo repo's working
