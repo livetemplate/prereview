@@ -22,9 +22,10 @@ off →"**, and the agent applies the changes. Any other agent (OpenAI Codex
 CLI, Gemini CLI, aider, opencode, cursor-agent) works through the same open
 comment protocol — see **[Works with any LLM CLI](#works-with-any-llm-cli)**.
 On a remote box prereview binds your Tailscale address, so you can review
-from your phone over the tailnet. The agent can also propose edits back to
-you (`prereview suggest`): inline boxes you accept, reject, or send back for
-a revision.
+from your phone over the tailnet. It also runs the other way: ask the agent
+to **suggest edits** (`prereview suggest`) and they appear as inline
+before → after boxes you accept or reject — refining an artifact in a few
+taps instead of several rounds of copy-paste.
 
 **Get started** — install, then run standalone or drive it from your agent:
 
