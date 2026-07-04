@@ -833,8 +833,9 @@
 </div>
 {{end}}
 {{if .PendingRefresh}}
+
 <div class="reanchor-prompt refresh-prompt" role="status">
-  <span>✓ Changes applied — refresh to see the agent's edits.</span>
+  <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
   </form>

@@ -1557,8 +1557,12 @@
 </div>
 {{end}}
 {{if .PendingRefresh}}
+{{/* Frozen-view nudge (#119): the agent edited files ON DISK; this view is
+     deliberately still showing the pre-edit version so scroll/drafts survive.
+     Say that plainly — the old "✓ Changes applied" read as "already in your
+     view" and made the frozen view look like a leak (live-test feedback). */}}
 <div class="reanchor-prompt refresh-prompt" role="status">
-  <span>✓ Changes applied — refresh to see the agent's edits.</span>
+  <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
   </form>
