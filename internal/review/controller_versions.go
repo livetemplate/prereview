@@ -247,11 +247,15 @@ func (c *PrereviewController) RestoreVersion(state PrereviewState, ctx *livetemp
 		return state, fmt.Errorf("restore version %d: %w", seq, err)
 	}
 
-	// (1) Force-pause BEFORE touching disk.
-	c.setAgentPaused(true)
-	state.AgentPaused = true
+	// Rollback is decoupled from the send-mode (#119): restoring a file does NOT
+	// flip Live/Batching — that's the reviewer's own choice, not something undoing
+	// a file should override. We deliberately do NOT scheduleEmit here either: the
+	// comments are unchanged, so a rollback pings the agent with nothing, and the
+	// next mutation's emit re-anchors against the restored disk. (In Live mode a
+	// still-open comment on the restored region can be re-addressed on that next
+	// emit — resolve/delete it as part of rolling back if you don't want it redone.)
 
-	// (2) Apply to disk: write the restored bytes, or delete for a tombstone.
+	// (1) Apply to disk: write the restored bytes, or delete for a tombstone.
 	full := filepath.Join(c.RepoPath, state.SelectedFile)
 	if errors.Is(err, ErrVersionTombstone) {
 		if rerr := os.Remove(full); rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
@@ -261,10 +265,10 @@ func (c *PrereviewController) RestoreVersion(state PrereviewState, ctx *livetemp
 		return state, fmt.Errorf("write restored file: %w", werr)
 	}
 
-	// (3) Record the rollback as a new, append-only version.
+	// (2) Record the rollback as a new, append-only version.
 	c.checkpointVersions(VersionTriggerRollback)
 
-	// (4) Back to the live diff (now showing the restored content) + refresh nudge.
+	// (3) Back to the live diff (now showing the restored content) + refresh nudge.
 	c.reloadLiveDiff(&state)
 	state.PendingRefresh = true
 	return state, nil
@@ -284,8 +288,9 @@ func (c *PrereviewController) ToggleAgentPause(state PrereviewState, ctx *livete
 }
 
 // ResumeAgent clears the pause and releases the drain: the batch accumulated
-// while paused ships on the next emit. Bound to the "Resume agent" banner button
-// shown after a rollback-induced pause.
+// while paused ships on the next emit. Bound to the "Resume — send batch" button
+// on the batching banner (the manual Pause is the only thing that sets it now —
+// rollback no longer force-pauses, see RestoreVersion).
 func (c *PrereviewController) ResumeAgent(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	c.setAgentPaused(false)
 	state.AgentPaused = false

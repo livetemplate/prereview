@@ -1565,11 +1565,11 @@
 </div>
 {{end}}
 {{if .AgentPaused}}
-{{/* Paused = batching (#119): comments are held, not sent one-by-one. Shown for
-     BOTH triggers — the manual Pause toggle and a rollback's auto-pause (#90,
-     which holds the drain so the agent can't undo the version you restored).
-     The wording describes the STATE (batching), not the cause, so it's true
-     either way. Resume releases the held batch in one snapshot. */}}
+{{/* Paused = batching (#119): comments are held, not sent one-by-one. Set only
+     by the manual Pause toggle — a rollback no longer force-pauses (send-mode is
+     decoupled from rollback; see RestoreVersion). The wording describes the
+     STATE (batching), not any cause. Resume releases the held batch in one
+     snapshot. */}}
 <div class="reanchor-prompt paused-prompt" role="status">
   <span>⏸ Batching — comments are held, not sent to the agent yet.</span>
   <form method="POST" class="toast-dismiss-form">

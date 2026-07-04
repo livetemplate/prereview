@@ -48,8 +48,8 @@ func seedVersionStore(t *testing.T, repo, path string, contents ...string) {
 
 // TestE2E_VersionTimeline exercises the artifact-versioning UI (#90): the
 // per-file Versions panel lists the timeline, "View" opens a prior version
-// read-only, and "Restore" rolls the file back on disk and force-pauses the
-// agent. Captures browser console + server stderr for diagnosis.
+// read-only, and "Restore" rolls the file back on disk (decoupled from the
+// send-mode — no pause/batch). Captures browser console + server stderr.
 func TestE2E_VersionTimeline(t *testing.T) {
 	const (
 		original = "package edited\n\nfunc Hello() string {\n\treturn \"ORIGINAL-VERSION\"\n}\n"
@@ -152,12 +152,17 @@ func TestE2E_VersionTimeline(t *testing.T) {
 		t.Fatalf("exit diff view: %v%s", err, diag())
 	}
 
-	// Restore the Original: the file on disk reverts and the agent is paused.
+	// Restore the Original: the file on disk reverts and the browser gets a
+	// refresh nudge. Rollback is decoupled from the send-mode (#119) — it does
+	// NOT pause/batch. Wait on the refresh prompt (PendingRefresh) as the sync
+	// point instead of a paused banner.
+	var pausedBanners int
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),
 		chromedp.WaitVisible(`button[name="restoreVersion"]`, chromedp.ByQuery),
 		chromedp.Evaluate(clickVersionBtnJS("restoreVersion", 0), nil),
-		chromedp.WaitVisible(`.paused-prompt`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.refresh-prompt`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('.paused-prompt').length`, &pausedBanners),
 	); err != nil {
 		t.Fatalf("restore version 0: %v%s", err, diag())
 	}
@@ -170,9 +175,12 @@ func TestE2E_VersionTimeline(t *testing.T) {
 		t.Errorf("restored edited.go = %q, want the original version %q", got, original)
 	}
 
-	// The paused marker must exist on disk (the M2 drain will honour it).
-	if _, err := os.Stat(filepath.Join(repo, ".prereview", "paused")); err != nil {
-		t.Errorf("paused marker should exist after rollback: %v", err)
+	// Decoupled: rollback must NOT batch/pause — no banner, no paused marker.
+	if pausedBanners != 0 {
+		t.Errorf("rollback should not show the batching banner, saw %d%s", pausedBanners, diag())
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".prereview", "paused")); !os.IsNotExist(err) {
+		t.Errorf("rollback must not write the paused marker (send-mode decoupled), stat err = %v", err)
 	}
 
 	for _, l := range consoleLines {
