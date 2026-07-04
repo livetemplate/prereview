@@ -26,11 +26,14 @@ from your phone over the tailnet. The agent can also propose edits back to
 you (`prereview suggest`): inline boxes you accept, reject, or send back for
 a revision.
 
-**Get started** — install, then run in any repo:
+**Get started** — install, then run standalone or drive it from your agent:
 
 ```bash
 brew install livetemplate/prereview/prereview   # or: curl -fsSL https://raw.githubusercontent.com/livetemplate/prereview/main/install.sh | sh
-cd your-repo && prereview                        # opens the review UI and prints its URL
+cd your-repo && prereview                        # standalone: opens the review UI, prints the URL
+
+prereview --install-skill --client=claude        # one-time: install the Claude Code skill
+# then just say  /prereview  in Claude Code — it launches a session, you comment, it applies the fixes
 ```
 
 ## Features
