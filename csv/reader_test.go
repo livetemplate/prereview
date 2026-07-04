@@ -174,9 +174,44 @@ func TestRead_BackCompatColumnCounts(t *testing.T) {
 		got[7].Hidden {
 		t.Errorf("15-col text row wrong: %+v", got[7])
 	}
-	// 16-col: current schema — hidden column parsed true.
-	if !got[8].Hidden || !got[8].Resolved {
-		t.Errorf("16-col hidden row wrong: %+v", got[8])
+	// 16-col: pre-enqueued schema — hidden parsed true; the absent `enqueued`
+	// column must default to enqueued (Draft=false), never a silent draft (#119).
+	if !got[8].Hidden || !got[8].Resolved || got[8].Draft {
+		t.Errorf("16-col row wrong (Draft must be false for legacy): %+v", got[8])
+	}
+}
+
+// TestRead_EnqueuedColumn pins the `enqueued` column's inversion (#119): it
+// persists as enqueued but maps to the in-memory Draft flag as its negation.
+// This is exactly where a sign-flip would silently turn every legacy comment
+// into a draft the LLM never sees — so assert all three inputs explicitly.
+func TestRead_EnqueuedColumn(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "comments.csv")
+	content := strings.Join([]string{
+		"id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued",
+		`legacy,a.go,1,1,new,legacy,2026-05-14T10:00:00Z,false,,,,,,0,0,false`,       // 16 cols — absent ⇒ enqueued
+		`queued,a.go,2,2,new,queued,2026-05-14T10:00:00Z,false,,,,,,0,0,false,true`,  // enqueued=true  ⇒ not draft
+		`draft,a.go,3,3,new,draft,2026-05-14T10:00:00Z,false,,,,,,0,0,false,false`,   // enqueued=false ⇒ draft
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := Read(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d rows, want 3", len(got))
+	}
+	if got[0].Draft {
+		t.Errorf("legacy row (no enqueued col) must be active, got Draft=true")
+	}
+	if got[1].Draft {
+		t.Errorf("enqueued=true row must be active, got Draft=true")
+	}
+	if !got[2].Draft {
+		t.Errorf("enqueued=false row must be a draft, got Draft=false")
 	}
 }
 

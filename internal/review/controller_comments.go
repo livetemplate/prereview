@@ -549,6 +549,44 @@ func (c *PrereviewController) ToggleResolved(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
+// setCommentDraft flips a comment's Draft flag by id and persists, rolling back
+// on a write error so disk and memory stay in sync. Shared by EnqueueComment
+// (draft→queued) and MoveToDraft (queued→draft) — the two moves in the draft
+// lifecycle (#119).
+func (c *PrereviewController) setCommentDraft(state PrereviewState, id string, draft bool) (PrereviewState, error) {
+	if id == "" {
+		return state, fmt.Errorf("setCommentDraft: missing id")
+	}
+	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
+	if idx < 0 {
+		return state, fmt.Errorf("setCommentDraft: id %s not found", id)
+	}
+	if state.Comments[idx].Draft == draft {
+		return state, nil // already in the requested state
+	}
+	prev := state.Comments[idx].Draft
+	state.Comments[idx].Draft = draft
+	if err := c.persist(state.Comments); err != nil {
+		state.Comments[idx].Draft = prev
+		return state, fmt.Errorf("persist after draft toggle: %w", err)
+	}
+	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
+// EnqueueComment moves a draft comment into the queue (Draft=false) so the agent
+// will act on it. Bound to the per-card "Enqueue" action.
+func (c *PrereviewController) EnqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.setCommentDraft(state, ctx.GetString("id"), false)
+}
+
+// MoveToDraft pulls a queued comment back to a draft (Draft=true) so it's held
+// out of the agent's snapshot while the reviewer keeps working on it.
+func (c *PrereviewController) MoveToDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.setCommentDraft(state, ctx.GetString("id"), true)
+}
+
 // HideComment individually re-hides a RESOLVED comment (issue #88): it stays out
 // of the diff + overview even while "Show resolved" is on, without turning the
 // whole resolved group back off. A view-only flag — the comment is untouched

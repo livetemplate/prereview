@@ -77,6 +77,7 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 			Created:  r.CreatedAt,
 			Resolved: r.Resolved,
 			Hidden:   r.Hidden,
+			Draft:    r.Draft,
 		})
 	}
 

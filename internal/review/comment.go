@@ -94,6 +94,13 @@ type Comment struct {
 	// applyProcessed from the agent-written .prereview/processed.jsonl markers on
 	// every Mount and on each markers-file change (see processed.go).
 	Processed bool `json:"processed"`
+	// Draft is the not-yet-enqueued flag (#119): a reviewer's in-progress note
+	// that is kept OUT of the agent's actionable snapshot until they enqueue it.
+	// The default (false) means enqueued/active — "save auto-enqueues" — so the
+	// five comment-creation paths need no change. Persisted INVERTED as the CSV
+	// `enqueued` column (enqueued == !Draft); legacy rows (no column) read as
+	// active. Toggled by SaveDraft / EnqueueComment / MoveToDraft.
+	Draft bool `json:"draft"`
 	// Anchor is the content fingerprint captured at create/edit time so
 	// the comment can be re-located when the file changes (see anchor.go).
 	// AnchorStatus is "ok" | "moved" | "outdated" (empty == ok for

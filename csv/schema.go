@@ -59,6 +59,13 @@ const (
 	// which comments are actionable (resolved comments are already excluded from
 	// the handoff); it only declutters the human's view.
 	ColHidden = "hidden"
+	// `enqueued` is "true" or "false" (#119): whether the comment is queued for
+	// the agent. A "draft" comment (enqueued=false) is the reviewer's not-yet-
+	// submitted note, kept out of the actionable snapshot until they enqueue it.
+	// ABSENT (short legacy rows) reads as "true": pre-#119 comments were always
+	// active and must never silently become drafts. Persisted inverted from the
+	// in-memory Draft flag (enqueued == !Draft) so the zero value is "enqueued".
+	ColEnqueued = "enqueued"
 )
 
 // Header is the row written before any data. Position-stable: only ever
@@ -66,4 +73,5 @@ const (
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
 	ColAnchor, ColAnchorStatus, ColKind, ColArea, ColURL, ColFromCol, ColToCol, ColHidden,
+	ColEnqueued,
 }
