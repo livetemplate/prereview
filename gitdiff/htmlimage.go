@@ -17,9 +17,16 @@ import (
 //	<p align="center"><img src="docs/hero.gif" alt="…" width="820"></p>
 //
 // which renders blank even though the file is served by the static fallback
-// (server.go). This extension re-admits exactly ONE safe construct — a local
-// `<img>`, optionally wrapped in a single `<p>`/`<div>` for centering — and
-// nothing else. It does so by OVERRIDING goldmark's default NodeRenderer for
+// (server.go). This extension re-admits a local `<img>`, optionally wrapped in a
+// single `<p>`/`<div>` for centering, and EXTRACTS it out of a block that also
+// carries inert sibling markup — a caption. goldmark groups two adjacent `<p>`
+// blocks with no blank line between them into ONE ast.HTMLBlock, so the common
+// "centered image + caption" hero (`<p><img></p><p>…caption…</p>`) arrives here
+// as a single block; the caption must NOT veto the image (issue #104). So the
+// image and its wrapper are emitted while inert siblings (a caption `<p>`, and
+// `<sub>`/`<em>`/… formatting, and text) are DROPPED; a non-inert tag
+// (`<script>`, `<a>`, `<iframe>`, …) still vetoes the whole block. It does so by
+// OVERRIDING goldmark's default NodeRenderer for
 // the raw-HTML node kinds rather than enabling WithUnsafe (which is all-or-
 // nothing) or mutating the AST (a transformer would need custom block AND
 // inline node types and would have to re-attach source line ranges so
@@ -45,10 +52,14 @@ import (
 //
 // SECURITY: this output lands in template.HTML (markdown.go) and so bypasses
 // the contextual autoescaper. sanitizeImageHTML therefore ALLOWLISTS — a fixed
-// set of tags and attributes — rather than denylisting; anything outside the
-// allowlist (scripts, event handlers, styles, srcset, remote/data/javascript
-// srcs, any other tag) makes the whole block fall back to the omitted-comment,
-// i.e. it is dropped exactly as before this extension existed.
+// set of tags and attributes — rather than denylisting. Only the `<img>` and its
+// wrapper (with allowlisted attrs) are ever EMITTED; every other tag/text is
+// dropped, so admitting inert caption siblings opens no new sink — the caption's
+// markup and attributes never reach the output. A tag outside the allowlist
+// (scripts, `<a>`, `<iframe>`, styles-as-a-tag, …), a non-local/data/javascript
+// img src, a second image, an event handler or style on the img, or a stray
+// close tag still makes the WHOLE block fall back to the omitted-comment, i.e.
+// it is dropped exactly as before this extension existed.
 
 // rawHTMLOmitted mirrors goldmark's safe-mode placeholder for dropped raw HTML
 // (html.Renderer, pinned v1.8.2). Reproduced so a NON-image raw-HTML node — now
@@ -74,6 +85,27 @@ var allowedWrapper = map[string]bool{"p": true, "div": true}
 // junk value can't ride through even after escaping.
 var allowedAlign = map[string]bool{
 	"left": true, "right": true, "center": true, "justify": true,
+}
+
+// captionInline is the set of inert text-formatting tags allowed to appear as
+// caption siblings of the image within one merged raw-HTML block (see the
+// package doc — goldmark groups adjacent `<p>` blocks with no blank line into a
+// single block, so an image's caption lands alongside it). These tags — and any
+// text — are DROPPED, never emitted; only the `<img>` and its wrapper reach the
+// output, so admitting them adds no sink. A tag outside this set (and outside
+// img/wrapper) still vetoes the whole block.
+var captionInline = map[string]bool{
+	"sub": true, "sup": true, "em": true, "strong": true, "b": true,
+	"i": true, "br": true, "code": true, "kbd": true, "small": true,
+	"s": true, "u": true, "mark": true,
+}
+
+// wrapFrame is one open `<p>`/`<div>` on sanitizeImageHTML's nesting stack, held
+// so the image's DIRECT wrapper (the innermost open frame when the `<img>` is
+// seen) can be re-emitted with its centering align.
+type wrapFrame struct {
+	name  string
+	align string
 }
 
 // imageRenderer overrides the raw-HTML node renderers to pass through a safe,
@@ -135,19 +167,24 @@ func rawHTMLRaw(r *ast.RawHTML, source []byte) string {
 	return sb.String()
 }
 
-// sanitizeImageHTML returns sanitized HTML for raw markup that is EXACTLY a
-// local `<img>` optionally wrapped in a single `<p>`/`<div>`, and ok=false for
-// anything else (which the caller then drops). Whitespace between tags is
-// ignored; any other text, comment, or tag rejects the whole block.
+// sanitizeImageHTML extracts the single admissible local `<img>` — optionally
+// wrapped in a single `<p>`/`<div>` for centering — from a raw-HTML block, and
+// returns ok=false (caller drops the block) if there is no such image or the
+// block carries a NON-inert construct. Inert caption siblings — text and
+// captionInline tags (`<sub>`/`<em>`/…) and their own `<p>`/`<div>` wrappers —
+// are DROPPED, not vetoed, so a caption alongside the image no longer blanks it
+// (issue #104). A tag outside {img, wrapper, captionInline} (`<script>`, `<a>`,
+// `<iframe>`, …), a comment, a second image, or a stray/mismatched wrapper close
+// rejects the whole block. Only the image + wrapper are emitted.
 func sanitizeImageHTML(raw string) (string, bool) {
 	z := html.NewTokenizer(strings.NewReader(raw))
 
 	var (
-		wrapper      string // "" until a <p>/<div> opens
-		wrapperAlign string
-		wrapperOpen  bool
-		imgTag       string
-		haveImg      bool
+		stack     []wrapFrame // open <p>/<div>, LIFO — to find the img's direct wrapper
+		imgTag    string
+		haveImg   bool
+		wrapper   string // the img's direct wrapper tag ("" = none)
+		wrapAlign string
 	)
 
 	for {
@@ -173,36 +210,52 @@ func sanitizeImageHTML(raw string) (string, bool) {
 					return "", false
 				}
 				imgTag, haveImg = built, true
-			case allowedWrapper[name] && wrapper == "" && !haveImg:
-				wrapper, wrapperOpen = name, true
-				wrapperAlign = wrapperAlignValue(attrs)
+				// The img's direct wrapper is the innermost open <p>/<div>.
+				if len(stack) > 0 {
+					top := stack[len(stack)-1]
+					wrapper, wrapAlign = top.name, top.align
+				}
+			case allowedWrapper[name]:
+				// A <p>/<div>: the img's wrapper OR a caption container. Only a
+				// non-self-closing one opens a frame to match a later close.
+				if tt != html.SelfClosingTagToken {
+					stack = append(stack, wrapFrame{name, wrapperAlignValue(attrs)})
+				}
+			case captionInline[name]:
+				// inert caption formatting — dropped, never emitted
 			default:
-				return "", false // any other tag, or a second/late wrapper
+				return "", false // <script>/<a>/<iframe>/… veto the whole block
 			}
 		case html.EndTagToken:
 			nameBytes, _ := z.TagName()
-			if strings.ToLower(string(nameBytes)) != wrapper || !wrapperOpen {
-				return "", false // stray/mismatched close tag
+			name := strings.ToLower(string(nameBytes))
+			switch {
+			case allowedWrapper[name]:
+				if len(stack) == 0 || stack[len(stack)-1].name != name {
+					return "", false // stray/mismatched wrapper close
+				}
+				stack = stack[:len(stack)-1]
+			case captionInline[name]:
+				// inert caption close — dropped
+			default:
+				return "", false // stray close of a non-allowlisted tag
 			}
-			wrapperOpen = false
 		case html.TextToken:
-			if strings.TrimSpace(string(z.Text())) != "" {
-				return "", false // non-whitespace text alongside the image
-			}
+			// caption text or whitespace — dropped
 		default: // CommentToken, DoctypeToken
 			return "", false
 		}
 	}
 
-	if !haveImg || (wrapper != "" && wrapperOpen) {
+	if !haveImg || len(stack) != 0 {
 		return "", false // no image, or an unclosed wrapper
 	}
 	if wrapper == "" {
 		return imgTag, true
 	}
 	var wrapAttrs []rawAttr
-	if wrapperAlign != "" {
-		wrapAttrs = []rawAttr{{"align", wrapperAlign}}
+	if wrapAlign != "" {
+		wrapAttrs = []rawAttr{{"align", wrapAlign}}
 	}
 	return string(serializeTag(wrapper, wrapAttrs, false)) + imgTag + "</" + wrapper + ">", true
 }
