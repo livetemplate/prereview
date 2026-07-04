@@ -124,6 +124,34 @@ func TestE2E_VersionTimeline(t *testing.T) {
 		t.Errorf("read-only banner should clear after Back to current%s", diag())
 	}
 
+	// Diff the Original vs current: the banner says "Comparing" and the pane
+	// renders del+add rows (ORIGINAL-VERSION → hello world).
+	var bannerText, diffHTML string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`button[name="diffVersion"]`, chromedp.ByQuery),
+		chromedp.Evaluate(clickVersionBtnJS("diffVersion", 0), nil),
+		chromedp.WaitVisible(`.version-view-banner`, chromedp.ByQuery),
+		chromedp.Text(`.version-view-banner`, &bannerText, chromedp.ByQuery),
+		chromedp.OuterHTML(`main.viewer`, &diffHTML, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("diff version 0: %v%s", err, diag())
+	}
+	if !strings.Contains(bannerText, "Comparing") {
+		t.Errorf("diff banner should say 'Comparing', got %q", bannerText)
+	}
+	if !strings.Contains(diffHTML, "line del") || !strings.Contains(diffHTML, "line add") {
+		t.Errorf("diff pane should show del+add rows; html: %s", diffHTML)
+	}
+
+	// Back to current before the destructive step.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.version-view-banner button[name="exitVersionView"]`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("exit diff view: %v%s", err, diag())
+	}
+
 	// Restore the Original: the file on disk reverts and the agent is paused.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),

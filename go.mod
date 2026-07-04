@@ -7,6 +7,7 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327
 	github.com/chromedp/chromedp v0.14.2
 	github.com/ericpauley/go-quantize v0.0.0-20200331213906-ae555eb2afa4
+	github.com/hexops/gotextdiff v1.0.3
 	github.com/livetemplate/livetemplate v0.9.1
 	github.com/minio/selfupdate v0.6.0
 	github.com/yuin/goldmark v1.8.2

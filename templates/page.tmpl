@@ -1206,8 +1206,9 @@
             <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
           </span>
           <span class="version-actions">
-            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn"{{if .Viewing}} disabled{{end}}>View</button></form>
-            {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
+            {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
+            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
           </span>
         </div>
         {{end}}
@@ -1220,7 +1221,7 @@
   {{/* Read-only banner while viewing a historical version. Commenting is gated
        off (line coords don't match disk); this is the way back to the live diff. */}}
   <div class="version-view-banner" role="status">
-    <span>Viewing a previous version (read-only).</span>
+    <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
   {{end}}

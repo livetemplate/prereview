@@ -150,6 +150,7 @@ func (c *PrereviewController) applyVersionList(state *PrereviewState) {
 func (c *PrereviewController) reloadLiveDiff(state *PrereviewState) {
 	state.ViewingVersion = false
 	state.VersionViewSeq = 0
+	state.VersionViewDiff = false
 	if state.SelectedFile == "" {
 		state.CurrentDiff = nil
 		c.applyVersionList(state)
@@ -187,6 +188,33 @@ func (c *PrereviewController) ViewVersion(state PrereviewState, ctx *livetemplat
 		state.CurrentDiff = gitdiff.RenderBytesAsFile(state.SelectedFile, data)
 	}
 	state.ViewingVersion = true
+	state.VersionViewDiff = false
+	state.VersionViewSeq = seq
+	state.SelectionAnchor, state.SelectionEnd = 0, 0
+	state.CommentMode = ""
+	c.applyVersionList(&state)
+	return state, nil
+}
+
+// DiffVersion shows a prior version diffed against the CURRENT working-tree file
+// ("Diff vs current") — a read-only view mode like ViewVersion, but the pane
+// renders the line diff (via gitdiff.DiffContents, a pure-Go Myers diff over the
+// two blobs — no git). A tombstone (the file didn't exist at that version) diffs
+// as an all-addition against nothing. No disk change.
+func (c *PrereviewController) DiffVersion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if c.Versions == nil || state.SelectedFile == "" {
+		return state, nil
+	}
+	seq := ctx.GetInt("seq")
+	oldData, err := c.Versions.Restore(state.SelectedFile, seq)
+	if err != nil && !errors.Is(err, ErrVersionTombstone) {
+		return state, fmt.Errorf("diff version %d: %w", seq, err)
+	}
+	// Tombstone ⇒ oldData nil ⇒ everything in current reads as an addition.
+	curData, _ := os.ReadFile(filepath.Join(c.RepoPath, state.SelectedFile))
+	state.CurrentDiff = gitdiff.DiffContents(state.SelectedFile, oldData, curData)
+	state.ViewingVersion = true
+	state.VersionViewDiff = true
 	state.VersionViewSeq = seq
 	state.SelectionAnchor, state.SelectionEnd = 0, 0
 	state.CommentMode = ""
