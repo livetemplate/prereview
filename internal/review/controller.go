@@ -125,6 +125,32 @@ func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDi
 			return cd.diff, nil
 		}
 	}
+	return c.loadDiffFresh(base, path)
+}
+
+// effectiveBase returns the base ref to diff against: the state's base (the
+// user's picker choice) when set, else the controller's CLI base. The fallback
+// is load-bearing for re-anchoring in the emit/hand-off path: that state can
+// arrive with an empty Base (a transient snapshot state, or a session that never
+// hydrated it), and `git diff '' -- file` fails with "bad revision", which would
+// silently skip re-anchoring and leak an edited-away comment/suggestion into the
+// snapshot (the real #121). NoGit mode ignores the base entirely.
+func (c *PrereviewController) effectiveBase(state *PrereviewState) string {
+	if state.Base != "" {
+		return state.Base
+	}
+	return c.Base
+}
+
+// loadDiffFresh loads the diff BYPASSING the mtime cache — it always re-reads
+// the working-tree file and re-runs git. Used by the re-anchoring done at
+// emit/hand-off (relocateAll / relocateSuggestionsAll), where correctness beats
+// the cache: two edits within a single filesystem mtime tick would otherwise
+// leave loadDiffCached serving a stale diff, so a suggestion/comment whose
+// target was just edited away would fail to re-anchor `outdated` and would keep
+// leaking into the snapshot (#121). It refreshes the cache so later cached
+// reads are correct.
+func (c *PrereviewController) loadDiffFresh(base, path string) (*gitdiff.FileDiff, error) {
 	var diff *gitdiff.FileDiff
 	var err error
 	if c.NoGit {
@@ -135,7 +161,7 @@ func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDi
 	if err != nil {
 		return nil, err
 	}
-	c.diffCache.Store(key, cachedDiff{diff: diff, mtime: curMtime})
+	c.diffCache.Store(base+"\t"+path, cachedDiff{diff: diff, mtime: fileMtime(filepath.Join(c.RepoPath, path))})
 	return diff, nil
 }
 
@@ -159,6 +185,7 @@ func (c *PrereviewController) relocateSelected(state *PrereviewState) {
 // files the user never opened this session: the skill handoff and
 // opening the all-comments view.
 func (c *PrereviewController) relocateAll(state *PrereviewState) {
+	base := c.effectiveBase(state)
 	seen := map[string]bool{}
 	anyChanged := false
 	for _, cm := range state.Comments {
@@ -166,7 +193,10 @@ func (c *PrereviewController) relocateAll(state *PrereviewState) {
 			continue
 		}
 		seen[cm.File] = true
-		diff, err := c.loadDiffCached(state.Base, cm.File)
+		// Fresh (uncached) load: re-anchoring must see the file's CURRENT content,
+		// not a stale mtime-cached diff, or an edited-away comment fails to drift
+		// outdated (same class as #121).
+		diff, err := c.loadDiffFresh(base, cm.File)
 		if err != nil {
 			slog.Warn("relocateAll: load diff", "file", cm.File, "err", err)
 			continue
