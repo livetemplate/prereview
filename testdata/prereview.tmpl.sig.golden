@@ -607,15 +607,6 @@
     </form>
   </div>
   
-  {{if and (gt (len .Comments) 0) (not .ShowAllComments)}}
-  <div class="drawer-all-comments">
-    <form method="POST">
-      <button type="submit" name="toggleCommentList" class="outline" title="Open the all-comments overview">
-        💬 All comments ({{len .Comments}})
-      </button>
-    </form>
-  </div>
-  {{end}}
   
   
   {{if not .NoGit}}
