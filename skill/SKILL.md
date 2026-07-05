@@ -261,6 +261,14 @@ Fields per suggestion:
 `prereview processed`). Never hand-edit `suggestions.jsonl` — always append via the
 subcommand.
 
+**Proposing alternatives (a group).** When you want to offer the user a *choice*
+between several ways to edit the same text, submit multiple suggestions with the
+**same `file` / `from_line` / `to_line` / `original`** and different `proposed`
+(each a distinct `id`). prereview groups them as alternatives: the user accepting
+one **auto-rejects the rest**, so you'll get exactly one `accept` and the others as
+`reject` on hand-off — no need for them to reject each by hand. Use this freely to
+present options rather than committing to one phrasing.
+
 ### Applying the reviewer's decisions (user → you)
 
 On each Hand off, the event's `suggestions[]` is a **full snapshot of every decided

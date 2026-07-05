@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
@@ -69,6 +70,20 @@ func (s Suggestion) AnchorOutdated() bool { return s.AnchorStatus == anchorOutda
 // AnchorMoved reports that the suggestion was auto-shifted to follow its target
 // text after the file changed (informational). Parallels Comment.AnchorMoved.
 func (s Suggestion) AnchorMoved() bool { return s.AnchorStatus == anchorMoved }
+
+// groupKey identifies the artifact area a suggestion targets, so alternatives for
+// the SAME text/area are grouped (#117 — accepting one auto-rejects the rest).
+// OriginalText is the stable identity ("the same text"); File+Side+range
+// disambiguate identical text appearing elsewhere in the file (e.g. `return nil`
+// on two different lines are NOT one group). NUL-joined to avoid field-boundary
+// collisions. Two alternatives for the same edit carry the same OriginalText AND
+// target the same range, so they share this key; different ProposedText is what
+// makes them distinct alternatives within it.
+func (s Suggestion) groupKey() string {
+	return strings.Join([]string{
+		s.File, s.Side, strconv.Itoa(s.FromLine), strconv.Itoa(s.ToLine), s.OriginalText,
+	}, "\x00")
+}
 
 // LineSpan renders "L42" / "L42-L48" for the card badge, matching Comment's
 // line-level span (suggestions are always line-anchored).
