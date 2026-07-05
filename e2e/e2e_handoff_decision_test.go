@@ -1,10 +1,12 @@
 //go:build browser
 
-// End-to-end coverage for issue #98 Phase 3: the hand-off round-trip. The LLM
-// submits a suggestion (`prereview suggest`), the reviewer decides on it, and on
-// "Hand off →" the decision ships to the LLM in the stream's handoff event
-// (stdout + events.jsonl) — carrying the verdict + note + original/proposed. Only
-// DECIDED, non-outdated suggestions ship; an undecided one is not emitted.
+// End-to-end coverage for issue #98 Phase 3: the decision round-trip. The LLM
+// submits a suggestion (`prereview suggest`), the reviewer decides on it, and the
+// decision auto-emits to the LLM in the stream's handoff event (stdout +
+// events.jsonl) — carrying the verdict + note + original/proposed. Under
+// continuous enqueue (#119) there is no Hand off button: deciding a suggestion is
+// a persisted mutation that auto-emits a snapshot. Only DECIDED, non-outdated
+// suggestions ship; an undecided one is not emitted.
 //
 // Run with: go test -tags=browser -run TestE2E_HandoffDecisions ./e2e/...
 
@@ -16,7 +18,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
 
@@ -64,14 +65,9 @@ func TestE2E_HandoffDecisions(t *testing.T) {
 		t.Fatalf("accept: %v%s", err, diag())
 	}
 
-	// Hand off → the decision ships in the handoff event.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
-		chromedp.Sleep(200*time.Millisecond),
-	); err != nil {
-		t.Fatalf("hand off: %v%s", err, diag())
-	}
-
+	// Continuous enqueue (#119): stream mode has NO Hand off button. The accept
+	// above persisted the decision, which auto-emits a debounced snapshot — the
+	// decision ships in that emitted handoff event with no button click.
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		h := handoffEvents(evs)
 		if len(h) < 1 {
