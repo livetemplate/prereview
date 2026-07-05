@@ -252,6 +252,7 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	if id == "" {
 		return state, fmt.Errorf("jumpToComment: missing id")
 	}
+	state = c.materializeDraft(state) // keep unsaved composer text when jumping away (#105)
 	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
 	if idx < 0 {
 		return state, fmt.Errorf("jumpToComment: id %s not found", id)

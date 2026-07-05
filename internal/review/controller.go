@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/livetemplate/livetemplate"
@@ -68,6 +69,13 @@ type PrereviewController struct {
 	// EndSession guard on nil so non-stream sessions emit nothing.
 	Emitter *EventStream
 
+	// Versions is the artifact version store (#90): content-addressed snapshots
+	// of the reviewed files as the LLM edits them on disk, enabling view / diff /
+	// rollback of uncommitted work. Non-nil only in repo / single-file mode
+	// (external mode has no file scope). Every caller nil-guards it, so a failed
+	// init just disables versioning rather than breaking the review.
+	Versions *VersionStore
+
 	// ShutdownReq receives a struct{} when the user clicks Quit. main.go
 	// listens for it and triggers graceful HTTP shutdown.
 	ShutdownReq chan<- struct{}
@@ -99,6 +107,17 @@ type PrereviewController struct {
 	// treats ErrSessionDisconnected (no tabs) as a skip, so nothing needs
 	// clearing.
 	session livetemplate.Session
+
+	// Continuous emission (#119). A single debounced timer coalesces a burst of
+	// mutations into one snapshot emit (see controller_emit.go). emitMu guards the
+	// timer. inEmit is set while emitSnapshot runs so its own self-heal persist
+	// can't reschedule (avoiding a feedback loop). emitDisabled is set at session
+	// end so no snapshot fires after session_end (which the skill treats as
+	// terminal).
+	emitMu       sync.Mutex
+	emitTimer    *time.Timer
+	inEmit       atomic.Bool
+	emitDisabled atomic.Bool
 }
 
 type cachedDiff struct {
@@ -118,6 +137,32 @@ func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDi
 			return cd.diff, nil
 		}
 	}
+	return c.loadDiffFresh(base, path)
+}
+
+// effectiveBase returns the base ref to diff against: the state's base (the
+// user's picker choice) when set, else the controller's CLI base. The fallback
+// is load-bearing for re-anchoring in the emit/hand-off path: that state can
+// arrive with an empty Base (a transient snapshot state, or a session that never
+// hydrated it), and `git diff '' -- file` fails with "bad revision", which would
+// silently skip re-anchoring and leak an edited-away comment/suggestion into the
+// snapshot (the real #121). NoGit mode ignores the base entirely.
+func (c *PrereviewController) effectiveBase(state *PrereviewState) string {
+	if state.Base != "" {
+		return state.Base
+	}
+	return c.Base
+}
+
+// loadDiffFresh loads the diff BYPASSING the mtime cache — it always re-reads
+// the working-tree file and re-runs git. Used by the re-anchoring done at
+// emit/hand-off (relocateAll / relocateSuggestionsAll), where correctness beats
+// the cache: two edits within a single filesystem mtime tick would otherwise
+// leave loadDiffCached serving a stale diff, so a suggestion/comment whose
+// target was just edited away would fail to re-anchor `outdated` and would keep
+// leaking into the snapshot (#121). It refreshes the cache so later cached
+// reads are correct.
+func (c *PrereviewController) loadDiffFresh(base, path string) (*gitdiff.FileDiff, error) {
 	var diff *gitdiff.FileDiff
 	var err error
 	if c.NoGit {
@@ -128,7 +173,7 @@ func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDi
 	if err != nil {
 		return nil, err
 	}
-	c.diffCache.Store(key, cachedDiff{diff: diff, mtime: curMtime})
+	c.diffCache.Store(base+"\t"+path, cachedDiff{diff: diff, mtime: fileMtime(filepath.Join(c.RepoPath, path))})
 	return diff, nil
 }
 
@@ -152,6 +197,7 @@ func (c *PrereviewController) relocateSelected(state *PrereviewState) {
 // files the user never opened this session: the skill handoff and
 // opening the all-comments view.
 func (c *PrereviewController) relocateAll(state *PrereviewState) {
+	base := c.effectiveBase(state)
 	seen := map[string]bool{}
 	anyChanged := false
 	for _, cm := range state.Comments {
@@ -159,7 +205,10 @@ func (c *PrereviewController) relocateAll(state *PrereviewState) {
 			continue
 		}
 		seen[cm.File] = true
-		diff, err := c.loadDiffCached(state.Base, cm.File)
+		// Fresh (uncached) load: re-anchoring must see the file's CURRENT content,
+		// not a stale mtime-cached diff, or an edited-away comment fails to drift
+		// outdated (same class as #121).
+		diff, err := c.loadDiffFresh(base, cm.File)
 		if err != nil {
 			slog.Warn("relocateAll: load diff", "file", cm.File, "err", err)
 			continue
@@ -327,6 +376,12 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// Same for the selected file's suggestions (#98): a suggestion whose target
 	// text was edited away renders `outdated`; one whose text moved follows it.
 	c.relocateSuggestionsSelected(&state)
+	// Artifact versioning (#90): populate the selected file's version timeline
+	// and the paused state. Mount always shows the LIVE diff (ViewingVersion
+	// defaults false and isn't persisted), so a reconnect naturally leaves any
+	// historical view and lands back on current.
+	c.applyVersionList(&state)
+	c.applyPaused(&state)
 	return state, nil
 }
 
@@ -355,9 +410,17 @@ func (c *PrereviewController) persist(comments []Comment) error {
 			FromCol:      cm.FromCol,
 			ToCol:        cm.ToCol,
 			Hidden:       cm.Hidden,
+			Draft:        cm.Draft,
 		})
 	}
-	return c.CSVWriter.Write(rows)
+	if err := c.CSVWriter.Write(rows); err != nil {
+		return err
+	}
+	// Continuous enqueue (#119): a persisted comment change (re)arms the debounced
+	// snapshot emit. inEmit-guarded, so the self-heal persist inside emitSnapshot
+	// doesn't re-arm and spin; no-op in non-stream mode.
+	c.scheduleEmit()
+	return nil
 }
 
 // writeDoneMarker writes csvPath into donePath atomically, so a skill that
@@ -408,7 +471,7 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 			Side: r.Side, Body: r.Body, Created: r.CreatedAt, Resolved: r.Resolved,
 			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus,
 			Kind: r.Kind, Area: parseArea(r.Area), URL: r.URL,
-			FromCol: r.FromCol, ToCol: r.ToCol, Hidden: r.Hidden,
+			FromCol: r.FromCol, ToCol: r.ToCol, Hidden: r.Hidden, Draft: r.Draft,
 		})
 	}
 	return out

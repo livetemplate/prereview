@@ -7,7 +7,8 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327
 	github.com/chromedp/chromedp v0.14.2
 	github.com/ericpauley/go-quantize v0.0.0-20200331213906-ae555eb2afa4
-	github.com/livetemplate/livetemplate v0.9.1
+	github.com/hexops/gotextdiff v1.0.3
+	github.com/livetemplate/livetemplate v0.16.0
 	github.com/minio/selfupdate v0.6.0
 	github.com/yuin/goldmark v1.8.2
 	github.com/yuin/goldmark-emoji v1.0.6
@@ -37,8 +38,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/redis/go-redis/v9 v9.17.2 // indirect
-	github.com/tdewolff/minify/v2 v2.24.8 // indirect
-	github.com/tdewolff/parse/v2 v2.8.5 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.38.0 // indirect

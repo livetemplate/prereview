@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,14 +218,19 @@ func (c *PrereviewController) relocateSuggestionsSelected(state *PrereviewState)
 // the suggestion analogue of relocateAll for comments. Used only at hand-off (the
 // CSV/stream become a contract there). Read-only: nothing is persisted.
 func (c *PrereviewController) relocateSuggestionsAll(state *PrereviewState) {
+	base := c.effectiveBase(state)
 	seen := map[string]bool{}
 	for _, sg := range state.Suggestions {
 		if sg.Anchor.Empty() || seen[sg.File] {
 			continue
 		}
 		seen[sg.File] = true
-		diff, err := c.loadDiffCached(state.Base, sg.File)
+		// Fresh (uncached) load so a suggestion whose target was just edited away
+		// re-anchors `outdated` and drops from the snapshot — the mtime cache can
+		// serve a stale diff for edits within one tick (part of #121).
+		diff, err := c.loadDiffFresh(base, sg.File)
 		if err != nil {
+			slog.Warn("relocateSuggestionsAll: load diff", "file", sg.File, "base", base, "err", err)
 			continue
 		}
 		relocateSuggestions(state.Suggestions, sg.File, diff)

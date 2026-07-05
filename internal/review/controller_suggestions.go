@@ -54,6 +54,8 @@ func (c *PrereviewController) setDecision(state *PrereviewState, id, verdict, no
 	if err := writeDecisions(c.decisionsPath(), next); err != nil {
 		state.Decisions = prev // rollback
 		slog.Warn("persist decision", "id", id, "verdict", verdict, "err", err)
+	} else {
+		c.scheduleEmit() // #119: a decision change re-arms the snapshot emit
 	}
 }
 
@@ -137,6 +139,8 @@ func (c *PrereviewController) ClearSuggestionDecision(state PrereviewState, ctx 
 	if err := writeDecisions(c.decisionsPath(), next); err != nil {
 		state.Decisions = prev // rollback
 		slog.Warn("clear decision", "id", id, "err", err)
+	} else {
+		c.scheduleEmit() // #119: clearing a decision re-arms the snapshot emit
 	}
 	return state, nil
 }

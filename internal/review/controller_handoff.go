@@ -56,6 +56,11 @@ func (c *PrereviewController) HandOff(state PrereviewState, ctx *livetemplate.Co
 // "session ended" banner before the WebSocket is torn down. The LLM's
 // background job completing is the second, redundant terminator.
 func (c *PrereviewController) EndSession(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	// Stop the debounced emitter and block new emits BEFORE the final flush, so a
+	// queued snapshot can't fire AFTER session_end — the skill's only stop signal.
+	// The synchronous flushHandoff below is the last, authoritative snapshot.
+	c.emitDisabled.Store(true)
+	c.stopPendingEmit()
 	if err := c.flushHandoff(&state); err != nil {
 		return state, err
 	}
@@ -75,6 +80,9 @@ func (c *PrereviewController) EndSession(state PrereviewState, ctx *livetemplate
 // back to the client before the WebSocket is torn down — otherwise the
 // browser sees a sudden disconnect with no UI feedback.
 func (c *PrereviewController) Quit(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	// Stop emitting on the way out (same terminal reasoning as EndSession).
+	c.emitDisabled.Store(true)
+	c.stopPendingEmit()
 	state.Quitting = true
 	c.requestShutdown()
 	return state, nil

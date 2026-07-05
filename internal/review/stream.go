@@ -176,7 +176,9 @@ func toStreamComment(c Comment) StreamComment {
 func actionableComments(comments []Comment) []StreamComment {
 	out := make([]StreamComment, 0, len(comments))
 	for _, c := range comments {
-		if c.Resolved || c.AnchorOutdated() {
+		// Drafts (#119) are the reviewer's not-yet-enqueued notes — kept out of
+		// the actionable snapshot until enqueued, exactly like resolved/outdated.
+		if c.Resolved || c.AnchorOutdated() || c.Draft {
 			continue
 		}
 		out = append(out, toStreamComment(c))

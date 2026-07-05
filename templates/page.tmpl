@@ -40,6 +40,7 @@
 </head>
 <body
   data-lvt-loading-debounce-ms="200"
+  data-lvt-heartbeat-ms="10000"
 >
 {{/* .theme-root carries the dynamic theme attributes INSIDE livetemplate's
      managed subtree so the Light/Dark toggle morphs them live (a data-mode on
@@ -84,13 +85,16 @@
       >💬 {{len $.AllRegionComments}}</button>
     </form>
     {{- if .StreamMode -}}
+    {{/* Continuous enqueue (#119): annotations stream to the agent as you make
+         them; pausing BATCHES them instead (held, sent together on resume) — not
+         a stop. Mirrors the repo-mode toolbar. */}}
     <form method="POST" style="margin:0">
       <button
         type="submit"
-        name="handOff"
-        class="contrast"
-        title="Send the current annotations to your agent as a handoff event (session stays open)"
-      >Hand off →</button>
+        name="toggleAgentPause"
+        class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}"
+        title="{{if .AgentPaused}}Batching — annotations held, not sent. Resume to send the batch.{{else}}Live — each annotation is sent as you make it. Pause to batch them instead.{{end}}"
+      >{{if .AgentPaused}}▶ Resume — send batch{{else}}⏸ Pause — batch{{end}}</button>
     </form>
     {{- /* session terminator — opens the confirm dialog (#58) instead of ending
            immediately; the dialog's button fires endSession. */ -}}
@@ -579,25 +583,66 @@
     ><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
   </form>
   {{end}}
-  <form method="POST" class="tb-action">
-    {{if .StreamMode}}
-    <button
-      type="submit"
-      name="handOff"
-      class="contrast"
-      title="Send the current comments to your agent as a handoff event (session stays open)"
-    >Hand off →</button>
-    {{/* On mobile End session moves to the ⋮ overflow menu (below) so the
-         narrow bar isn't crowded by two action buttons — hidden here via
-         .end-session-inline in the mobile media query. */}}
+  {{/* Work queue (#119) — the hub for a continuous-enqueue session: what's queued
+       / worked-on / held as drafts, PLUS Pause/Resume and End session. A direct
+       child of the bar (reachable on mobile) placed AFTER the flex:1 .title so it
+       sits on the RIGHT — its panel opens over the content, clear of the file
+       drawer (the bar's z-index sits below the drawer's, so a left-opening panel
+       would render behind it). */}}
+  {{if .StreamMode}}
+  <div
+    class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}"
+    lvt-el:toggleClass:on:click="open"
+    lvt-el:removeClass:on:click-away="open"
+  >
     <button
       type="button"
-      command="show-modal"
-      commandfor="confirm-end-session"
-      class="contrast end-session-inline"
-      title="Emit session_end and stop the server — your agent stops consuming the stream"
-    >End session</button>
-    {{else if .SkillMode}}
+      class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}"
+      aria-haspopup="menu"
+      title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"
+    >{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
+    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
+      {{/* Pause = batch, not stop (#119). Live: each comment is sent to the agent
+           as you save it. Paused: comments are held and batched; resume sends the
+           accumulated batch in one go. The button says what it does; the mode line
+           below says which state you're in. */}}
+      <form method="POST" class="queue-pause-form">
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}</button>
+      </form>
+      <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
+      {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      {{if .HasQueue}}
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      {{range .QueueItems}}
+      <div class="queue-row queue-{{.State}}">
+        <form method="POST" class="queue-jump-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
+            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
+            <span class="queue-body">{{.Body}}</span>
+            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
+          </button>
+        </form>
+        {{- if eq .State "done"}}
+        {{/* Re-enqueue (#119): put a done item back on the queue for the agent to redo. */}}
+        <form method="POST" class="queue-reenqueue-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
+        </form>
+        {{- end}}
+      </div>
+      {{end}}
+      {{else}}
+      <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
+      {{end}}
+      {{/* End session — the terminator, grouped at the bottom of the hub. Opens
+           the confirm dialog (endSession fires from there). */}}
+      <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
+    </div>
+  </div>
+  {{else}}
+  <form method="POST" class="tb-action">
+    {{if .SkillMode}}
     <button
       type="submit"
       name="handOff"
@@ -614,6 +659,7 @@
     >Quit</button>
     {{end}}
   </form>
+  {{end}}
   {{/* 3-dots trigger — mobile only (hidden on desktop via CSS). Placed
        last so it visually anchors the right edge of the toolbar; the
        menu opens directly below it (also right-edge aligned). Uses an
@@ -658,6 +704,24 @@
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed
     {{- if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end -}}
   </div>
+  {{/* Prev/Next file moved here from the bar on mobile (#119) so the narrow bar
+       stays tidy (☰ 🔍 Queue Pause ⋮). Pause/resume + End session stay inline
+       (there's room). Desktop keeps these inline (this menu is display:none
+       ≥900px); their bar copies are hidden <900px via CSS. */}}
+  {{if gt (len .Files) 1}}
+  <form method="POST">
+    <button type="submit" name="prevFile" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconChevronLeft"}}</span>
+      <span class="menu-label">Previous file</span>
+    </button>
+  </form>
+  <form method="POST">
+    <button type="submit" name="nextFile" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconChevronRight"}}</span>
+      <span class="menu-label">Next file</span>
+    </button>
+  </form>
+  {{end}}
   {{/* Color scheme + mode — mirror the desktop toolbar palette + sun/moon.
        Scheme cycles Solarized → Gruvbox → Catppuccin; mode cycles
        System → Light → Dark; meta shows what the next tap switches to.
@@ -840,23 +904,8 @@
     style="border-bottom: 0; margin-bottom: 0; font-style: italic;"
   >No comments yet — tap a line to add one.</div>
   {{end}}
-  {{if .StreamMode}}
-  {{/* Stream-mode terminator. Inline in the top bar on desktop; on mobile it
-       lives here (the inline copy is hidden) so the bar isn't crowded by two
-       action buttons. Last item, so it's not an accidental tap target. */}}
-  <form method="POST">
-    <button
-      type="button"
-      command="show-modal"
-      commandfor="confirm-end-session"
-      class="menu-item"
-      role="menuitem"
-    >
-      <span class="menu-icon">{{template "iconStop"}}</span>
-      <span class="menu-label">End session</span>
-    </button>
-  </form>
-  {{end}}
+  {{/* End session now lives in the Queue dropdown (the session hub) — reachable
+       on mobile too since that dropdown is a direct child of the bar. */}}
   {{/* Keyboard shortcuts — same toggleKeyboardHelp action as the "?" key and
        the desktop toolbar button. Always available. */}}
   <form method="POST">
@@ -1163,14 +1212,14 @@
 <article>
   <header class="file-head">
     <span class="file-head-name"><strong>{{.Path}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
-    {{/* Comment on the whole file — moved here from the toolbar to declutter
-         it and to sit in context next to the filename. The .file-head is
-         sticky, so it stays reachable while scrolling; it works for every file
-         type (text, binary, deleted, too-large). Hidden while the file composer
-         is already open to avoid a self-toggle loop. This is the single home for
-         the action on both desktop and mobile (the old toolbar + more-menu
-         copies are gone). */}}
-    {{if ne $.CommentMode "file"}}
+    {{/* Right-aligned action group: comment-on-file + the versions control. Both
+         are compact chips sharing one row so the sticky header stays a single
+         thin line on every viewport. */}}
+    <span class="file-head-actions">
+    {{/* Comment on the whole file — sits in context next to the filename. Hidden
+         while the file composer is already open (self-toggle loop) or while
+         viewing a historical version (read-only). */}}
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
     <form method="POST" class="file-head-comment">
       <button
         type="submit"
@@ -1181,7 +1230,50 @@
       >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
     {{end}}
+    {{/* Versions panel (#90): the selected file's version timeline with view +
+         rollback. Reuses the View-dropdown client primitive (lvt-el toggle +
+         click-away, no server state, no custom JS). A compact chip (history icon
+         + count) matching the comment button; label hides on mobile. Only shows
+         once the file has recorded history. */}}
+    {{if $.Versions}}
+    <div
+      class="tb-dropdown versions-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="versions-trigger"
+        aria-haspopup="menu"
+        title="Versions of this file — view or roll back to a previous version"
+      >{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
+      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
+        {{range $.Versions}}
+        <div class="version-row{{if .Viewing}} viewing{{end}}">
+          <span class="version-meta">
+            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
+            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
+          </span>
+          <span class="version-actions">
+            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
+            {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
+            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+          </span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    </span>
   </header>
+  {{if $.ViewingVersion}}
+  {{/* Read-only banner while viewing a historical version. Commenting is gated
+       off (line coords don't match disk); this is the way back to the live diff. */}}
+  <div class="version-view-banner" role="status">
+    <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
+  </div>
+  {{end}}
   {{/* File-level comments + composer. Lives above the body branch so
        it's visible for every preview mode (line view, markdown blocks,
        HTML blocks, binary preview, "no diff content" placeholder).
@@ -1466,10 +1558,27 @@
 </div>
 {{end}}
 {{if .PendingRefresh}}
+{{/* Frozen-view nudge (#119): the agent edited files ON DISK; this view is
+     deliberately still showing the pre-edit version so scroll/drafts survive.
+     Say that plainly — the old "✓ Changes applied" read as "already in your
+     view" and made the frozen view look like a leak (live-test feedback). */}}
 <div class="reanchor-prompt refresh-prompt" role="status">
-  <span>✓ Changes applied — refresh to see the agent's edits.</span>
+  <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
+  </form>
+</div>
+{{end}}
+{{if .AgentPaused}}
+{{/* Paused = batching (#119): comments are held, not sent one-by-one. Set only
+     by the manual Pause toggle — a rollback no longer force-pauses (send-mode is
+     decoupled from rollback; see RestoreVersion). The wording describes the
+     STATE (batching), not any cause. Resume releases the held batch in one
+     snapshot. */}}
+<div class="reanchor-prompt paused-prompt" role="status">
+  <span>⏸ Batching — comments are held, not sent to the agent yet.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="resumeAgent" class="refresh-btn">Resume — send batch</button>
   </form>
 </div>
 {{end}}

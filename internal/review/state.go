@@ -38,6 +38,28 @@ type PrereviewState struct {
 	SelectedFile string              `json:"selected_file" lvt:"persist"`
 	CurrentDiff  *gitdiff.FileDiff   `json:"current_diff"`
 
+	// Artifact versioning (#90). Versions is the selected file's version
+	// timeline (newest first), populated from the version store each Mount /
+	// version action for the Versions panel. When ViewingVersion is true the
+	// right pane shows a historical version (VersionViewSeq) of SelectedFile
+	// read-only instead of the live diff — CurrentDiff holds the rendered
+	// historical content. ViewingVersion is deliberately NOT lvt:"persist": it
+	// is a transient view mode that every live-diff rebuild (Mount, SelectFile,
+	// RefreshDiff) must clear, so a reconnect or background re-render lands back
+	// on the live diff rather than stale history mislabeled as current.
+	Versions       []VersionListItem `json:"versions"`
+	ViewingVersion bool              `json:"viewing_version"`
+	VersionViewSeq int               `json:"version_view_seq"`
+	// VersionViewDiff distinguishes the two historical views: false = the version's
+	// content read-only ("View"), true = that version diffed against the current
+	// file ("Diff vs current"). Only meaningful while ViewingVersion.
+	VersionViewDiff bool `json:"version_view_diff"`
+
+	// AgentPaused mirrors the .prereview/paused marker: a rollback force-pauses
+	// the agent so it stops applying while the reviewer re-steers (#90). Read
+	// from disk each Mount; M2's continuous drain gates emission on it.
+	AgentPaused bool `json:"agent_paused"`
+
 	// Two-click selection (anchor → end). 0 = nothing selected; first
 	// click sets both to the same line; second click moves end; third
 	// click reseats anchor.
@@ -643,7 +665,17 @@ func (s PrereviewState) BinaryKind() string {
 func (s PrereviewState) ShowRenderedMarkdown() bool {
 	// Revealing() forces the raw line view so a search-jump lands on the exact
 	// source line (rendered blocks carry no L<old>-<new> rows to scroll to).
-	return s.IsMarkdown() && !s.RawMarkdown && !s.Revealing() && len(s.CurrentDiff.MarkdownBlocks) > 0
+	// A version DIFF also forces the line view — a diff must show add/del rows,
+	// not the rendered Markdown of one side (#90). A plain version VIEW keeps the
+	// rendered preview (seeing the old doc rendered is useful).
+	return s.IsMarkdown() && !s.RawMarkdown && !s.Revealing() && !s.diffingVersion() &&
+		len(s.CurrentDiff.MarkdownBlocks) > 0
+}
+
+// diffingVersion reports whether the pane is showing a version-vs-current diff
+// (as opposed to a plain read-only version view or the live diff).
+func (s PrereviewState) diffingVersion() bool {
+	return s.ViewingVersion && s.VersionViewDiff
 }
 
 // ShowRenderedHTML is true when the viewer should swap the line view
@@ -654,7 +686,7 @@ func (s PrereviewState) ShowRenderedMarkdown() bool {
 func (s PrereviewState) ShowRenderedHTML() bool {
 	// Revealing() forces the raw line view so a search-jump lands on the exact
 	// source line (the preview iframe has no L<old>-<new> rows to scroll to).
-	return s.IsHTML() && !s.RawHTML && !s.Revealing() &&
+	return s.IsHTML() && !s.RawHTML && !s.Revealing() && !s.diffingVersion() &&
 		s.CurrentDiff != nil && len(s.CurrentDiff.HTMLBlocks) > 0
 }
 

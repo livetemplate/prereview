@@ -64,6 +64,9 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	if path == "" {
 		return state, fmt.Errorf("selectFile: missing path")
 	}
+	// Keep any unsaved composer text as a draft before leaving this file (#105) —
+	// navigating away isn't clicking Save, so the note shouldn't be lost.
+	state = c.materializeDraft(state)
 	diff, err := c.loadDiffCached(state.Base, path)
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
@@ -87,6 +90,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	// selected (but invisible) file behind it.
 	state.ShowAllComments = false
 	c.relocateSelected(&state)
+	c.applyVersionList(&state) // per-file version timeline (#90) — refresh for the new file
 	return state, nil
 }
 
@@ -114,6 +118,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	if len(files) == 0 {
 		return state, nil
 	}
+	state = c.materializeDraft(state) // keep unsaved composer text on file switch (#105)
 	cur := -1
 	for i, f := range files {
 		if f.Path == state.SelectedFile {
@@ -139,6 +144,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	state.EditingCommentID = ""
 	state.CursorKey = "" // new file, new lines — drop the line cursor
 	c.relocateSelected(&state)
+	c.applyVersionList(&state) // per-file version timeline (#90)
 	return state, nil
 }
 
@@ -191,6 +197,7 @@ func (c *PrereviewController) stepComment(state PrereviewState, delta int) (Prer
 		}
 		state.SelectedFile = target.File
 		state.CurrentDiff = diff
+		c.applyVersionList(&state) // per-file version timeline (#90)
 	}
 	state.ShowAllComments = false
 	state.ScrollToCommentID = target.ID

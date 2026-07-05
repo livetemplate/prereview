@@ -3,11 +3,15 @@
 === blockSuggestions ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}
 === commentCardFull ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if .Resolved}}<form method="POST">
+    </form>{{if and $.StreamMode (not .Resolved) (not .AnchorOutdated)}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">{{if .Draft}}
+      <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Enqueue for the agent">Enqueue</button>{{else}}
+      <button type="submit" name="moveToDraft" class="outline" title="Hold back as a draft — the agent won't see it until you enqueue">Draft</button>{{end}}
+    </form>{{end}}{{if .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="hideComment" class="outline">Hide</button>
     </form>{{end}}{{if and (not .Resolved) .AnchorOutdated}}<form method="POST">
@@ -18,7 +22,7 @@
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialog" .}}</div></div>
 === commentCardSimple ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -31,7 +35,7 @@
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>
 === composer ===
 <div class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}" data-key="composer"{{if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}><strong>{{if eq $.CommentMode "region"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small>{{else}}{{if eq $.CommentMode "file"}}{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "area"}}{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "text"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}} · “<span class="selection-snippet">{{$.SelectionText}}</span>”{{else}}{{if $.ReanchorCommentID}}Re-anchoring comment to {{else}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{end}}{{$.SelectionLabel}}{{end}}{{end}}{{end}}{{end}}</strong>{{if and (eq $.CommentMode "") (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID) (not $.ShowRenderedMarkdown) (not $.ShowRenderedHTML)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form" lvt-on:keydown="addComment" lvt-key="Mod+Enter">
-    <textarea name="body" placeholder="{{if eq $.CommentMode "region"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "file"}}What's wrong with this file?{{else}}{{if eq $.CommentMode "area"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "text"}}What's wrong with this text?{{else}}What's wrong with these lines?{{end}}{{end}}{{end}}{{end}}" required lvt-autofocus>{{$.DraftBody}}</textarea>
+    <textarea name="body" placeholder="{{if eq $.CommentMode "region"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "file"}}What's wrong with this file?{{else}}{{if eq $.CommentMode "area"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "text"}}What's wrong with this text?{{else}}What's wrong with these lines?{{end}}{{end}}{{end}}{{end}}" required lvt-autofocus lvt-on:input="saveDraft" lvt-mod:debounce="150">{{$.DraftBody}}</textarea>
   </form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions">
     <button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button>
     <button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button>
@@ -95,6 +99,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" /></svg>
 === iconHamburger ===
 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
+=== iconHistory14 ===
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
 === iconPalette ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round" /><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg>
 === iconRendered ===
@@ -134,7 +140,7 @@
 <link rel="stylesheet" href="/syntax.css">
 <link rel="stylesheet" href="/prereview.css">
 </head>
-<body data-lvt-loading-debounce-ms="200">
+<body data-lvt-loading-debounce-ms="200" data-lvt-heartbeat-ms="10000">
 
 <div class="theme-root" data-scheme="{{.DataScheme}}"{{with .DataMode}} data-mode="{{.}}"{{end}}>
 
@@ -146,8 +152,9 @@
   <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
   <span class="bar-actions"><form method="POST" style="margin:0">
       <button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button>
-    </form>{{if .StreamMode}}<form method="POST" style="margin:0">
-      <button type="submit" name="handOff" class="contrast" title="Send the current annotations to your agent as a handoff event (session stays open)">Hand off →</button>
+    </form>{{if .StreamMode}}
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Batching — annotations held, not sent. Resume to send the batch.{{else}}Live — each annotation is sent as you make it. Pause to batch them instead.{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{else}}⏸ Pause — batch{{end}}</button>
     </form><form method="POST" style="margin:0">
       <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
     </form>{{else}}{{if .SkillMode}}<form method="POST" style="margin:0">
@@ -336,17 +343,52 @@
     <button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
   </form>
   {{end}}
+  
+  {{if .StreamMode}}
+  <div class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+    <button type="button" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
+    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
+      
+      <form method="POST" class="queue-pause-form">
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}</button>
+      </form>
+      <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
+      {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      {{if .HasQueue}}
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      {{range .QueueItems}}
+      <div class="queue-row queue-{{.State}}">
+        <form method="POST" class="queue-jump-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
+            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
+            <span class="queue-body">{{.Body}}</span>
+            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
+          </button>
+        </form>{{if eq .State "done"}}
+        
+        <form method="POST" class="queue-reenqueue-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
+        </form>{{end}}
+      </div>
+      {{end}}
+      {{else}}
+      <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
+      {{end}}
+      
+      <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
+    </div>
+  </div>
+  {{else}}
   <form method="POST" class="tb-action">
-    {{if .StreamMode}}
-    <button type="submit" name="handOff" class="contrast" title="Send the current comments to your agent as a handoff event (session stays open)">Hand off →</button>
-    
-    <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast end-session-inline" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
-    {{else}}{{if .SkillMode}}
+    {{if .SkillMode}}
     <button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button>
     {{else}}
     <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
-    {{end}}{{end}}
+    {{end}}
   </form>
+  {{end}}
   
   <form method="POST" style="margin:0">
     <button type="submit" name="toggleMoreMenu" class="more-trigger" aria-label="More options" aria-haspopup="menu" aria-expanded="{{if .MoreMenuOpen}}true{{else}}false{{end}}">
@@ -363,6 +405,21 @@
 <div class="more-menu-backdrop{{if .MoreMenuOpen}} is-open{{end}}" lvt-on:click="closeMoreMenu" aria-hidden="true"></div>
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
+  
+  {{if gt (len .Files) 1}}
+  <form method="POST">
+    <button type="submit" name="prevFile" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconChevronLeft"}}</span>
+      <span class="menu-label">Previous file</span>
+    </button>
+  </form>
+  <form method="POST">
+    <button type="submit" name="nextFile" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconChevronRight"}}</span>
+      <span class="menu-label">Next file</span>
+    </button>
+  </form>
+  {{end}}
   
   <form method="POST">
     <button type="submit" name="cycleScheme" class="menu-item" role="menuitem">
@@ -485,15 +542,7 @@
   {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
   <div class="menu-info" style="border-bottom: 0; margin-bottom: 0; font-style: italic;">No comments yet — tap a line to add one.</div>
   {{end}}
-  {{if .StreamMode}}
   
-  <form method="POST">
-    <button type="button" command="show-modal" commandfor="confirm-end-session" class="menu-item" role="menuitem">
-      <span class="menu-icon">{{template "iconStop"}}</span>
-      <span class="menu-label">End session</span>
-    </button>
-  </form>
-  {{end}}
   
   <form method="POST">
     <button type="submit" name="toggleKeyboardHelp" class="menu-item" role="menuitem">
@@ -665,12 +714,43 @@
   <header class="file-head">
     <span class="file-head-name"><strong>{{.Path}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
     
-    {{if ne $.CommentMode "file"}}
+    <span class="file-head-actions">
+    
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
     <form method="POST" class="file-head-comment">
       <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
     {{end}}
+    
+    {{if $.Versions}}
+    <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="versions-trigger" aria-haspopup="menu" title="Versions of this file — view or roll back to a previous version">{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
+      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
+        {{range $.Versions}}
+        <div class="version-row{{if .Viewing}} viewing{{end}}">
+          <span class="version-meta">
+            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
+            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
+          </span>
+          <span class="version-actions">
+            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
+            {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
+            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+          </span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    </span>
   </header>
+  {{if $.ViewingVersion}}
+  
+  <div class="version-view-banner" role="status">
+    <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
+  </div>
+  {{end}}
   
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
@@ -753,10 +833,20 @@
 </div>
 {{end}}
 {{if .PendingRefresh}}
+
 <div class="reanchor-prompt refresh-prompt" role="status">
-  <span>✓ Changes applied — refresh to see the agent's edits.</span>
+  <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
   <form method="POST" class="toast-dismiss-form">
     <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
+  </form>
+</div>
+{{end}}
+{{if .AgentPaused}}
+
+<div class="reanchor-prompt paused-prompt" role="status">
+  <span>⏸ Batching — comments are held, not sent to the agent yet.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="resumeAgent" class="refresh-btn">Resume — send batch</button>
   </form>
 </div>
 {{end}}

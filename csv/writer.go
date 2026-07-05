@@ -48,6 +48,12 @@ type Row struct {
 	// comment (issue #88) stays out of the view even when "Show resolved" is on.
 	// The main package owns the semantics; the skill ignores this column.
 	Hidden bool
+	// Draft is the not-yet-enqueued flag (#119). It persists INVERTED as the
+	// `enqueued` column (enqueued == !Draft): the default (false) means enqueued/
+	// active, so a comment saved without touching this field is queued for the
+	// agent — "save auto-enqueues". A draft (true) is kept out of the actionable
+	// snapshot until the reviewer enqueues it.
+	Draft bool
 }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
@@ -148,6 +154,11 @@ func rowToRecord(r Row) []string {
 	if r.Hidden {
 		hidden = "true"
 	}
+	// Persist inverted: enqueued == !Draft (default Draft=false ⇒ "true").
+	enqueued := "true"
+	if r.Draft {
+		enqueued = "false"
+	}
 	return []string{
 		r.ID,
 		r.File,
@@ -165,5 +176,6 @@ func rowToRecord(r Row) []string {
 		strconv.Itoa(r.FromCol),
 		strconv.Itoa(r.ToCol),
 		hidden,
+		enqueued,
 	}
 }

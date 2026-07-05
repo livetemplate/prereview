@@ -962,6 +962,142 @@ header.bar button[name="endSession"]:focus-visible {
   padding: 0.05rem 0.4rem; background: var(--pico-card-sectioning-background-color);
   border-radius: 999px;
 }
+
+/* Versions panel (#90) — the per-file timeline dropdown reuses .tb-dropdown chrome;
+   each row is a label + view/restore actions. The TRIGGER is a compact chip that
+   matches the "Comment on file" button so the sticky file-head stays one thin row
+   (NOT the oversized Pico .contrast button it used to inherit). */
+.versions-trigger {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin: 0; padding: 0.2rem 0.55rem; min-height: 0;
+  font-size: 0.8rem; font-weight: 500; white-space: nowrap;
+  background: var(--soft-bg); color: var(--pico-h1-color);
+  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
+}
+.versions-trigger:hover, .versions-trigger:focus-visible {
+  background: var(--soft-bg-hover); border-color: var(--accent);
+}
+.versions-trigger svg { display: block; color: var(--pico-muted-color); }
+.versions-count {
+  font-size: 0.72rem; font-weight: 700; color: var(--pico-h1-color);
+  padding: 0.02rem 0.32rem; background: var(--pico-card-sectioning-background-color);
+  border-radius: 999px;
+}
+/* Group the file-head's right-side actions on one line. */
+header.file-head .file-head-actions {
+  display: inline-flex; align-items: center; gap: 0.4rem; flex-shrink: 0;
+}
+.versions-panel { min-width: 17rem; padding: 0.3rem; }
+.version-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.4rem 0.5rem; border-radius: 5px;
+}
+.version-row + .version-row { border-top: 1px solid var(--pico-card-sectioning-background-color); }
+.version-row.viewing { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.version-meta { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.version-label { font-size: 0.85rem; font-weight: 600; color: var(--pico-h1-color); }
+.version-when { font-size: 0.72rem; color: var(--pico-muted-color); }
+.version-actions { display: flex; gap: 0.35rem; flex: 0 0 auto; }
+.version-btn {
+  margin: 0; padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; min-height: 0;
+  border-radius: 4px; cursor: pointer;
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-h1-color);
+  border: 1px solid var(--pico-muted-border-color);
+}
+.version-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.version-btn:disabled { opacity: 0.5; cursor: default; }
+.version-restore { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 45%, transparent); }
+.version-restore:hover:not(:disabled) { background: color-mix(in srgb, var(--pr-del) 14%, transparent); }
+/* Read-only banner while viewing a historical version. */
+.version-view-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.4rem 0.75rem; margin: 0.4rem 0;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 6px; font-size: 0.85rem;
+}
+.paused-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
+/* Pause/resume toggle (#119): the paused state is visually distinct so it's
+   obvious the agent is held. Used by the --external bar's inline Pause button
+   (repo-mode's Pause moved into the Queue dropdown as .queue-pause-btn). */
+.tb-pause.is-paused {
+  background: color-mix(in srgb, var(--pr-del) 22%, var(--soft-bg));
+  border-color: color-mix(in srgb, var(--pr-del) 50%, transparent);
+}
+
+/* Work-queue panel (#119): the toolbar Queue chip + its dropdown of rows. */
+.queue-counts { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0 0.15rem 0 0.35rem; font-size: 0.78rem; }
+.q-num { font-weight: 700; }
+.q-queued { color: var(--accent); }
+.q-done { color: var(--pr-add); }
+.q-draft { color: var(--pico-muted-color); }
+/* Keep the whole chip (label · counts · chevron) on one line — it was wrapping
+   the chevron to a second row on a narrow bar. */
+.queue-trigger { display: inline-flex; align-items: center; white-space: nowrap; flex: 0 0 auto; }
+.queue-trigger.is-working { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+/* The Queue chip sits on the RIGHT of the bar (after the flex:1 title), so its
+   panel opens right-aligned (the shared .tb-dropdown-panel default) — over the
+   content area, clear of the file drawer. */
+.queue-panel { min-width: 22rem; max-width: min(30rem, calc(100vw - 1rem)); padding: 0.3rem; }
+/* End session at the bottom of the queue panel — a full-width, quiet terminator. */
+.queue-end-btn {
+  display: block; width: 100%; margin: 0.3rem 0 0; padding: 0.4rem 0.6rem; min-height: 0;
+  font-size: 0.82rem; font-weight: 500; text-align: center; cursor: pointer;
+  border-radius: 5px; border: 1px solid var(--pico-muted-border-color);
+  background: none; color: var(--pico-muted-color);
+}
+.queue-end-btn:hover { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 45%, transparent); }
+/* One-line explainer under the Pause toggle: which send-mode you're in (#119).
+   Live vs Batching — the button says the action, this says the state. */
+.queue-mode { padding: 0 0.5rem 0.35rem; font-size: 0.73rem; line-height: 1.3; color: var(--pico-muted-color); }
+.queue-mode.is-batching { color: color-mix(in srgb, var(--pr-del) 70%, var(--pico-muted-color)); }
+/* Pause/resume toggle at the top of the queue panel (merged in — it gates the
+   queue). Full-width; the paused state is red so it reads as "held". */
+.queue-pause-form { margin: 0 0 0.15rem; }
+.queue-pause-btn {
+  display: block; width: 100%; margin: 0; padding: 0.45rem 0.6rem; min-height: 0;
+  font-size: 0.85rem; font-weight: 600; text-align: center; cursor: pointer;
+  border-radius: 5px; border: 1px solid var(--pico-muted-border-color);
+  background: var(--soft-bg); color: var(--pico-h1-color);
+}
+.queue-pause-btn:hover { background: var(--soft-bg-hover); border-color: var(--accent); }
+.queue-pause-btn.is-paused {
+  background: color-mix(in srgb, var(--pr-del) 20%, var(--soft-bg));
+  border-color: color-mix(in srgb, var(--pr-del) 50%, transparent);
+}
+/* Paused indicator on the trigger so you know at a glance without opening it. */
+.queue-paused-dot { margin-right: 0.2rem; }
+.queue-trigger.is-paused { border-color: color-mix(in srgb, var(--pr-del) 55%, transparent); }
+.queue-empty { padding: 0.5rem; font-size: 0.8rem; color: var(--pico-muted-color); }
+.queue-working { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
+.queue-legend { padding: 0.25rem 0.5rem 0.4rem; font-size: 0.75rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-card-sectioning-background-color); margin-bottom: 0.2rem; }
+.queue-row { margin: 0; display: flex; align-items: center; gap: 0.15rem; }
+.queue-jump-form { margin: 0; flex: 1 1 auto; min-width: 0; }
+.queue-reenqueue-form { margin: 0; flex: 0 0 auto; }
+.queue-reenqueue {
+  margin: 0; padding: 0.2rem 0.45rem; min-height: 0; font-size: 1rem; line-height: 1;
+  background: none; border: 1px solid var(--pico-muted-border-color); border-radius: 5px;
+  color: var(--pico-muted-color); cursor: pointer;
+}
+.queue-reenqueue:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.queue-item {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%;
+  margin: 0; padding: 0.4rem 0.5rem; min-height: 0;
+  background: none; border: 0; border-radius: 5px;
+  color: var(--pico-h1-color); font-size: 0.82rem; text-align: left; cursor: pointer;
+}
+.queue-item:hover, .queue-item:focus { background: var(--pico-card-sectioning-background-color); }
+.queue-badge {
+  flex: 0 0 auto; font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;
+  padding: 0.08rem 0.4rem; border-radius: 999px;
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color);
+}
+.queue-badge-queued { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.queue-badge-done { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
+.queue-badge-draft { background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color); }
+.queue-body { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-loc { flex: 0 0 auto; font-size: 0.7rem; color: var(--pico-muted-color); font-family: var(--font-mono, monospace); }
 /* Active toggle items (Focus on, Show-resolved on) tint like the mobile menu's
    .is-on so an engaged state is visible in the dropdown too. */
 .tb-dropdown-panel button.menu-item.is-on .menu-icon,
@@ -1423,6 +1559,7 @@ header.file-head .file-head-comment button:focus-visible {
 }
 header.file-head .file-head-comment button svg { display: block; }
 .file-head-comment-label { display: none; }
+.versions-trigger-label { display: none; }
 
 /* Diff viewer container — was <pre> but that preserves whitespace which
    made every template-loop newline a visible blank line. Now a <div>
@@ -2080,10 +2217,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   /* On a phone the open drawer slides over the live site rather than pushing
      it below the fold. */
   .ext-sidebar.is-open { position: fixed; inset: 0 0 0 auto; width: min(88vw, 360px); z-index: 50; background: var(--pico-background-color, #fff); border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); box-shadow: -8px 0 24px rgba(0,0,0,0.18); }
-  /* Stream mode adds a second top-bar action (End session). Two contrast
-     buttons overflow the narrow bar and wrap, so on mobile keep only
-     "Hand off →" inline and surface End session in the ⋮ overflow menu. */
-  header.bar .tb-action .end-session-inline { display: none; }
+  /* Mobile declutter (#119): the continuous-enqueue toolbar had too many chips
+     and wrapped to two rows. Keep the bar to ☰ 🔍 Queue ⋮ — pause/resume and
+     end-session now live inside the Queue dropdown; prev/next move to the ⋮
+     overflow menu; drop the redundant filename (it's in the sticky .file-head
+     right below). */
+  header.bar .nav-prev,
+  header.bar .nav-next,
+  header.bar .title-file { display: none; }
   /* The external bar has no overflow menu — keep its actions compact so
      💬 + Hand off + End session fit on one row. */
   .bar-external .bar-actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
@@ -2132,6 +2273,13 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    distinct, positive state next to resolved (green) / moved / outdated (red). */
 .inline-comment .processed-badge, .all-comments .processed-badge {
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+/* Draft badge (#119): a held, not-yet-enqueued comment. Muted so it reads as
+   "parked" rather than active. */
+.inline-comment .draft-badge, .all-comments .draft-badge {
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color);
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
 }
@@ -2408,6 +2556,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   main.viewer > article > header.file-head small { font-size: 0.85rem; }
   /* Desktop has room for the "Comment on file" text label; mobile stays icon-only. */
   .file-head-comment-label { display: inline; }
+  .versions-trigger-label { display: inline; }
   /* The filename already headlines the diff (.file-head) and the
      all-comments view (.ac-head). Showing it again in the top bar is
      pure duplication on desktop — drop just the filename, keep the

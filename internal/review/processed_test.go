@@ -16,13 +16,14 @@ func writeProcessed(t *testing.T, path, content string) {
 	}
 }
 
-// TestLoadProcessedIDs covers the tolerance contract: a missing file is empty,
-// blank/torn lines are skipped, valid marks (even duplicated) collapse to a set.
-func TestLoadProcessedIDs(t *testing.T) {
+// TestLoadMarkCounts covers the tolerance contract: a missing file is empty,
+// blank/torn lines are skipped, valid marks are COUNTED per id (a duplicate
+// increments — the re-enqueue math depends on the count, not a set).
+func TestLoadMarkCounts(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ProcessedFileName)
 
-	if got := loadProcessedIDs(path); len(got) != 0 {
+	if got := loadMarkCounts(path); len(got) != 0 {
 		t.Fatalf("missing file: want empty, got %v", got)
 	}
 
@@ -31,12 +32,12 @@ func TestLoadProcessedIDs(t *testing.T) {
 		"\n"+ // blank line — skip
 		`{"id":"b"}`+"\n"+
 		`{not json`+"\n"+ // torn line — skip, next is fine
-		`{"id":"a"}`+"\n"+ // duplicate — collapses
+		`{"id":"a"}`+"\n"+ // duplicate — counted
 		`{"at":"2026-07-02T10:00:00Z"}`+"\n") // no id — skip
 
-	got := loadProcessedIDs(path)
-	if len(got) != 2 || !got["a"] || !got["b"] {
-		t.Fatalf("want {a,b}, got %v", got)
+	got := loadMarkCounts(path)
+	if got["a"] != 2 || got["b"] != 1 {
+		t.Fatalf("want a=2 b=1, got %v", got)
 	}
 }
 

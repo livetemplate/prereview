@@ -79,6 +79,10 @@
       {{- else}}What's wrong with these lines?{{end}}"
       required
       lvt-autofocus
+      {{- /* Autosave to DraftBody as you type (debounced) so unsaved text is
+             materialized as a draft when you navigate away without Save (#105). */}}
+      lvt-on:input="saveDraft"
+      lvt-mod:debounce="150"
     >{{$.DraftBody}}</textarea>
   </form>
   {{- /* cancel-form target */ -}}
@@ -255,6 +259,7 @@
     {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
     {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
     {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
+    {{- if .Draft}} · <small class="draft-badge">draft</small>{{end}}
     {{- if .Processed}} · <small class="processed-badge">worked on</small>{{end -}}
   </span></header>
   {{- /* selected phrase (kind=text) — shows what the comment is about, esp. for
@@ -275,6 +280,17 @@
         class="outline"
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
+    {{- /* Draft ↔ queued toggle (#119) — stream mode only, open comments only. */ -}}
+    {{- if and $.StreamMode (not .Resolved) (not .AnchorOutdated) -}}
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      {{- if .Draft}}
+      <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Enqueue for the agent">Enqueue</button>
+      {{- else}}
+      <button type="submit" name="moveToDraft" class="outline" title="Hold back as a draft — the agent won't see it until you enqueue">Draft</button>
+      {{- end}}
+    </form>
+    {{- end}}
     {{- if .Resolved -}}
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
@@ -391,7 +407,7 @@
   lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}
 >
   {{- /* line span · resolved badge */ -}}
-  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header>
+  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header>
   {{- /* comment text */ -}}
   <div class="body">{{.Body}}</div>
   {{- /* resolve / edit / delete */ -}}

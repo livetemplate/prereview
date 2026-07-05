@@ -2,10 +2,12 @@ package review
 
 import (
 	"fmt"
-	"github.com/livetemplate/livetemplate"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/livetemplate/livetemplate"
 )
 
 // SaveDraft updates DraftBody as the user types. Bound to the textarea's
@@ -15,10 +17,48 @@ func (c *PrereviewController) SaveDraft(state PrereviewState, ctx *livetemplate.
 	return state, nil
 }
 
+// materializeDraft turns the composer's in-progress text into a DRAFT comment
+// instead of discarding it, so navigating away (switching files, jumping to a
+// comment) WITHOUT clicking Save doesn't lose the note (#105/#119). It reuses the
+// normal add path (any kind) then flips the new comment to Draft. A no-op when
+// there's no pending text, when editing/re-anchoring an existing comment, or when
+// the add can't anchor. The materialized draft is enqueue-able / deletable from
+// its card; explicit Cancel (clearSelection) still discards.
+//
+// Called at the START of the composer-abandon navigation actions — NOT from
+// clearSelection (Cancel/Esc), which the reviewer chose to keep as "discard".
+func (c *PrereviewController) materializeDraft(state PrereviewState) PrereviewState {
+	if state.EditingCommentID != "" || state.ReanchorCommentID != "" {
+		return state // editing an existing comment — abandoning reverts, doesn't draft
+	}
+	body := strings.TrimSpace(state.DraftBody)
+	if body == "" {
+		return state
+	}
+	before := len(state.Comments)
+	st, err := c.addCommentBody(state, body)
+	if err != nil || len(st.Comments) <= before {
+		return state // couldn't anchor (no live selection) — leave the composer as-is
+	}
+	st.Comments[len(st.Comments)-1].Draft = true
+	if perr := c.persist(st.Comments); perr != nil {
+		slog.Warn("materialize draft", "err", perr)
+		return state
+	}
+	return st
+}
+
 // AddComment validates body+selection, appends a Comment, writes the CSV
-// atomically, and clears selection + draft for the next round.
+// atomically, and clears selection + draft for the next round. Save enqueues
+// (the comment is actionable); the draft path is materializeDraft.
 func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	body := strings.TrimSpace(ctx.GetString("body"))
+	return c.addCommentBody(state, strings.TrimSpace(ctx.GetString("body")))
+}
+
+// addCommentBody is AddComment's core, parameterized on the body so
+// materializeDraft can reuse the full kind-dispatch with the autosaved DraftBody
+// instead of a form value.
+func (c *PrereviewController) addCommentBody(state PrereviewState, body string) (PrereviewState, error) {
 	if body == "" {
 		return state, fmt.Errorf("comment body cannot be empty")
 	}
@@ -545,6 +585,55 @@ func (c *PrereviewController) ToggleResolved(state PrereviewState, ctx *livetemp
 		return state, fmt.Errorf("persist after toggle resolved: %w", err)
 	}
 	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
+// setCommentDraft flips a comment's Draft flag by id and persists, rolling back
+// on a write error so disk and memory stay in sync. Shared by EnqueueComment
+// (draft→queued) and MoveToDraft (queued→draft) — the two moves in the draft
+// lifecycle (#119).
+func (c *PrereviewController) setCommentDraft(state PrereviewState, id string, draft bool) (PrereviewState, error) {
+	if id == "" {
+		return state, fmt.Errorf("setCommentDraft: missing id")
+	}
+	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
+	if idx < 0 {
+		return state, fmt.Errorf("setCommentDraft: id %s not found", id)
+	}
+	if state.Comments[idx].Draft == draft {
+		return state, nil // already in the requested state
+	}
+	prev := state.Comments[idx].Draft
+	state.Comments[idx].Draft = draft
+	if err := c.persist(state.Comments); err != nil {
+		state.Comments[idx].Draft = prev
+		return state, fmt.Errorf("persist after draft toggle: %w", err)
+	}
+	state.LastDeletedComment = nil
+	state.LastSaved = time.Now().Format("15:04:05")
+	return state, nil
+}
+
+// EnqueueComment moves a draft comment into the queue (Draft=false) so the agent
+// will act on it. Bound to the per-card "Enqueue" action.
+func (c *PrereviewController) EnqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.setCommentDraft(state, ctx.GetString("id"), false)
+}
+
+// MoveToDraft pulls a queued comment back to a draft (Draft=true) so it's held
+// out of the agent's snapshot while the reviewer keeps working on it.
+func (c *PrereviewController) MoveToDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.setCommentDraft(state, ctx.GetString("id"), true)
+}
+
+// ReenqueueComment moves a "done" comment back to "queued" (#119): the agent
+// marked it worked-on but the reviewer wants it redone. Records an un-processed
+// tombstone so the comment leaves the done bucket and re-arms the snapshot.
+func (c *PrereviewController) ReenqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if err := c.reenqueueComment(&state, ctx.GetString("id")); err != nil {
+		return state, err
+	}
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
 }
