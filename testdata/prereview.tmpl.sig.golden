@@ -140,7 +140,7 @@
 <link rel="stylesheet" href="/syntax.css">
 <link rel="stylesheet" href="/prereview.css">
 </head>
-<body data-lvt-loading-debounce-ms="200">
+<body data-lvt-loading-debounce-ms="200" data-lvt-heartbeat-ms="10000">
 
 <div class="theme-root" data-scheme="{{.DataScheme}}"{{with .DataMode}} data-mode="{{.}}"{{end}}>
 
