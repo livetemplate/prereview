@@ -1097,7 +1097,16 @@ header.file-head .file-head-actions {
 .queue-badge-done { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
 .queue-badge-draft { background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color); }
 .queue-body { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.queue-loc { flex: 0 0 auto; font-size: 0.7rem; color: var(--pico-muted-color); font-family: var(--font-mono, monospace); }
+/* Location is a secondary hint, so let it SHRINK (flex-shrink 1) and ellipsize
+   rather than force the row — and thus the whole panel — wider than its
+   container. Without this a long path (e.g. a deep dir) balloons the queue panel
+   past a phone viewport. The row's button carries the full ref; a `title` on the
+   span surfaces it on hover/long-press when truncated. */
+.queue-loc {
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.7rem; color: var(--pico-muted-color); font-family: var(--font-mono, monospace);
+}
 /* Active toggle items (Focus on, Show-resolved on) tint like the mobile menu's
    .is-on so an engaged state is visible in the dropdown too. */
 .tb-dropdown-panel button.menu-item.is-on .menu-icon,
@@ -2228,6 +2237,22 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   /* The external bar has no overflow menu — keep its actions compact so
      💬 + Hand off + End session fit on one row. */
   .bar-external .bar-actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+  /* Queue panel on mobile: the shared .tb-dropdown-panel anchors right:0 to its
+     trigger, but the Queue chip is inset from the viewport's right edge by the ⋮
+     overflow button — so a 22rem panel pushed its left edge off-screen, where
+     body{overflow-x:hidden} clipped it ("Queued"→"eued"). Pin it to the VIEWPORT
+     like .more-menu (fixed, both margins) so it's always fully on-screen
+     regardless of the inset; cap the height so a long queue scrolls in place
+     rather than running off the bottom of a fixed box. */
+  .queue-panel {
+    position: fixed; top: calc(var(--pr-bar-h) + 0.25rem);
+    left: 0.5rem; right: 0.5rem;
+    /* width:auto (not the base's max-content) so left+right actually size it to
+       the viewport; else the over-constrained max-content width wins and `right`
+       is dropped, letting a long queue-row location balloon it off the RIGHT. */
+    width: auto; min-width: 0; max-width: none;
+    max-height: calc(100dvh - var(--pr-bar-h) - 1rem); overflow-y: auto;
+  }
 }
 /* Resolved comments stay visible but muted, with a clear badge. The skill
    reads the CSV `resolved` column and skips these — UI just signals the
