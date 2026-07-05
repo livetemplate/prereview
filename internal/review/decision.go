@@ -7,6 +7,7 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -45,8 +46,33 @@ type SuggestionDecision struct {
 	SuggestionID string    `json:"suggestion_id"`
 	Verdict      string    `json:"verdict"` // accept | reject | revise
 	Note         string    `json:"note,omitempty"`
-	Fingerprint  string    `json:"fingerprint"` // of the suggestion content decided on
-	Created      time.Time `json:"created"`
+	// Auto marks a reject that was a SIDE EFFECT of accepting another alternative
+	// in the same group (#117), as opposed to a reject the reviewer clicked. It
+	// lets ClearSuggestionDecision re-open the whole group when the accept is
+	// undone (radio-button semantics). Invisible to the LLM — a reject is a reject.
+	Auto        bool      `json:"auto,omitempty"`
+	Fingerprint string    `json:"fingerprint"` // of the suggestion content decided on
+	Created     time.Time `json:"created"`
+}
+
+// newDecision builds a decision stamped with the suggestion's current content
+// fingerprint (so it auto-invalidates if the suggestion later changes) + time.
+func newDecision(sg Suggestion, verdict, note string, auto bool) SuggestionDecision {
+	return SuggestionDecision{
+		SuggestionID: sg.ID,
+		Verdict:      verdict,
+		Note:         note,
+		Auto:         auto,
+		Fingerprint:  suggestionFingerprint(sg),
+		Created:      time.Now().UTC(),
+	}
+}
+
+// upsertDecision returns list with any existing decision for d.SuggestionID
+// replaced by d (last-write-wins for one id), keeping the rest.
+func upsertDecision(list []SuggestionDecision, d SuggestionDecision) []SuggestionDecision {
+	list = slices.DeleteFunc(list, func(x SuggestionDecision) bool { return x.SuggestionID == d.SuggestionID })
+	return append(list, d)
 }
 
 // suggestionFingerprint hashes the decided content (Original + Proposed) so a

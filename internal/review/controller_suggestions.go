@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/livetemplate/livetemplate"
 )
@@ -28,41 +27,54 @@ func (s *PrereviewState) findSuggestion(id string) *Suggestion {
 	return nil
 }
 
-// setDecision upserts a verdict for a suggestion, stamping the current content
-// fingerprint, then persists. On a write error it rolls the in-memory slice back
-// so disk and memory never diverge. A missing suggestion (raced away) is a no-op.
+// commitDecisions sets state.Decisions to next and persists it in ONE atomic
+// write, so a grouped accept (accept + N sibling auto-rejects) or a group re-open
+// is a single write / emit / rollback — never a half-decided group on disk. #119:
+// a decision change re-arms the snapshot emit.
+func (c *PrereviewController) commitDecisions(state *PrereviewState, next []SuggestionDecision) {
+	prev := state.Decisions
+	state.Decisions = next
+	if err := writeDecisions(c.decisionsPath(), next); err != nil {
+		state.Decisions = prev // rollback
+		slog.Warn("persist decisions", "err", err)
+		return
+	}
+	c.scheduleEmit()
+}
+
+// setDecision upserts a single verdict for a suggestion (reject / revise). A
+// missing suggestion (raced away) is a no-op.
 func (c *PrereviewController) setDecision(state *PrereviewState, id, verdict, note string) {
 	sg := state.findSuggestion(id)
 	if sg == nil {
 		slog.Warn("decision on unknown suggestion", "id", id, "verdict", verdict)
 		return
 	}
-	prev := state.Decisions
-	// Clone first so the rollback below can restore prev untouched: DeleteFunc
-	// drops any existing verdict for this id (upsert), keeping other suggestions'.
-	next := slices.DeleteFunc(slices.Clone(prev), func(d SuggestionDecision) bool {
-		return d.SuggestionID == id
-	})
-	next = append(next, SuggestionDecision{
-		SuggestionID: id,
-		Verdict:      verdict,
-		Note:         note,
-		Fingerprint:  suggestionFingerprint(*sg),
-		Created:      time.Now().UTC(),
-	})
-	state.Decisions = next
-	if err := writeDecisions(c.decisionsPath(), next); err != nil {
-		state.Decisions = prev // rollback
-		slog.Warn("persist decision", "id", id, "verdict", verdict, "err", err)
-	} else {
-		c.scheduleEmit() // #119: a decision change re-arms the snapshot emit
-	}
+	c.commitDecisions(state, upsertDecision(slices.Clone(state.Decisions), newDecision(*sg, verdict, note, false)))
 }
 
-// AcceptSuggestion records an "accept" verdict.
+// AcceptSuggestion records an "accept" AND auto-rejects every OTHER suggestion in
+// the same artifact-area group (#117): alternatives for the same text are mutually
+// exclusive, like a radio button, so the reviewer no longer rejects the rest by
+// hand. The sibling rejects override whatever verdict they had and are marked Auto
+// (so clearing the accept re-opens the group — see ClearSuggestionDecision). All
+// batched into one persist.
 func (c *PrereviewController) AcceptSuggestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RevisingSuggestionID = ""
-	c.setDecision(&state, ctx.GetString("id"), verdictAccept, "")
+	id := ctx.GetString("id")
+	sg := state.findSuggestion(id)
+	if sg == nil {
+		slog.Warn("accept on unknown suggestion", "id", id)
+		return state, nil
+	}
+	next := upsertDecision(slices.Clone(state.Decisions), newDecision(*sg, verdictAccept, "", false))
+	key := sg.groupKey()
+	for i := range state.Suggestions {
+		if other := state.Suggestions[i]; other.ID != id && other.groupKey() == key {
+			next = upsertDecision(next, newDecision(other, verdictReject, "", true))
+		}
+	}
+	c.commitDecisions(&state, next)
 	return state, nil
 }
 
@@ -124,23 +136,38 @@ func (c *PrereviewController) CancelRevision(state PrereviewState, ctx *livetemp
 }
 
 // ClearSuggestionDecision removes a recorded decision (undo), returning the
-// suggestion to undecided. Persist + rollback like setDecision.
+// suggestion to undecided. If the cleared decision was an ACCEPT, the whole group
+// it auto-rejected re-opens too (#117): clear every Auto reject on a sibling in
+// the same group, so undoing the accept restores the group to undecided rather
+// than leaving it permanently all-rejected. Batched into one persist.
 func (c *PrereviewController) ClearSuggestionDecision(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	id := ctx.GetString("id")
-	prev := state.Decisions
-	// Clone so the rollback restores prev untouched (DeleteFunc mutates in place).
-	next := slices.DeleteFunc(slices.Clone(prev), func(d SuggestionDecision) bool {
-		return d.SuggestionID == id
-	})
-	if len(next) == len(prev) {
+	var cleared *SuggestionDecision
+	for i := range state.Decisions {
+		if state.Decisions[i].SuggestionID == id {
+			cleared = &state.Decisions[i]
+			break
+		}
+	}
+	if cleared == nil {
 		return state, nil // nothing to clear
 	}
-	state.Decisions = next
-	if err := writeDecisions(c.decisionsPath(), next); err != nil {
-		state.Decisions = prev // rollback
-		slog.Warn("clear decision", "id", id, "err", err)
-	} else {
-		c.scheduleEmit() // #119: clearing a decision re-arms the snapshot emit
+	next := slices.DeleteFunc(slices.Clone(state.Decisions), func(d SuggestionDecision) bool {
+		return d.SuggestionID == id
+	})
+	// Re-open the group the accept had auto-rejected.
+	if cleared.Verdict == verdictAccept {
+		if sg := state.findSuggestion(id); sg != nil {
+			key := sg.groupKey()
+			next = slices.DeleteFunc(next, func(d SuggestionDecision) bool {
+				if !d.Auto {
+					return false
+				}
+				sib := state.findSuggestion(d.SuggestionID)
+				return sib != nil && sib.groupKey() == key
+			})
+		}
 	}
+	c.commitDecisions(&state, next)
 	return state, nil
 }
