@@ -99,7 +99,9 @@ type Comment struct {
 	// The default (false) means enqueued/active — "save auto-enqueues" — so the
 	// five comment-creation paths need no change. Persisted INVERTED as the CSV
 	// `enqueued` column (enqueued == !Draft); legacy rows (no column) read as
-	// active. Toggled by SaveDraft / EnqueueComment / MoveToDraft.
+	// active. Set by materializeDraft (unsaved-text recovery); cleared by
+	// EnqueueComment. There is no manual "move to draft" — a comment only ever
+	// becomes a draft via unsaved-text recovery.
 	Draft bool `json:"draft"`
 	// Anchor is the content fingerprint captured at create/edit time so
 	// the comment can be re-located when the file changes (see anchor.go).

@@ -2129,6 +2129,26 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border-bottom: 1px dotted var(--pico-muted-border-color, #d9d9d9);
 }
 .file-comments .composer { margin-top: 0.5rem; }
+/* File-comment modal — a blocking, viewport-centered composer opened by `c` so it
+   never sits off-screen at a mid-page scroll. Backdrop is a sibling BEHIND the
+   card (mirrors .more-menu-backdrop) so a click on the card doesn't bubble to
+   close. */
+.fc-modal-backdrop {
+  position: fixed; inset: 0; z-index: 99;
+  background: color-mix(in srgb, var(--pico-color, #000) 45%, transparent);
+}
+.fc-modal {
+  position: fixed; z-index: 100;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(600px, calc(100vw - 2rem));
+  max-height: min(80vh, 40rem); overflow-y: auto;
+}
+/* Inside the modal the composer is a plain centered card, not the sticky
+   bottom-docked bar it is inline. */
+.fc-modal .composer {
+  position: static; margin: 0;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+}
 /* image-with-areas: positioning context for the .area-overlay
    rectangles. The wrapper is display:inline-block so it shrinks to
    the rendered image dimensions — overlays positioned in % then

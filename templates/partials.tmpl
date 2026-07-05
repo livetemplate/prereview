@@ -252,8 +252,11 @@
      {{- /* the targeted comment (just saved, or jumped to via n/p) scrolls into
             view AND takes focus, so after the composer closes the keyboard user
             lands on their comment instead of <body>. tabindex=-1 = programmatically
-            focusable, not in the Tab order. */ -}}
-     {{- if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}>
+            focusable, not in the Tab order. GATED on "no composer open" — else this
+            lvt-autofocus re-fires on every debounced saveDraft re-render and yanks
+            focus/scroll OUT of a composer you just opened (a prior comment stealing
+            focus while you type the next one). */ -}}
+     {{- if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}>
   {{- /* line span · side · status badges */ -}}
   <header><span>{{.LineSpan}} · <small>{{.Side}}</small>
     {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
@@ -280,15 +283,14 @@
         class="outline"
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
-    {{- /* Draft ↔ queued toggle (#119) — stream mode only, open comments only. */ -}}
-    {{- if and $.StreamMode (not .Resolved) (not .AnchorOutdated) -}}
+    {{- /* Re-enqueue a WORKED-ON comment (#119): put it back on the agent's queue to
+           redo. This is the only per-card queue action — a draft is enqueued simply
+           by saving it, and a plain queued comment is already on the queue. Stream
+           mode, open comments only. */ -}}
+    {{- if and $.StreamMode (not .Resolved) (not .AnchorOutdated) .Processed -}}
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
-      {{- if .Draft}}
-      <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Enqueue for the agent">Enqueue</button>
-      {{- else}}
-      <button type="submit" name="moveToDraft" class="outline" title="Hold back as a draft — the agent won't see it until you enqueue">Draft</button>
-      {{- end}}
+      <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Re-enqueue — ask the agent to redo this">Re-enqueue</button>
     </form>
     {{- end}}
     {{- if .Resolved -}}
@@ -403,7 +405,10 @@
 <div
   class="inline-comment{{if .Resolved}} is-resolved{{end}}"
   data-key="{{.ID}}"
-  lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}}
+  {{- /* GATED on "no composer open" (same reason as commentCardFull): don't let a
+         prior comment's lvt-autofocus steal focus/scroll from an open composer on
+         each saveDraft re-render. */ -}}
+  lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}}
   lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}
 >
   {{- /* line span · resolved badge */ -}}
