@@ -1204,22 +1204,8 @@ dialog#files-drawer .close-btn:hover { border-color: var(--pico-muted-border-col
    (HEAD, HEAD~1, main, abc1234, …). Lives right under .drawer-head so
    it's contextually near the file count it produces. The text input
    uses lvt-form:preserve so partial typing survives re-renders. */
-/* All-comments view-switch button. Sits at the top of the drawer so it
-   reads as a sibling of "the file list" (i.e. "instead of a file, look
-   at all comments") — semantically distinct from the toolbar's filter
-   checkboxes. Outline-style button (not contrast-filled) keeps it from
-   competing visually with Hand off / Quit, which remain the toolbar's
-   primary actions. */
-dialog#files-drawer .drawer-all-comments {
-  padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
-}
-dialog#files-drawer .drawer-all-comments form { margin: 0; }
-dialog#files-drawer .drawer-all-comments button {
-  width: 100%; margin: 0; padding: 0.45rem 0.6rem;
-  font-size: 0.9rem; min-height: 0; text-align: left;
-  display: inline-flex; align-items: center; gap: 0.4rem;
-}
-
+/* The all-comments view-switch button was removed from the drawer (#111) — the
+   sidebar is for files; the overview is reachable from the toolbar / `a`. */
 dialog#files-drawer .drawer-base {
   padding: 0.3rem 0.5rem 0.35rem; border-bottom: 1px solid var(--pico-muted-border-color);
   font-size: 0.75rem;

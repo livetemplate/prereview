@@ -1014,25 +1014,9 @@
       >{{template "iconClose16"}}</button>
     </form>
   </div>
-  {{/* View-change to the all-comments overview. Lives at the top of the
-       drawer so it's obviously a "switch what's in the viewer" action,
-       not a filter (which is the role checkboxes play in the toolbar).
-       When already in all-comments view, this button hides — the
-       view's own "Back" header button handles returning. */}}
-  {{if and (gt (len .Comments) 0) (not .ShowAllComments)}}
-  <div class="drawer-all-comments">
-    <form method="POST">
-      <button
-        type="submit"
-        name="toggleCommentList"
-        class="outline"
-        title="Open the all-comments overview"
-      >
-        💬 All comments ({{len .Comments}})
-      </button>
-    </form>
-  </div>
-  {{end}}
+  {{/* The all-comments overview button used to live here, but the sidebar is for
+       files (#111) — it's reachable from the toolbar "View ▾" dropdown, the mobile
+       ⋮ menu, and the `a` shortcut. */}}
   {{/* Base picker — native select so iOS renders the platform wheel
        (a text input opens the keyboard with autofill noise). Options
        come from state.BaseChoices: HEAD~N presets + every local and

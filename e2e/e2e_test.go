@@ -1739,8 +1739,14 @@ func TestE2E_AllCommentsView(t *testing.T) {
 		chromedp.SendKeys(`.composer textarea`, "first", chromedp.ByQuery),
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
-		// Open all-comments view via the pill.
-		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("add comment: %v\nstderr: %s", err, p.stderr.String())
+	}
+	// Open all-comments via the `a` shortcut (the sidebar button was removed in
+	// #111; `a` is the primary access path, robust to which toolbar dropdown holds
+	// the item).
+	if err := chromedp.Run(p.ctx,
+		chromedp.KeyEvent("a"),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("open all-comments: %v\nstderr: %s", err, p.stderr.String())
@@ -1831,11 +1837,11 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 		t.Fatalf("add comment beta: %v%s", err, diag())
 	}
 
-	// Open the all-comments view; assert each item carries the three
-	// new actions.
+	// Open the all-comments view (via the `a` shortcut — the sidebar button was
+	// removed in #111); assert each item carries the three new actions.
 	var items, withResolve, withEdit, withDelete int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.KeyEvent("a"),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item').length`, &items),
 		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item button[name="toggleResolved"]').length`, &withResolve),
