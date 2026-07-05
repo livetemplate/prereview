@@ -62,6 +62,17 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 	if body == "" {
 		return state, fmt.Errorf("comment body cannot be empty")
 	}
+	// Saving a comment enqueues it (#119): clear any Draft flag on the edited
+	// target so re-saving a recovered draft sends it to the agent — the reason
+	// drafts need no separate "enqueue" affordance. New comments already default
+	// Draft=false; a draft is only ever created by materializeDraft, which runs
+	// with EditingCommentID=="" so this is inert for it. Set before the kind
+	// dispatch below so it covers every comment kind (Comments is a shared slice).
+	if state.EditingCommentID != "" {
+		if idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == state.EditingCommentID }); idx >= 0 {
+			state.Comments[idx].Draft = false
+		}
+	}
 	// Region comments (--external mode) anchor to a URL, not a file — handle
 	// before the file guard below, which would otherwise reject them.
 	if state.CommentMode == commentKindRegion {
@@ -590,9 +601,9 @@ func (c *PrereviewController) ToggleResolved(state PrereviewState, ctx *livetemp
 }
 
 // setCommentDraft flips a comment's Draft flag by id and persists, rolling back
-// on a write error so disk and memory stay in sync. Shared by EnqueueComment
-// (draft→queued) and MoveToDraft (queued→draft) — the two moves in the draft
-// lifecycle (#119).
+// on a write error so disk and memory stay in sync. The only remaining move is
+// draft→queued (via the enqueue path); a draft is now created solely by
+// materializeDraft (unsaved-text recovery), never by a manual "move to draft" (#119).
 func (c *PrereviewController) setCommentDraft(state PrereviewState, id string, draft bool) (PrereviewState, error) {
 	if id == "" {
 		return state, fmt.Errorf("setCommentDraft: missing id")
@@ -615,27 +626,53 @@ func (c *PrereviewController) setCommentDraft(state PrereviewState, id string, d
 	return state, nil
 }
 
-// EnqueueComment moves a draft comment into the queue (Draft=false) so the agent
-// will act on it. Bound to the per-card "Enqueue" action.
-func (c *PrereviewController) EnqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	return c.setCommentDraft(state, ctx.GetString("id"), false)
-}
-
-// MoveToDraft pulls a queued comment back to a draft (Draft=true) so it's held
-// out of the agent's snapshot while the reviewer keeps working on it.
-func (c *PrereviewController) MoveToDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	return c.setCommentDraft(state, ctx.GetString("id"), true)
-}
-
-// ReenqueueComment moves a "done" comment back to "queued" (#119): the agent
-// marked it worked-on but the reviewer wants it redone. Records an un-processed
-// tombstone so the comment leaves the done bucket and re-arms the snapshot.
-func (c *PrereviewController) ReenqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	if err := c.reenqueueComment(&state, ctx.GetString("id")); err != nil {
+// enqueueForAgent (re)queues a comment so the agent will act on it — the single
+// path behind BOTH the per-card "Enqueue"/"Re-enqueue" button and the queue
+// panel's ↺. It does whatever it takes to land the comment in "queued":
+//   - clears the Draft flag (a held draft becomes active), and
+//   - if the agent already marked it worked-on, records a re-enqueue tombstone so
+//     it leaves the "done" bucket back to "queued".
+//
+// The earlier split was the bug (#126 follow-up): the card's "Enqueue" only
+// cleared Draft, so a worked-on comment toggled draft→enqueued fell through
+// QueueState's Draft>Processed>Queued ladder to "done" and was never re-queued.
+func (c *PrereviewController) enqueueForAgent(state PrereviewState, id string) (PrereviewState, error) {
+	if id == "" {
+		return state, fmt.Errorf("enqueue: missing id")
+	}
+	// Refresh derived Processed from disk so the re-enqueue decision is current.
+	c.applyProcessed(&state)
+	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
+	if idx < 0 {
+		return state, fmt.Errorf("enqueue: id %s not found", id)
+	}
+	processed := state.Comments[idx].Processed
+	// 1. Clear the draft flag (persists; a no-op if already enqueued).
+	state, err := c.setCommentDraft(state, id, false)
+	if err != nil {
 		return state, err
+	}
+	// 2. Un-mark a worked-on comment so it returns to "queued". GUARDED on
+	//    Processed: reenqueueComment appends one count-based tombstone, so doing it
+	//    on a never-processed comment would make its NEXT `prereview processed`
+	//    mark a no-op (pc==rc), silently losing the "worked on" badge forever.
+	if processed {
+		if err := c.reenqueueComment(&state, id); err != nil {
+			return state, err
+		}
 	}
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
+}
+
+// EnqueueComment is the per-card "Enqueue" / "Re-enqueue" action.
+func (c *PrereviewController) EnqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.enqueueForAgent(state, ctx.GetString("id"))
+}
+
+// ReenqueueComment is the queue-panel ↺ action — the same unified path.
+func (c *PrereviewController) ReenqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.enqueueForAgent(state, ctx.GetString("id"))
 }
 
 // HideComment individually re-hides a RESOLVED comment (issue #88): it stays out

@@ -1283,12 +1283,28 @@
        per-comment actions — no new endpoints. */}}
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
-  {{if or $fcs $acs (eq $.CommentMode "file") (eq $.CommentMode "area")}}
+  {{/* The file composer opens as a blocking modal (below), not inline here — a
+       mid-page scroll position used to leave it off-screen. Area mode keeps its
+       inline composer (it anchors to the image region). This section still lists
+       existing file/area comment cards. */}}
+  {{if or $fcs $acs (eq $.CommentMode "area")}}
   <section class="file-comments" data-key="file-comments-{{.Path}}">
     {{range $fcs}}{{template "commentCardSimple" .}}{{end}}
     {{range $acs}}{{template "commentCardSimple" .}}{{end}}
-    {{if or (eq $.CommentMode "file") (eq $.CommentMode "area")}}{{template "composer" $}}{{end}}
+    {{if eq $.CommentMode "area"}}{{template "composer" $}}{{end}}
   </section>
+  {{end}}
+  {{/* File-comment modal (#—): pressing `c` opens a blocking, viewport-centered
+       composer so it's reachable regardless of scroll position. Backdrop click /
+       Esc / Cancel / Save all close it (clearSelection resets CommentMode). The
+       backdrop is a sibling BEHIND the card (like .more-menu-backdrop) so a click
+       on the card doesn't bubble to close. Stable data-keys keep the textarea node
+       identity across the debounced saveDraft re-render (focus/cursor survive). */}}
+  {{if eq $.CommentMode "file"}}
+  <div class="fc-modal-backdrop" data-key="fc-modal-backdrop" lvt-on:click="clearSelection" aria-hidden="true"></div>
+  <div class="fc-modal" data-key="fc-modal" role="dialog" aria-modal="true" aria-label="Comment on file">
+    {{template "composer" $}}
+  </div>
   {{end}}
   {{if .IsBinary}}
   {{/* Binary files: now that the HTTP static fallback serves the bytes

@@ -3,14 +3,13 @@
 === blockSuggestions ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}
 === commentCardFull ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if and $.StreamMode (not .Resolved) (not .AnchorOutdated)}}<form method="POST">
-      <input type="hidden" name="id" value="{{.ID}}">{{if .Draft}}
-      <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Enqueue for the agent">Enqueue</button>{{else}}
-      <button type="submit" name="moveToDraft" class="outline" title="Hold back as a draft — the agent won't see it until you enqueue">Draft</button>{{end}}
+    </form>{{if and $.StreamMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Re-enqueue — ask the agent to redo this">Re-enqueue</button>
     </form>{{end}}{{if .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="hideComment" class="outline">Hide</button>
@@ -22,7 +21,7 @@
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialog" .}}</div></div>
 === commentCardSimple ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}"lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -754,12 +753,20 @@
   
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
-  {{if or $fcs $acs (eq $.CommentMode "file") (eq $.CommentMode "area")}}
+  
+  {{if or $fcs $acs (eq $.CommentMode "area")}}
   <section class="file-comments" data-key="file-comments-{{.Path}}">
     {{range $fcs}}{{template "commentCardSimple" .}}{{end}}
     {{range $acs}}{{template "commentCardSimple" .}}{{end}}
-    {{if or (eq $.CommentMode "file") (eq $.CommentMode "area")}}{{template "composer" $}}{{end}}
+    {{if eq $.CommentMode "area"}}{{template "composer" $}}{{end}}
   </section>
+  {{end}}
+  
+  {{if eq $.CommentMode "file"}}
+  <div class="fc-modal-backdrop" data-key="fc-modal-backdrop" lvt-on:click="clearSelection" aria-hidden="true"></div>
+  <div class="fc-modal" data-key="fc-modal" role="dialog" aria-modal="true" aria-label="Comment on file">
+    {{template "composer" $}}
+  </div>
   {{end}}
   {{if .IsBinary}}
   
