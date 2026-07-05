@@ -591,6 +591,19 @@
   }
 }
 
+/* The Pico `.contrast` button (the Queue chip, etc.) keeps a Pico-pinned DARK
+   background (#181c25) in EVERY mode — <html> is pinned data-theme="light" — so
+   its label must stay LIGHT. Pico's --pico-contrast-inverse defaults to
+   var(--surface): light in light mode, but it FLIPS dark in dark mode, so the
+   label goes invisible (#124 — the Queue button "disappeared"). The dark blocks
+   already flip --pico-primary-inverse per scheme; contrast-inverse was missed.
+   Force it light in dark mode — scheme-agnostic, because the button bg is too;
+   var(--text-strong) is each scheme's light heading color in the dark palette. */
+[data-scheme][data-mode="dark"] { --pico-contrast-inverse: var(--text-strong); }
+@media (prefers-color-scheme: dark) {
+  [data-scheme]:not([data-mode="light"]) { --pico-contrast-inverse: var(--text-strong); }
+}
+
 /* Self-hosted webfonts (offline over Tailscale/devbox). */
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/jetbrains-mono-regular.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/jetbrains-mono-bold.woff2") format("woff2"); }
