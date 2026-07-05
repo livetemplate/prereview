@@ -165,10 +165,12 @@ func addLineComment(t *testing.T, p *runningPrereview, oldNum, newNum int, body 
 	}
 }
 
-// TestE2E_StreamHandoff drives the real --stream binary through a browser:
-// two handoff rounds emit JSON events with incrementing seq, resolving a
-// comment prunes the next snapshot, the events also land in events.jsonl, and
-// End session emits the terminator and shuts the server down.
+// TestE2E_StreamHandoff drives the real --stream binary through a browser under
+// the continuous-enqueue model (#119): stream mode has NO Hand off button — every
+// comment mutation auto-emits a full-snapshot handoff event (debounced) with no
+// click. Adding two comments emits snapshots with strictly increasing seq,
+// resolving a comment prunes the next snapshot, the events also land in
+// events.jsonl, and End session emits the terminator and shuts the server down.
 func TestE2E_StreamHandoff(t *testing.T) {
 	p, stdoutBuf, waitCh := bootChromeStream(t)
 
@@ -188,14 +190,9 @@ func TestE2E_StreamHandoff(t *testing.T) {
 	p.waitReady()
 	p.clickFile("edited.go")
 
-	// Round 1: one comment → Hand off → a handoff event carrying it.
+	// Round 1: one comment → its persist auto-emits a snapshot carrying it (no
+	// button click — continuous enqueue replaced the Hand off button in #119).
 	addLineComment(t, p, 3, 3, "first round note")
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.toast`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("round 1 hand off: %v%s", err, diag())
-	}
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		h := handoffEvents(evs)
 		if len(h) < 1 {
@@ -203,29 +200,21 @@ func TestE2E_StreamHandoff(t *testing.T) {
 		}
 		c := h[len(h)-1].CommentList()
 		return len(c) == 1 && strings.Contains(c[0].Body, "first round")
-	}, "round 1 handoff event with the comment", diag)
+	}, "round 1 auto-emitted snapshot with the comment", diag)
 
-	// Round 2: a second comment → Hand off → a handoff snapshot of BOTH.
+	// Round 2: a second comment → the next snapshot is a FULL snapshot of BOTH.
 	addLineComment(t, p, 0, 4, "second round note")
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
-		chromedp.Sleep(150*time.Millisecond),
-	); err != nil {
-		t.Fatalf("round 2 hand off: %v%s", err, diag())
-	}
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		h := handoffEvents(evs)
 		return len(h) >= 2 && len(h[len(h)-1].CommentList()) == 2
-	}, "round 2 handoff event with both comments", diag)
+	}, "round 2 snapshot with both comments", diag)
 
-	// Resolve the first comment (line 3) → next Hand off prunes it.
+	// Resolve the first comment (line 3) → its persist auto-emits a pruned snapshot.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`.inline-comment button[name='toggleResolved']`, chromedp.ByQuery),
-		chromedp.Sleep(300*time.Millisecond),
-		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
 		chromedp.Sleep(150*time.Millisecond),
 	); err != nil {
-		t.Fatalf("resolve + round 3 hand off: %v%s", err, diag())
+		t.Fatalf("resolve first comment: %v%s", err, diag())
 	}
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		h := handoffEvents(evs)
@@ -234,7 +223,7 @@ func TestE2E_StreamHandoff(t *testing.T) {
 		}
 		c := h[len(h)-1].CommentList()
 		return len(c) == 1 && strings.Contains(c[0].Body, "second round")
-	}, "round 3 handoff with the resolved comment pruned", diag)
+	}, "snapshot after resolve prunes the resolved comment", diag)
 
 	// seq is strictly increasing across rounds — the fix for idempotent DONE.
 	h := handoffEvents(parseStreamEvents(stdoutBuf.String()))
@@ -255,10 +244,13 @@ func TestE2E_StreamHandoff(t *testing.T) {
 		t.Errorf("events.jsonl has %d handoff events, want >= 3", got)
 	}
 
-	// End session now goes through a confirm dialog (#58): the toolbar button
-	// opens the native <dialog>; its confirm button fires the real endSession.
+	// End session now lives INSIDE the Queue dropdown (#119 toolbar move) and goes
+	// through a confirm dialog (#58): open the dropdown, click End session to open
+	// the native <dialog>, then confirm to fire the real endSession.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`header.bar button[commandfor='confirm-end-session']`, chromedp.ByQuery),
+		chromedp.Click(`.queue-dropdown .queue-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.queue-panel button[commandfor='confirm-end-session']`, chromedp.ByQuery),
+		chromedp.Click(`.queue-panel button[commandfor='confirm-end-session']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`#confirm-end-session[open] button[name='endSession']`, chromedp.ByQuery),
 		chromedp.Click(`#confirm-end-session button[name='endSession']`, chromedp.ByQuery),
 	); err != nil {

@@ -620,7 +620,7 @@
           <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
             <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
             <span class="queue-body">{{.Body}}</span>
-            <span class="queue-loc">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
+            <span class="queue-loc" title="{{.File}}{{if .Line}}:{{.Line}}{{end}}">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
           </button>
         </form>
         {{- if eq .State "done"}}
