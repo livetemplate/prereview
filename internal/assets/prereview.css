@@ -105,6 +105,13 @@
   --pico-muted-color: var(--text-muted);
   --pico-muted-border-color: var(--border);
   --pico-primary: var(--accent);
+  /* Pico's default primary-button BACKGROUND is a fixed azure (#0172ad), unlinked
+     from --pico-primary — so a plain <button> (the composer Save) stayed azure in
+     every scheme, and the accent-paired --pico-primary-inverse label went
+     low-contrast on it (e.g. gruvbox dark #282828 on azure = 2.8:1). Link them so
+     filled buttons use the themed accent, which the inverse IS designed to pair
+     with. */
+  --pico-primary-background: var(--accent);
   --pico-primary-hover: var(--accent-press);
   --pico-primary-border: var(--accent-press);
   --pico-primary-inverse: var(--surface);
@@ -301,6 +308,13 @@
   --pico-muted-color: var(--text-muted);
   --pico-muted-border-color: var(--border);
   --pico-primary: var(--accent);
+  /* Pico's default primary-button BACKGROUND is a fixed azure (#0172ad), unlinked
+     from --pico-primary — so a plain <button> (the composer Save) stayed azure in
+     every scheme, and the accent-paired --pico-primary-inverse label went
+     low-contrast on it (e.g. gruvbox dark #282828 on azure = 2.8:1). Link them so
+     filled buttons use the themed accent, which the inverse IS designed to pair
+     with. */
+  --pico-primary-background: var(--accent);
   --pico-primary-hover: var(--accent-press);
   --pico-primary-border: var(--accent-press);
   --pico-primary-inverse: var(--surface);
@@ -475,6 +489,13 @@
   --pico-muted-color: var(--text-muted);
   --pico-muted-border-color: var(--border);
   --pico-primary: var(--accent);
+  /* Pico's default primary-button BACKGROUND is a fixed azure (#0172ad), unlinked
+     from --pico-primary — so a plain <button> (the composer Save) stayed azure in
+     every scheme, and the accent-paired --pico-primary-inverse label went
+     low-contrast on it (e.g. gruvbox dark #282828 on azure = 2.8:1). Link them so
+     filled buttons use the themed accent, which the inverse IS designed to pair
+     with. */
+  --pico-primary-background: var(--accent);
   --pico-primary-hover: var(--accent-press);
   --pico-primary-border: var(--accent-press);
   --pico-primary-inverse: var(--surface);
@@ -591,17 +612,63 @@
   }
 }
 
-/* The Pico `.contrast` button (the Queue chip, etc.) keeps a Pico-pinned DARK
-   background (#181c25) in EVERY mode — <html> is pinned data-theme="light" — so
-   its label must stay LIGHT. Pico's --pico-contrast-inverse defaults to
-   var(--surface): light in light mode, but it FLIPS dark in dark mode, so the
-   label goes invisible (#124 — the Queue button "disappeared"). The dark blocks
-   already flip --pico-primary-inverse per scheme; contrast-inverse was missed.
-   Force it light in dark mode — scheme-agnostic, because the button bg is too;
-   var(--text-strong) is each scheme's light heading color in the dark palette. */
-[data-scheme][data-mode="dark"] { --pico-contrast-inverse: var(--text-strong); }
+/* Dark-mode remaps for Pico role tokens that otherwise fall through to Pico's
+   LIGHT defaults (which never activate — <html> is pinned data-theme="light") and
+   render dark-on-dark / low-contrast on the themed dark surface (#124). Each maps
+   to a per-scheme token that IS light/bright in the dark palette, so these stay
+   scheme-agnostic. KEEP THE TWO BLOCKS IN SYNC (explicit data-mode + the @media
+   system twin), like the rest of the file's dark duplication.
+     - contrast-inverse: the .contrast button label (Queue chip) — its bg is
+       Pico-pinned dark in EVERY mode, so the label must stay light.
+     - ins/del: <ins>/<del> in rendered Markdown (`~~strike~~` → <del>) — Pico's
+       fixed light-red/green were dark-on-dark.
+     - secondary(+hover): .secondary.outline button labels (Delete, anno-toggle) —
+       only --pico-secondary-background was remapped, not the text color.
+     - mark: the search-result <mark> highlight (Pico's light-peach island). */
+[data-scheme][data-mode="dark"] {
+  --pico-contrast-inverse: var(--text-strong);
+  --pico-ins-color: var(--pr-add);
+  --pico-del-color: var(--pr-del);
+  --pico-secondary: var(--text-muted);
+  --pico-secondary-hover: var(--text-strong);
+  --pico-mark-color: var(--text-strong);
+  --pico-mark-background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
 @media (prefers-color-scheme: dark) {
-  [data-scheme]:not([data-mode="light"]) { --pico-contrast-inverse: var(--text-strong); }
+  [data-scheme]:not([data-mode="light"]) {
+    --pico-contrast-inverse: var(--text-strong);
+    --pico-ins-color: var(--pr-add);
+    --pico-del-color: var(--pr-del);
+    --pico-secondary: var(--text-muted);
+    --pico-secondary-hover: var(--text-strong);
+    --pico-mark-color: var(--text-strong);
+    --pico-mark-background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+}
+
+/* Component islands that HARDCODE light colors (readable in light, but a bright
+   box on the dark surface). Re-skin with tokens in dark mode. KEEP the @media twin
+   in sync. F4 = the drawer's "Changed N · show all" scope pill (default state, so
+   commonly visible); F5 = the mermaid render-error callout. */
+[data-scheme][data-mode="dark"] dialog#files-drawer .scope-toggle.is-on {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  --pico-color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+[data-scheme][data-mode="dark"] .md-mermaid-error {
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--pr-del) 15%, transparent);
+  border-color: color-mix(in srgb, var(--pr-del) 40%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  [data-scheme]:not([data-mode="light"]) dialog#files-drawer .scope-toggle.is-on {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    --pico-color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  [data-scheme]:not([data-mode="light"]) .md-mermaid-error {
+    color: var(--text-strong);
+    background: color-mix(in srgb, var(--pr-del) 15%, transparent);
+    border-color: color-mix(in srgb, var(--pr-del) 40%, transparent);
+  }
 }
 
 /* Self-hosted webfonts (offline over Tailscale/devbox). */
@@ -1482,6 +1549,9 @@ dialog#files-drawer .dir-row .tree-label {
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 500;
+  /* Folder names inherited a Pico default slate (#646b79) — un-themed, so ~2.8:1
+     on the dark drawer. Use the themed muted token (readable-muted in both modes). */
+  color: var(--pico-muted-color);
 }
 dialog#files-drawer .dir-row .file-count {
   flex-shrink: 0; margin: 0;
@@ -1903,6 +1973,11 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   display: block; width: 100%; text-align: left; margin: 0;
   padding: 0.35rem 0.55rem; border: none; border-radius: 6px;
   background: transparent; color: inherit; cursor: pointer;
+  /* Re-anchor --pico-color: Pico scopes it to --pico-primary-inverse on any
+     <button>, which the file-name match (.search-where code, var(--pico-color))
+     otherwise reads as inverse-on-surface = invisible in most scheme×modes (#124).
+     Mirrors .more-trigger / .menu-item, which already re-anchor. */
+  --pico-color: var(--pico-h1-color);
 }
 .search-hit:hover, .search-hit:focus { background: var(--pico-card-sectioning-background-color); box-shadow: none; }
 .search-where { display: block; font-size: 0.78rem; color: var(--pico-muted-color); }
