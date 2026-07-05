@@ -641,8 +641,16 @@ body > [data-lvt-id] { display: contents; }
    display:contents — no box — for the same reason the data-lvt-id wrapper is
    (keep header.bar + .layout as direct flex children of the 100dvh body);
    custom-property inheritance is unaffected by display:contents, so the tokens
-   still cascade into the whole subtree. */
-.theme-root { display: contents; }
+   still cascade into the whole subtree.
+
+   It ALSO sets `color` here — not just the tokens. Pico applies `color:
+   var(--pico-color)` on <body>, an ANCESTOR of .theme-root that is stuck on
+   Pico's light default (#373c44); that resolved dark color inherits down into the
+   themed subtree, so in DARK mode any text without its own component color renders
+   dark-on-dark and is unreadable (#124). Re-declaring `color` on the wrapper — a
+   descendant of body — re-resolves it from the THEMED --pico-color (= var(--text))
+   for the whole subtree. Mirrors why .layout paints --surface over body's bg. */
+.theme-root { display: contents; color: var(--pico-color); }
 /* --surface on .layout makes the main column opaque so the un-themeable <body>
    (an ancestor of .theme-root, stuck on Pico's value) never shows through. */
 .layout { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); }
