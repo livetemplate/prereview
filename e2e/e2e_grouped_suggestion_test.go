@@ -42,13 +42,26 @@ func TestE2E_GroupedSuggestionAutoReject(t *testing.T) {
 		t.Fatalf("accept alt1 → auto-reject alt2: %v%s", err, diag())
 	}
 
-	// The auto-reject reads "alternative", not "rejected".
-	var altText string
-	if err := chromedp.Run(p.ctx, chromedp.Text(`.inline-suggestion[data-key="sg-alt2"] .sg-verdict-badge.sg-reject`, &altText, chromedp.ByQuery)); err != nil {
-		t.Fatalf("read alt2 badge: %v%s", err, diag())
+	// Both cards carry the group tag ("alternative N of 2"); the auto-reject verdict
+	// reads "not chosen", not "rejected".
+	var tag1, altText string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Text(`.inline-suggestion[data-key="sg-alt1"] .sg-group-tag`, &tag1, chromedp.ByQuery),
+		chromedp.Text(`.inline-suggestion[data-key="sg-alt2"] .sg-verdict-badge.sg-reject`, &altText, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("read group tag / verdict: %v%s", err, diag())
 	}
-	if strings.TrimSpace(altText) != "alternative" {
-		t.Errorf("auto-rejected alternative badge = %q, want %q", strings.TrimSpace(altText), "alternative")
+	if !strings.Contains(strings.ToLower(tag1), "of 2") {
+		t.Errorf("group tag = %q, want an \"... of 2\" alternatives tag", tag1)
+	}
+	if strings.TrimSpace(altText) != "not chosen" {
+		t.Errorf("auto-rejected verdict = %q, want %q", strings.TrimSpace(altText), "not chosen")
+	}
+	// The grouped cards carry the is-grouped visual class.
+	var grouped int
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelectorAll('.inline-suggestion.is-grouped').length`, &grouped))
+	if grouped != 2 {
+		t.Errorf("both alternatives should have the is-grouped class, got %d", grouped)
 	}
 
 	// Undo alt1's accept → the whole group re-opens (no verdict badges anywhere).

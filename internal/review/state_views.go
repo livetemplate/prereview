@@ -50,6 +50,15 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 	return out
 }
 
+// visibleSuggestions is the SINGLE source every render surface iterates —
+// SuggestionsByEndLine (line view), FileSuggestions (block view), and
+// SuggestionGroups (the "N of M" count) all go through it, so a suggestion
+// excluded here can never leak into one view while showing in another. (The hide
+// feature filters individually-hidden suggestions here.)
+func (s PrereviewState) visibleSuggestions() []Suggestion {
+	return s.Suggestions
+}
+
 // SuggestionsByEndLine groups the selected file's suggestions by ToLine, so the
 // template can inline each suggestion box right after its trailing line — exactly
 // like CommentsByEndLine does for comments. Zero-arg (the framework only
@@ -60,7 +69,7 @@ func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
 		return nil
 	}
 	out := make(map[int][]Suggestion)
-	for _, sg := range s.Suggestions {
+	for _, sg := range s.visibleSuggestions() {
 		if sg.File != s.SelectedFile {
 			continue
 		}
@@ -114,6 +123,45 @@ func (s PrereviewState) DecisionCount() int {
 	return len(s.DecisionsBySuggestion())
 }
 
+// SuggestionGroupInfo positions a suggestion within its group of same-area
+// alternatives (#117).
+type SuggestionGroupInfo struct {
+	Index int // 1-based position within the group, in submission order
+	Total int // group size; only groups of >1 members are surfaced
+}
+
+// SuggestionGroups maps each suggestion ID that belongs to a multi-member
+// alternatives group (same File/Side/range/OriginalText) to its position + group
+// size, so the card can show "N of M" + a shared visual — a clear signal that the
+// suggestions are alternatives, not independent edits. Zero-arg so the framework
+// pre-computes it; the card looks up {{index $.SuggestionGroups .ID}}. Computed
+// over the SAME visible set the views render (hidden suggestions don't count), so
+// the "N of M" never over- or under-states what the reviewer can see.
+func (s PrereviewState) SuggestionGroups() map[string]SuggestionGroupInfo {
+	vis := s.visibleSuggestions()
+	if len(vis) < 2 {
+		return nil
+	}
+	byKey := make(map[string][]string)
+	for _, sg := range vis {
+		k := sg.groupKey()
+		byKey[k] = append(byKey[k], sg.ID)
+	}
+	var out map[string]SuggestionGroupInfo
+	for _, ids := range byKey {
+		if len(ids) < 2 {
+			continue // not a group
+		}
+		if out == nil {
+			out = make(map[string]SuggestionGroupInfo, len(ids))
+		}
+		for i, id := range ids {
+			out[id] = SuggestionGroupInfo{Index: i + 1, Total: len(ids)}
+		}
+	}
+	return out
+}
+
 // FileSuggestions returns the selected file's suggestions as a flat slice (nil
 // when toggled off), so the rendered-Markdown view can, per block, show the
 // suggestions whose ToLine falls in that block's source range — the parallel of
@@ -123,7 +171,7 @@ func (s PrereviewState) FileSuggestions() []Suggestion {
 		return nil
 	}
 	var out []Suggestion
-	for _, sg := range s.Suggestions {
+	for _, sg := range s.visibleSuggestions() {
 		if sg.File == s.SelectedFile {
 			out = append(out, sg)
 		}
