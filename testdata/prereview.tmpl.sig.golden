@@ -305,6 +305,16 @@
         </form>
         {{end}}
         
+        {{if gt .HiddenSuggestionCount 0}}
+        <form method="POST">
+          <button type="submit" name="showHiddenSuggestions" class="menu-item" role="menuitem">
+            <span class="menu-icon">{{template "iconSuggestion"}}</span>
+            <span class="menu-label">Show hidden suggestions</span>
+            <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
         {{if gt .DecisionCount 0}}
         <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
         {{end}}
@@ -532,6 +542,16 @@
       <span class="menu-icon">{{template "iconSuggestion"}}</span>
       <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}</span>
       <span class="menu-meta">{{.SuggestionCount}}</span>
+    </button>
+  </form>
+  {{end}}
+  
+  {{if gt .HiddenSuggestionCount 0}}
+  <form method="POST">
+    <button type="submit" name="showHiddenSuggestions" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconSuggestion"}}</span>
+      <span class="menu-label">Show hidden suggestions</span>
+      <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
     </button>
   </form>
   {{end}}
@@ -995,7 +1015,9 @@
   <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
 </form>
 === suggestionCard ===
-{{$d := index $.DecisionsBySuggestion .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end}}</header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}<pre class="sg-new">{{.ProposedText}}</pre>
+{{$d := index $.DecisionsBySuggestion .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
+    </span>
+  </header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}<pre class="sg-new">{{.ProposedText}}</pre>
   </div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{if and (eq $d.Verdict "revise") $d.Note}}<div class="sg-revise-note">{{$d.Note}}</div>{{end}}{{if not .AnchorOutdated}}{{if eq $.RevisingSuggestionID .ID}}<form method="POST" class="sg-revise-form" lvt-form:preserve lvt-on:keydown="submitRevision" lvt-key="Mod+Enter">
     <input type="hidden" name="id" value="{{.ID}}">
     <textarea name="note" placeholder="What should change?" lvt-on:input="saveRevisionDraft" lvt-mod:debounce="200" lvt-autofocus>{{$.RevisionDraft}}</textarea>

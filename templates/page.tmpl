@@ -519,6 +519,22 @@
           </button>
         </form>
         {{end}}
+        {{/* Show individually-hidden suggestions on this file (hide feature). Only
+             when at least one suggestion is hidden. */}}
+        {{if gt .HiddenSuggestionCount 0}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="showHiddenSuggestions"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconSuggestion"}}</span>
+            <span class="menu-label">Show hidden suggestions</span>
+            <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}
         {{/* Recorded suggestion decisions (issue #98 Phase 2). Neutral copy — the
              hand-off doesn't carry them until Phase 3. */}}
         {{if gt .DecisionCount 0}}
@@ -892,6 +908,21 @@
       <span class="menu-icon">{{template "iconSuggestion"}}</span>
       <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}</span>
       <span class="menu-meta">{{.SuggestionCount}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{/* Show individually-hidden suggestions — mobile more-menu mirror. */}}
+  {{if gt .HiddenSuggestionCount 0}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="showHiddenSuggestions"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon">{{template "iconSuggestion"}}</span>
+      <span class="menu-label">Show hidden suggestions</span>
+      <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
     </button>
   </form>
   {{end}}
