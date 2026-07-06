@@ -135,6 +135,80 @@ func (c *PrereviewController) CancelRevision(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
+// commitHidden sets state.Hidden to next and persists it in ONE atomic write, so
+// hiding a whole group (N entries) is a single write / rollback — never a
+// half-hidden group on disk. Hiding is view-only, so it does NOT scheduleEmit:
+// the LLM's snapshot is unaffected (a hidden suggestion is still an open
+// suggestion, not a reject).
+func (c *PrereviewController) commitHidden(state *PrereviewState, next []HiddenSuggestion) {
+	prev := state.Hidden
+	state.Hidden = next
+	if err := writeHidden(c.hiddenPath(), next); err != nil {
+		state.Hidden = prev // rollback
+		slog.Warn("persist hidden suggestions", "err", err)
+	}
+}
+
+// upsertHidden replaces any existing hide for h.SuggestionID with h (re-pinning
+// its fingerprint), keeping the rest.
+func upsertHidden(list []HiddenSuggestion, h HiddenSuggestion) []HiddenSuggestion {
+	list = slices.DeleteFunc(list, func(x HiddenSuggestion) bool { return x.SuggestionID == h.SuggestionID })
+	return append(list, h)
+}
+
+// HideSuggestion hides a single suggestion from view (pinned to its current
+// content, so a later revision un-hides it). A pure declutter — the suggestion
+// stays open and still reaches the LLM on hand-off.
+func (c *PrereviewController) HideSuggestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	sg := state.findSuggestion(ctx.GetString("id"))
+	if sg == nil {
+		return state, nil // raced away
+	}
+	c.commitHidden(&state, upsertHidden(slices.Clone(state.Hidden), newHidden(*sg)))
+	return state, nil
+}
+
+// HideSuggestionGroup hides every alternative in the same artifact-area group as
+// the given suggestion (#117) in one atomic write — the "hide these alternatives"
+// affordance. A lone suggestion (no group) hides just itself.
+func (c *PrereviewController) HideSuggestionGroup(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	sg := state.findSuggestion(ctx.GetString("id"))
+	if sg == nil {
+		return state, nil
+	}
+	key := sg.groupKey()
+	next := slices.Clone(state.Hidden)
+	for i := range state.Suggestions {
+		if state.Suggestions[i].groupKey() == key {
+			next = upsertHidden(next, newHidden(state.Suggestions[i]))
+		}
+	}
+	c.commitHidden(&state, next)
+	return state, nil
+}
+
+// ShowHiddenSuggestions clears the SELECTED file's hides (the "show N hidden"
+// recovery), bringing them back into view. Other files' hides are untouched, so
+// the count next to the affordance stays scoped to the page. Mirrors
+// UnhideAllResolved for comments.
+func (c *PrereviewController) ShowHiddenSuggestions(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if len(state.Hidden) == 0 {
+		return state, nil
+	}
+	// Which hidden IDs belong to the selected file?
+	onFile := make(map[string]bool)
+	for _, sg := range state.Suggestions {
+		if sg.File == state.SelectedFile {
+			onFile[sg.ID] = true
+		}
+	}
+	next := slices.DeleteFunc(slices.Clone(state.Hidden), func(h HiddenSuggestion) bool {
+		return onFile[h.SuggestionID]
+	})
+	c.commitHidden(&state, next)
+	return state, nil
+}
+
 // ClearSuggestionDecision removes a recorded decision (undo), returning the
 // suggestion to undecided. If the cleared decision was an ACCEPT, the whole group
 // it auto-rejected re-opens too (#117): clear every Auto reject on a sibling in

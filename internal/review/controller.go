@@ -274,6 +274,11 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// DecisionsBySuggestion, so a revised suggestion drops its stale verdict.
 	c.applyDecisions(&state)
 
+	// Load the reviewer's hidden-from-view set (server-owned
+	// .prereview/hidden-suggestions.jsonl). Filtered out of every render surface
+	// in visibleSuggestions, fingerprint-gated so a revised suggestion un-hides.
+	c.applyHidden(&state)
+
 	// SkillMode is mirror-only: refresh from the controller every connect
 	// so a binary launched with --skill renders the right button even after
 	// a session-storage reconnect.

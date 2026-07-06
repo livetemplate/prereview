@@ -126,6 +126,12 @@ type PrereviewState struct {
 	// onto suggestions by ID + content fingerprint in DecisionsBySuggestion.
 	Decisions []SuggestionDecision `json:"decisions"`
 
+	// Hidden is the reviewer's hidden-from-view suggestion set, loaded from the
+	// server-owned .prereview/hidden-suggestions.jsonl every Mount (the file is
+	// the source of truth — not lvt:"persist"). A pure view filter applied in
+	// visibleSuggestions, fingerprint-gated so a revised suggestion reappears.
+	Hidden []HiddenSuggestion `json:"hidden_suggestions"`
+
 	// RevisingSuggestionID is the suggestion whose inline "request revision" note
 	// form is open (mirrors EditingCommentID); RevisionDraft holds the in-progress
 	// note so it survives reconnects. Empty = no revision form open.

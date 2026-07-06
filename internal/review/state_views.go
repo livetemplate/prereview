@@ -53,10 +53,60 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 // visibleSuggestions is the SINGLE source every render surface iterates —
 // SuggestionsByEndLine (line view), FileSuggestions (block view), and
 // SuggestionGroups (the "N of M" count) all go through it, so a suggestion
-// excluded here can never leak into one view while showing in another. (The hide
-// feature filters individually-hidden suggestions here.)
+// excluded here can never leak into one view while showing in another. It drops
+// suggestions the reviewer has individually hidden (fingerprint-gated: a revised
+// suggestion's content no longer matches the stored hide, so it reappears).
 func (s PrereviewState) visibleSuggestions() []Suggestion {
-	return s.Suggestions
+	if len(s.Hidden) == 0 {
+		return s.Suggestions
+	}
+	hidden := s.hiddenFingerprints()
+	out := make([]Suggestion, 0, len(s.Suggestions))
+	for _, sg := range s.Suggestions {
+		if isHidden(hidden, sg) {
+			continue // hidden against this exact content
+		}
+		out = append(out, sg)
+	}
+	return out
+}
+
+// hiddenFingerprints maps each hidden suggestion's ID to the content fingerprint
+// it was hidden against, so visibleSuggestions can drop only suggestions whose
+// content still matches (a revision un-hides). Small (hidden set is tiny).
+func (s PrereviewState) hiddenFingerprints() map[string]string {
+	m := make(map[string]string, len(s.Hidden))
+	for _, h := range s.Hidden {
+		m[h.SuggestionID] = h.Fingerprint
+	}
+	return m
+}
+
+// isHidden reports whether sg is hidden against its CURRENT content: its ID is in
+// the hidden set AND the pinned fingerprint still matches (a revision drops the
+// match, so the suggestion reappears). The membership gate means only the tiny
+// hidden set is ever hashed — never every suggestion.
+func isHidden(hidden map[string]string, sg Suggestion) bool {
+	fp, ok := hidden[sg.ID]
+	return ok && fp == suggestionFingerprint(sg)
+}
+
+// HiddenSuggestionCount is how many of the SELECTED file's suggestions are
+// currently hidden (fingerprint-matching), driving the "N hidden · show"
+// affordance. Scoped to the selected file so the count matches what a reviewer
+// could reveal on the page they're looking at. Zero-arg.
+func (s PrereviewState) HiddenSuggestionCount() int {
+	if len(s.Hidden) == 0 || s.SelectedFile == "" {
+		return 0
+	}
+	hidden := s.hiddenFingerprints()
+	n := 0
+	for _, sg := range s.Suggestions {
+		if sg.File == s.SelectedFile && isHidden(hidden, sg) {
+			n++
+		}
+	}
+	return n
 }
 
 // SuggestionsByEndLine groups the selected file's suggestions by ToLine, so the
