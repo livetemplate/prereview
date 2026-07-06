@@ -191,6 +191,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 			AnchorStatus: anchorOK,
 		}
 		state.Comments = append(state.Comments, cm)
+		noteEnqueue(&state) // #129: a new saved comment enters the queue → pulse
 		// Land scroll + focus on the just-saved comment so a keyboard user
 		// lands on it after the composer closes (see commentCardFull/Simple).
 		// Clear any pending heading target — the two scroll intents are
@@ -244,6 +245,7 @@ func (c *PrereviewController) addFileLevelComment(state PrereviewState, body str
 			// keys off of in relocate() and the UI ranges.
 		}
 		state.Comments = append(state.Comments, cm)
+		noteEnqueue(&state) // #129: a new saved comment enters the queue → pulse
 		// Land scroll + focus on the just-saved comment so a keyboard user
 		// lands on it after the composer closes (see commentCardFull/Simple).
 		// Clear any pending heading target — the two scroll intents are
@@ -299,6 +301,7 @@ func (c *PrereviewController) addAreaComment(state PrereviewState, body string) 
 			// keys off of in relocate() and the UI ranges.
 		}
 		state.Comments = append(state.Comments, cm)
+		noteEnqueue(&state) // #129: a new saved comment enters the queue → pulse
 		// Land scroll + focus on the just-saved comment so a keyboard user
 		// lands on it after the composer closes (see commentCardFull/Simple).
 		// Clear any pending heading target — the two scroll intents are
@@ -357,6 +360,7 @@ func (c *PrereviewController) addRegionComment(state PrereviewState, body string
 			// keys off the "no anchor to relocate" contract.
 		}
 		state.Comments = append(state.Comments, cm)
+		noteEnqueue(&state) // #129: a new saved comment enters the queue → pulse
 		// Land scroll + focus on the just-saved comment so a keyboard user
 		// lands on it after the composer closes (see commentCardFull/Simple).
 		// Clear any pending heading target — the two scroll intents are
@@ -428,6 +432,7 @@ func (c *PrereviewController) addTextComment(state PrereviewState, body string) 
 			AnchorStatus: anchorOK,
 		}
 		state.Comments = append(state.Comments, cm)
+		noteEnqueue(&state) // #129: a new saved comment enters the queue → pulse
 		state.ScrollToCommentID = cm.ID
 		state.ScrollToHeadingID = ""
 		rollback = func() { state.Comments = state.Comments[:len(state.Comments)-1] }
@@ -661,9 +666,17 @@ func (c *PrereviewController) enqueueForAgent(state PrereviewState, id string) (
 			return state, err
 		}
 	}
+	noteEnqueue(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
 }
+
+// noteEnqueue bumps the monotonic tick that drives the Queue button's one-shot
+// "just queued" pulse (#129). Call it ONLY where a comment genuinely enters the
+// queued set — a new saved comment, or an explicit (re)enqueue — never on edit,
+// resolve, delete, or reconnect, so the pulse always means "your comment was
+// queued". Persisted, so a reconnect restoring the same value doesn't re-pulse.
+func noteEnqueue(state *PrereviewState) { state.EnqueueTick++ }
 
 // EnqueueComment is the per-card "Enqueue" / "Re-enqueue" action.
 func (c *PrereviewController) EnqueueComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {

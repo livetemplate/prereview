@@ -142,6 +142,16 @@ type PrereviewState struct {
 	LastSaved   string `json:"last_saved"`
 	DoneWritten bool   `json:"done_written" lvt:"persist"`
 
+	// EnqueueTick is a monotonic counter bumped ONLY when a comment genuinely
+	// enters the queued set (a new saved comment, or an explicit (re)enqueue) —
+	// never on edit / resolve / delete / reconnect. It drives the Queue button's
+	// one-shot "just queued" pulse (#129): the button's id embeds this tick, so a
+	// bump changes the id, morphdom recreates the node, and the client's
+	// lvt-fx:animate scan re-fires (the effect is once-per-node-identity, so a
+	// persistent button would otherwise animate only once). Persisted so a
+	// reconnect restores the same tick → same id → no spurious pulse.
+	EnqueueTick int `json:"enqueue_tick" lvt:"persist"`
+
 	// LLMState mirrors the agent's inbound status signal
 	// (.prereview/llm-status.json): "working" while the agent applies a handoff
 	// batch, "done" once finished, "" idle. LLMMessage is the optional detail

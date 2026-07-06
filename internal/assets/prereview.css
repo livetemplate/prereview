@@ -1124,6 +1124,18 @@ header.file-head .file-head-actions {
    the chevron to a second row on a narrow bar. */
 .queue-trigger { display: inline-flex; align-items: center; white-space: nowrap; flex: 0 0 auto; }
 .queue-trigger.is-working { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+/* #129: one-shot "just queued" pulse. The button's id embeds EnqueueTick, so a
+   genuine enqueue recreates the node and this animation replays from 0 (a
+   persistent node would run it only once). A brief scale pop — no box-shadow, so
+   it never fights the .is-working ring above. Gated on reduced-motion. */
+@keyframes queue-pulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.13); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .queue-trigger { animation: queue-pulse 0.55s ease-out; }
+}
 /* The Queue chip sits on the RIGHT of the bar (after the flex:1 title), so its
    panel opens right-aligned (the shared .tb-dropdown-panel default) — over the
    content area, clear of the file drawer. */
@@ -2430,6 +2442,15 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    "parked" rather than active. */
 .inline-comment .draft-badge, .all-comments .draft-badge {
   background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+/* Queued badge (#129): confirms a comment is enqueued for the agent. It's the
+   DEFAULT state of an active comment (appears on nearly every card), so it's kept
+   quiet — accent-tinted to match the toolbar queue count (.q-queued), but muted. */
+.inline-comment .queued-badge, .all-comments .queued-badge {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 82%, var(--pico-muted-color));
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
 }

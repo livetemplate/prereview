@@ -613,6 +613,10 @@
   >
     <button
       type="button"
+      {{- /* #129: id embeds the enqueue tick so morphdom recreates the button on
+             each genuine enqueue, replaying its CSS pulse (.queue-trigger's
+             animation) — a persistent node otherwise animates only once. */}}
+      id="queue-trigger-{{.EnqueueTick}}"
       class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}"
       aria-haspopup="menu"
       title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"

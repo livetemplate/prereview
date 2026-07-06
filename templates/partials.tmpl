@@ -263,7 +263,8 @@
     {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
     {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
     {{- if .Draft}} · <small class="draft-badge">draft</small>{{end}}
-    {{- if .Processed}} · <small class="processed-badge">worked on</small>{{end -}}
+    {{- if .Processed}} · <small class="processed-badge">worked on</small>{{end}}
+    {{- if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end -}}
   </span></header>
   {{- /* selected phrase (kind=text) — shows what the comment is about, esp. for
          rendered-view comments that anchor line-level */ -}}
@@ -421,7 +422,7 @@
   lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}
 >
   {{- /* line span · resolved badge */ -}}
-  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}</span></header>
+  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}</span></header>
   {{- /* comment text */ -}}
   <div class="body">{{.Body}}</div>
   {{- /* resolve / edit / delete */ -}}
