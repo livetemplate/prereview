@@ -175,6 +175,54 @@ func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
 	return out
 }
 
+// CommentMarkLines / SuggestionMarkLines report, per line-row (keyed
+// "<toLine>-<side>", e.g. "4-new"), whether that row carries a comment /
+// suggestion — driving the #136 right-margin marks. Derived from the SAME filtered
+// maps the cards render from (CommentsByEndLine / SuggestionsByEndLine), so a mark
+// appears exactly where a card does — respecting side, individually-hidden, the
+// global suggestions toggle, and file scope. Zero-arg so the framework pre-computes
+// them (a method WITH an arg silently breaks rendering); the row looks itself up as
+// {{index $.CommentMarkLines (printf "%d-%s" $ln $lside)}}. Nil when none, so a
+// missing key indexes to false.
+func (s PrereviewState) CommentMarkLines() map[string]bool {
+	out := map[string]bool{}
+	for ln, cs := range s.CommentsByEndLine() {
+		for _, c := range cs {
+			markRowSides(out, ln, c.Side)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (s PrereviewState) SuggestionMarkLines() map[string]bool {
+	out := map[string]bool{}
+	for ln, sgs := range s.SuggestionsByEndLine() {
+		for _, sg := range sgs {
+			markRowSides(out, ln, sg.Side)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// markRowSides records the row key(s) an annotation on line ln / side occupies,
+// matching the template's {{if or (eq .Side $lside) (eq .Side "")}} gate: a
+// whole-line annotation (Side "") marks BOTH the old and new rows; a one-sided one
+// marks just its side.
+func markRowSides(out map[string]bool, ln int, side string) {
+	if side == "" {
+		out[fmt.Sprintf("%d-old", ln)] = true
+		out[fmt.Sprintf("%d-new", ln)] = true
+		return
+	}
+	out[fmt.Sprintf("%d-%s", ln, side)] = true
+}
+
 // SuggestionCount is the number of suggestions on the selected file, used to
 // label the toolbar toggle and gate its visibility. Counts regardless of the
 // HideSuggestions toggle (it's the total available, not the shown count).
