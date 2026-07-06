@@ -73,6 +73,13 @@ func (c *PrereviewController) OnConnect(state PrereviewState, ctx *livetemplate.
 // rely on any payload.
 func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	prev := state.LLMState
+	// Capture the suggestion IDs already loaded BEFORE applySuggestions overwrites
+	// state.Suggestions, so we can tell a genuinely-new proposal from an unrelated
+	// status/processed tick (this handler fans out on all three). Valid because
+	// state.Suggestions is retained in the live session across dispatches (it's
+	// re-zeroed only on reconnect, where Mount reloads it — hence this check lives
+	// here, never in Mount, where the prior set is always empty).
+	prevSuggestionIDs := suggestionIDSet(state.Suggestions)
 	c.applyLLMStatus(&state)
 	// The watcher also fires this on a processed.jsonl change (the agent marked a
 	// comment "worked on"), so refresh the per-comment badges here too — a cheap
@@ -83,6 +90,14 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// CurrentDiff, so a new suggestion box appears inline with no reload.
 	c.applySuggestions(&state)
 	c.relocateSuggestionsSelected(&state)
+	// #116: if the agent submitted a brand-new suggestion while the inline boxes
+	// were toggled off, reveal them — a hidden toggle must never silently swallow
+	// fresh proposals. Gated on a genuinely-new ID (a revision re-appends the same
+	// id and a status/processed tick adds none), so the reviewer can still keep
+	// suggestions hidden across unrelated updates.
+	if state.HideSuggestions && hasNewSuggestion(prevSuggestionIDs, state.Suggestions) {
+		state.HideSuggestions = false
+	}
 	switch {
 	case prev == LLMStateWorking && state.LLMState == LLMStateDone:
 		// The agent just finished a batch and edited files, so this tab's diff is

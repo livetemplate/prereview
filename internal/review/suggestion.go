@@ -149,6 +149,32 @@ func loadSuggestions(path string) []Suggestion {
 	return out
 }
 
+// suggestionIDSet collects the IDs of a suggestion slice into a set, used to
+// diff one load against the next (#116: detect a genuinely-new proposal).
+func suggestionIDSet(sugs []Suggestion) map[string]bool {
+	if len(sugs) == 0 {
+		return nil
+	}
+	ids := make(map[string]bool, len(sugs))
+	for _, s := range sugs {
+		ids[s.ID] = true
+	}
+	return ids
+}
+
+// hasNewSuggestion reports whether cur contains an ID absent from prev — i.e. the
+// LLM appended a brand-new suggestion (not a revision of an existing id, which
+// reuses its id). Empty prev + any cur counts as new, which is correct: the only
+// way prev is empty here is that no suggestions were loaded last render.
+func hasNewSuggestion(prev map[string]bool, cur []Suggestion) bool {
+	for _, s := range cur {
+		if !prev[s.ID] {
+			return true
+		}
+	}
+	return false
+}
+
 // normJoinText normalizes an OriginalText blob into the same "\n"-joined,
 // whitespace-collapsed form joinNorm produces for a file's line range, so a
 // suggestion's OriginalText can be matched against the live file by the shared
