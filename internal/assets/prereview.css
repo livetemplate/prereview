@@ -2179,6 +2179,17 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   padding: 0.05rem 0.4rem; border-radius: 999px; white-space: nowrap;
 }
+/* Hide controls — a quiet declutter affordance floated to the header's right edge,
+   so it never competes with the accept/reject buttons below. */
+.inline-suggestion .sg-hide-actions {
+  float: right; display: inline-flex; gap: 0.5rem; margin-left: 0.5rem;
+}
+.inline-suggestion .sg-hide-actions form { display: inline; margin: 0; }
+.inline-suggestion .sg-hide-btn {
+  width: auto; margin: 0; padding: 0; border: 0; background: none; box-shadow: none;
+  font-size: 0.72rem; color: var(--pico-muted-color); cursor: pointer; line-height: 1.2;
+}
+.inline-suggestion .sg-hide-btn:hover { color: var(--accent); text-decoration: underline; }
 
 /* Decision surface (issue #98 Phase 2): the accept/reject/request-revision action
    row, the verdict badge, and the inline revision-note form. Verdict colors reuse

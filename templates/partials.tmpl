@@ -355,6 +355,13 @@
     {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}
     {{- if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}
     {{- if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end -}}
+    {{- /* Hide controls — a pure declutter, always available (even for a decided or
+           outdated card), separate from the accept/reject flow. Hiding never counts
+           as a reject and never reaches the LLM. */ -}}
+    <span class="sg-hide-actions">
+      {{- if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end -}}
+      <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
+    </span>
   </header>
   {{- if .Note}}<div class="sg-note">{{.Note}}</div>{{end -}}
   {{- /* before → after; the original is omitted for a pure insertion */ -}}
