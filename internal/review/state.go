@@ -240,6 +240,22 @@ type PrereviewState struct {
 	// browser refresh; not written to CSV (this is UX state, not a comment).
 	ViewedFiles map[string]bool `json:"viewed_files" lvt:"persist"`
 
+	// Read progress (#128), keyed by file path. ReadThrough is the furthest
+	// new-side line number the reviewer has scrolled past (a high-water mark →
+	// lines at/above it render "read"). LastReadTopKey is the topmost visible line
+	// key at the last report → the scroll-restore target when the file is
+	// re-opened. Both are reported by the client's lvt-fx:viewport-report directive
+	// and persisted so they survive a reconnect within the review session. See
+	// readprogress.go.
+	ReadThrough    map[string]int    `json:"read_through" lvt:"persist"`
+	LastReadTopKey map[string]string `json:"last_read_top_key" lvt:"persist"`
+
+	// ScrollToReadKey is the transient scroll-restore target: SelectFile sets it to
+	// the file's LastReadTopKey so the browser re-opens where the reviewer left off.
+	// NOT persisted — a one-render nudge (like ScrollToCommentID), cleared once the
+	// reviewer scrolls (ReportViewport) so a re-render can't yank them back.
+	ScrollToReadKey string `json:"scroll_to_read_key"`
+
 	// FileFilter is the case-insensitive substring filter for the file
 	// drawer. Persisted so a refresh doesn't drop the filter.
 	FileFilter string `json:"file_filter" lvt:"persist"`

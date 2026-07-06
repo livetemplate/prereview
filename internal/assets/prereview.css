@@ -1,5 +1,8 @@
 :root {
-  --pr-bar-h: 43px;
+  /* Reserved height for the sticky top bar. A touch taller than the bar's raw
+     content so a browser that renders the chips slightly larger (Safari/Mac font
+     metrics) can't push the bar past this and clip the file-head below it. */
+  --pr-bar-h: 48px;
   /* Three-column desktop layout (≥900px): file drawer | viewer | TOC.
      Drawer at 280px holds most filenames intact (mockups/, docs/
      prefixed paths fit); on the rare longer path, the button's
@@ -1614,22 +1617,44 @@ main.viewer > article > header.file-head {
      the file-head extends past the viewport on both sides and the first
      character of the filename gets clipped. */
   margin: 0;
-  display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
-  padding: 0.4rem 0.75rem;
+  /* flex-wrap so a tight header drops the action chips onto their own row rather
+     than squeezing them off-screen (#128 file-head responsive). */
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 0.4rem 0.5rem;
+  /* A little more vertical padding than the chips strictly need, so the header
+     has breathing room and a couple px of cross-browser slack absorbs any
+     overlap instead of clipping the chips/filename at the top. */
+  padding: 0.55rem 0.75rem;
   background: var(--pico-card-background-color);
   border-bottom: 1px solid var(--pico-muted-border-color);
   position: sticky; top: 0; z-index: 5;
   font-size: 0.85rem;
 }
-main.viewer > article > header.file-head strong {
-  word-break: break-all; font-size: 0.9rem; padding-left: 0;
+/* Basename: bold, one line, and last to give up space (it identifies the file). */
+main.viewer > article > header.file-head .fh-base {
+  font-size: 0.9rem; padding-left: 0; flex: 0 1 auto; min-width: 3ch;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-main.viewer > article > header.file-head small { color: var(--pico-muted-color); font-size: 0.75rem; }
+/* Directory prefix: muted, and the FIRST to truncate when the header is tight. */
+main.viewer > article > header.file-head .fh-dir {
+  color: var(--pico-muted-color); flex: 0 1 auto; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+main.viewer > article > header.file-head small { color: var(--pico-muted-color); font-size: 0.75rem; margin-left: 0.4rem; white-space: nowrap; }
 /* "Comment on file" lives in the sticky file header (moved out of the toolbar).
    Left group is the filename (+ note); the button is pushed right by the
    header's space-between. Secondary-button look, matching the bar's chrome
    controls. The label is icon-only on mobile to keep the header uncluttered. */
-header.file-head .file-head-name { display: inline-flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
+/* No overflow:hidden here — truncation lives on .fh-dir/.fh-base individually
+   (each clips + ellipsizes itself); clipping the whole name box risks shaving the
+   text vertically under baseline alignment on some browsers. */
+header.file-head .file-head-name { display: flex; align-items: baseline; gap: 0; min-width: 0; flex: 1 1 auto; }
+/* On a narrow header, the filename takes the whole first row and the action chips
+   wrap to their own row (right-aligned) — no more squeezing or 5-line paths. */
+@media (max-width: 700px) {
+  header.file-head .file-head-name { flex-basis: 100%; }
+  header.file-head .file-head-actions { margin-left: auto; }
+}
 header.file-head .file-head-comment { margin: 0; flex-shrink: 0; }
 header.file-head .file-head-comment button {
   display: inline-flex; align-items: center; gap: 0.35rem;
@@ -1727,6 +1752,22 @@ header.file-head .file-head-comment button svg { display: block; }
   text-align: left; align-items: flex-start; line-height: 1.2;
 }
 .code .line:hover { outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
+/* #128 read progress: a thin bar along the bottom edge of the sticky file-head
+   fills left→right as the reviewer reads down the file (high-water mark). Always
+   visible (the header is sticky), non-busy, and unambiguously "progress". */
+.file-head .read-progress-fill {
+  position: absolute; left: 0; bottom: -1px; height: 2px;
+  background: var(--accent);
+  transition: width 0.2s ease-out;
+}
+/* "Resume reading" chip — compact, matches the other file-head action chips. */
+.file-head-resume { margin: 0; }
+.file-head-resume button {
+  width: auto; margin: 0; padding: 0.08rem 0.5rem;
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  font-size: 0.76rem; white-space: nowrap;
+}
+.file-head-resume button svg { flex: none; }
 /* Keyboard line cursor (ArrowUp/Down). A left accent bar + outline marks the
    focused line so the user can see where Enter will comment. */
 .code .line.is-cursor { box-shadow: inset 3px 0 0 0 var(--pico-primary); outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
