@@ -52,6 +52,25 @@ func TestAcceptSuggestion_AutoRejectsGroup(t *testing.T) {
 	}
 }
 
+// TestSuggestionGroups: multi-member groups surface a distinct index + total; a
+// lone suggestion is not a group.
+func TestSuggestionGroups(t *testing.T) {
+	st := PrereviewState{Suggestions: []Suggestion{
+		groupAlt("a", "x"), groupAlt("b", "y"), // same area → group of 2
+		{ID: "lone", File: "a.md", Side: "new", FromLine: 9, ToLine: 9, OriginalText: "foo", ProposedText: "bar"},
+	}}
+	g := st.SuggestionGroups()
+	if g["a"].Total != 2 || g["b"].Total != 2 {
+		t.Errorf("a/b should be one group of 2, got %+v", g)
+	}
+	if g["a"].Index == g["b"].Index {
+		t.Errorf("group members need distinct positions, got a=%d b=%d", g["a"].Index, g["b"].Index)
+	}
+	if _, ok := g["lone"]; ok {
+		t.Error("a standalone suggestion must not be reported as grouped")
+	}
+}
+
 // TestAcceptSuggestion_DoesNotOverGroup: the SAME OriginalText at a DIFFERENT
 // location is a distinct area — accepting one must NOT auto-reject the other.
 func TestAcceptSuggestion_DoesNotOverGroup(t *testing.T) {

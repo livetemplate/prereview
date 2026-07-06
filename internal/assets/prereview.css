@@ -2167,6 +2167,18 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .inline-suggestion .sg-old { background: var(--pr-del-bg); color: var(--pr-del); }
 .inline-suggestion .sg-new { background: var(--pr-add-bg); color: var(--pr-add); }
 .inline-suggestion.is-outdated { border-left-color: var(--pr-del); opacity: 0.9; }
+/* Grouped alternatives (#117) — a stronger left rail + accent wash so the cards
+   read as ONE set of choices, reinforced by the "alternative N of M" tag pill. */
+.inline-suggestion.is-grouped {
+  border-left-width: 4px;
+  background: color-mix(in srgb, var(--accent) 13%, var(--pr-comment-bg));
+}
+.inline-suggestion .sg-group-tag {
+  font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  padding: 0.05rem 0.4rem; border-radius: 999px; white-space: nowrap;
+}
 
 /* Decision surface (issue #98 Phase 2): the accept/reject/request-revision action
    row, the verdict badge, and the inline revision-note form. Verdict colors reuse

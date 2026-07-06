@@ -343,15 +343,17 @@
      trim-wrapped to hold exactly the original/proposed text. */}}
 {{define "suggestionCard" -}}
 {{$d := index $.DecisionsBySuggestion .ID -}}
-<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}"
+{{$g := index $.SuggestionGroups .ID -}}
+<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}"
      data-key="sg-{{.ID}}"
      lvt-fx:animate="fade">
-  {{- /* sparkle label · line span · drift status · verdict */ -}}
-  <header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span> · <small>{{.LineSpan}}</small>
+  {{- /* sparkle label · group tag · line span · drift status · verdict */ -}}
+  <header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>
+    {{- if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>
     {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
     {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
     {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}
-    {{- if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}auto-rejected — another alternative for this text was accepted{{else}}rejected by you{{end}}">{{if $d.Auto}}alternative{{else}}rejected{{end}}</small>{{end}}
+    {{- if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}
     {{- if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end -}}
   </header>
   {{- if .Note}}<div class="sg-note">{{.Note}}</div>{{end -}}
