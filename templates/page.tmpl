@@ -627,7 +627,7 @@
            accumulated batch in one go. The button says what it does; the mode line
            below says which state you're in. */}}
       <form method="POST" class="queue-pause-form">
-        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}</button>
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}{{with index $.KeyHint "toggleAgentPause"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
       </form>
       <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
       {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}

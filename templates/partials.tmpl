@@ -94,13 +94,13 @@
       name="clearSelection"
       form="composer-cancel-form"
       class="cancel-btn"
-    >Cancel</button>
+    >Cancel{{with index $.KeyHint "clearSelection"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
     <button
       type="submit"
       name="addComment"
       form="composer-add-form"
       class="save-btn"
-    >Save</button>
+    >Save{{with index $.KeyHint "addComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
   </div>
 {{- /* close composer */ -}}
 </div>

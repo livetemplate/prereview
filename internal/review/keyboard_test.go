@@ -60,6 +60,21 @@ func TestKeyHint(t *testing.T) {
 	if got := hint["nextFile"]; got != "j" {
 		t.Errorf(`KeyHint["nextFile"] = %q, want "j"`, got)
 	}
+	// #118: the composer Save/Cancel buttons surface their shortcuts even though
+	// those rows fire from their own template bindings (Mod+Enter → the composer
+	// form; Esc → the global clearSelection), keyed by Button, not Action.
+	if got := hint["addComment"]; got != "⌘/Ctrl + Enter" {
+		t.Errorf(`KeyHint["addComment"] = %q, want "⌘/Ctrl + Enter" (Save chip)`, got)
+	}
+	if got := hint["clearSelection"]; got != "Esc" {
+		t.Errorf(`KeyHint["clearSelection"] = %q, want "Esc" (Cancel chip)`, got)
+	}
+	// #118: the stream-only Pause/Resume shortcut is present in KeyHint (it's not
+	// filtered there) so the Queue pause button — which renders only in stream
+	// mode — gets its chip.
+	if got := hint["toggleAgentPause"]; got != "q" {
+		t.Errorf(`KeyHint["toggleAgentPause"] = %q, want "q" (Pause chip)`, got)
+	}
 	// Every action-bearing binding is present; no empty-action row leaks in.
 	for _, b := range keyBindings {
 		if b.Action == "" {
@@ -72,11 +87,40 @@ func TestKeyHint(t *testing.T) {
 	if len(hint) == 0 {
 		t.Fatal("KeyHint is empty")
 	}
-	// Esc has an empty Action (help-only) — it must not appear as a button hint.
-	for action := range hint {
-		if action == "" {
-			t.Error("KeyHint contains an empty-action entry (help-only row leaked in)")
+	// Plain Enter has neither Action nor Button (no toolbar button fires it), so
+	// it must not appear as a hint; and no row may key an empty entry.
+	if _, ok := hint["Enter"]; ok {
+		t.Error(`KeyHint contains "Enter" (help-only row with no button leaked in)`)
+	}
+	for name := range hint {
+		if name == "" {
+			t.Error("KeyHint contains an empty-key entry (a row with empty Action and Button leaked in)")
 		}
+	}
+}
+
+// TestKeyBindings_StreamOnlyFiltering pins #118: the agent-queue Pause/Resume
+// shortcut (StreamOnly) is live + documented only in --stream mode, so a
+// repo-only reviewer gets neither a phantom window binding nor a help-overlay
+// row for a control they don't have.
+func TestKeyBindings_StreamOnlyFiltering(t *testing.T) {
+	has := func(bs []KeyBinding, action string) bool {
+		for _, b := range bs {
+			if b.Action == action {
+				return true
+			}
+		}
+		return false
+	}
+	if has(PrereviewState{}.KeyBindings(), "toggleAgentPause") {
+		t.Error("repo-mode KeyBindings must not include the stream-only Pause/Resume shortcut")
+	}
+	if !has(PrereviewState{StreamMode: true}.KeyBindings(), "toggleAgentPause") {
+		t.Error("stream-mode KeyBindings must include the Pause/Resume shortcut")
+	}
+	// Non-stream-only rows are unaffected in both modes.
+	if !has(PrereviewState{}.KeyBindings(), "nextFile") {
+		t.Error("repo-mode KeyBindings dropped a non-stream-only shortcut (nextFile)")
 	}
 }
 
