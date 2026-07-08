@@ -50,6 +50,53 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 	return out
 }
 
+// SelectedFileBase / SelectedFileDir split the selected file's path for the
+// file-head: the basename is shown bold and always in full (it identifies the
+// file), the directory prefix is muted and truncates when the header is tight, so
+// a long/deep path never wraps into a multi-line block that shoves the action
+// chips off-screen. Dir includes a trailing "/"; empty for a top-level file.
+// Zero-arg state methods (safe — a method on the nested *FileDiff wouldn't render).
+func (s PrereviewState) SelectedFileBase() string {
+	return filepath.Base(s.SelectedFile)
+}
+
+func (s PrereviewState) SelectedFileDir() string {
+	d := filepath.Dir(s.SelectedFile)
+	if d == "." || d == "" || d == "/" {
+		return ""
+	}
+	return d + "/"
+}
+
+// ReadPercent is how far through the selected file the reviewer has read (0..100):
+// the read high-water mark (ReadThrough — the furthest new-side line scrolled past)
+// as a fraction of the file's line count. Drives the top reading-progress bar
+// (#128). Zero-arg; 0 when nothing's been read or the file length is unknown.
+// Because it's the high-water mark, it only grows — scrolling back up doesn't
+// shrink it (you've still reviewed that far).
+func (s PrereviewState) ReadPercent() int {
+	if len(s.ReadThrough) == 0 || s.SelectedFile == "" || s.CurrentDiff == nil {
+		return 0
+	}
+	mark := s.ReadThrough[s.SelectedFile]
+	if mark == 0 {
+		return 0
+	}
+	total := 0
+	for _, ln := range s.CurrentDiff.Lines {
+		if ln.NewNum > total {
+			total = ln.NewNum
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	if pct := mark * 100 / total; pct < 100 {
+		return pct
+	}
+	return 100
+}
+
 // visibleSuggestions is the SINGLE source every render surface iterates —
 // SuggestionsByEndLine (line view), FileSuggestions (block view), and
 // SuggestionGroups (the "N of M" count) all go through it, so a suggestion

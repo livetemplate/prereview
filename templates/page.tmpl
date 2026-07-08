@@ -1116,7 +1116,15 @@
   <div class="resize-handle" aria-hidden="true"></div>
 </dialog>
 
-<main class="viewer">
+<main class="viewer"
+      {{- /* #128 read progress: report the visible line keys as the reviewer
+             scrolls so the server can track how far they've read + where they left
+             off. .viewer is the scroll container; .line rows carry the keys. */}}
+      lvt-fx:viewport-report="reportViewport"
+      {{- /* track both the code-view lines AND the preview-view markdown blocks;
+             only one renders at a time, and both carry a data-key the server
+             parses to a source line (L<old>-<new> / MB-<start>-<end>). */}}
+      data-lvt-viewport-items=".line, .md-block">
 {{if .ShowAllComments}}
 <section class="all-comments">
   <header class="ac-head">
@@ -1226,11 +1234,30 @@
 {{with .CurrentDiff}}
 <article>
   <header class="file-head">
-    <span class="file-head-name"><strong>{{.Path}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    {{- /* #128: reading-progress fill along the header's bottom edge. Absolutely
+           positioned (out of the flex flow), so it never shifts the header. */ -}}
+    {{- if gt $.ReadPercent 0}}<div class="read-progress-fill" style="width: {{$.ReadPercent}}%" aria-hidden="true"></div>{{end -}}
+    {{- /* Directory prefix muted + truncatable, basename bold + always in full,
+           so a long/deep path never wraps into a multi-line block (see .fh-dir /
+           .fh-base). Title carries the full path for hover/long-press. */ -}}
+    <span class="file-head-name" title="{{.Path}}">{{if $.SelectedFileDir}}<span class="fh-dir">{{$.SelectedFileDir}}</span>{{end}}<strong class="fh-base">{{$.SelectedFileBase}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
     {{/* Right-aligned action group: comment-on-file + the versions control. Both
          are compact chips sharing one row so the sticky header stays a single
          thin line on every viewport. */}}
     <span class="file-head-actions">
+    {{/* #128: jump to the read frontier — the first unread content. Shown only
+         when the file is partly read (some progress, not all), so it never
+         clutters a fresh or finished file. */}}
+    {{if $.HasReadFrontier}}
+    <form method="POST" class="file-head-resume">
+      <button
+        type="submit"
+        name="jumpToReadFrontier"
+        class="outline"
+        title="Jump to the first content you haven't read yet"
+      >{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
+    </form>
+    {{end}}
     {{/* Comment on the whole file — sits in context next to the filename. Hidden
          while the file composer is already open (self-toggle loop) or while
          viewing a historical version (read-only). */}}
@@ -1456,7 +1483,7 @@
         (le $.SelectionEndMax $be)}} selected{{end -}}
     "
          data-key="{{$mbkey}}"
-         {{- if eq $.ScrollHeadingBlockKey $mbkey}} lvt-fx:scroll="into-view"{{end}}>
+         {{- if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>
       {{- /* rendered markdown — clicking (or Enter when focused) selects the
              block's source line span. tabindex makes it keyboard-focusable and
              the keydown makes Enter activate it; it deliberately has NO
@@ -1531,7 +1558,7 @@
               data-line="{{$ln}}"
               data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}"
               class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"
-              {{- if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{end}}
+              {{- if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}
               data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span>
               {{- /* */ -}}<span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>
       {{- /* comments anchored to this line (on THIS side), then the composer when
