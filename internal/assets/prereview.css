@@ -1731,7 +1731,29 @@ header.file-head .file-head-comment button svg { display: block; }
 .code .line-row {
   line-height: 1.2;
   min-width: 100%;
+  /* Positioning context for the #136 right-margin marks (.line-marks is absolute). */
+  position: relative;
 }
+/* #136: per-line comment/suggestion indicators. A marked row reserves a sliver of
+   right padding on its content so the absolutely-positioned marks never overlap the
+   wrapped code text. */
+.code .line-row.has-line-marks .content { padding-right: 1.4rem; }
+.line-marks {
+  position: absolute; top: 0; right: 0.3rem; height: 1.2em;
+  display: flex; align-items: center; gap: 0.22rem;
+  padding: 0; margin: 0; border: 0; background: none; cursor: pointer; z-index: 2;
+  width: auto;
+}
+.line-mark { width: 7px; height: 7px; border-radius: 999px; display: block; }
+.line-mark-comment { background: var(--accent); }
+.line-mark-suggestion { background: var(--pr-add); }
+.line-marks:hover .line-mark { box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent); }
+/* Clicking a mark collapses that line's inline cards (pure-client lvt-el toggle);
+   the mark stays as the compact signal that they're there. */
+.line-row.cards-collapsed .inline-comment,
+.line-row.cards-collapsed .inline-suggestion { display: none; }
+/* When collapsed, ring the marks so they read as "click to expand". */
+.line-row.cards-collapsed .line-mark { box-shadow: 0 0 0 1.5px color-mix(in srgb, currentColor 35%, transparent); }
 /* Collapsed-gap marker in Diff view ("··· N unchanged lines ···").
    Non-interactive: no gutter, no selectLine button. */
 .code .fold-row {
