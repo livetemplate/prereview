@@ -780,6 +780,84 @@ func (s PrereviewState) RenderedMarkdown() []gitdiff.MarkdownBlock {
 	return s.CurrentDiff.MarkdownBlocks
 }
 
+// markdownBlockKey is the data-key a rendered-Markdown block carries in the
+// template ("MB-<start>-<end>"), keyed by its 1-based source line span. The
+// template stamps the same literal format on each block; the Go side
+// (BlockDiffStatus, ScrollHeadingBlockKey, ReadFrontierKey) matches against it,
+// so the format lives in one place on this side of the wire.
+func markdownBlockKey(start, end int) string {
+	return fmt.Sprintf("MB-%d-%d", start, end)
+}
+
+// BlockDiffStatus maps a rendered-Markdown block's data-key
+// ("MB-<start>-<end>") to a diff-highlight class: "added" when every new-side
+// line the block spans is an addition, "changed" when the block spans a mix of
+// added and context lines. Blocks that span only unchanged (context) lines are
+// omitted, so `{{index $.BlockDiffStatus $mbkey}}` yields "" and no class is
+// applied.
+//
+// This is what makes issue #110 — "diff highlighting should also show up in
+// preview mode" — work: the code view colours each add/del line green/red, and
+// this surfaces the same add signal on the rendered blocks. Only ADDED/CHANGED
+// content is representable here: the preview renders the NEW side of the file,
+// so a purely-deleted region has no block to mark (a documented gap, not a bug —
+// interleaving old content would be a different feature).
+//
+// Zero-arg by design (livetemplate only auto-invokes NumIn()==0 state methods),
+// mirroring LineDisplay / ScrollHeadingBlockKey: the per-block predicate is
+// precomputed into a map the template looks up by key.
+//
+// Returns nil (no highlighting) when the rendered view isn't showing, when the
+// reviewer picked File over Diff (the toolbar's Diff/File toggle — File mode
+// shows the plain document, exactly as it drops the add/del colouring in the
+// code view via `.code.file-view`), when a historical version is being viewed
+// (block ranges are in the version's coordinates while CurrentDiff.Lines is the
+// live diff — matching them is meaningless), or for a wholly-added /
+// wholly-deleted file (Note "file added" / "file deleted"): the code view drops
+// its green wall there too (`.code.pure-add`), so the preview stays consistent.
+func (s PrereviewState) BlockDiffStatus() map[string]string {
+	if !s.ShowRenderedMarkdown() || s.FileView || s.ViewingVersion {
+		return nil
+	}
+	switch s.CurrentDiff.Note {
+	case "file added", "file deleted":
+		return nil
+	}
+	// New-side line number → was it an addition? Context lines map to false;
+	// deletions carry NewNum==0 and never appear on the new side.
+	added := make(map[int]bool, len(s.CurrentDiff.Lines))
+	for _, ln := range s.CurrentDiff.Lines {
+		if ln.NewNum > 0 {
+			added[ln.NewNum] = ln.Kind == "add"
+		}
+	}
+	out := make(map[string]string)
+	for _, b := range s.CurrentDiff.MarkdownBlocks {
+		nAdd := 0
+		for n := b.StartLine; n <= b.EndLine; n++ {
+			if added[n] {
+				nAdd++
+			}
+		}
+		if nAdd == 0 {
+			continue
+		}
+		// Every new-side line in the block's span is present in `added`
+		// (LoadDiff renders the whole file, -U999999), so the span length is
+		// the line count: all-adds ⇒ a wholly-new block, else a partial edit.
+		key := markdownBlockKey(b.StartLine, b.EndLine)
+		if nAdd == b.EndLine-b.StartLine+1 {
+			out[key] = "added"
+		} else {
+			out[key] = "changed"
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // ScrollHeadingBlockKey returns the `data-key` (e.g. "MB-5-10") of the
 // MarkdownBlock containing the heading currently targeted by
 // ScrollToHeadingID — or "" when no scroll is requested or the heading
@@ -809,7 +887,7 @@ func (s PrereviewState) ScrollHeadingBlockKey() string {
 	}
 	for _, b := range s.CurrentDiff.MarkdownBlocks {
 		if line >= b.StartLine && line <= b.EndLine {
-			return fmt.Sprintf("MB-%d-%d", b.StartLine, b.EndLine)
+			return markdownBlockKey(b.StartLine, b.EndLine)
 		}
 	}
 	return ""

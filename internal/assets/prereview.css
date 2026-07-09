@@ -795,6 +795,14 @@ header.bar .toolbar-inline + .tb-action {
   margin-left: 0.2rem;
   padding-left: 0.7rem;
 }
+/* Tablet band (desktop inline bar shown from 900px; below it the whole bar
+   collapses into the 3-dots menu). A Markdown file carries BOTH the Preview|Raw
+   and Diff|File radio groups inline, which pushes the bar to two rows here.
+   Drop the file-count counters (secondary — always in the file drawer, and the
+   full text returns above ~1100px) so the toggles stay on one row. */
+@media (min-width: 900px) and (max-width: 1100px) {
+  .toolbar-inline .tb-counters { display: none; }
+}
 /* A .tb-action form can hold two buttons (stream mode: "Hand off →" +
    "End session"). It's a plain block form, and Pico buttons default to
    display:block/width:100%, so the two stack and — with margin:0 — overlap
@@ -2079,6 +2087,17 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border: 1px solid transparent;
 }
 .md-rendered:hover { background: var(--pico-card-sectioning-background-color); border-color: var(--pico-muted-border-color); }
+/* #110 — diff highlighting in the rendered-Markdown preview. The code view
+   colours each added line green; here the same signal rides on the rendered
+   block via a left change-bar (BlockDiffStatus → md-added / md-changed). An
+   inset box-shadow (not a border) keeps the prose from shifting, and the
+   --pr-add token auto-themes across every scheme×mode. A wholly-new block also
+   gets a faint fill; a partially-edited one carries the bar alone. Only
+   additions are shown — the preview renders the NEW side of the file, so a
+   purely-deleted region has no block to mark (documented gap in BlockDiffStatus). */
+.md-block.md-added .md-rendered,
+.md-block.md-changed .md-rendered { box-shadow: inset 3px 0 0 var(--pr-add); }
+.md-block.md-added .md-rendered { background: var(--pr-add-bg); }
 /* Tighten Pico's default block spacing inside rendered Markdown so a
    doc reads as one flow rather than widely-spaced cards, and make code
    wrap instead of forcing horizontal scroll (consistent with the diff
