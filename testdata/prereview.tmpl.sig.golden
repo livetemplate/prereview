@@ -36,8 +36,8 @@
 <div class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}" data-key="composer"{{if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}><strong>{{if eq $.CommentMode "region"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small>{{else}}{{if eq $.CommentMode "file"}}{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "area"}}{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "text"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}} · “<span class="selection-snippet">{{$.SelectionText}}</span>”{{else}}{{if $.ReanchorCommentID}}Re-anchoring comment to {{else}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{end}}{{$.SelectionLabel}}{{end}}{{end}}{{end}}{{end}}</strong>{{if and (eq $.CommentMode "") (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID) (not $.ShowRenderedMarkdown) (not $.ShowRenderedHTML)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form" lvt-on:keydown="addComment" lvt-key="Mod+Enter">
     <textarea name="body" placeholder="{{if eq $.CommentMode "region"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "file"}}What's wrong with this file?{{else}}{{if eq $.CommentMode "area"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "text"}}What's wrong with this text?{{else}}What's wrong with these lines?{{end}}{{end}}{{end}}{{end}}" required lvt-autofocus lvt-on:input="saveDraft" lvt-mod:debounce="150">{{$.DraftBody}}</textarea>
   </form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions">
-    <button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel</button>
-    <button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save</button>
+    <button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel{{with index $.KeyHint "clearSelection"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+    <button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save{{with index $.KeyHint "addComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
   </div></div>
 === deleteDialog ===
 <dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer>
@@ -359,7 +359,7 @@
     <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
       
       <form method="POST" class="queue-pause-form">
-        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}</button>
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}{{with index $.KeyHint "toggleAgentPause"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
       </form>
       <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
       {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}

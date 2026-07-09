@@ -99,6 +99,35 @@ func TestE2E_KbdHintInButtons(t *testing.T) {
 	// wouldn't flip the query. It's a standard media rule, left to manual check
 	// on a real touch device.
 
+	// #118: the composer Save/Cancel buttons surface their existing shortcuts
+	// (Mod+Enter saves, Esc cancels) as chips — those rows fire from their own
+	// template bindings, so KeyHint keys them by Button, not Action. Open the
+	// file composer with "c" and assert both chips (single-sourced from keymap).
+	if err := chromedp.Run(p.ctx,
+		chromedp.KeyEvent("c"),
+		chromedp.WaitVisible(`.composer .save-btn`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("open file composer: %v%s", err, diag())
+	}
+	for _, c := range []struct{ sel, wantKey, where string }{
+		{`.composer .save-btn .kbd-hint`, "⌘/Ctrl + Enter", "Save"},
+		{`.composer .cancel-btn .kbd-hint`, "Esc", "Cancel"},
+	} {
+		got := evalStr(fmt.Sprintf(`(()=>{const el=document.querySelector(%q);return el?el.textContent.trim():'MISSING'})()`, c.sel))
+		if got != c.wantKey {
+			t.Errorf("%s chip = %q, want %q (single-sourced from keymap)%s", c.where, got, c.wantKey, diag())
+		}
+	}
+
+	// #118 stream-gating: the agent-queue Pause/Resume shortcut is StreamOnly, so
+	// in this repo-mode (no --stream) session its hidden window binding must NOT
+	// be emitted — a repo-only reviewer gets no phantom key for a queue they lack.
+	// (The positive case — the binding present + "q" toggling pause — is
+	// TestE2E_PauseShortcut.)
+	if evalStr(`String(!!document.querySelector('.kbd-bindings [lvt-on\\:window\\:keydown="toggleAgentPause"]'))`) != "false" {
+		t.Errorf("repo mode unexpectedly emits the stream-only Pause/Resume window binding%s", diag())
+	}
+
 	if strings.Contains(p.stderr.String(), "panic") {
 		t.Fatalf("server logged a panic:%s", diag())
 	}
