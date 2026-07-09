@@ -228,7 +228,8 @@
         <label><input type="radio" name="view" value="raw" {{if .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Raw</label>
       </form>
       {{end}}
-      {{if and (not .ShowRenderedMarkdown) (not .ShowRenderedHTML)}}
+      
+      {{if not .ShowRenderedHTML}}
       <form method="POST" class="tb-radios" aria-label="File view">
         <label><input type="radio" name="view" value="diff" {{if not .FileView}}checked{{end}} lvt-on:change="setFileViewMode">Diff</label>
         <label><input type="radio" name="view" value="file" {{if .FileView}}checked{{end}} lvt-on:change="setFileViewMode">File</label>
@@ -484,7 +485,7 @@
     </button>
   </form>
   {{end}}
-  {{if and (not .ShowRenderedMarkdown) (not .ShowRenderedHTML)}}
+  {{if not .ShowRenderedHTML}}
   <form method="POST">
     <button type="submit" name="toggleFileView" class="menu-item{{if .FileView}} is-on{{end}}" role="menuitem">
       <span class="menu-icon">

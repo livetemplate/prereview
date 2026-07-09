@@ -50,6 +50,11 @@ func TestBlockDiffStatus(t *testing.T) {
 			want:  nil,
 		},
 		{
+			name:  "File view (Diff/File toggle on File) → suppressed",
+			state: PrereviewState{CurrentDiff: modified, FileView: true},
+			want:  nil,
+		},
+		{
 			name: "wholly-added file → suppressed (parity with .code.pure-add)",
 			state: PrereviewState{CurrentDiff: &gitdiff.FileDiff{
 				Path:           "NEW.md",

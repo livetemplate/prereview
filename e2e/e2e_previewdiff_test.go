@@ -133,18 +133,21 @@ func TestE2E_PreviewDiffHighlight(t *testing.T) {
 		return cls
 	}
 
-	// The brand-new paragraph's block is highlighted as an addition. Poll: the
-	// class lands on the block once the file-select render settles.
-	added := func() bool {
+	// waitCharlieAdded polls until the new-paragraph block's md-added presence
+	// matches want (the class lands / clears a render after a mode toggle).
+	waitCharlieAdded := func(want bool) bool {
 		for i := 0; i < 40; i++ {
-			if strings.Contains(classOfBlockContaining("Charlie paragraph is brand new."), "md-added") {
+			if strings.Contains(classOfBlockContaining("Charlie paragraph is brand new."), "md-added") == want {
 				return true
 			}
 			chromedp.Run(p.ctx, chromedp.Sleep(75*time.Millisecond))
 		}
 		return false
 	}
-	if !added() {
+
+	// The brand-new paragraph's block is highlighted as an addition (Diff mode,
+	// the default).
+	if !waitCharlieAdded(true) {
 		t.Errorf("new-paragraph block never carried md-added%s", diag())
 	}
 
@@ -174,6 +177,58 @@ func TestE2E_PreviewDiffHighlight(t *testing.T) {
 	}
 	if shadow == "" || shadow == "none" || strings.HasPrefix(shadow, "NO_") {
 		t.Errorf("added block's .md-rendered has no change-bar box-shadow (got %q)%s", shadow, diag())
+	}
+
+	// The toolbar's Diff/File toggle works in Preview mode too (the point of this
+	// follow-up): File shows the plain rendered doc with NO highlight, Diff
+	// restores it. The inline radio group is on the desktop toolbar at this width
+	// (>=900px); click by value via the setFileViewMode form.
+	clickViewRadio := func(value string) {
+		js := fmt.Sprintf(
+			`(()=>{const el=document.querySelector('form[aria-label="File view"] input[value=%q]');if(!el)return false;el.click();return true})()`,
+			value)
+		var ok bool
+		if err := chromedp.Run(p.ctx, chromedp.Evaluate(js, &ok)); err != nil || !ok {
+			t.Fatalf("click %q view radio (ok=%v): %v%s", value, ok, err, diag())
+		}
+	}
+	clickViewRadio("file")
+	if !waitCharlieAdded(false) {
+		t.Errorf("File mode should drop the preview highlight, but md-added persisted%s", diag())
+	}
+	clickViewRadio("diff")
+	if !waitCharlieAdded(true) {
+		t.Errorf("Diff mode should restore the preview highlight, but md-added never returned%s", diag())
+	}
+
+	// Toolbar crop guard. The user's primary surface is a phone/tablet over the
+	// tailnet, so keeping Diff/File in the View▾ dropdown (rather than a second
+	// inline radio group next to Preview|Raw) must keep the markdown-preview bar
+	// on one row at the narrow "iPad" band the grouping exists for. 1000px is the
+	// design contract (matches TestE2E_ToolbarViewDropdown; below it, at the
+	// 900px mobile breakpoint, the inline set gives way to the hamburger menu).
+	if err := chromedp.Run(p.ctx, chromedp.EmulateViewport(1000, 860), chromedp.Sleep(200*time.Millisecond)); err != nil {
+		t.Fatalf("resize to 1000px: %v%s", err, diag())
+	}
+	var barH int
+	var cropped, fileToggleShown bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('header.bar').offsetHeight`, &barH),
+		chromedp.Evaluate(`(()=>{const w=window.innerWidth;return [...document.querySelectorAll('header.bar button')].some(b=>b.getBoundingClientRect().right > w + 1);})()`, &cropped),
+		// The Diff/File toggle must stay INLINE on the desktop bar (the request):
+		// visible with a non-zero box, not collapsed away.
+		chromedp.Evaluate(`(()=>{const f=document.querySelector('.toolbar-inline form[aria-label="File view"]');if(!f)return false;const r=f.getBoundingClientRect();return r.width>0&&r.height>0;})()`, &fileToggleShown),
+	); err != nil {
+		t.Fatalf("crop probe at 1000px: %v%s", err, diag())
+	}
+	if barH > 70 {
+		t.Errorf("markdown-preview toolbar wrapped at 1000px (bar height=%dpx)%s", barH, diag())
+	}
+	if cropped {
+		t.Errorf("markdown-preview toolbar control clipped past the right edge at 1000px%s", diag())
+	}
+	if !fileToggleShown {
+		t.Errorf("Diff/File toggle should stay inline on the desktop toolbar at 1000px%s", diag())
 	}
 
 	// No console errors (warnings tolerated).

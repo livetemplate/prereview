@@ -364,7 +364,13 @@
         >Raw</label>
       </form>
       {{end}}
-      {{if and (not .ShowRenderedMarkdown) (not .ShowRenderedHTML)}}
+      {{/* Diff / File inline radios (desktop). Shown for code, HTML-raw, and
+           Markdown (raw + preview) — in preview the Diff/File choice gates the
+           rendered change-bars (#110), matching what it does in raw. Hidden in
+           HTML preview, whose highlight is deferred (it'd be a no-op there). On
+           mobile the whole inline bar collapses into the 3-dots menu, which
+           carries the same toggle. */}}
+      {{if not .ShowRenderedHTML}}
       <form method="POST" class="tb-radios" aria-label="File view">
         <label><input
           type="radio"
@@ -829,7 +835,7 @@
     </button>
   </form>
   {{end}}
-  {{if and (not .ShowRenderedMarkdown) (not .ShowRenderedHTML)}}
+  {{if not .ShowRenderedHTML}}
   <form method="POST">
     <button
       type="submit"

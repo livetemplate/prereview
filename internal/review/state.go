@@ -807,14 +807,16 @@ func markdownBlockKey(start, end int) string {
 // mirroring LineDisplay / ScrollHeadingBlockKey: the per-block predicate is
 // precomputed into a map the template looks up by key.
 //
-// Returns nil (no highlighting) when the rendered view isn't showing, when a
-// historical version is being viewed (block ranges are in the version's
-// coordinates while CurrentDiff.Lines is the live diff — matching them is
-// meaningless), or for a wholly-added / wholly-deleted file (Note "file added"
-// / "file deleted"): the code view drops its green wall there too
-// (`.code.pure-add`), so the preview stays consistent.
+// Returns nil (no highlighting) when the rendered view isn't showing, when the
+// reviewer picked File over Diff (the toolbar's Diff/File toggle — File mode
+// shows the plain document, exactly as it drops the add/del colouring in the
+// code view via `.code.file-view`), when a historical version is being viewed
+// (block ranges are in the version's coordinates while CurrentDiff.Lines is the
+// live diff — matching them is meaningless), or for a wholly-added /
+// wholly-deleted file (Note "file added" / "file deleted"): the code view drops
+// its green wall there too (`.code.pure-add`), so the preview stays consistent.
 func (s PrereviewState) BlockDiffStatus() map[string]string {
-	if !s.ShowRenderedMarkdown() || s.ViewingVersion {
+	if !s.ShowRenderedMarkdown() || s.FileView || s.ViewingVersion {
 		return nil
 	}
 	switch s.CurrentDiff.Note {

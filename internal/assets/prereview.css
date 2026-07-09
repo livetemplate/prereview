@@ -795,6 +795,14 @@ header.bar .toolbar-inline + .tb-action {
   margin-left: 0.2rem;
   padding-left: 0.7rem;
 }
+/* Tablet band (desktop inline bar shown from 900px; below it the whole bar
+   collapses into the 3-dots menu). A Markdown file carries BOTH the Preview|Raw
+   and Diff|File radio groups inline, which pushes the bar to two rows here.
+   Drop the file-count counters (secondary — always in the file drawer, and the
+   full text returns above ~1100px) so the toggles stay on one row. */
+@media (min-width: 900px) and (max-width: 1100px) {
+  .toolbar-inline .tb-counters { display: none; }
+}
 /* A .tb-action form can hold two buttons (stream mode: "Hand off →" +
    "End session"). It's a plain block form, and Pico buttons default to
    display:block/width:100%, so the two stack and — with margin:0 — overlap
