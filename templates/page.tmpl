@@ -1480,11 +1480,13 @@
        lvt-fx:text-select="selectText" data-surface="block">
     {{- range $.RenderedMarkdown -}}
     {{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be -}}
+    {{$mbstatus := index $.BlockDiffStatus $mbkey -}}
     <div class="md-block
     {{- if and
         (ne $.SelectionEndMax 0)
         (ge $.SelectionEndMax $bs)
         (le $.SelectionEndMax $be)}} selected{{end -}}
+    {{- if $mbstatus}} md-{{$mbstatus}}{{end -}}
     "
          data-key="{{$mbkey}}"
          {{- if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>

@@ -88,7 +88,7 @@ func (s PrereviewState) ReadFrontierKey() string {
 	if s.ShowRenderedMarkdown() {
 		for _, b := range s.CurrentDiff.MarkdownBlocks {
 			if mark >= b.StartLine && mark <= b.EndLine {
-				return fmt.Sprintf("MB-%d-%d", b.StartLine, b.EndLine)
+				return markdownBlockKey(b.StartLine, b.EndLine)
 			}
 		}
 		return ""
