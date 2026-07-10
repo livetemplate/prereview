@@ -25,7 +25,7 @@ import (
 	"github.com/livetemplate/prereview/internal/review"
 )
 
-func run(repo, base, host string, explicitHost bool, port int, agentMode, skillUpdated bool, out string) error {
+func run(repo, base, host string, explicitHost, explicitBase bool, port int, agentMode, skillUpdated bool, out string, replace bool) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -39,6 +39,20 @@ func run(repo, base, host string, explicitHost bool, port int, agentMode, skillU
 	// valid whether the path was a repo, a loose dir, or a single file.
 	absRepo = tgt.RepoPath
 
+	// Clean working tree + no explicit --base: the HEAD diff is empty and there
+	// is nothing to review, so diff against the empty tree instead — every
+	// tracked line then appears added and is commentable. Best-effort: any git
+	// error leaves base=HEAD and never fails the launch, and an explicitly
+	// requested base is always honored as-is.
+	if !explicitBase && base == "HEAD" && !tgt.NoGit {
+		if clean, err := gitdiff.WorktreeClean(absRepo); err == nil && clean {
+			if empty, err := gitdiff.EmptyTreeHash(absRepo); err == nil && empty != "" {
+				base = empty
+				slog.Info("clean working tree — reviewing the whole tree against the empty base")
+			}
+		}
+	}
+
 	// The .prereview/ store defaults to the review root; --out redirects it
 	// (e.g. to keep a read-only checkout pristine). storeRoot is what we print
 	// as REPO so the agent polls the right .prereview/.
@@ -46,6 +60,15 @@ func run(repo, base, host string, explicitHost bool, port int, agentMode, skillU
 	if err != nil {
 		return err
 	}
+
+	// Claim the per-store server lock BEFORE openStore: a non-replacing second
+	// launch must error out before openStore wipes a live server's events.jsonl.
+	release, err := claimServerLock(filepath.Join(storeRoot, ".prereview"), replace)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	startedAt := time.Now()
 	csvPath, csvWriter, err := openStore(storeRoot)
 	if err != nil {
@@ -297,7 +320,7 @@ func serveAndWait(srv *http.Server, ln net.Listener, extra *http.Server, shutdow
 // live local site on its own port (a separate origin so the app's root-relative
 // URLs forward cleanly — see proxy.go) plus the prereview UI that frames it and
 // overlays the region-annotation overlay. Annotations save to <out>/comments.csv.
-func runExternal(externalURL, outDir, host string, explicitHost bool, port int, agentMode, skillUpdated bool) error {
+func runExternal(externalURL, outDir, host string, explicitHost bool, port int, agentMode, skillUpdated, replace bool) error {
 	target, err := url.Parse(externalURL)
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
 		return fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
@@ -309,6 +332,15 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	if err != nil {
 		return err
 	}
+
+	// Claim the per-store server lock BEFORE openStore, same as repo mode: a
+	// non-replacing second launch must error out before openStore wipes a live
+	// server's events.jsonl.
+	release, err := claimServerLock(filepath.Join(absOut, ".prereview"), replace)
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	// Same .prereview/ store layout as repo mode (so the agent locates the
 	// store identically), just rooted at --out.

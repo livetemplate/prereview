@@ -27,6 +27,7 @@ const topUsage = `Usage: prereview [flags] [path]
 Subcommands (for the coding agent; each takes --out <REPO>):
   comments   list the review's comments (--json for the queue-snapshot shape; --all for resolved too)
   done       mark comments worked on (validated against comments.csv; --file -/--all-open)
+  status     echo the agent's status to the review UI: status <working|done> [message]
   suggest    submit proposed edits as inline suggestion boxes (--file/stdin)
   watch      deliver the next batch of queue events after --since <seq> (blocks when caught up), until the terminating end event
   help       show this message
@@ -121,6 +122,17 @@ func main() {
 		return
 	}
 
+	// `prereview status <working|done> [message] [--out <dir>]` — the coding agent
+	// echoes what it's doing so the live review UI shows a status pill. A bare
+	// positional verb like the others, so intercept it before flag parsing.
+	if len(os.Args) > 1 && os.Args[1] == "status" {
+		if err := runStatus(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview status:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// `prereview help` (or -h/--help with no other args) — list the subcommands so
 	// an agent doesn't accidentally launch a server when it meant to query. Bare
 	// `prereview` still launches a review of the current directory (the default).
@@ -147,6 +159,7 @@ func main() {
 	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
 	doUninstall := flag.Bool("uninstall", false, "remove the prereview binary from disk, then exit (your review comments in each repo's .prereview/ are left untouched)")
 	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
+	replace := flag.Bool("replace", false, "if a prereview server is already running for this repo's store, stop it and take over (otherwise launch errors)")
 	flag.Parse()
 
 	// --agent is the single agent-mode flag. --skill/--stream are kept as
@@ -163,10 +176,18 @@ func main() {
 	// auto-rebind over it), the default is just a starting point we may
 	// replace with the Tailscale IP on a remote box. flag.Visit only
 	// reports flags actually set on the command line.
+	// explicitBase is the same distinction for --base: an explicit base
+	// (--base main, HEAD~3, a tag) is honored as-is, while the default "HEAD"
+	// is a starting point we may swap for the empty tree on a clean working
+	// tree (so every line is commentable). See run().
 	explicitHost := false
+	explicitBase := false
 	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "host" {
+		switch f.Name {
+		case "host":
 			explicitHost = true
+		case "base":
+			explicitBase = true
 		}
 	})
 
@@ -285,14 +306,14 @@ func main() {
 	}
 
 	if *external != "" {
-		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode, skillUpdated); err != nil {
+		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode, skillUpdated, *replace); err != nil {
 			slog.Error("fatal", "err", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, agentMode, skillUpdated, *out); err != nil {
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, explicitBase, *port, agentMode, skillUpdated, *out, *replace); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
