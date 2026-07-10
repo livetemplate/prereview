@@ -30,6 +30,7 @@ type UIPrefs struct {
 	SchemeName   string `json:"scheme_name"`
 	ThemeMode    string `json:"theme_mode"`
 	FocusMode    bool   `json:"focus_mode"`
+	HideMarks    bool   `json:"hide_marks"`
 	FileView     bool   `json:"file_view"`
 	RawMarkdown  bool   `json:"raw_markdown"`
 	RawHTML      bool   `json:"raw_html"`
@@ -110,6 +111,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.SchemeName = p.SchemeName
 	state.ThemeMode = p.ThemeMode
 	state.FocusMode = p.FocusMode
+	state.HideMarks = p.HideMarks
 	state.FileView = p.FileView
 	state.RawMarkdown = p.RawMarkdown
 	state.RawHTML = p.RawHTML
@@ -125,6 +127,7 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		SchemeName:   state.SchemeName,
 		ThemeMode:    state.ThemeMode,
 		FocusMode:    state.FocusMode,
+		HideMarks:    state.HideMarks,
 		FileView:     state.FileView,
 		RawMarkdown:  state.RawMarkdown,
 		RawHTML:      state.RawHTML,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"path/filepath"
+	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
 )
@@ -175,20 +176,21 @@ func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
 	return out
 }
 
-// CommentMarkLines / SuggestionMarkLines report, per line-row (keyed
-// "<toLine>-<side>", e.g. "4-new"), whether that row carries a comment /
-// suggestion — driving the #136 right-margin marks. Derived from the SAME filtered
-// maps the cards render from (CommentsByEndLine / SuggestionsByEndLine), so a mark
-// appears exactly where a card does — respecting side, individually-hidden, the
-// global suggestions toggle, and file scope. Zero-arg so the framework pre-computes
-// them (a method WITH an arg silently breaks rendering); the row looks itself up as
-// {{index $.CommentMarkLines (printf "%d-%s" $ln $lside)}}. Nil when none, so a
-// missing key indexes to false.
-func (s PrereviewState) CommentMarkLines() map[string]bool {
-	out := map[string]bool{}
+// CommentCountLines / SuggestionCountLines report, per line-row (keyed
+// "<toLine>-<side>", e.g. "4-new"), HOW MANY comments / suggestions render on that
+// row — driving the #151 right-margin count badges (and, via count>0, the #136
+// presence marks). Derived from the SAME filtered maps the cards render from
+// (CommentsByEndLine / SuggestionsByEndLine), so a badge's number always equals the
+// cards actually rendered on that row — side, individually-hidden, the global
+// suggestions toggle, resolved filter, and file scope are all inherited. Zero-arg so
+// the framework pre-computes them (a method WITH an arg silently breaks rendering);
+// the row looks itself up as {{index $.CommentCountLines (printf "%d-%s" $ln $lside)}}.
+// Nil when none, so a missing key indexes to 0.
+func (s PrereviewState) CommentCountLines() map[string]int {
+	out := map[string]int{}
 	for ln, cs := range s.CommentsByEndLine() {
 		for _, c := range cs {
-			markRowSides(out, ln, c.Side)
+			countRowSides(out, ln, c.Side)
 		}
 	}
 	if len(out) == 0 {
@@ -197,11 +199,11 @@ func (s PrereviewState) CommentMarkLines() map[string]bool {
 	return out
 }
 
-func (s PrereviewState) SuggestionMarkLines() map[string]bool {
-	out := map[string]bool{}
+func (s PrereviewState) SuggestionCountLines() map[string]int {
+	out := map[string]int{}
 	for ln, sgs := range s.SuggestionsByEndLine() {
 		for _, sg := range sgs {
-			markRowSides(out, ln, sg.Side)
+			countRowSides(out, ln, sg.Side)
 		}
 	}
 	if len(out) == 0 {
@@ -210,17 +212,53 @@ func (s PrereviewState) SuggestionMarkLines() map[string]bool {
 	return out
 }
 
-// markRowSides records the row key(s) an annotation on line ln / side occupies,
+// HasMarks reports whether the selected file has any per-line comment/suggestion
+// badges — i.e. whether the "Hide annotations" toggle (ToggleMarks) has anything to
+// act on. Gates that menu entry. Reads the same memoized count maps the badges use.
+func (s PrereviewState) HasMarks() bool {
+	return len(s.CommentCountLines()) > 0 || len(s.SuggestionCountLines()) > 0
+}
+
+// CollapsedRows returns the collapsed diff rows (#112) for the SELECTED file, keyed
+// by rowkey ("L<old>-<new>") — the file prefix that scopes CollapsedLines across
+// files is stripped so the template can look a row up directly with
+// {{index $.CollapsedRows $lkey}}. Zero-arg so the framework pre-computes it; nil
+// when nothing is collapsed on this file (a missing key indexes to false).
+func (s PrereviewState) CollapsedRows() map[string]bool {
+	if len(s.CollapsedLines) == 0 || s.SelectedFile == "" {
+		return nil
+	}
+	prefix := collapsedLineKey(s.SelectedFile, "") // "<file>\n" — same encoding as the keys
+	out := map[string]bool{}
+	for k := range s.CollapsedLines {
+		if rowkey, ok := strings.CutPrefix(k, prefix); ok {
+			out[rowkey] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// collapsedLineKey is the CollapsedLines map key for a row on the given file —
+// file-scoped so equal line numbers on different files don't collide.
+func collapsedLineKey(file, rowkey string) string {
+	return file + "\n" + rowkey
+}
+
+// countRowSides increments the row key(s) an annotation on line ln / side occupies,
 // matching the template's {{if or (eq .Side $lside) (eq .Side "")}} gate: a
-// whole-line annotation (Side "") marks BOTH the old and new rows; a one-sided one
-// marks just its side.
-func markRowSides(out map[string]bool, ln int, side string) {
+// whole-line annotation (Side "") counts on BOTH the old and new rows; a one-sided
+// one counts on just its side. This per-row identity (new = #new + #"", old = #old +
+// #"") is what makes a badge's number equal the cards actually rendered on the row.
+func countRowSides(out map[string]int, ln int, side string) {
 	if side == "" {
-		out[fmt.Sprintf("%d-old", ln)] = true
-		out[fmt.Sprintf("%d-new", ln)] = true
+		out[fmt.Sprintf("%d-old", ln)]++
+		out[fmt.Sprintf("%d-new", ln)]++
 		return
 	}
-	out[fmt.Sprintf("%d-%s", ln, side)] = true
+	out[fmt.Sprintf("%d-%s", ln, side)]++
 }
 
 // SuggestionCount is the number of suggestions on the selected file, used to

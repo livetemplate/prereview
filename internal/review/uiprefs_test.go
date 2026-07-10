@@ -53,10 +53,10 @@ func TestUIPrefsRoundTrip(t *testing.T) {
 }
 
 // TestSavePrefsWritesOnlyViewFields is the guard for the advisor's correctness
-// caveat: only the seven global view-style fields belong in the prefs file — the
+// caveat: only the global view-style fields belong in the prefs file — the
 // per-repo Base (and every other lvt:"persist" field) must NOT be swept in, or it
 // would corrupt across repos. UIPrefs has no Base field, so the file can never
-// carry one; this asserts the on-disk JSON key set stays exactly the seven.
+// carry one; this asserts the on-disk JSON key set stays exactly the view fields.
 func TestSavePrefsWritesOnlyViewFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ui-prefs.json")
 	c := &PrereviewController{UIPrefsPath: path}
@@ -77,7 +77,8 @@ func TestSavePrefsWritesOnlyViewFields(t *testing.T) {
 	}
 	wantKeys := map[string]bool{
 		"show_resolved": true, "scheme_name": true, "theme_mode": true,
-		"focus_mode": true, "file_view": true, "raw_markdown": true, "raw_html": true,
+		"focus_mode": true, "hide_marks": true, "file_view": true,
+		"raw_markdown": true, "raw_html": true,
 	}
 	for k := range m {
 		if !wantKeys[k] {

@@ -244,6 +244,14 @@ type PrereviewState struct {
 	// browser refresh; not written to CSV (this is UX state, not a comment).
 	ViewedFiles map[string]bool `json:"viewed_files" lvt:"persist"`
 
+	// CollapsedLines is the set of diff rows whose inline comment/suggestion
+	// cards the reviewer collapsed via the right-margin mark (#112). Keyed
+	// "<file>\n<rowkey>" (rowkey = "L<old>-<new>") so a line number can't
+	// collide across files. Persisted (lvt:"persist") so a collapse survives a
+	// browser refresh — the whole point of #112, where the old client-only
+	// .cards-collapsed class was lost on reload and hidden cards reappeared.
+	CollapsedLines map[string]bool `json:"collapsed_lines" lvt:"persist"`
+
 	// Read progress (#128), keyed by file path. ReadThrough is the furthest
 	// new-side line number the reviewer has scrolled past (a high-water mark →
 	// lines at/above it render "read"). LastReadTopKey is the topmost visible line
@@ -396,6 +404,13 @@ type PrereviewState struct {
 	// already overlays/modals, so the flag is a harmless no-op there.
 	// Durable per-user view pref (uiprefs.go), like FileView.
 	FocusMode bool `json:"focus_mode"`
+
+	// HideMarks, when true, hides the per-line comment/suggestion count badges
+	// (#151) AND their inline cards in the diff, so a reviewer can read the raw
+	// diff clean. Toggled from the overflow menu (ToggleMarks); focus mode hides
+	// them too (CSS). Applies on all viewports (unlike FocusMode's side-column
+	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
+	HideMarks bool `json:"hide_marks"`
 
 	// ThemeMode is the Light/Dark/System color-mode preference (issue #60),
 	// cycled by the toolbar toggle. "" means System (the default): the page
