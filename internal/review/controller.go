@@ -274,6 +274,11 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// in visibleSuggestions, fingerprint-gated so a revised suggestion un-hides.
 	c.applyHidden(&state)
 
+	// Load the #149 conversation threads (agent + reviewer reply sidecars, merged
+	// + sorted) so each comment/suggestion card renders its thread. Cheap
+	// append-only read, like applySuggestions; the files are the source of truth.
+	state.ThreadEntries = loadThreads(c.CSVPath)
+
 	// AgentMode is mirror-only: refresh from the controller every connect so a
 	// binary launched with --agent renders the right button even after a
 	// session-storage reconnect. Mirrored BEFORE the external short-circuit

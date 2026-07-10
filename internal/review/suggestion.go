@@ -107,6 +107,13 @@ func SuggestionPath(csvPath string) string {
 	return filepath.Join(filepath.Dir(csvPath), SuggestionFileName)
 }
 
+// LoadSuggestions reads the agent-owned suggestions for the store whose CSV lives at
+// csvPath. Exported so the `reply` subcommand can validate a target id against
+// suggestion ids — a reply targets a comment OR a suggestion.
+func LoadSuggestions(csvPath string) []Suggestion {
+	return loadSuggestions(SuggestionPath(csvPath))
+}
+
 // loadSuggestions reads the append-only suggestions file into a slice, deduped by
 // ID (last write wins, so the LLM can revise a suggestion by re-appending the same
 // ID). Tolerant by design, exactly like loadProcessedIDs: a missing file yields

@@ -195,6 +195,19 @@ typo can't corrupt anything. **Prefer per-id marking** (tie each mark to its edi
 Marking is a one-way signal that you acted; the human still **resolves** comments
 themselves, so keep acting only on unresolved rows.
 
+## Say what you did — `prereview reply`
+
+`done` marks a comment handled; **`reply` says what you actually changed** — a short
+note the reviewer sees threaded under the comment (or suggestion), so they aren't left
+guessing. After addressing a comment, post a one-line reply alongside the `done` mark:
+
+```bash
+prereview reply --out "<REPO>" <comment-or-suggestion-id> --body "Renamed to userToken and updated the 3 call sites."
+```
+
+The id is validated against `comments.csv` and suggestions (an unknown id fails
+non-zero, like `done`). Keep it to a sentence or two on the change.
+
 ## Suggested edits (`prereview suggest`)
 
 Comments flow **user → you**. Suggestions flow the other way: **you propose an edit,

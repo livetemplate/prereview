@@ -2537,6 +2537,23 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   min-height: 26px; min-width: auto; line-height: 1.2;
 }
 .inline-comment .ic-actions form { margin: 0; }
+/* #149 conversation thread — agent replies (and, later, reviewer replies) rendered
+   under a comment/suggestion. Each entry is a small card indented from the left with
+   an author-coloured rail; the agent's uses --accent, the reviewer's the muted colour. */
+.thread { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.4rem 0 0.1rem; }
+.thread-entry {
+  border-left: 2px solid var(--pico-muted-border-color);
+  padding: 0.15rem 0 0.15rem 0.5rem;
+}
+.thread-agent { border-left-color: var(--accent); }
+.thread-meta { display: flex; align-items: baseline; gap: 0.3rem; }
+.thread-author {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.03em; color: var(--pico-muted-color);
+}
+.thread-agent .thread-author { color: var(--accent); }
+.thread-when { font-size: 0.66rem; color: var(--pico-muted-color); }
+.thread-body { white-space: pre-wrap; word-break: break-word; font-size: 0.82rem; }
 /* Anchor-status surface. moved = informational (auto-followed its
    content); outdated = the anchored text changed/vanished and the
    comment could not be confidently re-placed — it needs Re-anchor. */

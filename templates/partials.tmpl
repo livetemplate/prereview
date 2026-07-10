@@ -274,6 +274,9 @@
   {{- if .AnchorOutdated -}}
   <details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>
   {{- end -}}
+  {{- /* #149 conversation thread — the agent's replies ("what I did") on this
+         comment, rendered under the body. Empty (Threads nil) → nothing renders. */ -}}
+  {{- template "thread" (index $.Threads .ID) -}}
   {{- /* resolve / re-anchor / edit / delete */ -}}
   <div class="ic-actions">
     <form method="POST">
@@ -334,6 +337,22 @@
   </div></div>
 {{- end}}
 
+{{/* thread — the #149 conversation on a comment or suggestion. Receives the target's
+     []ThreadEntry (or nil). Renders nothing when empty, so a target with no replies is
+     unchanged. Each entry shows its author (agent/reviewer) + a compact time + body. */}}
+{{define "thread" -}}
+{{- if . -}}
+<div class="thread">
+  {{- range . -}}
+  <div class="thread-entry thread-{{.Author}}">
+    <div class="thread-meta"><span class="thread-author">{{.Author}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
+    <div class="thread-body">{{.Body}}</div>
+  </div>
+  {{- end -}}
+</div>
+{{- end -}}
+{{- end}}
+
 {{/* suggestionCard — one LLM-proposed edit (issue #98), rendered inline like a
      comment but visually distinct (sparkle icon, accent-tinted chrome, a
      before→after mini-diff). Phase 2 adds the reviewer's decision: accept / reject /
@@ -375,6 +394,8 @@
   {{- end -}}
   {{- /* the reviewer's requested-revision note, if any */ -}}
   {{- if and (eq $d.Verdict "revise") $d.Note}}<div class="sg-revise-note">{{$d.Note}}</div>{{end -}}
+  {{- /* #149 conversation thread — the agent's replies on this suggestion. */ -}}
+  {{- template "thread" (index $.Threads .ID) -}}
   {{- /* decision surface — hidden for outdated suggestions (can't act on a stale
          target; the LLM re-derives it on hand-off) */ -}}
   {{- if not .AnchorOutdated -}}

@@ -219,6 +219,21 @@ func (s PrereviewState) HasMarks() bool {
 	return len(s.CommentCountLines()) > 0 || len(s.SuggestionCountLines()) > 0
 }
 
+// Threads groups the loaded conversation entries (#149) by target ID (a comment or
+// suggestion ID), so a card renders its own thread with {{index $.Threads .ID}}.
+// Entries arrive already sorted (loadThreads), so each group is chronological.
+// Zero-arg so the framework pre-computes it; nil when there are no threads.
+func (s PrereviewState) Threads() map[string][]ThreadEntry {
+	if len(s.ThreadEntries) == 0 {
+		return nil
+	}
+	out := make(map[string][]ThreadEntry)
+	for _, e := range s.ThreadEntries {
+		out[e.TargetID] = append(out[e.TargetID], e)
+	}
+	return out
+}
+
 // CollapsedRows returns the collapsed diff rows (#112) for the SELECTED file, keyed
 // by rowkey ("L<old>-<new>") — the file prefix that scopes CollapsedLines across
 // files is stripped so the template can look a row up directly with
