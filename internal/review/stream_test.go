@@ -35,7 +35,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "events.jsonl")
 	es := NewEventStream(&out, file)
 
-	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, fixedTS); err != nil {
+	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
 	if err := es.EmitSnapshot(nil, nil, nil, false, fixedTS); err != nil {
@@ -63,12 +63,33 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 		if ev.Event != wantTypes[i] {
 			t.Errorf("event %d: want type %q, got %q", i, wantTypes[i], ev.Event)
 		}
-		if ev.Seq != i { // ready=0, handoff=1, end=2
+		if ev.Seq != i { // ready=0, snapshot=1, end=2
 			t.Errorf("event %d (%s): want seq %d, got %d", i, ev.Event, i, ev.Seq)
 		}
 		if ev.Ts != fixedTS.Format(time.RFC3339) {
 			t.Errorf("event %d (%s): want ts %q, got %q", i, ev.Event, fixedTS.Format(time.RFC3339), ev.Ts)
 		}
+	}
+}
+
+// TestEmitReady_SkillUpdatedField pins the drift signal: a launch that refreshed
+// the installed skill sets skill_updated on the ready event (so the agent knows
+// its loaded skill is stale), and the steady state omits it.
+func TestEmitReady_SkillUpdatedField(t *testing.T) {
+	var out bytes.Buffer
+	if err := NewEventStream(&out, "").EmitReady("/r", "/r/c.csv", false, true, fixedTS); err != nil {
+		t.Fatalf("EmitReady: %v", err)
+	}
+	if !strings.Contains(out.String(), `"skill_updated":true`) {
+		t.Errorf("ready must carry skill_updated:true after a skill refresh; got %s", out.String())
+	}
+
+	out.Reset()
+	if err := NewEventStream(&out, "").EmitReady("/r", "/r/c.csv", false, false, fixedTS); err != nil {
+		t.Fatalf("EmitReady: %v", err)
+	}
+	if strings.Contains(out.String(), "skill_updated") {
+		t.Errorf("ready must omit skill_updated when the skill is current; got %s", out.String())
 	}
 }
 
@@ -78,7 +99,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	var out bytes.Buffer
 	es := NewEventStream(&out, "")
-	if err := es.EmitReady("/r", "/r/c.csv", false, fixedTS); err != nil {
+	if err := es.EmitReady("/r", "/r/c.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
 	if err := es.EmitSnapshot(nil, nil, nil, false, fixedTS); err != nil { // no actionable comments

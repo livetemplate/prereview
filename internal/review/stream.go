@@ -71,6 +71,11 @@ type StreamEvent struct {
 	// Paused reports that the reviewer paused the queue (batching): the agent's
 	// `watch` will block until resume, which then delivers one coalesced snapshot.
 	Paused bool `json:"paused,omitempty"` // ready / snapshot
+	// SkillUpdated is set on the `ready` event when this launch refreshed the
+	// installed prereview skill to match the (possibly self-updated) binary — so
+	// the agent's loaded skill is now stale. The agent should re-read the skill
+	// from its install path before continuing and tell the user to reload it.
+	SkillUpdated bool `json:"skill_updated,omitempty"` // ready
 }
 
 // CommentList returns the event's comment snapshot, or nil for events that
@@ -249,8 +254,8 @@ func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 // EmitReady announces the session is live. Emitted once, after the
 // READY/REPO stdout preamble, so the preamble parse is never interleaved
 // with JSON.
-func (e *EventStream) EmitReady(repo, csvPath string, paused bool, ts time.Time) error {
-	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath, Paused: paused}, ts)
+func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool, ts time.Time) error {
+	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath, Paused: paused, SkillUpdated: skillUpdated}, ts)
 }
 
 // EmitSnapshot emits a full actionable snapshot — one per queue mutation (or the

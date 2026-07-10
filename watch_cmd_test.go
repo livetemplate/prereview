@@ -108,7 +108,7 @@ func TestFollowEvents_RealEmitterContract(t *testing.T) {
 	es := review.NewEventStream(io.Discard, path) // discard the live channel; assert the durable mirror
 	ts := time.Unix(0, 0)
 
-	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, ts); err != nil {
+	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, false, ts); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
 	c := review.Comment{ID: "c1", File: "a.go", FromLine: 1, ToLine: 1, Side: "new", Body: "fix this", Created: ts}

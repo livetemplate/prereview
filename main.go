@@ -266,23 +266,33 @@ func main() {
 	// so it sits outside the update/package-manager gates and covers brew,
 	// Scoop, and `go install` upgrades too. Best-effort: a review must start
 	// regardless.
+	skillUpdated := false
 	if home, err := os.UserHomeDir(); err != nil {
 		slog.Debug("skill sync: resolve home", "err", err)
 	} else if changed, serr := syncInstalledSkill(home); serr != nil {
 		slog.Debug("skill sync failed", "err", serr)
-	} else if changed {
-		fmt.Fprintln(os.Stderr, "prereview: refreshed the Claude skill at ~/.claude/skills/prereview/ to match this version.")
+	} else {
+		skillUpdated = changed
+	}
+	if skillUpdated {
+		// The refreshed skill on disk does NOT reload into an already-running
+		// agent's context, so its loaded copy is now stale. Make the drift
+		// actionable for both audiences: the agent must re-read the skill, and
+		// the human must reload it in their agent. In agent mode the `ready`
+		// event also carries skill_updated:true (the reliable machine channel —
+		// stderr may be detached on a backgrounded launch).
+		fmt.Fprintln(os.Stderr, "prereview: refreshed the prereview skill at ~/.claude/skills/prereview/ to match this binary. Re-read that SKILL.md before continuing, and reload the skill in your agent.")
 	}
 
 	if *external != "" {
-		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode); err != nil {
+		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode, skillUpdated); err != nil {
 			slog.Error("fatal", "err", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, agentMode, *out); err != nil {
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, agentMode, skillUpdated, *out); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}

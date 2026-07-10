@@ -25,7 +25,7 @@ import (
 	"github.com/livetemplate/prereview/internal/review"
 )
 
-func run(repo, base, host string, explicitHost bool, port int, agentMode bool, out string) error {
+func run(repo, base, host string, explicitHost bool, port int, agentMode, skillUpdated bool, out string) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -195,7 +195,7 @@ func run(repo, base, host string, explicitHost bool, port int, agentMode bool, o
 
 	// Emit the `ready` event AFTER the plaintext preamble so the agent's
 	// READY/REPO parse is never interleaved with JSON. No-op when not in agent mode.
-	emitReady(emitter, storeRoot, csvPath)
+	emitReady(emitter, storeRoot, csvPath, skillUpdated)
 
 	// Watch the agent's inbound status file (.prereview/llm-status.json) and
 	// push each change to every open tab. Agent mode only — that's when an
@@ -223,11 +223,13 @@ func newStreamEmitter(agentMode bool, csvPath string) *review.EventStream {
 // (non-agent session) is a no-op. A write failure is logged, not fatal — the
 // review server must run regardless. The session always starts unpaused
 // (openStore cleared any stale paused marker), so ready reports paused=false.
-func emitReady(emitter *review.EventStream, storeRoot, csvPath string) {
+// skillUpdated reports whether this launch refreshed the installed skill, so the
+// agent knows its loaded skill is stale (see syncInstalledSkill).
+func emitReady(emitter *review.EventStream, storeRoot, csvPath string, skillUpdated bool) {
 	if emitter == nil {
 		return
 	}
-	if err := emitter.EmitReady(storeRoot, csvPath, false, time.Now()); err != nil {
+	if err := emitter.EmitReady(storeRoot, csvPath, false, skillUpdated, time.Now()); err != nil {
 		slog.Warn("emit ready event", "err", err)
 	}
 }
@@ -295,7 +297,7 @@ func serveAndWait(srv *http.Server, ln net.Listener, extra *http.Server, shutdow
 // live local site on its own port (a separate origin so the app's root-relative
 // URLs forward cleanly — see proxy.go) plus the prereview UI that frames it and
 // overlays the region-annotation overlay. Annotations save to <out>/comments.csv.
-func runExternal(externalURL, outDir, host string, explicitHost bool, port int, agentMode bool) error {
+func runExternal(externalURL, outDir, host string, explicitHost bool, port int, agentMode, skillUpdated bool) error {
 	target, err := url.Parse(externalURL)
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
 		return fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
@@ -401,7 +403,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	fmt.Printf("REPO %s\n", absOut)
 	slog.Info("prereview started (external)", "url", uiURL, "proxy", proxyBaseURL, "target", externalURL, "out", absOut, "bindHost", bindHost)
 
-	emitReady(emitter, absOut, csvPath)
+	emitReady(emitter, absOut, csvPath, skillUpdated)
 
 	// Watch the agent's inbound status file and push changes to every open tab
 	// (agent mode only). Stops on shutdown.
