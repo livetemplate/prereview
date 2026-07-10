@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"path/filepath"
+	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
 )
@@ -216,6 +217,34 @@ func (s PrereviewState) SuggestionCountLines() map[string]int {
 // act on. Gates that menu entry. Reads the same memoized count maps the badges use.
 func (s PrereviewState) HasMarks() bool {
 	return len(s.CommentCountLines()) > 0 || len(s.SuggestionCountLines()) > 0
+}
+
+// CollapsedRows returns the collapsed diff rows (#112) for the SELECTED file, keyed
+// by rowkey ("L<old>-<new>") — the file prefix that scopes CollapsedLines across
+// files is stripped so the template can look a row up directly with
+// {{index $.CollapsedRows $lkey}}. Zero-arg so the framework pre-computes it; nil
+// when nothing is collapsed on this file (a missing key indexes to false).
+func (s PrereviewState) CollapsedRows() map[string]bool {
+	if len(s.CollapsedLines) == 0 || s.SelectedFile == "" {
+		return nil
+	}
+	prefix := collapsedLineKey(s.SelectedFile, "") // "<file>\n" — same encoding as the keys
+	out := map[string]bool{}
+	for k := range s.CollapsedLines {
+		if rowkey, ok := strings.CutPrefix(k, prefix); ok {
+			out[rowkey] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// collapsedLineKey is the CollapsedLines map key for a row on the given file —
+// file-scoped so equal line numbers on different files don't collide.
+func collapsedLineKey(file, rowkey string) string {
+	return file + "\n" + rowkey
 }
 
 // countRowSides increments the row key(s) an annotation on line ln / side occupies,

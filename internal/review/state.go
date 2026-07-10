@@ -244,6 +244,14 @@ type PrereviewState struct {
 	// browser refresh; not written to CSV (this is UX state, not a comment).
 	ViewedFiles map[string]bool `json:"viewed_files" lvt:"persist"`
 
+	// CollapsedLines is the set of diff rows whose inline comment/suggestion
+	// cards the reviewer collapsed via the right-margin mark (#112). Keyed
+	// "<file>\n<rowkey>" (rowkey = "L<old>-<new>") so a line number can't
+	// collide across files. Persisted (lvt:"persist") so a collapse survives a
+	// browser refresh — the whole point of #112, where the old client-only
+	// .cards-collapsed class was lost on reload and hidden cards reappeared.
+	CollapsedLines map[string]bool `json:"collapsed_lines" lvt:"persist"`
+
 	// Read progress (#128), keyed by file path. ReadThrough is the furthest
 	// new-side line number the reviewer has scrolled past (a high-water mark →
 	// lines at/above it render "read"). LastReadTopKey is the topmost visible line

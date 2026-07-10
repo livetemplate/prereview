@@ -1557,9 +1557,13 @@
     {{$suggestionCount := index $.SuggestionCountLines $rowkey -}}
     {{$hasComment := gt $commentCount 0 -}}
     {{$hasSuggestion := gt $suggestionCount 0 -}}
-    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
+    {{- /* #112: the row's collapse state is now SERVER state (CollapsedRows, persisted)
+           so it survives a browser refresh — the old client-only .cards-collapsed was
+           lost on reload and hidden cards reappeared. $lkey ("L<old>-<new>") is the
+           per-file rowkey; defined here so the class below can read it. */ -}}
+    {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
+    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.CollapsedRows $lkey}} cards-collapsed{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
-      {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
       {{- /* A selectable div (not <button>): <button> content is non-
              selectable in UA styles, which would block native text selection.
              Same pattern as .md-rendered above — tabindex + click/keydown so
@@ -1581,12 +1585,12 @@
              kind present on this line (comment / suggestion) carrying the count. A
              sibling of .line (never inside it) so its click can't bubble to
              selectLine; absolutely positioned in the reserved right padding. A single
-             <button> (both badges share it) — clicking toggles .cards-collapsed on the
-             row (pure client, lvt-el) to hide/show that line's inline cards. */ -}}
+             <button> (both badges share it) — clicking toggles this row's collapse
+             via a SERVER action (#112) so it survives a browser refresh. */ -}}
       {{- if or $hasComment $hasSuggestion -}}
       <button type="button" class="line-marks"
-              lvt-el:toggleClass:on:click="cards-collapsed"
-              data-lvt-target="closest:.line-row"
+              lvt-on:click="toggleLineCollapse"
+              data-rowkey="{{$lkey}}"
               aria-label="Toggle comments and suggestions on this line"
               title="Toggle comments/suggestions on this line">
         {{- if $hasComment}}<span class="line-mark line-mark-comment" aria-hidden="true">{{$commentCount}}</span>{{end -}}

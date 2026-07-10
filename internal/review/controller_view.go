@@ -58,6 +58,29 @@ func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// ToggleLineCollapse flips whether a single diff row's inline comment/suggestion
+// cards are collapsed (#112). Replaces the old client-only `.cards-collapsed` class,
+// which was lost on a browser refresh so hidden cards reappeared. The collapse now
+// lives in server state (CollapsedLines, lvt:"persist"), file-scoped by rowkey, so it
+// survives a reload. No savePrefs: this is per-session view state (like ViewedFiles),
+// not a durable cross-relaunch preference.
+func (c *PrereviewController) ToggleLineCollapse(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	rowkey := ctx.GetString("rowkey")
+	if rowkey == "" || state.SelectedFile == "" {
+		return state, nil
+	}
+	key := collapsedLineKey(state.SelectedFile, rowkey)
+	if state.CollapsedLines == nil {
+		state.CollapsedLines = map[string]bool{}
+	}
+	if state.CollapsedLines[key] {
+		delete(state.CollapsedLines, key)
+	} else {
+		state.CollapsedLines[key] = true
+	}
+	return state, nil
+}
+
 // ToggleMarks flips whether the per-line comment/suggestion count badges (#151)
 // and their inline cards are shown in the diff. Off by default (badges visible);
 // when on, the diff reads clean so a reviewer can scan the raw code. Persisted
