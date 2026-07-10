@@ -516,6 +516,21 @@
           </button>
         </form>
         {{end}}
+        {{/* #151: hide/show the per-line count badges + their inline cards on this
+             file, so the diff reads clean. Only when the file has badges. */}}
+        {{if $.HasMarks}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleMarks"
+            class="menu-item{{if not .HideMarks}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
+            <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}{{with index $.KeyHint "toggleMarks"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+          </button>
+        </form>
+        {{end}}
         {{/* Show individually-hidden suggestions on this file (hide feature). Only
              when at least one suggestion is hidden. */}}
         {{if gt .HiddenSuggestionCount 0}}
@@ -903,6 +918,20 @@
     </button>
   </form>
   {{end}}
+  {{/* #151: hide/show the per-line count badges + inline cards — more-menu mirror. */}}
+  {{if $.HasMarks}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleMarks"
+      class="menu-item{{if not .HideMarks}} is-on{{end}}"
+      role="menuitem"
+    >
+      <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
+      <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}</span>
+    </button>
+  </form>
+  {{end}}
   {{/* Show individually-hidden suggestions — mobile more-menu mirror. */}}
   {{if gt .HiddenSuggestionCount 0}}
   <form method="POST">
@@ -996,7 +1025,7 @@
   aria-label="Close file list"
 ></div>
 
-<div class="layout{{if .FocusMode}} focus-mode{{end}}">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .HideMarks}} marks-hidden{{end}}">
 <dialog
   id="files-drawer"
   open
@@ -1516,15 +1545,18 @@
            composing-marker must also match the SELECTED side, or they render
            on both rows. */ -}}
     {{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end -}}
-    {{- /* #136: does THIS row (this line, this side) carry a comment / suggestion?
-           CommentMarkLines/SuggestionMarkLines are keyed "<line>-<side>" and are
-           built from the SAME filtered maps the card ranges below render, so the
-           margin mark matches what actually renders on the row (never both old+new).
+    {{- /* #151: how many comments / suggestions render on THIS row (this line, this
+           side)? CommentCountLines/SuggestionCountLines are keyed "<line>-<side>" and
+           are built from the SAME filtered maps the card ranges below render, so a
+           badge's number matches what actually renders on the row (never both
+           old+new). $hasComment/$hasSuggestion (count>0) drive the #136 presence gate.
            A zero-arg map lookup — NOT an assign-inside-range, which breaks the
            framework's live render. */ -}}
     {{$rowkey := printf "%d-%s" $ln $lside -}}
-    {{$hasComment := index $.CommentMarkLines $rowkey -}}
-    {{$hasSuggestion := index $.SuggestionMarkLines $rowkey -}}
+    {{$commentCount := index $.CommentCountLines $rowkey -}}
+    {{$suggestionCount := index $.SuggestionCountLines $rowkey -}}
+    {{$hasComment := gt $commentCount 0 -}}
+    {{$hasSuggestion := gt $suggestionCount 0 -}}
     <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
       {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
@@ -1545,19 +1577,20 @@
               {{- if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}
               data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span>
               {{- /* */ -}}<span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>
-      {{- /* #136: right-margin marks — a colour-coded dot per kind present on this
-             line (comment / suggestion). A sibling of .line (never inside it) so its
-             click can't bubble to selectLine; absolutely positioned in the reserved
-             right padding. Clicking toggles .cards-collapsed on the row (pure client,
-             lvt-el) to hide/show that line's inline cards. */ -}}
+      {{- /* #151: right-margin count badges — a colour-coded, tap-sized badge per
+             kind present on this line (comment / suggestion) carrying the count. A
+             sibling of .line (never inside it) so its click can't bubble to
+             selectLine; absolutely positioned in the reserved right padding. A single
+             <button> (both badges share it) — clicking toggles .cards-collapsed on the
+             row (pure client, lvt-el) to hide/show that line's inline cards. */ -}}
       {{- if or $hasComment $hasSuggestion -}}
       <button type="button" class="line-marks"
               lvt-el:toggleClass:on:click="cards-collapsed"
               data-lvt-target="closest:.line-row"
               aria-label="Toggle comments and suggestions on this line"
               title="Toggle comments/suggestions on this line">
-        {{- if $hasComment}}<span class="line-mark line-mark-comment" aria-hidden="true"></span>{{end -}}
-        {{- if $hasSuggestion}}<span class="line-mark line-mark-suggestion" aria-hidden="true"></span>{{end -}}
+        {{- if $hasComment}}<span class="line-mark line-mark-comment" aria-hidden="true">{{$commentCount}}</span>{{end -}}
+        {{- if $hasSuggestion}}<span class="line-mark line-mark-suggestion" aria-hidden="true">{{$suggestionCount}}</span>{{end -}}
       </button>
       {{- end -}}
       {{- /* comments anchored to this line (on THIS side), then the composer when

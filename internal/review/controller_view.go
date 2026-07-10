@@ -58,6 +58,17 @@ func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// ToggleMarks flips whether the per-line comment/suggestion count badges (#151)
+// and their inline cards are shown in the diff. Off by default (badges visible);
+// when on, the diff reads clean so a reviewer can scan the raw code. Persisted
+// per-user. Closes the overflow menu so the effect is visible immediately.
+func (c *PrereviewController) ToggleMarks(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.HideMarks = !state.HideMarks
+	state.MoreMenuOpen = false
+	c.savePrefs(state)
+	return state, nil
+}
+
 // CycleTheme advances the Light/Dark/System color mode (issue #60), cycling
 // System → Light → Dark → System. Persisted per-user; the page re-renders with
 // the new data-mode attribute (omitted for System) and the cascade does the

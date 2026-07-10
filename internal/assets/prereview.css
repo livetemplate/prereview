@@ -1742,26 +1742,64 @@ header.file-head .file-head-comment button svg { display: block; }
   /* Positioning context for the #136 right-margin marks (.line-marks is absolute). */
   position: relative;
 }
-/* #136: per-line comment/suggestion indicators. A marked row reserves a sliver of
-   right padding on its content so the absolutely-positioned marks never overlap the
-   wrapped code text. */
-.code .line-row.has-line-marks .content { padding-right: 1.4rem; }
+/* #151: per-line comment/suggestion COUNT badges. A marked row reserves a strip of
+   right padding on its content so the absolutely-positioned badges never overlap the
+   wrapped code text (wide enough for two count-circle badges side by side). */
+.code .line-row.has-line-marks .content { padding-right: 2.9rem; }
+/* The badges share ONE button (the whole click target). Pinned to the TOP of the
+   row so it aligns with the CODE LINE — NOT top:50%, which would centre it in the
+   whole row (the row also contains the inline cards). min-height keeps a ≥24px tap
+   target; it grows downward from the line, aligning near the line's centre. */
 .line-marks {
-  position: absolute; top: 0; right: 0.3rem; height: 1.2em;
-  display: flex; align-items: center; gap: 0.22rem;
-  padding: 0; margin: 0; border: 0; background: none; cursor: pointer; z-index: 2;
-  width: auto;
+  position: absolute; top: 0; right: 0.2rem;
+  min-height: 24px; min-width: 24px;
+  display: flex; align-items: center; justify-content: flex-end; gap: 0.28rem;
+  padding: 0 0.2rem; margin: 0; border: 0; border-radius: 999px;
+  background: none; cursor: pointer; z-index: 2;
 }
-.line-mark { width: 7px; height: 7px; border-radius: 999px; display: block; }
-.line-mark-comment { background: var(--accent); }
-.line-mark-suggestion { background: var(--pr-add); }
-.line-marks:hover .line-mark { box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent); }
-/* Clicking a mark collapses that line's inline cards (pure-client lvt-el toggle);
-   the mark stays as the compact signal that they're there. */
+/* A badge = a colour-coded circle with the count centred INSIDE it. The fill is an
+   opaque kind-colour/surface mix (opaque, not translucent, so it stays deterministic
+   even over a diff-tinted line) and the digit is the normal foreground colour — the
+   same contrast-safe treatment as .status-badge, so the WCAG walk passes in every
+   scheme×mode without a per-scheme text colour. A kind-coloured ring sharpens it. */
+.line-mark {
+  min-width: 1.1rem; height: 1.1rem; padding: 0 0.24rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: 1px solid transparent;
+  font-family: var(--jbm); font-size: 0.66rem; font-weight: 700; line-height: 1;
+  color: var(--pico-color);
+}
+.line-mark-comment {
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.line-mark-suggestion {
+  background: color-mix(in srgb, var(--pr-add) 30%, var(--surface));
+  border-color: color-mix(in srgb, var(--pr-add) 55%, transparent);
+}
+/* Hover / collapsed give the whole button a pill-shaped affordance. */
+.line-marks:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+/* Clicking a badge collapses that line's inline cards (pure-client lvt-el toggle);
+   the badges stay as the compact signal that they're there. */
 .line-row.cards-collapsed .inline-comment,
 .line-row.cards-collapsed .inline-suggestion { display: none; }
-/* When collapsed, ring the marks so they read as "click to expand". */
-.line-row.cards-collapsed .line-mark { box-shadow: 0 0 0 1.5px color-mix(in srgb, currentColor 35%, transparent); }
+/* When collapsed, ring the button so it reads as "click to expand". */
+.line-row.cards-collapsed .line-marks { background: color-mix(in srgb, currentColor 12%, transparent); }
+/* #151 review note: "Hide annotations" (marks-hidden, via the overflow menu) and
+   focus mode both hide the per-line count badges AND their inline cards in the diff,
+   so the reviewer reads the raw code clean. Scoped to .code so it never blanks the
+   all-comments overview or the md/html block-comment views (which reuse
+   .inline-comment). Deliberately at top level (NOT inside the desktop media query
+   where focus mode's side-column hiding lives) so it applies on the phone too. */
+.layout.marks-hidden .code .line-marks,
+.layout.focus-mode .code .line-marks,
+.layout.marks-hidden .code .inline-comment,
+.layout.focus-mode .code .inline-comment,
+.layout.marks-hidden .code .inline-suggestion,
+.layout.focus-mode .code .inline-suggestion { display: none; }
+/* With the badges gone, reclaim their reserved right padding. */
+.layout.marks-hidden .code .line-row.has-line-marks .content,
+.layout.focus-mode .code .line-row.has-line-marks .content { padding-right: 0; }
 /* Collapsed-gap marker in Diff view ("··· N unchanged lines ···").
    Non-interactive: no gutter, no selectLine button. */
 .code .fold-row {

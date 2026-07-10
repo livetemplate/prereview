@@ -397,6 +397,13 @@ type PrereviewState struct {
 	// Durable per-user view pref (uiprefs.go), like FileView.
 	FocusMode bool `json:"focus_mode"`
 
+	// HideMarks, when true, hides the per-line comment/suggestion count badges
+	// (#151) AND their inline cards in the diff, so a reviewer can read the raw
+	// diff clean. Toggled from the overflow menu (ToggleMarks); focus mode hides
+	// them too (CSS). Applies on all viewports (unlike FocusMode's side-column
+	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
+	HideMarks bool `json:"hide_marks"`
+
 	// ThemeMode is the Light/Dark/System color-mode preference (issue #60),
 	// cycled by the toolbar toggle. "" means System (the default): the page
 	// omits the data-mode attribute and follows the OS via prefers-color-scheme
