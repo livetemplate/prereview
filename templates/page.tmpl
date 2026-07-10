@@ -1585,10 +1585,16 @@
              kind present on this line (comment / suggestion) carrying the count. A
              sibling of .line (never inside it) so its click can't bubble to
              selectLine; absolutely positioned in the reserved right padding. A single
-             <button> (both badges share it) — clicking toggles this row's collapse
-             via a SERVER action (#112) so it survives a browser refresh. */ -}}
+             <button> (both badges share it) — clicking toggles this row's collapse.
+             Two directives fire on the one click: lvt-el flips .cards-collapsed on the
+             row INSTANTLY (client-only, so it's snappy on a high-latency phone), and
+             lvt-on persists it via the server action (#112) so it survives a refresh.
+             They converge — the server re-render emits the same class from CollapsedRows
+             (server wins on morph), matching the optimistic flip. */ -}}
       {{- if or $hasComment $hasSuggestion -}}
       <button type="button" class="line-marks"
+              lvt-el:toggleClass:on:click="cards-collapsed"
+              data-lvt-target="closest:.line-row"
               lvt-on:click="toggleLineCollapse"
               data-rowkey="{{$lkey}}"
               aria-label="Toggle comments and suggestions on this line"
