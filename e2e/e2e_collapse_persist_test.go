@@ -24,16 +24,29 @@ func TestE2E_CollapsePersistsAcrossRefresh(t *testing.T) {
 	p.waitReady()
 	p.clickFile("target.go")
 	p.clickLine(0, 3)
+	// Collapse via the mark, and in the SAME synchronous evaluate check the row got
+	// .cards-collapsed — this is the OPTIMISTIC client toggle (lvt-el), which fires in
+	// the click handler before any server round-trip. A regression that drops lvt-el
+	// (leaving only the server action) would make this false: collapse would still
+	// work + persist, but laggily on a high-latency phone.
+	var optimistic bool
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 		chromedp.SendKeys(`.composer textarea`, "collapse me", chromedp.ByQuery),
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
-		// Collapse the line's cards via the right-margin mark button (now a server action).
-		chromedp.Evaluate(`document.querySelector('.line-marks').click()`, nil),
+		chromedp.Evaluate(`(() => {
+			const btn = document.querySelector('.line-marks');
+			const row = btn.closest('.line-row');
+			btn.click();
+			return row.classList.contains('cards-collapsed');
+		})()`, &optimistic),
 		chromedp.Sleep(300e6),
 	); err != nil {
 		t.Fatalf("seed+collapse: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !optimistic {
+		t.Errorf("collapse was not applied optimistically on click — the instant client-side lvt-el toggle is missing (collapse would feel laggy on a high-latency phone)")
 	}
 
 	visible := func(label string) bool {
