@@ -108,7 +108,7 @@ func TestE2E_FrozenViewStreamEmit(t *testing.T) {
 
 	// Agent starts working, then edits the file on disk (this is the emit's fresh
 	// content), then marks the comment processed, then finishes — the exact
-	// sequence the live agent ran. `prereview processed` + the disk edit both
+	// sequence the live agent ran. `prereview done` + the disk edit both
 	// happen while the shared cache will be refreshed by the emit.
 	writeLLMStatusFile(t, p.repo, `{"state":"working","message":"renaming"}`)
 	waitJSTrue(t, p.ctx,
@@ -116,7 +116,7 @@ func TestE2E_FrozenViewStreamEmit(t *testing.T) {
 		10*time.Second, "working pill appears")
 	mustWrite(t, p.repo, "edited.go", "package edited\n\nfunc Greet() string {\n\treturn \"STREAM-AGENT-EDIT\"\n}\n")
 	// Mark processed via the real CLI (fans a watcher event, like the live run).
-	if out, err := exec.Command(p.binary, "processed", "--out", p.repo, "c1").CombinedOutput(); err != nil {
+	if out, err := exec.Command(p.binary, "done", "--out", p.repo, "c1").CombinedOutput(); err != nil {
 		t.Logf("processed (non-fatal): %v\n%s", err, out)
 	}
 	writeLLMStatusFile(t, p.repo, `{"state":"done"}`)

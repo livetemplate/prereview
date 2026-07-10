@@ -20,7 +20,7 @@ import (
 // server's WatchLLMStatus poll idiom).
 const eventsPollInterval = 250 * time.Millisecond
 
-// runEvents implements `prereview events [--out <dir>] [--since <seq>]` — the ONE
+// runWatch implements `prereview watch [--out <dir>] [--since <seq>]` — the ONE
 // supported way for the coding agent to consume the review event stream. It
 // reads the durable, append-only <store>/.prereview/events.jsonl (the same log
 // the server writes in --agent mode), so it never drops events the way a bare
@@ -33,13 +33,13 @@ const eventsPollInterval = 250 * time.Millisecond
 // blocks and streams new events as they are appended, exiting 0 only when it
 // sees `end`. Run it with a long Bash timeout; on timeout, re-run with
 // the last seq to pick up seamlessly.
-func runEvents(args []string) error {
-	fs := flag.NewFlagSet("events", flag.ContinueOnError)
+func runWatch(args []string) error {
+	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
 	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
 	since := fs.Int("since", -1, "print only events whose seq is greater than this cursor (-1 = from the start); resume by passing the seq of the last line you saw")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
-			"Usage: prereview events [--out <dir>] [--since <seq>]\n\n"+
+			"Usage: prereview watch [--out <dir>] [--since <seq>]\n\n"+
 				"  Deliver the next batch of review events (one JSON event per line). Prints\n"+
 				"  every event after --since; if none are waiting, blocks for the next, then\n"+
 				"  returns — exiting immediately on the terminating `end`. Each line\n"+
@@ -94,7 +94,7 @@ func followEvents(path string, since int, w io.Writer, poll time.Duration) error
 		}
 	}
 	if maxSeq >= 0 && maxSeq < since {
-		fmt.Fprintln(os.Stderr, "prereview events: event log reset (new session) — resuming from seq 0")
+		fmt.Fprintln(os.Stderr, "prereview watch: event log reset (new session) — resuming from seq 0")
 		since = -1
 	}
 	emitted, done, err := emitBatch(catchup, since, w)
@@ -197,7 +197,7 @@ func waitOpen(path string, poll time.Duration) (*os.File, error) {
 			return nil, fmt.Errorf("open %s: %w", path, err)
 		}
 		if !warned {
-			fmt.Fprintf(os.Stderr, "prereview events: waiting for %s — is the review running with --agent (and --out correct)?\n", path)
+			fmt.Fprintf(os.Stderr, "prereview watch: waiting for %s — is the review running with --agent (and --out correct)?\n", path)
 			warned = true
 		}
 		time.Sleep(poll)

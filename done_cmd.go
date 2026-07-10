@@ -15,7 +15,7 @@ import (
 	"github.com/livetemplate/prereview/internal/review"
 )
 
-// runProcessed implements `prereview processed [--out <dir>] [--file <f>]
+// runDone implements `prereview done [--out <dir>] [--file <f>]
 // [--all-open] <id>...`: the coding agent (via the skill) calls it after
 // addressing a comment so the running review UI badges it "worked on". It
 // APPENDS one JSON line per id to <store>/.prereview/processed.jsonl — an
@@ -25,7 +25,7 @@ import (
 //
 // Ids come from positional args, from --file (a file, or "-" for stdin: bare
 // newline-delimited ids, a JSON array, or JSONL objects with an "id" — so
-// `prereview comments --json | jq -r '.[].id' | prereview processed --file -`
+// `prereview comments --json | jq -r '.[].id' | prereview done --file -`
 // just works), or from --all-open (mark the whole current actionable set, the
 // "I addressed the batch" shortcut). Explicit ids are VALIDATED against
 // comments.csv first — an unknown id fails loudly with a non-zero exit instead
@@ -36,14 +36,14 @@ import (
 // prereview prints at launch — so the mark lands in the same store the server
 // watches (mirrors the skill's prereview_status <REPO> convention). Defaults to
 // the current directory.
-func runProcessed(args []string) error {
-	fs := flag.NewFlagSet("processed", flag.ContinueOnError)
+func runDone(args []string) error {
+	fs := flag.NewFlagSet("done", flag.ContinueOnError)
 	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
 	file := fs.String("file", "", "read comment ids from this file, or \"-\" for stdin (newline-delimited ids, a JSON array, or JSONL objects with an \"id\")")
 	allOpen := fs.Bool("all-open", false, "mark every comment in the current actionable set (the whole batch); cannot be combined with explicit ids or --file")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
-			"Usage: prereview processed [--out <dir>] [--file <f>|-] [--all-open] <comment-id>...\n\n"+
+			"Usage: prereview done [--out <dir>] [--file <f>|-] [--all-open] <comment-id>...\n\n"+
 				"  Mark review comments as addressed so the live review UI badges them\n"+
 				"  \"worked on\". Run by the coding agent after it applies a comment; --out\n"+
 				"  must match the review's directory (the REPO line). Explicit ids are\n"+

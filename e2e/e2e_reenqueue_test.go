@@ -71,7 +71,7 @@ func TestE2E_ReenqueueWorkedOnComment(t *testing.T) {
 
 	// The agent marks the comment worked-on (separate process, like the skill).
 	id := p.readCSV()[1][0]
-	if out, err := exec.Command(p.binary, "processed", "--out", p.repo, id).CombinedOutput(); err != nil {
+	if out, err := exec.Command(p.binary, "done", "--out", p.repo, id).CombinedOutput(); err != nil {
 		t.Fatalf("prereview processed: %v\n%s", err, out)
 	}
 

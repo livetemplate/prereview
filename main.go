@@ -25,13 +25,13 @@ const topUsage = `Usage: prereview [flags] [path]
          Flags must come before the path, e.g. ` + "`prereview --agent ./docs`" + `.
 
 Subcommands (for the coding agent; each takes --out <REPO>):
-  comments   list the review's comments (--json for the stream shape; --all for resolved too)
-  processed  mark comments worked on (validated against comments.csv; --file -/--all-open)
+  comments   list the review's comments (--json for the queue-snapshot shape; --all for resolved too)
+  done       mark comments worked on (validated against comments.csv; --file -/--all-open)
   suggest    submit proposed edits as inline suggestion boxes (--file/stdin)
-  events     deliver the next batch of events after --since <seq> (blocks when caught up), until the terminating end event
+  watch      deliver the next batch of queue events after --since <seq> (blocks when caught up), until the terminating end event
   help       show this message
 
-  Run a subcommand with -h for its own flags, e.g. ` + "`prereview processed -h`" + `.
+  Run a subcommand with -h for its own flags, e.g. ` + "`prereview done -h`" + `.
 `
 
 // templatesFS holds the split template set: page.tmpl (the page shell — the
@@ -74,13 +74,13 @@ func reviewPath(args []string) string {
 }
 
 func main() {
-	// `prereview processed [--out <dir>] <id>...` — the coding agent marks
+	// `prereview done [--out <dir>] <id>...` — the coding agent marks
 	// comments it has addressed so the live review UI badges them "worked on".
 	// A bare positional verb, so intercept it before flag parsing (which would
-	// otherwise treat "processed" as the review path).
-	if len(os.Args) > 1 && os.Args[1] == "processed" {
-		if err := runProcessed(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "prereview processed:", err)
+	// otherwise treat "done" as the review path).
+	if len(os.Args) > 1 && os.Args[1] == "done" {
+		if err := runDone(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview done:", err)
 			os.Exit(1)
 		}
 		return
@@ -89,7 +89,7 @@ func main() {
 	// `prereview suggest [--out <dir>] [--file <f>]` — the coding agent submits
 	// proposed edits (from a JSON payload on stdin/--file) that the live review UI
 	// renders as inline suggestion boxes (#98). A bare positional verb like
-	// `processed`, so intercept it before flag parsing.
+	// `done`, so intercept it before flag parsing.
 	if len(os.Args) > 1 && os.Args[1] == "suggest" {
 		if err := runSuggest(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview suggest:", err)
@@ -98,20 +98,20 @@ func main() {
 		return
 	}
 
-	// `prereview events [--out <dir>] [--since <seq>]` — the coding agent consumes
+	// `prereview watch [--out <dir>] [--since <seq>]` — the coding agent consumes
 	// the review's JSON event stream (the durable events.jsonl the server writes in
 	// --agent mode), resuming from a seq cursor. A bare positional verb like
-	// `processed`/`suggest`, so intercept it before flag parsing.
-	if len(os.Args) > 1 && os.Args[1] == "events" {
-		if err := runEvents(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "prereview events:", err)
+	// `done`/`suggest`, so intercept it before flag parsing.
+	if len(os.Args) > 1 && os.Args[1] == "watch" {
+		if err := runWatch(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview watch:", err)
 			os.Exit(1)
 		}
 		return
 	}
 
 	// `prereview comments [--out <dir>] [--json] [--all]` — enumerate the review's
-	// comments from a stable interface (feeds `prereview processed`). A bare
+	// comments from a stable interface (feeds `prereview done`). A bare
 	// positional verb like the others, so intercept it before flag parsing.
 	if len(os.Args) > 1 && os.Args[1] == "comments" {
 		if err := runComments(os.Args[2:]); err != nil {

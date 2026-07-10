@@ -14,7 +14,7 @@ import (
 // runComments implements `prereview comments [--out <dir>] [--json] [--all]` —
 // the supported way for the coding agent (or a human) to ENUMERATE review
 // comments from a stable interface, instead of hand-parsing comments.csv. It is
-// the read counterpart of `prereview processed`: read ids here, mark them there.
+// the read counterpart of `prereview done`: read ids here, mark them there.
 //
 // By default it prints only the actionable set (unresolved, non-outdated,
 // non-draft — what the agent should act on); --all includes every comment.
@@ -31,7 +31,7 @@ func runComments(args []string) error {
 				"  List the review's comments from a stable interface (no CSV hand-parsing).\n"+
 				"  Defaults to the actionable set the agent should act on; --all includes\n"+
 				"  resolved/outdated/draft. --json emits the same shape as the snapshot.\n"+
-				"  Pipe the ids into `prereview processed --file -` to mark them worked on.\n")
+				"  Pipe the ids into `prereview done --file -` to mark them worked on.\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err

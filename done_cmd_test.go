@@ -38,8 +38,8 @@ func TestRunProcessed_AppendsMarks(t *testing.T) {
 	dir := t.TempDir()
 	seedStore(t, dir, []csv.Row{row("id1"), row("id2"), row("id3")})
 
-	if err := runProcessed([]string{"--out", dir, "id1", "id2"}); err != nil {
-		t.Fatalf("runProcessed: %v", err)
+	if err := runDone([]string{"--out", dir, "id1", "id2"}); err != nil {
+		t.Fatalf("runDone: %v", err)
 	}
 	path := filepath.Join(dir, ".prereview", review.ProcessedFileName)
 	data, err := os.ReadFile(path)
@@ -55,8 +55,8 @@ func TestRunProcessed_AppendsMarks(t *testing.T) {
 	}
 
 	// Append-only: a second call adds a line, never rewrites.
-	if err := runProcessed([]string{"--out", dir, "id3"}); err != nil {
-		t.Fatalf("runProcessed 2: %v", err)
+	if err := runDone([]string{"--out", dir, "id3"}); err != nil {
+		t.Fatalf("runDone 2: %v", err)
 	}
 	data2, _ := os.ReadFile(path)
 	if n := len(strings.Split(strings.TrimSpace(string(data2)), "\n")); n != 3 {
@@ -68,7 +68,7 @@ func TestRunProcessed_AppendsMarks(t *testing.T) {
 func TestRunProcessed_NoIDs(t *testing.T) {
 	dir := t.TempDir()
 	seedStore(t, dir, []csv.Row{row("id1")})
-	if err := runProcessed([]string{"--out", dir}); err == nil {
+	if err := runDone([]string{"--out", dir}); err == nil {
 		t.Error("expected error when no ids given")
 	}
 }
@@ -118,7 +118,7 @@ var (
 )
 
 // prereviewBin builds the CLI once (GOWORK=off, matching CI) so the integration
-// tests exercise the real argv → exit-code contract, not just runProcessed's
+// tests exercise the real argv → exit-code contract, not just runDone's
 // return value.
 func prereviewBin(t *testing.T) string {
 	t.Helper()
@@ -185,11 +185,11 @@ func processedIDs(t *testing.T, root string) []string {
 	return out
 }
 
-func TestProcessed_BogusIDExitsNonZero(t *testing.T) {
+func TestDone_BogusIDExitsNonZero(t *testing.T) {
 	root := t.TempDir()
 	seedStore(t, root, []csv.Row{row("real-1")})
 
-	res := runBin(t, "", "processed", "--out", root, "totally-bogus-xyz")
+	res := runBin(t, "", "done", "--out", root, "totally-bogus-xyz")
 	if res.exit == 0 {
 		t.Errorf("bogus id should exit non-zero; got 0\nstdout: %s", res.stdout)
 	}
@@ -201,11 +201,11 @@ func TestProcessed_BogusIDExitsNonZero(t *testing.T) {
 	}
 }
 
-func TestProcessed_ValidIDSucceeds(t *testing.T) {
+func TestDone_ValidIDSucceeds(t *testing.T) {
 	root := t.TempDir()
 	seedStore(t, root, []csv.Row{row("real-1")})
 
-	res := runBin(t, "", "processed", "--out", root, "real-1")
+	res := runBin(t, "", "done", "--out", root, "real-1")
 	if res.exit != 0 {
 		t.Fatalf("valid id should exit 0; got %d\nstderr: %s", res.exit, res.stderr)
 	}
@@ -214,11 +214,11 @@ func TestProcessed_ValidIDSucceeds(t *testing.T) {
 	}
 }
 
-func TestProcessed_FileStdin(t *testing.T) {
+func TestDone_FileStdin(t *testing.T) {
 	root := t.TempDir()
 	seedStore(t, root, []csv.Row{row("a"), row("b")})
 
-	res := runBin(t, "a\nb\n", "processed", "--out", root, "--file", "-")
+	res := runBin(t, "a\nb\n", "done", "--out", root, "--file", "-")
 	if res.exit != 0 {
 		t.Fatalf("stdin ids should exit 0; got %d\nstderr: %s", res.exit, res.stderr)
 	}
@@ -227,14 +227,14 @@ func TestProcessed_FileStdin(t *testing.T) {
 	}
 }
 
-func TestProcessed_AllOpen(t *testing.T) {
+func TestDone_AllOpen(t *testing.T) {
 	root := t.TempDir()
 	seedStore(t, root, []csv.Row{
 		row("open-1"),
 		{ID: "resolved-1", File: "f", FromLine: 2, ToLine: 2, Side: "new", Body: "y", CreatedAt: time.Unix(0, 0), Resolved: true},
 	})
 
-	res := runBin(t, "", "processed", "--out", root, "--all-open")
+	res := runBin(t, "", "done", "--out", root, "--all-open")
 	if res.exit != 0 {
 		t.Fatalf("--all-open should exit 0; got %d\nstderr: %s", res.exit, res.stderr)
 	}
@@ -244,10 +244,10 @@ func TestProcessed_AllOpen(t *testing.T) {
 	}
 }
 
-func TestProcessed_AllOpenRejectsExplicitIDs(t *testing.T) {
+func TestDone_AllOpenRejectsExplicitIDs(t *testing.T) {
 	root := t.TempDir()
 	seedStore(t, root, []csv.Row{row("a")})
-	res := runBin(t, "", "processed", "--out", root, "--all-open", "a")
+	res := runBin(t, "", "done", "--out", root, "--all-open", "a")
 	if res.exit == 0 {
 		t.Errorf("--all-open with explicit ids should error")
 	}
