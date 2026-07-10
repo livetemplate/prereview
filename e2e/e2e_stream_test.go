@@ -1,9 +1,9 @@
 //go:build browser
 
-// End-to-end test for `prereview --skill --stream`: the real binary emits a
+// End-to-end test for `prereview --agent`: the real binary emits a
 // continuous JSON event stream (stdout + .prereview/events.jsonl) across
 // multiple handoff rounds, with monotonic seq, a resolve-pruned snapshot, and
-// a terminating session_end that shuts the server down.
+// a terminating end that shuts the server down.
 // Run with: go test -tags=browser -run TestE2E_Stream ./...
 package e2e
 
@@ -25,14 +25,14 @@ import (
 	"github.com/livetemplate/prereview/internal/review"
 )
 
-// startPrereviewStream launches the binary with --skill --stream and captures
+// startPrereviewStream launches the binary with --agent and captures
 // ALL stdout (not just READY) into a bytesBuf so the test can read the JSON
 // event lines as they arrive. Returns once READY prints.
 func startPrereviewStream(t *testing.T, binary, repo string) (url string, cmd *exec.Cmd, stderr, stdoutBuf *bytesBuf) {
 	t.Helper()
 	cmd = exec.Command(binary,
 		"--base", "HEAD", "--port", "0", "--host", "127.0.0.1", "--no-update",
-		"--skill", "--stream", repo)
+		"--agent", repo)
 	cmd.Env = prefsIsolatedEnv(repo)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -69,7 +69,7 @@ func startPrereviewStream(t *testing.T, binary, repo string) (url string, cmd *e
 	return "", nil, nil, nil
 }
 
-// bootChromeStream boots `--skill --stream` against the fixture repo, wires a
+// bootChromeStream boots `--agent` against the fixture repo, wires a
 // headless chrome, and returns the running session, the stdout capture buffer,
 // and a channel that delivers the process's exit (single-owner Wait, so the
 // test can detect End-session shutdown without racing t.Cleanup).
@@ -131,7 +131,7 @@ func parseStreamEvents(s string) []review.StreamEvent {
 func handoffEvents(evs []review.StreamEvent) []review.StreamEvent {
 	var out []review.StreamEvent
 	for _, e := range evs {
-		if e.Event == "handoff" {
+		if e.Event == "snapshot" {
 			out = append(out, e)
 		}
 	}
@@ -165,9 +165,9 @@ func addLineComment(t *testing.T, p *runningPrereview, oldNum, newNum int, body 
 	}
 }
 
-// TestE2E_StreamHandoff drives the real --stream binary through a browser under
+// TestE2E_StreamHandoff drives the real --agent binary through a browser under
 // the continuous-enqueue model (#119): stream mode has NO Hand off button — every
-// comment mutation auto-emits a full-snapshot handoff event (debounced) with no
+// comment mutation auto-emits a full-snapshot snapshot event (debounced) with no
 // click. Adding two comments emits snapshots with strictly increasing seq,
 // resolving a comment prunes the next snapshot, the events also land in
 // events.jsonl, and End session emits the terminator and shuts the server down.
@@ -241,7 +241,7 @@ func TestE2E_StreamHandoff(t *testing.T) {
 		t.Fatalf("read events.jsonl: %v%s", err, diag())
 	}
 	if got := len(handoffEvents(parseStreamEvents(string(fileBytes)))); got < 3 {
-		t.Errorf("events.jsonl has %d handoff events, want >= 3", got)
+		t.Errorf("events.jsonl has %d snapshot events, want >= 3", got)
 	}
 
 	// End session now lives INSIDE the Queue dropdown (#119 toolbar move) and goes
@@ -257,8 +257,8 @@ func TestE2E_StreamHandoff(t *testing.T) {
 		t.Fatalf("confirm End session: %v%s", err, diag())
 	}
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
-		return len(evs) > 0 && evs[len(evs)-1].Event == "session_end"
-	}, "session_end terminator", diag)
+		return len(evs) > 0 && evs[len(evs)-1].Event == "end"
+	}, "end terminator", diag)
 
 	select {
 	case <-waitCh:

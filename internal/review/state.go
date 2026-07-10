@@ -139,8 +139,7 @@ type PrereviewState struct {
 	RevisionDraft        string `json:"revision_draft" lvt:"persist"`
 
 	// UI status.
-	LastSaved   string `json:"last_saved"`
-	DoneWritten bool   `json:"done_written" lvt:"persist"`
+	LastSaved string `json:"last_saved"`
 
 	// EnqueueTick is a monotonic counter bumped ONLY when a comment genuinely
 	// enters the queued set (a new saved comment, or an explicit (re)enqueue) —
@@ -153,7 +152,7 @@ type PrereviewState struct {
 	EnqueueTick int `json:"enqueue_tick" lvt:"persist"`
 
 	// LLMState mirrors the agent's inbound status signal
-	// (.prereview/llm-status.json): "working" while the agent applies a handoff
+	// (.prereview/llm-status.json): "working" while the agent applies a snapshot
 	// batch, "done" once finished, "" idle. LLMMessage is the optional detail
 	// shown in the pill. Written by the agent (skill), watched by the server, and
 	// pushed to every open tab via the llm-status watcher → LLMStatusChanged
@@ -191,18 +190,13 @@ type PrereviewState struct {
 	FocusedCommentID string `json:"focused_comment_id" lvt:"persist"`
 	FocusSeq         int    `json:"focus_seq"          lvt:"persist"`
 
-	// SkillMode is mirrored from the controller (set by --skill flag) into
-	// state in Mount so the template can branch the top-bar button between
-	// "Hand off → Claude" (skill) and "Quit" (standalone). Not persisted —
-	// the controller is the source of truth; Mount refreshes it every connect.
-	SkillMode bool `json:"skill_mode"`
-
-	// StreamMode is mirrored from the controller (set by --stream flag) into
-	// state in Mount. It implies SkillMode (the "Hand off" button) and adds the
-	// "End session" button: in stream mode each Hand off emits a JSON handoff
-	// event and End session emits the terminating session_end event. Not
-	// persisted; the controller is the source of truth.
-	StreamMode bool `json:"stream_mode"`
+	// AgentMode is mirrored from the controller (set by --agent flag) into state
+	// in Mount so the template can branch the top-bar controls between the Queue
+	// (Pause/Resume) + "End session" agent UI and the standalone "Quit" button.
+	// In agent mode each queue mutation emits a JSON snapshot and End
+	// session emits the terminating end event. Not persisted — the
+	// controller is the source of truth; Mount refreshes it every connect.
+	AgentMode bool `json:"agent_mode"`
 
 	// NoGit is mirrored from the controller (set when the path is a single
 	// file or a non-git directory) into state in Mount so the template
@@ -218,7 +212,7 @@ type PrereviewState struct {
 	// SessionEnded flips true when the user clicks "End session" in stream
 	// mode. Like Quitting it precedes a delayed graceful shutdown, but the
 	// banner wording differs ("session ended") and EndSession also emits the
-	// terminating session_end stream event before shutting down.
+	// terminating end stream event before shutting down.
 	SessionEnded bool `json:"session_ended"`
 
 	// EditingCommentID is set when the user has tapped Edit on an existing

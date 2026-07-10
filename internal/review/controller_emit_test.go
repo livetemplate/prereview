@@ -64,7 +64,7 @@ func TestEmit_PausedSuppressesThenResumeFlushes(t *testing.T) {
 }
 
 // TestEmit_NoSnapshotAfterSessionEnd: a debounced emit armed just before End
-// session must NOT fire a snapshot after session_end (the skill's terminator).
+// session must NOT fire a snapshot after end (the skill's terminator).
 func TestEmit_NoSnapshotAfterSessionEnd(t *testing.T) {
 	fastDebounce(t)
 	c, buf, _ := newStreamController(t)
@@ -81,22 +81,22 @@ func TestEmit_NoSnapshotAfterSessionEnd(t *testing.T) {
 
 	evs := decodeEvents(t, buf.Bytes())
 	if len(evs) == 0 {
-		t.Fatal("expected a final handoff + session_end")
+		t.Fatal("expected a final snapshot + end")
 	}
-	// The LAST event must be session_end — nothing may follow it.
+	// The LAST event must be end — nothing may follow it.
 	last := evs[len(evs)-1]
-	if last.Event != "session_end" {
-		t.Errorf("last event must be session_end, got %q (a late snapshot leaked)", last.Event)
+	if last.Event != "end" {
+		t.Errorf("last event must be end, got %q (a late snapshot leaked)", last.Event)
 	}
-	// And there must be exactly one session_end.
+	// And there must be exactly one end.
 	nEnd := 0
 	for _, e := range evs {
-		if e.Event == "session_end" {
+		if e.Event == "end" {
 			nEnd++
 		}
 	}
 	if nEnd != 1 {
-		t.Errorf("want exactly 1 session_end, got %d", nEnd)
+		t.Errorf("want exactly 1 end, got %d", nEnd)
 	}
 }
 

@@ -286,9 +286,9 @@
     </form>
     {{- /* Re-enqueue a WORKED-ON comment (#119): put it back on the agent's queue to
            redo. This is the only per-card queue action — a draft is enqueued simply
-           by saving it, and a plain queued comment is already on the queue. Stream
+           by saving it, and a plain queued comment is already on the queue. Agent
            mode, open comments only. */ -}}
-    {{- if and $.StreamMode (not .Resolved) (not .AnchorOutdated) .Processed -}}
+    {{- if and $.AgentMode (not .Resolved) (not .AnchorOutdated) .Processed -}}
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Re-enqueue — ask the agent to redo this">Re-enqueue</button>

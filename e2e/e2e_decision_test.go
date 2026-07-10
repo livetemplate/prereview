@@ -19,7 +19,7 @@ import (
 )
 
 func TestE2E_SuggestionDecisions(t *testing.T) {
-	p := bootChromeAgainstRepo(t, setupSuggestionRepo(t), 1200, 800, "--skill")
+	p := bootChromeAgainstRepo(t, setupSuggestionRepo(t), 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("app.go")
 

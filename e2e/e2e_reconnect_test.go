@@ -24,7 +24,7 @@ import (
 // switch. Staying connected afterwards proves the server actually handles the
 // __ping__ action (a broken pong would loop the socket every interval).
 func TestE2E_HeartbeatReconnectsStuckPill(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 
 	var console []string
 	chromedp.ListenTarget(p.ctx, func(ev any) {
@@ -68,7 +68,7 @@ func TestE2E_HeartbeatReconnectsStuckPill(t *testing.T) {
 
 	// Restart prereview on the SAME port + repo, so the client's heartbeat can
 	// reconnect to it. Mirror startPrereview's flags/env.
-	restart := exec.Command(p.binary, "--base", "HEAD", "--port", port, "--host", "127.0.0.1", "--skill", p.repo)
+	restart := exec.Command(p.binary, "--base", "HEAD", "--port", port, "--host", "127.0.0.1", "--agent", p.repo)
 	restart.Env = prefsIsolatedEnv(p.repo)
 	stdout, err := restart.StdoutPipe()
 	if err != nil {

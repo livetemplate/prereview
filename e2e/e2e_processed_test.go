@@ -19,9 +19,9 @@ import (
 )
 
 func TestE2E_ProcessedBadge(t *testing.T) {
-	// --skill so the server runs WatchLLMStatus (the only mode with an agent
+	// --agent so the server runs WatchLLMStatus (the only mode with an agent
 	// writing signals) — that's the live badge-push path under test.
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("edited.go")
 
@@ -47,7 +47,7 @@ func TestE2E_ProcessedBadge(t *testing.T) {
 	markedID := rows[1][0]
 
 	// The agent marks ONLY the first comment as worked-on (separate process).
-	if out, err := exec.Command(p.binary, "processed", "--out", p.repo, markedID).CombinedOutput(); err != nil {
+	if out, err := exec.Command(p.binary, "done", "--out", p.repo, markedID).CombinedOutput(); err != nil {
 		t.Fatalf("prereview processed: %v\n%s", err, out)
 	}
 

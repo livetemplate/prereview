@@ -145,7 +145,8 @@ func prefsIsolatedEnv(repo string) []string {
 
 // startPrereview launches the binary against repo and returns the READY URL,
 // the running cmd, and a captured stderr buffer. Caller must kill the cmd.
-// Pass extraArgs to enable --skill mode for tests asserting Hand off behavior.
+// Pass extraArgs (e.g. --agent) to enable agent mode for tests asserting
+// agent-mode behavior.
 func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (string, *exec.Cmd, *bytesBuf) {
 	t.Helper()
 	// --host 127.0.0.1 is explicit ON PURPOSE — do NOT delete as a
@@ -157,7 +158,7 @@ func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (str
 	// what matters is that the flag is *explicitly set*.
 	// The review path is a positional arg now, so it must come AFTER every
 	// flag (Go's flag package stops parsing at the first non-flag). extraArgs
-	// are flags (e.g. --skill), so append the path last.
+	// are flags (e.g. --agent), so append the path last.
 	args := append([]string{"--base", "HEAD", "--port", "0", "--host", "127.0.0.1"}, extraArgs...)
 	args = append(args, repo)
 	cmd := exec.Command(binary, args...)
@@ -375,7 +376,8 @@ type runningPrereview struct {
 // launches prereview, and opens a chromedp session at the given viewport.
 // Above 900px the template renders desktop mode (sidebar always visible);
 // at/below 900px it renders mobile mode (drawer overlay).
-// Pass extraArgs to enable --skill for tests asserting handoff/DONE behavior.
+// Pass extraArgs (e.g. --agent) to enable agent mode for tests asserting
+// agent-mode behavior.
 func bootChromeAgainstPrereview(t *testing.T, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
 	return bootChromeAgainstRepo(t, setupFixtureRepo(t), viewportW, viewportH, extraArgs...)
 }
@@ -657,8 +659,9 @@ func TestE2E_MobileDrawer(t *testing.T) {
 }
 
 func TestE2E_CommentLifecycle(t *testing.T) {
-	// --skill so the Hand off button is rendered (this test asserts DONE).
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
+	// --agent so the session runs the full agent-mode UI (this test exercises
+	// the add/edit/delete CSV round-trip).
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 	p.waitReady()
 
 	// Switch to edited.go (so we have ctx/del/add lines to comment on).
@@ -747,28 +750,6 @@ func TestE2E_CommentLifecycle(t *testing.T) {
 	if len(rows) != 1 {
 		t.Errorf("post-delete: expected header-only, got %d rows:\n%v", len(rows), rows)
 	}
-
-	// Hand off — writes the DONE marker. The composer is gone (no selection
-	// after the delete-confirm cycle), so the Hand off button at the top bar
-	// is reachable. Skill mode required for the button to render.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name='handOff']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.toast`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("click handOff: %v\nstderr: %s", err, p.stderr.String())
-	}
-
-	doneBytes, err := os.ReadFile(filepath.Join(p.repo, ".prereview", "DONE"))
-	if err != nil {
-		t.Fatalf("DONE marker missing: %v", err)
-	}
-	csvPath := strings.TrimSpace(string(doneBytes))
-	if !strings.HasSuffix(csvPath, ".prereview/comments.csv") {
-		t.Errorf("DONE points at %q, want ending with .prereview/comments.csv", csvPath)
-	}
-	if _, err := os.Stat(csvPath); err != nil {
-		t.Errorf("CSV path from DONE doesn't exist: %v", err)
-	}
 }
 
 // TestE2E_CmdEnterSavesComment verifies the composer's Cmd/Ctrl+Enter shortcut
@@ -805,127 +786,6 @@ func TestE2E_CmdEnterSavesComment(t *testing.T) {
 	if body := rows[1][5]; !strings.Contains(body, "saved via keyboard") {
 		t.Errorf("saved comment body = %q, missing the typed text", body)
 	}
-}
-
-// TestE2E_HandOffMarker verifies that in skill mode the top-bar button is
-// "Hand off" and clicking it writes the DONE marker — without needing to
-// add or delete any comments first.
-func TestE2E_HandOffMarker(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
-	p.waitReady()
-
-	var btnText, btnTitle string
-	if err := chromedp.Run(p.ctx,
-		chromedp.Text(`header.bar button[name='handOff']`, &btnText, chromedp.ByQuery),
-		chromedp.AttributeValue(`header.bar button[name='handOff']`, "title", &btnTitle, nil, chromedp.ByQuery),
-		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.toast`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("hand off: %v\nstderr: %s", err, p.stderr.String())
-	}
-	if !strings.Contains(btnText, "Hand off") {
-		t.Errorf("button text = %q, want 'Hand off'", btnText)
-	}
-	// The hand-off affordance is vendor-neutral: the button and its tooltip
-	// must not name a specific agent (prereview works with any LLM CLI).
-	if strings.Contains(btnText, "Claude") || strings.Contains(btnTitle, "Claude") {
-		t.Errorf("hand-off button must be vendor-neutral; text=%q title=%q", btnText, btnTitle)
-	}
-
-	donePath := filepath.Join(p.repo, ".prereview", "DONE")
-	doneBytes, err := os.ReadFile(donePath)
-	if err != nil {
-		t.Fatalf("DONE marker missing after hand off: %v", err)
-	}
-	csvPath := strings.TrimSpace(string(doneBytes))
-	if !strings.HasSuffix(csvPath, ".prereview/comments.csv") {
-		t.Errorf("DONE points at %q, want ending with .prereview/comments.csv", csvPath)
-	}
-}
-
-// TestE2E_ToastAutoDismiss verifies the DONE "Saved" toast disappears
-// on its own ~5s after hand off, with NO manual dismiss click, and
-// that auto-dismiss is UI-only — the on-disk DONE marker (the skill's
-// signal) must survive. Captures console/server/ws/HTML.
-func TestE2E_ToastAutoDismiss(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
-
-	var mu sync.Mutex
-	var consoleLines, wsFrames []string
-	chromedp.ListenTarget(p.ctx, func(ev any) {
-		mu.Lock()
-		defer mu.Unlock()
-		switch e := ev.(type) {
-		case *cdpruntime.EventConsoleAPICalled:
-			parts := []string{string(e.Type)}
-			for _, a := range e.Args {
-				if a.Value != nil {
-					parts = append(parts, string(a.Value))
-				} else {
-					parts = append(parts, a.Description)
-				}
-			}
-			consoleLines = append(consoleLines, strings.Join(parts, " "))
-		case *cdpnetwork.EventWebSocketFrameReceived:
-			wsFrames = append(wsFrames, "recv "+e.Response.PayloadData)
-		case *cdpnetwork.EventWebSocketFrameSent:
-			wsFrames = append(wsFrames, "sent "+e.Response.PayloadData)
-		}
-	})
-	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return cdpnetwork.Enable().Do(ctx)
-	})); err != nil {
-		t.Fatalf("enable network: %v", err)
-	}
-	diag := func() string {
-		var html string
-		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
-		mu.Lock()
-		defer mu.Unlock()
-		return fmt.Sprintf("\n--- server ---\n%s\n--- console ---\n%s\n--- ws ---\n%s\n--- html ---\n%s",
-			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
-	}
-
-	p.waitReady()
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.toast`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("hand off: %v%s", err, diag())
-	}
-
-	// DONE marker must exist right after hand off.
-	donePath := filepath.Join(p.repo, ".prereview", "DONE")
-	if _, err := os.Stat(donePath); err != nil {
-		t.Fatalf("DONE marker missing after hand off: %v%s", err, diag())
-	}
-
-	// Do NOT click dismiss. The toast must auto-dismiss ~5s later.
-	var toastGone bool
-	if err := chromedp.Run(p.ctx,
-		chromedp.Sleep(7*time.Second),
-		chromedp.Evaluate(`!document.querySelector('.toast')`, &toastGone),
-	); err != nil {
-		t.Fatalf("post-wait query: %v%s", err, diag())
-	}
-	if !toastGone {
-		t.Errorf("toast should auto-dismiss within ~5s without a manual click%s", diag())
-	}
-
-	// Auto-dismiss is UI-only: it clears DoneWritten but must NOT remove
-	// the DONE marker the skill polls for.
-	if _, err := os.Stat(donePath); err != nil {
-		t.Errorf("DONE marker must survive toast auto-dismiss, but it's gone: %v", err)
-	}
-
-	mu.Lock()
-	for _, l := range consoleLines {
-		if strings.Contains(strings.ToLower(l), "error") {
-			t.Errorf("browser console error: %s", l)
-		}
-	}
-	t.Logf("captured %d console lines, %d ws frames", len(consoleLines), len(wsFrames))
-	mu.Unlock()
 }
 
 // TestE2E_Footer verifies the page footer shows the product name (plus the
@@ -1199,9 +1059,9 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 
 // TestE2E_QuitShutsServer verifies that in standalone mode the top-bar
 // button is "Quit" and clicking it gracefully shuts the server down —
-// no DONE marker, subsequent HTTP requests fail.
+// subsequent HTTP requests fail.
 func TestE2E_QuitShutsServer(t *testing.T) {
-	// Default boot — no --skill.
+	// Default boot — no --agent.
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 	p.waitReady()
 
@@ -1230,12 +1090,6 @@ func TestE2E_QuitShutsServer(t *testing.T) {
 	if err == nil {
 		resp.Body.Close()
 		t.Errorf("server still responding after Quit; expected dial error")
-	}
-
-	// And no DONE marker was written — Quit is not a hand-off.
-	donePath := filepath.Join(p.repo, ".prereview", "DONE")
-	if _, err := os.Stat(donePath); err == nil {
-		t.Errorf("DONE marker exists after Quit; should only be written by Hand off")
 	}
 }
 

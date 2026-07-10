@@ -60,7 +60,7 @@ func TestE2E_VersionTimeline(t *testing.T) {
 	repo := setupFixtureRepo(t)
 	seedVersionStore(t, repo, "edited.go", original, working)
 
-	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--skill")
+	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--agent")
 
 	var consoleLines []string
 	chromedp.ListenTarget(p.ctx, func(ev any) {
@@ -204,4 +204,3 @@ func clickVersionBtnJS(name string, seq int) string {
 		return false;
 	})()`, name, seq)
 }
-

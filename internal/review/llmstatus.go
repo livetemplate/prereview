@@ -10,7 +10,7 @@ import (
 
 // LLMStatusFileName is the fixed name of the status file the agent writes under
 // .prereview/ and the server watches. It is the INBOUND counterpart to
-// events.jsonl: where events.jsonl carries handoffs server→agent, llm-status.json
+// events.jsonl: where events.jsonl carries snapshots server→agent, llm-status.json
 // carries the agent's "what am I doing" echo agent→server, so the review UI can
 // show live status across every open tab. Reset on each launch by openStore.
 const LLMStatusFileName = "llm-status.json"
@@ -33,7 +33,7 @@ const LLMStatusPollInterval = 750 * time.Millisecond
 // the agent is doing. It is the reverse of the outbound event stream
 // (stream.go): the agent is the writer, the server the reader.
 type LLMStatus struct {
-	// State is "working" while the agent applies a handoff batch, "done" once it
+	// State is "working" while the agent applies a snapshot batch, "done" once it
 	// has finished and reported back. "" (missing/blank) means idle.
 	State string `json:"state"`
 	// Message is an optional human-readable detail shown in the status pill,

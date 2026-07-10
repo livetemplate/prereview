@@ -11,36 +11,35 @@ import (
 	"github.com/livetemplate/prereview/internal/review"
 )
 
-// openStore prepares the .prereview/ store (comments.csv + DONE marker) under
-// storeRoot, the directory whose .prereview/ holds annotations — the value
-// printed as REPO so the skill polls the right place. Shared by repo mode and
-// external mode; clears any stale DONE marker so a fresh session isn't read as
-// already-handed-off, and returns the paths plus a goroutine-safe CSV writer.
-func openStore(storeRoot string) (csvPath, donePath string, w *csv.Writer, err error) {
+// openStore prepares the .prereview/ store (comments.csv) under storeRoot, the
+// directory whose .prereview/ holds annotations — the value printed as REPO so
+// the agent polls the right place. Shared by repo mode and external mode; resets
+// the per-session scratch files (event log, agent status, paused marker) so a
+// fresh session starts clean, and returns the CSV path plus a goroutine-safe
+// CSV writer.
+func openStore(storeRoot string) (csvPath string, w *csv.Writer, err error) {
 	dir := filepath.Join(storeRoot, ".prereview")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", "", nil, fmt.Errorf("mkdir %s: %w", dir, err)
+		return "", nil, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	// Fixed CSV filename — survives server restarts so users can resume editing
 	// where they left off. (Earlier versions timestamped it per session, which
 	// orphaned previous comments on restart.)
-	csvPath = filepath.Join(dir, "comments.csv")
-	donePath = filepath.Join(dir, "DONE")
-	_ = os.Remove(donePath)
+	csvPath = filepath.Join(dir, review.CommentsFileName)
 	// Clear any stale stream event log so a fresh session starts from seq 0
-	// rather than appending onto a previous run's events (same intent as the
-	// DONE reset above). Harmless when not streaming — the file won't exist.
-	_ = os.Remove(filepath.Join(dir, "events.jsonl"))
+	// rather than appending onto a previous run's events. Harmless when not in
+	// agent mode — the file won't exist.
+	_ = os.Remove(filepath.Join(dir, review.EventsFileName))
 	// Clear any stale agent-status file so a fresh session doesn't start showing
-	// a "working"/"done" left over from the previous run (same intent as the
-	// DONE/events reset above). It's the agent's to recreate.
+	// a "working"/"done" left over from the previous run. It's the agent's to
+	// recreate.
 	_ = os.Remove(filepath.Join(dir, review.LLMStatusFileName))
 	// Clear any stale paused marker so a fresh session starts unpaused — a
 	// rollback-induced pause from a previous run shouldn't carry over (#90).
 	// The versions/ dir itself is deliberately NOT reset: it's the uncommitted
 	// version history and must survive restarts.
 	_ = os.Remove(filepath.Join(dir, review.PausedMarkerName))
-	return csvPath, donePath, csv.NewWriter(csvPath), nil
+	return csvPath, csv.NewWriter(csvPath), nil
 }
 
 // uiPrefsPath returns the durable per-user view-prefs file (see
@@ -106,7 +105,7 @@ func stageTemplates(fsys embed.FS) (paths []string, cleanup func(), err error) {
 }
 
 // reviewTarget is the classified path argument after normalization.
-// RepoPath is ALWAYS a directory: the comment store and DONE marker live
+// RepoPath is ALWAYS a directory: the comment store lives
 // at RepoPath/.prereview/, and every downstream filepath.Join(RepoPath,
 // relPath) stays valid. SingleFile, when non-empty, is the only
 // reviewable file (its basename, relative to RepoPath). NoGit is true

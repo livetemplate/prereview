@@ -57,7 +57,7 @@ const (
 	// re-hidden RESOLVED comment (issue #88) stays out of the diff/overview even
 	// when "Show resolved" is on. The skill MUST ignore it — it never changes
 	// which comments are actionable (resolved comments are already excluded from
-	// the handoff); it only declutters the human's view.
+	// the snapshot); it only declutters the human's view.
 	ColHidden = "hidden"
 	// `enqueued` is "true" or "false" (#119): whether the comment is queued for
 	// the agent. A "draft" comment (enqueued=false) is the reviewer's not-yet-

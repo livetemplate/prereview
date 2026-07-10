@@ -5,17 +5,37 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
-// EventStream emits the --stream mode JSON event log: one JSON object per
+// Store-layout filenames under .prereview/ that the CLI subcommands resolve.
+// Centralised so the server and the read subcommands (events, comments) agree on
+// one location — mirroring ProcessedFileName / SuggestionFileName.
+const (
+	// CommentsFileName is the CSV the review server writes (the on-disk source of
+	// truth) and the `prereview comments` reader parses.
+	CommentsFileName = "comments.csv"
+	// EventsFileName is the durable, append-only event log written only in
+	// --agent mode and reset per launch (openStore); each line is a seq-stamped
+	// StreamEvent consumed by `prereview events`.
+	EventsFileName = "events.jsonl"
+)
+
+// EventsPath returns the event-log path for a store whose CSV lives at csvPath —
+// i.e. <csv dir>/events.jsonl, alongside processed.jsonl and llm-status.json.
+func EventsPath(csvPath string) string {
+	return filepath.Join(filepath.Dir(csvPath), EventsFileName)
+}
+
+// EventStream emits the --agent mode JSON event log: one JSON object per
 // line, written to both a live channel (stdout, polled by the consuming LLM)
 // and an append-only durable mirror (.prereview/events.jsonl, for replay after
 // a context reset). It is the single writer of these events — controller
 // actions call it under its mutex, so emitted lines are naturally ordered and
 // carry a monotonic seq. A nil *EventStream is never emitted to; callers gate
-// on stream mode before constructing one.
+// on agent mode before constructing one.
 type EventStream struct {
 	mu       sync.Mutex
 	seq      int
@@ -39,19 +59,27 @@ type StreamEvent struct {
 	Ts    string `json:"ts"`
 	Repo  string `json:"repo,omitempty"` // ready
 	CSV   string `json:"csv,omitempty"`  // ready
-	// Comments is a pointer so a handoff always serializes the key — `[]` when
-	// empty, never absent — while ready/session_end (nil) omit it. A consumer
-	// keying event["comments"] on a handoff never chokes on a missing field.
-	Comments *[]StreamComment `json:"comments,omitempty"` // handoff
+	// Comments is a pointer so a snapshot always serializes the key — `[]` when
+	// empty, never absent — while ready/end (nil) omit it. A consumer
+	// keying event["comments"] on a snapshot never chokes on a missing field.
+	Comments *[]StreamComment `json:"comments,omitempty"` // snapshot
 	// Suggestions carries the reviewer's decisions on the LLM's suggested edits
 	// (issue #98): the decided, non-outdated suggestions the LLM should act on —
 	// apply accepts, rework revises, drop rejects. Same pointer convention as
-	// Comments: always present on a handoff (`[]` when none), absent elsewhere.
-	Suggestions *[]StreamDecision `json:"suggestions,omitempty"` // handoff
+	// Comments: always present on a snapshot (`[]` when none), absent elsewhere.
+	Suggestions *[]StreamDecision `json:"suggestions,omitempty"` // snapshot
+	// Paused reports that the reviewer paused the queue (batching): the agent's
+	// `watch` will block until resume, which then delivers one coalesced snapshot.
+	Paused bool `json:"paused,omitempty"` // ready / snapshot
+	// SkillUpdated is set on the `ready` event when this launch refreshed the
+	// installed prereview skill to match the (possibly self-updated) binary — so
+	// the agent's loaded skill is now stale. The agent should re-read the skill
+	// from its install path before continuing and tell the user to reload it.
+	SkillUpdated bool `json:"skill_updated,omitempty"` // ready
 }
 
 // CommentList returns the event's comment snapshot, or nil for events that
-// carry none (ready / session_end).
+// carry none (ready / end).
 func (e StreamEvent) CommentList() []StreamComment {
 	if e.Comments == nil {
 		return nil
@@ -88,7 +116,7 @@ type StreamDecision struct {
 // actionableDecisions returns the decided suggestions the LLM should act on:
 // every fingerprint-matched decision (from state.DecisionsBySuggestion) whose
 // suggestion is not outdated, mapped to its stream shape. Outdated is excluded so
-// an accepted edit, once the LLM applies it, drops off the next handoff (the
+// an accepted edit, once the LLM applies it, drops off the next snapshot (the
 // original text is gone → the suggestion re-anchors as outdated); a reworked
 // revise drops because its fingerprint no longer matches. The consumer dedupes by
 // id, exactly like comments.
@@ -117,7 +145,7 @@ func actionableDecisions(suggestions []Suggestion, decided map[string]Suggestion
 
 // StreamComment is the consumer-facing shape of a Comment: the CSV fields
 // minus the opaque `anchor` fingerprint (the consumer must not parse it) and
-// minus `resolved` (a handoff snapshot is pre-filtered to actionable rows).
+// minus `resolved` (a snapshot is pre-filtered to actionable rows).
 // Area is a nested object (or null) rather than a JSON-in-a-string blob, so
 // the consumer never parses nested JSON.
 type StreamComment struct {
@@ -171,7 +199,7 @@ func toStreamComment(c Comment) StreamComment {
 
 // actionableComments returns the comments the skill should act on — every
 // unresolved, non-outdated comment, mapped to its stream shape. This is the
-// payload of a handoff event: a full snapshot, deduped by id on the consumer
+// payload of a snapshot event: a full snapshot, deduped by id on the consumer
 // side, so the human's resolve-clicks naturally prune later rounds.
 func actionableComments(comments []Comment) []StreamComment {
 	out := make([]StreamComment, 0, len(comments))
@@ -226,23 +254,24 @@ func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 // EmitReady announces the session is live. Emitted once, after the
 // READY/REPO stdout preamble, so the preamble parse is never interleaved
 // with JSON.
-func (e *EventStream) EmitReady(repo, csvPath string, ts time.Time) error {
-	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath}, ts)
+func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool, ts time.Time) error {
+	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath, Paused: paused, SkillUpdated: skillUpdated}, ts)
 }
 
-// EmitHandoff emits a full actionable snapshot — one per "Hand off" click:
-// the open comments AND the reviewer's decisions on the LLM's suggestions.
+// EmitSnapshot emits a full actionable snapshot — one per queue mutation (or the
+// final EndSession flush): the open comments AND the reviewer's decisions on the
+// LLM's suggestions.
 // Both snapshots are always non-nil slices so their keys are always present
 // (`[]` when nothing is actionable). decided is the fingerprint-matched decision
 // map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
-func (e *EventStream) EmitHandoff(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, ts time.Time) error {
+func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, paused bool, ts time.Time) error {
 	csnap := actionableComments(comments)
 	dsnap := actionableDecisions(suggestions, decided)
-	return e.emit(StreamEvent{Event: "handoff", Comments: &csnap, Suggestions: &dsnap}, ts)
+	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Paused: paused}, ts)
 }
 
-// EmitSessionEnd emits the single terminator — the only event the consumer
+// EmitEnd emits the single terminator — the only event the consumer
 // loop should treat as "stop".
-func (e *EventStream) EmitSessionEnd(ts time.Time) error {
-	return e.emit(StreamEvent{Event: "session_end"}, ts)
+func (e *EventStream) EmitEnd(ts time.Time) error {
+	return e.emit(StreamEvent{Event: "end"}, ts)
 }

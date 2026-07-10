@@ -26,7 +26,7 @@ func TestResolveStoreRoot(t *testing.T) {
 
 func TestOpenStoreLayout(t *testing.T) {
 	root := t.TempDir()
-	csvPath, donePath, w, err := openStore(root)
+	csvPath, w, err := openStore(root)
 	if err != nil {
 		t.Fatalf("openStore: %v", err)
 	}
@@ -40,21 +40,6 @@ func TestOpenStoreLayout(t *testing.T) {
 	if filepath.Dir(csvPath) != wantDir || filepath.Base(csvPath) != "comments.csv" {
 		t.Errorf("csvPath = %q, want %s/comments.csv", csvPath, wantDir)
 	}
-	if filepath.Dir(donePath) != wantDir || filepath.Base(donePath) != "DONE" {
-		t.Errorf("donePath = %q, want %s/DONE", donePath, wantDir)
-	}
-
-	// A stale DONE marker from a previous session must be cleared so a fresh
-	// server isn't read as already-handed-off.
-	if err := os.WriteFile(donePath, []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, _, err := openStore(root); err != nil {
-		t.Fatalf("re-openStore: %v", err)
-	}
-	if _, err := os.Stat(donePath); !os.IsNotExist(err) {
-		t.Errorf("stale DONE not cleared (stat err = %v)", err)
-	}
 }
 
 // TestOpenStoreResetsStatusFile ensures a stale agent-status file from a
@@ -62,7 +47,7 @@ func TestOpenStoreLayout(t *testing.T) {
 // "working"/"done" before the agent writes anything this session.
 func TestOpenStoreResetsStatusFile(t *testing.T) {
 	root := t.TempDir()
-	csvPath, _, _, err := openStore(root)
+	csvPath, _, err := openStore(root)
 	if err != nil {
 		t.Fatalf("openStore: %v", err)
 	}
@@ -70,7 +55,7 @@ func TestOpenStoreResetsStatusFile(t *testing.T) {
 	if err := os.WriteFile(statusPath, []byte(`{"state":"working"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := openStore(root); err != nil {
+	if _, _, err := openStore(root); err != nil {
 		t.Fatalf("re-openStore: %v", err)
 	}
 	if _, err := os.Stat(statusPath); !os.IsNotExist(err) {

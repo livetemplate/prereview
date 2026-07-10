@@ -13,9 +13,9 @@ import (
 // TestE2E_UnsavedBecomesADraft pins the draft model (#105/#119): composer text
 // that is NOT saved but abandoned by navigating away (switching files) is kept
 // as a DRAFT comment (enqueued=false), not lost — and shows in the Queue as a
-// draft. Requires --stream (drafts are a continuous-enqueue concept).
+// draft. Requires --agent (drafts are a continuous-enqueue concept).
 func TestE2E_UnsavedBecomesADraft(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--stream")
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("edited.go")
 

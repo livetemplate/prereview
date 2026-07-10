@@ -16,7 +16,7 @@ import (
 // file match) and walks every text node, asserting zero elements below ~3:1 —
 // across all three schemes. Catches the whole "invisible / dark-on-dark" class.
 func TestE2E_DarkNoLowContrast(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1400, 900, "--stream")
+	p := bootChromeAgainstPrereview(t, 1400, 900, "--agent")
 	p.waitReadyAt(1400, 900)
 	p.clickFile("edited.go")
 
@@ -46,7 +46,12 @@ func TestE2E_DarkNoLowContrast(t *testing.T) {
 	walk := `(() => {
 	  const lum = (c) => {
 	    const m = c.match(/\d+(\.\d+)?/g); if(!m) return null;
-	    const [r,g,b,a] = m.map(Number);
+	    let [r,g,b,a] = m.map(Number);
+	    // getComputedStyle returns rgb()/rgba() as 0-255, but color-mix() results
+	    // come back as color(srgb 0..1 ...) — scale those floats to 0-255 so the
+	    // WCAG math below (which divides by 255) is correct for both. Without this
+	    // a color(srgb ...) fg reads as near-black and reports a false low ratio.
+	    if (/^color\(/.test(c)) { r*=255; g*=255; b*=255; }
 	    if (a===0) return null;
 	    const f = (v)=>{v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4);};
 	    return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);

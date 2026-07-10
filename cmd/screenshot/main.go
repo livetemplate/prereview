@@ -291,7 +291,7 @@ func main() {
 // created through the real UI — line, file, and image-area — so anchors are
 // authentic and nothing shows as "outdated". prereview's deep-link hash
 // (`#path`, `#path:Ln-Lm`) drives file/line navigation; clicks/drags handle the
-// rest. Run the server in --skill mode so the hero shows "Hand off → Claude".
+// rest. Run the server in --agent mode for the hero flow.
 
 const saveBtn = `button.save-btn[name="addComment"]`
 

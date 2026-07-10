@@ -341,6 +341,29 @@ func parseNameStatus(raw []byte) []FileEntry {
 	return entries
 }
 
+// WorktreeClean reports whether repo's working tree has no uncommitted changes:
+// `git status --porcelain` with trimmed-empty output. A git error (not a repo,
+// git missing) propagates so the caller can fall back rather than assume clean.
+func WorktreeClean(repo string) (bool, error) {
+	out, err := runGit(repo, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return len(bytes.TrimSpace(out)) == 0, nil
+}
+
+// EmptyTreeHash returns repo's empty-tree object hash via
+// `git hash-object -t tree /dev/null`. It's computed (never hardcoded) so it's
+// correct under both SHA-1 (4b825dc6…) and SHA-256 repositories. Diffing against
+// it makes every tracked line appear added and thus commentable.
+func EmptyTreeHash(repo string) (string, error) {
+	out, err := runGit(repo, "hash-object", "-t", "tree", os.DevNull)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // runGit executes `git <args...>` in repo and returns stdout. Stderr is
 // folded into the error so callers see the underlying git complaint.
 func runGit(repo string, args ...string) ([]byte, error) {

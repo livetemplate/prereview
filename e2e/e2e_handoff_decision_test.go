@@ -2,7 +2,7 @@
 
 // End-to-end coverage for issue #98 Phase 3: the decision round-trip. The LLM
 // submits a suggestion (`prereview suggest`), the reviewer decides on it, and the
-// decision auto-emits to the LLM in the stream's handoff event (stdout +
+// decision auto-emits to the LLM in the stream's snapshot event (stdout +
 // events.jsonl) — carrying the verdict + note + original/proposed. Under
 // continuous enqueue (#119) there is no Hand off button: deciding a suggestion is
 // a persisted mutation that auto-emits a snapshot. Only DECIDED, non-outdated
@@ -67,14 +67,14 @@ func TestE2E_HandoffDecisions(t *testing.T) {
 
 	// Continuous enqueue (#119): stream mode has NO Hand off button. The accept
 	// above persisted the decision, which auto-emits a debounced snapshot — the
-	// decision ships in that emitted handoff event with no button click.
+	// decision ships in that emitted snapshot event with no button click.
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		h := handoffEvents(evs)
 		if len(h) < 1 {
 			return false
 		}
 		return len(h[len(h)-1].DecisionList()) == 1
-	}, "handoff event carrying exactly the one decided suggestion", diag)
+	}, "snapshot event carrying exactly the one decided suggestion", diag)
 
 	// Inspect the shipped decision: verdict + content, and the undecided one absent.
 	h := handoffEvents(parseStreamEvents(stdoutBuf.String()))
@@ -91,7 +91,7 @@ func TestE2E_HandoffDecisions(t *testing.T) {
 	}
 	for _, dd := range decisions {
 		if dd.ID == "undecided" {
-			t.Error("an undecided suggestion must NOT ship in the handoff")
+			t.Error("an undecided suggestion must NOT ship in the snapshot")
 		}
 	}
 

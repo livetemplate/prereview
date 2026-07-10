@@ -38,7 +38,7 @@ func (c *PrereviewController) scheduleEmit() {
 
 // stopPendingEmit cancels any armed debounce timer. EndSession calls it (and
 // sets emitDisabled) before its synchronous final flush, so a queued emit can't
-// fire a snapshot AFTER session_end — the skill's only stop signal.
+// fire a snapshot AFTER end — the skill's only stop signal.
 func (c *PrereviewController) stopPendingEmit() {
 	c.emitMu.Lock()
 	defer c.emitMu.Unlock()
@@ -67,7 +67,7 @@ func (c *PrereviewController) emitSnapshot() {
 	c.applyDecisions(st)
 	c.relocateAll(st)            // re-anchor comments against fresh disk (base-safe, #121)
 	c.relocateSuggestionsAll(st) // re-anchor suggestions likewise
-	if err := c.Emitter.EmitHandoff(st.Comments, st.Suggestions, st.DecisionsBySuggestion(), time.Now()); err != nil {
+	if err := c.Emitter.EmitSnapshot(st.Comments, st.Suggestions, st.DecisionsBySuggestion(), c.isPaused(), time.Now()); err != nil {
 		slog.Warn("emit snapshot", "err", err)
 	}
 }

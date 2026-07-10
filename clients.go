@@ -21,7 +21,7 @@ var clientBody string
 // clientTrigger is the one-line "when to use this" description shared by every
 // client's command/skill metadata. Phrased as the trigger condition because
 // most agents match on exactly this string to decide whether to invoke.
-const clientTrigger = "Use when the user wants to review their working tree (or a file) and have you apply the fixes: prereview opens a browser review UI, the user comments and hands off, then you read .prereview/comments.csv and apply the still-open comments."
+const clientTrigger = "Use when the user wants to review their working tree (or a file) and have you apply the fixes: prereview opens a browser review UI, the user queues comments, then you read them (prereview comments --json) and apply the still-open ones."
 
 // clientFile is one file an installer writes, at a path relative to $HOME.
 // rel always uses forward slashes; it is converted per-OS at write time.
@@ -279,7 +279,7 @@ func aiderScript() string {
 	return `#!/bin/sh
 # prereview -> aider: apply the review comments you left in prereview.
 #
-# Usage (after reviewing in prereview and handing off):
+# Usage (after queuing your comments in prereview):
 #   ~/.config/prereview/aider/prereview-aider.sh <files-to-edit>
 #
 # Pass the files you commented on. Run from the repo root (where .prereview/ is).

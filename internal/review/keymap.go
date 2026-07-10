@@ -36,10 +36,10 @@ type KeyBinding struct {
 	// not from the keyBindings loop, so their rows carry Button instead of Action.
 	Button string
 
-	// StreamOnly limits a binding to --stream (skill) mode. A stream-only
-	// shortcut is filtered out of the live window bindings AND the help overlay
-	// when the session isn't streaming, so a repo-only reviewer never sees a key
-	// for a control (the agent-queue Pause/Resume) that doesn't exist for them.
+	// StreamOnly limits a binding to --agent mode. An agent-only shortcut is
+	// filtered out of the live window bindings AND the help overlay when the
+	// session isn't in agent mode, so a repo-only reviewer never sees a key for a
+	// control (the agent-queue Pause/Resume) that doesn't exist for them.
 	StreamOnly bool
 }
 
@@ -75,10 +75,10 @@ var keyBindings = []KeyBinding{
 // KeyBindings exposes the keymap to the template. Zero-arg so livetemplate's
 // evaluator auto-invokes it; the template ranges over it for both the hidden
 // window bindings and the help overlay. StreamOnly rows are dropped outside
-// --stream mode so a repo-only reviewer gets neither a live binding nor a help
+// --agent mode so a repo-only reviewer gets neither a live binding nor a help
 // row for the agent-queue Pause/Resume shortcut (there's no queue for them).
 func (s PrereviewState) KeyBindings() []KeyBinding {
-	if s.StreamMode {
+	if s.AgentMode {
 		return keyBindings
 	}
 	out := make([]KeyBinding, 0, len(keyBindings))
@@ -101,8 +101,8 @@ func (s PrereviewState) KeyBindings() []KeyBinding {
 // Single-sourced from the same keyBindings slice as the live bindings and the
 // help overlay, so a chip can never show a stale key.
 //
-// Not filtered by StreamMode (unlike KeyBindings): a hint for a control that
-// isn't rendered (the stream-only Pause button in repo mode) has no button to
+// Not filtered by AgentMode (unlike KeyBindings): a hint for a control that
+// isn't rendered (the agent-only Pause button in repo mode) has no button to
 // attach to, so it's harmless — and leaving it in keeps the lookup a pure map
 // over the keymap. Zero-arg so livetemplate auto-invokes it (a method-with-arg
 // would silently break rendering).
