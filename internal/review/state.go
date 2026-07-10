@@ -152,7 +152,7 @@ type PrereviewState struct {
 	EnqueueTick int `json:"enqueue_tick" lvt:"persist"`
 
 	// LLMState mirrors the agent's inbound status signal
-	// (.prereview/llm-status.json): "working" while the agent applies a handoff
+	// (.prereview/llm-status.json): "working" while the agent applies a snapshot
 	// batch, "done" once finished, "" idle. LLMMessage is the optional detail
 	// shown in the pill. Written by the agent (skill), watched by the server, and
 	// pushed to every open tab via the llm-status watcher → LLMStatusChanged
@@ -193,8 +193,8 @@ type PrereviewState struct {
 	// AgentMode is mirrored from the controller (set by --agent flag) into state
 	// in Mount so the template can branch the top-bar controls between the Queue
 	// (Pause/Resume) + "End session" agent UI and the standalone "Quit" button.
-	// In agent mode each queue mutation emits a JSON handoff snapshot and End
-	// session emits the terminating session_end event. Not persisted — the
+	// In agent mode each queue mutation emits a JSON snapshot and End
+	// session emits the terminating end event. Not persisted — the
 	// controller is the source of truth; Mount refreshes it every connect.
 	AgentMode bool `json:"agent_mode"`
 
@@ -212,7 +212,7 @@ type PrereviewState struct {
 	// SessionEnded flips true when the user clicks "End session" in stream
 	// mode. Like Quitting it precedes a delayed graceful shutdown, but the
 	// banner wording differs ("session ended") and EndSession also emits the
-	// terminating session_end stream event before shutting down.
+	// terminating end stream event before shutting down.
 	SessionEnded bool `json:"session_ended"`
 
 	// EditingCommentID is set when the user has tapped Edit on an existing

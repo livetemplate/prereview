@@ -3,7 +3,7 @@
 // End-to-end test for the agent-facing CLI subcommands against a LIVE --agent
 // server: a real browser comment generates a real handoff, then `prereview
 // comments --json` enumerates it, `prereview events --since` delivers the
-// handoff event, and `prereview processed` validates ids (a real id marks; a
+// snapshot event, and `prereview processed` validates ids (a real id marks; a
 // bogus id fails non-zero — the #1 corruption regression, through a real store).
 // This is the server↔CLI loop the unit/contract tests can't reach: only the UI
 // produces a genuine event.
@@ -78,11 +78,11 @@ func TestE2E_AgentSubcommands(t *testing.T) {
 	// emit debounce (a bare --since -1 could return with just ready@0).
 	out, _, exit := runCLI(t, 10*time.Second, p.binary, "events", "--out", p.repo, "--since", "0")
 	if exit != 0 {
-		t.Fatalf("events --since 0 exit=%d (should return once the handoff is emitted)", exit)
+		t.Fatalf("events --since 0 exit=%d (should return once the snapshot is emitted)", exit)
 	}
 	var sawHandoff bool
 	for _, ev := range parseStreamEvents(out) {
-		if ev.Event == "handoff" && len(ev.CommentList()) == 1 && strings.Contains(ev.CommentList()[0].Body, "please rename") {
+		if ev.Event == "snapshot" && len(ev.CommentList()) == 1 && strings.Contains(ev.CommentList()[0].Body, "please rename") {
 			sawHandoff = true
 		}
 	}

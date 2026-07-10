@@ -18,19 +18,19 @@ import (
 //
 // By default it prints only the actionable set (unresolved, non-outdated,
 // non-draft — what the agent should act on); --all includes every comment.
-// --json emits a JSON array in the SAME shape the --agent handoff snapshot uses
+// --json emits a JSON array in the SAME shape the --agent snapshot uses
 // (so an agent parses one contract everywhere); without it, a terse human table.
 func runComments(args []string) error {
 	fs := flag.NewFlagSet("comments", flag.ContinueOnError)
 	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
-	asJSON := fs.Bool("json", false, "print the comments as a JSON array (same shape as the --agent handoff snapshot)")
+	asJSON := fs.Bool("json", false, "print the comments as a JSON array (same shape as the --agent snapshot)")
 	all := fs.Bool("all", false, "include resolved / outdated / draft comments (default: only the actionable set)")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview comments [--out <dir>] [--json] [--all]\n\n"+
 				"  List the review's comments from a stable interface (no CSV hand-parsing).\n"+
 				"  Defaults to the actionable set the agent should act on; --all includes\n"+
-				"  resolved/outdated/draft. --json emits the same shape as the stream handoff.\n"+
+				"  resolved/outdated/draft. --json emits the same shape as the snapshot.\n"+
 				"  Pipe the ids into `prereview processed --file -` to mark them worked on.\n")
 	}
 	if err := fs.Parse(args); err != nil {

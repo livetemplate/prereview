@@ -4,7 +4,7 @@
 // human commenting and handing off; this terminal pane shows the Claude Code
 // skill reading that comment and editing the file. The transcript is scripted
 // (deterministic — no live LLM call, so `make gifs` reproduces byte-for-byte)
-// but faithful to skill/SKILL.md: Claude reads the handoff and edits the file.
+// but faithful to skill/SKILL.md: Claude reads the snapshot and edits the file.
 // It does NOT mark comments resolved — that's a human action (the "Resolve"
 // button), so the transcript never claims to resolve.
 //

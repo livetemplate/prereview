@@ -218,7 +218,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 
 	rec := &gifRec{}
 
-	// Terminal pane: launched, idle, waiting for the handoff. Mirrors the real
+	// Terminal pane: launched, idle, waiting for the snapshot. Mirrors the real
 	// skill flow — /prereview prints a review URL the user taps to open.
 	idle := []termLine{
 		{"$ claude", "dim"},
@@ -276,7 +276,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	_ = rec.captureComposite(bctx, tctx, 110)
 	_ = rec.captureComposite(bctx, tctx, 150) // terminal still idle (event arriving)
 
-	// Terminal: Claude receives the handoff and reads the comment. Keep the
+	// Terminal: Claude receives the snapshot and reads the comment. Keep the
 	// launch lines + review URL (first 4), drop the blank + "waiting…" lines.
 	recv := append(idle[:4:4],
 		termLine{"", "sp"},

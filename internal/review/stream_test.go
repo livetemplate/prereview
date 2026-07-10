@@ -38,11 +38,11 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
-	if err := es.EmitHandoff(nil, nil, nil, false, fixedTS); err != nil {
-		t.Fatalf("EmitHandoff: %v", err)
+	if err := es.EmitSnapshot(nil, nil, nil, false, fixedTS); err != nil {
+		t.Fatalf("EmitSnapshot: %v", err)
 	}
-	if err := es.EmitSessionEnd(fixedTS); err != nil {
-		t.Fatalf("EmitSessionEnd: %v", err)
+	if err := es.EmitEnd(fixedTS); err != nil {
+		t.Fatalf("EmitEnd: %v", err)
 	}
 
 	// Both sinks must hold byte-identical output.
@@ -58,12 +58,12 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	if len(evs) != 3 {
 		t.Fatalf("want 3 events, got %d", len(evs))
 	}
-	wantTypes := []string{"ready", "handoff", "session_end"}
+	wantTypes := []string{"ready", "snapshot", "end"}
 	for i, ev := range evs {
 		if ev.Event != wantTypes[i] {
 			t.Errorf("event %d: want type %q, got %q", i, wantTypes[i], ev.Event)
 		}
-		if ev.Seq != i { // ready=0, handoff=1, session_end=2
+		if ev.Seq != i { // ready=0, handoff=1, end=2
 			t.Errorf("event %d (%s): want seq %d, got %d", i, ev.Event, i, ev.Seq)
 		}
 		if ev.Ts != fixedTS.Format(time.RFC3339) {
@@ -72,20 +72,20 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	}
 }
 
-// TestEventStream_CommentsKeyPresence pins the contract: a handoff ALWAYS
+// TestEventStream_CommentsKeyPresence pins the contract: a snapshot ALWAYS
 // carries the comments key (an empty `[]` when nothing is actionable, never
-// absent), while ready/session_end omit it entirely.
+// absent), while ready/end omit it entirely.
 func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	var out bytes.Buffer
 	es := NewEventStream(&out, "")
 	if err := es.EmitReady("/r", "/r/c.csv", false, fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
-	if err := es.EmitHandoff(nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
+	if err := es.EmitSnapshot(nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
 		t.Fatalf("handoff: %v", err)
 	}
-	if err := es.EmitSessionEnd(fixedTS); err != nil {
-		t.Fatalf("session_end: %v", err)
+	if err := es.EmitEnd(fixedTS); err != nil {
+		t.Fatalf("end: %v", err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if n := len(lines); n != 3 {
@@ -102,11 +102,11 @@ func TestEventStream_CommentsKeyPresence(t *testing.T) {
 		t.Errorf("empty handoff must carry suggestions:[] (not absent): %s", lines[1])
 	}
 	if strings.Contains(lines[2], "comments") || strings.Contains(lines[2], "suggestions") {
-		t.Errorf("session_end should omit comments/suggestions: %s", lines[2])
+		t.Errorf("end should omit comments/suggestions: %s", lines[2])
 	}
 }
 
-// TestActionableDecisions_FiltersAndMaps pins the handoff decision payload: only
+// TestActionableDecisions_FiltersAndMaps pins the snapshot decision payload: only
 // fingerprint-matched, non-outdated decided suggestions ship, carrying the
 // verdict + note joined with the suggestion's content/location.
 func TestActionableDecisions_FiltersAndMaps(t *testing.T) {
@@ -150,12 +150,12 @@ func TestEventStream_AppendOnly(t *testing.T) {
 
 	// First session writes one event.
 	es1 := NewEventStream(&bytes.Buffer{}, file)
-	if err := es1.EmitSessionEnd(fixedTS); err != nil {
+	if err := es1.EmitEnd(fixedTS); err != nil {
 		t.Fatalf("first emit: %v", err)
 	}
 	// A second emitter pointed at the same file must append, not truncate.
 	es2 := NewEventStream(&bytes.Buffer{}, file)
-	if err := es2.EmitSessionEnd(fixedTS); err != nil {
+	if err := es2.EmitEnd(fixedTS); err != nil {
 		t.Fatalf("second emit: %v", err)
 	}
 

@@ -73,8 +73,8 @@ func TestSuggestionDrift_121_DropsFromSnapshotWhenTargetEditedAway(t *testing.T)
 	}
 
 	// Round 1: target text is present → the decided suggestion is in the snapshot.
-	if err := c.flushHandoff(&st); err != nil {
-		t.Fatalf("flushHandoff 1: %v", err)
+	if err := c.flushSnapshot(&st); err != nil {
+		t.Fatalf("flushSnapshot 1: %v", err)
 	}
 	evs := decodeEvents(t, buf.Bytes())
 	if n := len(evs[0].DecisionList()); n != 1 {
@@ -89,8 +89,8 @@ func TestSuggestionDrift_121_DropsFromSnapshotWhenTargetEditedAway(t *testing.T)
 
 	// Round 2: the suggestion must re-anchor outdated and DROP from the snapshot.
 	buf.Reset()
-	if err := c.flushHandoff(&st); err != nil {
-		t.Fatalf("flushHandoff 2: %v", err)
+	if err := c.flushSnapshot(&st); err != nil {
+		t.Fatalf("flushSnapshot 2: %v", err)
 	}
 	evs = decodeEvents(t, buf.Bytes())
 	if n := len(evs[0].DecisionList()); n != 0 {

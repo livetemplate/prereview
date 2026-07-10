@@ -28,7 +28,7 @@ Subcommands (for the coding agent; each takes --out <REPO>):
   comments   list the review's comments (--json for the stream shape; --all for resolved too)
   processed  mark comments worked on (validated against comments.csv; --file -/--all-open)
   suggest    submit proposed edits as inline suggestion boxes (--file/stdin)
-  events     deliver the next batch of events after --since <seq> (blocks when caught up), until session_end
+  events     deliver the next batch of events after --since <seq> (blocks when caught up), until the terminating end event
   help       show this message
 
   Run a subcommand with -h for its own flags, e.g. ` + "`prereview processed -h`" + `.

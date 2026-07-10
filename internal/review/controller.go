@@ -56,7 +56,7 @@ type PrereviewController struct {
 	// AgentMode is true under `prereview --agent`: prereview streams the review
 	// queue as JSON events (stdout + .prereview/events.jsonl) and the UI shows
 	// the Queue (Pause/Resume) + "End session" (which emits the terminating
-	// session_end event) instead of "Quit". Set once by main.go.
+	// end event) instead of "Quit". Set once by main.go.
 	AgentMode bool
 
 	// Emitter is the agent-mode JSON event log writer (stdout +
@@ -107,7 +107,7 @@ type PrereviewController struct {
 	// mutations into one snapshot emit (see controller_emit.go). emitMu guards the
 	// timer. inEmit is set while emitSnapshot runs so its own self-heal persist
 	// can't reschedule (avoiding a feedback loop). emitDisabled is set at session
-	// end so no snapshot fires after session_end (which the skill treats as
+	// end so no snapshot fires after end (which the skill treats as
 	// terminal).
 	emitMu       sync.Mutex
 	emitTimer    *time.Timer
@@ -451,7 +451,7 @@ func commentsFromRows(rows []csv.Row) []Comment {
 }
 
 // LoadComments reads the review's comments.csv at csvPath and returns the
-// comments as StreamComment — the SAME JSON shape the live handoff snapshot
+// comments as StreamComment — the SAME JSON shape the live snapshot
 // emits, so the `prereview comments` reader and the stream never diverge. With
 // all=false it returns only the actionable set (unresolved, non-outdated,
 // non-draft — what the agent should act on); with all=true, every comment. The

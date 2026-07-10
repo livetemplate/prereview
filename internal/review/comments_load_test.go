@@ -11,7 +11,7 @@ import (
 )
 
 // TestLoadComments_ActionableVsAll pins that LoadComments filters exactly like
-// the handoff snapshot (actionable = unresolved, non-outdated, non-draft) and
+// the snapshot (actionable = unresolved, non-outdated, non-draft) and
 // that --all returns every row.
 func TestLoadComments_ActionableVsAll(t *testing.T) {
 	dir := t.TempDir()

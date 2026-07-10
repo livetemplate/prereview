@@ -53,15 +53,15 @@ func appendLine(t *testing.T, path, line string) {
 const testPoll = 5 * time.Millisecond
 
 // TestFollowEvents_SinceFilterAndSessionEnd: --since drops already-seen events
-// and session_end terminates the stream (exit path, no follow needed since the
+// and end terminates the stream (exit path, no follow needed since the
 // terminator is already on disk).
 func TestFollowEvents_SinceFilterAndSessionEnd(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeFile(t, path, strings.Join([]string{
 		`{"event":"ready","seq":0}`,
-		`{"event":"handoff","seq":1}`,
-		`{"event":"handoff","seq":2}`,
-		`{"event":"session_end","seq":3}`,
+		`{"event":"snapshot","seq":1}`,
+		`{"event":"snapshot","seq":2}`,
+		`{"event":"end","seq":3}`,
 		"",
 	}, "\n"))
 
@@ -79,13 +79,13 @@ func TestFollowEvents_SinceFilterAndSessionEnd(t *testing.T) {
 }
 
 // TestFollowEvents_TornLineTolerance: a garbage line is skipped and the stream
-// still terminates cleanly on session_end.
+// still terminates cleanly on end.
 func TestFollowEvents_TornLineTolerance(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeFile(t, path, strings.Join([]string{
 		`{"event":"ready","seq":0}`,
 		`{not valid json at all`,
-		`{"event":"session_end","seq":1}`,
+		`{"event":"end","seq":1}`,
 		"",
 	}, "\n"))
 
@@ -100,7 +100,7 @@ func TestFollowEvents_TornLineTolerance(t *testing.T) {
 
 // TestFollowEvents_RealEmitterContract wires the REAL review.EventStream to the
 // reader, so a format mismatch between what the server writes and what the reader
-// parses (field names, seq semantics, session_end serialization) is caught —
+// parses (field names, seq semantics, end serialization) is caught —
 // every other test hand-authors the fixture, which only confirms our own
 // assumptions about the wire shape.
 func TestFollowEvents_RealEmitterContract(t *testing.T) {
@@ -112,11 +112,11 @@ func TestFollowEvents_RealEmitterContract(t *testing.T) {
 		t.Fatalf("EmitReady: %v", err)
 	}
 	c := review.Comment{ID: "c1", File: "a.go", FromLine: 1, ToLine: 1, Side: "new", Body: "fix this", Created: ts}
-	if err := es.EmitHandoff([]review.Comment{c}, nil, nil, false, ts); err != nil {
-		t.Fatalf("EmitHandoff: %v", err)
+	if err := es.EmitSnapshot([]review.Comment{c}, nil, nil, false, ts); err != nil {
+		t.Fatalf("EmitSnapshot: %v", err)
 	}
-	if err := es.EmitSessionEnd(ts); err != nil {
-		t.Fatalf("EmitSessionEnd: %v", err)
+	if err := es.EmitEnd(ts); err != nil {
+		t.Fatalf("EmitEnd: %v", err)
 	}
 
 	var buf syncBuf
@@ -124,7 +124,7 @@ func TestFollowEvents_RealEmitterContract(t *testing.T) {
 		t.Fatalf("followEvents: %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{`"event":"ready"`, `"event":"handoff"`, `"c1"`, `"from_line":1`, `"event":"session_end"`} {
+	for _, want := range []string{`"event":"ready"`, `"event":"snapshot"`, `"c1"`, `"from_line":1`, `"event":"end"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("reader did not deliver %s from the real emitter output:\n%s", want, out)
 		}
@@ -133,13 +133,13 @@ func TestFollowEvents_RealEmitterContract(t *testing.T) {
 
 // TestFollowEvents_ReturnsAfterCatchupBatch pins Model B's core promise: once
 // catch-up has delivered a batch, the reader RETURNS (so the agent can act) — it
-// does NOT keep following until session_end. This path has no session_end, so it
-// isolates the emitted>0 return that the session_end tests would otherwise mask.
+// does NOT keep following until end. This path has no end, so it
+// isolates the emitted>0 return that the end tests would otherwise mask.
 func TestFollowEvents_ReturnsAfterCatchupBatch(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeFile(t, path, strings.Join([]string{
 		`{"event":"ready","seq":0}`,
-		`{"event":"handoff","seq":1}`,
+		`{"event":"snapshot","seq":1}`,
 		"",
 	}, "\n"))
 
@@ -153,7 +153,7 @@ func TestFollowEvents_ReturnsAfterCatchupBatch(t *testing.T) {
 			t.Fatalf("followEvents: %v", err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("followEvents must return after the catch-up batch (no session_end needed)")
+		t.Fatal("followEvents must return after the catch-up batch (no end needed)")
 	}
 	if !strings.Contains(buf.String(), `"seq":1`) {
 		t.Errorf("expected the catch-up batch; got:\n%s", buf.String())
@@ -175,7 +175,7 @@ func TestFollowEvents_BlocksThenReturnsOnAppend(t *testing.T) {
 	if s := buf.String(); s != "" {
 		t.Fatalf("caught-up reader should block (emit nothing); got:\n%s", s)
 	}
-	appendLine(t, path, `{"event":"handoff","seq":1}`+"\n")
+	appendLine(t, path, `{"event":"snapshot","seq":1}`+"\n")
 
 	select {
 	case err := <-done:
@@ -202,7 +202,7 @@ func TestFollowEvents_PartialTailWaitsForNewline(t *testing.T) {
 	go func() { done <- followEvents(path, 0, &buf, testPoll) }() // caught up ⇒ block
 
 	time.Sleep(10 * testPoll)
-	appendLine(t, path, `{"event":"handoff","seq":1}`) // no newline yet
+	appendLine(t, path, `{"event":"snapshot","seq":1}`) // no newline yet
 	time.Sleep(10 * testPoll)
 	if buf.String() != "" {
 		t.Errorf("partial line (no newline) must not be delivered yet; got:\n%s", buf.String())
@@ -228,8 +228,8 @@ func TestFollowEvents_ResetGuard(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeFile(t, path, strings.Join([]string{
 		`{"event":"ready","seq":0}`,
-		`{"event":"handoff","seq":1}`,
-		`{"event":"session_end","seq":2}`,
+		`{"event":"snapshot","seq":1}`,
+		`{"event":"end","seq":2}`,
 		"",
 	}, "\n"))
 
@@ -256,7 +256,7 @@ func TestFollowEvents_WaitsForLogThenReads(t *testing.T) {
 	time.Sleep(10 * testPoll) // reader is waiting for the file
 	writeFile(t, path, strings.Join([]string{
 		`{"event":"ready","seq":0}`,
-		`{"event":"session_end","seq":1}`,
+		`{"event":"end","seq":1}`,
 		"",
 	}, "\n"))
 

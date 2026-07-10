@@ -31,7 +31,7 @@ const eventsPollInterval = 250 * time.Millisecond
 // It MERGES catch-up and follow into one behaviour (there is no separate
 // --follow): it prints every event whose seq is greater than --since, then
 // blocks and streams new events as they are appended, exiting 0 only when it
-// sees `session_end`. Run it with a long Bash timeout; on timeout, re-run with
+// sees `end`. Run it with a long Bash timeout; on timeout, re-run with
 // the last seq to pick up seamlessly.
 func runEvents(args []string) error {
 	fs := flag.NewFlagSet("events", flag.ContinueOnError)
@@ -42,7 +42,7 @@ func runEvents(args []string) error {
 			"Usage: prereview events [--out <dir>] [--since <seq>]\n\n"+
 				"  Deliver the next batch of review events (one JSON event per line). Prints\n"+
 				"  every event after --since; if none are waiting, blocks for the next, then\n"+
-				"  returns — exiting immediately on the terminating `session_end`. Each line\n"+
+				"  returns — exiting immediately on the terminating `end`. Each line\n"+
 				"  carries a `seq`; loop by re-running with the highest seq you saw (anything\n"+
 				"  that landed between rounds comes back instantly). Requires the review\n"+
 				"  server running with --agent; --out must match its REPO directory.\n")
@@ -63,7 +63,7 @@ func runEvents(args []string) error {
 // on disk past the cursor (seq > since); if that yielded anything, it returns so
 // the agent can act on the batch. Only when already caught up does it block,
 // polling until the next event(s) are appended, then emits them and returns. It
-// always returns as soon as it sees `session_end` (the stream's terminator). The
+// always returns as soon as it sees `end` (the stream's terminator). The
 // agent loops: run, act on the latest snapshot, re-run with the highest seq it
 // saw — so anything that lands between rounds is caught instantly on the next run
 // (the durable log + seq cursor is what closes the missed-events window a bare
@@ -99,7 +99,7 @@ func followEvents(path string, since int, w io.Writer, poll time.Duration) error
 	}
 	emitted, done, err := emitBatch(catchup, since, w)
 	if err != nil || done || emitted > 0 {
-		return err // delivered a batch (or hit session_end) — return so the agent acts
+		return err // delivered a batch (or hit end) — return so the agent acts
 	}
 
 	// Already caught up → block until the next event(s) land, then return.
@@ -115,7 +115,7 @@ func followEvents(path string, since int, w io.Writer, poll time.Duration) error
 }
 
 // emitBatch writes each line whose seq exceeds the cursor, returning how many it
-// wrote and whether a `session_end` terminator was seen. Torn/malformed lines
+// wrote and whether a `end` terminator was seen. Torn/malformed lines
 // are skipped.
 func emitBatch(lines [][]byte, since int, w io.Writer) (emitted int, done bool, err error) {
 	for _, ln := range lines {
@@ -154,7 +154,7 @@ func readComplete(r *bufio.Reader, carry []byte) (lines [][]byte, partial []byte
 }
 
 // emitEvent prints line when its seq exceeds the cursor (reporting wrote), and
-// reports term when the line is a `session_end` — the stream's only terminator —
+// reports term when the line is a `end` — the stream's only terminator —
 // even if it was filtered out (a cursor already past it means the agent has seen
 // it), so we never block waiting for events that will never come. Torn/malformed
 // lines are silently skipped.
@@ -169,7 +169,7 @@ func emitEvent(line []byte, since int, w io.Writer) (wrote, term bool, err error
 		}
 		wrote = true
 	}
-	return wrote, ev.Event == "session_end", nil
+	return wrote, ev.Event == "end", nil
 }
 
 // peekEvent decodes only the routing fields (event + seq) from a log line. ok is
