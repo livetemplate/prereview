@@ -140,14 +140,13 @@ Three event types:
     (`~/.claude/skills/prereview/SKILL.md`) before continuing, and tell the user to
     reload the skill in their agent. (A matching stderr note prints too.)
   - `paused:true` means the reviewer started with the queue paused.
-- **`snapshot`** — emitted per queue mutation (coalesced to one when paused). A **FULL
-  snapshot of the still-actionable queue** (a superset, not a delta): act only on the
-  **latest** and **dedupe by `id`**. Fields: `event, seq, ts, comments[], suggestions[]`,
-  plus optional `paused`. `comments` and `suggestions` are always present (`[]` when
-  empty). The snapshot is pre-filtered to actionable rows (no resolved, no outdated, no
-  draft). `paused:true` → the reviewer paused the queue (batching): `watch` blocks until
-  they resume, which delivers ONE coalesced snapshot of the whole batch — act on it as a
-  single set.
+- **`snapshot`** — emitted (debounced) per queue mutation. A **FULL snapshot of the
+  still-actionable queue** (a superset, not a delta): act only on the **latest** and
+  **dedupe by `id`**. Fields: `event, seq, ts, comments[], suggestions[]`. `comments`
+  and `suggestions` are always present (`[]` when empty). The snapshot is pre-filtered
+  to actionable rows (no resolved, no outdated, no draft). While the reviewer has the
+  queue **paused** (batching), no snapshot is emitted — mutations still persist, but
+  `watch` blocks — and **resume** emits ONE coalesced snapshot of everything queued.
 - **`end`** — emitted once on **End session**. The **only** terminator: stop consuming.
   The server shuts down right after (so a backgrounded launch's job completes too).
 

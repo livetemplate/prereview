@@ -114,9 +114,10 @@ Track this as a checklist; run it until you see the `end` event.
 3. **Act on the latest `snapshot`.** Each `snapshot` is a FULL snapshot of the still-
    actionable queue (a superset, not a delta). When a returned batch holds several,
    act only on the **latest**, and **dedupe by `id`**. See *Act on the comments*.
-   A `paused:true` snapshot means the reviewer paused: `watch` blocks until they
-   resume, then delivers ONE coalesced snapshot of the whole batch — act on it as a
-   single set.
+   While the reviewer has the queue **paused** (batching), no snapshot is emitted —
+   your `watch` simply blocks — and **resume** delivers ONE coalesced snapshot of
+   everything queued; act on it as a single set. (`ready.paused` tells you only
+   whether the session *started* paused.)
 4. **Advance the cursor.** Set `n` to the highest `seq` in the batch and re-run
    `watch --since "$n"`. Because the log is durable and `--since` resumes from the
    cursor, anything that lands between rounds comes back instantly — no missed events.
