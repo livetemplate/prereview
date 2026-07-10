@@ -271,12 +271,3 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	state.ScrollToHeadingID = ""
 	return state, nil
 }
-
-// DismissBanner hides the DONE confirmation banner. The on-disk DONE marker
-// and CSV file are unaffected — this only clears the UI signal, freeing
-// header space. Clicking Done again will rewrite the marker and reshow
-// the banner.
-func (c *PrereviewController) DismissBanner(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.DoneWritten = false
-	return state, nil
-}

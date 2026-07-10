@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-// flushHandoff re-anchors every commented file, persists the CSV, and (in
-// stream mode) emits a handoff event carrying the full actionable snapshot.
-// Shared by HandOff and EndSession. The CSV only becomes a contract at
-// handoff, so re-anchoring here gives the consumer accurate line numbers (and
-// an explicit anchor_status=outdated where it cannot be trusted); the stream
-// snapshot is filtered to actionable rows and the consumer dedupes by id.
+// flushHandoff re-anchors every commented file, persists the CSV, and (in agent
+// mode) emits a handoff event carrying the full actionable snapshot. Shared by
+// the emit path and EndSession. The CSV only becomes a contract at handoff, so
+// re-anchoring here gives the consumer accurate line numbers (and an explicit
+// anchor_status=outdated where it cannot be trusted); the stream snapshot is
+// filtered to actionable rows and the consumer dedupes by id.
 func (c *PrereviewController) flushHandoff(state *PrereviewState) error {
 	c.relocateAll(state)
 	if err := c.persist(state.Comments); err != nil {
@@ -22,34 +22,16 @@ func (c *PrereviewController) flushHandoff(state *PrereviewState) error {
 	// applied re-anchors as outdated and drops from the snapshot (#98 Phase 3).
 	c.relocateSuggestionsAll(state)
 	if c.Emitter != nil {
-		if err := c.Emitter.EmitHandoff(state.Comments, state.Suggestions, state.DecisionsBySuggestion(), time.Now()); err != nil {
+		if err := c.Emitter.EmitHandoff(state.Comments, state.Suggestions, state.DecisionsBySuggestion(), c.isPaused(), time.Now()); err != nil {
 			return fmt.Errorf("emit handoff event: %w", err)
 		}
 	}
 	return nil
 }
 
-// HandOff is the skill-mode "I'm finished reviewing" handoff. Flushes the CSV
-// (+ a stream handoff event in stream mode), then writes the DONE marker AFTER
-// the CSV is fsynced + renamed. The skill polls for the marker, so writing
-// DONE before the CSV is durable would let it race and read a half-written
-// file. Server keeps running afterwards so the user can keep editing.
-func (c *PrereviewController) HandOff(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	if err := c.flushHandoff(&state); err != nil {
-		return state, err
-	}
-	if err := writeDoneMarker(c.DonePath, c.CSVPath); err != nil {
-		return state, fmt.Errorf("write done marker: %w", err)
-	}
-	state.DoneWritten = true
-	state.LastDeletedComment = nil
-	state.LastSaved = time.Now().Format("15:04:05")
-	return state, nil
-}
-
-// EndSession is the stream-mode terminator. It first flushes a final handoff
-// snapshot — so comments left since the last Hand off still reach the consumer
-// (dedup-by-id makes a redundant snapshot harmless, and the alternative would
+// EndSession is the agent-mode terminator. It first flushes a final handoff
+// snapshot — so comments left since the last emitted snapshot still reach the
+// consumer (dedup-by-id makes a redundant snapshot harmless, and the alternative would
 // silently strand them in the CSV but never the stream) — then emits the single
 // session_end event (the only event the consumer loop treats as "stop") and
 // shuts the server down on the same delay as Quit, so the framework renders the

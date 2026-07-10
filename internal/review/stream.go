@@ -5,17 +5,37 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
-// EventStream emits the --stream mode JSON event log: one JSON object per
+// Store-layout filenames under .prereview/ that the CLI subcommands resolve.
+// Centralised so the server and the read subcommands (events, comments) agree on
+// one location — mirroring ProcessedFileName / SuggestionFileName.
+const (
+	// CommentsFileName is the CSV the review server writes (the on-disk source of
+	// truth) and the `prereview comments` reader parses.
+	CommentsFileName = "comments.csv"
+	// EventsFileName is the durable, append-only event log written only in
+	// --agent mode and reset per launch (openStore); each line is a seq-stamped
+	// StreamEvent consumed by `prereview events`.
+	EventsFileName = "events.jsonl"
+)
+
+// EventsPath returns the event-log path for a store whose CSV lives at csvPath —
+// i.e. <csv dir>/events.jsonl, alongside processed.jsonl and llm-status.json.
+func EventsPath(csvPath string) string {
+	return filepath.Join(filepath.Dir(csvPath), EventsFileName)
+}
+
+// EventStream emits the --agent mode JSON event log: one JSON object per
 // line, written to both a live channel (stdout, polled by the consuming LLM)
 // and an append-only durable mirror (.prereview/events.jsonl, for replay after
 // a context reset). It is the single writer of these events — controller
 // actions call it under its mutex, so emitted lines are naturally ordered and
 // carry a monotonic seq. A nil *EventStream is never emitted to; callers gate
-// on stream mode before constructing one.
+// on agent mode before constructing one.
 type EventStream struct {
 	mu       sync.Mutex
 	seq      int
@@ -48,6 +68,9 @@ type StreamEvent struct {
 	// apply accepts, rework revises, drop rejects. Same pointer convention as
 	// Comments: always present on a handoff (`[]` when none), absent elsewhere.
 	Suggestions *[]StreamDecision `json:"suggestions,omitempty"` // handoff
+	// Paused reports that the reviewer paused the queue (batching): the agent's
+	// `watch` will block until resume, which then delivers one coalesced snapshot.
+	Paused bool `json:"paused,omitempty"` // ready / handoff
 }
 
 // CommentList returns the event's comment snapshot, or nil for events that
@@ -226,19 +249,20 @@ func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 // EmitReady announces the session is live. Emitted once, after the
 // READY/REPO stdout preamble, so the preamble parse is never interleaved
 // with JSON.
-func (e *EventStream) EmitReady(repo, csvPath string, ts time.Time) error {
-	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath}, ts)
+func (e *EventStream) EmitReady(repo, csvPath string, paused bool, ts time.Time) error {
+	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath, Paused: paused}, ts)
 }
 
-// EmitHandoff emits a full actionable snapshot — one per "Hand off" click:
-// the open comments AND the reviewer's decisions on the LLM's suggestions.
+// EmitHandoff emits a full actionable snapshot — one per queue mutation (or the
+// final EndSession flush): the open comments AND the reviewer's decisions on the
+// LLM's suggestions.
 // Both snapshots are always non-nil slices so their keys are always present
 // (`[]` when nothing is actionable). decided is the fingerprint-matched decision
 // map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
-func (e *EventStream) EmitHandoff(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, ts time.Time) error {
+func (e *EventStream) EmitHandoff(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, paused bool, ts time.Time) error {
 	csnap := actionableComments(comments)
 	dsnap := actionableDecisions(suggestions, decided)
-	return e.emit(StreamEvent{Event: "handoff", Comments: &csnap, Suggestions: &dsnap}, ts)
+	return e.emit(StreamEvent{Event: "handoff", Comments: &csnap, Suggestions: &dsnap, Paused: paused}, ts)
 }
 
 // EmitSessionEnd emits the single terminator — the only event the consumer

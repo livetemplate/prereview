@@ -28,7 +28,7 @@ prereview --stream "$(pwd)" &
 # stdout: READY http://127.0.0.1:PORT          (or http://100.x.y.z:PORT on a remote box)
 #         ALT   http://host.tailnet.ts.net:PORT   (0+ extra reachable URLs; only on a tailnet)
 #         REPO  /abs/dir/whose/.prereview/holds/the/CSV+events
-#         {"event":"ready","seq":0,...}             (then JSON event lines)
+#         {"event":"ready","seq":0,...}             (events mirror here too; consume them with `prereview events` — §3)
 ```
 
 `--stream` **implies `--skill`** — the UI streams comments to you continuously (a **⏸ Pause / ▶ Resume** toggle holds/releases the queue) and offers **End session**. (Without either flag the UI shows a "Quit" button and nothing is emitted — that's standalone mode, not for skill use.)
@@ -79,43 +79,35 @@ When an `ALT` MagicDNS hostname is present, make **that** the headline link (sta
 
 ### 3. Consume the stream — drain to the LATEST snapshot, exit ONLY on `session_end`
 
-The reviewer's comments/suggestions now **stream to you continuously** as they
-work — there is no explicit "Hand off" button. The server emits a fresh event
-whenever the queue changes (debounced), each appended to
-`<REPO>/.prereview/events.jsonl` (one JSON object per line; also printed to
-stdout). `<REPO>` is the directory from the printed `REPO` line.
-
-**Every `snapshot`/`handoff` event is a FULL snapshot of the still-actionable
-set — a superset, not a delta.** So when several have queued up while you were
-working, only the **latest** matters. Don't process them one at a time: **drain
-to EOF and act on the last snapshot**, advancing your cursor past all of them.
+The reviewer's comments/suggestions **stream to you continuously** as they work —
+there is no explicit "Hand off" button. The server records each change (debounced)
+as a seq-stamped JSON event in the durable log `<REPO>/.prereview/events.jsonl`
+(`<REPO>` is the printed `REPO` directory). **Consume them with `prereview
+events` — the one reader; never hand-roll `tail`/`head` over the file:**
 
 ```bash
-# n = next line to read (1-based); start at 1.
-total=$(wc -l < <REPO>/.prereview/events.jsonl)
-if [ "$n" -le "$total" ]; then
-  # Events are waiting: read lines n..EOF at once, keep the LAST snapshot, and
-  # jump the cursor past every line consumed.
-  batch=$(tail -n +"$n" <REPO>/.prereview/events.jsonl)
-  n=$((total + 1))
-else
-  # Nothing waiting → block (no busy-poll) until the next event lands.
-  batch=$(tail -n +"$n" -f <REPO>/.prereview/events.jsonl | head -n 1)
-  n=$((n + 1))
-fi
+# n = the highest seq you've seen; start at -1 (from the beginning).
+prereview events --out "<REPO>" --since "$n"
 ```
 
-From `batch`: if any line is `{"event":"session_end"}`, **stop** (see below).
-Otherwise take the **last** `snapshot`/`handoff` line and act on its `comments`
-as one whole (§4) — ignore the earlier ones, they're subsumed. Run the blocking
-read with a **long Bash timeout** (e.g. 600s).
+It prints every event after `$n` (one JSON object per line). If none are waiting
+it **blocks** for the next; as soon as it has delivered a batch it **returns**, so
+you can act. Run it with a **long Bash timeout** (e.g. 600s). After it returns,
+set `$n` to the **highest `seq`** you saw, act on the batch (§4), then re-run to
+continue. Because the log is durable and `--since` resumes from your cursor,
+anything that landed while you were editing comes back **instantly** on the next
+run — there is no window where a reviewer's action goes unseen (the failure a bare
+`tail -f`, alive only while running, used to leave open).
 
-**Always re-arm.** The blocking read is live only *while running*, and between
-rounds nothing is listening — but because `tail -n +"$n"` starts *at* line `n`,
-anything that landed while you were away comes back instantly on the next read.
-After every exit (idle timeout, or having done other work), re-run the drain for
-the current `n`. **The loop's only exit is `session_end`** — never stop after a
-snapshot; the review is continuous.
+**Every `handoff` event is a FULL snapshot of the still-actionable set — a
+superset, not a delta.** When a returned batch holds several, only the **latest**
+matters: act on the last `handoff` line's `comments` as one whole (§4), ignore the
+earlier ones (they're subsumed), and **dedupe by `id`**.
+
+**The loop's only exit is `session_end`.** Re-run `prereview events --since "$n"`
+after every return (batch handled, or an idle timeout with nothing new) until a
+batch contains `{"event":"session_end"}` — then stop (the server exits too). Never
+stop after a `handoff`; the review is continuous.
 
 **Frozen-view contract (important):** you apply fixes to files on disk as you go,
 but the reviewer's diff **does not auto-refresh** — it stays frozen until they
@@ -193,25 +185,41 @@ prereview_status() {
 The file resets on each fresh launch, so a new session starts with no stale
 status. You don't write anything on `session_end` — the server is shutting down.
 
-### Mark each comment you addressed (so the reviewer sees a "worked on" badge)
+### Mark each comment you addressed — a REQUIRED step (badges it "worked on")
 
 Separately from the whole-batch `prereview_status` echo above, tell prereview
-which **specific** comments you handled, so the review UI badges each of them
-**worked on**. As you apply each comment's change (or once, listing the batch's
-ids at the end), run:
+which **specific** comments you handled, so the review UI badges each **worked
+on** — this is how the reviewer sees you acted on their notes (an unmarked comment
+looks ignored). **After every edit that addresses a comment, immediately mark that
+comment's id — before moving on.** Don't defer it to the end, and don't skip it.
 
 ```bash
-# usage: prereview processed --out <REPO> <comment-id> [<comment-id>...]
-prereview processed --out "<REPO>" 01J... 01K...
+# mark specific ids (validated against comments.csv — an unknown id is rejected):
+prereview processed --out "<REPO>" <comment-id> [<comment-id>...]
+
+# or read ids from the stream shape and pipe them (no CSV hand-parsing):
+prereview comments --out "<REPO>" --json | jq -r '.[].id' \
+  | prereview processed --out "<REPO>" --file -
+
+# or, once you've addressed the WHOLE current batch, mark all of it at once:
+prereview processed --out "<REPO>" --all-open
 ```
 
 `<REPO>` is the directory prereview printed at launch (the same one the
-`prereview_status` helper writes into); the `<comment-id>` values are the `id`
-column/field of the comments you addressed. This appends to
-`<REPO>/.prereview/processed.jsonl` (append-only — never hand-edit it or
-`comments.csv`), and the badge appears live across every open tab. It's a
-one-way signal that you acted on the comment: the human still **resolves**
-comments themselves, so keep acting only on unresolved rows.
+`prereview_status` helper writes into). Ids are the `id` field of the comments you
+addressed — list them any time with `prereview comments --json` (the **same JSON
+shape as the stream snapshot**), so you never hand-parse `comments.csv`.
+`prereview processed` **validates** each id against the CSV and **fails loudly**
+(non-zero exit, naming the unknown ids) instead of silently recording a garbage
+mark — so a typo or a broken shell substitution can't corrupt the log. It appends
+to `<REPO>/.prereview/processed.jsonl` (append-only — never hand-edit it or
+`comments.csv`), and the badge appears live across every open tab. Marking is a
+one-way signal that you acted; the human still **resolves** comments themselves,
+so keep acting only on unresolved rows.
+
+Prefer per-comment marking (tie each mark to its edit) over `--all-open`: the
+per-id path records exactly what you touched, whereas `--all-open` asserts you
+handled the entire batch — reach for it only when that is genuinely true.
 
 ## Suggested edits (`prereview suggest`)
 
@@ -404,11 +412,15 @@ while [ ! -f <REPO>/.prereview/DONE ]; do sleep 1; done
 cat "$(cat <REPO>/.prereview/DONE)"
 ```
 
-Parse the CSV per [CSV columns](#csv-columns), filter to actionable rows
-yourself (skip `resolved=true` and `anchor_status=outdated` — both stay in the
-CSV as historical record and may inform the read as context), then **act on them
-holistically exactly as in §4** — read the whole open set first, then drive one
-coherent change. When done, clean up (Hand off does *not* stop the server here):
+Rather than hand-parse the CSV, read the actionable set as JSON with
+`prereview comments --out "<REPO>" --json` (the same shape as a stream snapshot —
+already filtered to actionable rows). If you do parse the CSV directly, follow
+[CSV columns](#csv-columns) and skip `resolved=true` and `anchor_status=outdated`
+yourself (both stay in the CSV as historical record and may inform the read as
+context). Either way, **act on the set holistically exactly as in §4** — read the
+whole open set first, then drive one coherent change; mark each id worked on with
+`prereview processed` as you go. When done, clean up (Hand off does *not* stop the
+server here):
 
 ```bash
 kill %1                       # stop the background prereview server

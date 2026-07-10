@@ -150,7 +150,7 @@ func TestE2E_ToolbarViewDropdown(t *testing.T) {
 	assertNoCrop("1400px")
 	// 1c. …and — critically — at ~1000px, the iPad-ish "between 900 and full-fit"
 	//     band where the OLD always-inline set (file-count + Preview|Raw + Focus +
-	//     scheme + mode + help + Comment on file + Hand off + End session) cropped
+	//     scheme + mode + help + Comment on file + Quit) cropped
 	//     off the right (the motivating screenshot). The grouped set must fit one
 	//     row here with no clipped control; this is where the assertion has teeth.
 	if err := chromedp.Run(p.ctx, chromedp.EmulateViewport(1000, 860), chromedp.Sleep(200*time.Millisecond)); err != nil {

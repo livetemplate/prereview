@@ -25,12 +25,7 @@ import (
 	"github.com/livetemplate/prereview/internal/review"
 )
 
-func run(repo, base, host string, explicitHost bool, port int, skillMode bool, out string, streamMode bool) error {
-	// --stream implies --skill: the stream needs the "Hand off" button, which
-	// is gated by skill mode.
-	if streamMode {
-		skillMode = true
-	}
+func run(repo, base, host string, explicitHost bool, port int, agentMode bool, out string) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -46,17 +41,17 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 
 	// The .prereview/ store defaults to the review root; --out redirects it
 	// (e.g. to keep a read-only checkout pristine). storeRoot is what we print
-	// as REPO so the skill polls the right .prereview/.
+	// as REPO so the agent polls the right .prereview/.
 	storeRoot, err := resolveStoreRoot(out, absRepo)
 	if err != nil {
 		return err
 	}
 	startedAt := time.Now()
-	csvPath, donePath, csvWriter, err := openStore(storeRoot)
+	csvPath, csvWriter, err := openStore(storeRoot)
 	if err != nil {
 		return err
 	}
-	emitter := newStreamEmitter(streamMode, csvPath)
+	emitter := newStreamEmitter(agentMode, csvPath)
 
 	// Load any existing comments from disk so a restart resumes the session.
 	existing, err := csv.Read(csvPath)
@@ -113,12 +108,10 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 		NoGit:       tgt.NoGit,
 		SingleFile:  tgt.SingleFile,
 		CSVPath:     csvPath,
-		DonePath:    donePath,
 		UIPrefsPath: uiPrefsPath(),
 		Version:     version,
 		CSVWriter:   csvWriter,
-		SkillMode:   skillMode,
-		StreamMode:  streamMode,
+		AgentMode:   agentMode,
 		Emitter:     emitter,
 		ShutdownReq: shutdownReq,
 	}
@@ -137,14 +130,13 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	}
 
 	initial := &review.PrereviewState{
-		RepoPath:   absRepo,
-		Base:       base,
-		NoGit:      tgt.NoGit,
-		StartedAt:  startedAt.Format("2006-01-02 15:04:05"),
-		CSVPath:    csvPath,
-		Comments:   initialComments,
-		SkillMode:  skillMode,
-		StreamMode: streamMode,
+		RepoPath:  absRepo,
+		Base:      base,
+		NoGit:     tgt.NoGit,
+		StartedAt: startedAt.Format("2006-01-02 15:04:05"),
+		CSVPath:   csvPath,
+		Comments:  initialComments,
+		AgentMode: agentMode,
 	}
 
 	mux := http.NewServeMux()
@@ -194,21 +186,21 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	for _, alt := range netaddr.AltURLs(bindHost, tsIP, magicDNS, actual.Port) {
 		fmt.Printf("ALT %s\n", alt)
 	}
-	// Print the resolved review directory so the skill can poll
-	// <dir>/.prereview/DONE even when the path was a single file (RepoPath
+	// Print the resolved review directory so the agent can locate the store
+	// under <dir>/.prereview/ even when the path was a single file (RepoPath
 	// is normalized to the file's parent). For a git repo this equals the
-	// path argument, so the existing skill contract is unchanged.
+	// path argument, so the existing contract is unchanged.
 	fmt.Printf("REPO %s\n", storeRoot)
 	slog.Info("prereview started", "url", url, "repo", absRepo, "store", storeRoot, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
 
-	// Emit the `ready` event AFTER the plaintext preamble so the skill's
-	// READY/REPO parse is never interleaved with JSON. No-op when not streaming.
+	// Emit the `ready` event AFTER the plaintext preamble so the agent's
+	// READY/REPO parse is never interleaved with JSON. No-op when not in agent mode.
 	emitReady(emitter, storeRoot, csvPath)
 
 	// Watch the agent's inbound status file (.prereview/llm-status.json) and
-	// push each change to every open tab. Skill/stream mode only — that's when
-	// an agent is running the skill and writing status. Stops on shutdown.
-	if skillMode {
+	// push each change to every open tab. Agent mode only — that's when an
+	// agent is running and writing status. Stops on shutdown.
+	if agentMode {
 		stopWatch := make(chan struct{})
 		defer close(stopWatch)
 		go controller.WatchLLMStatus(stopWatch, review.LLMStatusPollInterval)
@@ -217,25 +209,25 @@ func run(repo, base, host string, explicitHost bool, port int, skillMode bool, o
 	return serveAndWait(srv, ln, nil, shutdownReq)
 }
 
-// newStreamEmitter builds the stream-mode event emitter targeting
+// newStreamEmitter builds the agent-mode event emitter targeting
 // <store>/.prereview/events.jsonl (durable mirror) and stdout (live channel),
-// or returns nil when streaming is off so callers attach it unconditionally.
-func newStreamEmitter(streamMode bool, csvPath string) *review.EventStream {
-	if !streamMode {
+// or returns nil outside agent mode so callers attach it unconditionally.
+func newStreamEmitter(agentMode bool, csvPath string) *review.EventStream {
+	if !agentMode {
 		return nil
 	}
-	eventsPath := filepath.Join(filepath.Dir(csvPath), "events.jsonl")
-	return review.NewEventStream(os.Stdout, eventsPath)
+	return review.NewEventStream(os.Stdout, review.EventsPath(csvPath))
 }
 
-// emitReady emits the one-shot `ready` event when streaming; a nil emitter
-// (non-stream session) is a no-op. A write failure is logged, not fatal — the
-// review server must run regardless.
+// emitReady emits the one-shot `ready` event in agent mode; a nil emitter
+// (non-agent session) is a no-op. A write failure is logged, not fatal — the
+// review server must run regardless. The session always starts unpaused
+// (openStore cleared any stale paused marker), so ready reports paused=false.
 func emitReady(emitter *review.EventStream, storeRoot, csvPath string) {
 	if emitter == nil {
 		return
 	}
-	if err := emitter.EmitReady(storeRoot, csvPath, time.Now()); err != nil {
+	if err := emitter.EmitReady(storeRoot, csvPath, false, time.Now()); err != nil {
 		slog.Warn("emit ready event", "err", err)
 	}
 }
@@ -303,11 +295,7 @@ func serveAndWait(srv *http.Server, ln net.Listener, extra *http.Server, shutdow
 // live local site on its own port (a separate origin so the app's root-relative
 // URLs forward cleanly — see proxy.go) plus the prereview UI that frames it and
 // overlays the region-annotation overlay. Annotations save to <out>/comments.csv.
-func runExternal(externalURL, outDir, host string, explicitHost bool, port int, skillMode bool, streamMode bool) error {
-	// --stream implies --skill (the stream needs the "Hand off" button).
-	if streamMode {
-		skillMode = true
-	}
+func runExternal(externalURL, outDir, host string, explicitHost bool, port int, agentMode bool) error {
 	target, err := url.Parse(externalURL)
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
 		return fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
@@ -320,14 +308,14 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		return err
 	}
 
-	// Same .prereview/ store layout as repo mode (so the skill polls
-	// <out>/.prereview/DONE identically), just rooted at --out.
+	// Same .prereview/ store layout as repo mode (so the agent locates the
+	// store identically), just rooted at --out.
 	startedAt := time.Now()
-	csvPath, donePath, csvWriter, err := openStore(absOut)
+	csvPath, csvWriter, err := openStore(absOut)
 	if err != nil {
 		return err
 	}
-	emitter := newStreamEmitter(streamMode, csvPath)
+	emitter := newStreamEmitter(agentMode, csvPath)
 	// Fail fast on a corrupt store; Mount reloads the rows on every connect.
 	if _, err := csv.Read(csvPath); err != nil {
 		return fmt.Errorf("read existing csv: %w", err)
@@ -374,12 +362,10 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		ProxyBaseURL: proxyBaseURL,
 		TargetURL:    externalURL,
 		CSVPath:      csvPath,
-		DonePath:     donePath,
 		UIPrefsPath:  uiPrefsPath(),
 		Version:      version,
 		CSVWriter:    csvWriter,
-		SkillMode:    skillMode,
-		StreamMode:   streamMode,
+		AgentMode:    agentMode,
 		Emitter:      emitter,
 		ShutdownReq:  shutdownReq,
 	}
@@ -389,8 +375,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		TargetURL:    externalURL,
 		StartedAt:    startedAt.Format("2006-01-02 15:04:05"),
 		CSVPath:      csvPath,
-		SkillMode:    skillMode,
-		StreamMode:   streamMode,
+		AgentMode:    agentMode,
 	}
 
 	mux := http.NewServeMux()
@@ -412,15 +397,15 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		fmt.Printf("ALT %s\n", alt)
 	}
 	fmt.Printf("PROXY %s\n", proxyBaseURL)
-	// REPO points at the annotation store so the skill polls <out>/DONE.
+	// REPO points at the annotation store so the agent can locate <out>/.prereview/.
 	fmt.Printf("REPO %s\n", absOut)
 	slog.Info("prereview started (external)", "url", uiURL, "proxy", proxyBaseURL, "target", externalURL, "out", absOut, "bindHost", bindHost)
 
 	emitReady(emitter, absOut, csvPath)
 
 	// Watch the agent's inbound status file and push changes to every open tab
-	// (skill/stream mode only). Stops on shutdown.
-	if skillMode {
+	// (agent mode only). Stops on shutdown.
+	if agentMode {
 		stopWatch := make(chan struct{})
 		defer close(stopWatch)
 		go controller.WatchLLMStatus(stopWatch, review.LLMStatusPollInterval)

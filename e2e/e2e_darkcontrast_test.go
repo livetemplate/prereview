@@ -18,7 +18,7 @@ import (
 // --pico-contrast-inverse to var(--text-strong) (light) in dark mode. This asserts
 // the Queue button's text is LIGHT on its DARK background in dark mode.
 func TestE2E_DarkContrastButtonReadable(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1400, 900, "--stream")
+	p := bootChromeAgainstPrereview(t, 1400, 900, "--agent")
 	p.waitReadyAt(1400, 900)
 	p.clickFile("edited.go")
 	for i := 0; i < 2; i++ { // System("") → Light → Dark

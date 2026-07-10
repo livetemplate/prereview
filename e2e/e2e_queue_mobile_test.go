@@ -44,7 +44,7 @@ func TestE2E_QueuePanelFitsMobileViewport(t *testing.T) {
 
 	// A narrow phone viewport is the whole point — 375×812 ≈ the iPhone that
 	// produced the bug report (IMG_3941: 1125px physical / 3× = 375 CSS px).
-	p := bootChromeAgainstRepo(t, repo, 400, 900, "--stream")
+	p := bootChromeAgainstRepo(t, repo, 400, 900, "--agent")
 
 	var consoleLines []string
 	chromedp.ListenTarget(p.ctx, func(ev any) {

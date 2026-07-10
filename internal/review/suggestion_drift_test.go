@@ -62,8 +62,7 @@ func TestSuggestionDrift_121_DropsFromSnapshotWhenTargetEditedAway(t *testing.T)
 	buf := &bytes.Buffer{}
 	c := &PrereviewController{
 		RepoPath: repo, Base: "HEAD", CSVPath: csvPath,
-		DonePath: filepath.Join(repo, ".prereview", "DONE"),
-		CSVWriter: csv.NewWriter(csvPath), SkillMode: true, StreamMode: true,
+		CSVWriter: csv.NewWriter(csvPath), AgentMode: true,
 		Emitter: NewEventStream(buf, ""),
 	}
 
@@ -74,8 +73,8 @@ func TestSuggestionDrift_121_DropsFromSnapshotWhenTargetEditedAway(t *testing.T)
 	}
 
 	// Round 1: target text is present → the decided suggestion is in the snapshot.
-	if _, err := c.HandOff(st, regionCtx("handOff", nil)); err != nil {
-		t.Fatalf("HandOff 1: %v", err)
+	if err := c.flushHandoff(&st); err != nil {
+		t.Fatalf("flushHandoff 1: %v", err)
 	}
 	evs := decodeEvents(t, buf.Bytes())
 	if n := len(evs[0].DecisionList()); n != 1 {
@@ -90,8 +89,8 @@ func TestSuggestionDrift_121_DropsFromSnapshotWhenTargetEditedAway(t *testing.T)
 
 	// Round 2: the suggestion must re-anchor outdated and DROP from the snapshot.
 	buf.Reset()
-	if _, err := c.HandOff(st, regionCtx("handOff", nil)); err != nil {
-		t.Fatalf("HandOff 2: %v", err)
+	if err := c.flushHandoff(&st); err != nil {
+		t.Fatalf("flushHandoff 2: %v", err)
 	}
 	evs = decodeEvents(t, buf.Bytes())
 	if n := len(evs[0].DecisionList()); n != 0 {

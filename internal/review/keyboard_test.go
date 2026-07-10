@@ -113,10 +113,10 @@ func TestKeyBindings_StreamOnlyFiltering(t *testing.T) {
 		return false
 	}
 	if has(PrereviewState{}.KeyBindings(), "toggleAgentPause") {
-		t.Error("repo-mode KeyBindings must not include the stream-only Pause/Resume shortcut")
+		t.Error("repo-mode KeyBindings must not include the agent-only Pause/Resume shortcut")
 	}
-	if !has(PrereviewState{StreamMode: true}.KeyBindings(), "toggleAgentPause") {
-		t.Error("stream-mode KeyBindings must include the Pause/Resume shortcut")
+	if !has(PrereviewState{AgentMode: true}.KeyBindings(), "toggleAgentPause") {
+		t.Error("agent-mode KeyBindings must include the Pause/Resume shortcut")
 	}
 	// Non-stream-only rows are unaffected in both modes.
 	if !has(PrereviewState{}.KeyBindings(), "nextFile") {

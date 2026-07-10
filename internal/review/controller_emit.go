@@ -67,7 +67,7 @@ func (c *PrereviewController) emitSnapshot() {
 	c.applyDecisions(st)
 	c.relocateAll(st)            // re-anchor comments against fresh disk (base-safe, #121)
 	c.relocateSuggestionsAll(st) // re-anchor suggestions likewise
-	if err := c.Emitter.EmitHandoff(st.Comments, st.Suggestions, st.DecisionsBySuggestion(), time.Now()); err != nil {
+	if err := c.Emitter.EmitHandoff(st.Comments, st.Suggestions, st.DecisionsBySuggestion(), c.isPaused(), time.Now()); err != nil {
 		slog.Warn("emit snapshot", "err", err)
 	}
 }

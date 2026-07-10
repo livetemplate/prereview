@@ -7,7 +7,7 @@
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if and $.StreamMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
+    </form>{{if and $.AgentMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Re-enqueue — ask the agent to redo this">Re-enqueue</button>
     </form>{{end}}{{if .Resolved}}<form method="POST">
@@ -151,16 +151,14 @@
   <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
   <span class="bar-actions"><form method="POST" style="margin:0">
       <button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button>
-    </form>{{if .StreamMode}}
+    </form>{{if .AgentMode}}
     <form method="POST" style="margin:0">
       <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Batching — annotations held, not sent. Resume to send the batch.{{else}}Live — each annotation is sent as you make it. Pause to batch them instead.{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{else}}⏸ Pause — batch{{end}}</button>
     </form><form method="POST" style="margin:0">
       <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
-    </form>{{else}}{{if .SkillMode}}<form method="POST" style="margin:0">
-      <button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button>
     </form>{{else}}<form method="POST" style="margin:0">
       <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
-    </form>{{end}}{{end}}</span>
+    </form>{{end}}</span>
 </header>
 <div class="layout layout-external">
   <main class="viewer ext-viewer">
@@ -354,7 +352,7 @@
   </form>
   {{end}}
   
-  {{if .StreamMode}}
+  {{if .AgentMode}}
   <div class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
     <button type="button" id="queue-trigger-{{.EnqueueTick}}" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
     <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
@@ -392,11 +390,7 @@
   </div>
   {{else}}
   <form method="POST" class="tb-action">
-    {{if .SkillMode}}
-    <button type="submit" name="handOff" class="contrast" title="Stop the server and signal your agent to read the CSV">Hand off →</button>
-    {{else}}
     <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
-    {{end}}
   </form>
   {{end}}
   
@@ -599,17 +593,7 @@
   </form>
 </div>
 {{end}}
-{{if .DoneWritten}}
-<div class="toast" role="status" lvt-fx:auto-click="5000:dismissBanner">
-  <span class="toast-msg">✓ Handed off → Claude is acting on your comments</span>
-  <form method="POST" class="toast-dismiss-form">
-    <button type="submit" name="dismissBanner" class="toast-dismiss" aria-label="Dismiss">
-      {{template "iconClose14"}}
-    </button>
-  </form>
-</div>
-{{end}}
-{{if eq .LLMState "working"}}
+{{if and .AgentMode (eq .LLMState "working")}}
 <div class="toast llm-working" role="status" aria-live="polite">
   <span class="llm-spinner" aria-hidden="true"></span>
   <span class="toast-msg">{{if .LLMMessage}}{{.LLMMessage}}{{else}}Working on your handoff…{{end}}</span>
@@ -969,8 +953,8 @@
 {{end}}
 
 
-{{if .StreamMode}}{{template "endSessionDialog" .}}{{end}}
-{{if and (not .SkillMode) (not .StreamMode)}}{{template "quitDialog" .}}{{end}}
+{{if .AgentMode}}{{template "endSessionDialog" .}}{{end}}
+{{if not .AgentMode}}{{template "quitDialog" .}}{{end}}
 
 </div>
 <script defer src="/livetemplate-client.js"></script>

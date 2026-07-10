@@ -1,10 +1,10 @@
 //go:build browser
 
 // End-to-end coverage for the #118 agent-queue Pause/Resume keyboard shortcut.
-// In --stream mode the "q" key toggles the drain between Live and Batching (the
+// In --agent mode the "q" key toggles the drain between Live and Batching (the
 // only Queue action that previously had no shortcut), and the pause button
 // surfaces the key as a chip — both single-sourced from the keymap (StreamOnly).
-// The repo-mode negative (the binding is absent without --stream) lives in
+// The repo-mode negative (the binding is absent without --agent) lives in
 // TestE2E_KbdHintInButtons.
 //
 // Run with: go test -tags=browser -run PauseShortcut ./e2e/...
@@ -25,9 +25,9 @@ import (
 )
 
 func TestE2E_PauseShortcut(t *testing.T) {
-	// --stream renders the Queue dropdown + its Pause/Resume control, and arms
+	// --agent renders the Queue dropdown + its Pause/Resume control, and arms
 	// the StreamOnly "q" binding.
-	p := bootChromeAgainstRepo(t, setupFixtureRepo(t), 1400, 900, "--stream")
+	p := bootChromeAgainstRepo(t, setupFixtureRepo(t), 1400, 900, "--agent")
 
 	var mu sync.Mutex
 	var consoleLines, wsFrames []string

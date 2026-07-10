@@ -64,8 +64,8 @@ func submitSuggestions(t *testing.T, binary, repo, payload string) {
 }
 
 func TestE2E_Suggestions(t *testing.T) {
-	// --skill so the server runs WatchLLMStatus — the live suggestion-push path.
-	p := bootChromeAgainstRepo(t, setupSuggestionRepo(t), 1200, 800, "--skill")
+	// --agent so the server runs WatchLLMStatus — the live suggestion-push path.
+	p := bootChromeAgainstRepo(t, setupSuggestionRepo(t), 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("app.go")
 

@@ -35,10 +35,10 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "events.jsonl")
 	es := NewEventStream(&out, file)
 
-	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", fixedTS); err != nil {
+	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
-	if err := es.EmitHandoff(nil, nil, nil, fixedTS); err != nil {
+	if err := es.EmitHandoff(nil, nil, nil, false, fixedTS); err != nil {
 		t.Fatalf("EmitHandoff: %v", err)
 	}
 	if err := es.EmitSessionEnd(fixedTS); err != nil {
@@ -78,10 +78,10 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	var out bytes.Buffer
 	es := NewEventStream(&out, "")
-	if err := es.EmitReady("/r", "/r/c.csv", fixedTS); err != nil {
+	if err := es.EmitReady("/r", "/r/c.csv", false, fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
-	if err := es.EmitHandoff(nil, nil, nil, fixedTS); err != nil { // no actionable comments
+	if err := es.EmitHandoff(nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
 		t.Fatalf("handoff: %v", err)
 	}
 	if err := es.EmitSessionEnd(fixedTS); err != nil {

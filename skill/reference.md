@@ -17,6 +17,20 @@ this file is the LLM's lookup for **what every value means**.
 | `--stream` | `false` | no | Emit a continuous JSON event stream for an LLM consumer (stdout + `.prereview/events.jsonl`): each Hand off emits a `handoff` snapshot, the new **End session** button emits a terminating `session_end`. **Implies `--skill`.** See [Stream mode](#stream-mode---stream). |
 | `--version` | — | no | Print build version and exit. |
 
+## Agent subcommands
+
+Besides launching a review, `prereview` has verb subcommands the coding agent uses
+to read from and write to a running review's `.prereview/` store. Each takes
+`--out <REPO>` (the printed `REPO` directory; defaults to the current dir). Run any
+with `-h` for its own flags, or `prereview help` for the top-level list.
+
+| Subcommand | Purpose |
+|---|---|
+| `prereview events [--since <seq>]` | Deliver the next batch of stream events from `events.jsonl` (see [Stream mode](#stream-mode---stream)). Prints every event after `--since`, blocks for the next when caught up, and exits on `session_end`. Each line carries a `seq`; loop by re-running with the highest seq seen. The **one** event reader — no `tail`/`head`. |
+| `prereview comments [--json] [--all]` | List the review's comments from a stable interface (no CSV hand-parsing). Defaults to the actionable set; `--all` includes resolved/outdated/draft. `--json` emits the same shape as a `handoff` snapshot. |
+| `prereview processed [--file <f>\|-] [--all-open] <id>...` | Mark comments **worked on** (append to `processed.jsonl`). Ids come from args, `--file`/stdin (bare ids, a JSON array, or JSONL objects with an `id`), or `--all-open` (the whole actionable set). Each explicit id is **validated against `comments.csv`** — an unknown id fails with a non-zero exit and is not recorded. |
+| `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](./SKILL.md#suggested-edits-prereview-suggest). |
+
 ## stdout protocol
 
 On startup, prereview prints these lines to stdout, in order:
@@ -224,6 +238,11 @@ and `suggestions` are always present on a `handoff` (`[]` when empty):
 ]}
 {"event":"session_end","seq":2,"ts":"…"}
 ```
+
+Consume the log with **`prereview events --since <seq>`** (see
+[Agent subcommands](#agent-subcommands)) — the one reader, resuming from a seq
+cursor and delivering the next batch; do **not** hand-roll `tail`/`head` over
+`events.jsonl` (that drops events whenever the tail isn't running).
 
 `events.jsonl` is append-only and reset on each fresh launch (same as the DONE
 marker). The CSV stays the authoritative store; the stream is a convenience

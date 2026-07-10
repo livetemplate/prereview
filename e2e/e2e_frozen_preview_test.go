@@ -20,8 +20,8 @@ import (
 // (.md-view), which is what the user was looking at (notes.md in Preview).
 func TestE2E_FrozenPreviewOnAgentEdit(t *testing.T) {
 	// gfm.md is an untracked Markdown file → opens in the rendered preview
-	// (.md-view). --skill starts the llm-status watcher (the working→done signal).
-	p := bootChromeAgainstRepo(t, setupFixtureGFMRepo(t), 1200, 800, "--skill")
+	// (.md-view). --agent starts the llm-status watcher (the working→done signal).
+	p := bootChromeAgainstRepo(t, setupFixtureGFMRepo(t), 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("gfm.md")
 
@@ -73,15 +73,15 @@ func TestE2E_FrozenPreviewOnAgentEdit(t *testing.T) {
 }
 
 // TestE2E_FrozenViewStreamEmit reproduces the ACTUAL live-test conditions the
-// --skill test above misses: --stream mode with a REAL comment on the file. In
-// stream mode every comment fires the emit engine, whose re-anchoring
+// watcher test above misses: agent mode with a REAL comment on the file. In
+// agent mode every comment fires the emit engine, whose re-anchoring
 // (relocateAll / relocateSuggestionsAll) calls loadDiffFresh — which REFRESHES
 // the shared diffCache to the file's current on-disk bytes. The hypothesis: that
 // cache pollution leaks the agent's edit into the frozen line-diff view without
 // a Refresh click. Uses the line view (edited.go) for reliable line-commenting.
 func TestE2E_FrozenViewStreamEmit(t *testing.T) {
-	// --stream implies --skill (the watcher) AND fires the emit engine per comment.
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--stream")
+	// --agent starts the watcher AND fires the emit engine per comment.
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("edited.go")
 
@@ -94,7 +94,7 @@ func TestE2E_FrozenViewStreamEmit(t *testing.T) {
 		t.Fatalf("pre-edit diff should contain 'hello world'; got: %s", before)
 	}
 
-	// Add a real comment — in --stream this fires scheduleEmit → emitSnapshot →
+	// Add a real comment — in --agent this fires scheduleEmit → emitSnapshot →
 	// relocateAll → loadDiffFresh, which refreshes the shared diffCache.
 	p.clickLine(0, 4)
 	if err := chromedp.Run(p.ctx,

@@ -16,6 +16,24 @@ import (
 	"github.com/livetemplate/prereview/internal/update"
 )
 
+// topUsage is the top-level help: the review-launch synopsis plus the agent-
+// facing subcommands, so `prereview help` (or a bad flag) surfaces every verb
+// instead of only the launch flags — a bare `prereview` launches a review.
+const topUsage = `Usage: prereview [flags] [path]
+
+  path   git repo, non-git directory, or single file to review (default: current dir).
+         Flags must come before the path, e.g. ` + "`prereview --agent ./docs`" + `.
+
+Subcommands (for the coding agent; each takes --out <REPO>):
+  comments   list the review's comments (--json for the stream shape; --all for resolved too)
+  processed  mark comments worked on (validated against comments.csv; --file -/--all-open)
+  suggest    submit proposed edits as inline suggestion boxes (--file/stdin)
+  events     deliver the next batch of events after --since <seq> (blocks when caught up), until session_end
+  help       show this message
+
+  Run a subcommand with -h for its own flags, e.g. ` + "`prereview processed -h`" + `.
+`
+
 // templatesFS holds the split template set: page.tmpl (the page shell — the
 // entry template) plus partials.tmpl (reusable comment/region render partials)
 // and icons.tmpl (SVG icon {{define}}s). They are staged to a temp dir at
@@ -80,21 +98,49 @@ func main() {
 		return
 	}
 
+	// `prereview events [--out <dir>] [--since <seq>]` — the coding agent consumes
+	// the review's JSON event stream (the durable events.jsonl the server writes in
+	// --agent mode), resuming from a seq cursor. A bare positional verb like
+	// `processed`/`suggest`, so intercept it before flag parsing.
+	if len(os.Args) > 1 && os.Args[1] == "events" {
+		if err := runEvents(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview events:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `prereview comments [--out <dir>] [--json] [--all]` — enumerate the review's
+	// comments from a stable interface (feeds `prereview processed`). A bare
+	// positional verb like the others, so intercept it before flag parsing.
+	if len(os.Args) > 1 && os.Args[1] == "comments" {
+		if err := runComments(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview comments:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `prereview help` (or -h/--help with no other args) — list the subcommands so
+	// an agent doesn't accidentally launch a server when it meant to query. Bare
+	// `prereview` still launches a review of the current directory (the default).
+	if len(os.Args) > 1 && (os.Args[1] == "help" || os.Args[1] == "-h" || os.Args[1] == "--help") {
+		fmt.Print(topUsage)
+		return
+	}
+
 	flag.Usage = func() {
-		fmt.Fprint(flag.CommandLine.Output(),
-			"Usage: prereview [flags] [path]\n\n"+
-				"  path   git repo, non-git directory, or single file to review (default: current dir).\n"+
-				"         Flags must come before the path, e.g. `prereview --skill ./docs`.\n\n"+
-				"Flags:\n")
+		fmt.Fprint(flag.CommandLine.Output(), topUsage+"\nFlags:\n")
 		flag.PrintDefaults()
 	}
 	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit); ignored for a non-git dir or single file")
 	external := flag.String("external", "", "annotate a live local website instead of files: reverse-proxies this http(s):// URL and overlays the region-annotation UI. Requires --out. Ignores [path]/--base.")
-	out := flag.String("out", "", "directory whose .prereview/ holds the saved annotations (comments.csv + DONE). Defaults to the review path; required with --external (which has no review path).")
+	out := flag.String("out", "", "directory whose .prereview/ holds the saved annotations (comments.csv). Defaults to the review path; required with --external (which has no review path).")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
-	skill := flag.Bool("skill", false, "running under an agent's skill/command: show the 'Hand off →' button that writes .prereview/DONE; default UI shows 'Quit' instead")
-	stream := flag.Bool("stream", false, "emit a continuous JSON event stream (stdout + .prereview/events.jsonl) for an LLM: each 'Hand off' emits a handoff snapshot, the new 'End session' button emits a terminating session_end. Implies --skill.")
+	agent := flag.Bool("agent", false, "run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`); shows the Queue (Pause/Resume) + End session UI")
+	skill := flag.Bool("skill", false, "deprecated alias for --agent")
+	stream := flag.Bool("stream", false, "deprecated alias for --agent")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	doInstallSkill := flag.Bool("install-skill", false, "install the prereview integration for one or more coding agents and exit (choose with --client; omit it to pick from a menu)")
 	clientFlag := flag.String("client", "", "agent(s) to install the integration for: a comma-separated list of claude,codex,gemini,opencode,aider,cursor (with --install-skill; empty shows an interactive menu)")
@@ -102,6 +148,14 @@ func main() {
 	doUninstall := flag.Bool("uninstall", false, "remove the prereview binary from disk, then exit (your review comments in each repo's .prereview/ are left untouched)")
 	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
 	flag.Parse()
+
+	// --agent is the single agent-mode flag. --skill/--stream are kept as
+	// deprecated aliases so existing skills/scripts keep launching agent mode;
+	// warn once on stderr when only a legacy alias was passed.
+	agentMode := *agent || *skill || *stream
+	if (*skill || *stream) && !*agent {
+		fmt.Fprintln(os.Stderr, "prereview: --skill/--stream are deprecated; use --agent")
+	}
 
 	// flag can't tell "user passed --host 127.0.0.1" from "default
 	// 127.0.0.1" by value alone, and that distinction is load-bearing:
@@ -221,14 +275,14 @@ func main() {
 	}
 
 	if *external != "" {
-		if err := runExternal(*external, *out, *host, explicitHost, *port, *skill, *stream); err != nil {
+		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode); err != nil {
 			slog.Error("fatal", "err", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, *skill, *out, *stream); err != nil {
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, *port, agentMode, *out); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}

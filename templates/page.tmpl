@@ -84,7 +84,7 @@
         title="Show/hide annotations"
       >💬 {{len $.AllRegionComments}}</button>
     </form>
-    {{- if .StreamMode -}}
+    {{- if .AgentMode -}}
     {{/* Continuous enqueue (#119): annotations stream to the agent as you make
          them; pausing BATCHES them instead (held, sent together on resume) — not
          a stop. Mirrors the repo-mode toolbar. */}}
@@ -106,15 +106,6 @@
         class="contrast"
         title="Emit session_end and stop the server — your agent stops consuming the stream"
       >End session</button>
-    </form>
-    {{- else if .SkillMode -}}
-    <form method="POST" style="margin:0">
-      <button
-        type="submit"
-        name="handOff"
-        class="contrast"
-        title="Stop the server and signal your agent to read the CSV"
-      >Hand off →</button>
     </form>
     {{- else -}}
     <form method="POST" style="margin:0">
@@ -611,7 +602,7 @@
        sits on the RIGHT — its panel opens over the content, clear of the file
        drawer (the bar's z-index sits below the drawer's, so a left-opening panel
        would render behind it). */}}
-  {{if .StreamMode}}
+  {{if .AgentMode}}
   <div
     class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}"
     lvt-el:toggleClass:on:click="open"
@@ -668,14 +659,6 @@
   </div>
   {{else}}
   <form method="POST" class="tb-action">
-    {{if .SkillMode}}
-    <button
-      type="submit"
-      name="handOff"
-      class="contrast"
-      title="Stop the server and signal your agent to read the CSV"
-    >Hand off →</button>
-    {{else}}
     <button
       type="button"
       command="show-modal"
@@ -683,7 +666,6 @@
       class="contrast"
       title="Stop the prereview server"
     >Quit</button>
-    {{end}}
   </form>
   {{end}}
   {{/* 3-dots trigger — mobile only (hidden on desktop via CSS). Placed
@@ -998,26 +980,7 @@
   </form>
 </div>
 {{end}}
-{{if .DoneWritten}}
-<div
-  class="toast"
-  role="status"
-  lvt-fx:auto-click="5000:dismissBanner"
->
-  <span class="toast-msg">✓ Handed off → Claude is acting on your comments</span>
-  <form method="POST" class="toast-dismiss-form">
-    <button
-      type="submit"
-      name="dismissBanner"
-      class="toast-dismiss"
-      aria-label="Dismiss"
-    >
-      {{template "iconClose14"}}
-    </button>
-  </form>
-</div>
-{{end}}
-{{if eq .LLMState "working"}}
+{{if and .AgentMode (eq .LLMState "working")}}
 <div class="toast llm-working" role="status" aria-live="polite">
   <span class="llm-spinner" aria-hidden="true"></span>
   <span class="toast-msg">{{if .LLMMessage}}{{.LLMMessage}}{{else}}Working on your handoff…{{end}}</span>
@@ -1878,11 +1841,10 @@
 
 {{/* Confirm dialogs for the session terminators (#58), rendered ONCE here at the
      top level — outside every <form> — so the toolbar/overflow/external triggers
-     can all open them by id. End session shows in stream mode; Quit in standalone
-     (the skill-mode "Hand off" is the intended primary action, so it isn't
-     gated). Hidden until a trigger fires command="show-modal". */}}
-{{if .StreamMode}}{{template "endSessionDialog" .}}{{end}}
-{{if and (not .SkillMode) (not .StreamMode)}}{{template "quitDialog" .}}{{end}}
+     can all open them by id. End session shows in agent mode; Quit in standalone.
+     Hidden until a trigger fires command="show-modal". */}}
+{{if .AgentMode}}{{template "endSessionDialog" .}}{{end}}
+{{if not .AgentMode}}{{template "quitDialog" .}}{{end}}
 
 </div>{{/* .theme-root */}}
 <script defer src="/livetemplate-client.js"></script>

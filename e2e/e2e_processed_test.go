@@ -19,9 +19,9 @@ import (
 )
 
 func TestE2E_ProcessedBadge(t *testing.T) {
-	// --skill so the server runs WatchLLMStatus (the only mode with an agent
+	// --agent so the server runs WatchLLMStatus (the only mode with an agent
 	// writing signals) — that's the live badge-push path under test.
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("edited.go")
 

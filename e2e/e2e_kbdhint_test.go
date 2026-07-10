@@ -120,7 +120,7 @@ func TestE2E_KbdHintInButtons(t *testing.T) {
 	}
 
 	// #118 stream-gating: the agent-queue Pause/Resume shortcut is StreamOnly, so
-	// in this repo-mode (no --stream) session its hidden window binding must NOT
+	// in this repo-mode (no --agent) session its hidden window binding must NOT
 	// be emitted — a repo-only reviewer gets no phantom key for a queue they lack.
 	// (The positive case — the binding present + "q" toggling pause — is
 	// TestE2E_PauseShortcut.)

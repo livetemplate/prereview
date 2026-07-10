@@ -75,15 +75,10 @@ func runSuggest(args []string) error {
 		return fmt.Errorf("no suggestions in payload")
 	}
 
-	root := "."
-	if *out != "" {
-		root = *out
-	}
-	absRoot, err := filepath.Abs(root)
+	dir, err := storeDir(*out)
 	if err != nil {
-		return fmt.Errorf("resolve dir: %w", err)
+		return err
 	}
-	dir := filepath.Join(absRoot, ".prereview")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", dir, err)
 	}

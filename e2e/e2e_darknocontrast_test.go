@@ -16,7 +16,7 @@ import (
 // file match) and walks every text node, asserting zero elements below ~3:1 —
 // across all three schemes. Catches the whole "invisible / dark-on-dark" class.
 func TestE2E_DarkNoLowContrast(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1400, 900, "--stream")
+	p := bootChromeAgainstPrereview(t, 1400, 900, "--agent")
 	p.waitReadyAt(1400, 900)
 	p.clickFile("edited.go")
 

@@ -18,12 +18,11 @@ import (
 // PrereviewController holds singleton dependencies. State is cloned per
 // session by the framework — never store per-user data on the controller.
 type PrereviewController struct {
-	// RepoPath, Base, CSVPath, DonePath are set once by main.go and are
-	// read-only. CSVWriter is a goroutine-safe serializer over CSVPath.
+	// RepoPath, Base, CSVPath are set once by main.go and are read-only.
+	// CSVWriter is a goroutine-safe serializer over CSVPath.
 	RepoPath string
 	Base     string
 	CSVPath  string
-	DonePath string
 
 	// UIPrefsPath is the per-user view-prefs file (see uiprefs.go): the durable
 	// home for theme/mode/focus/file-view/raw/show-resolved so they survive a
@@ -54,19 +53,15 @@ type PrereviewController struct {
 	Version   string
 	CSVWriter *csv.Writer
 
-	// SkillMode is true when prereview is launched via `--skill` (the
-	// Claude skill sets this). It selects the top-bar button label:
-	// "Hand off → Claude" vs "Quit". --stream implies SkillMode.
-	SkillMode bool
+	// AgentMode is true under `prereview --agent`: prereview streams the review
+	// queue as JSON events (stdout + .prereview/events.jsonl) and the UI shows
+	// the Queue (Pause/Resume) + "End session" (which emits the terminating
+	// session_end event) instead of "Quit". Set once by main.go.
+	AgentMode bool
 
-	// StreamMode is true under `prereview --stream`: each Hand off emits a
-	// JSON handoff event and the UI offers an "End session" button that emits
-	// the terminating session_end event. Set once by main.go.
-	StreamMode bool
-
-	// Emitter is the stream-mode JSON event log writer (stdout +
-	// .prereview/events.jsonl). Non-nil only in stream mode; HandOff /
-	// EndSession guard on nil so non-stream sessions emit nothing.
+	// Emitter is the agent-mode JSON event log writer (stdout +
+	// .prereview/events.jsonl). Non-nil only in agent mode; the emit path and
+	// EndSession guard on nil so non-agent sessions emit nothing.
 	Emitter *EventStream
 
 	// Versions is the artifact version store (#90): content-addressed snapshots
@@ -144,7 +139,7 @@ func (c *PrereviewController) loadDiffCached(base, path string) (*gitdiff.FileDi
 // user's picker choice) when set, else the controller's CLI base. The fallback
 // is load-bearing for re-anchoring in the emit/hand-off path: that state can
 // arrive with an empty Base (a transient snapshot state, or a session that never
-// hydrated it), and `git diff '' -- file` fails with "bad revision", which would
+// hydrated it), and `git diff ” -- file` fails with "bad revision", which would
 // silently skip re-anchoring and leak an edited-away comment/suggestion into the
 // snapshot (the real #121). NoGit mode ignores the base entirely.
 func (c *PrereviewController) effectiveBase(state *PrereviewState) string {
@@ -279,14 +274,12 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// in visibleSuggestions, fingerprint-gated so a revised suggestion un-hides.
 	c.applyHidden(&state)
 
-	// SkillMode is mirror-only: refresh from the controller every connect
-	// so a binary launched with --skill renders the right button even after
-	// a session-storage reconnect.
-	state.SkillMode = c.SkillMode
-	// StreamMode mirrors the same way and BEFORE the external short-circuit
+	// AgentMode is mirror-only: refresh from the controller every connect so a
+	// binary launched with --agent renders the right button even after a
+	// session-storage reconnect. Mirrored BEFORE the external short-circuit
 	// below, so the "End session" button renders in both repo and external
-	// stream sessions.
-	state.StreamMode = c.StreamMode
+	// agent sessions.
+	state.AgentMode = c.AgentMode
 
 	// External (proxy) mode short-circuits the entire git/file-list path:
 	// there is no repo to diff. Mirror the proxy identity from the controller
@@ -428,38 +421,6 @@ func (c *PrereviewController) persist(comments []Comment) error {
 	return nil
 }
 
-// writeDoneMarker writes csvPath into donePath atomically, so a skill that
-// reads donePath gets a complete path string (no truncation race).
-func writeDoneMarker(donePath, csvPath string) error {
-	dir := filepath.Dir(donePath)
-	tmp, err := os.CreateTemp(dir, ".prereview-done-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer func() {
-		if tmpName != "" {
-			_ = os.Remove(tmpName)
-		}
-	}()
-	if _, err := tmp.WriteString(csvPath + "\n"); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, donePath); err != nil {
-		return err
-	}
-	tmpName = ""
-	return nil
-}
-
 // loadCommentsFromDisk reads the CSV and converts to []Comment. Errors
 // are logged and an empty slice returned so a corrupt CSV doesn't break
 // the UI — the next write regenerates the file from in-memory state.
@@ -469,6 +430,13 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 		slog.Warn("loadCommentsFromDisk", "err", err)
 		return nil
 	}
+	return commentsFromRows(rows)
+}
+
+// commentsFromRows is the shared CSV-row → Comment projection used by both the
+// live server (loadCommentsFromDisk) and the `prereview comments` subcommand
+// (LoadComments), so the two never drift on how a row maps to a comment.
+func commentsFromRows(rows []csv.Row) []Comment {
 	out := make([]Comment, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, Comment{
@@ -480,6 +448,28 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 		})
 	}
 	return out
+}
+
+// LoadComments reads the review's comments.csv at csvPath and returns the
+// comments as StreamComment — the SAME JSON shape the live handoff snapshot
+// emits, so the `prereview comments` reader and the stream never diverge. With
+// all=false it returns only the actionable set (unresolved, non-outdated,
+// non-draft — what the agent should act on); with all=true, every comment. The
+// returned slice is always non-nil (JSON-encodes as `[]`, never `null`).
+func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
+	rows, err := csv.Read(csvPath)
+	if err != nil {
+		return nil, err
+	}
+	comments := commentsFromRows(rows)
+	if !all {
+		return actionableComments(comments), nil
+	}
+	out := make([]StreamComment, 0, len(comments))
+	for _, cm := range comments {
+		out = append(out, toStreamComment(cm))
+	}
+	return out, nil
 }
 
 // fileInList reports whether path appears among entries.

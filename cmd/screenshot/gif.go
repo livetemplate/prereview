@@ -270,13 +270,11 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	_ = chromedp.Run(bctx, chromedp.SendKeys(`.composer textarea`, "here, not a generic string.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 140) // full comment
 
-	// Save → the comment becomes an inline card.
+	// Save → the comment becomes an inline card and, in agent mode, is
+	// automatically streamed to the agent's queue (no explicit hand-off click).
 	_ = chromedp.Run(bctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(600*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 110)
-
-	// Hand off → Claude: writes the marker and shows the "Handed off" toast.
-	_ = chromedp.Run(bctx, chromedp.Click(`header.bar button[name='handOff']`, chromedp.ByQuery), chromedp.Sleep(800*time.Millisecond))
-	_ = rec.captureComposite(bctx, tctx, 150) // toast; terminal still idle (event arriving)
+	_ = rec.captureComposite(bctx, tctx, 150) // terminal still idle (event arriving)
 
 	// Terminal: Claude receives the handoff and reads the comment. Keep the
 	// launch lines + review URL (first 4), drop the blank + "waiting…" lines.

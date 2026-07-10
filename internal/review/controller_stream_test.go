@@ -9,9 +9,9 @@ import (
 	"github.com/livetemplate/prereview/csv"
 )
 
-// newStreamController returns a stream-mode controller whose emitter writes to
+// newStreamController returns an agent-mode controller whose emitter writes to
 // an in-memory buffer (no file mirror), wired to a temp CSV store. External
-// mode keeps region comments diff-free so HandOff's relocateAll is a no-op.
+// mode keeps region comments diff-free so flushHandoff's relocateAll is a no-op.
 func newStreamController(t *testing.T) (*PrereviewController, *bytes.Buffer, chan struct{}) {
 	t.Helper()
 	dir := t.TempDir()
@@ -21,10 +21,8 @@ func newStreamController(t *testing.T) (*PrereviewController, *bytes.Buffer, cha
 	c := &PrereviewController{
 		ExternalMode: true,
 		CSVPath:      csvPath,
-		DonePath:     filepath.Join(dir, "DONE"),
 		CSVWriter:    csv.NewWriter(csvPath),
-		SkillMode:    true,
-		StreamMode:   true,
+		AgentMode:    true,
 		Emitter:      NewEventStream(buf, ""),
 		ShutdownReq:  shutdown,
 	}
@@ -35,10 +33,10 @@ func regionComment(id, body string) Comment {
 	return Comment{ID: id, Kind: commentKindRegion, URL: "/p", Area: Area{X: 0.1, Y: 0.1, W: 0.2, H: 0.1}, Body: body, Created: fixedTS}
 }
 
-// TestHandOff_StreamEmitsActionableSnapshot pins that a Hand off click emits
+// TestFlushHandoff_EmitsActionableSnapshot pins that a handoff flush emits
 // exactly one handoff event whose snapshot is the actionable comments only —
 // resolved and anchor-outdated rows are pruned.
-func TestHandOff_StreamEmitsActionableSnapshot(t *testing.T) {
+func TestFlushHandoff_EmitsActionableSnapshot(t *testing.T) {
 	c, buf, _ := newStreamController(t)
 	st := PrereviewState{Comments: []Comment{
 		regionComment("keep", "fix this"),
@@ -46,8 +44,8 @@ func TestHandOff_StreamEmitsActionableSnapshot(t *testing.T) {
 		func() Comment { c := regionComment("outdated", "gone"); c.AnchorStatus = anchorOutdated; return c }(),
 	}}
 
-	if _, err := c.HandOff(st, regionCtx("handOff", nil)); err != nil {
-		t.Fatalf("HandOff: %v", err)
+	if err := c.flushHandoff(&st); err != nil {
+		t.Fatalf("flushHandoff: %v", err)
 	}
 
 	evs := decodeEvents(t, buf.Bytes())
@@ -62,21 +60,20 @@ func TestHandOff_StreamEmitsActionableSnapshot(t *testing.T) {
 	}
 }
 
-// TestHandOff_StreamSeqIncrements pins that successive Hand off clicks emit
-// distinguishable rounds (monotonic seq) — the fix for the idempotent-DONE
-// blind spot, and that resolving between rounds prunes the snapshot.
-func TestHandOff_StreamSeqIncrements(t *testing.T) {
+// TestFlushHandoff_SeqIncrements pins that successive handoff flushes emit
+// distinguishable rounds (monotonic seq), and that resolving between rounds
+// prunes the snapshot.
+func TestFlushHandoff_SeqIncrements(t *testing.T) {
 	c, buf, _ := newStreamController(t)
 	st := PrereviewState{Comments: []Comment{regionComment("a", "one"), regionComment("b", "two")}}
 
-	st, err := c.HandOff(st, regionCtx("handOff", nil))
-	if err != nil {
-		t.Fatalf("first HandOff: %v", err)
+	if err := c.flushHandoff(&st); err != nil {
+		t.Fatalf("first flushHandoff: %v", err)
 	}
 	// User resolves "a" in the UI, then hands off again.
 	st.Comments[0].Resolved = true
-	if _, err := c.HandOff(st, regionCtx("handOff", nil)); err != nil {
-		t.Fatalf("second HandOff: %v", err)
+	if err := c.flushHandoff(&st); err != nil {
+		t.Fatalf("second flushHandoff: %v", err)
 	}
 
 	evs := decodeEvents(t, buf.Bytes())
@@ -129,24 +126,20 @@ func TestEndSession_FlushesThenTerminatesAndShutsDown(t *testing.T) {
 	}
 }
 
-// TestHandOff_NonStreamEmitsNothing pins the default (non-stream) regression:
-// a nil emitter is safe and HandOff still writes the DONE marker.
-func TestHandOff_NonStreamEmitsNothing(t *testing.T) {
+// TestFlushHandoff_NilEmitterSafe pins the default (non-agent) regression: a nil
+// emitter is safe — flushHandoff persists the CSV and emits nothing rather than
+// panicking.
+func TestFlushHandoff_NilEmitterSafe(t *testing.T) {
 	dir := t.TempDir()
 	csvPath := filepath.Join(dir, "comments.csv")
 	c := &PrereviewController{
 		ExternalMode: true,
 		CSVPath:      csvPath,
-		DonePath:     filepath.Join(dir, "DONE"),
 		CSVWriter:    csv.NewWriter(csvPath),
-		SkillMode:    true,
-		// Emitter nil, StreamMode false.
+		// Emitter nil, AgentMode false.
 	}
-	st, err := c.HandOff(PrereviewState{Comments: []Comment{regionComment("a", "x")}}, regionCtx("handOff", nil))
-	if err != nil {
-		t.Fatalf("HandOff with nil emitter: %v", err)
-	}
-	if !st.DoneWritten {
-		t.Error("HandOff should still write DONE in non-stream mode")
+	st := PrereviewState{Comments: []Comment{regionComment("a", "x")}}
+	if err := c.flushHandoff(&st); err != nil {
+		t.Fatalf("flushHandoff with nil emitter: %v", err)
 	}
 }

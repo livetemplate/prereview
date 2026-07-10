@@ -100,9 +100,8 @@ func TestE2E_LLMStatusMultiTab(t *testing.T) {
 	}
 
 	repo := setupFixtureRepo(t)
-	// --skill starts the llm-status watcher (skillMode gates it); it also renders
-	// the Hand off button, which we don't use here.
-	url, srv, stderr := startPrereview(t, binary, repo, "--skill")
+	// --agent starts the llm-status watcher (agentMode gates it).
+	url, srv, stderr := startPrereview(t, binary, repo, "--agent")
 	defer func() {
 		_ = srv.Process.Kill()
 		_, _ = srv.Process.Wait()
@@ -247,7 +246,7 @@ func TestE2E_LLMStatusMultiTab(t *testing.T) {
 // cleared over WS just fine (the earlier multi-tab failures were chromedp driving
 // a 3rd tab, not a real page wedge).
 func TestE2E_LLMStatusReloadedTabClears(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 	p.waitReady()
 
 	pillVisibleJS := `(() => { const e = document.querySelector('.toast.llm-working'); return !!e && getComputedStyle(e).display !== 'none'; })()`
@@ -291,7 +290,7 @@ func TestE2E_LLMStatusTwoTabJoinerClears(t *testing.T) {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	repo := setupFixtureRepo(t)
-	url, srv, stderr := startPrereview(t, binary, repo, "--skill")
+	url, srv, stderr := startPrereview(t, binary, repo, "--agent")
 	defer func() { _ = srv.Process.Kill(); _, _ = srv.Process.Wait() }()
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
@@ -346,7 +345,7 @@ func TestE2E_LLMStatusTwoTabJoinerClears(t *testing.T) {
 // the agent's edits and clears the affordance. Single tab, opened before work
 // starts (so no SSR-baseline hydration issue — see TestE2E_LLMStatusMultiTab).
 func TestE2E_LLMStatusRefreshOnDone(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--skill")
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("edited.go")
 

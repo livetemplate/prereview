@@ -22,9 +22,9 @@ import (
 )
 
 func TestE2E_ReenqueueWorkedOnComment(t *testing.T) {
-	// --stream so the per-card (re-)enqueue button renders (StreamMode-gated) and
+	// --agent so the per-card (re-)enqueue button renders (AgentMode-gated) and
 	// the continuous emit engine + WatchLLMStatus (processed fan-out) are live.
-	p := bootChromeAgainstPrereview(t, 1200, 800, "--stream")
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 
 	var consoleLines []string
 	chromedp.ListenTarget(p.ctx, func(ev any) {
