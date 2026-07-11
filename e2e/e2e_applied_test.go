@@ -46,19 +46,14 @@ func TestE2E_AppliedAck(t *testing.T) {
 		t.Fatalf("prereview applied: %v\n%s", err, out)
 	}
 
-	// LIVE: the badge flips to "applied", the status appears, and Undo is gone.
+	// LIVE (M4.3b): the applied ack collapses the box out of the diff to a ✦ badge in
+	// the right margin — this is how the applied state now surfaces (declutter). The
+	// re-expand → applied status → no-Undo details are covered by
+	// TestE2E_AppliedCollapsesToBadge; here we just assert the ack pushes live.
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.sg-applied-status`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.line-margin .applied-badge`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.inline-suggestion[data-key="sg-s1"]`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("applied status never appeared live: %v\nstderr: %s", err, p.stderr.String())
-	}
-	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.sg-verdict-badge.sg-accept').textContent.trim()`, &verdict))
-	if verdict != "applied" {
-		t.Errorf("after the applied ack, badge should read 'applied'; got %q", verdict)
-	}
-	var undoPresent bool
-	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`!!document.querySelector('button[name="clearSuggestionDecision"]')`, &undoPresent))
-	if undoPresent {
-		t.Error("an applied suggestion must NOT show the desyncing Undo (revert lands in a follow-up)")
+		t.Fatalf("applied ack should collapse the box to a ✦ badge live: %v\nstderr: %s", err, p.stderr.String())
 	}
 }

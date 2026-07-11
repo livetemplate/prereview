@@ -132,6 +132,14 @@ type PrereviewState struct {
 	// apply)" to "applied", and drops it from the agent's actionable snapshot.
 	Applied map[string]bool `json:"applied"`
 
+	// ExpandedSuggestions is the set of APPLIED suggestion ids the reviewer chose to
+	// peek at (#159 M4.3b). An applied suggestion collapses out of the diff flow to a
+	// right-margin ✦ badge by DEFAULT (declutter); clicking the badge adds the id here
+	// to re-expand the box inline, clicking again removes it. Persisted so a peek
+	// survives reload (like CollapsedLines). Only meaningful for ids in Applied —
+	// suggestionCollapsed = Applied[id] && !ExpandedSuggestions[id].
+	ExpandedSuggestions map[string]bool `json:"expanded_suggestions" lvt:"persist"`
+
 	// Hidden is the reviewer's hidden-from-view suggestion set, loaded from the
 	// server-owned .prereview/hidden-suggestions.jsonl every Mount (the file is
 	// the source of truth — not lvt:"persist"). A pure view filter applied in

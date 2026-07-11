@@ -1,6 +1,7 @@
 package review
 
 import (
+	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -81,6 +82,26 @@ func (c *PrereviewController) AcceptSuggestion(state PrereviewState, ctx *livete
 	// is silent too (the top-right toast slot is already crowded), and the accepted
 	// suggestion box stays put until the agent applies.
 	noteEnqueue(&state)
+	return state, nil
+}
+
+// ToggleSuggestionExpand flips an applied suggestion between its collapsed
+// right-margin ✦ badge and the inline box (#159 M4.3b). Purely a view toggle over
+// ExpandedSuggestions — it never touches the decision or the file; an applied edit
+// stays applied whether the reviewer is peeking at it or not.
+func (c *PrereviewController) ToggleSuggestionExpand(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("toggleSuggestionExpand: missing id")
+	}
+	if state.ExpandedSuggestions == nil {
+		state.ExpandedSuggestions = map[string]bool{}
+	}
+	if state.ExpandedSuggestions[id] {
+		delete(state.ExpandedSuggestions, id)
+	} else {
+		state.ExpandedSuggestions[id] = true
+	}
 	return state, nil
 }
 
