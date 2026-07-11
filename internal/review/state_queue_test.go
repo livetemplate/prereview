@@ -60,3 +60,61 @@ func TestQueueDerivation(t *testing.T) {
 		t.Error("HasQueue should be false on an empty review")
 	}
 }
+
+// TestSuggestionQueueProjection: an accepted suggestion is "queued" work (the
+// agent still has to apply it), an applied one is "done", and reject/undecided
+// stay out of the queue (#159). Suggestions ride the same counts/rows as comments.
+func TestSuggestionQueueProjection(t *testing.T) {
+	s := PrereviewState{
+		Suggestions: []Suggestion{
+			{ID: "acc", File: "a.go", ToLine: 3, Note: "fix grammar"}, // accepted → queued
+			{ID: "app", File: "a.go", ToLine: 7},                      // applied → done (no note → fallback body)
+			{ID: "rej", File: "a.go", ToLine: 9},                      // rejected → excluded
+			{ID: "und", File: "a.go", ToLine: 11},                     // undecided → excluded
+		},
+		Decisions: []SuggestionDecision{
+			{SuggestionID: "acc", Verdict: verdictAccept},
+			{SuggestionID: "app", Verdict: verdictAccept}, // decision still accept; Applied wins
+			{SuggestionID: "rej", Verdict: verdictReject},
+		},
+		Applied: map[string]bool{"app": true},
+	}
+
+	if got := s.suggestionQueueState("acc"); got != queueQueued {
+		t.Errorf("accepted suggestion state = %q, want queued", got)
+	}
+	if got := s.suggestionQueueState("app"); got != queueDone {
+		t.Errorf("applied suggestion state = %q, want done (Applied beats the accept decision)", got)
+	}
+	if got := s.suggestionQueueState("rej"); got != "" {
+		t.Errorf("rejected suggestion state = %q, want excluded", got)
+	}
+	if got := s.suggestionQueueState("und"); got != "" {
+		t.Errorf("undecided suggestion state = %q, want excluded", got)
+	}
+
+	if s.QueuedCount() != 1 || s.DoneCount() != 1 {
+		t.Errorf("counts: queued=%d done=%d, want 1/1", s.QueuedCount(), s.DoneCount())
+	}
+	if !s.HasQueue() {
+		t.Error("a review with only suggestions should still show the queue")
+	}
+
+	items := s.QueueItems()
+	if len(items) != 2 {
+		t.Fatalf("QueueItems = %d, want 2 (acc queued, app done)", len(items))
+	}
+	// queued first, then done.
+	if items[0].ID != "acc" || items[0].State != queueQueued || items[0].Kind != queueKindSuggestion {
+		t.Errorf("item[0] = %+v, want acc/queued/suggestion", items[0])
+	}
+	if items[0].Body != "fix grammar" {
+		t.Errorf("item[0] body = %q, want the note", items[0].Body)
+	}
+	if items[1].ID != "app" || items[1].State != queueDone {
+		t.Errorf("item[1] = %+v, want app/done", items[1])
+	}
+	if items[1].Body != "Suggested edit" {
+		t.Errorf("item[1] body = %q, want the no-note fallback", items[1].Body)
+	}
+}

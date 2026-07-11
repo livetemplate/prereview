@@ -75,6 +75,12 @@ func (c *PrereviewController) AcceptSuggestion(state PrereviewState, ctx *livete
 		}
 	}
 	c.commitDecisions(&state, next)
+	// An accepted suggestion is now queued work for the agent (apply the edit), so
+	// it rides the exact same feedback adding a comment gets (#159): pulse the
+	// toolbar Queue button + bump its count. No toast — matching AddComment, which
+	// is silent too (the top-right toast slot is already crowded), and the accepted
+	// suggestion box stays put until the agent applies.
+	noteEnqueue(&state)
 	return state, nil
 }
 

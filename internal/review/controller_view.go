@@ -286,22 +286,52 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	if id == "" {
 		return state, fmt.Errorf("jumpToComment: missing id")
 	}
-	state = c.materializeDraft(state) // keep unsaved composer text when jumping away (#105)
 	idx := slices.IndexFunc(state.Comments, func(cm Comment) bool { return cm.ID == id })
 	if idx < 0 {
 		return state, fmt.Errorf("jumpToComment: id %s not found", id)
 	}
-	cm := state.Comments[idx]
-	if cm.File != state.SelectedFile {
-		diff, err := c.loadDiffCached(state.Base, cm.File)
+	state, err := c.selectFileForJump(state, state.Comments[idx].File)
+	if err != nil {
+		return state, err
+	}
+	state.ScrollToCommentID = id
+	return state, nil
+}
+
+// JumpToSuggestion selects the file an accepted suggestion lives in, from its
+// row in the queue panel (#159). It stops at file selection — suggestions have
+// no per-item scroll target today (unlike ScrollToCommentID), so the reviewer
+// lands on the file with the inline suggestion box visible; a precise scroll can
+// ride along with the collapse-to-badge work.
+func (c *PrereviewController) JumpToSuggestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("jumpToSuggestion: missing id")
+	}
+	sg := state.findSuggestion(id)
+	if sg == nil {
+		return state, fmt.Errorf("jumpToSuggestion: id %s not found", id)
+	}
+	return c.selectFileForJump(state, sg.File)
+}
+
+// selectFileForJump switches the view to file (loading its diff if it changed)
+// and closes the all-comments overview, preserving unsaved composer text (#105).
+// Shared by JumpToComment/JumpToSuggestion; each sets its own scroll target after
+// (or none). Clears both one-render scroll nudges so a caller that sets neither
+// leaves no stale target behind.
+func (c *PrereviewController) selectFileForJump(state PrereviewState, file string) (PrereviewState, error) {
+	state = c.materializeDraft(state)
+	if file != state.SelectedFile {
+		diff, err := c.loadDiffCached(state.Base, file)
 		if err != nil {
 			return state, fmt.Errorf("load diff: %w", err)
 		}
-		state.SelectedFile = cm.File
+		state.SelectedFile = file
 		state.CurrentDiff = diff
 	}
 	state.ShowAllComments = false
-	state.ScrollToCommentID = cm.ID
+	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
 	return state, nil
 }

@@ -381,15 +381,17 @@
       {{if .HasQueue}}
       <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
       {{range .QueueItems}}
-      <div class="queue-row queue-{{.State}}">
+      
+      <div class="queue-row queue-{{.State}} queue-kind-{{.Kind}}">
         <form method="POST" class="queue-jump-form">
           <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
+          <button type="submit" name="{{if eq .Kind "suggestion"}}jumpToSuggestion{{else}}jumpToComment{{end}}" class="queue-item" title="Go to this {{.Kind}}">
+            {{if eq .Kind "suggestion"}}<span class="queue-kind-icon" aria-hidden="true">✦</span>{{end}}
             <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
             <span class="queue-body">{{.Body}}</span>
             <span class="queue-loc" title="{{.File}}{{if .Line}}:{{.Line}}{{end}}">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
           </button>
-        </form>{{if eq .State "done"}}
+        </form>{{if and (eq .State "done") (eq .Kind "comment")}}
         
         <form method="POST" class="queue-reenqueue-form">
           <input type="hidden" name="id" value="{{.ID}}">
