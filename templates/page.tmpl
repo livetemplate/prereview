@@ -646,17 +646,22 @@
       {{if .HasQueue}}
       <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
       {{range .QueueItems}}
-      <div class="queue-row queue-{{.State}}">
+      {{/* queue-kind-* is the row's kind hook — read by the e2e today, and the
+           styling hook the collapsed-suggestion badge (M4.2/M4.3) will target. */}}
+      <div class="queue-row queue-{{.State}} queue-kind-{{.Kind}}">
         <form method="POST" class="queue-jump-form">
           <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="jumpToComment" class="queue-item" title="Go to this comment">
+          <button type="submit" name="{{if eq .Kind "suggestion"}}jumpToSuggestion{{else}}jumpToComment{{end}}" class="queue-item" title="Go to this {{.Kind}}">
+            {{if eq .Kind "suggestion"}}<span class="queue-kind-icon" aria-hidden="true">✦</span>{{end}}
             <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
             <span class="queue-body">{{.Body}}</span>
             <span class="queue-loc" title="{{.File}}{{if .Line}}:{{.Line}}{{end}}">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
           </button>
         </form>
-        {{- if eq .State "done"}}
-        {{/* Re-enqueue (#119): put a done item back on the queue for the agent to redo. */}}
+        {{- if and (eq .State "done") (eq .Kind "comment")}}
+        {{/* Re-enqueue (#119): put a done comment back on the queue for the agent to redo.
+             A done SUGGESTION is "applied" — undoing that is a revert, not a re-enqueue, so
+             it has no ↺ here (the revert lands on the collapsed-badge popup, M4.2). */}}
         <form method="POST" class="queue-reenqueue-form">
           <input type="hidden" name="id" value="{{.ID}}">
           <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>

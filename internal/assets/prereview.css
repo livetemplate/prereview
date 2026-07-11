@@ -1229,6 +1229,9 @@ header.file-head .file-head-actions {
 .queue-badge-queued { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
 .queue-badge-done { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
 .queue-badge-draft { background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color); }
+/* Suggestion queue rows carry the same ✦ accent mark the inline suggestion box uses,
+   so the queue reads "this row is a suggested edit, not a comment" at a glance. */
+.queue-kind-icon { flex: 0 0 auto; color: var(--accent); font-size: 0.8rem; line-height: 1; }
 .queue-body { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Location is a secondary hint, so let it SHRINK (flex-shrink 1) and ellipsize
    rather than force the row — and thus the whole panel — wider than its
