@@ -29,7 +29,8 @@ func (c *PrereviewController) statusPath() string {
 func (c *PrereviewController) agentSignalFingerprint() string {
 	return statusFingerprint(c.statusPath()) + "|" +
 		statusFingerprint(c.processedPath()) + "|" +
-		statusFingerprint(c.suggestionsPath())
+		statusFingerprint(c.suggestionsPath()) + "|" +
+		statusFingerprint(AgentRepliesPath(c.CSVPath))
 }
 
 // applyLLMStatus refreshes the LLM-status fields on state from the status file.
@@ -90,6 +91,9 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// CurrentDiff, so a new suggestion box appears inline with no reload.
 	c.applySuggestions(&state)
 	c.relocateSuggestionsSelected(&state)
+	// ...and on an agent-replies.jsonl change (the agent posted a thread reply, #149):
+	// reload the merged threads so the note appears under its card with no reload.
+	state.ThreadEntries = loadThreads(c.CSVPath)
 	// #116: if the agent submitted a brand-new suggestion while the inline boxes
 	// were toggled off, reveal them — a hidden toggle must never silently swallow
 	// fresh proposals. Gated on a genuinely-new ID (a revision re-appends the same

@@ -264,7 +264,8 @@
     {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
     {{- if .Draft}} · <small class="draft-badge">draft</small>{{end}}
     {{- if .Processed}} · <small class="processed-badge">worked on</small>{{end}}
-    {{- if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end -}}
+    {{- if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}
+    {{- if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end -}}
   </span></header>
   {{- /* selected phrase (kind=text) — shows what the comment is about, esp. for
          rendered-view comments that anchor line-level */ -}}
@@ -274,7 +275,27 @@
   {{- if .AnchorOutdated -}}
   <details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>
   {{- end -}}
-  {{- /* resolve / re-anchor / edit / delete */ -}}
+  {{- /* #149 conversation thread — the agent's replies ("what I did") + the
+         reviewer's follow-ups, rendered under the body. Empty → nothing renders. */ -}}
+  {{- template "thread" (index $.Threads .ID) -}}
+  {{- /* #149 reviewer reply — the inline form when open on this card. */ -}}
+  {{- if eq $.ReplyingID .ID -}}
+  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea
+      name="body"
+      placeholder="Reply to the agent…"
+      lvt-on:input="saveReplyDraft"
+      lvt-mod:debounce="200"
+      lvt-autofocus
+    >{{$.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>
+  {{- end -}}
+  {{- /* resolve / re-anchor / edit / delete / reply */ -}}
   <div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
@@ -284,6 +305,10 @@
         class="outline"
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
+    {{- /* #149 Reply — opens the inline reply form to steer the agent. */ -}}
+    {{- if ne $.ReplyingID .ID -}}
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
+    {{- end -}}
     {{- /* Re-enqueue a WORKED-ON comment (#119): put it back on the agent's queue to
            redo. This is the only per-card queue action — a draft is enqueued simply
            by saving it, and a plain queued comment is already on the queue. Agent
@@ -334,6 +359,22 @@
   </div></div>
 {{- end}}
 
+{{/* thread — the #149 conversation on a comment or suggestion. Receives the target's
+     []ThreadEntry (or nil). Renders nothing when empty, so a target with no replies is
+     unchanged. Each entry shows its author (agent/reviewer) + a compact time + body. */}}
+{{define "thread" -}}
+{{- if . -}}
+<div class="thread">
+  {{- range . -}}
+  <div class="thread-entry thread-{{.Author}}">
+    <div class="thread-meta"><span class="thread-author">{{.Author}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
+    <div class="thread-body">{{.Body}}</div>
+  </div>
+  {{- end -}}
+</div>
+{{- end -}}
+{{- end}}
+
 {{/* suggestionCard — one LLM-proposed edit (issue #98), rendered inline like a
      comment but visually distinct (sparkle icon, accent-tinted chrome, a
      before→after mini-diff). Phase 2 adds the reviewer's decision: accept / reject /
@@ -355,7 +396,8 @@
     {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
     {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}
     {{- if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}
-    {{- if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end -}}
+    {{- if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end}}
+    {{- if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end -}}
     {{- /* Hide controls — a pure declutter, always available (even for a decided or
            outdated card), separate from the accept/reject flow. Hiding never counts
            as a reject and never reaches the LLM. */ -}}
@@ -375,6 +417,27 @@
   {{- end -}}
   {{- /* the reviewer's requested-revision note, if any */ -}}
   {{- if and (eq $d.Verdict "revise") $d.Note}}<div class="sg-revise-note">{{$d.Note}}</div>{{end -}}
+  {{- /* #149 conversation thread — the agent's replies + reviewer follow-ups. */ -}}
+  {{- template "thread" (index $.Threads .ID) -}}
+  {{- /* #149 reviewer reply — inline form when open, else a Reply button. */ -}}
+  {{- if eq $.ReplyingID .ID -}}
+  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea
+      name="body"
+      placeholder="Reply to the agent…"
+      lvt-on:input="saveReplyDraft"
+      lvt-mod:debounce="200"
+      lvt-autofocus
+    >{{$.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>
+  {{- else -}}
+  <div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>
+  {{- end -}}
   {{- /* decision surface — hidden for outdated suggestions (can't act on a stale
          target; the LLM re-derives it on hand-off) */ -}}
   {{- if not .AnchorOutdated -}}

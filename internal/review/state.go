@@ -132,11 +132,23 @@ type PrereviewState struct {
 	// visibleSuggestions, fingerprint-gated so a revised suggestion reappears.
 	Hidden []HiddenSuggestion `json:"hidden_suggestions"`
 
+	// ThreadEntries are the #149 conversation entries on comments/suggestions —
+	// the agent's "what I did" notes (and, later, reviewer replies) — loaded from
+	// the append-only thread sidecars every Mount (the files are the source of
+	// truth — not lvt:"persist"). Grouped by target ID in Threads() for render.
+	ThreadEntries []ThreadEntry `json:"thread_entries"`
+
 	// RevisingSuggestionID is the suggestion whose inline "request revision" note
 	// form is open (mirrors EditingCommentID); RevisionDraft holds the in-progress
 	// note so it survives reconnects. Empty = no revision form open.
 	RevisingSuggestionID string `json:"revising_suggestion_id" lvt:"persist"`
 	RevisionDraft        string `json:"revision_draft" lvt:"persist"`
+
+	// ReplyingID is the comment/suggestion whose inline reply form is open (#149;
+	// mirrors RevisingSuggestionID); ReplyDraft holds the in-progress reply so it
+	// survives reconnects. Empty = no reply form open.
+	ReplyingID string `json:"replying_id" lvt:"persist"`
+	ReplyDraft string `json:"reply_draft" lvt:"persist"`
 
 	// UI status.
 	LastSaved string `json:"last_saved"`

@@ -3,11 +3,18 @@
 === blockSuggestions ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}
 === commentCardFull ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}<div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}{{if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}<form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea name="body" placeholder="Reply to the agent…" lvt-on:input="saveReplyDraft" lvt-mod:debounce="200" lvt-autofocus>{{$.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if and $.AgentMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
+    </form>{{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}{{if and $.AgentMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Re-enqueue — ask the agent to redo this">Re-enqueue</button>
     </form>{{end}}{{if .Resolved}}<form method="POST">
@@ -1009,6 +1016,9 @@
 
 
 
+
+
+
 === quitDialog ===
 <dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
     <form method="POST">
@@ -1023,10 +1033,17 @@
   <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
 </form>
 === suggestionCard ===
-{{$d := index $.DecisionsBySuggestion .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
+{{$d := index $.DecisionsBySuggestion .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end}}{{if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
     </span>
   </header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}<pre class="sg-new">{{.ProposedText}}</pre>
-  </div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{if and (eq $d.Verdict "revise") $d.Note}}<div class="sg-revise-note">{{$d.Note}}</div>{{end}}{{if not .AnchorOutdated}}{{if eq $.RevisingSuggestionID .ID}}<form method="POST" class="sg-revise-form" lvt-form:preserve lvt-on:keydown="submitRevision" lvt-key="Mod+Enter">
+  </div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{if and (eq $d.Verdict "revise") $d.Note}}<div class="sg-revise-note">{{$d.Note}}</div>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}<form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea name="body" placeholder="Reply to the agent…" lvt-on:input="saveReplyDraft" lvt-mod:debounce="200" lvt-autofocus>{{$.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>{{else}}<div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>{{end}}{{if not .AnchorOutdated}}{{if eq $.RevisingSuggestionID .ID}}<form method="POST" class="sg-revise-form" lvt-form:preserve lvt-on:keydown="submitRevision" lvt-key="Mod+Enter">
     <input type="hidden" name="id" value="{{.ID}}">
     <textarea name="note" placeholder="What should change?" lvt-on:input="saveRevisionDraft" lvt-mod:debounce="200" lvt-autofocus>{{$.RevisionDraft}}</textarea>
     <div class="sg-actions">
@@ -1039,3 +1056,8 @@
     <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="rejectSuggestion" class="outline sg-reject-btn">Reject</button></form>
     <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevision" class="outline">Request revision</button></form>
   </div>{{end}}{{end}}{{end}}</div>
+=== thread ===
+{{if .}}<div class="thread">{{range .}}<div class="thread-entry thread-{{.Author}}">
+    <div class="thread-meta"><span class="thread-author">{{.Author}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
+    <div class="thread-body">{{.Body}}</div>
+  </div>{{end}}</div>{{end}}

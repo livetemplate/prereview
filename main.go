@@ -27,6 +27,7 @@ const topUsage = `Usage: prereview [flags] [path]
 Subcommands (for the coding agent; each takes --out <REPO>):
   comments   list the review's comments (--json for the queue-snapshot shape; --all for resolved too)
   done       mark comments worked on (validated against comments.csv; --file -/--all-open)
+  reply      post a thread reply on a comment or suggestion so the reviewer sees what you did (--body/--file)
   status     echo the agent's status to the review UI: status <working|done> [message]
   suggest    submit proposed edits as inline suggestion boxes (--file/stdin)
   watch      deliver the next batch of queue events after --since <seq> (blocks when caught up), until the terminating end event
@@ -94,6 +95,18 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "suggest" {
 		if err := runSuggest(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview suggest:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `prereview reply [--out <dir>] (--body "…"|--file <f>) <id>` — the coding
+	// agent posts a thread reply on a comment or suggestion so the reviewer sees
+	// what it did (#149). A bare positional verb like `done`/`suggest`, so intercept
+	// it before flag parsing.
+	if len(os.Args) > 1 && os.Args[1] == "reply" {
+		if err := runReply(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview reply:", err)
 			os.Exit(1)
 		}
 		return
