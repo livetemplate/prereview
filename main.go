@@ -26,6 +26,7 @@ const topUsage = `Usage: prereview [flags] [path]
 
 Subcommands (for the coding agent; each takes --out <REPO>):
   comments   list the review's comments (--json for the queue-snapshot shape; --all for resolved too)
+  applied    ack that you applied an accepted suggestion's edit to disk (validated against suggestions)
   done       mark comments worked on (validated against comments.csv; --file -/--all-open)
   reply      post a thread reply on a comment or suggestion so the reviewer sees what you did (--body/--file)
   status     echo the agent's status to the review UI: status <working|done> [message]
@@ -107,6 +108,17 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "reply" {
 		if err := runReply(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview reply:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `prereview applied [--out <dir>] <suggestion-id>...` — the coding agent acks that
+	// it wrote an accepted suggestion's edit to disk (#159), so the UI marks it applied
+	// and drops it from the snapshot. A bare positional verb, so intercept before flags.
+	if len(os.Args) > 1 && os.Args[1] == "applied" {
+		if err := runApplied(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview applied:", err)
 			os.Exit(1)
 		}
 		return

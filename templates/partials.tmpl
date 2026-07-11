@@ -385,6 +385,7 @@
      trim-wrapped to hold exactly the original/proposed text. */}}
 {{define "suggestionCard" -}}
 {{$d := index $.DecisionsBySuggestion .ID -}}
+{{$applied := index $.Applied .ID -}}
 {{$g := index $.SuggestionGroups .ID -}}
 <div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}"
      data-key="sg-{{.ID}}"
@@ -394,7 +395,7 @@
     {{- if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>
     {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
     {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
-    {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">accepted</small>{{end}}
+    {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}
     {{- if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}
     {{- if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end}}
     {{- if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end -}}
@@ -458,6 +459,11 @@
       <button type="submit" name="submitRevision">Send revision</button>
     </div>
   </form>
+  {{- else if $applied -}}
+  {{- /* #159: an applied edit is in the file. No Undo here — undoing an applied edit
+         must REVERT the file (agent inverse-apply), which lands in a follow-up; a plain
+         decision-clear would desync file vs. decision. */ -}}
+  <div class="sg-actions"><small class="sg-applied-status">Edit applied to the file.</small></div>
   {{- else if $d.Verdict -}}
   <div class="sg-actions">
     {{- if eq $d.Verdict "revise"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevision" class="outline">Edit note</button></form>{{end -}}

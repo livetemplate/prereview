@@ -99,25 +99,35 @@ func runDone(args []string) error {
 	}
 	ids = dedupe(ids)
 
+	if err := appendMarks(dir, review.ProcessedFileName, ids); err != nil {
+		return err
+	}
+	fmt.Printf("marked %d comment(s) as worked on\n", len(ids))
+	return nil
+}
+
+// appendMarks appends one `{"id","at"}` JSON line per id to <dir>/<fileName> —
+// the append-only, agent-owned marks format that loadMarkCounts reads. Both
+// `done` (processed.jsonl) and `applied` (applied.jsonl) write it; keeping the
+// write in one place means the two verbs can't drift on the on-disk shape.
+// json.Encoder writes one object + newline per call → JSONL.
+func appendMarks(dir, fileName string, ids []string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", dir, err)
 	}
-	path := filepath.Join(dir, review.ProcessedFileName)
+	path := filepath.Join(dir, fileName)
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
-	// json.Encoder writes one object + newline per call → JSONL, matching the
-	// append-only line format loadMarkCounts reads.
 	now := time.Now().UTC().Format(time.RFC3339)
 	enc := json.NewEncoder(f)
 	for _, id := range ids {
 		if err := enc.Encode(review.ProcessedMark{ID: id, At: now}); err != nil {
-			return fmt.Errorf("append mark %s: %w", id, err)
+			return fmt.Errorf("append mark %s to %s: %w", id, fileName, err)
 		}
 	}
-	fmt.Printf("marked %d comment(s) as worked on\n", len(ids))
 	return nil
 }
 

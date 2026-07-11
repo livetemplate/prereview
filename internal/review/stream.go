@@ -121,11 +121,11 @@ type StreamDecision struct {
 // to its stream shape with its thread. Outdated is excluded so an accepted edit, once
 // the LLM applies it, drops off the next snapshot; a reworked revise drops because its
 // fingerprint no longer matches. The consumer dedupes by id, exactly like comments.
-func actionableDecisions(suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry) []StreamDecision {
+func actionableDecisions(suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool) []StreamDecision {
 	out := make([]StreamDecision, 0, len(decided))
 	for _, sg := range suggestions {
-		if sg.AnchorOutdated() {
-			continue
+		if sg.AnchorOutdated() || applied[sg.ID] {
+			continue // outdated, or already applied by the agent (#159) → nothing to do
 		}
 		d, isDecided := decided[sg.ID]
 		thread := threadByID[sg.ID]
@@ -308,9 +308,9 @@ func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool,
 // Both snapshots are always non-nil slices so their keys are always present
 // (`[]` when nothing is actionable). decided is the fingerprint-matched decision
 // map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
-func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, paused bool, ts time.Time) error {
+func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, paused bool, ts time.Time) error {
 	csnap := actionableComments(comments, threadByID)
-	dsnap := actionableDecisions(suggestions, decided, threadByID)
+	dsnap := actionableDecisions(suggestions, decided, threadByID, applied)
 	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Paused: paused}, ts)
 }
 

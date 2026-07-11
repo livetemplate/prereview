@@ -144,7 +144,7 @@ func TestActionableDecisions_UnreadOverlay(t *testing.T) {
 	threads := map[string][]ThreadEntry{
 		"s1": {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "tweak it", At: 2}},
 	}
-	got := actionableDecisions(sugs, decided, threads)
+	got := actionableDecisions(sugs, decided, threads, nil)
 	if len(got) != 1 || got[0].ID != "s1" {
 		t.Fatalf("only the reviewer-replied suggestion should be actionable; got %+v", got)
 	}
