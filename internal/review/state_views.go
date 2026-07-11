@@ -224,12 +224,21 @@ func (s PrereviewState) HasMarks() bool {
 // Entries arrive already sorted (loadThreads), so each group is chronological.
 // Zero-arg so the framework pre-computes it; nil when there are no threads.
 func (s PrereviewState) Threads() map[string][]ThreadEntry {
-	if len(s.ThreadEntries) == 0 {
-		return nil
+	return groupThreads(s.ThreadEntries)
+}
+
+// AwaitingAgent maps each target ID whose thread ends with a REVIEWER entry — the
+// reviewer replied and is waiting on the agent (#149) — so a card can badge itself
+// "awaiting agent". Zero-arg for the framework; nil when none.
+func (s PrereviewState) AwaitingAgent() map[string]bool {
+	out := map[string]bool{}
+	for id, th := range groupThreads(s.ThreadEntries) {
+		if hasUnreadReviewerReply(th) {
+			out[id] = true
+		}
 	}
-	out := make(map[string][]ThreadEntry)
-	for _, e := range s.ThreadEntries {
-		out[e.TargetID] = append(out[e.TargetID], e)
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

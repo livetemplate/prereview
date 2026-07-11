@@ -78,6 +78,64 @@ func TestThreads_GroupByTarget(t *testing.T) {
 	}
 }
 
+// TestThreadActionable is the #149 unread-model truth table: a fresh comment is
+// actionable iff unresolved; a thread the reviewer spoke last on re-surfaces even when
+// resolved; a thread the agent spoke last on drops out (handled, awaiting the reviewer).
+func TestThreadActionable(t *testing.T) {
+	agentLast := []ThreadEntry{{Author: AuthorReviewer, At: 1}, {Author: AuthorAgent, At: 2}}
+	reviewerLast := []ThreadEntry{{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, At: 2}}
+	cases := []struct {
+		name     string
+		resolved bool
+		thread   []ThreadEntry
+		want     bool
+	}{
+		{"fresh unresolved", false, nil, true},
+		{"fresh resolved", true, nil, false},
+		{"agent-last, unresolved (handled, awaiting reviewer)", false, agentLast, false},
+		{"agent-last, resolved", true, agentLast, false},
+		{"reviewer-last, unresolved", false, reviewerLast, true},
+		{"reviewer-last, resolved (re-surface)", true, reviewerLast, true},
+	}
+	for _, c := range cases {
+		if got := threadActionable(c.resolved, c.thread); got != c.want {
+			t.Errorf("%s: threadActionable=%v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestActionableComments_UnreadOverlay checks the wire: a resolved comment with an
+// unread reviewer reply re-appears in the snapshot, carrying its thread; an
+// agent-last one does not.
+func TestActionableComments_UnreadOverlay(t *testing.T) {
+	comments := []Comment{
+		{ID: "resurface", Resolved: true},
+		{ID: "handled", Resolved: false},
+		{ID: "fresh", Resolved: false},
+	}
+	threads := map[string][]ThreadEntry{
+		"resurface": {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "one more thing", At: 2}},
+		"handled":   {{Author: AuthorReviewer, At: 1}, {Author: AuthorAgent, At: 2}},
+	}
+	got := actionableComments(comments, threads)
+	ids := map[string]StreamComment{}
+	for _, c := range got {
+		ids[c.ID] = c
+	}
+	if _, ok := ids["resurface"]; !ok {
+		t.Error("a resolved comment with an unread reviewer reply must re-surface")
+	}
+	if len(ids["resurface"].Thread) != 2 || ids["resurface"].Thread[1].Author != AuthorReviewer {
+		t.Errorf("re-surfaced comment must carry its thread; got %+v", ids["resurface"].Thread)
+	}
+	if _, ok := ids["handled"]; ok {
+		t.Error("an unresolved comment the agent replied to last must NOT be actionable (awaiting reviewer)")
+	}
+	if _, ok := ids["fresh"]; !ok {
+		t.Error("a fresh unresolved comment must be actionable")
+	}
+}
+
 func TestThreadEntry_When(t *testing.T) {
 	if (ThreadEntry{At: 0}).When() != "" {
 		t.Error("zero At should render empty time")

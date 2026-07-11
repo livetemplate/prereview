@@ -3,6 +3,7 @@ package review
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -92,6 +93,64 @@ func loadThreadEntries(path string) []ThreadEntry {
 		out = append(out, e)
 	}
 	return out
+}
+
+// groupThreads groups sorted thread entries by target ID (comment or suggestion),
+// preserving chronological order within each group. Shared by the render path
+// (Threads) and the snapshot path (LoadComments / EmitSnapshot) so both agree.
+func groupThreads(entries []ThreadEntry) map[string][]ThreadEntry {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make(map[string][]ThreadEntry)
+	for _, e := range entries {
+		out[e.TargetID] = append(out[e.TargetID], e)
+	}
+	return out
+}
+
+// hasUnreadReviewerReply reports whether a target's thread ends with a REVIEWER
+// entry — i.e. the reviewer has spoken since the agent last did, so the agent owes a
+// response. Because entries are sorted, "last entry is the reviewer's" is exactly
+// "newer than the agent's last entry". Empty thread → false.
+func hasUnreadReviewerReply(thread []ThreadEntry) bool {
+	return len(thread) > 0 && thread[len(thread)-1].Author == AuthorReviewer
+}
+
+// threadActionable decides whether a comment/suggestion belongs in the agent's
+// snapshot, given its resolved state and thread. The unread-reply model (#149), NOT
+// auto-reopen:
+//   - no thread yet      → actionable iff unresolved (the fresh-comment case).
+//   - thread, reviewer-last (unread) → actionable, even if resolved (the reviewer
+//     steered after resolving — re-surface it).
+//   - thread, agent-last → NOT actionable (the agent replied and is waiting on the
+//     reviewer; without this it would re-act on a handled comment forever — the
+//     exact gap a plain !Resolved filter leaves open).
+func threadActionable(resolved bool, thread []ThreadEntry) bool {
+	if len(thread) == 0 {
+		return !resolved
+	}
+	return hasUnreadReviewerReply(thread)
+}
+
+// appendReviewerReply records a reviewer's thread entry in the server-owned
+// reviewer-replies.jsonl (append-only, mirroring processed.go's appendMark). at is a
+// nanosecond timestamp so it sorts against the agent's replies.
+func appendReviewerReply(csvPath, targetID, body string, at int64) error {
+	line, err := json.Marshal(ThreadEntry{TargetID: targetID, Author: AuthorReviewer, Body: body, At: at})
+	if err != nil {
+		return err
+	}
+	path := ReviewerRepliesPath(csvPath)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", filepath.Base(path), err)
+	}
+	defer f.Close()
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		return fmt.Errorf("append %s: %w", filepath.Base(path), err)
+	}
+	return nil
 }
 
 // loadThreads merges the agent + reviewer sidecars, sorted by (At, author) with the

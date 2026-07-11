@@ -111,21 +111,26 @@ type StreamDecision struct {
 	Original     string `json:"original"`
 	Proposed     string `json:"proposed"`
 	AnchorStatus string `json:"anchor_status"`
+	// Thread is the #149 conversation on this suggestion (see StreamComment.Thread).
+	Thread []StreamReply `json:"thread,omitempty"`
 }
 
-// actionableDecisions returns the decided suggestions the LLM should act on:
-// every fingerprint-matched decision (from state.DecisionsBySuggestion) whose
-// suggestion is not outdated, mapped to its stream shape. Outdated is excluded so
-// an accepted edit, once the LLM applies it, drops off the next snapshot (the
-// original text is gone → the suggestion re-anchors as outdated); a reworked
-// revise drops because its fingerprint no longer matches. The consumer dedupes by
-// id, exactly like comments.
-func actionableDecisions(suggestions []Suggestion, decided map[string]SuggestionDecision) []StreamDecision {
+// actionableDecisions returns the suggestions the LLM should act on: every
+// fingerprint-matched decision (from state.DecisionsBySuggestion) whose suggestion is
+// not outdated, PLUS any suggestion the reviewer replied on last (#149 unread), mapped
+// to its stream shape with its thread. Outdated is excluded so an accepted edit, once
+// the LLM applies it, drops off the next snapshot; a reworked revise drops because its
+// fingerprint no longer matches. The consumer dedupes by id, exactly like comments.
+func actionableDecisions(suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry) []StreamDecision {
 	out := make([]StreamDecision, 0, len(decided))
 	for _, sg := range suggestions {
-		d, ok := decided[sg.ID]
-		if !ok || sg.AnchorOutdated() {
+		if sg.AnchorOutdated() {
 			continue
+		}
+		d, isDecided := decided[sg.ID]
+		thread := threadByID[sg.ID]
+		if !isDecided && !hasUnreadReviewerReply(thread) {
+			continue // undecided and no reviewer reply → nothing for the agent
 		}
 		out = append(out, StreamDecision{
 			ID:           sg.ID,
@@ -138,6 +143,7 @@ func actionableDecisions(suggestions []Suggestion, decided map[string]Suggestion
 			Original:     sg.OriginalText,
 			Proposed:     sg.ProposedText,
 			AnchorStatus: sg.AnchorStatus,
+			Thread:       toStreamThread(thread),
 		})
 	}
 	return out
@@ -167,6 +173,35 @@ type StreamComment struct {
 	// on — essential for rendered-view (Preview) comments, which anchor at
 	// line level (no columns) so the phrase is the only sub-line signal.
 	Text string `json:"text,omitempty"`
+	// Thread is the #149 conversation on this comment: the agent's prior replies
+	// and the reviewer's follow-ups, oldest first. Present when non-empty so the
+	// agent has the full exchange — and can tell a fresh comment (no thread) from a
+	// reviewer reply it must respond to (the last entry's author is "reviewer").
+	Thread []StreamReply `json:"thread,omitempty"`
+}
+
+// StreamReply is one consumer-facing thread entry (#149): who said it, what, when.
+// At is RFC3339 (not the internal nanoseconds) to match CreatedAt's convention.
+type StreamReply struct {
+	Author string `json:"author"`
+	Body   string `json:"body"`
+	At     string `json:"at"`
+}
+
+// toStreamThread maps a target's thread entries to the consumer shape; nil when empty.
+func toStreamThread(thread []ThreadEntry) []StreamReply {
+	if len(thread) == 0 {
+		return nil
+	}
+	out := make([]StreamReply, 0, len(thread))
+	for _, e := range thread {
+		out = append(out, StreamReply{
+			Author: e.Author,
+			Body:   e.Body,
+			At:     time.Unix(0, e.At).UTC().Format(time.RFC3339),
+		})
+	}
+	return out
 }
 
 // toStreamComment maps a Comment to its consumer-facing shape. Area is set
@@ -201,15 +236,24 @@ func toStreamComment(c Comment) StreamComment {
 // unresolved, non-outdated comment, mapped to its stream shape. This is the
 // payload of a snapshot event: a full snapshot, deduped by id on the consumer
 // side, so the human's resolve-clicks naturally prune later rounds.
-func actionableComments(comments []Comment) []StreamComment {
+func actionableComments(comments []Comment, threadByID map[string][]ThreadEntry) []StreamComment {
 	out := make([]StreamComment, 0, len(comments))
 	for _, c := range comments {
 		// Drafts (#119) are the reviewer's not-yet-enqueued notes — kept out of
 		// the actionable snapshot until enqueued, exactly like resolved/outdated.
-		if c.Resolved || c.AnchorOutdated() || c.Draft {
+		if c.AnchorOutdated() || c.Draft {
 			continue
 		}
-		out = append(out, toStreamComment(c))
+		// #149 unread model: an unresolved fresh comment is actionable; a resolved
+		// one re-surfaces only when the reviewer replied last; an agent-last thread
+		// drops out (handled, awaiting the reviewer).
+		thread := threadByID[c.ID]
+		if !threadActionable(c.Resolved, thread) {
+			continue
+		}
+		sc := toStreamComment(c)
+		sc.Thread = toStreamThread(thread)
+		out = append(out, sc)
 	}
 	return out
 }
@@ -264,9 +308,9 @@ func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool,
 // Both snapshots are always non-nil slices so their keys are always present
 // (`[]` when nothing is actionable). decided is the fingerprint-matched decision
 // map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
-func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, paused bool, ts time.Time) error {
-	csnap := actionableComments(comments)
-	dsnap := actionableDecisions(suggestions, decided)
+func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, paused bool, ts time.Time) error {
+	csnap := actionableComments(comments, threadByID)
+	dsnap := actionableDecisions(suggestions, decided, threadByID)
 	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Paused: paused}, ts)
 }
 

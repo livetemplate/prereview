@@ -2554,6 +2554,20 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .thread-agent .thread-author { color: var(--accent); }
 .thread-when { font-size: 0.66rem; color: var(--pico-muted-color); }
 .thread-body { white-space: pre-wrap; word-break: break-word; font-size: 0.82rem; }
+/* #149 reviewer reply form (mirrors sg-revise-form) + the awaiting-agent badge. */
+.reply-form { margin: 0.4rem 0 0.2rem; }
+.reply-form textarea {
+  width: 100%; min-height: 3rem; margin-bottom: 0.4rem;
+  font-family: var(--sans); font-size: 0.82rem;
+}
+.reply-actions { display: flex; gap: 0.3rem; }
+.reply-actions button { padding: 0.15rem 0.5rem; font-size: 0.72rem; margin: 0; min-height: 26px; }
+.sg-reply-open { margin: 0.4rem 0 0.2rem; }
+.awaiting-badge {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-radius: 0.4rem; padding: 0 0.3rem; font-weight: 600;
+}
 /* Anchor-status surface. moved = informational (auto-followed its
    content); outdated = the anchored text changed/vanished and the
    comment could not be confidently re-placed — it needs Re-anchor. */

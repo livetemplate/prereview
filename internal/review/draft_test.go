@@ -31,7 +31,7 @@ func TestDraftLifecycle(t *testing.T) {
 	if err := c.persist(st.Comments); err != nil {
 		t.Fatalf("seed persist: %v", err)
 	}
-	if got := actionableComments(st.Comments); len(got) != 0 {
+	if got := actionableComments(st.Comments, nil); len(got) != 0 {
 		t.Fatalf("a draft must be excluded from the actionable snapshot, got %d", len(got))
 	}
 
@@ -43,7 +43,7 @@ func TestDraftLifecycle(t *testing.T) {
 	if st.Comments[0].Draft {
 		t.Error("EnqueueComment should set Draft=false")
 	}
-	if got := actionableComments(st.Comments); len(got) != 1 {
+	if got := actionableComments(st.Comments, nil); len(got) != 1 {
 		t.Errorf("enqueued comment should be actionable, got %d", len(got))
 	}
 	if reloaded := c.loadCommentsFromDisk(); len(reloaded) != 1 || reloaded[0].Draft {
@@ -121,7 +121,7 @@ func TestSaveEnqueuesDraft(t *testing.T) {
 	if idx < 0 || st.Comments[idx].Draft {
 		t.Errorf("saving a draft must enqueue it (Draft=false), got %+v", st.Comments[idx])
 	}
-	if got := actionableComments(st.Comments); len(got) != 1 {
+	if got := actionableComments(st.Comments, nil); len(got) != 1 {
 		t.Errorf("saved (enqueued) comment should be actionable, got %d", len(got))
 	}
 	if reloaded := c.loadCommentsFromDisk(); len(reloaded) != 1 || reloaded[0].Draft {
@@ -143,7 +143,7 @@ func TestMaterializeDraft_KeepsUnsavedText(t *testing.T) {
 	if !st.Comments[0].Draft {
 		t.Error("materialized comment should be a Draft")
 	}
-	if got := actionableComments(st.Comments); len(got) != 0 {
+	if got := actionableComments(st.Comments, nil); len(got) != 0 {
 		t.Errorf("a draft must not be actionable, got %d", len(got))
 	}
 	if reloaded := c.loadCommentsFromDisk(); len(reloaded) != 1 || !reloaded[0].Draft {

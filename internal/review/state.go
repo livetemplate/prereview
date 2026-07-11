@@ -144,6 +144,12 @@ type PrereviewState struct {
 	RevisingSuggestionID string `json:"revising_suggestion_id" lvt:"persist"`
 	RevisionDraft        string `json:"revision_draft" lvt:"persist"`
 
+	// ReplyingID is the comment/suggestion whose inline reply form is open (#149;
+	// mirrors RevisingSuggestionID); ReplyDraft holds the in-progress reply so it
+	// survives reconnects. Empty = no reply form open.
+	ReplyingID string `json:"replying_id" lvt:"persist"`
+	ReplyDraft string `json:"reply_draft" lvt:"persist"`
+
 	// UI status.
 	LastSaved string `json:"last_saved"`
 

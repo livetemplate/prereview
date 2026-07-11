@@ -468,7 +468,9 @@ func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
 	}
 	comments := commentsFromRows(rows)
 	if !all {
-		return actionableComments(comments), nil
+		// Same actionable set the snapshot ships, incl. the #149 unread overlay, so
+		// `comments --json` and `watch` agree.
+		return actionableComments(comments, groupThreads(loadThreads(csvPath))), nil
 	}
 	out := make([]StreamComment, 0, len(comments))
 	for _, cm := range comments {

@@ -65,9 +65,10 @@ func (c *PrereviewController) emitSnapshot() {
 	st.Comments = c.loadCommentsFromDisk()
 	c.applySuggestions(st)
 	c.applyDecisions(st)
-	c.relocateAll(st)            // re-anchor comments against fresh disk (base-safe, #121)
-	c.relocateSuggestionsAll(st) // re-anchor suggestions likewise
-	if err := c.Emitter.EmitSnapshot(st.Comments, st.Suggestions, st.DecisionsBySuggestion(), c.isPaused(), time.Now()); err != nil {
+	st.ThreadEntries = loadThreads(c.CSVPath) // #149: the conversation on each target
+	c.relocateAll(st)                         // re-anchor comments against fresh disk (base-safe, #121)
+	c.relocateSuggestionsAll(st)              // re-anchor suggestions likewise
+	if err := c.Emitter.EmitSnapshot(st.Comments, st.Suggestions, st.DecisionsBySuggestion(), st.Threads(), c.isPaused(), time.Now()); err != nil {
 		slog.Warn("emit snapshot", "err", err)
 	}
 }

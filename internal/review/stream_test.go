@@ -38,7 +38,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
-	if err := es.EmitSnapshot(nil, nil, nil, false, fixedTS); err != nil {
+	if err := es.EmitSnapshot(nil, nil, nil, nil, false, fixedTS); err != nil {
 		t.Fatalf("EmitSnapshot: %v", err)
 	}
 	if err := es.EmitEnd(fixedTS); err != nil {
@@ -102,7 +102,7 @@ func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	if err := es.EmitReady("/r", "/r/c.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
-	if err := es.EmitSnapshot(nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
+	if err := es.EmitSnapshot(nil, nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
 		t.Fatalf("handoff: %v", err)
 	}
 	if err := es.EmitEnd(fixedTS); err != nil {
@@ -149,7 +149,7 @@ func TestActionableDecisions_FiltersAndMaps(t *testing.T) {
 			// "none" has no decision.
 		},
 	}
-	got := actionableDecisions(st.Suggestions, st.DecisionsBySuggestion())
+	got := actionableDecisions(st.Suggestions, st.DecisionsBySuggestion(), nil)
 	byID := map[string]StreamDecision{}
 	for _, d := range got {
 		byID[d.ID] = d
@@ -239,7 +239,7 @@ func TestActionableComments_FiltersResolvedAndOutdated(t *testing.T) {
 		{ID: "drop-outdated", Kind: commentKindLine, FromLine: 3, ToLine: 3, AnchorStatus: anchorOutdated, Created: fixedTS},
 		{ID: "keep2", Kind: commentKindRegion, URL: "/x", Area: Area{W: 0.5, H: 0.5}, Created: fixedTS},
 	}
-	got := actionableComments(comments)
+	got := actionableComments(comments, nil)
 	if len(got) != 2 {
 		t.Fatalf("want 2 actionable, got %d: %+v", len(got), got)
 	}
