@@ -22,8 +22,9 @@ func (c *PrereviewController) flushSnapshot(state *PrereviewState) error {
 	// applied re-anchors as outdated and drops from the snapshot (#98 Phase 3).
 	c.relocateSuggestionsAll(state)
 	state.ThreadEntries = loadThreads(c.CSVPath) // #149: fresh threads for the final flush
+	state.Applied = loadAppliedSet(c.CSVPath)    // #159: applied acks drop from the flush
 	if c.Emitter != nil {
-		if err := c.Emitter.EmitSnapshot(state.Comments, state.Suggestions, state.DecisionsBySuggestion(), state.Threads(), c.isPaused(), time.Now()); err != nil {
+		if err := c.Emitter.EmitSnapshot(state.Comments, state.Suggestions, state.DecisionsBySuggestion(), state.Threads(), state.Applied, c.isPaused(), time.Now()); err != nil {
 			return fmt.Errorf("emit snapshot event: %w", err)
 		}
 	}

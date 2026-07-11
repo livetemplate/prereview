@@ -264,8 +264,10 @@ On each snapshot, `suggestions[]` is a full snapshot of every decided suggestion
 (dedupe by `id`). Act by `verdict`:
 
 - **`accept`** — apply the edit (replace `original` with `proposed` at the given
-  lines; you own the file write). Once applied it re-anchors away and drops off future
-  snapshots.
+  lines; you own the file write), then **`prereview applied "<id>"`** to ack it. That
+  flips the reviewer's card from "accepted" to "applied" and drops it from the snapshot.
+  Idempotent — re-acking an id is harmless (two snapshots can carry the same accept
+  before your ack lands, so dedupe by `id` like comments and ack once per id).
 - **`reject`** — drop it; do not apply or re-submit. Dedupe by `id` and skip it.
 - **`revise`** — rework the edit and **re-submit via `prereview suggest` with the SAME
   `id`** and new `proposed` text; that resets the box to undecided for re-review.

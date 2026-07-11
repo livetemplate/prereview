@@ -126,6 +126,12 @@ type PrereviewState struct {
 	// onto suggestions by ID + content fingerprint in DecisionsBySuggestion.
 	Decisions []SuggestionDecision `json:"decisions"`
 
+	// Applied is the set of accepted-suggestion ids the agent has WRITTEN to disk
+	// (#159), loaded from the agent-owned .prereview/applied.jsonl every Mount (not
+	// lvt:"persist"). Flips an accepted suggestion's card from "accepted (pending
+	// apply)" to "applied", and drops it from the agent's actionable snapshot.
+	Applied map[string]bool `json:"applied"`
+
 	// Hidden is the reviewer's hidden-from-view suggestion set, loaded from the
 	// server-owned .prereview/hidden-suggestions.jsonl every Mount (the file is
 	// the source of truth — not lvt:"persist"). A pure view filter applied in

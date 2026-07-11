@@ -34,8 +34,9 @@ const ProcessedFileName = "processed.jsonl"
 // processed.jsonl.
 const ReenqueuedFileName = "reenqueued.jsonl"
 
-// ProcessedMark is one line of processed.jsonl: the comment ID the agent
-// addressed plus an informational timestamp (the server only uses ID).
+// ProcessedMark is one line of an agent-owned marks file (processed.jsonl for
+// done'd comments, applied.jsonl for applied suggestions): the target ID the
+// agent acted on plus an informational timestamp (the server only uses ID).
 type ProcessedMark struct {
 	ID string `json:"id"`
 	At string `json:"at,omitempty"`

@@ -112,7 +112,7 @@ func TestFollowEvents_RealEmitterContract(t *testing.T) {
 		t.Fatalf("EmitReady: %v", err)
 	}
 	c := review.Comment{ID: "c1", File: "a.go", FromLine: 1, ToLine: 1, Side: "new", Body: "fix this", Created: ts}
-	if err := es.EmitSnapshot([]review.Comment{c}, nil, nil, nil, false, ts); err != nil {
+	if err := es.EmitSnapshot([]review.Comment{c}, nil, nil, nil, nil, false, ts); err != nil {
 		t.Fatalf("EmitSnapshot: %v", err)
 	}
 	if err := es.EmitEnd(ts); err != nil {

@@ -274,6 +274,11 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// DecisionsBySuggestion, so a revised suggestion drops its stale verdict.
 	c.applyDecisions(&state)
 
+	// Load the agent's applied-suggestion acks (#159, .prereview/applied.jsonl): an
+	// accepted suggestion the agent has written to disk renders "applied" and drops
+	// from the actionable snapshot. Cheap by-id set, like applyProcessed.
+	state.Applied = loadAppliedSet(c.CSVPath)
+
 	// Load the reviewer's hidden-from-view set (server-owned
 	// .prereview/hidden-suggestions.jsonl). Filtered out of every render surface
 	// in visibleSuggestions, fingerprint-gated so a revised suggestion un-hides.
