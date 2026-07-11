@@ -1592,7 +1592,7 @@
              They converge — the server re-render emits the same class from CollapsedRows
              (server wins on morph), matching the optimistic flip. */ -}}
       {{- if or $hasComment $hasSuggestion -}}
-      <button type="button" class="line-marks"
+      <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}"
               lvt-el:toggleClass:on:click="cards-collapsed"
               data-lvt-target="closest:.line-row"
               lvt-on:click="toggleLineCollapse"
