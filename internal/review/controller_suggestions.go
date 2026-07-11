@@ -105,6 +105,33 @@ func (c *PrereviewController) ToggleSuggestionExpand(state PrereviewState, ctx *
 	return state, nil
 }
 
+// RequestRevert asks the agent to UNDO an already-applied accept (#159 M4.2): it sets
+// the Revert flag on the suggestion's accept decision, so the next snapshot carries it
+// to the agent as verdict="revert". The agent restores the original text on disk and
+// acks with `prereview reverted <id>` — that drops the suggestion out of the applied
+// set, at which point DecisionsBySuggestion filters the now-revert-complete decision
+// back to undecided. prereview still never writes the file itself; the agent does.
+func (c *PrereviewController) RequestRevert(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == "" {
+		return state, fmt.Errorf("requestRevert: missing id")
+	}
+	next := slices.Clone(state.Decisions)
+	found := false
+	for i := range next {
+		if next[i].SuggestionID == id {
+			next[i].Revert = true
+			found = true
+		}
+	}
+	if !found {
+		slog.Warn("revert on suggestion with no decision", "id", id)
+		return state, nil
+	}
+	c.commitDecisions(&state, next)
+	return state, nil
+}
+
 // RejectSuggestion records a "reject" verdict.
 func (c *PrereviewController) RejectSuggestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RevisingSuggestionID = ""

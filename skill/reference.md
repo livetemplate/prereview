@@ -50,6 +50,7 @@ for its own flags, or `prereview help` for the top-level list.
 | `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](#suggested-edits). |
 | `prereview reply <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment **or** suggestion, so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. See [Threads](#threads). |
 | `prereview applied <suggestion-id>...` | Ack that you applied an **accepted** suggestion's edit to the file, so the UI marks it "applied" and drops it from the snapshot. Ids come from a snapshot's `suggestions[]` (`verdict=accept`); validated against suggestions. Idempotent. |
+| `prereview reverted <suggestion-id>...` | Ack that you **reverted** an applied suggestion — restored its `original` text after the reviewer asked to undo the accept (delivered as `verdict=revert`). Nets the suggestion back out of "applied" → the card returns to undecided. Validated against suggestions. Idempotent. |
 
 ## stdout protocol
 
@@ -252,14 +253,18 @@ Act by `verdict`:
 
 - **`accept`** — apply the edit: replace `original` with `proposed` at
   `file`:`from_line`–`to_line`. You own the file write (prereview never edits the user's
-  files). Once applied, the suggestion re-anchors as `outdated` and **drops off future
-  snapshots** — so you won't re-apply it.
+  files). Then **`prereview applied "<id>"`** to ack it — that flips the card to "applied"
+  and drops it from future snapshots (re-acking is harmless).
 - **`reject`** — the user declined it. **Drop it** — do not apply, do not re-submit.
   (It keeps reappearing; dedupe by `id` and skip it, like a handled comment.)
 - **`revise`** — the user wants a different take; `note` says how. Rework and
   **re-submit via `prereview suggest` with the SAME `id`** and new `proposed`. That
   revision resets the decision (the box goes back to undecided) and replaces the old
   snapshot entry.
+- **`revert`** — the user wants an edit you already applied UNDONE. The file holds your
+  applied `proposed`; **restore `original` over it** (the inverse), then
+  **`prereview reverted "<id>"`** to ack. That nets it back out of "applied" and returns
+  the card to undecided. Idempotent per `id`.
 
 Every emitted entry has `anchor_status` **`ok`** or **`moved`** — both carry
 trustworthy `from_line`/`to_line` (a `moved` suggestion was already re-anchored). An

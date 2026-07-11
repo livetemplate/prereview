@@ -31,7 +31,8 @@ func (c *PrereviewController) agentSignalFingerprint() string {
 		statusFingerprint(c.processedPath()) + "|" +
 		statusFingerprint(c.suggestionsPath()) + "|" +
 		statusFingerprint(AgentRepliesPath(c.CSVPath)) + "|" +
-		statusFingerprint(AppliedPath(c.CSVPath))
+		statusFingerprint(AppliedPath(c.CSVPath)) + "|" +
+		statusFingerprint(RevertedPath(c.CSVPath))
 }
 
 // applyLLMStatus refreshes the LLM-status fields on state from the status file.

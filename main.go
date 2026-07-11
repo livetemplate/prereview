@@ -27,6 +27,7 @@ const topUsage = `Usage: prereview [flags] [path]
 Subcommands (for the coding agent; each takes --out <REPO>):
   comments   list the review's comments (--json for the queue-snapshot shape; --all for resolved too)
   applied    ack that you applied an accepted suggestion's edit to disk (validated against suggestions)
+  reverted   ack that you reverted an applied suggestion (restored its original text after a revert request)
   done       mark comments worked on (validated against comments.csv; --file -/--all-open)
   reply      post a thread reply on a comment or suggestion so the reviewer sees what you did (--body/--file)
   status     echo the agent's status to the review UI: status <working|done> [message]
@@ -119,6 +120,14 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "applied" {
 		if err := runApplied(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview applied:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "reverted" {
+		if err := runReverted(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview reverted:", err)
 			os.Exit(1)
 		}
 		return

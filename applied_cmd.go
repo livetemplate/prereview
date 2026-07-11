@@ -19,17 +19,24 @@ import (
 // carry the same `verdict:accept` before the ack lands. Ids come from a snapshot's
 // `suggestions[]` (the ones with `verdict:accept`).
 func runApplied(args []string) error {
-	fs := flag.NewFlagSet("applied", flag.ContinueOnError)
+	return runMarkAck("applied", appliedUsage, review.AppliedFileName, "applied", args)
+}
+
+const appliedUsage = "Usage: prereview applied [--out <dir>] [--file <f>|-] <suggestion-id>...\n\n" +
+	"  Acknowledge that you APPLIED an accepted suggestion's edit to the file, so\n" +
+	"  the review UI marks it \"applied\" and stops showing it as work. Run by the\n" +
+	"  coding agent after writing the edit. Ids come from a snapshot's suggestions[]\n" +
+	"  (verdict=accept); each is validated against the review's suggestions.\n"
+
+// runMarkAck is the shared body of the suggestion agent-acks (`applied` and
+// `reverted`): gather ids (positional + --file/-), validate them against the review's
+// suggestions, and append them to the named agent-owned marks file. The two verbs
+// differ only in flag-set name, usage text, the marks file, and the reported noun.
+func runMarkAck(name, usage, fileName, noun string, args []string) error {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
 	file := fs.String("file", "", "read suggestion ids from this file, or \"-\" for stdin (bare ids, a JSON array, or JSONL objects with an \"id\")")
-	fs.Usage = func() {
-		fmt.Fprint(fs.Output(),
-			"Usage: prereview applied [--out <dir>] [--file <f>|-] <suggestion-id>...\n\n"+
-				"  Acknowledge that you APPLIED an accepted suggestion's edit to the file, so\n"+
-				"  the review UI marks it \"applied\" and stops showing it as work. Run by the\n"+
-				"  coding agent after writing the edit. Ids come from a snapshot's suggestions[]\n"+
-				"  (verdict=accept); each is validated against the review's suggestions.\n")
-	}
+	fs.Usage = func() { fmt.Fprint(fs.Output(), usage) }
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -60,10 +67,10 @@ func runApplied(args []string) error {
 	if err := validateAppliedTargets(csvPath, ids); err != nil {
 		return err
 	}
-	if err := appendMarks(dir, review.AppliedFileName, ids); err != nil {
+	if err := appendMarks(dir, fileName, ids); err != nil {
 		return err
 	}
-	fmt.Printf("marked %d suggestion(s) as applied\n", len(ids))
+	fmt.Printf("marked %d suggestion(s) as %s\n", len(ids), noun)
 	return nil
 }
 

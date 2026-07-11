@@ -106,7 +106,7 @@ type StreamDecision struct {
 	FromLine     int    `json:"from_line"`
 	ToLine       int    `json:"to_line"`
 	Side         string `json:"side"`
-	Verdict      string `json:"verdict"` // accept | reject | revise
+	Verdict      string `json:"verdict"` // accept | reject | revise | revert (#159 M4.2, wire-only)
 	Note         string `json:"note,omitempty"`
 	Original     string `json:"original"`
 	Proposed     string `json:"proposed"`
@@ -124,13 +124,22 @@ type StreamDecision struct {
 func actionableDecisions(suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool) []StreamDecision {
 	out := make([]StreamDecision, 0, len(decided))
 	for _, sg := range suggestions {
-		if sg.AnchorOutdated() || applied[sg.ID] {
+		d, isDecided := decided[sg.ID]
+		// #159 M4.2: a revert-PENDING suggestion (the reviewer asked to undo an applied
+		// accept) must reach the agent EVEN THOUGH it's applied+outdated — that's the
+		// whole point. decided is already effective (DecisionsBySuggestion drops
+		// revert-complete), so d.Revert here ⟹ still applied ⟹ genuinely pending.
+		revertPending := isDecided && d.Revert
+		if !revertPending && (sg.AnchorOutdated() || applied[sg.ID]) {
 			continue // outdated, or already applied by the agent (#159) → nothing to do
 		}
-		d, isDecided := decided[sg.ID]
 		thread := threadByID[sg.ID]
 		if !isDecided && !hasUnreadReviewerReply(thread) {
 			continue // undecided and no reviewer reply → nothing for the agent
+		}
+		verdict := d.Verdict
+		if revertPending {
+			verdict = verdictRevert // restore Original over the applied Proposed, then `prereview reverted`
 		}
 		out = append(out, StreamDecision{
 			ID:           sg.ID,
@@ -138,7 +147,7 @@ func actionableDecisions(suggestions []Suggestion, decided map[string]Suggestion
 			FromLine:     sg.FromLine,
 			ToLine:       sg.ToLine,
 			Side:         sg.Side,
-			Verdict:      d.Verdict,
+			Verdict:      verdict,
 			Note:         d.Note,
 			Original:     sg.OriginalText,
 			Proposed:     sg.ProposedText,

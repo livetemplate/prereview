@@ -405,6 +405,15 @@ func (s PrereviewState) DecisionsBySuggestion() map[string]SuggestionDecision {
 	out := make(map[string]SuggestionDecision)
 	for _, sg := range s.Suggestions {
 		if d, ok := byID[sg.ID]; ok && d.Fingerprint == suggestionFingerprint(sg) {
+			// #159 M4.2: a revert the agent already COMPLETED (Revert set, but the
+			// suggestion is no longer applied — appliedCount<=revertedCount) drops back
+			// to UNDECIDED. Revert-PENDING ones (still applied) stay, so the agent still
+			// sees the task and the card shows "reverting". The stale Revert=true row in
+			// decisions.jsonl self-cleans on the next commitDecisions rewrite. This is the
+			// single chokepoint — the map feeds BOTH the template and the agent snapshot.
+			if d.Revert && !s.Applied[sg.ID] {
+				continue
+			}
 			out[sg.ID] = d
 		}
 	}
