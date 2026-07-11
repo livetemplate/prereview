@@ -138,6 +138,12 @@ type PrereviewState struct {
 	// truth — not lvt:"persist"). Grouped by target ID in Threads() for render.
 	ThreadEntries []ThreadEntry `json:"thread_entries"`
 
+	// Prompts is the #147 "ask for suggestions" library — built-in templates plus the
+	// user's ~/.config/prereview/prompts/ overlay — loaded every Mount (not
+	// lvt:"persist"). Rendered in the file-header picker; picking one pre-fills the
+	// file-comment composer.
+	Prompts []Prompt `json:"prompts"`
+
 	// RevisingSuggestionID is the suggestion whose inline "request revision" note
 	// form is open (mirrors EditingCommentID); RevisionDraft holds the in-progress
 	// note so it survives reconnects. Empty = no revision form open.

@@ -59,6 +59,11 @@ type PrereviewController struct {
 	// end event) instead of "Quit". Set once by main.go.
 	AgentMode bool
 
+	// PromptsDir is the user's "ask for suggestions" prompt overlay directory
+	// (~/.config/prereview/prompts), set once by main.go. Read every Mount and
+	// merged with the embedded built-ins in LoadPrompts. "" = built-ins only.
+	PromptsDir string
+
 	// Emitter is the agent-mode JSON event log writer (stdout +
 	// .prereview/events.jsonl). Non-nil only in agent mode; the emit path and
 	// EndSession guard on nil so non-agent sessions emit nothing.
@@ -278,6 +283,11 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// + sorted) so each comment/suggestion card renders its thread. Cheap
 	// append-only read, like applySuggestions; the files are the source of truth.
 	state.ThreadEntries = loadThreads(c.CSVPath)
+
+	// Load the #147 "ask for suggestions" prompts (embedded built-ins + the user's
+	// overlay dir) for the file-header picker. Cheap; refreshed each connect so a
+	// user's edits to their prompt files show without a relaunch.
+	state.Prompts = LoadPrompts(c.PromptsDir)
 
 	// AgentMode is mirror-only: refresh from the controller every connect so a
 	// binary launched with --agent renders the right button even after a

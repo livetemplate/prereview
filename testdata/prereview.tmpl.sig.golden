@@ -747,6 +747,17 @@
     </form>
     {{end}}
     
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
+    <div class="tb-dropdown prompts-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="prompts-trigger" aria-haspopup="menu" title="Ask the agent for suggestions using a prebuilt prompt">{{template "iconSuggestion"}}<span class="prompts-trigger-label">Ask for suggestions</span></button>
+      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
+        {{range $.Prompts}}
+        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    
     {{if $.Versions}}
     <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
       <button type="button" class="versions-trigger" aria-haspopup="menu" title="Versions of this file — view or roll back to a previous version">{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>

@@ -311,6 +311,15 @@ func (c *PrereviewController) OpenFileComment(state PrereviewState, ctx *livetem
 	if state.SelectedFile == "" {
 		return state, fmt.Errorf("openFileComment: no file selected")
 	}
+	resetToFileComment(&state)
+	return state, nil
+}
+
+// resetToFileComment clears every selection/edit field and opens a fresh whole-file
+// composer (CommentMode=file). Shared by OpenFileComment and PickPrompt. It does NOT
+// touch DraftBody — OpenFileComment leaves an in-progress draft intact; PickPrompt
+// overwrites it with the prompt afterwards.
+func resetToFileComment(state *PrereviewState) {
 	state.CommentMode = commentKindFile
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
@@ -320,6 +329,30 @@ func (c *PrereviewController) OpenFileComment(state PrereviewState, ctx *livetem
 	state.EditingCommentID = ""
 	state.ReanchorCommentID = ""
 	state.MoreMenuOpen = false
+}
+
+// PickPrompt opens a file-level comment PRE-FILLED with a chosen "ask for suggestions"
+// prompt (#147): it mirrors OpenFileComment, then seeds DraftBody with the prompt's
+// body, so the reviewer sees the instruction in the composer, can tweak/scope it, and
+// hits Save — creating an ordinary kind=file comment the agent answers with
+// `prereview suggest`. An unknown slug is a no-op (a stale picker click).
+func (c *PrereviewController) PickPrompt(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if state.SelectedFile == "" {
+		return state, fmt.Errorf("pickPrompt: no file selected")
+	}
+	slug := ctx.GetString("slug")
+	var body string
+	for _, p := range state.Prompts {
+		if p.Slug == slug {
+			body = p.Body
+			break
+		}
+	}
+	if body == "" {
+		return state, nil // unknown/stale slug
+	}
+	resetToFileComment(&state)
+	state.DraftBody = body // pre-fill the composer with the prompt
 	return state, nil
 }
 
