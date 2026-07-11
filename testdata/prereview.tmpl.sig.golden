@@ -1056,7 +1056,10 @@
       <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
       <button type="submit" name="postReply">Send reply</button>
     </div>
-  </form>{{else}}<div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>{{end}}{{if $applied}}<div class="sg-actions"><small class="sg-applied-status">Edit applied to the file.</small></div>{{else}}{{if not .AnchorOutdated}}{{if eq $.RevisingSuggestionID .ID}}<form method="POST" class="sg-revise-form" lvt-form:preserve lvt-on:keydown="submitRevision" lvt-key="Mod+Enter">
+  </form>{{else}}<div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>{{end}}{{if $applied}}{{if $d.Revert}}<div class="sg-actions"><small class="sg-applied-status sg-reverting">Reverting — the agent will restore the original text.</small></div>{{else}}<div class="sg-actions">
+    <small class="sg-applied-status">Edit applied to the file.</small>
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevert" class="outline sg-revert-btn">Revert</button></form>
+  </div>{{end}}{{else}}{{if not .AnchorOutdated}}{{if eq $.RevisingSuggestionID .ID}}<form method="POST" class="sg-revise-form" lvt-form:preserve lvt-on:keydown="submitRevision" lvt-key="Mod+Enter">
     <input type="hidden" name="id" value="{{.ID}}">
     <textarea name="note" placeholder="What should change?" lvt-on:input="saveRevisionDraft" lvt-mod:debounce="200" lvt-autofocus>{{$.RevisionDraft}}</textarea>
     <div class="sg-actions">

@@ -271,6 +271,11 @@ On each snapshot, `suggestions[]` is a full snapshot of every decided suggestion
 - **`reject`** — drop it; do not apply or re-submit. Dedupe by `id` and skip it.
 - **`revise`** — rework the edit and **re-submit via `prereview suggest` with the SAME
   `id`** and new `proposed` text; that resets the box to undecided for re-review.
+- **`revert`** — the reviewer changed their mind about an edit you already applied. The
+  file currently holds your applied `proposed` text; **restore the `original` text over
+  it** (the inverse of the accept), then **`prereview reverted "<id>"`** to ack. That
+  nets the suggestion back out of "applied" and returns the reviewer's card to undecided.
+  Idempotent per `id`, same as `applied`.
 
 After processing, run `prereview status --out "<REPO>" done` and go read the next event.
 

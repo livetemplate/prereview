@@ -22,14 +22,37 @@ func AppliedPath(csvPath string) string {
 // loadAppliedSet reads the applied-marks file into a set of suggestion ids. Reuses the
 // append-only {"id":…} marks loader (loadMarkCounts); any recorded id is applied. Nil
 // when none, so a missing key indexes to false.
+//
+// #159 M4.2: "applied" is NET of reverts. Both files are agent-owned append-only
+// tallies read by loadMarkCounts, so a suggestion is live-on-disk iff the agent has
+// applied it more times than it has reverted it (appliedCount > revertedCount). This
+// count arithmetic handles the whole accept→apply→revert→re-accept→re-apply cycle
+// with no cancellation bookkeeping — each revert just decrements the derived flag.
 func loadAppliedSet(csvPath string) map[string]bool {
-	counts := loadMarkCounts(AppliedPath(csvPath))
-	if len(counts) == 0 {
+	applied := loadMarkCounts(AppliedPath(csvPath))
+	if len(applied) == 0 {
 		return nil
 	}
-	out := make(map[string]bool, len(counts))
-	for id := range counts {
-		out[id] = true
+	reverted := loadMarkCounts(RevertedPath(csvPath))
+	out := make(map[string]bool, len(applied))
+	for id, n := range applied {
+		if n > reverted[id] {
+			out[id] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
+}
+
+// RevertedFileName is the agent-written, append-only revert-ack file: one {"id":…}
+// line each time the agent RESTORES an applied suggestion's original text to disk
+// (via `prereview reverted <id>`), the mirror of applied.jsonl. See loadAppliedSet
+// for how the two counts net out to the live "applied" state.
+const RevertedFileName = "reverted.jsonl"
+
+// RevertedPath returns the revert-marks path for a store whose CSV lives at csvPath.
+func RevertedPath(csvPath string) string {
+	return filepath.Join(filepath.Dir(csvPath), RevertedFileName)
 }

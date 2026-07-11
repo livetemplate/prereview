@@ -447,9 +447,19 @@
          decision-clear that desyncs file vs. state. The rest is hidden for outdated
          suggestions (can't act on a stale target; the LLM re-derives it on hand-off). */ -}}
   {{- if $applied -}}
-  {{- /* No collapse button here — the right-margin ✦ badge is the sole expand/collapse
-         toggle. Just the applied status (Revert joins it in M4.2). */ -}}
-  <div class="sg-actions"><small class="sg-applied-status">Edit applied to the file.</small></div>
+  {{- /* Applied surface. No collapse button — the right-margin ✦ badge is the sole
+         expand/collapse toggle. #159 M4.2: while a revert is pending (Revert set, agent
+         hasn't restored yet) show a waiting note; otherwise the applied status + a Revert
+         button that asks the agent to restore the original (the agent writes the file,
+         never prereview). */ -}}
+  {{- if $d.Revert -}}
+  <div class="sg-actions"><small class="sg-applied-status sg-reverting">Reverting — the agent will restore the original text.</small></div>
+  {{- else -}}
+  <div class="sg-actions">
+    <small class="sg-applied-status">Edit applied to the file.</small>
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevert" class="outline sg-revert-btn">Revert</button></form>
+  </div>
+  {{- end -}}
   {{- else if not .AnchorOutdated -}}
   {{- if eq $.RevisingSuggestionID .ID -}}
   {{- /* inline "request revision" note form. Not `required` so Cancel doesn't trip

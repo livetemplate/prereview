@@ -34,11 +34,14 @@ import (
 // under .prereview/. Durable across launches (openStore does NOT reset it).
 const SuggestionDecisionFileName = "suggestion-decisions.jsonl"
 
-// Decision verdicts. "revise" carries a Note (the requested change).
+// Decision verdicts. "revise" carries a Note (the requested change). accept/reject/
+// revise are STORED on a decision; "revert" is wire-output only (#159 M4.2) — a
+// revert-pending accept is emitted to the agent with this verdict, never stored.
 const (
 	verdictAccept = "accept"
 	verdictReject = "reject"
 	verdictRevise = "revise"
+	verdictRevert = "revert"
 )
 
 // SuggestionDecision is the reviewer's recorded verdict on one suggestion.
@@ -51,6 +54,13 @@ type SuggestionDecision struct {
 	// lets ClearSuggestionDecision re-open the whole group when the accept is
 	// undone (radio-button semantics). Invisible to the LLM — a reject is a reject.
 	Auto        bool      `json:"auto,omitempty"`
+	// Revert marks that the reviewer asked to UNDO an already-applied accept (#159
+	// M4.2): the verdict stays "accept" but the agent must restore the original text
+	// on disk. Set by RequestRevert, surfaced to the agent as verdict="revert", and
+	// self-clears once the agent acks (`reverted` drops the suggestion out of the
+	// applied set → DecisionsBySuggestion filters the now-revert-complete decision
+	// back to undecided).
+	Revert      bool      `json:"revert,omitempty"`
 	Fingerprint string    `json:"fingerprint"` // of the suggestion content decided on
 	Created     time.Time `json:"created"`
 }
