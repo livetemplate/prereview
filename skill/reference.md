@@ -212,6 +212,14 @@ The agent proposes edits with `prereview suggest` (a JSON payload — a single o
 JSON array, or newline-delimited objects — on stdin or via `--file`). It appends to
 `<REPO>/.prereview/suggestions.jsonl`; the running UI picks them up live (no restart).
 
+**Prompt entry point (#147).** The reviewer's file-header "Ask for suggestions" picker
+sends a prebuilt prompt as an ordinary `kind=file` comment whose body asks for
+suggestions. The agent answers it with `prereview suggest` (proposing, not editing the
+file), then `done`s the prompt and `reply`s a one-line summary — see the SKILL's
+*Suggested edits → Prompts*. Users add their own prompts as `.md` files in
+`~/.config/prereview/prompts/` (first `# Heading` = the picker title, the rest = the
+prompt body); they override the built-ins by filename.
+
 Fields per suggestion:
 
 - `id` — **stable, your choice.** Re-submitting the same `id` *revises* it (last write

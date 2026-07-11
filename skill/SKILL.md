@@ -233,6 +233,15 @@ edits", "propose tighter wording". Each suggestion renders as an inline box (a
 before→after mini-diff) that the user acts on; their decision comes back in the next
 snapshot's `suggestions[]`.
 
+**Prompts (`#147`).** The reviewer can also send a prebuilt prompt from the file header
+("Ask for suggestions"). It arrives as a normal `kind=file` comment whose body asks you
+to *suggest* edits (e.g. "review this file's grammar … propose each change as a
+`prereview suggest` edit — do not modify files directly"). Treat it as a suggest
+request: read the file, propose the edits with `prereview suggest` (**do not edit the
+file** — the reviewer accepts/rejects each box), then `done` the prompt comment and
+`reply` a one-line summary ("proposed N edits below"). This is the one case where a
+comment wants **suggestions, not a direct fix** — the body says so; follow it.
+
 Submit a JSON payload — a single object, a JSON array, or newline-delimited objects —
 on stdin or via `--file`. The running UI picks them up live (no restart):
 
