@@ -1584,14 +1584,16 @@
     {{$rowkey := printf "%d-%s" $ln $lside -}}
     {{$commentCount := index $.CommentCountLines $rowkey -}}
     {{$suggestionCount := index $.SuggestionCountLines $rowkey -}}
+    {{$appliedCount := index $.AppliedBadgeLines $rowkey -}}
     {{$hasComment := gt $commentCount 0 -}}
     {{$hasSuggestion := gt $suggestionCount 0 -}}
+    {{$hasApplied := gt $appliedCount 0 -}}
     {{- /* #112: the row's collapse state is now SERVER state (CollapsedRows, persisted)
            so it survives a browser refresh — the old client-only .cards-collapsed was
            lost on reload and hidden cards reappeared. $lkey ("L<old>-<new>") is the
            per-file rowkey; defined here so the class below can read it. */ -}}
     {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
-    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.CollapsedRows $lkey}} cards-collapsed{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
+    <div class="line-row{{if or $hasComment $hasSuggestion $hasApplied}} has-line-marks{{end}}{{if index $.CollapsedRows $lkey}} cards-collapsed{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
       {{- /* A selectable div (not <button>): <button> content is non-
              selectable in UA styles, which would block native text selection.
@@ -1620,17 +1622,27 @@
              lvt-on persists it via the server action (#112) so it survives a refresh.
              They converge — the server re-render emits the same class from CollapsedRows
              (server wins on morph), matching the optimistic flip. */ -}}
-      {{- if or $hasComment $hasSuggestion -}}
-      <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}"
-              lvt-el:toggleClass:on:click="cards-collapsed"
-              data-lvt-target="closest:.line-row"
-              lvt-on:click="toggleLineCollapse"
-              data-rowkey="{{$lkey}}"
-              aria-label="Toggle comments and suggestions on this line"
-              title="Toggle comments/suggestions on this line">
-        {{- if $hasComment}}<span class="line-mark line-mark-comment" aria-hidden="true">{{$commentCount}}</span>{{end -}}
-        {{- if $hasSuggestion}}<span class="line-mark line-mark-suggestion" aria-hidden="true">{{$suggestionCount}}</span>{{end -}}
-      </button>
+      {{- if or $hasComment $hasSuggestion $hasApplied -}}
+      <span class="line-margin">
+        {{- if or $hasComment $hasSuggestion -}}
+        <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}"
+                lvt-el:toggleClass:on:click="cards-collapsed"
+                data-lvt-target="closest:.line-row"
+                lvt-on:click="toggleLineCollapse"
+                data-rowkey="{{$lkey}}"
+                aria-label="Toggle comments and suggestions on this line"
+                title="Toggle comments/suggestions on this line">
+          {{- if $hasComment}}<span class="line-mark line-mark-comment" aria-hidden="true">{{$commentCount}}</span>{{end -}}
+          {{- if $hasSuggestion}}<span class="line-mark line-mark-suggestion" aria-hidden="true">{{$suggestionCount}}</span>{{end -}}
+        </button>
+        {{- end -}}
+        {{- /* #159 M4.3b: one ✦ badge per APPLIED suggestion — always present (the badge
+               IS the expand/collapse toggle, marked is-expanded while the box is peeked
+               open). An applied suggestion auto-collapses; clicking ✦ toggles its inline
+               box (toggleSuggestionExpand). Side-gated like the boxes so a modified line's
+               old/new rows don't each render it. */ -}}
+        {{- range (index $.AppliedByLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}<form method="POST" class="applied-badge-form"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleSuggestionExpand" class="line-mark applied-badge{{if index $.ExpandedSuggestions .ID}} is-expanded{{end}}" title="{{if index $.ExpandedSuggestions .ID}}Collapse{{else}}Show{{end}} the applied edit ({{.LineSpan}})" aria-label="Show or hide the applied suggestion">✦</button></form>{{end}}{{end -}}
+      </span>
       {{- end -}}
       {{- /* comments anchored to this line (on THIS side), then the composer when
              this line+side is selected — both gated on $lside so a modified line's

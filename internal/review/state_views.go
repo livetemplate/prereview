@@ -157,35 +157,85 @@ func (s PrereviewState) HiddenSuggestionCount() int {
 	return n
 }
 
-// SuggestionsByEndLine groups the selected file's suggestions by ToLine, so the
-// template can inline each suggestion box right after its trailing line — exactly
-// like CommentsByEndLine does for comments. Zero-arg (the framework only
-// pre-computes zero-arg methods). Returns nil when suggestions are toggled off
-// (HideSuggestions) so the whole surface disappears with one flag.
-func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
+// suggestionCollapsed reports that an APPLIED suggestion is collapsed to its
+// right-margin ✦ badge (#159 M4.3b) — the default for an applied edit, unless the
+// reviewer expanded it to peek (ExpandedSuggestions). Only applied ids ever
+// collapse; an accepted-pending or undecided suggestion always renders inline.
+func (s PrereviewState) suggestionCollapsed(id string) bool {
+	return s.Applied[id] && !s.ExpandedSuggestions[id]
+}
+
+// suggestionsGroupedBy groups the selected file's visible suggestions by ToLine,
+// keeping only those the predicate accepts. Nil when suggestions are toggled off
+// (HideSuggestions) or none match. Shared by the zero-arg public views below (the
+// framework only pre-computes zero-arg methods, so this stays private). The three
+// views over it — inline boxes, ✦ applied badges, green count — use three different
+// predicates rather than one complement, because an applied suggestion that's
+// expanded shows in BOTH the inline set (the peek) and the ✦ set (the toggle).
+func (s PrereviewState) suggestionsGroupedBy(keep func(Suggestion) bool) map[int][]Suggestion {
 	if s.SelectedFile == "" || s.HideSuggestions {
 		return nil
 	}
 	out := make(map[int][]Suggestion)
 	for _, sg := range s.visibleSuggestions() {
-		if sg.File != s.SelectedFile {
+		if sg.File != s.SelectedFile || !keep(sg) {
 			continue
 		}
 		out[sg.ToLine] = append(out[sg.ToLine], sg)
 	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 
-// CommentCountLines / SuggestionCountLines report, per line-row (keyed
-// "<toLine>-<side>", e.g. "4-new"), HOW MANY comments / suggestions render on that
-// row — driving the #151 right-margin count badges (and, via count>0, the #136
-// presence marks). Derived from the SAME filtered maps the cards render from
-// (CommentsByEndLine / SuggestionsByEndLine), so a badge's number always equals the
-// cards actually rendered on that row — side, individually-hidden, the global
-// suggestions toggle, resolved filter, and file scope are all inherited. Zero-arg so
-// the framework pre-computes them (a method WITH an arg silently breaks rendering);
-// the row looks itself up as {{index $.CommentCountLines (printf "%d-%s" $ln $lside)}}.
-// Nil when none, so a missing key indexes to 0.
+// countByLine collapses a by-ToLine suggestion grouping into per-row counts keyed
+// "<toLine>-<side>" (both sides for a whole-line suggestion), driving the right-
+// margin badges. Nil when empty.
+func countByLine(byLine map[int][]Suggestion) map[string]int {
+	out := map[string]int{}
+	for ln, sgs := range byLine {
+		for _, sg := range sgs {
+			countRowSides(out, ln, sg.Side)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// SuggestionsByEndLine groups the selected file's INLINE suggestion boxes by ToLine,
+// so the template renders each right after its trailing line — like CommentsByEndLine
+// does for comments. A suggestion renders inline unless it's a collapsed applied one
+// (Applied && !Expanded) — those show only as a right-margin ✦ badge (AppliedByLine).
+func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
+	return s.suggestionsGroupedBy(func(sg Suggestion) bool { return !s.suggestionCollapsed(sg.ID) })
+}
+
+// AppliedByLine groups the selected file's APPLIED suggestions by ToLine — one ✦
+// badge each in the right margin, ALWAYS present for an applied suggestion (whether
+// collapsed or expanded), because the badge IS the expand/collapse toggle. The
+// template marks the badge is-expanded when the box is currently peeked open.
+func (s PrereviewState) AppliedByLine() map[int][]Suggestion {
+	return s.suggestionsGroupedBy(func(sg Suggestion) bool { return s.Applied[sg.ID] })
+}
+
+// AppliedBadgeLines reports, per line-row, how many ✦ applied badges render there —
+// the presence gate for the right-margin container. Zero-arg; nil when none.
+func (s PrereviewState) AppliedBadgeLines() map[string]int {
+	return countByLine(s.AppliedByLine())
+}
+
+// CommentCountLines reports, per line-row (keyed "<toLine>-<side>", e.g. "4-new"),
+// HOW MANY comments render on that row — driving the #151 right-margin count badge
+// (and, via count>0, the #136 presence marks). Derived from the SAME filtered map the
+// cards render from (CommentsByEndLine), so the badge's number always equals the cards
+// actually rendered — side, individually-hidden, resolved filter, and file scope are
+// all inherited. Zero-arg so the framework pre-computes it (a method WITH an arg
+// silently breaks rendering); the row looks itself up as
+// {{index $.CommentCountLines (printf "%d-%s" $ln $lside)}}. Nil when none, so a
+// missing key indexes to 0. (SuggestionCountLines is its counterpart below.)
 func (s PrereviewState) CommentCountLines() map[string]int {
 	out := map[string]int{}
 	for ln, cs := range s.CommentsByEndLine() {
@@ -199,17 +249,12 @@ func (s PrereviewState) CommentCountLines() map[string]int {
 	return out
 }
 
+// SuggestionCountLines counts the NON-applied suggestions per row — the green
+// "to review" badge. Applied suggestions are excluded (they show as the ✦ applied
+// badge instead, via AppliedByLine), so the two right-margin suggestion badges never
+// double-report the same suggestion, whether it's collapsed or expanded.
 func (s PrereviewState) SuggestionCountLines() map[string]int {
-	out := map[string]int{}
-	for ln, sgs := range s.SuggestionsByEndLine() {
-		for _, sg := range sgs {
-			countRowSides(out, ln, sg.Side)
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return countByLine(s.suggestionsGroupedBy(func(sg Suggestion) bool { return !s.Applied[sg.ID] }))
 }
 
 // HasMarks reports whether the selected file has any per-line comment/suggestion

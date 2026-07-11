@@ -394,7 +394,7 @@
   <header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>
     {{- if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>
     {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
-    {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
+    {{- if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}
     {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}
     {{- if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}
     {{- if eq $d.Verdict "revise"}} · <small class="sg-verdict-badge sg-revise">revision requested</small>{{end}}
@@ -413,7 +413,7 @@
     {{- if .OriginalText}}<pre class="sg-old">{{- .OriginalText -}}</pre>{{end -}}
     <pre class="sg-new">{{- .ProposedText -}}</pre>
   </div>
-  {{- if .AnchorOutdated -}}
+  {{- if and .AnchorOutdated (not $applied) -}}
   <details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{- .OriginalText -}}</pre></details>
   {{- end -}}
   {{- /* the reviewer's requested-revision note, if any */ -}}
@@ -439,9 +439,18 @@
   {{- else -}}
   <div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>
   {{- end -}}
-  {{- /* decision surface — hidden for outdated suggestions (can't act on a stale
-         target; the LLM re-derives it on hand-off) */ -}}
-  {{- if not .AnchorOutdated -}}
+  {{- /* decision surface. The applied branch is FIRST and OUTSIDE the not-outdated
+         gate: an applied edit is always anchor-outdated, so it'd otherwise be hidden
+         by that gate (as it silently was before M4.3b). It shows the applied status +
+         a collapse-to-✦-badge control; Undo is intentionally absent — undoing an
+         applied edit must REVERT the file (agent inverse-apply, M4.2), not a plain
+         decision-clear that desyncs file vs. state. The rest is hidden for outdated
+         suggestions (can't act on a stale target; the LLM re-derives it on hand-off). */ -}}
+  {{- if $applied -}}
+  {{- /* No collapse button here — the right-margin ✦ badge is the sole expand/collapse
+         toggle. Just the applied status (Revert joins it in M4.2). */ -}}
+  <div class="sg-actions"><small class="sg-applied-status">Edit applied to the file.</small></div>
+  {{- else if not .AnchorOutdated -}}
   {{- if eq $.RevisingSuggestionID .ID -}}
   {{- /* inline "request revision" note form. Not `required` so Cancel doesn't trip
          HTML validation; SubmitRevision re-opens the form on an empty note. */ -}}
@@ -459,11 +468,6 @@
       <button type="submit" name="submitRevision">Send revision</button>
     </div>
   </form>
-  {{- else if $applied -}}
-  {{- /* #159: an applied edit is in the file. No Undo here — undoing an applied edit
-         must REVERT the file (agent inverse-apply), which lands in a follow-up; a plain
-         decision-clear would desync file vs. decision. */ -}}
-  <div class="sg-actions"><small class="sg-applied-status">Edit applied to the file.</small></div>
   {{- else if $d.Verdict -}}
   <div class="sg-actions">
     {{- if eq $d.Verdict "revise"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevision" class="outline">Edit note</button></form>{{end -}}
