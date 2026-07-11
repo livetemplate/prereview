@@ -1779,6 +1779,16 @@ header.file-head .file-head-comment button svg { display: block; }
 }
 /* Hover / collapsed give the whole button a pill-shaped affordance. */
 .line-marks:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+/* #149: a small accent dot on a row's badge when a comment/suggestion there is
+   awaiting the agent (the reviewer replied last). .line-marks is already
+   position:absolute, so it is the containing block for this ::after — no extra
+   `position` needed (and adding one would shift the badge on unread rows). */
+.line-marks.has-unread::after {
+  content: ""; position: absolute; top: -1px; right: -1px;
+  width: 6px; height: 6px; border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--surface);
+}
 /* Clicking a badge collapses that line's inline cards (pure-client lvt-el toggle);
    the badges stay as the compact signal that they're there. */
 .line-row.cards-collapsed .inline-comment,

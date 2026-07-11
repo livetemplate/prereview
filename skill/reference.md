@@ -11,6 +11,7 @@ this file is the lookup for **what every value means**.
 - [Exit codes](#exit-codes)
 - [Filesystem layout](#filesystem-layout)
 - [Agent mode](#agent-mode) — the event stream (`ready` / `snapshot` / `end`)
+- [Threads](#threads) — the two-way reviewer↔agent conversation (`prereview reply`)
 - [Suggested edits](#suggested-edits)
 - [Comment data](#comment-data) — kinds, resolved, re-anchoring
 - [CSV schema](#csv-schema)
@@ -47,6 +48,7 @@ for its own flags, or `prereview help` for the top-level list.
 | `prereview done [--file <f>\|-] [--all-open] <id>...` | Mark comments **done** (badge them in the UI). Ids come from args, `--file`/stdin (bare ids, a JSON array, or JSONL objects with an `id`), or `--all-open` (the whole actionable set). Each explicit id is **validated against `comments.csv`** — an unknown id fails with a non-zero exit and is not recorded. |
 | `prereview status <working\|done> [message]` | Echo the agent's status to the review UI (a live pill across every open tab): `working` while applying a batch, `done` when finished. Writes `llm-status.json` atomically. |
 | `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](#suggested-edits). |
+| `prereview reply <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment **or** suggestion, so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. See [Threads](#threads). |
 
 ## stdout protocol
 
@@ -144,7 +146,9 @@ Three event types:
   still-actionable queue** (a superset, not a delta): act only on the **latest** and
   **dedupe by `id`**. Fields: `event, seq, ts, comments[], suggestions[]`. `comments`
   and `suggestions` are always present (`[]` when empty). The snapshot is pre-filtered
-  to actionable rows (no resolved, no outdated, no draft). While the reviewer has the
+  to what needs you: unresolved, non-outdated, non-draft comments — **plus** any
+  resolved comment the reviewer just replied on (see [Threads](#threads)); an item you
+  replied on last drops out until the reviewer speaks again. While the reviewer has the
   queue **paused** (batching), no snapshot is emitted — mutations still persist, but
   `watch` blocks — and **resume** emits ONE coalesced snapshot of everything queued.
 - **`end`** — emitted once on **End session**. The **only** terminator: stop consuming.
@@ -154,9 +158,10 @@ Every event has `event`, a monotonic `seq`, and an RFC-3339 `ts`. Each comment i
 `snapshot` mirrors the CSV columns **minus** the opaque `anchor` fingerprint and
 `resolved`, with `area` as a nested object (or `null`) — no nested JSON-in-a-string.
 Each comment carries: `id`, `kind`, `file`, `from_line`, `to_line`, `from_col`,
-`to_col`, `side`, `body`, `url`, `area`, `created_at`, `anchor_status`, and `text` (the
-exact selected substring, for `kind=text`). See [Comment data](#comment-data) for how
-to interpret them.
+`to_col`, `side`, `body`, `url`, `area`, `created_at`, `anchor_status`, `text` (the
+exact selected substring, for `kind=text`), and `thread` (the conversation, present
+only when non-empty — see [Threads](#threads)). See [Comment data](#comment-data) for
+how to interpret them.
 
 ```jsonc
 {"event":"ready","seq":0,"ts":"…","repo":"/abs/dir","csv":"/abs/dir/.prereview/comments.csv"}
@@ -165,7 +170,10 @@ to interpret them.
 {"event":"snapshot","seq":1,"ts":"…","comments":[
   {"id":"01J…","kind":"line","file":"main.go","from_line":42,"to_line":42,
    "from_col":0,"to_col":0,"side":"new","body":"rename this","url":"","area":null,
-   "created_at":"…","anchor_status":"ok"}
+   "created_at":"…","anchor_status":"ok",
+   // present only when non-empty; last entry here is the reviewer → respond to it:
+   "thread":[{"author":"agent","body":"Renamed to userToken.","at":"…"},
+             {"author":"reviewer","body":"also update the docs","at":"…"}]}
 ],"suggestions":[
   {"id":"s1","file":"docs/readme.md","from_line":12,"to_line":12,"side":"new",
    "verdict":"accept","original":"The API might returns an error.",
@@ -176,6 +184,27 @@ to interpret them.
 
 `events.jsonl` is append-only and reset on each fresh launch. The CSV stays the
 authoritative store; the stream is a convenience layer over it.
+
+## Threads
+
+A **thread** is the two-way conversation on a comment or suggestion (#149). It rides on
+each snapshot item as a `thread` array (present only when non-empty), oldest first; each
+entry is `{ "author": "agent" | "reviewer", "body": "…", "at": "<RFC3339>" }`.
+
+- **You → reviewer:** `prereview reply --out "<REPO>" <id> --body "…"` appends an
+  `agent` entry the reviewer sees under the card. Post one after addressing a comment to
+  say what you changed (alongside the `done` mark). Validated against comments +
+  suggestions, like `done`.
+- **Reviewer → you:** the reviewer replies under the card; that `reviewer` entry re-arms
+  the snapshot. When an item's **last thread entry is `reviewer`**, they're steering you
+  — respond to it, then `reply`.
+- **Unread model (why items appear/disappear).** The snapshot carries an item only when
+  it is **fresh** (no thread yet, unresolved) or its **last entry is the reviewer's**.
+  Reply, and it drops out until the reviewer speaks again — you never re-answer yourself.
+  A **resolved** comment reappears iff the reviewer replied after resolving (reopening
+  the conversation); a reply never changes `resolved` on its own.
+
+Suggestion threads work identically — a `thread` on a `suggestions[]` entry.
 
 ## Suggested edits
 

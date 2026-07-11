@@ -136,6 +136,46 @@ func TestActionableComments_UnreadOverlay(t *testing.T) {
 	}
 }
 
+// TestActionableDecisions_UnreadOverlay: a suggestion with an unread reviewer reply is
+// actionable even when undecided, and carries its thread.
+func TestActionableDecisions_UnreadOverlay(t *testing.T) {
+	sugs := []Suggestion{{ID: "s1"}, {ID: "s2"}}
+	decided := map[string]SuggestionDecision{} // neither decided
+	threads := map[string][]ThreadEntry{
+		"s1": {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "tweak it", At: 2}},
+	}
+	got := actionableDecisions(sugs, decided, threads)
+	if len(got) != 1 || got[0].ID != "s1" {
+		t.Fatalf("only the reviewer-replied suggestion should be actionable; got %+v", got)
+	}
+	if len(got[0].Thread) != 2 || got[0].Thread[1].Author != AuthorReviewer {
+		t.Errorf("actionable suggestion must carry its thread; got %+v", got[0].Thread)
+	}
+}
+
+// TestAwaitingLines maps the awaiting-agent set onto the diff rows carrying those
+// comments, so the #151 badge can show an unread dot on the right row.
+func TestAwaitingLines(t *testing.T) {
+	s := PrereviewState{
+		SelectedFile: "f",
+		Comments: []Comment{
+			{ID: "c1", File: "f", ToLine: 4, Side: "new"},
+			{ID: "c2", File: "f", ToLine: 9, Side: "new"},
+		},
+		ThreadEntries: []ThreadEntry{
+			{TargetID: "c1", Author: AuthorAgent, At: 1},
+			{TargetID: "c1", Author: AuthorReviewer, At: 2}, // c1 awaiting
+		},
+	}
+	lines := s.AwaitingLines()
+	if !lines["4-new"] {
+		t.Errorf("line 4 (c1, reviewer-last) should be awaiting; got %v", lines)
+	}
+	if lines["9-new"] {
+		t.Errorf("line 9 (c2, no thread) should NOT be awaiting; got %v", lines)
+	}
+}
+
 func TestThreadEntry_When(t *testing.T) {
 	if (ThreadEntry{At: 0}).When() != "" {
 		t.Error("zero At should render empty time")

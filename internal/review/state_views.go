@@ -277,12 +277,54 @@ func collapsedLineKey(file, rowkey string) string {
 // one counts on just its side. This per-row identity (new = #new + #"", old = #old +
 // #"") is what makes a badge's number equal the cards actually rendered on the row.
 func countRowSides(out map[string]int, ln int, side string) {
-	if side == "" {
-		out[fmt.Sprintf("%d-old", ln)]++
-		out[fmt.Sprintf("%d-new", ln)]++
-		return
+	for _, k := range rowKeysFor(ln, side) {
+		out[k]++
 	}
-	out[fmt.Sprintf("%d-%s", ln, side)]++
+}
+
+// rowKeysFor returns the "<line>-<side>" key(s) an annotation on line ln / side
+// occupies: a whole-line one (Side "") is on BOTH the old and new rows; a one-sided
+// one is on just its side. Shared by the count badges and the awaiting-reply dots so
+// they land on the same rows.
+func rowKeysFor(ln int, side string) []string {
+	if side == "" {
+		return []string{fmt.Sprintf("%d-old", ln), fmt.Sprintf("%d-new", ln)}
+	}
+	return []string{fmt.Sprintf("%d-%s", ln, side)}
+}
+
+// AwaitingLines reports, per line-row ("<line>-<side>"), whether any comment or
+// suggestion rendered there is awaiting the agent (the reviewer replied last, #149) —
+// so the #151 count badge on that row can show an unread dot. Derived from the same
+// filtered ByEndLine maps as the badges, gated by AwaitingAgent. Zero-arg; nil when
+// nothing is awaiting.
+func (s PrereviewState) AwaitingLines() map[string]bool {
+	awaiting := s.AwaitingAgent()
+	if len(awaiting) == 0 {
+		return nil
+	}
+	out := map[string]bool{}
+	mark := func(ln int, id, side string) {
+		if awaiting[id] {
+			for _, k := range rowKeysFor(ln, side) {
+				out[k] = true
+			}
+		}
+	}
+	for ln, cs := range s.CommentsByEndLine() {
+		for _, c := range cs {
+			mark(ln, c.ID, c.Side)
+		}
+	}
+	for ln, sgs := range s.SuggestionsByEndLine() {
+		for _, sg := range sgs {
+			mark(ln, sg.ID, sg.Side)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // SuggestionCount is the number of suggestions on the selected file, used to

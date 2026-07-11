@@ -126,8 +126,9 @@ Track this as a checklist; run it until you see the `end` event.
    completes on its own). Never stop after a `snapshot` — the review is continuous.
 
 Event fields and comment kinds are in
-[reference.md → Agent mode](./reference.md#agent-mode). The snapshot is pre-filtered
-to actionable rows (no resolved, outdated, or draft comments).
+[reference.md → Agent mode](./reference.md#agent-mode). The snapshot is pre-filtered to
+what needs you: unresolved, non-outdated, non-draft comments — **plus** any resolved
+comment the reviewer just replied on (see *Threads*). Each item may carry its `thread`.
 
 ## Act on the comments
 
@@ -195,18 +196,33 @@ typo can't corrupt anything. **Prefer per-id marking** (tie each mark to its edi
 Marking is a one-way signal that you acted; the human still **resolves** comments
 themselves, so keep acting only on unresolved rows.
 
-## Say what you did — `prereview reply`
+## Threads — say what you did, and respond when the reviewer steers
 
-`done` marks a comment handled; **`reply` says what you actually changed** — a short
-note the reviewer sees threaded under the comment (or suggestion), so they aren't left
-guessing. After addressing a comment, post a one-line reply alongside the `done` mark:
+You and the reviewer hold a **thread** on each comment/suggestion. Both directions:
+
+**You → reviewer.** `done` marks a comment handled; **`reply` says what you actually
+changed** — a short note the reviewer sees threaded under the comment (or suggestion),
+so they aren't left guessing. After addressing a comment, post a one-line reply
+alongside the `done` mark:
 
 ```bash
 prereview reply --out "<REPO>" <comment-or-suggestion-id> --body "Renamed to userToken and updated the 3 call sites."
 ```
 
 The id is validated against `comments.csv` and suggestions (an unknown id fails
-non-zero, like `done`). Keep it to a sentence or two on the change.
+non-zero, like `done`). Keep it to a sentence or two.
+
+**Reviewer → you.** Each comment/suggestion in a snapshot may carry a **`thread`**
+array — the conversation so far, oldest first, each entry `{author, body, at}`. When an
+item's **last thread entry is the reviewer's**, they've replied to steer you: read the
+thread, address their latest point, and `prereview reply` with what you changed.
+
+**You never re-answer yourself.** The snapshot only carries items that need you — a
+**fresh** comment, or one the **reviewer replied on last**. Once you reply, the item
+drops out until the reviewer speaks again, so a thread whose last entry is *yours* is
+one you're already waiting on and you won't see it. (This is also why a **resolved**
+comment can reappear: the reviewer resolved it, then replied to reopen the conversation
+— treat that reply as the new instruction.)
 
 ## Suggested edits (`prereview suggest`)
 
