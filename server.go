@@ -132,6 +132,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		SingleFile:  tgt.SingleFile,
 		CSVPath:     csvPath,
 		UIPrefsPath: uiPrefsPath(),
+		PromptsDir:  userPromptsDir(),
 		Version:     version,
 		CSVWriter:   csvWriter,
 		AgentMode:   agentMode,

@@ -1274,6 +1274,30 @@
       >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
     {{end}}
+    {{/* #147: "Ask for suggestions" — pick a prebuilt prompt; it pre-fills the file
+         composer (tweak/scope, then Save) and the agent answers with inline
+         suggestions. Reuses the View-dropdown client primitive (lvt-el toggle +
+         click-away, no server state). Hidden while the file composer is open or a
+         historical version is shown, and only when prompts exist. */}}
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
+    <div
+      class="tb-dropdown prompts-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="prompts-trigger"
+        aria-haspopup="menu"
+        title="Ask the agent for suggestions using a prebuilt prompt"
+      >{{template "iconSuggestion"}}<span class="prompts-trigger-label">Ask for suggestions</span></button>
+      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
+        {{range $.Prompts}}
+        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
     {{/* Versions panel (#90): the selected file's version timeline with view +
          rollback. Reuses the View-dropdown client primitive (lvt-el toggle +
          click-away, no server state, no custom JS). A compact chip (history icon

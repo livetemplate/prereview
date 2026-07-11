@@ -62,6 +62,21 @@ func uiPrefsPath() string {
 	return filepath.Join(dir, "prereview", "ui-prefs.json")
 }
 
+// userPromptsDir is the "ask for suggestions" prompt overlay directory (#147):
+// ~/.config/prereview/prompts. PREREVIEW_PROMPTS_DIR overrides it (tests, or a custom
+// library). "" when the user-config dir can't be resolved — the built-in prompts still
+// ship, so the picker never depends on this resolving.
+func userPromptsDir() string {
+	if p := os.Getenv("PREREVIEW_PROMPTS_DIR"); p != "" {
+		return p
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "prereview", "prompts")
+}
+
 // resolveStoreRoot picks the directory whose .prereview/ holds annotations:
 // --out when set (available in every mode so it's never a silently-ignored
 // flag), else the default review root.
