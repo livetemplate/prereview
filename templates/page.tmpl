@@ -1030,7 +1030,7 @@
   aria-label="Close file list"
 ></div>
 
-<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .HideMarks}} marks-hidden{{end}}">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
 <dialog
   id="files-drawer"
   open
@@ -1532,6 +1532,20 @@
     "
          data-key="{{$mbkey}}"
          {{- if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>
+      {{- /* #165: the md-view has no gutter, so each block carries a state badge in its
+             top-right — yellow if any open annotation, else green — counting the block's
+             comments/suggestions. Clicking peeks the done cards (peek-done on the block,
+             client-only). Done cards auto-collapse via CSS (like the diff view). */ -}}
+      {{- $ba := index $.BlockAnnotations $mbkey -}}
+      {{- if gt $ba.Total 0 -}}
+      <button type="button" class="md-block-marks"
+              lvt-el:toggleClass:on:click="peek-done"
+              data-lvt-target="closest:.md-block"
+              aria-label="Show or hide resolved and accepted annotations in this block"
+              title="Show/hide resolved &amp; accepted annotations">
+        <span class="line-mark{{if $ba.Open}} is-open{{else if $ba.Accepted}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{$ba.Total}}</span>
+      </button>
+      {{- end -}}
       {{- /* rendered markdown — clicking (or Enter when focused) selects the
              block's source line span. tabindex makes it keyboard-focusable and
              the keydown makes Enter activate it; it deliberately has NO
@@ -1599,16 +1613,10 @@
     {{$rowkey := printf "%d-%s" $ln $lside -}}
     {{$commentCount := index $.CommentCountLines $rowkey -}}
     {{$suggestionCount := index $.SuggestionCountLines $rowkey -}}
-    {{$appliedCount := index $.AppliedBadgeLines $rowkey -}}
     {{$hasComment := gt $commentCount 0 -}}
     {{$hasSuggestion := gt $suggestionCount 0 -}}
-    {{$hasApplied := gt $appliedCount 0 -}}
-    {{- /* #112: the row's collapse state is now SERVER state (CollapsedRows, persisted)
-           so it survives a browser refresh — the old client-only .cards-collapsed was
-           lost on reload and hidden cards reappeared. $lkey ("L<old>-<new>") is the
-           per-file rowkey; defined here so the class below can read it. */ -}}
     {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
-    <div class="line-row{{if or $hasComment $hasSuggestion $hasApplied}} has-line-marks{{end}}{{if index $.CollapsedRows $lkey}} cards-collapsed{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
+    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
       {{- /* A selectable div (not <button>): <button> content is non-
              selectable in UA styles, which would block native text selection.
@@ -1627,36 +1635,21 @@
               {{- if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}
               data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span>
               {{- /* */ -}}<span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>
-      {{- /* #151: right-margin count badges — a colour-coded, tap-sized badge per
-             kind present on this line (comment / suggestion) carrying the count. A
-             sibling of .line (never inside it) so its click can't bubble to
-             selectLine; absolutely positioned in the reserved right padding. A single
-             <button> (both badges share it) — clicking toggles this row's collapse.
-             Two directives fire on the one click: lvt-el flips .cards-collapsed on the
-             row INSTANTLY (client-only, so it's snappy on a high-latency phone), and
-             lvt-on persists it via the server action (#112) so it survives a refresh.
-             They converge — the server re-render emits the same class from CollapsedRows
-             (server wins on morph), matching the optimistic flip. */ -}}
-      {{- if or $hasComment $hasSuggestion $hasApplied -}}
+      {{- /* #165: ONE state-coloured right-margin badge per line — the TOTAL annotation
+             count (comments + suggestions), coloured YELLOW when any are open (unresolved
+             comment / unaccepted suggestion) or GREEN when all are done. Done cards
+             auto-collapse (CSS by state class); clicking the badge toggles `peek-done`
+             on the row (client-only) to reveal them. Sibling of .line so the click
+             can't bubble to selectLine; sits in the reserved right padding. */ -}}
+      {{- if or $hasComment $hasSuggestion -}}
       <span class="line-margin">
-        {{- if or $hasComment $hasSuggestion -}}
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}"
-                lvt-el:toggleClass:on:click="cards-collapsed"
+                lvt-el:toggleClass:on:click="peek-done"
                 data-lvt-target="closest:.line-row"
-                lvt-on:click="toggleLineCollapse"
-                data-rowkey="{{$lkey}}"
-                aria-label="Toggle comments and suggestions on this line"
-                title="Toggle comments/suggestions on this line">
-          {{- if $hasComment}}<span class="line-mark line-mark-comment" aria-hidden="true">{{$commentCount}}</span>{{end -}}
-          {{- if $hasSuggestion}}<span class="line-mark line-mark-suggestion" aria-hidden="true">{{$suggestionCount}}</span>{{end -}}
+                aria-label="Show or hide resolved and accepted annotations on this line"
+                title="Show/hide resolved &amp; accepted annotations on this line">
+          <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
-        {{- end -}}
-        {{- /* #159 M4.3b: one ✦ badge per APPLIED suggestion — always present (the badge
-               IS the expand/collapse toggle, marked is-expanded while the box is peeked
-               open). An applied suggestion auto-collapses; clicking ✦ toggles its inline
-               box (toggleSuggestionExpand). Side-gated like the boxes so a modified line's
-               old/new rows don't each render it. */ -}}
-        {{- range (index $.AppliedByLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}<form method="POST" class="applied-badge-form"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleSuggestionExpand" class="line-mark applied-badge{{if index $.ExpandedSuggestions .ID}} is-expanded{{end}}" title="{{if index $.ExpandedSuggestions .ID}}Collapse{{else}}Show{{end}} the applied edit ({{.LineSpan}})" aria-label="Show or hide the applied suggestion">✦</button></form>{{end}}{{end -}}
       </span>
       {{- end -}}
       {{- /* comments anchored to this line (on THIS side), then the composer when

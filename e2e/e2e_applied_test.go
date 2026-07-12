@@ -1,17 +1,19 @@
 //go:build browser
 
-// End-to-end for #159 Phase 10 (applied ack): after the reviewer accepts a suggestion,
-// the agent applies the edit and runs `prereview applied <id>`; the card flips LIVE from
-// "accepted" to "applied" (via the agent-signal watcher), the "Edit applied to the file"
-// status appears, and the Undo is gone (undoing an applied edit needs a revert — a
-// follow-up — not a desyncing decision-clear).
+// End-to-end for #159 Phase 10 (applied ack), in the #165 state-badge model: accepting
+// a suggestion collapses it to a GREEN suggestion count badge (card hidden); the agent
+// then applies the edit and runs `prereview applied <id>`, and the peeked card carries
+// the "Edit applied to the file" status live, with no desyncing Undo.
 //
 // Run: go test -tags=browser -run TestE2E_AppliedAck ./e2e/...
 
 package e2e
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/chromedp/chromedp"
@@ -26,34 +28,30 @@ func TestE2E_AppliedAck(t *testing.T) {
 	  {"id":"s1","file":"app.go","from_line":4,"to_line":4,"original":"return \"hello world\"","proposed":"return \"hi\""}
 	]`)
 
-	// Accept the suggestion → "accepted" badge + Undo present.
+	// The open suggestion is visible. Accept → it COLLAPSES behind an ACCENTUATED-yellow
+	// badge (is-accepted): decided, but the agent still has to apply it (#165).
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.inline-suggestion .sg-old`, chromedp.ByQuery),
 		chromedp.Click(`button[name='acceptSuggestion']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.sg-verdict-badge.sg-accept`, chromedp.ByQuery),
-		chromedp.WaitVisible(`button[name='clearSuggestionDecision']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.line-row:has(.inline-suggestion) .line-mark.is-accepted`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("accept suggestion: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("accept should collapse to an accentuated-yellow badge: %v\nstderr: %s", err, p.stderr.String())
 	}
-	var verdict string
-	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.sg-verdict-badge.sg-accept').textContent.trim()`, &verdict))
-	if verdict != "accepted" {
-		t.Errorf("before applied ack, badge should read 'accepted'; got %q", verdict)
+	var acceptedShown int
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('.inline-suggestion.sg-accept')].filter(e=>e.offsetParent).length`, &acceptedShown))
+	if acceptedShown != 0 {
+		t.Errorf("an accepted suggestion should collapse (card hidden); %d visible", acceptedShown)
 	}
 
-	// The agent applies the edit and acks it.
+	// The agent applies the edit and acks it → the badge goes GREEN (is-done); still collapsed.
 	if out, err := exec.Command(p.binary, "applied", "--out", p.repo, "s1").CombinedOutput(); err != nil {
 		t.Fatalf("prereview applied: %v\n%s", err, out)
 	}
-
-	// LIVE (M4.3b): the applied ack collapses the box out of the diff to a ✦ badge in
-	// the right margin — this is how the applied state now surfaces (declutter). The
-	// re-expand → applied status → no-Undo details are covered by
-	// TestE2E_AppliedCollapsesToBadge; here we just assert the ack pushes live.
-	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.line-margin .applied-badge`, chromedp.ByQuery),
-		chromedp.WaitNotPresent(`.inline-suggestion[data-key="sg-s1"]`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("applied ack should collapse the box to a ✦ badge live: %v\nstderr: %s", err, p.stderr.String())
+	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.line-row:has(.inline-suggestion) .line-mark.is-done`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("suggestion badge should go green after the applied ack: %v\nstderr: %s", err, p.stderr.String())
+	}
+	appliedJSONL := filepath.Join(p.repo, ".prereview", "applied.jsonl")
+	if b, err := os.ReadFile(appliedJSONL); err != nil || !strings.Contains(string(b), `"s1"`) {
+		t.Errorf("applied ack should record s1 in applied.jsonl; err=%v content=%s", err, b)
 	}
 }

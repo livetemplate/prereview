@@ -85,26 +85,6 @@ func (c *PrereviewController) AcceptSuggestion(state PrereviewState, ctx *livete
 	return state, nil
 }
 
-// ToggleSuggestionExpand flips an applied suggestion between its collapsed
-// right-margin ✦ badge and the inline box (#159 M4.3b). Purely a view toggle over
-// ExpandedSuggestions — it never touches the decision or the file; an applied edit
-// stays applied whether the reviewer is peeking at it or not.
-func (c *PrereviewController) ToggleSuggestionExpand(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	id := ctx.GetString("id")
-	if id == "" {
-		return state, fmt.Errorf("toggleSuggestionExpand: missing id")
-	}
-	if state.ExpandedSuggestions == nil {
-		state.ExpandedSuggestions = map[string]bool{}
-	}
-	if state.ExpandedSuggestions[id] {
-		delete(state.ExpandedSuggestions, id)
-	} else {
-		state.ExpandedSuggestions[id] = true
-	}
-	return state, nil
-}
-
 // RequestRevert asks the agent to UNDO an already-applied accept (#159 M4.2): it sets
 // the Revert flag on the suggestion's accept decision, so the next snapshot carries it
 // to the agent as verdict="revert". The agent restores the original text on disk and

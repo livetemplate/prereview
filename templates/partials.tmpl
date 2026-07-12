@@ -387,7 +387,7 @@
 {{$d := index $.DecisionsBySuggestion .ID -}}
 {{$applied := index $.Applied .ID -}}
 {{$g := index $.SuggestionGroups .ID -}}
-<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}"
+<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}"
      data-key="sg-{{.ID}}"
      lvt-fx:animate="fade">
   {{- /* sparkle label · group tag · line span · drift status · verdict */ -}}

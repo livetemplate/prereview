@@ -44,12 +44,18 @@ func TestE2E_AcceptQueuesSuggestion(t *testing.T) {
 		t.Fatalf("queue trigger button (agent mode) not found%s", diag())
 	}
 
-	// Accept the suggestion.
+	// Accept the suggestion — the card collapses behind its badge (#165), so PEEK line 4
+	// to confirm the verdict badge.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='acceptSuggestion']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.sg-verdict-badge.sg-accept`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("accept suggestion: %v%s", err, diag())
+	}
+	p.peekRow(4)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.sg-verdict-badge.sg-accept`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("accepted verdict badge: %v%s", err, diag())
 	}
 
 	// 1) The Queue button id (pulse driver) bumped — the accept enqueued work,

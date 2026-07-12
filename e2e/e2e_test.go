@@ -537,6 +537,22 @@ func (p *runningPrereview) clickLine(oldNum, newNum int) {
 	}
 }
 
+// peekRow clicks the right-margin count badge for the given NEW-side diff line, revealing
+// that row's COLLAPSED cards. #165 keeps OPEN cards visible but collapses DECIDED
+// suggestions (accepted/rejected) and RESOLVED comments behind the badge; clicking it
+// toggles `peek-done` on the row to reveal them. We WaitVisible the revealed card so callers
+// can interact with it.
+func (p *runningPrereview) peekRow(line int) {
+	p.t.Helper()
+	row := fmt.Sprintf(`.line-row:has(.line[data-line="%d"][data-side="new"])`, line)
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(row+` .line-marks`, chromedp.ByQuery),
+		chromedp.WaitVisible(row+`.peek-done .inline-suggestion, `+row+`.peek-done .inline-comment`, chromedp.ByQuery),
+	); err != nil {
+		p.t.Fatalf("peekRow %d: %v", line, err)
+	}
+}
+
 // readCSV returns the rows in the prereview CSV file (header included).
 func (p *runningPrereview) readCSV() [][]string {
 	p.t.Helper()

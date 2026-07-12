@@ -51,11 +51,13 @@ func TestE2E_RevertRestoresFile(t *testing.T) {
 	  {"id":"s1","file":"app.go","from_line":4,"to_line":4,"original":"return \"hello world\"","proposed":"return \"hi\""}
 	]`)
 
-	// Reviewer accepts; the agent applies the edit to disk and acks it.
+	// Reviewer accepts → the card collapses behind an ACCENTUATED-yellow badge (decided,
+	// pending apply). The agent then applies to disk and acks → the badge goes GREEN
+	// (#165). Both states keep the card collapsed; the reviewer peeks to reach Revert.
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-s1"] .sg-old`, chromedp.ByQuery),
 		chromedp.Click(`button[name='acceptSuggestion']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.sg-verdict-badge.sg-accept`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.line-row:has(.inline-suggestion[data-key="sg-s1"]) .line-mark.is-accepted`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("accept: %v%s", err, diag())
 	}
@@ -66,14 +68,16 @@ func TestE2E_RevertRestoresFile(t *testing.T) {
 	if got := readFile(); got != applied {
 		t.Fatalf("after apply, file should hold the proposed text; got:\n%s", got)
 	}
+	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.line-mark.is-done`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("after apply the badge should go green: %v%s", err, diag())
+	}
+	_ = chromedp.Run(p.ctx, chromedp.Sleep(1200*1e6)) // let the applied fan-out settle
 
-	// The box collapsed to a ✦ badge. Expand it and click Revert.
+	// Peek the collapsed suggestion (click its green badge) and click Revert.
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.line-margin .applied-badge`, chromedp.ByQuery),
-		chromedp.Click(`.applied-badge`, chromedp.ByQuery),
+		chromedp.Click(`.line-marks`, chromedp.ByQuery),
 		chromedp.WaitVisible(`button[name='requestRevert']`, chromedp.ByQuery),
 		chromedp.Click(`button[name='requestRevert']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.sg-reverting`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("request revert: %v%s", err, diag())
 	}
@@ -85,13 +89,12 @@ func TestE2E_RevertRestoresFile(t *testing.T) {
 	}
 	agent("reverted", "s1")
 
-	// THE FIX: the file is back to original, and the suggestion is no longer applied —
-	// it drops back to an undecided box (Accept offered again), no ✦ badge.
+	// THE FIX: the file is back to original, and the suggestion is no longer accepted —
+	// it drops back to an undecided box (Accept offered again), rendered inline (open).
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`button[name='acceptSuggestion']`, chromedp.ByQuery),
-		chromedp.WaitNotPresent(`.applied-badge`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-s1"] button[name='acceptSuggestion']`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("after revert the suggestion should return to undecided (no ✦ badge): %v%s", err, diag())
+		t.Fatalf("after revert the suggestion should return to undecided (open, Accept offered): %v%s", err, diag())
 	}
 	if got := readFile(); got != original {
 		t.Fatalf("after revert, file must be restored to the ORIGINAL; got:\n%s", got)

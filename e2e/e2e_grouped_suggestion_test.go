@@ -11,6 +11,7 @@ package e2e
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -31,11 +32,19 @@ func TestE2E_GroupedSuggestionAutoReject(t *testing.T) {
 	  {"id":"alt2","file":"app.go","from_line":4,"to_line":4,"original":"return \"hello world\"","proposed":"return \"hey\""}
 	]`)
 
-	// Accept alt1 → alt1 accepted, alt2 auto-rejected (no manual reject click).
+	// Accept alt1 → alt1 accepted, alt2 auto-rejected (no manual reject click). Both cards
+	// then collapse behind the badge (#165: accepted + rejected both tuck away), so PEEK
+	// line 4 to confirm the two verdict badges.
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-alt1"] button[name="acceptSuggestion"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-alt2"]`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelector('.inline-suggestion[data-key="sg-alt1"] button[name="acceptSuggestion"]').click()`, nil),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("accept alt1: %v%s", err, diag())
+	}
+	p.peekRow(4)
+	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-alt1"] .sg-verdict-badge.sg-accept`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-alt2"] .sg-verdict-badge.sg-reject`, chromedp.ByQuery),
 	); err != nil {
