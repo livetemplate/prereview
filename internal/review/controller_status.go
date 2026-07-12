@@ -168,11 +168,14 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 			// goroutine, BEFORE the session/fan-out guard below, so a version is
 			// recorded exactly once even if no tab is open — unlike the per-tab
 			// LLMStatusChanged handler, which would checkpoint once per open tab.
-			curState := c.currentLLMState()
-			if prevState == LLMStateWorking && curState == LLMStateDone {
-				c.checkpointVersions(VersionTriggerLLMDone)
+			// Read the FULL status (not just state) so the agent's done-message rides
+			// into the checkpoint as the version's changelog (#155). A torn/missing
+			// read yields an empty status (State "") — same as idle.
+			cur, _ := readLLMStatus(c.statusPath())
+			if prevState == LLMStateWorking && cur.State == LLMStateDone {
+				c.checkpointVersions(VersionTriggerLLMDone, cur.Message)
 			}
-			prevState = curState
+			prevState = cur.State
 			c.sessionMu.Lock()
 			session := c.session
 			c.sessionMu.Unlock()

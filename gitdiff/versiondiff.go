@@ -46,6 +46,17 @@ func RenderBytesAsFile(path string, data []byte) *FileDiff {
 // identically (add/del/ctx rows, syntax highlighting). Identical inputs render
 // as a plain all-context file; a binary on either side is reported as binary.
 func DiffContents(path string, oldData, newData []byte) *FileDiff {
+	return diffContents(path, oldData, newData, true)
+}
+
+// DiffContentsNoHighlight is DiffContents without the chroma syntax-highlight pass —
+// for callers that read only line Kind + raw Content (e.g. #155's version summary),
+// so highlighting every changed line isn't computed and then thrown away.
+func DiffContentsNoHighlight(path string, oldData, newData []byte) *FileDiff {
+	return diffContents(path, oldData, newData, false)
+}
+
+func diffContents(path string, oldData, newData []byte, highlight bool) *FileDiff {
 	if bytes.IndexByte(oldData, 0x00) >= 0 || bytes.IndexByte(newData, 0x00) >= 0 {
 		return &FileDiff{Path: path, IsBinary: true, Note: "binary file"}
 	}
@@ -62,6 +73,8 @@ func DiffContents(path string, oldData, newData []byte) *FileDiff {
 		// Never fail the view over a diff hiccup — fall back to the plain file.
 		return RenderBytesAsFile(path, newData)
 	}
-	highlightLines(fd)
+	if highlight {
+		highlightLines(fd)
+	}
 	return fd
 }

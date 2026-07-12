@@ -1088,15 +1088,40 @@ header.file-head .file-head-actions {
   display: inline-flex; align-items: center; gap: 0.4rem; flex-shrink: 0;
 }
 .versions-panel { min-width: 17rem; padding: 0.3rem; }
+/* #155: a row is a compact clickable header (meta + ⋯) that expands INLINE to reveal
+   the "what changed" summary + the actions — so the three-button row stops crowding
+   every entry. */
 .version-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
-  padding: 0.4rem 0.5rem; border-radius: 5px;
+  display: flex; flex-direction: column;
+  padding: 0.15rem 0.15rem; border-radius: 5px;
 }
 .version-row + .version-row { border-top: 1px solid var(--pico-card-sectioning-background-color); }
 .version-row.viewing { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.version-summary-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  width: 100%; margin: 0; padding: 0.3rem 0.35rem; border: 0; border-radius: 4px;
+  background: none; cursor: pointer; text-align: left;
+}
+.version-summary-toggle:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .version-meta { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .version-label { font-size: 0.85rem; font-weight: 600; color: var(--pico-h1-color); }
 .version-when { font-size: 0.72rem; color: var(--pico-muted-color); }
+.version-more {
+  flex: 0 0 auto; font-size: 1rem; font-weight: 700; line-height: 1; letter-spacing: 0.04em;
+  color: var(--pico-muted-color);
+}
+.version-row.expanded .version-more { color: var(--accent); }
+.version-details { display: none; padding: 0 0.35rem 0.35rem; }
+.version-row.expanded .version-details { display: block; }
+/* The agent's changelog prose (#155) — the primary "what changed", wraps naturally. */
+.version-changelog {
+  margin: 0 0 0.4rem; font-size: 0.78rem; line-height: 1.45; color: var(--pico-color);
+}
+.version-summary { margin-bottom: 0.45rem; font-size: 0.75rem; }
+.vs-note { color: var(--pico-muted-color); font-style: italic; }
+.vs-stat { font-family: var(--jbm); font-weight: 700; }
+.vs-add { color: var(--pr-add); }
+.vs-rem { color: var(--pr-del); }
 .version-actions { display: flex; gap: 0.35rem; flex: 0 0 auto; }
 .version-btn {
   margin: 0; padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; min-height: 0;

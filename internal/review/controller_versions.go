@@ -34,6 +34,59 @@ type VersionListItem struct {
 	Current bool   // newest recorded version (≈ what's on disk now)
 	Viewing bool   // currently open in the read-only version view
 	Deleted bool   // tombstone: the file was absent at this version
+	// Changelog is the agent's AI-authored "what changed" for this version (#155),
+	// captured from its status message at the llm-done checkpoint — the primary
+	// summary the panel shows. Empty for baseline/rollback and batches where the
+	// agent wrote no message; the +add/−del Summary stat is the fallback then.
+	Changelog string
+	// Summary is the computed diff STAT (+add/−del) between this checkpoint and the
+	// previous one — derived on demand from the content-addressed blobs (never
+	// stored). Shown alongside the changelog and as the floor when there's no
+	// changelog. Counts only (no raw lines), so it scales to a large diff.
+	Summary VersionSummary
+}
+
+// VersionSummary is the computed diff stat shown on a version row.
+type VersionSummary struct {
+	Added   int
+	Removed int
+	Initial bool // the file's first recorded version — nothing to diff against
+	Deleted bool // the file was removed at this version
+	Binary  bool // binary content — line counts are meaningless
+}
+
+// versionSummary computes the +add/−del stat between two content-addressed blobs of
+// path (older→newer). Empty olderSHA = the file's first appearance; empty newerSHA =
+// the file was removed at this version.
+func (c *PrereviewController) versionSummary(path, olderSHA, newerSHA string) VersionSummary {
+	switch {
+	case newerSHA == "":
+		return VersionSummary{Deleted: true}
+	case olderSHA == "":
+		return VersionSummary{Initial: true} // baseline — no predecessor to diff
+	}
+	newData, err := c.Versions.Blob(newerSHA)
+	if err != nil {
+		return VersionSummary{}
+	}
+	oldData, err := c.Versions.Blob(olderSHA)
+	if err != nil {
+		return VersionSummary{}
+	}
+	fd := gitdiff.DiffContentsNoHighlight(path, oldData, newData) // stat reads Kind only
+	if fd.IsBinary {
+		return VersionSummary{Binary: true}
+	}
+	var sum VersionSummary
+	for _, ln := range fd.Lines {
+		switch ln.Kind {
+		case "add":
+			sum.Added++
+		case "del":
+			sum.Removed++
+		}
+	}
+	return sum
 }
 
 // versionLabel maps a store trigger to a human label for the timeline.
@@ -89,17 +142,17 @@ func (c *PrereviewController) versionScope() []FileRef {
 // anything. Idempotent-ish: a second call with an unchanged scope is skipped by
 // the store, so it never duplicates the baseline.
 func (c *PrereviewController) CheckpointBaseline() {
-	c.checkpointVersions(VersionTriggerBaseline)
+	c.checkpointVersions(VersionTriggerBaseline, "")
 }
 
 // checkpointVersions snapshots the current scope under trigger. It is a safety
 // net, never on the critical path: a failure is logged and swallowed so a
 // versioning hiccup never breaks a review. No-op when the store is absent.
-func (c *PrereviewController) checkpointVersions(trigger string) {
+func (c *PrereviewController) checkpointVersions(trigger, changelog string) {
 	if c.Versions == nil {
 		return
 	}
-	if _, _, err := c.Versions.Checkpoint(c.versionScope(), trigger); err != nil {
+	if _, _, err := c.Versions.Checkpoint(c.versionScope(), trigger, changelog); err != nil {
 		slog.Warn("version checkpoint failed", "trigger", trigger, "err", err)
 	}
 }
@@ -131,13 +184,22 @@ func (c *PrereviewController) applyVersionList(state *PrereviewState) {
 	items := make([]VersionListItem, 0, len(hist))
 	for i := len(hist) - 1; i >= 0; i-- { // newest first
 		h := hist[i]
+		// "What changed" (#155) = this file's diff from the PREVIOUS history entry
+		// (hist is oldest→newest, so hist[i-1] is the predecessor). i==0 is the
+		// file's first version — no predecessor, so Summary is Initial.
+		var olderSHA string
+		if i > 0 {
+			olderSHA = hist[i-1].SHA
+		}
 		items = append(items, VersionListItem{
-			Seq:     h.Seq,
-			Label:   versionLabel(h.Trigger),
-			When:    h.TS.Local().Format("15:04:05"),
-			Current: i == len(hist)-1,
-			Viewing: state.ViewingVersion && state.VersionViewSeq == h.Seq,
-			Deleted: h.SHA == "",
+			Seq:       h.Seq,
+			Label:     versionLabel(h.Trigger),
+			When:      h.TS.Local().Format("15:04:05"),
+			Current:   i == len(hist)-1,
+			Viewing:   state.ViewingVersion && state.VersionViewSeq == h.Seq,
+			Deleted:   h.SHA == "",
+			Changelog: h.Changelog,
+			Summary:   c.versionSummary(state.SelectedFile, olderSHA, h.SHA),
 		})
 	}
 	state.Versions = items
@@ -266,7 +328,7 @@ func (c *PrereviewController) RestoreVersion(state PrereviewState, ctx *livetemp
 	}
 
 	// (2) Record the rollback as a new, append-only version.
-	c.checkpointVersions(VersionTriggerRollback)
+	c.checkpointVersions(VersionTriggerRollback, "")
 
 	// (3) Back to the live diff (now showing the restored content) + refresh nudge.
 	c.reloadLiveDiff(&state)

@@ -764,17 +764,22 @@
     <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
       <button type="button" class="versions-trigger" aria-haspopup="menu" title="Versions of this file — view or roll back to a previous version">{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
       <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
+        
         {{range $.Versions}}
         <div class="version-row{{if .Viewing}} viewing{{end}}">
-          <span class="version-meta">
+          <button type="button" class="version-summary-toggle" lvt-el:toggleClass:on:click="expanded" data-lvt-target="closest:.version-row" aria-label="Show what changed and version actions"><span class="version-meta">
             <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
             <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
-          </span>
-          <span class="version-actions">
-            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
-            {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
-            <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
-          </span>
+          </span><span class="version-more" aria-hidden="true">⋯</span></button>
+          <div class="version-details">
+            {{if .Changelog}}<p class="version-changelog">{{.Changelog}}</p>{{end}}
+            <div class="version-summary">{{template "versionSummary" .Summary}}</div>
+            <span class="version-actions">
+              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
+              {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
+              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+            </span>
+          </div>
         </div>
         {{end}}
       </div>
@@ -1077,3 +1082,5 @@
     <div class="thread-meta"><span class="thread-author">{{.Author}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
     <div class="thread-body">{{.Body}}</div>
   </div>{{end}}</div>{{end}}
+=== versionSummary ===
+{{if .Initial}}<span class="vs-note">Initial version — the starting point.</span>{{else}}{{if .Deleted}}<span class="vs-note">File removed at this version.</span>{{else}}{{if .Binary}}<span class="vs-note">Binary file changed.</span>{{else}}<span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>{{end}}{{end}}{{end}}
