@@ -132,13 +132,6 @@ type PrereviewState struct {
 	// apply)" to "applied", and drops it from the agent's actionable snapshot.
 	Applied map[string]bool `json:"applied"`
 
-	// ExpandedSuggestions is the set of APPLIED suggestion ids the reviewer chose to
-	// peek at (#159 M4.3b). An applied suggestion collapses out of the diff flow to a
-	// right-margin ✦ badge by DEFAULT (declutter); clicking the badge adds the id here
-	// to re-expand the box inline, clicking again removes it. Persisted so a peek
-	// survives reload (like CollapsedLines). Only meaningful for ids in Applied —
-	// suggestionCollapsed = Applied[id] && !ExpandedSuggestions[id].
-	ExpandedSuggestions map[string]bool `json:"expanded_suggestions" lvt:"persist"`
 
 	// Hidden is the reviewer's hidden-from-view suggestion set, loaded from the
 	// server-owned .prereview/hidden-suggestions.jsonl every Mount (the file is
@@ -276,13 +269,6 @@ type PrereviewState struct {
 	// browser refresh; not written to CSV (this is UX state, not a comment).
 	ViewedFiles map[string]bool `json:"viewed_files" lvt:"persist"`
 
-	// CollapsedLines is the set of diff rows whose inline comment/suggestion
-	// cards the reviewer collapsed via the right-margin mark (#112). Keyed
-	// "<file>\n<rowkey>" (rowkey = "L<old>-<new>") so a line number can't
-	// collide across files. Persisted (lvt:"persist") so a collapse survives a
-	// browser refresh — the whole point of #112, where the old client-only
-	// .cards-collapsed class was lost on reload and hidden cards reappeared.
-	CollapsedLines map[string]bool `json:"collapsed_lines" lvt:"persist"`
 
 	// Read progress (#128), keyed by file path. ReadThrough is the furthest
 	// new-side line number the reviewer has scrolled past (a high-water mark →

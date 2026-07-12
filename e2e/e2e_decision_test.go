@@ -46,8 +46,10 @@ func TestE2E_SuggestionDecisions(t *testing.T) {
 		return ok
 	}
 
-	// Accept → verdict badge appears, the action row is replaced by Undo.
+	// Accept → the card collapses behind its badge (#165: decided suggestions tuck away).
+	// PEEK line 4 to reveal it and confirm the verdict badge; the action row is now Undo.
 	click(`button[name="acceptSuggestion"]`)
+	p.peekRow(4)
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.inline-suggestion.is-decided.sg-accept .sg-verdict-badge.sg-accept`, chromedp.ByQuery),
 	); err != nil {

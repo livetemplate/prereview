@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"html/template"
 	"path/filepath"
-	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
 )
@@ -43,7 +42,11 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 		if c.IsFileLevel() || c.IsAreaLevel() {
 			continue
 		}
-		if s.commentHiddenFromView(c) {
+		// #165: RESOLVED comments stay in the inline diff — they collapse to a green
+		// count badge (CSS), not vanish. Only an individually re-hidden comment (Hidden,
+		// meaningful just on resolved ones) is dropped entirely. Other views keep the
+		// shared commentHiddenFromView rule; only this inline-diff path renders resolved.
+		if c.Hidden {
 			continue
 		}
 		out[c.ToLine] = append(out[c.ToLine], c)
@@ -157,36 +160,24 @@ func (s PrereviewState) HiddenSuggestionCount() int {
 	return n
 }
 
-// suggestionCollapsed reports that an APPLIED suggestion is collapsed to its
-// right-margin ✦ badge (#159 M4.3b) — the default for an applied edit, unless the
-// reviewer expanded it to peek (ExpandedSuggestions). Only applied ids ever
-// collapse; an accepted-pending or undecided suggestion always renders inline.
-func (s PrereviewState) suggestionCollapsed(id string) bool {
-	return s.Applied[id] && !s.ExpandedSuggestions[id]
+// A suggestion is in one of three badge/collapse states (#165). An UNDECIDED suggestion
+// stays visible inline with a yellow "open" badge. Once DECIDED (accepted or rejected) its
+// card collapses behind the badge — accentuated-yellow while accepted-but-unapplied (the
+// agent still has to apply it), green once applied/rejected. s.Applied is revert-aware
+// (loadAppliedSet nets reverts), so accept→apply→revert drops back to accepted-pending.
+
+// suggestionUndecided reports the reviewer has not yet accepted or rejected it — the card
+// stays visible inline (only DECIDED suggestions collapse to a badge).
+func (s PrereviewState) suggestionUndecided(id string) bool {
+	d, ok := s.DecisionsBySuggestion()[id]
+	return !ok || (d.Verdict != verdictAccept && d.Verdict != verdictReject)
 }
 
-// suggestionsGroupedBy groups the selected file's visible suggestions by ToLine,
-// keeping only those the predicate accepts. Nil when suggestions are toggled off
-// (HideSuggestions) or none match. Shared by the zero-arg public views below (the
-// framework only pre-computes zero-arg methods, so this stays private). The three
-// views over it — inline boxes, ✦ applied badges, green count — use three different
-// predicates rather than one complement, because an applied suggestion that's
-// expanded shows in BOTH the inline set (the peek) and the ✦ set (the toggle).
-func (s PrereviewState) suggestionsGroupedBy(keep func(Suggestion) bool) map[int][]Suggestion {
-	if s.SelectedFile == "" || s.HideSuggestions {
-		return nil
-	}
-	out := make(map[int][]Suggestion)
-	for _, sg := range s.visibleSuggestions() {
-		if sg.File != s.SelectedFile || !keep(sg) {
-			continue
-		}
-		out[sg.ToLine] = append(out[sg.ToLine], sg)
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+// suggestionAcceptedPending reports it was accepted but the agent has not applied it yet —
+// the badge is accentuated yellow, signalling "yet to be applied".
+func (s PrereviewState) suggestionAcceptedPending(id string) bool {
+	d, ok := s.DecisionsBySuggestion()[id]
+	return ok && d.Verdict == verdictAccept && !s.Applied[id]
 }
 
 // countByLine collapses a by-ToLine suggestion grouping into per-row counts keyed
@@ -205,26 +196,106 @@ func countByLine(byLine map[int][]Suggestion) map[string]int {
 	return out
 }
 
-// SuggestionsByEndLine groups the selected file's INLINE suggestion boxes by ToLine,
-// so the template renders each right after its trailing line — like CommentsByEndLine
-// does for comments. A suggestion renders inline unless it's a collapsed applied one
-// (Applied && !Expanded) — those show only as a right-margin ✦ badge (AppliedByLine).
+// SuggestionsByEndLine renders ALL of the selected file's suggestions inline (#165);
+// an applied suggestion collapses to a green count badge via CSS, not by exclusion
+// here (so the reviewer can still peek it open for the M4 status/revert controls).
 func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
-	return s.suggestionsGroupedBy(func(sg Suggestion) bool { return !s.suggestionCollapsed(sg.ID) })
+	if s.SelectedFile == "" || s.HideSuggestions {
+		return nil
+	}
+	out := map[int][]Suggestion{}
+	for _, sg := range s.visibleSuggestions() {
+		if sg.File != s.SelectedFile {
+			continue
+		}
+		out[sg.ToLine] = append(out[sg.ToLine], sg)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
-// AppliedByLine groups the selected file's APPLIED suggestions by ToLine — one ✦
-// badge each in the right margin, ALWAYS present for an applied suggestion (whether
-// collapsed or expanded), because the badge IS the expand/collapse toggle. The
-// template marks the badge is-expanded when the box is currently peeked open.
-func (s PrereviewState) AppliedByLine() map[int][]Suggestion {
-	return s.suggestionsGroupedBy(func(sg Suggestion) bool { return s.Applied[sg.ID] })
+// SuggestionOpenLines reports, per line-row, whether the row has any UNDECIDED suggestion
+// (#165) — drives the yellow "open" badge. An accepted-pending suggestion is NOT open (it
+// gets the accentuated-yellow badge via SuggestionAcceptedLines); an applied/rejected one
+// is done (green).
+func (s PrereviewState) SuggestionOpenLines() map[string]bool {
+	out := map[string]bool{}
+	for ln, sgs := range s.SuggestionsByEndLine() {
+		for _, sg := range sgs {
+			if s.suggestionUndecided(sg.ID) {
+				for _, k := range rowKeysFor(ln, sg.Side) {
+					out[k] = true
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
-// AppliedBadgeLines reports, per line-row, how many ✦ applied badges render there —
-// the presence gate for the right-margin container. Zero-arg; nil when none.
-func (s PrereviewState) AppliedBadgeLines() map[string]int {
-	return countByLine(s.AppliedByLine())
+// SuggestionAcceptedLines reports, per line-row, whether the row has any ACCEPTED-but-
+// unapplied suggestion (#165) — drives the accentuated-yellow "accepted" badge. Loses to
+// "open" on a mixed row (an undecided item is more urgent), which the template's
+// is-open→is-accepted→is-done ladder enforces.
+func (s PrereviewState) SuggestionAcceptedLines() map[string]bool {
+	out := map[string]bool{}
+	for ln, sgs := range s.SuggestionsByEndLine() {
+		for _, sg := range sgs {
+			if s.suggestionAcceptedPending(sg.ID) {
+				for _, k := range rowKeysFor(ln, sg.Side) {
+					out[k] = true
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// AnnotationCountLines is the per-row TOTAL — comments + suggestions — driving the one
+// unified right-margin badge (#165: a single badge per line, not one per kind).
+func (s PrereviewState) AnnotationCountLines() map[string]int {
+	out := map[string]int{}
+	for k, n := range s.CommentCountLines() {
+		out[k] += n
+	}
+	for k, n := range s.SuggestionCountLines() {
+		out[k] += n
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// AnnotationOpenLines reports, per row, whether ANY annotation is open (unresolved
+// comment / undecided suggestion) — the unified badge is yellow.
+func (s PrereviewState) AnnotationOpenLines() map[string]bool {
+	out := map[string]bool{}
+	for k := range s.CommentOpenLines() {
+		out[k] = true
+	}
+	for k := range s.SuggestionOpenLines() {
+		out[k] = true
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// AnnotationAcceptedLines reports, per row, whether the row has any accepted-but-unapplied
+// suggestion (#165) — the badge is accentuated yellow (else it falls through to open→yellow
+// or done→green). Only suggestions have an accepted state. The template checks it AFTER
+// AnnotationOpenLines, so open wins on a mixed row.
+func (s PrereviewState) AnnotationAcceptedLines() map[string]bool {
+	return s.SuggestionAcceptedLines()
 }
 
 // CommentCountLines reports, per line-row (keyed "<toLine>-<side>", e.g. "4-new"),
@@ -249,12 +320,31 @@ func (s PrereviewState) CommentCountLines() map[string]int {
 	return out
 }
 
-// SuggestionCountLines counts the NON-applied suggestions per row — the green
-// "to review" badge. Applied suggestions are excluded (they show as the ✦ applied
-// badge instead, via AppliedByLine), so the two right-margin suggestion badges never
-// double-report the same suggestion, whether it's collapsed or expanded.
+// CommentOpenLines reports, per line-row, whether the row has any OPEN (unresolved)
+// comment (#165). Drives the badge colour: yellow when open work remains, else green
+// (all resolved). "Yellow wins on a mixed line" falls out — one open comment flags it.
+func (s PrereviewState) CommentOpenLines() map[string]bool {
+	out := map[string]bool{}
+	for ln, cs := range s.CommentsByEndLine() {
+		for _, c := range cs {
+			if !c.Resolved {
+				for _, k := range rowKeysFor(ln, c.Side) {
+					out[k] = true
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// SuggestionCountLines counts ALL suggestions per row (#165) — open + accepted. The
+// badge colour (yellow if any open, else green) comes from SuggestionOpenLines; the
+// accepted ones collapse to that badge via CSS rather than being excluded here.
 func (s PrereviewState) SuggestionCountLines() map[string]int {
-	return countByLine(s.suggestionsGroupedBy(func(sg Suggestion) bool { return !s.Applied[sg.ID] }))
+	return countByLine(s.SuggestionsByEndLine())
 }
 
 // HasMarks reports whether the selected file has any per-line comment/suggestion
@@ -288,33 +378,6 @@ func (s PrereviewState) AwaitingAgent() map[string]bool {
 	return out
 }
 
-// CollapsedRows returns the collapsed diff rows (#112) for the SELECTED file, keyed
-// by rowkey ("L<old>-<new>") — the file prefix that scopes CollapsedLines across
-// files is stripped so the template can look a row up directly with
-// {{index $.CollapsedRows $lkey}}. Zero-arg so the framework pre-computes it; nil
-// when nothing is collapsed on this file (a missing key indexes to false).
-func (s PrereviewState) CollapsedRows() map[string]bool {
-	if len(s.CollapsedLines) == 0 || s.SelectedFile == "" {
-		return nil
-	}
-	prefix := collapsedLineKey(s.SelectedFile, "") // "<file>\n" — same encoding as the keys
-	out := map[string]bool{}
-	for k := range s.CollapsedLines {
-		if rowkey, ok := strings.CutPrefix(k, prefix); ok {
-			out[rowkey] = true
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-// collapsedLineKey is the CollapsedLines map key for a row on the given file —
-// file-scoped so equal line numbers on different files don't collide.
-func collapsedLineKey(file, rowkey string) string {
-	return file + "\n" + rowkey
-}
 
 // countRowSides increments the row key(s) an annotation on line ln / side occupies,
 // matching the template's {{if or (eq .Side $lside) (eq .Side "")}} gate: a
@@ -504,10 +567,63 @@ func (s PrereviewState) FileComments() []Comment {
 		if c.IsFileLevel() || c.IsAreaLevel() {
 			continue
 		}
-		if s.commentHiddenFromView(c) {
+		// #165: resolved comments render in the md-view too (they collapse to the block's
+		// green badge, not vanish); only an individually-hidden one is dropped.
+		if c.Hidden {
 			continue
 		}
 		out = append(out, c)
+	}
+	return out
+}
+
+// BlockAnn is the per-Markdown-block annotation summary (#165) — the md-view has no
+// gutter, so each block carries ONE state badge at its top-right: Total annotations,
+// coloured yellow when Open (unresolved comment / undecided suggestion), accentuated
+// yellow when Accepted (an accepted-but-unapplied suggestion, nothing open), else green.
+// Open wins over Accepted, matching the diff-row ladder.
+type BlockAnn struct {
+	Total    int
+	Open     bool
+	Accepted bool
+}
+
+// BlockAnnotations aggregates the selected file's inline annotations into each rendered
+// Markdown block by source line range, keyed "MB-<start>-<end>" (the template's $mbkey).
+// Zero-arg; nil when none.
+func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
+	blocks := s.RenderedMarkdown()
+	if len(blocks) == 0 {
+		return nil
+	}
+	comments, suggestions := s.FileComments(), s.FileSuggestions()
+	out := map[string]BlockAnn{}
+	for _, blk := range blocks {
+		var ba BlockAnn
+		for _, c := range comments {
+			if c.ToLine >= blk.StartLine && c.ToLine <= blk.EndLine {
+				ba.Total++
+				if !c.Resolved {
+					ba.Open = true
+				}
+			}
+		}
+		for _, sg := range suggestions {
+			if sg.ToLine >= blk.StartLine && sg.ToLine <= blk.EndLine {
+				ba.Total++
+				if s.suggestionUndecided(sg.ID) {
+					ba.Open = true
+				} else if s.suggestionAcceptedPending(sg.ID) {
+					ba.Accepted = true
+				}
+			}
+		}
+		if ba.Total > 0 {
+			out[fmt.Sprintf("MB-%d-%d", blk.StartLine, blk.EndLine)] = ba
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

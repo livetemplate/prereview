@@ -27,6 +27,20 @@ func TestE2E_DarkNoLowContrast(t *testing.T) {
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
 	)
+	// An accepted-but-unapplied suggestion → renders the accentuated-yellow `is-accepted`
+	// count badge (#165), so the walk checks its (hotter-amber) contrast in every scheme.
+	submitSuggestions(t, p.binary, p.repo, `[
+	  {"id":"sacc","file":"edited.go","from_line":4,"to_line":4,"original":"return \"hello world\"","proposed":"return \"hey\""}
+	]`)
+	_ = chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-sacc"] button[name='acceptSuggestion']`, chromedp.ByQuery),
+		chromedp.Click(`.inline-suggestion[data-key="sg-sacc"] button[name='acceptSuggestion']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.line-mark.is-accepted`, chromedp.ByQuery),
+	)
+	// Peek the collapsed accepted card so its amber left-rail + "accepted" verdict text are
+	// walked too (they're only visible when peeked).
+	p.peekRow(4)
+
 	p.clickLine(0, 4) // second composer open
 	_ = chromedp.Run(p.ctx, chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery))
 	_ = chromedp.Run(p.ctx, chromedp.Click(`.queue-dropdown .queue-trigger`, chromedp.ByQuery), chromedp.Sleep(200*time.Millisecond))

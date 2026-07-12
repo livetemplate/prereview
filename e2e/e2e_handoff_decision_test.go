@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chromedp/chromedp"
 
@@ -57,12 +58,19 @@ func TestE2E_HandoffDecisions(t *testing.T) {
 		t.Fatalf("suggestion action row never appeared: %v%s", err, diag())
 	}
 
-	// Accept exactly the "acc" suggestion.
+	// Accept exactly the "acc" suggestion. It collapses behind its badge (#165), so PEEK
+	// line 4 to confirm the verdict.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Evaluate(`document.querySelector('.inline-suggestion[data-key="sg-acc"] button[name="acceptSuggestion"]').click()`, nil),
-		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-acc"] .sg-verdict-badge.sg-accept`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
 	); err != nil {
 		t.Fatalf("accept: %v%s", err, diag())
+	}
+	p.peekRow(4)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-acc"] .sg-verdict-badge.sg-accept`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("accepted verdict badge: %v%s", err, diag())
 	}
 
 	// Continuous enqueue (#119): stream mode has NO Hand off button. The accept

@@ -10,7 +10,6 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -30,7 +29,7 @@ func TestE2E_LineIndicators(t *testing.T) {
 	  {"id":"s1","file":"app.go","from_line":4,"to_line":4,"original":"return \"hello world\"","proposed":"return \"hi\""}
 	]`)
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.line-row.has-line-marks .line-mark-suggestion`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.line-row.has-line-marks .line-mark`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("suggestion line never grew a suggestion mark: %v%s", err, diag())
 	}
@@ -41,34 +40,23 @@ func TestE2E_LineIndicators(t *testing.T) {
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 		chromedp.SendKeys(`.composer textarea`, "needs a doc comment", chromedp.ByQuery),
 		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.line-row.has-line-marks .line-mark-comment`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.line-row.has-line-marks .line-mark`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("comment line never grew a comment mark: %v%s", err, diag())
 	}
 
-	// The suggestion row's mark: clicking it collapses that row's inline cards.
-	// Scope to the row that has the suggestion box (data-key sg-s1 lives under it).
+	// #165 retired the manual per-line collapse: an OPEN suggestion's card always shows,
+	// and clicking the badge peeks DONE cards (covered by TestE2E_AnnotationBadges). Here
+	// we just confirm the open card stays visible beside its badge.
 	rowSel := `.line-row:has(.inline-suggestion[data-key="sg-s1"])`
-	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(rowSel+` .inline-suggestion`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('`+rowSel+` .line-marks').click()`, nil),
-		chromedp.Sleep(200*time.Millisecond),
-	); err != nil {
-		t.Fatalf("click suggestion-row mark: %v%s", err, diag())
-	}
-	// The card is now display:none (collapsed) — assert it's not visible.
 	var suggestionVisible bool
-	_ = chromedp.Run(p.ctx, chromedp.Evaluate(
-		`(() => { const el = document.querySelector('`+rowSel+` .inline-suggestion'); if (!el) return false; return el.offsetParent !== null; })()`, &suggestionVisible))
-	if suggestionVisible {
-		t.Errorf("clicking the mark should collapse the suggestion card (display:none)%s", diag())
-	}
-
-	// Clicking again expands it back.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelector('`+rowSel+` .line-marks').click()`, nil),
 		chromedp.WaitVisible(rowSel+` .inline-suggestion`, chromedp.ByQuery),
+		chromedp.Evaluate(`!!document.querySelector('`+rowSel+` .inline-suggestion')?.offsetParent`, &suggestionVisible),
 	); err != nil {
-		t.Fatalf("second click should re-expand the card: %v%s", err, diag())
+		t.Fatalf("open suggestion card: %v%s", err, diag())
+	}
+	if !suggestionVisible {
+		t.Errorf("an open suggestion's card should stay visible%s", diag())
 	}
 }

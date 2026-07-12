@@ -20,6 +20,7 @@ import (
 
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/device"
 )
 
 func TestE2E_CountBadges(t *testing.T) {
@@ -66,10 +67,10 @@ func TestE2E_CountBadges(t *testing.T) {
 		}
 		return n
 	}
-	// badgeText reads a badge's rendered count for the row owning `line`.
-	badgeText := func(line int, kind string) string {
+	// badgeText reads the row's ONE unified badge count (#165: total comments + suggestions).
+	badgeText := func(line int) string {
 		var s string
-		js := fmt.Sprintf(`(document.querySelector('%s .line-mark-%s')?.textContent||"").trim()`, rowSel(line), kind)
+		js := fmt.Sprintf(`(document.querySelector('%s .line-mark')?.textContent||"").trim()`, rowSel(line))
 		if err := chromedp.Run(p.ctx, chromedp.Evaluate(js, &s)); err != nil {
 			t.Fatalf("badgeText: %v%s", err, diag())
 		}
@@ -109,25 +110,23 @@ func TestE2E_CountBadges(t *testing.T) {
 	addComment(3, "first comment on line 3")
 	addComment(3, "second comment on line 3")
 
-	// --- The load-bearing assertion: a badge's number equals the cards rendered
-	//     on that row (derived from the same filtered maps). ---
-	if got := badgeText(3, "comment"); got != "2" {
-		t.Errorf("line 3 comment badge = %q, want \"2\"%s", got, diag())
+	// --- The load-bearing assertion: the ONE unified badge's number equals the total
+	//     cards rendered on that row (#165). Line 3 = 2 comments; line 4 = 1 comment + 1
+	//     suggestion = 2. ---
+	if got := badgeText(3); got != "2" {
+		t.Errorf("line 3 badge = %q, want \"2\"%s", got, diag())
 	}
 	if got := visibleCount(3, ".inline-comment"); got != 2 {
 		t.Errorf("line 3 shows %d comment cards, badge claims 2%s", got, diag())
 	}
-	if got := badgeText(4, "comment"); got != "1" {
-		t.Errorf("line 4 comment badge = %q, want \"1\"%s", got, diag())
-	}
-	if got := badgeText(4, "suggestion"); got != "1" {
-		t.Errorf("line 4 suggestion badge = %q, want \"1\"%s", got, diag())
+	if got := badgeText(4); got != "2" {
+		t.Errorf("line 4 badge = %q, want \"2\" (1 comment + 1 suggestion)%s", got, diag())
 	}
 	if got := visibleCount(4, ".inline-comment"); got != 1 {
-		t.Errorf("line 4 shows %d comment cards, badge claims 1%s", got, diag())
+		t.Errorf("line 4 shows %d comment cards%s", got, diag())
 	}
 	if got := visibleCount(4, ".inline-suggestion"); got != 1 {
-		t.Errorf("line 4 shows %d suggestion cards, badge claims 1%s", got, diag())
+		t.Errorf("line 4 shows %d suggestion cards%s", got, diag())
 	}
 
 	// --- Tap target: the badge button is ≥24px in both axes (touch-friendly). ---
@@ -147,39 +146,43 @@ func TestE2E_CountBadges(t *testing.T) {
 		t.Errorf("line-marks tap height = %dpx, want ≥24%s", h, diag())
 	}
 
-	// --- Clicking the badge collapses the row's cards, clicking again expands.
-	//     Done at a stable viewport (no mid-toggle re-render, which would strip the
-	//     client-only .cards-collapsed class). ---
-	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(fmt.Sprintf(`document.querySelector('%s .line-marks').click()`, rowSel(3)), nil),
-		chromedp.Sleep(200*time.Millisecond),
-	); err != nil {
-		t.Fatalf("click badge to collapse: %v%s", err, diag())
-	}
-	if got := visibleCount(3, ".inline-comment"); got != 0 {
-		t.Errorf("after clicking the badge, %d comment cards still visible (want 0/collapsed)%s", got, diag())
-	}
-	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(fmt.Sprintf(`document.querySelector('%s .line-marks').click()`, rowSel(3)), nil),
-		chromedp.Sleep(200*time.Millisecond),
-	); err != nil {
-		t.Fatalf("click badge to re-expand: %v%s", err, diag())
-	}
+	// (#165 retired the manual per-line collapse: OPEN cards always show; the badge now
+	// peeks DONE cards — covered by TestE2E_AnnotationBadges. Open comments stay visible.)
 	if got := visibleCount(3, ".inline-comment"); got != 2 {
-		t.Errorf("after re-clicking, %d comment cards visible (want 2)%s", got, diag())
+		t.Errorf("open comment cards should stay visible; got %d%s", got, diag())
 	}
 
-	// --- Coarse pointer / phone: the tap target stays ≥24px at a phone width so a
-	//     finger can hit it. ---
-	if err := chromedp.Run(p.ctx, chromedp.EmulateViewport(390, 780), chromedp.Sleep(200*time.Millisecond)); err != nil {
-		t.Fatalf("emulate phone viewport: %v", err)
+	// --- Coarse pointer / phone: on a real touch device the badge is the primary tap
+	//     affordance, so the `@media (pointer: coarse)` rule grows it to ~44px. Device
+	//     emulation (touch) is what actually flips `pointer: coarse` — SetEmulatedMedia
+	//     does NOT override `pointer` (see e2e_kbdhint_test.go). ---
+	if err := chromedp.Run(p.ctx, chromedp.Emulate(device.IPhone11), chromedp.Sleep(250*time.Millisecond)); err != nil {
+		t.Fatalf("emulate phone (touch): %v", err)
 	}
-	if w, h := rectDim(3, 0), rectDim(3, 1); w < 24 || h < 24 {
-		t.Errorf("phone tap target = %dx%dpx, want ≥24 in both axes%s", w, h, diag())
+	// Guard the guard: the media query must actually be active, or the ≥44 assertion
+	// below would pass vacuously on the base 24px badge.
+	if intEval(`matchMedia('(pointer: coarse)').matches ? 1 : 0`) != 1 {
+		t.Fatalf("(pointer: coarse) not active under device emulation — the tap-target assertion would be vacuous%s", diag())
+	}
+	if w, h := rectDim(3, 0), rectDim(3, 1); w < 44 || h < 44 {
+		t.Errorf("phone tap target = %dx%dpx, want ≥44 in both axes (coarse-pointer enlarge)%s", w, h, diag())
+	}
+	// The enlarged badge must NOT sit over the code: its left edge stays within the
+	// gutter that `.content`'s padding-right reserves, so text is never occluded.
+	noOverlap := intEval(fmt.Sprintf(`(() => {
+		const row = document.querySelector('%s');
+		const marks = row.querySelector('.line-marks').getBoundingClientRect();
+		const content = row.querySelector('.content');
+		const cr = content.getBoundingClientRect();
+		const textRight = cr.right - parseFloat(getComputedStyle(content).paddingRight);
+		return marks.left >= textRight - 1 ? 1 : 0;
+	})()`, rowSel(3)))
+	if noOverlap != 1 {
+		t.Errorf("the enlarged badge overlaps the code text (padding-right reserve too small)%s", diag())
 	}
 
 	// --- "Hide annotations" menu toggle removes ALL badges + inline cards. ---
-	if err := chromedp.Run(p.ctx, chromedp.EmulateViewport(1200, 800), chromedp.Sleep(150*time.Millisecond)); err != nil {
+	if err := chromedp.Run(p.ctx, chromedp.Emulate(device.Reset), chromedp.EmulateViewport(1200, 800), chromedp.Sleep(150*time.Millisecond)); err != nil {
 		t.Fatalf("restore desktop viewport: %v", err)
 	}
 	p.openViewItem("toggleMarks")

@@ -1816,30 +1816,11 @@ header.file-head .file-head-comment button svg { display: block; }
   padding: 0 0.2rem; margin: 0; border: 0; border-radius: 999px;
   background: none; cursor: pointer;
 }
-/* The applied-suggestion ✦ badge — a tap-sized accent chip (the suggestion identity
-   colour, matching .sg-label and the queue ✦), click re-expands the box inline. The
-   form is display:contents so the button is a direct flex child of .line-margin. */
-.applied-badge-form { display: contents; }
-.applied-badge {
-  min-width: 1.1rem; height: 1.1rem; padding: 0 0.24rem; margin: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
-  color: var(--accent); font-size: 0.72rem; line-height: 1; cursor: pointer;
-}
-.applied-badge:hover { background: color-mix(in srgb, var(--accent) 40%, var(--surface)); }
-/* While the box is peeked open, the badge reads as pressed/active — a stronger fill
-   and a solid ring, so the ✦ signals "click me again to collapse". */
-.applied-badge.is-expanded {
-  background: color-mix(in srgb, var(--accent) 55%, var(--surface));
-  border-color: var(--accent);
-}
 /* A badge = a colour-coded circle with the count centred INSIDE it. The fill is an
-   opaque kind-colour/surface mix (opaque, not translucent, so it stays deterministic
+   opaque state-colour/surface mix (opaque, not translucent, so it stays deterministic
    even over a diff-tinted line) and the digit is the normal foreground colour — the
    same contrast-safe treatment as .status-badge, so the WCAG walk passes in every
-   scheme×mode without a per-scheme text colour. A kind-coloured ring sharpens it. */
+   scheme×mode without a per-scheme text colour. A state-coloured ring sharpens it. */
 .line-mark {
   min-width: 1.1rem; height: 1.1rem; padding: 0 0.24rem;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1847,15 +1828,27 @@ header.file-head .file-head-comment button svg { display: block; }
   font-family: var(--jbm); font-size: 0.66rem; font-weight: 700; line-height: 1;
   color: var(--pico-color);
 }
-.line-mark-comment {
-  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+/* #165: badges are coloured by STATE, not kind. Three states, checked open→accepted→done:
+   YELLOW (amber) = OPEN work (unresolved comment / UNDECIDED suggestion); ACCENTUATED
+   yellow = an ACCEPTED-but-unapplied suggestion (the agent still has to apply it); GREEN =
+   all done (resolved / applied / rejected). Open wins over accepted on a mixed line.
+   --pr-open falls back to a scheme-neutral amber (only a tint, so no per-scheme dark
+   variant needed). is-accepted is a HOTTER amber fill + a solid full-strength border, so it
+   reads distinctly as "accentuated yellow" while its digit stays contrast-safe (the WCAG
+   walk, TestE2E_DarkNoLowContrast, still passes). */
+.line-mark.is-open {
+  background: color-mix(in srgb, var(--pr-open, #c9a000) 26%, var(--surface));
+  border-color: color-mix(in srgb, var(--pr-open, #c9a000) 60%, transparent);
 }
-.line-mark-suggestion {
-  background: color-mix(in srgb, var(--pr-add) 30%, var(--surface));
-  border-color: color-mix(in srgb, var(--pr-add) 55%, transparent);
+.line-mark.is-accepted {
+  background: color-mix(in srgb, var(--pr-open, #c9a000) 42%, var(--surface));
+  border-color: var(--pr-open, #c9a000);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--pr-open, #c9a000) 45%, transparent);
 }
-/* Hover / collapsed give the whole button a pill-shaped affordance. */
+.line-mark.is-done {
+  background: color-mix(in srgb, var(--pr-add) 26%, var(--surface));
+  border-color: color-mix(in srgb, var(--pr-add) 60%, transparent);
+}
 .line-marks:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 /* #149: a small accent dot on a row's badge when a comment/suggestion there is
    awaiting the agent (the reviewer replied last). .line-marks is position:relative
@@ -1867,12 +1860,41 @@ header.file-head .file-head-comment button svg { display: block; }
   background: var(--accent);
   box-shadow: 0 0 0 1.5px var(--surface);
 }
-/* Clicking a badge collapses that line's inline cards (pure-client lvt-el toggle);
-   the badges stay as the compact signal that they're there. */
-.line-row.cards-collapsed .inline-comment,
-.line-row.cards-collapsed .inline-suggestion { display: none; }
-/* When collapsed, ring the button so it reads as "click to expand". */
-.line-row.cards-collapsed .line-marks { background: color-mix(in srgb, currentColor 12%, transparent); }
+/* #165: HANDLED annotations auto-collapse to their state badge, so the document reads clean
+   once work is done — a RESOLVED comment or an ACCEPTED/REJECTED suggestion tucks behind its
+   badge (accented-yellow while accepted-but-unapplied, green once applied/rejected/resolved).
+   Everything still PENDING stays visible inline: an unresolved comment, an UNDECIDED
+   suggestion (so a proposed edit is right there to accept), and a suggestion awaiting the
+   agent — revision-requested (sg-revise) or being reverted (sg-revert). Peek a collapsed card
+   by clicking its badge (`.peek-done`, a pure-client lvt-el toggle) or globally via "Show
+   resolved" (.show-resolved). The M4 status/revert controls live inside the peeked card. */
+.code .inline-comment.is-resolved,
+.code .inline-suggestion.sg-accept,
+.code .inline-suggestion.sg-reject,
+.md-view .inline-comment.is-resolved,
+.md-view .inline-suggestion.sg-accept,
+.md-view .inline-suggestion.sg-reject { display: none; }
+.line-row.peek-done .inline-comment.is-resolved,
+.line-row.peek-done .inline-suggestion.sg-accept,
+.line-row.peek-done .inline-suggestion.sg-reject,
+.md-block.peek-done .inline-comment.is-resolved,
+.md-block.peek-done .inline-suggestion.sg-accept,
+.md-block.peek-done .inline-suggestion.sg-reject,
+.layout.show-resolved .code .inline-comment.is-resolved,
+.layout.show-resolved .code .inline-suggestion.sg-accept,
+.layout.show-resolved .code .inline-suggestion.sg-reject,
+.layout.show-resolved .md-view .inline-comment.is-resolved,
+.layout.show-resolved .md-view .inline-suggestion.sg-accept,
+.layout.show-resolved .md-view .inline-suggestion.sg-reject { display: block; }
+/* #165: the md-view has no gutter, so each block carries its state badge at the top-
+   right corner (the .line-mark chips reuse the diff-view colours). */
+.md-block { position: relative; }
+.md-block-marks {
+  position: absolute; top: 0.35rem; right: 0.35rem; z-index: 2;
+  min-height: 24px; min-width: 24px;
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.28rem;
+  margin: 0; padding: 0; border: 0; background: none; cursor: pointer;
+}
 /* #151 review note: "Hide annotations" (marks-hidden, via the overflow menu) and
    focus mode both hide the per-line count badges AND their inline cards in the diff,
    so the reviewer reads the raw code clean. Scoped to .code so it never blanks the
@@ -2132,6 +2154,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 @media (pointer: coarse) {
   .kbd-hint { display: none; }
+  /* #165: the annotation badges are the primary touch affordance — grow the tap
+     target to a comfortable ~44px on a finger, and enlarge the count chip so it's
+     legible. The chip stays right-aligned; the extra width is empty tap room. */
+  .line-marks, .md-block-marks { min-height: 44px; min-width: 44px; }
+  .code .line-row.has-line-marks .content { padding-right: 3.4rem; }
+  .line-mark {
+    min-width: 1.5rem; height: 1.5rem; padding: 0 0.34rem; font-size: 0.82rem;
+  }
 }
 /* Search palette (issue #91) — a command-palette overlay: top input + scrolling
    result list, reusing the keyboard-help modal's backdrop/positioning. */
@@ -2422,12 +2452,30 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .inline-suggestion .sg-accept-btn { color: var(--pr-add); border-color: color-mix(in srgb, var(--pr-add) 55%, transparent); }
 .inline-suggestion .sg-reject-btn { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 55%, transparent); }
 .sg-verdict-badge { font-weight: 600; }
-.sg-verdict-badge.sg-accept { color: var(--pr-add); }
+/* #165: an ACCEPTED-but-unapplied suggestion is amber (pending the agent's apply),
+   matching its accentuated-yellow count badge; it turns GREEN only once applied. */
+.sg-verdict-badge.sg-accept { color: var(--pr-open, #c9a000); }
+.inline-suggestion.is-applied .sg-verdict-badge.sg-accept { color: var(--pr-add); }
 .sg-verdict-badge.sg-reject { color: var(--pr-del); }
 .sg-verdict-badge.sg-revise { color: var(--accent); }
-/* A decided card gets a subtle left-border tint matching its verdict. */
-.inline-suggestion.is-decided.sg-accept { border-left-color: var(--pr-add); }
-.inline-suggestion.is-decided.sg-reject { border-left-color: var(--pr-del); }
+/* A decided card is re-skinned to its STATE colour — the WHOLE box (all borders + a
+   background wash), not just the left rail — so it reads unmistakably: accepted-pending →
+   amber, applied → green, rejected → red. */
+.inline-suggestion.is-decided.sg-accept {
+  border-color: color-mix(in srgb, var(--pr-open, #c9a000) 42%, var(--pr-comment-bd));
+  border-left-color: var(--pr-open, #c9a000);
+  background: color-mix(in srgb, var(--pr-open, #c9a000) 11%, var(--pr-comment-bg));
+}
+.inline-suggestion.is-decided.sg-accept.is-applied {
+  border-color: color-mix(in srgb, var(--pr-add) 42%, var(--pr-comment-bd));
+  border-left-color: var(--pr-add);
+  background: color-mix(in srgb, var(--pr-add) 11%, var(--pr-comment-bg));
+}
+.inline-suggestion.is-decided.sg-reject {
+  border-color: color-mix(in srgb, var(--pr-del) 42%, var(--pr-comment-bd));
+  border-left-color: var(--pr-del);
+  background: color-mix(in srgb, var(--pr-del) 11%, var(--pr-comment-bg));
+}
 .inline-suggestion.is-decided.sg-reject .sg-diff { opacity: 0.6; }
 /* The reviewer's requested-change note (revise verdict). */
 .inline-suggestion .sg-revise-note {

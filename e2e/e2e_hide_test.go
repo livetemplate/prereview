@@ -11,6 +11,8 @@
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,26 +21,30 @@ import (
 )
 
 func TestE2E_HideResolvedComment(t *testing.T) {
-	p := bootChromeAgainstPrereview(t, 1200, 800)
+	// Two already-resolved comments (seeded — robust vs the UI resolve loop, which is
+	// finicky now that resolving collapses a card mid-interaction). Both start collapsed
+	// to a green badge (#165).
+	repo := setupFixtureRepo(t)
+	pdir := filepath.Join(repo, ".prereview")
+	if err := os.MkdirAll(pdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seed := "id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url\n" +
+		"c1,edited.go,3,3,new,first-note,2026-06-30T12:00:00Z,true,,,line,,\n" +
+		"c2,edited.go,4,4,new,second-note,2026-06-30T12:00:00Z,true,,,line,,\n"
+	if err := os.WriteFile(filepath.Join(pdir, "comments.csv"), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := bootChromeAgainstRepo(t, repo, 1200, 800)
 	p.waitReady()
 	p.clickFile("edited.go")
 
-	// addComment seeds one comment on the given diff line.
-	addComment := func(oldNum, newNum int, body string) {
-		p.clickLine(oldNum, newNum)
-		if err := chromedp.Run(p.ctx,
-			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
-			chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
-			chromedp.Sleep(250*time.Millisecond),
-		); err != nil {
-			t.Fatalf("add comment %q: %v\nstderr: %s", body, err, p.stderr.String())
-		}
-	}
+	// #165: resolved cards stay in the DOM (collapsed to a green badge), so count and
+	// read only the VISIBLE ones.
 	countInline := func() int {
 		var n int
 		if err := chromedp.Run(p.ctx, chromedp.Evaluate(
-			`document.querySelectorAll('.inline-comment').length`, &n)); err != nil {
+			`[...document.querySelectorAll('.inline-comment')].filter(e=>e.offsetParent).length`, &n)); err != nil {
 			t.Fatalf("count inline: %v", err)
 		}
 		return n
@@ -46,26 +52,14 @@ func TestE2E_HideResolvedComment(t *testing.T) {
 	firstCardBody := func() string {
 		var s string
 		if err := chromedp.Run(p.ctx, chromedp.Evaluate(
-			`(document.querySelector('.inline-comment .body')||{textContent:""}).textContent`, &s)); err != nil {
+			`([...document.querySelectorAll('.inline-comment')].find(e=>e.offsetParent)?.querySelector('.body')||{textContent:""}).textContent`, &s)); err != nil {
 			t.Fatalf("read first card body: %v", err)
 		}
 		return strings.TrimSpace(s)
 	}
 
-	// Two comments, both then resolved (resolving hides them by default).
-	addComment(3, 3, "first-note")
-	addComment(0, 4, "second-note")
-	for range []int{0, 1} {
-		if err := chromedp.Run(p.ctx,
-			chromedp.WaitVisible(`.inline-comment button[name='toggleResolved']`, chromedp.ByQuery),
-			chromedp.Click(`.inline-comment button[name='toggleResolved']`, chromedp.ByQuery),
-			chromedp.Sleep(300*time.Millisecond),
-		); err != nil {
-			t.Fatalf("resolve a comment: %v\nstderr: %s", err, p.stderr.String())
-		}
-	}
 	if n := countInline(); n != 0 {
-		t.Fatalf("both resolved should be hidden by default; %d still shown", n)
+		t.Fatalf("both resolved should be collapsed (not visible) by default; %d still shown", n)
 	}
 
 	// Show resolved → both reappear (as .is-resolved), each with a Hide button.
