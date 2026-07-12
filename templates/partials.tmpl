@@ -547,3 +547,15 @@
     {{- template "deleteDialogTagged" . -}}
   </div></div>
 {{- end}}
+
+{{- /* #155: a version's diff STAT (+add/−del) — the scalable floor shown under the
+       agent's changelog (or alone when there's no changelog). Counts only, never the
+       raw diff lines, so it stays compact for a large change. */ -}}
+{{define "versionSummary" -}}
+{{- if .Initial}}<span class="vs-note">Initial version — the starting point.</span>
+{{- else if .Deleted}}<span class="vs-note">File removed at this version.</span>
+{{- else if .Binary}}<span class="vs-note">Binary file changed.</span>
+{{- else -}}
+<span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>
+{{- end -}}
+{{- end}}

@@ -162,12 +162,20 @@ review, but always do it:
 
 ```bash
 prereview status --out "<REPO>" working "Applying your review"   # starting a batch
-prereview status --out "<REPO>" done                             # batch finished
+prereview status --out "<REPO>" done "Tightened the intro and removed a duplicate word"  # finished + changelog
 ```
 
-Keep the message short and plain. **Do not put a comment count in it** — the queue
-can grow while you work, so any number goes stale. The status resets on each fresh
-launch; you write nothing on `end` (the server is shutting down).
+Keep the working message short and plain. **Do not put a comment count in it** — the
+queue can grow while you work, so any number goes stale. The status resets on each
+fresh launch; you write nothing on `end` (the server is shutting down).
+
+**The `done` message is the version changelog (#155).** When you finish a batch that
+edited files, prereview snapshots a new version — and your `done` message becomes that
+version's changelog entry, shown in the file's Versions panel. So make it a short,
+plain-language sentence describing *what you changed to the docs* this batch ("Fixed the
+subject–verb agreement in the API section"), not what you were busy doing. One line; no
+diff or counts (prereview shows the +add/−del itself). Skip the message on a batch that
+changed no files.
 
 ## Mark each comment you addressed — REQUIRED
 

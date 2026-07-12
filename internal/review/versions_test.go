@@ -39,7 +39,7 @@ func TestCheckpoint_BaselineAndDedup(t *testing.T) {
 	a := writeRef(t, work, "a.txt", "hello")
 
 	// Baseline always lands even though it's the first (nothing to compare).
-	cp, created, err := s.Checkpoint([]FileRef{a}, VersionTriggerBaseline)
+	cp, created, err := s.Checkpoint([]FileRef{a}, VersionTriggerBaseline, "")
 	if err != nil || !created {
 		t.Fatalf("baseline: created=%v err=%v", created, err)
 	}
@@ -53,7 +53,7 @@ func TestCheckpoint_BaselineAndDedup(t *testing.T) {
 
 	// Re-checkpoint with no change → skipped (created=false), no new blob, no
 	// new timeline entry.
-	_, created, err = s.Checkpoint([]FileRef{a}, VersionTriggerLLMDone)
+	_, created, err = s.Checkpoint([]FileRef{a}, VersionTriggerLLMDone, "")
 	if err != nil || created {
 		t.Fatalf("no-op checkpoint should be skipped: created=%v err=%v", created, err)
 	}
@@ -70,7 +70,7 @@ func TestCheckpoint_BaselineAndDedup(t *testing.T) {
 	if err := os.WriteFile(a.AbsPath, []byte("hello world"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cp2, created, err := s.Checkpoint([]FileRef{a}, VersionTriggerLLMDone)
+	cp2, created, err := s.Checkpoint([]FileRef{a}, VersionTriggerLLMDone, "")
 	if err != nil || !created {
 		t.Fatalf("changed checkpoint: created=%v err=%v", created, err)
 	}
@@ -89,7 +89,7 @@ func TestCheckpoint_DedupAcrossFiles(t *testing.T) {
 	a := writeRef(t, work, "a.txt", "same")
 	b := writeRef(t, work, "b.txt", "same") // identical content → shares one blob
 
-	if _, created, err := s.Checkpoint([]FileRef{a, b}, VersionTriggerBaseline); err != nil || !created {
+	if _, created, err := s.Checkpoint([]FileRef{a, b}, VersionTriggerBaseline, ""); err != nil || !created {
 		t.Fatalf("checkpoint: created=%v err=%v", created, err)
 	}
 	blobs, _ := os.ReadDir(filepath.Join(s.root, "blobs"))
@@ -102,10 +102,10 @@ func TestRestore_ReturnsExactBytes(t *testing.T) {
 	s := newTestStore(t)
 	work := t.TempDir()
 	a := writeRef(t, work, "a.txt", "v0-content")
-	s.Checkpoint([]FileRef{a}, VersionTriggerBaseline)
+	s.Checkpoint([]FileRef{a}, VersionTriggerBaseline, "")
 
 	os.WriteFile(a.AbsPath, []byte("v1-content"), 0o644)
-	s.Checkpoint([]FileRef{a}, VersionTriggerLLMDone)
+	s.Checkpoint([]FileRef{a}, VersionTriggerLLMDone, "")
 
 	got, err := s.Restore("a.txt", 0)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestCheckpoint_Tombstone(t *testing.T) {
 	work := t.TempDir()
 	a := writeRef(t, work, "a.txt", "will be deleted")
 	b := writeRef(t, work, "b.txt", "survives")
-	s.Checkpoint([]FileRef{a, b}, VersionTriggerBaseline)
+	s.Checkpoint([]FileRef{a, b}, VersionTriggerBaseline, "")
 
 	// LLM deletes a.txt. A missing ref must NOT fail the whole checkpoint — it's
 	// recorded as a tombstone, and b's change still lands.
@@ -140,7 +140,7 @@ func TestCheckpoint_Tombstone(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(b.AbsPath, []byte("edited"), 0o644)
-	cp, created, err := s.Checkpoint([]FileRef{a, b}, VersionTriggerLLMDone)
+	cp, created, err := s.Checkpoint([]FileRef{a, b}, VersionTriggerLLMDone, "")
 	if err != nil || !created {
 		t.Fatalf("checkpoint after delete: created=%v err=%v", created, err)
 	}
@@ -168,13 +168,13 @@ func TestFileHistory_SubsequenceOfChanges(t *testing.T) {
 	work := t.TempDir()
 	a := writeRef(t, work, "a.txt", "one")
 	b := writeRef(t, work, "b.txt", "static")
-	s.Checkpoint([]FileRef{a, b}, VersionTriggerBaseline) // seq 0: a=one
+	s.Checkpoint([]FileRef{a, b}, VersionTriggerBaseline, "") // seq 0: a=one
 
 	os.WriteFile(a.AbsPath, []byte("two"), 0o644)
-	s.Checkpoint([]FileRef{a, b}, VersionTriggerLLMDone) // seq 1: a=two (b unchanged)
+	s.Checkpoint([]FileRef{a, b}, VersionTriggerLLMDone, "") // seq 1: a=two (b unchanged)
 
 	os.WriteFile(a.AbsPath, []byte("three"), 0o644)
-	s.Checkpoint([]FileRef{a, b}, VersionTriggerLLMDone) // seq 2: a=three
+	s.Checkpoint([]FileRef{a, b}, VersionTriggerLLMDone, "") // seq 2: a=three
 
 	hist, err := s.FileHistory("a.txt")
 	if err != nil {
@@ -200,7 +200,7 @@ func TestVersionStore_PersistsAcrossReopen(t *testing.T) {
 	a := writeRef(t, work, "a.txt", "durable")
 
 	s1, _ := NewVersionStore(root)
-	s1.Checkpoint([]FileRef{a}, VersionTriggerBaseline)
+	s1.Checkpoint([]FileRef{a}, VersionTriggerBaseline, "")
 
 	// Reopen (simulating a server restart): history must survive.
 	s2, err := NewVersionStore(root)

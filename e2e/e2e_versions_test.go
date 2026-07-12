@@ -33,13 +33,15 @@ func seedVersionStore(t *testing.T, repo, path string, contents ...string) {
 		if err := os.WriteFile(filepath.Join(vdir, "blobs", sha), []byte(c), 0o644); err != nil {
 			t.Fatalf("write blob: %v", err)
 		}
-		trigger := "llm-done"
+		trigger, summary := "llm-done", ""
 		if i == 0 {
 			trigger = "baseline"
+		} else {
+			summary = fmt.Sprintf("Agent changelog for edit %d", i) // #155: seeded changelog
 		}
 		lines = append(lines, fmt.Sprintf(
-			`{"seq":%d,"ts":"2026-01-%02dT00:00:00Z","trigger":%q,"files":[{"path":%q,"sha":%q}]}`,
-			i, i+1, trigger, path, sha))
+			`{"seq":%d,"ts":"2026-01-%02dT00:00:00Z","trigger":%q,"summary":%q,"files":[{"path":%q,"sha":%q}]}`,
+			i, i+1, trigger, summary, path, sha))
 	}
 	if err := os.WriteFile(filepath.Join(vdir, "timeline.jsonl"), []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
 		t.Fatalf("write timeline: %v", err)
@@ -129,7 +131,10 @@ func TestE2E_VersionTimeline(t *testing.T) {
 	var bannerText, diffHTML string
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(`button[name="diffVersion"]`, chromedp.ByQuery),
+		// #155: the actions now live in the collapsed .version-details (revealed by the
+		// row's ⋯ toggle). clickVersionBtnJS fires a JS click that works regardless, so
+		// wait for presence (WaitReady), not visibility.
+		chromedp.WaitReady(`button[name="diffVersion"]`, chromedp.ByQuery),
 		chromedp.Evaluate(clickVersionBtnJS("diffVersion", 0), nil),
 		chromedp.WaitVisible(`.version-view-banner`, chromedp.ByQuery),
 		chromedp.Text(`.version-view-banner`, &bannerText, chromedp.ByQuery),
@@ -159,7 +164,7 @@ func TestE2E_VersionTimeline(t *testing.T) {
 	var pausedBanners int
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(`button[name="restoreVersion"]`, chromedp.ByQuery),
+		chromedp.WaitReady(`button[name="restoreVersion"]`, chromedp.ByQuery),
 		chromedp.Evaluate(clickVersionBtnJS("restoreVersion", 0), nil),
 		chromedp.WaitVisible(`.refresh-prompt`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelectorAll('.paused-prompt').length`, &pausedBanners),
@@ -193,6 +198,90 @@ func TestE2E_VersionTimeline(t *testing.T) {
 // clickVersionBtnJS returns JS that clicks the version-panel button (viewVersion
 // / restoreVersion) whose form carries the given seq — the robust JS-click the
 // harness prefers over coordinate dispatch for dropdown-panel buttons.
+// TestE2E_VersionSummary (#155): each version row is compact by default; its ⋯ toggle
+// expands INLINE to reveal the computed "what changed" diff summary + the (now
+// decluttered) actions — and expanding a row must NOT close the Versions dropdown
+// (the nested-toggle-inside-a-toggle case).
+func TestE2E_VersionSummary(t *testing.T) {
+	const (
+		original = "package edited\n\nfunc Hello() string {\n\treturn \"ORIGINAL-VERSION\"\n}\n"
+		working  = "package edited\n\nfunc Hello() string {\n\treturn \"hello world\"\n}\n"
+	)
+	repo := setupFixtureRepo(t)
+	seedVersionStore(t, repo, "edited.go", original, working)
+
+	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--agent")
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		return "\n--- server ---\n" + p.stderr.String() + "\n--- html ---\n" + html
+	}
+	p.waitReady()
+	p.clickFile("edited.go")
+
+	// Open the panel: rows are compact — the actions start hidden (in .version-details).
+	var actionVisible bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),
+		chromedp.Click(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.versions-panel .version-row .version-summary-toggle`, chromedp.ByQuery),
+		chromedp.Evaluate(`(() => { const b = document.querySelector('.version-row button[name="viewVersion"]'); return !!(b && b.offsetParent); })()`, &actionVisible),
+	); err != nil {
+		t.Fatalf("open versions panel: %v%s", err, diag())
+	}
+	if actionVisible {
+		t.Errorf("version actions should be collapsed by default (behind the ⋯ toggle)%s", diag())
+	}
+
+	// Expand the newest row (the "Agent edit") → its agent changelog + the +add/−del
+	// stat. The raw diff-line preview is gone (it didn't scale to a large diff).
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('.version-row')[0].querySelector('.version-summary-toggle').click()`, nil),
+		chromedp.WaitVisible(`.version-row.expanded .version-changelog`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.version-row.expanded .version-summary .vs-add`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("expand version row: %v%s", err, diag())
+	}
+
+	var changelog string
+	var add, rem, previewLines int
+	_ = chromedp.Run(p.ctx,
+		chromedp.Text(`.version-row.expanded .version-changelog`, &changelog, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.version-row.expanded .vs-add').textContent.trim()==='+1'?1:0`, &add),
+		chromedp.Evaluate(`document.querySelector('.version-row.expanded .vs-rem').textContent.trim()==='−1'?1:0`, &rem),
+		chromedp.Evaluate(`document.querySelectorAll('.version-row.expanded .vs-line').length`, &previewLines),
+	)
+	if !strings.Contains(changelog, "Agent changelog for edit 1") {
+		t.Errorf("expanded row should show the agent's changelog; got %q%s", changelog, diag())
+	}
+	if add != 1 || rem != 1 {
+		t.Errorf("the +add/−del stat fallback should read +1 −1; add=%d rem=%d%s", add, rem, diag())
+	}
+	if previewLines != 0 {
+		t.Errorf("the raw diff-line preview must be gone (does not scale); got %d lines%s", previewLines, diag())
+	}
+
+	// The nesting de-risk: expanding a row must keep the Versions dropdown OPEN.
+	var dropdownOpen bool
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.versions-dropdown').classList.contains('open')`, &dropdownOpen))
+	if !dropdownOpen {
+		t.Errorf("expanding a row must not close the Versions dropdown%s", diag())
+	}
+
+	// The baseline row's summary reads "Initial version" (no predecessor).
+	var initialNote bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('.version-row')[1].querySelector('.version-summary-toggle').click()`, nil),
+		chromedp.WaitVisible(`.version-row:last-child.expanded .version-summary .vs-note`, chromedp.ByQuery),
+		chromedp.Evaluate(`/Initial/.test(document.querySelector('.version-row:last-child .vs-note').textContent)`, &initialNote),
+	); err != nil {
+		t.Fatalf("expand baseline row: %v%s", err, diag())
+	}
+	if !initialNote {
+		t.Errorf("the baseline row summary should say 'Initial version'%s", diag())
+	}
+}
+
 func clickVersionBtnJS(name string, seq int) string {
 	return fmt.Sprintf(`(() => {
 		const forms = document.querySelectorAll('.versions-panel form');

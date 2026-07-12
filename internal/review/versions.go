@@ -71,6 +71,12 @@ type Checkpoint struct {
 	TS      time.Time     `json:"ts"`
 	Trigger string        `json:"trigger"`
 	Files   []FileVersion `json:"files"`
+	// Changelog is the agent's AI-authored "what changed" for this version (#155) —
+	// a one-line description captured from the agent's status message at the llm-done
+	// checkpoint. Empty for baseline/rollback and for any batch where the agent wrote
+	// no message; the panel falls back to a +add/−del stat then. Non-derived input, so
+	// it IS stored (unlike the diff stat). JSON tag stays "summary" (no migration).
+	Changelog string `json:"summary,omitempty"`
 }
 
 // FileHistoryEntry is one point in a single file's timeline: the checkpoint at
@@ -79,8 +85,9 @@ type Checkpoint struct {
 type FileHistoryEntry struct {
 	Seq     int
 	TS      time.Time
-	Trigger string
-	SHA     string
+	Trigger   string
+	SHA       string
+	Changelog string // the checkpoint's changelog (#155), for the llm-done trigger
 }
 
 // VersionStore is the append-only content-snapshot store rooted at a versions
@@ -120,7 +127,7 @@ func (s *VersionStore) blobPath(sha string) string { return filepath.Join(s.root
 // checkpoint — a deleted file is still restorable state. To keep the timeline
 // meaningful, a checkpoint whose scope is byte-identical to the previous one is
 // skipped (created=false) — EXCEPT the very first (baseline), which always lands.
-func (s *VersionStore) Checkpoint(refs []FileRef, trigger string) (cp Checkpoint, created bool, err error) {
+func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp Checkpoint, created bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -152,7 +159,10 @@ func (s *VersionStore) Checkpoint(refs []FileRef, trigger string) (cp Checkpoint
 		return cps[len(cps)-1], false, nil
 	}
 
-	cp = Checkpoint{Seq: len(cps), TS: s.now().UTC(), Trigger: trigger, Files: files}
+	// changelog is bound HERE, on the create path only — so a no-op done (unchanged
+	// scope → the early return above) never persists an orphaned changelog that would
+	// mis-attach to the next real checkpoint (#155).
+	cp = Checkpoint{Seq: len(cps), TS: s.now().UTC(), Trigger: trigger, Files: files, Changelog: changelog}
 	if err := s.appendCheckpointLocked(cp); err != nil {
 		return Checkpoint{}, false, err
 	}
@@ -265,7 +275,7 @@ func (s *VersionStore) FileHistory(path string) ([]FileHistoryEntry, error) {
 			// recorded version. A tombstone (SHA "") is itself a change worth
 			// recording (the file was deleted).
 			if len(out) == 0 || fv.SHA != last {
-				out = append(out, FileHistoryEntry{Seq: cp.Seq, TS: cp.TS, Trigger: cp.Trigger, SHA: fv.SHA})
+				out = append(out, FileHistoryEntry{Seq: cp.Seq, TS: cp.TS, Trigger: cp.Trigger, SHA: fv.SHA, Changelog: cp.Changelog})
 				last = fv.SHA
 			}
 		}
