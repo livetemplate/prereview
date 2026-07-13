@@ -1867,25 +1867,35 @@ header.file-head .file-head-comment button svg { display: block; }
    suggestion (so a proposed edit is right there to accept), and a suggestion awaiting the
    agent — revision-requested (sg-revise) or being reverted (sg-revert). Peek a collapsed card
    by clicking its badge (`.peek-done`, a pure-client lvt-el toggle) or globally via "Show
-   resolved" (.show-resolved). The M4 status/revert controls live inside the peeked card. */
+   resolved" (.show-resolved). The M4 status/revert controls live inside the peeked card.
+   #171: `.is-applied` collapses too, and NOT only via sg-accept. The agent can apply an
+   edit the reviewer never accepted (applied != decided), which carries is-applied but no
+   sg-* class — so without this it never collapsed and its badge stayed amber "open"
+   forever, even though the edit was already in the file. Applied is terminal. */
 .code .inline-comment.is-resolved,
 .code .inline-suggestion.sg-accept,
 .code .inline-suggestion.sg-reject,
+.code .inline-suggestion.is-applied,
 .md-view .inline-comment.is-resolved,
 .md-view .inline-suggestion.sg-accept,
-.md-view .inline-suggestion.sg-reject { display: none; }
+.md-view .inline-suggestion.sg-reject,
+.md-view .inline-suggestion.is-applied { display: none; }
 .line-row.peek-done .inline-comment.is-resolved,
 .line-row.peek-done .inline-suggestion.sg-accept,
 .line-row.peek-done .inline-suggestion.sg-reject,
+.line-row.peek-done .inline-suggestion.is-applied,
 .md-block.peek-done .inline-comment.is-resolved,
 .md-block.peek-done .inline-suggestion.sg-accept,
 .md-block.peek-done .inline-suggestion.sg-reject,
+.md-block.peek-done .inline-suggestion.is-applied,
 .layout.show-resolved .code .inline-comment.is-resolved,
 .layout.show-resolved .code .inline-suggestion.sg-accept,
 .layout.show-resolved .code .inline-suggestion.sg-reject,
+.layout.show-resolved .code .inline-suggestion.is-applied,
 .layout.show-resolved .md-view .inline-comment.is-resolved,
 .layout.show-resolved .md-view .inline-suggestion.sg-accept,
-.layout.show-resolved .md-view .inline-suggestion.sg-reject { display: block; }
+.layout.show-resolved .md-view .inline-suggestion.sg-reject,
+.layout.show-resolved .md-view .inline-suggestion.is-applied { display: block; }
 /* #165: the md-view has no gutter, so each block carries its state badge at the top-
    right corner (the .line-mark chips reuse the diff-view colours). */
 .md-block { position: relative; }

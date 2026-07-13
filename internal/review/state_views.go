@@ -187,7 +187,17 @@ func (s PrereviewState) HiddenSuggestionCount() int {
 
 // suggestionUndecided reports the reviewer has not yet accepted or rejected it — the card
 // stays visible inline (only DECIDED suggestions collapse to a badge).
+//
+// An APPLIED suggestion is never undecided (#171). The agent only applies what it has
+// written to the file, so the edit is already IN the document — rendering it as an open
+// proposal is a lie, and it stays amber ("open") forever because there's no verdict to
+// collapse it. Applied is terminal: green, collapsed, out of the queue. It reaches this
+// state without a verdict when the agent applies an edit the reviewer never accepted;
+// Peek / Show-resolved keep the card reachable, so the edit stays discoverable.
 func (s PrereviewState) suggestionUndecided(id string) bool {
+	if s.Applied[id] {
+		return false
+	}
 	d, ok := s.DecisionsBySuggestion()[id]
 	return !ok || (d.Verdict != verdictAccept && d.Verdict != verdictReject)
 }
