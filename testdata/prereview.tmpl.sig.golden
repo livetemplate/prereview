@@ -28,11 +28,18 @@
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialog" .}}</div></div>
 === commentCardSimple ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}"lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}</span></header><div class="body">{{.Body}}</div><div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}"lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}{{if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}</span></header><div class="body">{{.Body}}</div>{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}<form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea name="body" placeholder="Reply to the agent…" lvt-on:input="saveReplyDraft" lvt-mod:debounce="200" lvt-autofocus>{{$.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if .Resolved}}<form method="POST">
+    </form>{{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}{{if .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="hideComment" class="outline">Hide</button>
     </form>{{end}}{{if not .Resolved}}<form method="POST">
