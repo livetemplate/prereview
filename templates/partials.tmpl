@@ -505,10 +505,31 @@
   lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}
 >
   {{- /* line span · resolved badge */ -}}
-  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}</span></header>
+  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}{{if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}</span></header>
   {{- /* comment text */ -}}
   <div class="body">{{.Body}}</div>
-  {{- /* resolve / edit / delete */ -}}
+  {{- /* #149 conversation thread + reviewer reply — the same pair commentCardFull
+         renders. A file/area comment has no line anchor, but its thread is keyed by
+         comment ID like any other, so the agent's "what I did" replies and the
+         reviewer's follow-ups belong here too (#167). */ -}}
+  {{- template "thread" (index $.Threads .ID) -}}
+  {{- if eq $.ReplyingID .ID -}}
+  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea
+      name="body"
+      placeholder="Reply to the agent…"
+      lvt-on:input="saveReplyDraft"
+      lvt-mod:debounce="200"
+      lvt-autofocus
+    >{{$.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>
+  {{- end -}}
+  {{- /* resolve / reply / edit / delete */ -}}
   <div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
@@ -518,6 +539,9 @@
         class="outline"
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
+    {{- if ne $.ReplyingID .ID -}}
+    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
+    {{- end -}}
     {{- if .Resolved -}}
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
