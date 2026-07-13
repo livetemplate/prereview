@@ -88,6 +88,29 @@ func (s PrereviewState) DoneCount() int { return s.countQueue(queueDone) }
 // DraftCount is the number of held (not-yet-enqueued) comments.
 func (s PrereviewState) DraftCount() int { return s.countQueue(queueDraft) }
 
+// AwaitingApplyCount is how many suggestions the reviewer has ACCEPTED but the agent has
+// not yet written to the file (#171).
+//
+// Accepting only records a verdict — prereview never writes user files (#103); the agent
+// applies the edit and acks with `prereview applied <id>`. That works while an agent is
+// looping on `prereview watch`, but accept an edit after its turn has ended and nothing
+// ever applies it: the verdict sits in suggestion-decisions.jsonl, the file is untouched,
+// and the card has already collapsed to an amber badge (#165) that is trivially missed.
+// The document silently never becomes clean.
+//
+// This is the count that makes that state impossible to ignore — surfaced in the queue
+// and warned about on End session. Revert-aware, because s.Applied nets reverted.jsonl:
+// undoing an applied edit correctly puts it back in the awaiting-apply pile.
+func (s PrereviewState) AwaitingApplyCount() int {
+	n := 0
+	for _, sg := range s.scopedSuggestions() {
+		if s.suggestionAcceptedPending(sg.ID) {
+			n++
+		}
+	}
+	return n
+}
+
 // HasQueue reports whether there's anything to show in the queue panel (any
 // draft/queued/done comment or accepted/applied suggestion). Gates the toolbar
 // indicator so it stays hidden on an empty review.

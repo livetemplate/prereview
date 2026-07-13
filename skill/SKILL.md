@@ -287,6 +287,13 @@ On each snapshot, `suggestions[]` is a full snapshot of every decided suggestion
 
 After processing, run `prereview status --out "<REPO>" done` and go read the next event.
 
+**Never finish while an `accept` is unapplied.** prereview does not write the user's
+files — you do. An accepted edit that you don't apply and ack leaves the document
+inconsistent with the review, and once you stop watching, nothing else will ever apply
+it. Before you end your turn, drain every `accept` in the latest snapshot: apply it, then
+`prereview applied "<id>"`. The reviewer's Queue shows an amber "accepted, awaiting apply"
+count for exactly this, and warns them on End session — don't be the reason it's non-zero.
+
 ## Notes
 
 - Comments auto-save on every add/edit/delete — the user never needs to "save".

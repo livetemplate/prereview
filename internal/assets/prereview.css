@@ -1178,6 +1178,10 @@ header.file-head .file-head-actions {
 .q-queued { color: var(--accent); }
 .q-done { color: var(--pr-add); }
 .q-draft { color: var(--pico-muted-color); }
+/* #171: accepted-but-not-yet-applied. Amber, the same --pr-open the #165 "accepted
+   (pending apply)" line badge uses — the toolbar count and the badge on the line mean
+   the same thing, so they read the same. */
+.q-awaiting { color: var(--pr-open, #c9a000); }
 /* Keep the whole chip (label · counts · chevron) on one line — it was wrapping
    the chevron to a second row on a narrow bar. */
 .queue-trigger { display: inline-flex; align-items: center; white-space: nowrap; flex: 0 0 auto; }
@@ -1230,6 +1234,23 @@ header.file-head .file-head-actions {
 .queue-empty { padding: 0.5rem; font-size: 0.8rem; color: var(--pico-muted-color); }
 .queue-working { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
 .queue-legend { padding: 0.25rem 0.5rem 0.4rem; font-size: 0.75rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-card-sectioning-background-color); margin-bottom: 0.2rem; }
+/* #171: the accepted-but-unapplied line. Tinted, not muted like the legend above it —
+   this is the one queue state nothing else will chase, so it has to carry weight. */
+.queue-awaiting {
+  padding: 0.3rem 0.5rem 0.4rem; font-size: 0.75rem; line-height: 1.35;
+  color: var(--pico-color);
+  background: color-mix(in srgb, var(--pr-open, #c9a000) 12%, transparent);
+  border-left: 2px solid var(--pr-open, #c9a000);
+  margin-bottom: 0.3rem;
+}
+/* #171: the same warning on the End-session confirm — the last chance to notice that
+   accepted edits were never written to the file. */
+.end-warn {
+  padding: 0.4rem 0.6rem; margin: 0 0 0.5rem;
+  background: color-mix(in srgb, var(--pr-open, #c9a000) 12%, transparent);
+  border-left: 2px solid var(--pr-open, #c9a000);
+  border-radius: 3px;
+}
 .queue-row { margin: 0; display: flex; align-items: center; gap: 0.15rem; }
 .queue-jump-form { margin: 0; flex: 1 1 auto; min-width: 0; }
 .queue-reenqueue-form { margin: 0; flex: 0 0 auto; }

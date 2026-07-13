@@ -58,3 +58,53 @@ func TestApplied_WithoutAVerdictIsDoneNotOpen(t *testing.T) {
 		t.Error("an accepted suggestion is decided")
 	}
 }
+
+// #171: AwaitingApplyCount is the count that makes "accepted but never applied" impossible
+// to ignore — the state where the reviewer said yes, the agent's turn ended, and nothing
+// will ever write the edit to the file. It walks the accept → apply → revert cycle.
+func TestAwaitingApplyCount_TracksTheAcceptApplyCycle(t *testing.T) {
+	sg := Suggestion{ID: "s1", File: "doc.md", FromLine: 1, ToLine: 1, Side: "new",
+		OriginalText: "teh", ProposedText: "the"}
+	accept := SuggestionDecision{SuggestionID: "s1", Verdict: verdictAccept,
+		Fingerprint: suggestionFingerprint(sg)}
+
+	// Undecided — nothing is owed.
+	s := PrereviewState{SelectedFile: "doc.md", Suggestions: []Suggestion{sg}}
+	if got := s.AwaitingApplyCount(); got != 0 {
+		t.Errorf("undecided: AwaitingApplyCount = %d, want 0", got)
+	}
+
+	// Accepted — the agent owes us a file write. THIS is the state that used to go quiet.
+	s.Decisions = []SuggestionDecision{accept}
+	if got := s.AwaitingApplyCount(); got != 1 {
+		t.Errorf("accepted: AwaitingApplyCount = %d, want 1 — an accepted edit nobody applies "+
+			"leaves the document inconsistent, and the card has already collapsed to a badge", got)
+	}
+
+	// Applied — the edit is in the file; nothing is owed.
+	s.Applied = map[string]bool{"s1": true}
+	if got := s.AwaitingApplyCount(); got != 0 {
+		t.Errorf("applied: AwaitingApplyCount = %d, want 0", got)
+	}
+
+	// Reverted — loadAppliedSet nets reverts, so the id drops out of Applied and the
+	// accept is owed again. (#159's revert path must not strand the count at 0.)
+	s.Applied = map[string]bool{}
+	if got := s.AwaitingApplyCount(); got != 1 {
+		t.Errorf("after revert: AwaitingApplyCount = %d, want 1 — an un-applied accept is "+
+			"pending again", got)
+	}
+
+	// Out-of-scope work never counts (#171 scoping): another file's accepted suggestion
+	// must not show up in this review's awaiting-apply count.
+	other := Suggestion{ID: "s2", File: "other.md", FromLine: 1, ToLine: 1, Side: "new",
+		OriginalText: "a", ProposedText: "b"}
+	s.SingleFile = "doc.md"
+	s.Suggestions = append(s.Suggestions, other)
+	s.Decisions = append(s.Decisions, SuggestionDecision{SuggestionID: "s2",
+		Verdict: verdictAccept, Fingerprint: suggestionFingerprint(other)})
+	if got := s.AwaitingApplyCount(); got != 1 {
+		t.Errorf("AwaitingApplyCount = %d, want 1 — other.md's accepted suggestion is not "+
+			"part of this review", got)
+	}
+}
