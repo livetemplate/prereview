@@ -500,13 +500,7 @@ func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
 	}
 	comments := commentsFromRows(rows)
 	if scope := SessionScope(csvPath); scope != "" {
-		inScope := make([]Comment, 0, len(comments))
-		for _, cm := range comments {
-			if cm.File == scope {
-				inScope = append(inScope, cm)
-			}
-		}
-		comments = inScope
+		comments = slices.DeleteFunc(comments, func(cm Comment) bool { return cm.File != scope })
 	}
 	if !all {
 		// Same actionable set the snapshot ships, incl. the #149 unread overlay, so
