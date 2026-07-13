@@ -24,7 +24,11 @@ func (c *PrereviewController) flushSnapshot(state *PrereviewState) error {
 	state.ThreadEntries = loadThreads(c.CSVPath) // #149: fresh threads for the final flush
 	state.Applied = loadAppliedSet(c.CSVPath)    // #159: applied acks drop from the flush
 	if c.Emitter != nil {
-		if err := c.Emitter.EmitSnapshot(state.Comments, state.Suggestions, state.DecisionsBySuggestion(), state.Threads(), state.Applied, c.isPaused(), time.Now()); err != nil {
+		// SCOPED slices (#171) — the agent must not be handed the previous file's work.
+		// persist() above deliberately keeps the FULL state.Comments: that slice is the
+		// write-back buffer it rewrites comments.csv from, so scoping it would delete
+		// every other file's rows from disk.
+		if err := c.Emitter.EmitSnapshot(state.scopedComments(), state.scopedSuggestions(), state.DecisionsBySuggestion(), state.Threads(), state.Applied, c.isPaused(), time.Now()); err != nil {
 			return fmt.Errorf("emit snapshot event: %w", err)
 		}
 	}

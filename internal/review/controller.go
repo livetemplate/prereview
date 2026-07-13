@@ -301,6 +301,13 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// agent sessions.
 	state.AgentMode = c.AgentMode
 
+	// SingleFile is mirror-only too (#171): the session's review SCOPE. A single-file
+	// review's store lives in the file's PARENT directory, so it is shared with every
+	// other file reviewed from there; without this, the queue / all-comments view /
+	// agent snapshot show the previous file's work. Every file-agnostic surface reads
+	// it through PrereviewState.inScope. "" in a directory / git review (no narrowing).
+	state.SingleFile = c.SingleFile
+
 	// External (proxy) mode short-circuits the entire git/file-list path:
 	// there is no repo to diff. Mirror the proxy identity from the controller
 	// (source of truth) and return — the template renders the framed live
@@ -476,12 +483,31 @@ func commentsFromRows(rows []csv.Row) []Comment {
 // all=false it returns only the actionable set (unresolved, non-outdated,
 // non-draft — what the agent should act on); with all=true, every comment. The
 // returned slice is always non-nil (JSON-encodes as `[]`, never `null`).
+//
+// Scoped to the session's file (#171) — comments.csv is shared by every file
+// reviewed from the store's directory, and `prereview comments` / `done` must not
+// list work from a file the reviewer isn't reviewing. Unscoped when the store holds
+// no session scope (a directory review, or a pre-#171 store).
+//
+// This is the CLI's read path, NOT the server's: the server reads the CSV through
+// loadCommentsFromDisk, which stays UNSCOPED on purpose because its result is the
+// buffer persist() rewrites comments.csv from. Scoping that one would delete every
+// other file's rows from disk.
 func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
 	rows, err := csv.Read(csvPath)
 	if err != nil {
 		return nil, err
 	}
 	comments := commentsFromRows(rows)
+	if scope := SessionScope(csvPath); scope != "" {
+		inScope := make([]Comment, 0, len(comments))
+		for _, cm := range comments {
+			if cm.File == scope {
+				inScope = append(inScope, cm)
+			}
+		}
+		comments = inScope
+	}
 	if !all {
 		// Same actionable set the snapshot ships, incl. the #149 unread overlay, so
 		// `comments --json` and `watch` agree.

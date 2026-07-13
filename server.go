@@ -74,6 +74,13 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	if err != nil {
 		return err
 	}
+	// Record this session's review scope in the store (#171) so the agent subcommands
+	// — which only ever see `--out <dir>` — list the file under review rather than
+	// every file ever reviewed from this directory. openStore just cleared the
+	// previous session's; a directory review writes none (it scopes to nothing).
+	if err := review.WriteSessionScope(csvPath, tgt.SingleFile); err != nil {
+		return fmt.Errorf("record session scope: %w", err)
+	}
 	emitter := newStreamEmitter(agentMode, csvPath)
 
 	// Load any existing comments from disk so a restart resumes the session.

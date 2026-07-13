@@ -64,12 +64,12 @@ func (s PrereviewState) suggestionQueueState(id string) string {
 
 func (s PrereviewState) countQueue(state string) int {
 	n := 0
-	for _, c := range s.Comments {
+	for _, c := range s.scopedComments() {
 		if c.QueueState() == state {
 			n++
 		}
 	}
-	for _, sg := range s.Suggestions {
+	for _, sg := range s.scopedSuggestions() {
 		if s.suggestionQueueState(sg.ID) == state {
 			n++
 		}
@@ -128,10 +128,10 @@ func (s PrereviewState) QueueItems() []QueueItem {
 			drafts = append(drafts, item)
 		}
 	}
-	for _, c := range s.Comments {
+	for _, c := range s.scopedComments() {
 		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: c.QueueState()})
 	}
-	for _, sg := range s.Suggestions {
+	for _, sg := range s.scopedSuggestions() {
 		st := s.suggestionQueueState(sg.ID)
 		if st == "" {
 			continue
