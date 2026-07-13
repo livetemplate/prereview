@@ -62,14 +62,46 @@ func (s PrereviewState) suggestionQueueState(id string) string {
 	return "" // undecided
 }
 
+// queueComments / queueSuggestions are what the QUEUE PANEL shows: the work that will be
+// (or has been) applied to the file you are looking at — the current file, not the whole
+// review (#171). The queue is a per-document work list; a repo-wide roll-up is what the
+// all-comments view is for.
+//
+// This narrows the UI ONLY. The agent's snapshot still carries every actionable item in
+// the review (EmitSnapshot feeds off scopedComments / scopedSuggestions), so work you
+// queued on one file is never stranded just because you happened to be viewing another
+// when the agent read the queue.
+//
+// Both are still scoped* first, so an out-of-review file can't leak in through the
+// SelectedFile door either.
+func (s PrereviewState) queueComments() []Comment {
+	out := make([]Comment, 0, len(s.Comments))
+	for _, c := range s.scopedComments() {
+		if c.File == s.SelectedFile {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func (s PrereviewState) queueSuggestions() []Suggestion {
+	out := make([]Suggestion, 0, len(s.Suggestions))
+	for _, sg := range s.scopedSuggestions() {
+		if sg.File == s.SelectedFile {
+			out = append(out, sg)
+		}
+	}
+	return out
+}
+
 func (s PrereviewState) countQueue(state string) int {
 	n := 0
-	for _, c := range s.scopedComments() {
+	for _, c := range s.queueComments() {
 		if c.QueueState() == state {
 			n++
 		}
 	}
-	for _, sg := range s.scopedSuggestions() {
+	for _, sg := range s.queueSuggestions() {
 		if s.suggestionQueueState(sg.ID) == state {
 			n++
 		}
@@ -101,6 +133,12 @@ func (s PrereviewState) DraftCount() int { return s.countQueue(queueDraft) }
 // This is the count that makes that state impossible to ignore — surfaced in the queue
 // and warned about on End session. Revert-aware, because s.Applied nets reverted.jsonl:
 // undoing an applied edit correctly puts it back in the awaiting-apply pile.
+//
+// Deliberately scoped to the whole REVIEW, not the current file — unlike the rest of the
+// queue panel (#171). It is a "you are about to lose work" guard, not a work list: a count
+// that only saw the file you happen to be looking at would cheerfully let you end the
+// session with unapplied accepts stranded on another file, which is the exact failure it
+// exists to prevent.
 func (s PrereviewState) AwaitingApplyCount() int {
 	n := 0
 	for _, sg := range s.scopedSuggestions() {
@@ -151,10 +189,10 @@ func (s PrereviewState) QueueItems() []QueueItem {
 			drafts = append(drafts, item)
 		}
 	}
-	for _, c := range s.scopedComments() {
+	for _, c := range s.queueComments() {
 		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: c.QueueState()})
 	}
-	for _, sg := range s.scopedSuggestions() {
+	for _, sg := range s.queueSuggestions() {
 		st := s.suggestionQueueState(sg.ID)
 		if st == "" {
 			continue

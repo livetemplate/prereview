@@ -12,6 +12,9 @@ func TestQueueDerivation(t *testing.T) {
 	}
 	s := PrereviewState{
 		LLMState: LLMStateWorking,
+		// The queue panel shows the CURRENT file's work (#171), so a queue test has to
+		// sit on the file its comments are about.
+		SelectedFile: "a.go",
 		Comments: []Comment{
 			mk("q1", nil),                                      // queued (default)
 			mk("q2", nil),                                      // queued
@@ -66,6 +69,7 @@ func TestQueueDerivation(t *testing.T) {
 // stay out of the queue (#159). Suggestions ride the same counts/rows as comments.
 func TestSuggestionQueueProjection(t *testing.T) {
 	s := PrereviewState{
+		SelectedFile: "a.go", // the queue panel is per-file (#171)
 		Suggestions: []Suggestion{
 			{ID: "acc", File: "a.go", ToLine: 3, Note: "fix grammar"}, // accepted → queued
 			{ID: "app", File: "a.go", ToLine: 7},                      // applied → done (no note → fallback body)

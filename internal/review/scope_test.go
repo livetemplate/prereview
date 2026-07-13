@@ -104,12 +104,39 @@ func TestScope_DirectoryReviewSeesEveryFile(t *testing.T) {
 	if got := s.ResolvedCount(); got != 1 {
 		t.Errorf("ResolvedCount = %d, want 1", got)
 	}
-	files := map[string]bool{}
+
+	// The QUEUE PANEL is per-file even here (#171): it shows the work that will be — or
+	// has been — applied to the document in front of you. The cross-file roll-up is the
+	// all-comments view's job, asserted above. The AGENT's snapshot is what still spans
+	// every file in the review; see TestQueue_AgentStillGetsEveryFilesWork.
 	for _, it := range s.QueueItems() {
-		files[it.File] = true
+		if it.File != "b.md" {
+			t.Errorf("queue row for %s while viewing b.md — the queue panel is the CURRENT "+
+				"file's work list", it.File)
+		}
+	}
+}
+
+// The queue PANEL narrows to the current file, but the AGENT must still be handed every
+// actionable item in the review — otherwise work queued on one file is silently stranded
+// because the reviewer happened to be looking at another when the agent read the queue.
+func TestQueue_AgentStillGetsEveryFilesWork(t *testing.T) {
+	s := twoFileState()
+	s.SingleFile = "" // a directory review spanning a.md + b.md
+	s.SelectedFile = "b.md"
+
+	if got := len(s.QueueItems()); got != 1 {
+		t.Errorf("queue PANEL = %d rows, want 1 (b.md only — it is per-file)", got)
+	}
+
+	files := map[string]bool{}
+	for _, sc := range actionableComments(s.scopedComments(), s.Threads()) {
+		files[sc.File] = true
 	}
 	if !files["a.md"] || !files["b.md"] {
-		t.Errorf("QueueItems should span both files, got %v", files)
+		t.Errorf("the AGENT's snapshot must carry every file's actionable work, got %v — "+
+			"narrowing it to the selected file would strand work the reviewer queued elsewhere",
+			files)
 	}
 }
 
@@ -244,6 +271,71 @@ func TestScope_EmittedSnapshotIsScoped(t *testing.T) {
 			t.Errorf("snapshot decision leaked %s (%s) — the agent would act on a file "+
 				"the reviewer isn't reviewing", sd.ID, sd.File)
 		}
+	}
+}
+
+// A comment whose FILE IS GONE can never be re-anchored and the agent can never act on
+// it — but it used to ship in the actionable snapshot forever, because relocateAll skipped
+// anchorless comments and treated the missing-file load error as "no drift" (#171).
+//
+// It must drop out of the AGENT's queue (flagged outdated, which actionableComments already
+// filters) while staying VISIBLE to the reviewer to resolve or delete. Nothing is removed
+// from the CSV — a comment you wrote never silently disappears.
+func TestScope_CommentOnAGoneFileLeavesTheAgentQueue(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "here.md"), []byte("line one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	csvPath := filepath.Join(dir, ".prereview", "comments.csv")
+	if err := os.MkdirAll(filepath.Dir(csvPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := &PrereviewController{
+		RepoPath: dir, NoGit: true, // a DIRECTORY review — scope narrows nothing
+		CSVPath: csvPath, CSVWriter: csv.NewWriter(csvPath),
+	}
+	if err := c.persist([]Comment{
+		{ID: "live", File: "here.md", Body: "on a real file", FromLine: 1, ToLine: 1, Side: "new"},
+		{ID: "ghost", File: "gone.md", Body: "on a file that no longer exists", FromLine: 1, ToLine: 1, Side: "new"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := c.Mount(PrereviewState{}, nil)
+	if err != nil {
+		t.Fatalf("Mount: %v", err)
+	}
+	c.relocateAll(&state)
+
+	// Gone from the agent's actionable snapshot...
+	for _, sc := range actionableComments(state.scopedComments(), state.Threads()) {
+		if sc.File == "gone.md" {
+			t.Errorf("the agent is still being handed work on gone.md — it cannot act on a file "+
+				"that does not exist (%s)", sc.ID)
+		}
+	}
+	// ...but still there for the reviewer, flagged as needing attention.
+	if got := state.OutdatedCount(); got != 1 {
+		t.Errorf("OutdatedCount = %d, want 1 — the orphaned comment must stay VISIBLE so it can "+
+			"be resolved or deleted, not silently vanish", got)
+	}
+	found := false
+	for _, cm := range state.VisibleComments() {
+		if cm.ID == "ghost" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the orphaned comment disappeared from the all-comments view — a comment the " +
+			"reviewer wrote must never silently vanish")
+	}
+	// And it is still on disk.
+	rows, err := csv.Read(csvPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Errorf("comments.csv has %d rows, want 2 — nothing may be deleted from the store", len(rows))
 	}
 }
 
