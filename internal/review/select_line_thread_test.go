@@ -117,18 +117,18 @@ func TestSelectText_StillComposesNewCommentOnACommentedLine(t *testing.T) {
 func TestSelectLine_UncollapsesTheRowItOpens(t *testing.T) {
 	c := &PrereviewController{}
 	state := stateWithComment(lineComment("c1", 3, "new"))
-	state.ToggledRows = map[string]bool{"3-new": true, "9-new": true}
+	state.ToggledRows = map[string]string{"3-new": rowStateOpen, "9-new": rowStateOpen}
 
 	state, err := c.SelectLine(state, lineCtx(3, "new"))
 	if err != nil {
 		t.Fatalf("SelectLine: %v", err)
 	}
 
-	if state.ToggledRows["3-new"] {
+	if _, on := state.ToggledRows["3-new"]; on {
 		t.Error("opening a thread on a collapsed row must un-collapse it — a reply box on a " +
 			"hidden card reads as a dead click")
 	}
-	if !state.ToggledRows["9-new"] {
+	if _, on := state.ToggledRows["9-new"]; !on {
 		t.Error("un-collapsing the clicked row must not disturb other rows")
 	}
 }
@@ -208,16 +208,16 @@ func TestSelectBlock_OpensExistingThread(t *testing.T) {
 func TestSelectBlock_UncollapsesTheBlockItOpens(t *testing.T) {
 	c := &PrereviewController{}
 	state := stateWithComment(lineComment("c1", 4, "new"))
-	state.ToggledRows = map[string]bool{"MB-3-5": true, "MB-7-9": true}
+	state.ToggledRows = map[string]string{"MB-3-5": rowStateOpen, "MB-7-9": rowStateOpen}
 
 	state, err := c.SelectBlock(state, blockCtx(3, 5))
 	if err != nil {
 		t.Fatalf("SelectBlock: %v", err)
 	}
-	if state.ToggledRows["MB-3-5"] {
+	if _, on := state.ToggledRows["MB-3-5"]; on {
 		t.Error("opening a thread in a collapsed block must un-collapse it")
 	}
-	if !state.ToggledRows["MB-7-9"] {
+	if _, on := state.ToggledRows["MB-7-9"]; !on {
 		t.Error("un-collapsing one block must not disturb the others")
 	}
 }

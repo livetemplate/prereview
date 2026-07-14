@@ -32,6 +32,24 @@ func TestE2E_QueuePanelFitsMobileViewport(t *testing.T) {
 	// short loc keeps the panel at its 22rem min-width, which fits and would NOT
 	// exercise the bug. This is the deterministic trigger for the clip.
 	repo := setupFixtureRepo(t)
+	// The long-path file must actually EXIST in the repo. Since #171 a comment whose file is
+	// gone is swept to outdated and dropped from the queue (it can't be actionable work), and
+	// since #171's scope switch the queue shows the SELECTED file's work — so a comment on a
+	// phantom file produced no queue row at all, and the panel this test measures never
+	// opened. Give it a real file, long enough to carry line 27, and select it below.
+	longPath := "notes/zany-mixing-metcalfe-configuration-details.md"
+	if err := os.MkdirAll(filepath.Join(repo, "notes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var doc strings.Builder
+	doc.WriteString("# Zany mixing\n\n")
+	for i := 3; i <= 40; i++ {
+		fmt.Fprintf(&doc, "line %d of the configuration details\n", i)
+	}
+	if err := os.WriteFile(filepath.Join(repo, longPath), []byte(doc.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	pdir := filepath.Join(repo, ".prereview")
 	if err := os.MkdirAll(pdir, 0o755); err != nil {
 		t.Fatal(err)
@@ -62,6 +80,9 @@ func TestE2E_QueuePanelFitsMobileViewport(t *testing.T) {
 	// Force the mobile emulated viewport (headless otherwise pins 800×600
 	// regardless of window size) and load the page.
 	p.waitReadyAt(375, 812)
+	// The queue shows the SELECTED file's work (#171), so select the file the queued comment
+	// is on — otherwise the panel opens empty and there is no long .queue-loc to measure.
+	p.clickFile(longPath)
 
 	// Open the Queue dropdown and measure the panel against the viewport.
 	var rect struct {

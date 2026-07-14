@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"path/filepath"
+	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
 )
@@ -327,6 +328,56 @@ func (s PrereviewState) AnnotationAcceptedLines() map[string]bool {
 	return s.SuggestionAcceptedLines()
 }
 
+// The two default visibilities a row can have (#165): a row with any OPEN annotation shows
+// its cards inline; a row whose work is all done/accepted collapses them behind the badge.
+// ToggledRows stores which of these the reviewer was flipping away from.
+const (
+	rowStateOpen      = "open"
+	rowStateCollapsed = "collapsed"
+)
+
+// rowState is a row's DEFAULT card visibility — what the reviewer sees before any toggle.
+// Keyed like the badge: "<line>-<side>" in the diff, "MB-<start>-<end>" in the md-view.
+func (s PrereviewState) rowState(key string) string {
+	open := false
+	if strings.HasPrefix(key, "MB-") {
+		open = s.BlockAnnotations()[key].Open
+	} else {
+		open = s.AnnotationOpenLines()[key]
+	}
+	if open {
+		return rowStateOpen
+	}
+	return rowStateCollapsed
+}
+
+// RowToggled reports which rows currently render flipped away from their default — the
+// `row-toggled` class the templates emit. Zero-arg so livetemplate pre-computes it.
+//
+// A toggle EXPIRES when the row's default changes underneath it. A toggle means "flip THIS
+// row away from THIS default"; once the default is no longer that, the instruction is stale
+// and re-applying it inverts the reviewer's intent. Concretely: peek a done suggestion (the
+// row is collapsed-by-default, so the toggle means SHOW), then click Undo — the suggestion
+// goes back to undecided, the row's default becomes open, and the stale toggle would now
+// mean HIDE, vanishing the card the reviewer is working on. Same for reopening a resolved
+// comment. Dropping the stale entry restores the default view, which is what the reviewer
+// wants to see the moment the row's state changes.
+func (s PrereviewState) RowToggled() map[string]bool {
+	if len(s.ToggledRows) == 0 {
+		return nil
+	}
+	out := map[string]bool{}
+	for key, was := range s.ToggledRows {
+		if was == s.rowState(key) {
+			out[key] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // CommentCountLines reports, per line-row (keyed "<toLine>-<side>", e.g. "4-new"),
 // HOW MANY comments render on that row — driving the #151 right-margin count badge
 // (and, via count>0, the #136 presence marks). Derived from the SAME filtered map the
@@ -406,7 +457,6 @@ func (s PrereviewState) AwaitingAgent() map[string]bool {
 	}
 	return out
 }
-
 
 // countRowSides increments the row key(s) an annotation on line ln / side occupies,
 // matching the template's {{if or (eq .Side $lside) (eq .Side "")}} gate: a

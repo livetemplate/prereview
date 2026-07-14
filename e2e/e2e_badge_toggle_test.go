@@ -75,6 +75,17 @@ func TestE2E_BadgeTogglesOpenAnnotation(t *testing.T) {
 	// With the old client-only class, the morph stripped it here and the card silently
 	// re-appeared: you hid something and it came back on its own.
 	p.clickLine(1, 1)
+	// Wait for THAT render to actually land, via a condition that is false before it and
+	// true after: the composer opening on line 1. `row-toggled` cannot serve — it is
+	// already on the row from the collapse above, so waiting on it passes instantly against
+	// the stale DOM, the #173 assertion below proves nothing (the re-render it claims to
+	// survive hasn't happened yet), and the composer's insertion then shifts row 3 down
+	// mid-flight so the coordinate-based badge click further down misses it.
+	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(
+		`.line-row:has(.line[data-line="1"][data-side="new"]) .composer textarea`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("the unrelated re-render never landed, so there is nothing to survive: %v%s", err, diag())
+	}
 	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(row+`.row-toggled`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("the collapse must survive an unrelated server re-render (#173) — a client-only "+
 			"class gets morphed away: %v%s", err, diag())

@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -188,9 +189,20 @@ func TestE2E_QueueScopeSwitch(t *testing.T) {
 	}
 
 	// Flip to ALL FILES → the other file's work appears.
+	//
+	// Toggling the scope does NOT close the dropdown, so re-clicking .queue-trigger here (as
+	// this test used to) TOGGLED IT SHUT and the wait below then hung forever. Open it only
+	// if it actually closed — that holds either way and can't depend on the dropdown's
+	// close-on-submit behaviour.
+	ensureQueueOpen := chromedp.Evaluate(`(() => {
+		const panel = document.querySelector('.queue-panel');
+		if (!panel || !panel.offsetParent) document.querySelector('.queue-trigger').click();
+		return true;
+	})()`, nil)
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='toggleQueueScope']`, chromedp.ByQuery),
-		chromedp.Click(`.queue-trigger`, chromedp.ByQuery),
+		chromedp.Sleep(250*time.Millisecond),
+		ensureQueueOpen,
 		chromedp.WaitVisible(`.queue-row .queue-loc`, chromedp.ByQuery),
 		chromedp.Evaluate(`[...document.querySelectorAll('.queue-row .queue-loc')].map(e=>e.textContent)`, &rows),
 	); err != nil {

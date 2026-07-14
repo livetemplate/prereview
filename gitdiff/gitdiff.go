@@ -57,6 +57,9 @@ func ListFiles(repo, base string) ([]FileEntry, error) {
 		if line == "" {
 			continue
 		}
+		if isControlPath(line) {
+			continue
+		}
 		if _, ok := seen[line]; ok {
 			continue
 		}
@@ -80,6 +83,9 @@ func ListFiles(repo, base string) ([]FileEntry, error) {
 		return nil, err
 	}
 	for _, p := range untracked {
+		if isControlPath(p) {
+			continue
+		}
 		if _, ok := seen[p]; ok {
 			continue
 		}
@@ -291,6 +297,26 @@ func isWorkingTreeBase(repo, base string) bool {
 
 // listUntracked returns files that exist in the working tree but are not yet
 // tracked by git. Respects .gitignore via --exclude-standard.
+// isControlPath reports whether a repo-relative path lives inside prereview's own
+// store (".prereview/") or git's (".git/") — machinery, never review material.
+//
+// The store is UNTRACKED, so `ls-files --others` hands it straight back unless the repo
+// happens to .gitignore it: launch prereview in a repo that hasn't, and the drawer lists
+// comments.csv / server.pid, and — because a leading dot sorts first — auto-select opens
+// prereview's own CSV as the file under review. ListFilesNoGit has always skipped the
+// control dirs (nogit.go); the git path simply never did.
+//
+// Matched by PATH SEGMENT, not prefix: `--out` can put the store under a subdirectory
+// (<out>/.prereview/…), and a file legitimately named ".prereviewrc" must still show up.
+func isControlPath(p string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(p), "/") {
+		if seg == ".prereview" || seg == ".git" {
+			return true
+		}
+	}
+	return false
+}
+
 func listUntracked(repo string) ([]string, error) {
 	out, err := runGit(repo, "ls-files", "--others", "--exclude-standard")
 	if err != nil {

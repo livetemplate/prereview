@@ -58,7 +58,6 @@ func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
-
 // ToggleQueueScope switches the queue panel between THIS FILE's work (the default — the
 // queue is about the document in front of you) and the whole review's (#171). Persisted
 // per-user, so the choice survives the relaunch-per-review workflow.
@@ -88,14 +87,16 @@ func (c *PrereviewController) ToggleRow(state PrereviewState, ctx *livetemplate.
 	if key == "" {
 		return state, fmt.Errorf("toggleRow: missing row key")
 	}
-	if state.ToggledRows[key] {
+	if _, on := state.ToggledRows[key]; on {
 		delete(state.ToggledRows, key)
 		return state, nil
 	}
 	if state.ToggledRows == nil {
-		state.ToggledRows = map[string]bool{}
+		state.ToggledRows = map[string]string{}
 	}
-	state.ToggledRows[key] = true
+	// Record the default we're flipping AWAY FROM, so the toggle expires if that default
+	// later changes (RowToggled) instead of silently inverting into its opposite.
+	state.ToggledRows[key] = state.rowState(key)
 	return state, nil
 }
 
