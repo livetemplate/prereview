@@ -96,7 +96,7 @@ func TestE2E_AnnotationBadges(t *testing.T) {
 		t.Fatalf("peek click: %v%s", err, diag())
 	}
 	var peekedShown int
-	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('.line-row.peek-done .inline-comment.is-resolved')].filter(e=>e.offsetParent).length`, &peekedShown))
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('.line-row.row-toggled .inline-comment.is-resolved')].filter(e=>e.offsetParent).length`, &peekedShown))
 	if peekedShown < 1 {
 		t.Errorf("clicking the green badge should peek the collapsed resolved card%s", diag())
 	}

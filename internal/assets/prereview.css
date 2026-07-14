@@ -1907,9 +1907,9 @@ header.file-head .file-head-comment button svg { display: block; }
    badge (accented-yellow while accepted-but-unapplied, green once applied/rejected/resolved).
    Everything still PENDING stays visible inline: an unresolved comment, an UNDECIDED
    suggestion (so a proposed edit is right there to accept), and a suggestion awaiting the
-   agent — revision-requested (sg-revise) or being reverted (sg-revert). Peek a collapsed card
-   by clicking its badge (`.peek-done`, a pure-client lvt-el toggle) or globally via "Show
-   resolved" (.show-resolved). The M4 status/revert controls live inside the peeked card.
+   agent — revision-requested (sg-revise) or being reverted (sg-revert). Collapsed cards are
+   reachable by clicking the badge (`.row-toggled`) or globally via "Show resolved"
+   (.show-resolved). The M4 status/revert controls live inside the revealed card.
    #171: `.is-applied` collapses too, and NOT only via sg-accept. The agent can apply an
    edit the reviewer never accepted (applied != decided), which carries is-applied but no
    sg-* class — so without this it never collapsed and its badge stayed amber "open"
@@ -1922,14 +1922,25 @@ header.file-head .file-head-comment button svg { display: block; }
 .md-view .inline-suggestion.sg-accept,
 .md-view .inline-suggestion.sg-reject,
 .md-view .inline-suggestion.is-applied { display: none; }
-.line-row.peek-done .inline-comment.is-resolved,
-.line-row.peek-done .inline-suggestion.sg-accept,
-.line-row.peek-done .inline-suggestion.sg-reject,
-.line-row.peek-done .inline-suggestion.is-applied,
-.md-block.peek-done .inline-comment.is-resolved,
-.md-block.peek-done .inline-suggestion.sg-accept,
-.md-block.peek-done .inline-suggestion.sg-reject,
-.md-block.peek-done .inline-suggestion.is-applied,
+/* #174: a TOGGLED row flips its cards away from the default above. On a row whose work is
+   done that REVEALS the collapsed cards (what clicking the green badge always did). On a row
+   with OPEN work it COLLAPSES them — the behaviour the yellow badge was missing: set an
+   unresolved comment aside and come back to it later, with the badge as the way back.
+   `.row-toggled` is emitted by the SERVER (state.ToggledRows). It used to be a client-only
+   class, which meant the next re-render morphed it away and silently re-collapsed a card the
+   reviewer had just opened (#173). */
+.line-row.row-toggled .inline-comment:not(.is-resolved),
+.line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
+.md-block.row-toggled .inline-comment:not(.is-resolved),
+.md-block.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied) { display: none; }
+.line-row.row-toggled .inline-comment.is-resolved,
+.line-row.row-toggled .inline-suggestion.sg-accept,
+.line-row.row-toggled .inline-suggestion.sg-reject,
+.line-row.row-toggled .inline-suggestion.is-applied,
+.md-block.row-toggled .inline-comment.is-resolved,
+.md-block.row-toggled .inline-suggestion.sg-accept,
+.md-block.row-toggled .inline-suggestion.sg-reject,
+.md-block.row-toggled .inline-suggestion.is-applied,
 .layout.show-resolved .code .inline-comment.is-resolved,
 .layout.show-resolved .code .inline-suggestion.sg-accept,
 .layout.show-resolved .code .inline-suggestion.sg-reject,

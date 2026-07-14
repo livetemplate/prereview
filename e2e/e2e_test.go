@@ -540,14 +540,18 @@ func (p *runningPrereview) clickLine(oldNum, newNum int) {
 // peekRow clicks the right-margin count badge for the given NEW-side diff line, revealing
 // that row's COLLAPSED cards. #165 keeps OPEN cards visible but collapses DECIDED
 // suggestions (accepted/rejected) and RESOLVED comments behind the badge; clicking it
-// toggles `peek-done` on the row to reveal them. We WaitVisible the revealed card so callers
-// can interact with it.
+// flips the row (`row-toggled`, #174) so the collapsed cards show. We WaitVisible the
+// revealed card so callers can interact with it.
+//
+// The class is SERVER state now, not a client-only toggle — which is what made this helper
+// flaky (#173): a re-render landing after the click used to morph the class away and
+// re-collapse the card out from under the wait.
 func (p *runningPrereview) peekRow(line int) {
 	p.t.Helper()
 	row := fmt.Sprintf(`.line-row:has(.line[data-line="%d"][data-side="new"])`, line)
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(row+` .line-marks`, chromedp.ByQuery),
-		chromedp.WaitVisible(row+`.peek-done .inline-suggestion, `+row+`.peek-done .inline-comment`, chromedp.ByQuery),
+		chromedp.WaitVisible(row+`.row-toggled .inline-suggestion, `+row+`.row-toggled .inline-comment`, chromedp.ByQuery),
 	); err != nil {
 		p.t.Fatalf("peekRow %d: %v", line, err)
 	}

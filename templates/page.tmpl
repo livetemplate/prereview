@@ -1555,20 +1555,25 @@
         (ge $.SelectionEndMax $bs)
         (le $.SelectionEndMax $be)}} selected{{end -}}
     {{- if $mbstatus}} md-{{$mbstatus}}{{end -}}
+    {{- if index $.ToggledRows $mbkey}} row-toggled{{end -}}
     "
          data-key="{{$mbkey}}"
          {{- if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>
       {{- /* #165: the md-view has no gutter, so each block carries a state badge in its
              top-right — yellow if any open annotation, else green — counting the block's
-             comments/suggestions. Clicking peeks the done cards (peek-done on the block,
-             client-only). Done cards auto-collapse via CSS (like the diff view). */ -}}
+             comments/suggestions. Done cards auto-collapse via CSS (like the diff view).
+             #174: clicking flips the block away from that default — revealing its done
+             cards, or collapsing its OPEN ones so they can be set aside. Server state
+             (ToggledRows), so a re-render can't morph the class away (#173). */ -}}
       {{- $ba := index $.BlockAnnotations $mbkey -}}
       {{- if gt $ba.Total 0 -}}
       <button type="button" class="md-block-marks"
-              lvt-el:toggleClass:on:click="peek-done"
+              lvt-on:click="toggleRow"
+              data-row="{{$mbkey}}"
+              lvt-el:toggleClass:on:click="row-toggled"
               data-lvt-target="closest:.md-block"
-              aria-label="Show or hide resolved and accepted annotations in this block"
-              title="Show/hide resolved &amp; accepted annotations">
+              aria-label="Show or hide the annotations in this block"
+              title="Show/hide this block's annotations">
         <span class="line-mark{{if $ba.Open}} is-open{{else if $ba.Accepted}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{$ba.Total}}</span>
       </button>
       {{- end -}}
@@ -1642,7 +1647,7 @@
     {{$hasComment := gt $commentCount 0 -}}
     {{$hasSuggestion := gt $suggestionCount 0 -}}
     {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
-    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
+    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.ToggledRows $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
       {{- /* A selectable div (not <button>): <button> content is non-
              selectable in UA styles, which would block native text selection.
@@ -1663,17 +1668,23 @@
               {{- /* */ -}}<span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>
       {{- /* #165: ONE state-coloured right-margin badge per line — the TOTAL annotation
              count (comments + suggestions), coloured YELLOW when any are open (unresolved
-             comment / unaccepted suggestion) or GREEN when all are done. Done cards
-             auto-collapse (CSS by state class); clicking the badge toggles `peek-done`
-             on the row (client-only) to reveal them. Sibling of .line so the click
-             can't bubble to selectLine; sits in the reserved right padding. */ -}}
+             comment / unaccepted suggestion) or GREEN when all are done.
+             #174: clicking it flips the row away from its default: a done row REVEALS its
+             collapsed cards (the old "peek"), an OPEN row COLLAPSES them, so a comment can
+             be set aside and returned to later without resolving it. The class is SERVER
+             state (ToggledRows) — as a client-only class it was morphed away by the next
+             re-render (#173). lvt-el keeps the tap instant; the server render converges.
+             Sibling of .line so the click can't bubble to selectLine; sits in the reserved
+             right padding. */ -}}
       {{- if or $hasComment $hasSuggestion -}}
       <span class="line-margin">
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}"
-                lvt-el:toggleClass:on:click="peek-done"
+                lvt-on:click="toggleRow"
+                data-row="{{$rowkey}}"
+                lvt-el:toggleClass:on:click="row-toggled"
                 data-lvt-target="closest:.line-row"
-                aria-label="Show or hide resolved and accepted annotations on this line"
-                title="Show/hide resolved &amp; accepted annotations on this line">
+                aria-label="Show or hide the annotations on this line"
+                title="Show/hide this line's annotations">
           <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
       </span>
