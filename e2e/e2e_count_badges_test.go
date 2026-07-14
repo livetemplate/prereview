@@ -24,8 +24,27 @@ import (
 )
 
 func TestE2E_CountBadges(t *testing.T) {
+	repo := setupSuggestionRepo(t)
+
+	// Two comments on line 3 of app.go, SEEDED rather than clicked twice: since #174 a line
+	// is ONE conversation, so clicking an already-commented line OPENS its thread instead of
+	// composing a second comment. A row still carries several comments (from the agent, from
+	// text-select, from a prior session) — and the badge counting all of them is exactly what
+	// this test pins, so the row is set up directly instead of through a gesture that no
+	// longer exists.
+	pdir := filepath.Join(repo, ".prereview")
+	if err := os.MkdirAll(pdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seed := "id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url\n" +
+		"c1,app.go,3,3,new,first comment on line 3,2026-07-13T12:00:00Z,false,,,line,,\n" +
+		"c2,app.go,3,3,new,second comment on line 3,2026-07-13T12:01:00Z,false,,,line,,\n"
+	if err := os.WriteFile(filepath.Join(pdir, "comments.csv"), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	// --agent so the server runs WatchLLMStatus — the live suggestion-push path.
-	p := bootChromeAgainstRepo(t, setupSuggestionRepo(t), 1200, 800, "--agent")
+	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--agent")
 
 	// Console errors would flag a badge render / CSS bug — collect and assert none.
 	var consoleErrs []string
@@ -84,8 +103,8 @@ func TestE2E_CountBadges(t *testing.T) {
 			rowSel(line), sel))
 	}
 
-	// --- Build the annotation set: a suggestion + a comment on line 4, two
-	//     comments on line 3. ---
+	// --- Build the annotation set: a suggestion + a comment on line 4 (line 3's two
+	//     comments are seeded above). ---
 	submitSuggestions(t, p.binary, p.repo, `[
 	  {"id":"s4","file":"app.go","from_line":4,"to_line":4,"original":"return \"hello world\"","proposed":"return \"hi\""}
 	]`)
@@ -95,6 +114,9 @@ func TestE2E_CountBadges(t *testing.T) {
 		t.Fatalf("suggestion never rendered on line 4: %v%s", err, diag())
 	}
 
+	// Line 4 carries a SUGGESTION but no comment, so clicking it still opens the new-comment
+	// composer (#174's thread-opening looks only at comments — a suggestion is not a comment
+	// thread).
 	addComment := func(line int, body string) {
 		p.clickLine(0, line)
 		if err := chromedp.Run(p.ctx,
@@ -107,8 +129,6 @@ func TestE2E_CountBadges(t *testing.T) {
 		}
 	}
 	addComment(4, "comment coexisting with a suggestion")
-	addComment(3, "first comment on line 3")
-	addComment(3, "second comment on line 3")
 
 	// --- The load-bearing assertion: the ONE unified badge's number equals the total
 	//     cards rendered on that row (#165). Line 3 = 2 comments; line 4 = 1 comment + 1

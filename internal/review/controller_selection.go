@@ -15,6 +15,11 @@ import (
 //
 // Side is captured on the first click and locked thereafter so a range
 // can't accidentally span sides of the diff.
+//
+// EXCEPT when the line already carries a comment (#174): a line is ONE conversation, so
+// clicking it OPENS that thread rather than starting a second comment on top of it — see
+// openThreadOnLine. Further input belongs in the thread as a reply. A separate comment on
+// an already-commented line is still reachable by selecting text on it (kind=text).
 func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	n := ctx.GetInt("line")
 	if n <= 0 {
@@ -23,6 +28,15 @@ func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate
 	side := ctx.GetString("side")
 	if side == "" {
 		side = "new"
+	}
+
+	// Only on a FRESH click (no range in progress). Mid-range the reviewer is deliberately
+	// extending a selection across lines, and one of those lines happening to carry a comment
+	// must not hijack it.
+	if state.SelectionAnchor == 0 {
+		if opened, ok := openThreadOnLine(state, n, side); ok {
+			return opened, nil
+		}
 	}
 
 	switch {
@@ -48,6 +62,54 @@ func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate
 		state.SelectionSide = side
 	}
 	return state, nil
+}
+
+// openThreadOnLine handles a click on a line that ALREADY carries a comment (#174): a line
+// is one conversation, so the click opens that thread instead of composing a second comment
+// on top of it. It reveals the card (clearing any collapse the reviewer had toggled on, so a
+// click on a line whose comment is hidden brings it back rather than appearing to do nothing)
+// and arms the reply box, putting the cursor straight into the conversation.
+//
+// Reports false when the line has no comment, in which case the caller falls through to
+// ordinary range selection and the new-comment composer.
+//
+// It matches exactly the comments the diff RENDERS on that row — the same predicate as
+// CommentsByEndLine (file- and area-level comments don't belong to a line at all).
+//
+// RESOLVED and outdated comments are deliberately skipped: a closed thread must not swallow
+// a click that was meant to start a fresh comment on that line.
+//
+// Side matters: a modified line's number exists on BOTH the del(old) and add(new) rows, so a
+// comment on the old side must not hijack a click on the new one. A comment with no side
+// sits on both rows and matches either.
+func openThreadOnLine(state PrereviewState, line int, side string) (PrereviewState, bool) {
+	for _, cm := range state.Comments {
+		if cm.File != state.SelectedFile || cm.ToLine != line {
+			continue
+		}
+		if cm.IsFileLevel() || cm.IsAreaLevel() || cm.Hidden {
+			continue
+		}
+		if cm.Resolved || cm.AnchorOutdated() {
+			continue
+		}
+		if cm.Side != "" && cm.Side != side {
+			continue
+		}
+		// Un-collapse the row so the thread is actually ON SCREEN — otherwise clicking a line
+		// whose comment the reviewer had hidden (#174) would silently do nothing.
+		for _, k := range rowKeysFor(line, side) {
+			delete(state.ToggledRows, k)
+		}
+		state.ReplyingID = cm.ID
+		state.ReplyDraft = ""
+		// Clear the selection, or the NEW-comment composer renders on top of the thread.
+		state.SelectionAnchor = 0
+		state.SelectionEnd = 0
+		state.SelectionSide = ""
+		return state, true
+	}
+	return state, false
 }
 
 // SelectBlock selects a whole source block in one shot: a rendered-
@@ -112,9 +174,14 @@ func (c *PrereviewController) SelectText(state PrereviewState, ctx *livetemplate
 	state.SelectionToCol = ctx.GetInt("toCol")
 	state.SelectionText = text
 	state.CommentMode = commentKindText
-	// A fresh selection replaces any prior edit/re-anchor intent.
+	// A fresh selection replaces any prior edit/re-anchor/reply intent. Reply matters since
+	// #174: clicking a commented line now OPENS that thread, so text-selecting on that same
+	// line to add a second comment would otherwise render the reply box AND the new-comment
+	// composer on one row.
 	state.EditingCommentID = ""
 	state.ReanchorCommentID = ""
+	state.ReplyingID = ""
+	state.ReplyDraft = ""
 	return state, nil
 }
 
