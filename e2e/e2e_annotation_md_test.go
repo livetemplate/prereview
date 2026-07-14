@@ -101,7 +101,7 @@ func TestE2E_AnnotationBadgesMarkdown(t *testing.T) {
 		t.Fatalf("peek click: %v%s", err, diag())
 	}
 	var peeked int
-	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('`+sgBlock+`.peek-done .inline-suggestion.sg-accept, `+sgBlock+`.peek-done .inline-comment.is-resolved')].filter(e=>e.offsetParent).length`, &peeked))
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('`+sgBlock+`.row-toggled .inline-suggestion.sg-accept, `+sgBlock+`.row-toggled .inline-comment.is-resolved')].filter(e=>e.offsetParent).length`, &peeked))
 	if peeked < 1 {
 		t.Errorf("peeking the green block should reveal its collapsed done cards%s", diag())
 	}

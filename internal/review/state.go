@@ -442,6 +442,30 @@ type PrereviewState struct {
 	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
 	HideMarks bool `json:"hide_marks"`
 
+	// ToggledRows flips a row's annotation cards away from their DEFAULT visibility
+	// (#174). Keyed by the same row key the badge renders under: "<line>-<side>" in the
+	// diff, "MB-<start>-<end>" in the md-view.
+	//
+	// The default comes from the annotation's state (#165): an OPEN annotation shows
+	// inline, a done/accepted one collapses behind its badge. Toggling a row inverts
+	// that — so the green badge keeps its existing "peek the done cards" behaviour, and
+	// the yellow badge gains the one it was missing: collapse an open comment/suggestion
+	// out of the way to come back to it later, without resolving it.
+	//
+	// SERVER state, not a client-only class. The previous `peek-done` was toggled purely
+	// in the browser, and since the server never emitted it, any re-render morphed it
+	// away — silently re-collapsing a card the reviewer had just opened (#173). The
+	// client still toggles optimistically for instant feedback on a phone; the server
+	// emits the authoritative class and the morph converges on it.
+	//
+	// lvt:"persist" (session), NOT durable on disk: it survives a reload/reconnect, but a
+	// relaunch starts clean. A collapsed-but-OPEN annotation is still unresolved work —
+	// carrying yesterday's hidden pile into a new session would quietly conceal it.
+	//
+	// View-only: a collapsed annotation is still queued for the agent. This changes what
+	// the reviewer sees, never what the agent is handed.
+	ToggledRows map[string]bool `json:"toggled_rows" lvt:"persist"`
+
 	// QueueGlobal widens the queue panel from THIS FILE's work to the whole review's
 	// (#171). Default false: the queue answers "what is happening to the document in
 	// front of me", which is what it's for in a single-file or doc review. Flip it in

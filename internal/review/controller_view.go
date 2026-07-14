@@ -71,6 +71,34 @@ func (c *PrereviewController) ToggleQueueScope(state PrereviewState, ctx *livete
 	return state, nil
 }
 
+// ToggleRow flips one row's annotation cards away from their default visibility (#174) —
+// the count badge's click. Green badge: peek the done cards (what it always did). Yellow
+// badge: collapse the open comment/suggestion behind the badge, so it can be set aside and
+// come back to later without being resolved.
+//
+// Server-side on purpose: the old `peek-done` was a client-only class the server never
+// emitted, so any re-render morphed it away and silently re-collapsed a card the reviewer
+// had just opened (#173). Now the server owns it and the morph converges.
+//
+// The row key is the badge's own: "<line>-<side>" in the diff, "MB-<start>-<end>" in the
+// md-view. Deleting rather than storing false keeps the persisted map to just the rows the
+// reviewer actually flipped.
+func (c *PrereviewController) ToggleRow(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	key := ctx.GetString("row")
+	if key == "" {
+		return state, fmt.Errorf("toggleRow: missing row key")
+	}
+	if state.ToggledRows[key] {
+		delete(state.ToggledRows, key)
+		return state, nil
+	}
+	if state.ToggledRows == nil {
+		state.ToggledRows = map[string]bool{}
+	}
+	state.ToggledRows[key] = true
+	return state, nil
+}
+
 // ToggleMarks flips whether the per-line comment/suggestion count badges (#151)
 // and their inline cards are shown in the diff. Off by default (badges visible);
 // when on, the diff reads clean so a reviewer can scan the raw code. Persisted
