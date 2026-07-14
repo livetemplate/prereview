@@ -86,6 +86,24 @@ func TestE2E_SearchPalette(t *testing.T) {
 			t.Fatalf("type %q: %v", q, err)
 		}
 	}
+	// jumpToFirstHit clicks the top hit and waits for the jump's render to LAND.
+	//
+	// The landing signal must be the palette closing, not `.code .line.is-cursor`
+	// becoming visible: a cursor line is left over from the previous jump, so a
+	// WaitVisible on it is already satisfied by the stale DOM and returns without
+	// waiting for this jump at all. The test then raced the in-flight close — the
+	// next openViaButton read a stale is-open, skipped its click, and the input was
+	// destroyed underneath it (a null input, or a hang on a modal that was never
+	// reopened, depending on when the morph landed).
+	jumpToFirstHit := func(what string) {
+		if err := chromedp.Run(p.ctx,
+			chromedp.Click(`.search-hit`, chromedp.ByQuery),
+			chromedp.WaitNotPresent(`.search-modal.is-open`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.code .line.is-cursor`, chromedp.ByQuery),
+		); err != nil {
+			t.Fatalf("jump to %s hit: %v\nstderr: %s", what, err, p.stderr.String())
+		}
+	}
 	hitCount := func() int {
 		var n int
 		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelectorAll('.search-hit').length`, &n))
@@ -108,12 +126,7 @@ func TestE2E_SearchPalette(t *testing.T) {
 	if hitCount() == 0 {
 		t.Fatalf("no hits for UNCHANGEDNEEDLE\nstderr: %s", p.stderr.String())
 	}
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.search-hit`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.code .line.is-cursor`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("jump to folded content hit: %v\nstderr: %s", err, p.stderr.String())
-	}
+	jumpToFirstHit("folded content")
 	var cursorText string
 	if err := chromedp.Run(p.ctx, chromedp.Text(`.code .line.is-cursor`, &cursorText, chromedp.ByQuery)); err != nil {
 		t.Fatal(err)
@@ -128,12 +141,7 @@ func TestE2E_SearchPalette(t *testing.T) {
 	if hitCount() == 0 {
 		t.Fatalf("no hits for MARKDOWNNEEDLE")
 	}
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.search-hit`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.code .line.is-cursor`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("jump to markdown hit: %v\nstderr: %s", err, p.stderr.String())
-	}
+	jumpToFirstHit("markdown")
 	var hasMdView bool
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`!!document.querySelector('.md-view')`, &hasMdView)); err != nil {
 		t.Fatal(err)

@@ -470,10 +470,15 @@ func (p *runningPrereview) clickFile(path string) {
 	if !clicked {
 		p.t.Fatalf("clickFile %s: no selectFile button with that title", path)
 	}
+	// Wait on the file-head's title, which carries the FULL path. The old wait matched a
+	// <strong> whose text equalled the path — but the head splits the path into a dir span
+	// plus a <strong class="fh-base"> holding only the BASENAME, so any nested path
+	// ("docs/logo.png") never matched and the helper blocked forever. Root-level files
+	// happened to work because there basename == path, which is why this hid for so long.
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(
-			fmt.Sprintf(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='%s']`, path),
-			chromedp.BySearch),
+			fmt.Sprintf(`main.viewer .file-head-name[title=%q]`, path),
+			chromedp.ByQuery),
 	); err != nil {
 		p.t.Fatalf("clickFile %s: %v\nstderr: %s", path, err, p.stderr.String())
 	}
@@ -488,16 +493,41 @@ func (p *runningPrereview) clickFile(path string) {
 // own open/close/click-away mechanics are covered by TestE2E_ToolbarViewDropdown.
 // Desktop-width only (the dropdown lives in .toolbar-inline, hidden <900px where
 // the .more-menu takes over).
+// The trigger click is RETRIED because `open` is a client-only class
+// (lvt-el:toggleClass — the server never emits it), so a server render landing while
+// the menu is up morphs the toolbar and STRIPS it: the menu closes under us. Any
+// caller that opens the menu right after an action whose render touches the View
+// panel (e.g. toggleResolved, whose resolved-filter items live in that panel) races
+// it. Reproduced at ~1-in-4 and the cause of the intermittent hangs in
+// TestE2E_ResolvedReloadStableAgent. The retry keeps the suite honest; the real fix is
+// upstream — livetemplate/client#147 (preserve client-toggled classes across a morph, as
+// the client already does for the lvt-fx:scroll / lvt-autofocus guards). Drop this retry
+// when that lands.
 func (p *runningPrereview) openViewItem(name string) {
 	p.t.Helper()
-	itemSel := fmt.Sprintf(`.tb-dropdown-panel button[name=%q]`, name)
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.tb-dropdown-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.tb-dropdown.open `+itemSel, chromedp.ByQuery),
-		chromedp.Evaluate(fmt.Sprintf(`document.querySelector('.tb-dropdown-panel button[name="%s"]').click()`, name), nil),
-	); err != nil {
-		p.t.Fatalf("openViewItem %s: %v\nstderr: %s", name, err, p.stderr.String())
+	itemSel := fmt.Sprintf(`.tb-dropdown.open .tb-dropdown-panel button[name=%q]`, name)
+	for attempt := 0; attempt < 5; attempt++ {
+		if err := chromedp.Run(p.ctx, chromedp.Click(`.tb-dropdown-trigger`, chromedp.ByQuery)); err != nil {
+			p.t.Fatalf("openViewItem %s: click trigger: %v\nstderr: %s", name, err, p.stderr.String())
+		}
+		// Poll rather than WaitVisible: a stripped `open` never resolves, and we want
+		// to re-click instead of hanging until the package timeout.
+		for i := 0; i < 10; i++ {
+			var ok bool
+			_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+				fmt.Sprintf(`!!document.querySelector('%s')`, itemSel), &ok))
+			if ok {
+				if err := chromedp.Run(p.ctx, chromedp.Evaluate(
+					fmt.Sprintf(`document.querySelector('.tb-dropdown-panel button[name="%s"]').click()`, name), nil),
+				); err != nil {
+					p.t.Fatalf("openViewItem %s: click item: %v\nstderr: %s", name, err, p.stderr.String())
+				}
+				return
+			}
+			_ = chromedp.Run(p.ctx, chromedp.Sleep(100*time.Millisecond))
+		}
 	}
+	p.t.Fatalf("openViewItem %s: the View menu never stayed open across 5 attempts\nstderr: %s", name, p.stderr.String())
 }
 
 // clickLine selects the diff line identified by old/new line numbers.
@@ -1689,9 +1719,11 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 	p.waitReady()
 	p.clickFile("edited.go")
 
-	// Two comments on the same line so the all-comments list has two
-	// distinguishable items (avoids depending on a second selectable
-	// line existing in the fixture).
+	// Two comments, on two DIFFERENT lines, so the all-comments list has two distinguishable
+	// items. They used to both go on line 3 — but since #174 a line is one conversation, so
+	// clicking an already-commented line opens its thread instead of the composer, and the
+	// second add would wait forever for a composer that never comes. Which line each comment
+	// sits on is irrelevant here; this test is about the all-comments list's actions.
 	p.clickLine(3, 3)
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
@@ -1701,7 +1733,7 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 	); err != nil {
 		t.Fatalf("add comment alpha: %v%s", err, diag())
 	}
-	p.clickLine(3, 3)
+	p.clickLine(5, 5)
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 		chromedp.SendKeys(`.composer textarea`, "beta-cmt", chromedp.ByQuery),
@@ -1752,11 +1784,14 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 		t.Errorf("all-comments view must close when Edit is clicked from it%s", diag())
 	}
 
-	// Cancel the edit, go back to the list.
+	// Cancel the edit, go back to the list — via the `a` shortcut, the same way the list is
+	// opened above. The old `.drawer-all-comments` button no longer exists (#111 removed the
+	// sidebar entry; it lives in the View menu now), so clicking it waited forever on a node
+	// that is never rendered.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='clearSelection']`, chromedp.ByQuery),
 		chromedp.Sleep(150*time.Millisecond),
-		chromedp.Click(`.drawer-all-comments button[name='toggleCommentList']`, chromedp.ByQuery),
+		chromedp.KeyEvent("a"),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("cancel edit + reopen list: %v%s", err, diag())
@@ -1826,18 +1861,26 @@ func TestE2E_ResolveComment(t *testing.T) {
 		t.Fatalf("add comment: %v", err)
 	}
 
-	// Resolve. Resolved comments are hidden by default, so the inline-comment
-	// should disappear from the diff stream.
-	var stillVisibleAfterResolve bool
+	// Resolve → the card is hidden by default.
+	//
+	// It stays in the DOM: since #165 a resolved comment COLLAPSES behind the row's green
+	// count badge (a CSS rule) rather than being dropped from the render, so that clicking
+	// the badge can peek it back. Assert on what the reviewer SEES (offsetParent), not on
+	// presence — the old `!!querySelector('.inline-comment')` check has been failing ever
+	// since #165 landed, asserting a render contract the product deliberately changed.
+	var visibleAfterResolve int
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`.inline-comment button[name='toggleResolved']`, chromedp.ByQuery),
 		chromedp.Sleep(400*time.Millisecond),
-		chromedp.Evaluate(`!!document.querySelector('.inline-comment')`, &stillVisibleAfterResolve),
+		chromedp.Evaluate(
+			`[...document.querySelectorAll('.inline-comment')].filter(e => e.offsetParent !== null).length`,
+			&visibleAfterResolve),
 	); err != nil {
 		t.Fatalf("resolve: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if stillVisibleAfterResolve {
-		t.Error("resolved comment should be hidden by default; .inline-comment still present")
+	if visibleAfterResolve != 0 {
+		t.Errorf("a resolved comment should collapse out of sight by default; %d still visible",
+			visibleAfterResolve)
 	}
 
 	// CSV row should have resolved=true (col 7).
@@ -2359,8 +2402,13 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	if !hasMdRadios || checkedView != "rendered" {
 		t.Errorf("expected Markdown view radios with rendered checked; radios present=%v checked value=%q", hasMdRadios, checkedView)
 	}
-	if hasFileRadios {
-		t.Error("File view radios should be hidden while rendered Markdown is shown")
+	// The Diff/File radios STAY visible in rendered Markdown: since #110 that choice gates the
+	// rendered change-bars, exactly as it gates the diff in raw. (They are hidden only in the
+	// HTML preview, whose highlight is deferred — see TestE2E_HTMLPreview*.) This assertion
+	// used to demand the opposite and has been failing since #110 shipped.
+	if !hasFileRadios {
+		t.Error("File view radios should stay visible in rendered Markdown — the Diff/File " +
+			"choice gates the rendered change-bars there (#110)")
 	}
 
 	// Click the first rendered block (the h1, source line 1) and comment.
@@ -3804,14 +3852,12 @@ func TestE2E_TOCNavigationFromAllCommentsView(t *testing.T) {
 		t.Fatalf("seed comment: %v\nstderr: %s", err, p.stderr.String())
 	}
 
-	// Enter the all-comments view via the file drawer's CTA. Use JS
-	// click() rather than chromedp.Click because the drawer slides in
-	// via CSS transform — chromedp.Click's visibility precheck doesn't
-	// always settle on a transformed element on a narrow viewport.
+	// Enter the all-comments view with the `a` shortcut. It used to be entered through the
+	// file drawer's ".drawer-all-comments" CTA, but #111 removed that button — the JS
+	// querySelector returned null and threw. HOW the view is entered is incidental here;
+	// what this test is about is TOC navigation once you are IN it.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelector('.hamburger').click()`, nil),
-		chromedp.WaitVisible(`#files-drawer.is-open`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.drawer-all-comments button[name="toggleCommentList"]').click()`, nil),
+		chromedp.KeyEvent("a"),
 		chromedp.WaitVisible(`section.all-comments`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("enter all-comments view: %v\nstderr: %s", err, p.stderr.String())
@@ -4416,13 +4462,19 @@ func TestE2E_FileLevelComment(t *testing.T) {
 
 	// 1) Comment on a text file (edited.go). The file-header "Comment on
 	// file" button must be present even without any line clicked.
+	//
+	// The composer opens in the BLOCKING MODAL (.fc-modal), not inline in .file-comments:
+	// a mid-page scroll position used to leave an inline composer off-screen, so it was
+	// moved into a viewport-centered dialog. The SAVED cards still list in .file-comments.
+	// This test kept waiting on the old inline selector, which never appears — that is why
+	// it hung rather than failed.
 	p.clickFile("edited.go")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`button[name='openFileComment']`, chromedp.ByQuery),
 		chromedp.Click(`button[name='openFileComment']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.file-comments .composer textarea`, chromedp.ByQuery),
-		chromedp.SendKeys(`.file-comments .composer textarea`, "this file should be renamed", chromedp.ByQuery),
-		chromedp.Click(`.file-comments button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.fc-modal .composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.fc-modal .composer textarea`, "this file should be renamed", chromedp.ByQuery),
+		chromedp.Click(`.fc-modal button[name='addComment']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.file-comments .inline-comment .body`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("file-level comment on edited.go: %v\nstderr: %s", err, p.stderr.String())
@@ -4450,9 +4502,9 @@ func TestE2E_FileLevelComment(t *testing.T) {
 		chromedp.WaitVisible(`.binary-preview.binary-image img`, chromedp.ByQuery),
 		chromedp.WaitVisible(`button[name='openFileComment']`, chromedp.ByQuery),
 		chromedp.Click(`button[name='openFileComment']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.file-comments .composer textarea`, chromedp.ByQuery),
-		chromedp.SendKeys(`.file-comments .composer textarea`, "wrong file in this PR", chromedp.ByQuery),
-		chromedp.Click(`.file-comments button[name='addComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.fc-modal .composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.fc-modal .composer textarea`, "wrong file in this PR", chromedp.ByQuery),
+		chromedp.Click(`.fc-modal button[name='addComment']`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.file-comments .inline-comment .body`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("file-level comment on logo.png: %v\nstderr: %s", err, p.stderr.String())
@@ -4472,10 +4524,13 @@ func TestE2E_FileLevelComment(t *testing.T) {
 	p.clickFile("edited.go")
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='openFileComment']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.file-comments .composer textarea`, chromedp.ByQuery),
-		chromedp.SendKeys(`.file-comments .composer textarea`, "draft to discard", chromedp.ByQuery),
-		chromedp.Click(`.file-comments button[name='clearSelection']`, chromedp.ByQuery),
-		chromedp.WaitNotPresent(`.file-comments .composer`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.fc-modal .composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.fc-modal .composer textarea`, "draft to discard", chromedp.ByQuery),
+		chromedp.Click(`.fc-modal button[name='clearSelection']`, chromedp.ByQuery),
+		// Cancel closes the whole modal — the composer no longer lives in .file-comments,
+		// so the old "composer gone from .file-comments" wait was vacuously true while the
+		// SendKeys before it could never land.
+		chromedp.WaitNotPresent(`.fc-modal`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.file-comments .inline-comment .body`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("cancel file-level composer: %v\nstderr: %s", err, p.stderr.String())

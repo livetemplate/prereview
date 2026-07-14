@@ -120,7 +120,10 @@ func TestE2E_FileTree(t *testing.T) {
 	// this exercises the upstream <details lvt-ignore-attrs> open fix.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Evaluate(clickFileBtnJS("helper.go"), nil),
-		chromedp.WaitVisible(`//main[contains(@class,'viewer')]//strong[normalize-space(text())='src/lib/helper.go']`, chromedp.BySearch),
+		// Match the file-head's title (the FULL path). The head splits the path into a dir
+		// span + a <strong> holding just the basename, so a <strong> whose text equals
+		// "src/lib/helper.go" never exists — this wait blocked forever.
+		chromedp.WaitVisible(`main.viewer .file-head-name[title="src/lib/helper.go"]`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("select helper.go: %v%s", err, diag())
 	}

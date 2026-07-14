@@ -48,6 +48,14 @@ func TestE2E_UnsavedBecomesADraft(t *testing.T) {
 	}
 
 	// And it should surface in the Queue as a draft.
+	//
+	// Back to edited.go first: since #171 the queue is scoped to the SELECTED file
+	// (queueComments filters on c.File == s.SelectedFile unless QueueGlobal), and the
+	// draft lives on edited.go — the file we deliberately navigated away from above.
+	// Asserting from fresh.go waits forever on a row that cannot render. Returning to
+	// the file also keeps the check honest: the draft persisted across leaving it.
+	p.clickFile("edited.go")
+
 	var draftRows int
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.queue-dropdown .queue-trigger`, chromedp.ByQuery),

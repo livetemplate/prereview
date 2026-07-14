@@ -1555,7 +1555,7 @@
         (ge $.SelectionEndMax $bs)
         (le $.SelectionEndMax $be)}} selected{{end -}}
     {{- if $mbstatus}} md-{{$mbstatus}}{{end -}}
-    {{- if index $.ToggledRows $mbkey}} row-toggled{{end -}}
+    {{- if index $.RowToggled $mbkey}} row-toggled{{end -}}
     "
          data-key="{{$mbkey}}"
          {{- if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>
@@ -1647,7 +1647,7 @@
     {{$hasComment := gt $commentCount 0 -}}
     {{$hasSuggestion := gt $suggestionCount 0 -}}
     {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
-    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.ToggledRows $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
+    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
       {{- /* A selectable div (not <button>): <button> content is non-
              selectable in UA styles, which would block native text selection.

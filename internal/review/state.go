@@ -144,7 +144,6 @@ type PrereviewState struct {
 	// apply)" to "applied", and drops it from the agent's actionable snapshot.
 	Applied map[string]bool `json:"applied"`
 
-
 	// Hidden is the reviewer's hidden-from-view suggestion set, loaded from the
 	// server-owned .prereview/hidden-suggestions.jsonl every Mount (the file is
 	// the source of truth — not lvt:"persist"). A pure view filter applied in
@@ -280,7 +279,6 @@ type PrereviewState struct {
 	// "reviewed" (GitHub PR convention). Persisted so the state survives
 	// browser refresh; not written to CSV (this is UX state, not a comment).
 	ViewedFiles map[string]bool `json:"viewed_files" lvt:"persist"`
-
 
 	// Read progress (#128), keyed by file path. ReadThrough is the furthest
 	// new-side line number the reviewer has scrolled past (a high-water mark →
@@ -464,7 +462,13 @@ type PrereviewState struct {
 	//
 	// View-only: a collapsed annotation is still queued for the agent. This changes what
 	// the reviewer sees, never what the agent is handed.
-	ToggledRows map[string]bool `json:"toggled_rows" lvt:"persist"`
+	//
+	// The VALUE is the row's default state when the reviewer toggled it (rowStateOpen /
+	// rowStateCollapsed). A toggle is a flip AWAY FROM a specific default, so it expires the
+	// moment that default changes — see RowToggled. Without this, peeking a done card and
+	// then undoing its verdict left the row still "flipped", which now meant HIDE: the
+	// suggestion the reviewer was working on vanished from under them.
+	ToggledRows map[string]string `json:"toggled_rows" lvt:"persist"`
 
 	// QueueGlobal widens the queue panel from THIS FILE's work to the whole review's
 	// (#171). Default false: the queue answers "what is happening to the document in
