@@ -175,6 +175,97 @@ func TestSelectLine_FallsThroughToComposer(t *testing.T) {
 	}
 }
 
+func blockCtx(from, to int) *livetemplate.Context {
+	return livetemplate.NewContext(context.TODO(), "selectBlock",
+		map[string]interface{}{"from": from, "to": to})
+}
+
+// A BLOCK is one conversation too. In the rendered-Markdown view the reviewer clicks a
+// paragraph, not a line, so the same rule has to hold there or the fix is half-delivered for
+// exactly the markdown-draft review that motivated it.
+func TestSelectBlock_OpensExistingThread(t *testing.T) {
+	c := &PrereviewController{}
+	// The comment is anchored to line 4, INSIDE the clicked block's 3–5 source range — the
+	// membership rule the blockComments partial uses.
+	state := stateWithComment(lineComment("c1", 4, "new"))
+
+	state, err := c.SelectBlock(state, blockCtx(3, 5))
+	if err != nil {
+		t.Fatalf("SelectBlock: %v", err)
+	}
+	if state.ReplyingID != "c1" {
+		t.Errorf("clicking a rendered block that already has a comment must open its thread "+
+			"(ReplyingID=%q, want %q)", state.ReplyingID, "c1")
+	}
+	if state.SelectionAnchor != 0 || state.SelectionEnd != 0 {
+		t.Errorf("opening a thread must leave no selection, else the composer renders inside "+
+			"the block on top of it; got anchor=%d end=%d", state.SelectionAnchor, state.SelectionEnd)
+	}
+}
+
+// Un-collapse the BLOCK the thread lives in — the md-view's badge key is namespaced
+// "MB-<start>-<end>", not "<line>-<side>".
+func TestSelectBlock_UncollapsesTheBlockItOpens(t *testing.T) {
+	c := &PrereviewController{}
+	state := stateWithComment(lineComment("c1", 4, "new"))
+	state.ToggledRows = map[string]bool{"MB-3-5": true, "MB-7-9": true}
+
+	state, err := c.SelectBlock(state, blockCtx(3, 5))
+	if err != nil {
+		t.Fatalf("SelectBlock: %v", err)
+	}
+	if state.ToggledRows["MB-3-5"] {
+		t.Error("opening a thread in a collapsed block must un-collapse it")
+	}
+	if !state.ToggledRows["MB-7-9"] {
+		t.Error("un-collapsing one block must not disturb the others")
+	}
+}
+
+// THE GUARANTEE THAT KEEPS THE PREVIEW SURFACES WORKING: a region DRAWN over a preview
+// reaches SelectBlock through the very same handler, but drawing a box means "comment on
+// THIS area" — it must never be swallowed into an existing thread. The armed overlay is what
+// tells the two gestures apart (it only exists while armed, and capturing disarms it).
+func TestSelectBlock_DrawnRegionStillComposesANewComment(t *testing.T) {
+	c := &PrereviewController{}
+	state := stateWithComment(lineComment("c1", 4, "new"))
+	state.RegionSelectArmed = true // the reviewer armed "draw a box to comment"
+
+	state, err := c.SelectBlock(state, blockCtx(3, 5))
+	if err != nil {
+		t.Fatalf("SelectBlock: %v", err)
+	}
+	if state.ReplyingID != "" {
+		t.Errorf("a DRAWN region is an explicit new-comment gesture — it must not open the "+
+			"existing thread at those lines (opened %q)", state.ReplyingID)
+	}
+	if state.SelectionAnchor != 3 || state.SelectionEnd != 5 {
+		t.Errorf("the drawn region must arm the composer over its own range; got anchor=%d end=%d",
+			state.SelectionAnchor, state.SelectionEnd)
+	}
+	if state.RegionSelectArmed {
+		t.Error("capturing a region must disarm the overlay so scrolling returns")
+	}
+}
+
+// A block with no open comment composes as before.
+func TestSelectBlock_FallsThroughToComposer(t *testing.T) {
+	c := &PrereviewController{}
+	// The only comment sits on line 9 — OUTSIDE the clicked block's 3–5 range.
+	state, err := c.SelectBlock(stateWithComment(lineComment("c1", 9, "new")), blockCtx(3, 5))
+	if err != nil {
+		t.Fatalf("SelectBlock: %v", err)
+	}
+	if state.ReplyingID != "" {
+		t.Errorf("a comment outside the block must not be opened by clicking it (opened %q)",
+			state.ReplyingID)
+	}
+	if state.SelectionAnchor != 3 || state.SelectionEnd != 5 {
+		t.Errorf("the click must arm the composer over the block; got anchor=%d end=%d",
+			state.SelectionAnchor, state.SelectionEnd)
+	}
+}
+
 // Mid-range, the reviewer is deliberately extending a selection across lines. One of those
 // lines happening to carry a comment must NOT hijack it — you'd lose the range you were
 // halfway through drawing.

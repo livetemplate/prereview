@@ -175,3 +175,61 @@ func TestE2E_LineClickOpensThread(t *testing.T) {
 			"row(s), want 2%s", len(rows)-1, diag())
 	}
 }
+
+// The rendered-Markdown view: the reviewer clicks a BLOCK (paragraph), not a line. The rule
+// has to hold there too, or the fix is half-delivered for exactly the markdown-draft review
+// that motivated it — the whole point was a doc review where a paragraph already carries a
+// comment.
+func TestE2E_BlockClickOpensThread(t *testing.T) {
+	repo := setupFixtureRepoMarkdown(t) // docs.md: prose lines 3-5 render one block PER LINE
+	pdir := filepath.Join(repo, ".prereview")
+	if err := os.MkdirAll(pdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seed := "id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url\n" +
+		"c1,docs.md,3,3,new,the existing thread,2026-07-13T12:00:00Z,false,,,line,,\n"
+	if err := os.WriteFile(filepath.Join(pdir, "comments.csv"), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := bootChromeAgainstRepo(t, repo, 1400, 1000)
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		return "\n--- server ---\n" + p.stderr.String() + "\n--- html ---\n" + html
+	}
+	p.waitReady()
+	p.clickFile("docs.md")
+
+	block := `.md-block:has(.inline-comment[data-key="c1"])`
+	bctx, bcancel := context.WithTimeout(p.ctx, 20*time.Second)
+	err := chromedp.Run(bctx, chromedp.WaitVisible(block+` .inline-comment`, chromedp.ByQuery))
+	bcancel()
+	if err != nil {
+		t.Fatalf("precondition: the seeded comment should render in its md block: %v%s", err, diag())
+	}
+
+	// Click the block's rendered prose → its thread opens; no new-comment composer.
+	bctx, bcancel = context.WithTimeout(p.ctx, 20*time.Second)
+	err = chromedp.Run(bctx,
+		chromedp.Click(block+` .md-rendered`, chromedp.ByQuery),
+		chromedp.WaitVisible(block+` .reply-form`, chromedp.ByQuery),
+	)
+	bcancel()
+	if err != nil {
+		t.Fatalf("clicking a rendered block that already carries a comment must OPEN that "+
+			"thread — a block, like a line, is one conversation: %v%s", err, diag())
+	}
+	var composers int
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelectorAll('.composer').length`, &composers))
+	if composers != 0 {
+		t.Errorf("clicking a commented block must NOT open the new-comment composer (found %d)%s",
+			composers, diag())
+	}
+
+	// Nothing was written — opening a thread is a view action.
+	if rows := p.readCSV(); len(rows) != 2 {
+		t.Errorf("opening a block's thread must not write anything; CSV has %d data row(s), "+
+			"want 1%s", len(rows)-1, diag())
+	}
+}

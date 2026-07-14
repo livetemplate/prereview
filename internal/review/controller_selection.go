@@ -112,6 +112,38 @@ func openThreadOnLine(state PrereviewState, line int, side string) (PrereviewSta
 	return state, false
 }
 
+// openThreadOnBlock is openThreadOnLine's rendered-view twin: a click on a Markdown/HTML
+// block that ALREADY carries a comment opens that thread rather than composing a second one.
+//
+// It iterates FileComments() — literally the list the "blockComments" partial renders — and
+// uses the partial's own membership rule (a comment belongs to the block when its ToLine
+// falls inside the block's source range), so what the reviewer clicked and what opens can
+// never drift apart. Resolved / outdated comments are skipped for the same reason as on a
+// line: a closed thread must not swallow a click meant to start a fresh comment.
+//
+// No side gate: the rendered views have no diff sides (every block is "new").
+func openThreadOnBlock(state PrereviewState, from, to int) (PrereviewState, bool) {
+	for _, cm := range state.FileComments() {
+		if cm.ToLine < from || cm.ToLine > to {
+			continue
+		}
+		if cm.Resolved || cm.AnchorOutdated() {
+			continue
+		}
+		// Un-collapse the block (#174's badge) so the thread is actually on screen.
+		delete(state.ToggledRows, fmt.Sprintf("MB-%d-%d", from, to))
+		state.ReplyingID = cm.ID
+		state.ReplyDraft = ""
+		// Clear the selection, or the NEW-comment composer renders inside the block on top
+		// of the thread the reviewer just asked to see.
+		state.SelectionAnchor = 0
+		state.SelectionEnd = 0
+		state.SelectionSide = ""
+		return state, true
+	}
+	return state, false
+}
+
 // SelectBlock selects a whole source block in one shot: a rendered-
 // Markdown block, a region drawn over the rendered-HTML preview, or a
 // region drawn over the code view (issue #26 region comments). A block
@@ -126,6 +158,11 @@ func openThreadOnLine(state PrereviewState, line int, side string) (PrereviewSta
 // diff sides; deep-link line numbers are post-diff). The code-view region
 // path passes the side of the box's first matched row so a comment on a
 // deleted ("old") row anchors correctly.
+//
+// A block, like a line, is ONE conversation (#174): CLICKING a rendered block that already
+// carries a comment OPENS that thread instead of composing a second one on top of it — see
+// openThreadOnBlock. A brand-new comment on that block is still reachable by selecting a
+// phrase inside it (kind=text, data-surface="block").
 func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	from := ctx.GetInt("from")
 	to := ctx.GetInt("to")
@@ -136,6 +173,17 @@ func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplat
 	if side != "old" {
 		side = "new"
 	}
+
+	// Only a plain CLICK opens a thread. A region DRAWN over a preview reaches this same
+	// handler (lvt-fx:region-select), but drawing a box is an unambiguous "comment on THIS
+	// area" gesture, and the overlay that captures it only exists while armed — so an armed
+	// overlay is exactly the signal that the reviewer meant a new comment, not a read.
+	if !state.RegionSelectArmed {
+		if opened, ok := openThreadOnBlock(state, from, to); ok {
+			return opened, nil
+		}
+	}
+
 	state.SelectionAnchor = from
 	state.SelectionEnd = to
 	state.SelectionSide = side
