@@ -227,6 +227,44 @@ func TestE2E_BlockClickOpensThread(t *testing.T) {
 			composers, diag())
 	}
 
+	// The escape hatch, in the rendered view: selecting a phrase INSIDE the commented block
+	// must still compose a brand-new comment (kind=text, data-surface="block") — and close
+	// the thread's reply box, so the block never shows a reply form and a composer at once.
+	selectJS := `(() => {
+		const el = document.querySelector('` + block + ` .md-rendered');
+		if (!el) return 'no block';
+		const node = (el.querySelector('p') || el).firstChild;
+		if (!node || node.nodeType !== 3) return 'no text node';
+		const r = document.createRange();
+		r.setStart(node, 0);
+		r.setEnd(node, Math.min(6, node.textContent.length));
+		const sel = window.getSelection();
+		sel.removeAllRanges();
+		sel.addRange(r);
+		return 'ok';
+	})()`
+	var selResult string
+	bctx, bcancel = context.WithTimeout(p.ctx, 20*time.Second)
+	err = chromedp.Run(bctx,
+		chromedp.Evaluate(selectJS, &selResult),
+		chromedp.Sleep(400*time.Millisecond), // debounced selectionchange (150ms)
+		chromedp.WaitVisible(`[data-lvt-text-select-button]`, chromedp.ByQuery),
+		chromedp.Click(`[data-lvt-text-select-button]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.composer`, chromedp.ByQuery),
+	)
+	bcancel()
+	if err != nil || selResult != "ok" {
+		t.Fatalf("selecting a phrase inside an ALREADY-COMMENTED block must still compose a "+
+			"NEW comment — the escape hatch: %v (select=%q)%s", err, selResult, diag())
+	}
+	var replies int
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(
+		`[...document.querySelectorAll('.reply-form')].filter(e=>e.offsetParent).length`, &replies))
+	if replies != 0 {
+		t.Errorf("arming the composer must close the block's reply box — a block cannot show a "+
+			"reply form and a composer at once (found %d)%s", replies, diag())
+	}
+
 	// Nothing was written — opening a thread is a view action.
 	if rows := p.readCSV(); len(rows) != 2 {
 		t.Errorf("opening a block's thread must not write anything; CSV has %d data row(s), "+
