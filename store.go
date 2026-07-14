@@ -39,6 +39,11 @@ func openStore(storeRoot string) (csvPath string, w *csv.Writer, err error) {
 	// The versions/ dir itself is deliberately NOT reset: it's the uncommitted
 	// version history and must survive restarts.
 	_ = os.Remove(filepath.Join(dir, review.PausedMarkerName))
+	// Clear any stale session scope (#171). run() rewrites it immediately when this
+	// session is a single-file review. Removing it FIRST is what makes the scope
+	// per-session: a leftover from an earlier single-file run in this directory would
+	// otherwise silently narrow a DIRECTORY review down to that one file.
+	_ = os.Remove(filepath.Join(dir, review.SessionFileName))
 	return csvPath, csv.NewWriter(csvPath), nil
 }
 

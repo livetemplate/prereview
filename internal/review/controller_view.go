@@ -59,6 +59,18 @@ func (c *PrereviewController) ToggleFocusMode(state PrereviewState, ctx *livetem
 }
 
 
+// ToggleQueueScope switches the queue panel between THIS FILE's work (the default — the
+// queue is about the document in front of you) and the whole review's (#171). Persisted
+// per-user, so the choice survives the relaunch-per-review workflow.
+//
+// A view filter only: the agent is always handed every actionable item in the review, so
+// flipping this can never strand work it would otherwise have picked up.
+func (c *PrereviewController) ToggleQueueScope(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.QueueGlobal = !state.QueueGlobal
+	c.savePrefs(state)
+	return state, nil
+}
+
 // ToggleMarks flips whether the per-line comment/suggestion count badges (#151)
 // and their inline cards are shown in the diff. Off by default (badges visible);
 // when on, the diff reads clean so a reviewer can scan the raw code. Persisted

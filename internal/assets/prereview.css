@@ -1178,6 +1178,10 @@ header.file-head .file-head-actions {
 .q-queued { color: var(--accent); }
 .q-done { color: var(--pr-add); }
 .q-draft { color: var(--pico-muted-color); }
+/* #171: accepted-but-not-yet-applied. Amber, the same --pr-open the #165 "accepted
+   (pending apply)" line badge uses — the toolbar count and the badge on the line mean
+   the same thing, so they read the same. */
+.q-awaiting { color: var(--pr-open, #c9a000); }
 /* Keep the whole chip (label · counts · chevron) on one line — it was wrapping
    the chevron to a second row on a narrow bar. */
 .queue-trigger { display: inline-flex; align-items: center; white-space: nowrap; flex: 0 0 auto; }
@@ -1230,6 +1234,44 @@ header.file-head .file-head-actions {
 .queue-empty { padding: 0.5rem; font-size: 0.8rem; color: var(--pico-muted-color); }
 .queue-working { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
 .queue-legend { padding: 0.25rem 0.5rem 0.4rem; font-size: 0.75rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-card-sectioning-background-color); margin-bottom: 0.2rem; }
+/* #171: the queue scope switch — "This file" (default) vs "All files". A segmented pair
+   inside one button: the whole control is the toggle, the lit half says where you are. */
+.queue-scope-form { margin: 0; padding: 0.3rem 0.5rem 0.15rem; }
+.queue-scope-btn {
+  display: flex; width: 100%; padding: 2px; gap: 2px;
+  background: var(--pico-card-sectioning-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 999px; cursor: pointer;
+}
+.queue-scope-opt {
+  flex: 1; padding: 0.2rem 0.4rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; text-align: center; white-space: nowrap;
+  color: var(--pico-muted-color);
+}
+.queue-scope-opt.is-on { background: var(--surface); color: var(--pico-color); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+/* Coarse pointers get a 44px tap target (the whole switch), same rule as the badges. */
+@media (pointer: coarse) { .queue-scope-btn { min-height: 44px; align-items: center; } }
+/* The count of work the current filter is hiding — muted, but present, so the per-file
+   default can never conceal a backlog silently. */
+.q-elsewhere { color: var(--pico-muted-color); }
+
+/* #171: the accepted-but-unapplied line. Tinted, not muted like the legend above it —
+   this is the one queue state nothing else will chase, so it has to carry weight. */
+.queue-awaiting {
+  padding: 0.3rem 0.5rem 0.4rem; font-size: 0.75rem; line-height: 1.35;
+  color: var(--pico-color);
+  background: color-mix(in srgb, var(--pr-open, #c9a000) 12%, transparent);
+  border-left: 2px solid var(--pr-open, #c9a000);
+  margin-bottom: 0.3rem;
+}
+/* #171: the same warning on the End-session confirm — the last chance to notice that
+   accepted edits were never written to the file. */
+.end-warn {
+  padding: 0.4rem 0.6rem; margin: 0 0 0.5rem;
+  background: color-mix(in srgb, var(--pr-open, #c9a000) 12%, transparent);
+  border-left: 2px solid var(--pr-open, #c9a000);
+  border-radius: 3px;
+}
 .queue-row { margin: 0; display: flex; align-items: center; gap: 0.15rem; }
 .queue-jump-form { margin: 0; flex: 1 1 auto; min-width: 0; }
 .queue-reenqueue-form { margin: 0; flex: 0 0 auto; }
@@ -1867,25 +1909,35 @@ header.file-head .file-head-comment button svg { display: block; }
    suggestion (so a proposed edit is right there to accept), and a suggestion awaiting the
    agent — revision-requested (sg-revise) or being reverted (sg-revert). Peek a collapsed card
    by clicking its badge (`.peek-done`, a pure-client lvt-el toggle) or globally via "Show
-   resolved" (.show-resolved). The M4 status/revert controls live inside the peeked card. */
+   resolved" (.show-resolved). The M4 status/revert controls live inside the peeked card.
+   #171: `.is-applied` collapses too, and NOT only via sg-accept. The agent can apply an
+   edit the reviewer never accepted (applied != decided), which carries is-applied but no
+   sg-* class — so without this it never collapsed and its badge stayed amber "open"
+   forever, even though the edit was already in the file. Applied is terminal. */
 .code .inline-comment.is-resolved,
 .code .inline-suggestion.sg-accept,
 .code .inline-suggestion.sg-reject,
+.code .inline-suggestion.is-applied,
 .md-view .inline-comment.is-resolved,
 .md-view .inline-suggestion.sg-accept,
-.md-view .inline-suggestion.sg-reject { display: none; }
+.md-view .inline-suggestion.sg-reject,
+.md-view .inline-suggestion.is-applied { display: none; }
 .line-row.peek-done .inline-comment.is-resolved,
 .line-row.peek-done .inline-suggestion.sg-accept,
 .line-row.peek-done .inline-suggestion.sg-reject,
+.line-row.peek-done .inline-suggestion.is-applied,
 .md-block.peek-done .inline-comment.is-resolved,
 .md-block.peek-done .inline-suggestion.sg-accept,
 .md-block.peek-done .inline-suggestion.sg-reject,
+.md-block.peek-done .inline-suggestion.is-applied,
 .layout.show-resolved .code .inline-comment.is-resolved,
 .layout.show-resolved .code .inline-suggestion.sg-accept,
 .layout.show-resolved .code .inline-suggestion.sg-reject,
+.layout.show-resolved .code .inline-suggestion.is-applied,
 .layout.show-resolved .md-view .inline-comment.is-resolved,
 .layout.show-resolved .md-view .inline-suggestion.sg-accept,
-.layout.show-resolved .md-view .inline-suggestion.sg-reject { display: block; }
+.layout.show-resolved .md-view .inline-suggestion.sg-reject,
+.layout.show-resolved .md-view .inline-suggestion.is-applied { display: block; }
 /* #165: the md-view has no gutter, so each block carries its state badge at the top-
    right corner (the .line-mark chips reuse the diff-view colours). */
 .md-block { position: relative; }

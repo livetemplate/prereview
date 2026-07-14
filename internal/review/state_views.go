@@ -101,19 +101,38 @@ func (s PrereviewState) ReadPercent() int {
 	return 100
 }
 
+// scopedSuggestions drops the suggestions that belong to a DIFFERENT file than the one
+// this session is reviewing (see PrereviewState.inScope — a single-file review shares
+// its .prereview/ store with every other file in the parent directory). Scope only: the
+// queue needs it without inheriting the reviewer's hide filter, which is view-only.
+func (s PrereviewState) scopedSuggestions() []Suggestion {
+	if s.SingleFile == "" {
+		return s.Suggestions
+	}
+	out := make([]Suggestion, 0, len(s.Suggestions))
+	for _, sg := range s.Suggestions {
+		if s.inScope(sg.File) {
+			out = append(out, sg)
+		}
+	}
+	return out
+}
+
 // visibleSuggestions is the SINGLE source every render surface iterates —
 // SuggestionsByEndLine (line view), FileSuggestions (block view), and
 // SuggestionGroups (the "N of M" count) all go through it, so a suggestion
-// excluded here can never leak into one view while showing in another. It drops
-// suggestions the reviewer has individually hidden (fingerprint-gated: a revised
-// suggestion's content no longer matches the stored hide, so it reappears).
+// excluded here can never leak into one view while showing in another. It is
+// scopedSuggestions minus the suggestions the reviewer has individually hidden
+// (fingerprint-gated: a revised suggestion's content no longer matches the stored
+// hide, so it reappears).
 func (s PrereviewState) visibleSuggestions() []Suggestion {
+	scoped := s.scopedSuggestions()
 	if len(s.Hidden) == 0 {
-		return s.Suggestions
+		return scoped
 	}
 	hidden := s.hiddenFingerprints()
-	out := make([]Suggestion, 0, len(s.Suggestions))
-	for _, sg := range s.Suggestions {
+	out := make([]Suggestion, 0, len(scoped))
+	for _, sg := range scoped {
 		if isHidden(hidden, sg) {
 			continue // hidden against this exact content
 		}
@@ -168,7 +187,17 @@ func (s PrereviewState) HiddenSuggestionCount() int {
 
 // suggestionUndecided reports the reviewer has not yet accepted or rejected it — the card
 // stays visible inline (only DECIDED suggestions collapse to a badge).
+//
+// An APPLIED suggestion is never undecided (#171). The agent only applies what it has
+// written to the file, so the edit is already IN the document — rendering it as an open
+// proposal is a lie, and it stays amber ("open") forever because there's no verdict to
+// collapse it. Applied is terminal: green, collapsed, out of the queue. It reaches this
+// state without a verdict when the agent applies an edit the reviewer never accepted;
+// Peek / Show-resolved keep the card reachable, so the edit stays discoverable.
 func (s PrereviewState) suggestionUndecided(id string) bool {
+	if s.Applied[id] {
+		return false
+	}
 	d, ok := s.DecisionsBySuggestion()[id]
 	return !ok || (d.Verdict != verdictAccept && d.Verdict != verdictReject)
 }
@@ -451,14 +480,18 @@ func (s PrereviewState) SuggestionCount() int {
 	return n
 }
 
-// DecisionsBySuggestion maps each CURRENT suggestion's ID to its recorded decision,
-// but ONLY when the decision's fingerprint still matches the suggestion's content.
-// A same-id revision (new proposed text) changes the fingerprint, so its stale
+// DecisionsBySuggestion maps each CURRENT in-scope suggestion's ID to its recorded
+// decision, but ONLY when the decision's fingerprint still matches the suggestion's
+// content. A same-id revision (new proposed text) changes the fingerprint, so its stale
 // decision drops and the suggestion reads as undecided again; orphan decisions
 // (the suggestion is gone) are dropped too. Zero-arg so the framework pre-computes
 // it; the suggestionCard looks up its own ID via {{index $.DecisionsBySuggestion .ID}}.
+//
+// Keyed off scopedSuggestions, so DecisionCount (its len) counts only this review's
+// decisions — and the by-ID lookups it serves are all made from already-scoped cards.
 func (s PrereviewState) DecisionsBySuggestion() map[string]SuggestionDecision {
-	if len(s.Decisions) == 0 || len(s.Suggestions) == 0 {
+	scoped := s.scopedSuggestions()
+	if len(s.Decisions) == 0 || len(scoped) == 0 {
 		return nil
 	}
 	byID := make(map[string]SuggestionDecision, len(s.Decisions))
@@ -466,7 +499,7 @@ func (s PrereviewState) DecisionsBySuggestion() map[string]SuggestionDecision {
 		byID[d.SuggestionID] = d
 	}
 	out := make(map[string]SuggestionDecision)
-	for _, sg := range s.Suggestions {
+	for _, sg := range scoped {
 		if d, ok := byID[sg.ID]; ok && d.Fingerprint == suggestionFingerprint(sg) {
 			// #159 M4.2: a revert the agent already COMPLETED (Revert set, but the
 			// suggestion is no longer applied — appliedCount<=revertedCount) drops back

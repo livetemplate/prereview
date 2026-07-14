@@ -38,6 +38,18 @@ type PrereviewState struct {
 	SelectedFile string              `json:"selected_file" lvt:"persist"`
 	CurrentDiff  *gitdiff.FileDiff   `json:"current_diff"`
 
+	// SingleFile is the session's review SCOPE: in single-file mode it is the one
+	// reviewable file, and "" in a directory / git review (which scopes to nothing).
+	// Mirrored from the controller every Mount — the controller owns it.
+	//
+	// Deliberately NOT lvt:"persist": a persisted copy could ride a session store
+	// into a relaunch pointed at a DIFFERENT file and silently scope the review to
+	// the wrong document. Disk (the CLI target) is the only source of truth.
+	//
+	// It is not SelectedFile: that is a cursor the reviewer moves, and a directory
+	// review's all-comments view is SUPPOSED to span every file. See inScope.
+	SingleFile string `json:"single_file"`
+
 	// Artifact versioning (#90). Versions is the selected file's version
 	// timeline (newest first), populated from the version store each Mount /
 	// version action for the Versions panel. When ViewingVersion is true the
@@ -430,6 +442,17 @@ type PrereviewState struct {
 	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
 	HideMarks bool `json:"hide_marks"`
 
+	// QueueGlobal widens the queue panel from THIS FILE's work to the whole review's
+	// (#171). Default false: the queue answers "what is happening to the document in
+	// front of me", which is what it's for in a single-file or doc review. Flip it in
+	// a many-file repo review to see the review-wide backlog and jump across files.
+	//
+	// A VIEW toggle only — it never changes what the agent is handed. The snapshot
+	// always carries every actionable item in the review (see EmitSnapshot), so work
+	// queued on another file is never stranded by the reviewer's choice of filter.
+	// Durable per-user view pref (uiprefs.go).
+	QueueGlobal bool `json:"queue_global"`
+
 	// ThemeMode is the Light/Dark/System color-mode preference (issue #60),
 	// cycled by the toolbar toggle. "" means System (the default): the page
 	// omits the data-mode attribute and follows the OS via prefers-color-scheme
@@ -456,6 +479,43 @@ type PrereviewState struct {
 	BaseChoices []string `json:"base_choices"`
 }
 
+// inScope reports whether an annotation on file f belongs to THIS session's review.
+//
+// The .prereview/ store lives in RepoPath — which, for a single-file review, is the
+// file's PARENT DIRECTORY (resolveTarget) — so the store is SHARED with every other
+// file ever reviewed from that directory. SingleFile is the session's true scope:
+// when set, only that file's annotations belong to this review. A directory / git
+// review narrows nothing — every file in the store is in scope.
+//
+// Gate on SingleFile, never SelectedFile: SelectedFile is a cursor that moves as the
+// reviewer clicks, and a directory review's all-comments view must span every file.
+func (s PrereviewState) inScope(file string) bool {
+	return s.SingleFile == "" || file == s.SingleFile
+}
+
+// scopedComments is the SINGLE source every FILE-AGNOSTIC surface iterates — the
+// queue (QueueItems and its counts), the all-comments view (VisibleComments), and the
+// global counts — so an out-of-scope comment can never leak into one of them. The
+// per-file surfaces (CommentsByEndLine and friends) already narrow to SelectedFile and
+// don't go through here. Its suggestion twin is scopedSuggestions.
+//
+// It NEVER filters s.Comments in place, and nothing derived from it may reach persist:
+// s.Comments is the write-back buffer persist() atomically REWRITES comments.csv from,
+// so a filtered slice reaching it would delete every other file's rows from disk. Read
+// and emit are filtered; load is not.
+func (s PrereviewState) scopedComments() []Comment {
+	if s.SingleFile == "" {
+		return s.Comments
+	}
+	out := make([]Comment, 0, len(s.Comments))
+	for _, c := range s.Comments {
+		if s.inScope(c.File) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // commentHiddenFromView is the single visibility rule for resolved/hidden
 // state, replacing the copy-pasted `c.Resolved && !s.ShowResolved` guards
 // scattered across the view helpers (issue #88). A RESOLVED comment is omitted
@@ -466,14 +526,15 @@ func (s PrereviewState) commentHiddenFromView(c Comment) bool {
 	return c.Resolved && (!s.ShowResolved || c.Hidden)
 }
 
-// VisibleComments returns Comments filtered by the resolved/hidden view rule.
-// Zero-arg so the framework eagerly evaluates and the template iterates the
+// VisibleComments returns the in-scope Comments filtered by the resolved/hidden view
+// rule. Zero-arg so the framework eagerly evaluates and the template iterates the
 // filtered list directly. Note there is no `if ShowResolved { return all }`
 // fast-path: an individually-hidden resolved comment must stay out even when the
 // group is shown.
 func (s PrereviewState) VisibleComments() []Comment {
-	out := make([]Comment, 0, len(s.Comments))
-	for _, c := range s.Comments {
+	scoped := s.scopedComments()
+	out := make([]Comment, 0, len(scoped))
+	for _, c := range scoped {
 		if s.commentHiddenFromView(c) {
 			continue
 		}
@@ -482,12 +543,17 @@ func (s PrereviewState) VisibleComments() []Comment {
 	return out
 }
 
-// ResolvedCount returns how many of the current comments are resolved —
+// CommentCount is the number of in-scope comments — the all-comments view's header
+// total. Zero-arg because livetemplate only pre-computes zero-arg methods; the
+// template can't do `len` over a scoped slice itself without one.
+func (s PrereviewState) CommentCount() int { return len(s.scopedComments()) }
+
+// ResolvedCount returns how many of the in-scope comments are resolved —
 // useful for "(N resolved hidden)" status copy. Counts every resolved comment,
 // individually-hidden or not (it gates the "Show resolved" toggle's visibility).
 func (s PrereviewState) ResolvedCount() int {
 	n := 0
-	for _, c := range s.Comments {
+	for _, c := range s.scopedComments() {
 		if c.Resolved {
 			n++
 		}
@@ -495,11 +561,12 @@ func (s PrereviewState) ResolvedCount() int {
 	return n
 }
 
-// HiddenResolvedCount returns how many resolved comments have been individually
-// re-hidden — drives the "Unhide N" affordance next to the Show-resolved toggle.
+// HiddenResolvedCount returns how many in-scope resolved comments have been
+// individually re-hidden — drives the "Unhide N" affordance next to the
+// Show-resolved toggle.
 func (s PrereviewState) HiddenResolvedCount() int {
 	n := 0
-	for _, c := range s.Comments {
+	for _, c := range s.scopedComments() {
 		if c.Resolved && c.Hidden {
 			n++
 		}
@@ -507,13 +574,13 @@ func (s PrereviewState) HiddenResolvedCount() int {
 	return n
 }
 
-// OutdatedCount returns how many non-resolved comments could not be
+// OutdatedCount returns how many non-resolved in-scope comments could not be
 // confidently re-anchored (their line numbers no longer point at the
 // intended content) — drives the header "N need re-anchoring" hint so
 // drift is discoverable without opening every file.
 func (s PrereviewState) OutdatedCount() int {
 	n := 0
-	for _, c := range s.Comments {
+	for _, c := range s.scopedComments() {
 		if !c.Resolved && c.AnchorOutdated() {
 			n++
 		}

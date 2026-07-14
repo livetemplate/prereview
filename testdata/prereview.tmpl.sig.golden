@@ -74,7 +74,8 @@
     </form>
   </footer></article></dialog>
 === endSessionDialog ===
-<dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p><footer>
+<dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p>{{if .AwaitingApplyCount}}
+  <p class="end-warn" role="alert"><small><strong>{{.AwaitingApplyCount}} accepted edit{{if ne .AwaitingApplyCount 1}}s{{end}} not yet applied.</strong> The agent still has to write {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file (<code>prereview applied</code>). Ending now leaves the document without {{if eq .AwaitingApplyCount 1}}that change{{else}}those changes{{end}}.</small></p>{{end}}<footer>
     <form method="POST">
       <fieldset role="group">
         <button type="button" command="close" commandfor="confirm-end-session" class="secondary">Cancel</button>
@@ -278,12 +279,12 @@
           </button>
         </form>
         
-        {{if gt (len .Comments) 0}}
+        {{if gt .CommentCount 0}}
         <form method="POST">
           <button type="submit" name="toggleCommentList" class="menu-item{{if .ShowAllComments}} is-on{{end}}" role="menuitem">
             <span class="menu-icon">{{template "iconComments"}}</span>
             <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{len .Comments}}</span>
+            <span class="menu-meta">{{.CommentCount}}</span>
           </button>
         </form>
         {{end}}
@@ -377,7 +378,7 @@
   
   {{if .AgentMode}}
   <div class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-    <button type="button" id="queue-trigger-{{.EnqueueTick}}" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
+    <button type="button" id="queue-trigger-{{.EnqueueTick}}" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts">{{if .AwaitingApplyCount}}<span class="q-num q-awaiting" title="accepted, not yet applied to the file">{{.AwaitingApplyCount}}</span> · {{end}}<span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
     <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
       
       <form method="POST" class="queue-pause-form">
@@ -385,8 +386,20 @@
       </form>
       <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
       {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      
+      {{if not .SingleFile}}
+      <form method="POST" class="queue-scope-form">
+        <button type="submit" name="toggleQueueScope" class="queue-scope-btn" role="menuitemcheckbox" aria-checked="{{if .QueueGlobal}}true{{else}}false{{end}}" title="Show this file's work, or the whole review's">
+          <span class="queue-scope-opt{{if not .QueueGlobal}} is-on{{end}}">This file</span><span class="queue-scope-opt{{if .QueueGlobal}} is-on{{end}}">All files</span>
+        </button>
+      </form>
+      {{end}}
       {{if .HasQueue}}
-      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}{{if .QueueHiddenCount}} · <span class="q-num q-elsewhere">{{.QueueHiddenCount}}</span> on other files{{end}}</div>
+      
+      {{if .AwaitingApplyCount}}
+      <div class="queue-awaiting"><span class="q-num q-awaiting">{{.AwaitingApplyCount}}</span> accepted, awaiting the agent to apply {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file</div>
+      {{end}}
       {{range .QueueItems}}
       
       <div class="queue-row queue-{{.State}} queue-kind-{{.Kind}}">
@@ -406,9 +419,12 @@
         </form>{{end}}
       </div>
       {{end}}
+      {{else}}{{if .QueueHiddenCount}}
+      
+      <div class="queue-empty">Nothing queued on this file — <strong>{{.QueueHiddenCount}}</strong> item{{if ne .QueueHiddenCount 1}}s{{end}} on other files. Switch to <strong>All files</strong> to see {{if eq .QueueHiddenCount 1}}it{{else}}them{{end}}.</div>
       {{else}}
       <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
-      {{end}}
+      {{end}}{{end}}
       
       <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
     </div>
@@ -433,7 +449,7 @@
 
 <div class="more-menu-backdrop{{if .MoreMenuOpen}} is-open{{end}}" lvt-on:click="closeMoreMenu" aria-hidden="true"></div>
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
-  <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed{{if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end}}</div>
+  <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed{{if gt .CommentCount 0}} · {{.CommentCount}} comment{{if ne .CommentCount 1}}s{{end}}{{end}}</div>
   
   {{if gt (len .Files) 1}}
   <form method="POST">
@@ -521,12 +537,12 @@
   </form>
   {{end}}
   {{end}}
-  {{if gt (len .Comments) 0}}
+  {{if gt .CommentCount 0}}
   <form method="POST">
     <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem">
       <span class="menu-icon">{{template "iconComments"}}</span>
       <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-      <span class="menu-meta">{{len .Comments}}</span>
+      <span class="menu-meta">{{.CommentCount}}</span>
     </button>
   </form>
   {{end}}
@@ -587,7 +603,7 @@
   {{if gt .DecisionCount 0}}
   <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
   {{end}}
-  {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
+  {{if and (eq .CommentCount 0) (eq .ResolvedCount 0)}}
   <div class="menu-info" style="border-bottom: 0; margin-bottom: 0; font-style: italic;">No comments yet — tap a line to add one.</div>
   {{end}}
   
@@ -687,7 +703,7 @@
 {{if .ShowAllComments}}
 <section class="all-comments">
   <header class="ac-head">
-    <strong>All comments ({{len .Comments}})</strong>
+    <strong>All comments ({{.CommentCount}})</strong>
     <form method="POST" style="margin:0">
       <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
     </form>
@@ -730,7 +746,7 @@
   {{else}}
   
   <div class="ac-empty">
-    <p class="ac-empty-msg">{{if and (gt (len .Comments) 0) (not .ShowResolved)}}{{len .Comments}} resolved comment{{if ne (len .Comments) 1}}s{{end}} hidden — toggle “Show resolved” to see them.{{else}}No comments yet.{{end}}</p>
+    <p class="ac-empty-msg">{{if and (gt .CommentCount 0) (not .ShowResolved)}}{{.CommentCount}} resolved comment{{if ne .CommentCount 1}}s{{end}} hidden — toggle “Show resolved” to see them.{{else}}No comments yet.{{end}}</p>
     <form method="POST" style="margin:0">
       <button type="submit" name="toggleCommentList" class="contrast ac-empty-back" title="Return to the file you were viewing">← Back to file</button>
     </form>

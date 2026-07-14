@@ -74,6 +74,13 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	if err != nil {
 		return err
 	}
+	// Record this session's review scope in the store (#171) so the agent subcommands
+	// — which only ever see `--out <dir>` — list the file under review rather than
+	// every file ever reviewed from this directory. openStore just cleared the
+	// previous session's; a directory review writes none (it scopes to nothing).
+	if err := review.WriteSessionScope(csvPath, tgt.SingleFile); err != nil {
+		return fmt.Errorf("record session scope: %w", err)
+	}
 	emitter := newStreamEmitter(agentMode, csvPath)
 
 	// Load any existing comments from disk so a restart resumes the session.
@@ -152,6 +159,13 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		controller.Versions = vs
 		controller.CheckpointBaseline()
 	}
+
+	// A comment whose file no longer exists is work nobody can do (#171). Flag those
+	// outdated once, up front, so the store is true from the first moment: the CLI readers
+	// (`prereview comments` / `done`) read the CSV directly, and without this they keep
+	// handing the agent work on deleted files until something happens to trigger a
+	// relocate. The comments stay visible to the reviewer to resolve or delete.
+	controller.SweepGoneFiles()
 
 	initial := &review.PrereviewState{
 		RepoPath:  absRepo,

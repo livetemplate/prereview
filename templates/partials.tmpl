@@ -195,6 +195,14 @@
   <header><strong>End session?</strong></header>
   {{- /* */ -}}
   <p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p>
+  {{- /* #171: accepting an edit only records a verdict — prereview never writes your files;
+         the agent applies it and acks with `prereview applied`. End the session with accepts
+         outstanding and nothing ever applies them: the document is left inconsistent with the
+         review. Warn, but still allow it — a hard block would deadlock a session with no agent
+         running (which is exactly how you get here). */ -}}
+  {{- if .AwaitingApplyCount}}
+  <p class="end-warn" role="alert"><small><strong>{{.AwaitingApplyCount}} accepted edit{{if ne .AwaitingApplyCount 1}}s{{end}} not yet applied.</strong> The agent still has to write {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file (<code>prereview applied</code>). Ending now leaves the document without {{if eq .AwaitingApplyCount 1}}that change{{else}}those changes{{end}}.</small></p>
+  {{- end}}
   {{- /* */ -}}
   <footer>
     <form method="POST">

@@ -1,6 +1,7 @@
 package review
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -201,7 +202,28 @@ func (c *PrereviewController) relocateAll(state *PrereviewState) {
 	seen := map[string]bool{}
 	anyChanged := false
 	for _, cm := range state.Comments {
-		if cm.Resolved || cm.Anchor.Empty() || seen[cm.File] {
+		if cm.Resolved || seen[cm.File] {
+			continue
+		}
+		// A comment whose FILE IS GONE can never be re-anchored, and the agent can
+		// never act on it — but it used to stay "actionable" and ship in the snapshot
+		// forever (#171): the Anchor.Empty skip below stepped over anchorless comments,
+		// and a missing file made loadDiffFresh error, which was logged and skipped. A
+		// load failure was being read as "no drift" when it means "cannot anchor".
+		//
+		// Flag it outdated — the existing drift state. actionableComments already drops
+		// outdated, so it leaves the agent's queue; OutdatedCount still surfaces it to
+		// the reviewer ("N need re-anchoring") so it can be resolved or deleted. Nothing
+		// is removed from the CSV. Checked BEFORE the Anchor.Empty skip: a missing file
+		// is a fact about the file, not about the anchor.
+		if c.fileGone(cm.File) {
+			seen[cm.File] = true
+			if markFileOutdated(state.Comments, cm.File) {
+				anyChanged = true
+			}
+			continue
+		}
+		if cm.Anchor.Empty() {
 			continue
 		}
 		seen[cm.File] = true
@@ -222,6 +244,62 @@ func (c *PrereviewController) relocateAll(state *PrereviewState) {
 			slog.Warn("self-heal persist (all files)", "err", err)
 		}
 	}
+}
+
+// SweepGoneFiles flags every comment whose file no longer exists as outdated, ONCE at
+// startup, and self-heals the CSV.
+//
+// relocateAll already does this, but it only runs on a live path (a snapshot emit, opening
+// the all-comments view). The CLI readers — `prereview comments` / `done` — read the CSV
+// directly, so until something relocated, they kept handing the agent work on files that
+// no longer exist while the UI had already stopped showing it. Doing the sweep at launch
+// means the store is TRUE from the first moment and every reader agrees.
+//
+// Cheap: one os.Stat per commented file, no git.
+func (c *PrereviewController) SweepGoneFiles() {
+	comments := c.loadCommentsFromDisk()
+	seen := map[string]bool{}
+	changed := false
+	for _, cm := range comments {
+		if cm.Resolved || seen[cm.File] {
+			continue
+		}
+		seen[cm.File] = true
+		if c.fileGone(cm.File) && markFileOutdated(comments, cm.File) {
+			changed = true
+		}
+	}
+	if changed {
+		if err := c.persist(comments); err != nil {
+			slog.Warn("sweep gone files: persist", "err", err)
+		}
+	}
+}
+
+// fileGone reports that the comment's file is no longer on disk under the review root.
+// External-mode annotations carry a URL rather than a file, so an empty path is never
+// "gone" — there is nothing to look for.
+func (c *PrereviewController) fileGone(file string) bool {
+	if file == "" || c.ExternalMode {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(c.RepoPath, file))
+	return errors.Is(err, os.ErrNotExist)
+}
+
+// markFileOutdated flags every unresolved comment on file as outdated, reporting whether
+// anything changed (so the caller self-heals the CSV once).
+func markFileOutdated(comments []Comment, file string) bool {
+	changed := false
+	for i := range comments {
+		cm := &comments[i]
+		if cm.File != file || cm.Resolved || cm.AnchorStatus == anchorOutdated {
+			continue
+		}
+		cm.AnchorStatus = anchorOutdated
+		changed = true
+	}
+	return changed
 }
 
 // fileMtime returns the file's mtime or the zero time if it can't be
@@ -300,6 +378,13 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// below, so the "End session" button renders in both repo and external
 	// agent sessions.
 	state.AgentMode = c.AgentMode
+
+	// SingleFile is mirror-only too (#171): the session's review SCOPE. A single-file
+	// review's store lives in the file's PARENT directory, so it is shared with every
+	// other file reviewed from there; without this, the queue / all-comments view /
+	// agent snapshot show the previous file's work. Every file-agnostic surface reads
+	// it through PrereviewState.inScope. "" in a directory / git review (no narrowing).
+	state.SingleFile = c.SingleFile
 
 	// External (proxy) mode short-circuits the entire git/file-list path:
 	// there is no repo to diff. Mirror the proxy identity from the controller
@@ -476,12 +561,25 @@ func commentsFromRows(rows []csv.Row) []Comment {
 // all=false it returns only the actionable set (unresolved, non-outdated,
 // non-draft — what the agent should act on); with all=true, every comment. The
 // returned slice is always non-nil (JSON-encodes as `[]`, never `null`).
+//
+// Scoped to the session's file (#171) — comments.csv is shared by every file
+// reviewed from the store's directory, and `prereview comments` / `done` must not
+// list work from a file the reviewer isn't reviewing. Unscoped when the store holds
+// no session scope (a directory review, or a pre-#171 store).
+//
+// This is the CLI's read path, NOT the server's: the server reads the CSV through
+// loadCommentsFromDisk, which stays UNSCOPED on purpose because its result is the
+// buffer persist() rewrites comments.csv from. Scoping that one would delete every
+// other file's rows from disk.
 func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
 	rows, err := csv.Read(csvPath)
 	if err != nil {
 		return nil, err
 	}
 	comments := commentsFromRows(rows)
+	if scope := SessionScope(csvPath); scope != "" {
+		comments = slices.DeleteFunc(comments, func(cm Comment) bool { return cm.File != scope })
+	}
 	if !all {
 		// Same actionable set the snapshot ships, incl. the #149 unread overlay, so
 		// `comments --json` and `watch` agree.

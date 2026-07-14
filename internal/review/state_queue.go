@@ -62,14 +62,86 @@ func (s PrereviewState) suggestionQueueState(id string) string {
 	return "" // undecided
 }
 
+// queueComments / queueSuggestions are what the QUEUE PANEL shows: by default the work
+// that will be — or has been — applied to the file you are looking at (#171). The queue
+// answers "what is happening to the document in front of me", which is what it's for in a
+// single-file or doc review. QueueGlobal widens it to the whole review, for a many-file
+// repo review where the point is draining a backlog across files.
+//
+// This is a VIEW filter ONLY. The agent's snapshot always carries every actionable item in
+// the review (EmitSnapshot feeds off scopedComments / scopedSuggestions), so work queued on
+// one file is never stranded because the reviewer was looking at another — or had the
+// filter set to This file — when the agent read the queue.
+//
+// Both go through scoped* first, so an out-of-review file can't leak in through the Global
+// door either: "global" means the whole REVIEW, never the whole shared store.
+func (s PrereviewState) queueComments() []Comment {
+	scoped := s.scopedComments()
+	if s.QueueGlobal {
+		return scoped
+	}
+	out := make([]Comment, 0, len(scoped))
+	for _, c := range scoped {
+		if c.File == s.SelectedFile {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func (s PrereviewState) queueSuggestions() []Suggestion {
+	scoped := s.scopedSuggestions()
+	if s.QueueGlobal {
+		return scoped
+	}
+	out := make([]Suggestion, 0, len(scoped))
+	for _, sg := range scoped {
+		if sg.File == s.SelectedFile {
+			out = append(out, sg)
+		}
+	}
+	return out
+}
+
+// QueueScopeLabel names what the queue is currently showing — the switch's label, and the
+// honest answer to "why is this count different from the one I saw a second ago".
+func (s PrereviewState) QueueScopeLabel() string {
+	if s.QueueGlobal {
+		return "All files"
+	}
+	return "This file"
+}
+
+// QueueHiddenCount is how many queue rows the CURRENT filter is hiding — the work that
+// exists elsewhere in the review. Zero when Global (nothing is hidden) and zero in a
+// single-file review (there is nowhere else). It is what stops the per-file default from
+// concealing a backlog: the switch advertises what is behind it.
+func (s PrereviewState) QueueHiddenCount() int {
+	if s.QueueGlobal {
+		return 0
+	}
+	n := 0
+	for _, c := range s.scopedComments() {
+		if c.File != s.SelectedFile && c.QueueState() != "" {
+			n++
+		}
+	}
+	for _, sg := range s.scopedSuggestions() {
+		if sg.File != s.SelectedFile && s.suggestionQueueState(sg.ID) != "" {
+			n++
+		}
+	}
+	return n
+}
+
 func (s PrereviewState) countQueue(state string) int {
 	n := 0
-	for _, c := range s.Comments {
+	for _, c := range s.queueComments() {
 		if c.QueueState() == state {
 			n++
 		}
 	}
-	for _, sg := range s.Suggestions {
+	for _, sg := range s.queueSuggestions() {
 		if s.suggestionQueueState(sg.ID) == state {
 			n++
 		}
@@ -87,6 +159,35 @@ func (s PrereviewState) DoneCount() int { return s.countQueue(queueDone) }
 
 // DraftCount is the number of held (not-yet-enqueued) comments.
 func (s PrereviewState) DraftCount() int { return s.countQueue(queueDraft) }
+
+// AwaitingApplyCount is how many suggestions the reviewer has ACCEPTED but the agent has
+// not yet written to the file (#171).
+//
+// Accepting only records a verdict — prereview never writes user files (#103); the agent
+// applies the edit and acks with `prereview applied <id>`. That works while an agent is
+// looping on `prereview watch`, but accept an edit after its turn has ended and nothing
+// ever applies it: the verdict sits in suggestion-decisions.jsonl, the file is untouched,
+// and the card has already collapsed to an amber badge (#165) that is trivially missed.
+// The document silently never becomes clean.
+//
+// This is the count that makes that state impossible to ignore — surfaced in the queue
+// and warned about on End session. Revert-aware, because s.Applied nets reverted.jsonl:
+// undoing an applied edit correctly puts it back in the awaiting-apply pile.
+//
+// Deliberately scoped to the whole REVIEW, not the current file — unlike the rest of the
+// queue panel (#171). It is a "you are about to lose work" guard, not a work list: a count
+// that only saw the file you happen to be looking at would cheerfully let you end the
+// session with unapplied accepts stranded on another file, which is the exact failure it
+// exists to prevent.
+func (s PrereviewState) AwaitingApplyCount() int {
+	n := 0
+	for _, sg := range s.scopedSuggestions() {
+		if s.suggestionAcceptedPending(sg.ID) {
+			n++
+		}
+	}
+	return n
+}
 
 // HasQueue reports whether there's anything to show in the queue panel (any
 // draft/queued/done comment or accepted/applied suggestion). Gates the toolbar
@@ -128,10 +229,10 @@ func (s PrereviewState) QueueItems() []QueueItem {
 			drafts = append(drafts, item)
 		}
 	}
-	for _, c := range s.Comments {
+	for _, c := range s.queueComments() {
 		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: c.QueueState()})
 	}
-	for _, sg := range s.Suggestions {
+	for _, sg := range s.queueSuggestions() {
 		st := s.suggestionQueueState(sg.ID)
 		if st == "" {
 			continue

@@ -454,7 +454,7 @@
              toggleCommentList action). Surfacing it here also makes it reachable
              in Focus mode, where the drawer is hidden. Label flips to "Back"
              while the all-comments view is open. */}}
-        {{if gt (len .Comments) 0}}
+        {{if gt .CommentCount 0}}
         <form method="POST">
           <button
             type="submit"
@@ -464,7 +464,7 @@
           >
             <span class="menu-icon">{{template "iconComments"}}</span>
             <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{len .Comments}}</span>
+            <span class="menu-meta">{{.CommentCount}}</span>
           </button>
         </form>
         {{end}}
@@ -632,7 +632,7 @@
       class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}"
       aria-haspopup="menu"
       title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"
-    >{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts"><span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
+    >{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts">{{if .AwaitingApplyCount}}<span class="q-num q-awaiting" title="accepted, not yet applied to the file">{{.AwaitingApplyCount}}</span> · {{end}}<span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
     <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
       {{/* Pause = batch, not stop (#119). Live: each comment is sent to the agent
            as you save it. Paused: comments are held and batched; resume sends the
@@ -643,8 +643,29 @@
       </form>
       <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
       {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      {{/* #171: what the queue is showing. Default is THIS FILE — the queue is about the
+           document in front of you. Flip to All files for a many-file repo review, where
+           the point is draining a backlog across files. Rendered OUTSIDE the HasQueue
+           guard below: HasQueue is per-file, so on a file with no work the guard is false,
+           and a switch hidden there would strand the reviewer with no way to reach the
+           work sitting on the other files. The filter is view-only — the agent is always
+           handed every actionable item in the review. */}}
+      {{if not .SingleFile}}
+      <form method="POST" class="queue-scope-form">
+        <button type="submit" name="toggleQueueScope" class="queue-scope-btn" role="menuitemcheckbox" aria-checked="{{if .QueueGlobal}}true{{else}}false{{end}}" title="Show this file's work, or the whole review's">
+          <span class="queue-scope-opt{{if not .QueueGlobal}} is-on{{end}}">This file</span><span class="queue-scope-opt{{if .QueueGlobal}} is-on{{end}}">All files</span>
+        </button>
+      </form>
+      {{end}}
       {{if .HasQueue}}
-      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}{{if .QueueHiddenCount}} · <span class="q-num q-elsewhere">{{.QueueHiddenCount}}</span> on other files{{end}}</div>
+      {{/* #171: accepted edits the agent hasn't written to the file yet. prereview never
+           writes user files — the agent applies and acks with `prereview applied`. Accept
+           an edit after the agent's turn has ended and nothing ever applies it, so say so
+           out loud: the card itself has already collapsed to a badge that's easy to miss. */}}
+      {{if .AwaitingApplyCount}}
+      <div class="queue-awaiting"><span class="q-num q-awaiting">{{.AwaitingApplyCount}}</span> accepted, awaiting the agent to apply {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file</div>
+      {{end}}
       {{range .QueueItems}}
       {{/* queue-kind-* is the row's kind hook — read by the e2e today, and the
            styling hook the collapsed-suggestion badge (M4.2/M4.3) will target. */}}
@@ -669,6 +690,11 @@
         {{- end}}
       </div>
       {{end}}
+      {{else if .QueueHiddenCount}}
+      {{/* #171: nothing on THIS file, but the review has work elsewhere. Say so — a bare
+           "nothing queued" here would read as "the agent has no work", which is false, and
+           the per-file default would be quietly hiding a backlog. */}}
+      <div class="queue-empty">Nothing queued on this file — <strong>{{.QueueHiddenCount}}</strong> item{{if ne .QueueHiddenCount 1}}s{{end}} on other files. Switch to <strong>All files</strong> to see {{if eq .QueueHiddenCount 1}}it{{else}}them{{end}}.</div>
       {{else}}
       <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
       {{end}}
@@ -730,7 +756,7 @@
   aria-label="More options"
 >
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed
-    {{- if gt (len .Comments) 0}} · {{len .Comments}} comment{{if ne (len .Comments) 1}}s{{end}}{{end -}}
+    {{- if gt .CommentCount 0}} · {{.CommentCount}} comment{{if ne .CommentCount 1}}s{{end}}{{end -}}
   </div>
   {{/* Prev/Next file moved here from the bar on mobile (#119) so the narrow bar
        stays tidy (☰ 🔍 Queue Pause ⋮). Pause/resume + End session stay inline
@@ -859,7 +885,7 @@
   </form>
   {{end}}
   {{end}}
-  {{if gt (len .Comments) 0}}
+  {{if gt .CommentCount 0}}
   <form method="POST">
     <button
       type="submit"
@@ -869,7 +895,7 @@
     >
       <span class="menu-icon">{{template "iconComments"}}</span>
       <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-      <span class="menu-meta">{{len .Comments}}</span>
+      <span class="menu-meta">{{.CommentCount}}</span>
     </button>
   </form>
   {{end}}
@@ -955,7 +981,7 @@
   {{if gt .DecisionCount 0}}
   <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
   {{end}}
-  {{if and (eq (len .Comments) 0) (eq .ResolvedCount 0)}}
+  {{if and (eq .CommentCount 0) (eq .ResolvedCount 0)}}
   <div
     class="menu-info"
     style="border-bottom: 0; margin-bottom: 0; font-style: italic;"
@@ -1135,7 +1161,7 @@
 {{if .ShowAllComments}}
 <section class="all-comments">
   <header class="ac-head">
-    <strong>All comments ({{len .Comments}})</strong>
+    <strong>All comments ({{.CommentCount}})</strong>
     <form method="POST" style="margin:0">
       <button
         type="submit"
@@ -1222,7 +1248,7 @@
        resolved-hidden branch keeps its "toggle Show resolved" hint. */}}
   <div class="ac-empty">
     <p class="ac-empty-msg">
-      {{- if and (gt (len .Comments) 0) (not .ShowResolved)}}{{len .Comments}} resolved comment{{if ne (len .Comments) 1}}s{{end}} hidden — toggle “Show resolved” to see them.
+      {{- if and (gt .CommentCount 0) (not .ShowResolved)}}{{.CommentCount}} resolved comment{{if ne .CommentCount 1}}s{{end}} hidden — toggle “Show resolved” to see them.
       {{- else}}No comments yet.
       {{- end -}}
     </p>

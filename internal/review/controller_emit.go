@@ -61,7 +61,10 @@ func (c *PrereviewController) emitSnapshot() {
 	c.inEmit.Store(true)
 	defer c.inEmit.Store(false)
 
-	st := &PrereviewState{Base: c.Base}
+	// This state is built here, NOT via Mount, so the review scope has to be carried
+	// over explicitly (#171) — without it the agent's snapshot would still stream the
+	// previous file's work even though the UI no longer shows it.
+	st := &PrereviewState{Base: c.Base, SingleFile: c.SingleFile}
 	st.Comments = c.loadCommentsFromDisk()
 	c.applySuggestions(st)
 	c.applyDecisions(st)
@@ -69,7 +72,7 @@ func (c *PrereviewController) emitSnapshot() {
 	st.Applied = loadAppliedSet(c.CSVPath)    // #159: applied acks drop from the snapshot
 	c.relocateAll(st)                         // re-anchor comments against fresh disk (base-safe, #121)
 	c.relocateSuggestionsAll(st)              // re-anchor suggestions likewise
-	if err := c.Emitter.EmitSnapshot(st.Comments, st.Suggestions, st.DecisionsBySuggestion(), st.Threads(), st.Applied, c.isPaused(), time.Now()); err != nil {
+	if err := c.Emitter.EmitSnapshot(st.scopedComments(), st.scopedSuggestions(), st.DecisionsBySuggestion(), st.Threads(), st.Applied, c.isPaused(), time.Now()); err != nil {
 		slog.Warn("emit snapshot", "err", err)
 	}
 }
