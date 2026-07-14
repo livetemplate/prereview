@@ -1234,6 +1234,27 @@ header.file-head .file-head-actions {
 .queue-empty { padding: 0.5rem; font-size: 0.8rem; color: var(--pico-muted-color); }
 .queue-working { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
 .queue-legend { padding: 0.25rem 0.5rem 0.4rem; font-size: 0.75rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-card-sectioning-background-color); margin-bottom: 0.2rem; }
+/* #171: the queue scope switch — "This file" (default) vs "All files". A segmented pair
+   inside one button: the whole control is the toggle, the lit half says where you are. */
+.queue-scope-form { margin: 0; padding: 0.3rem 0.5rem 0.15rem; }
+.queue-scope-btn {
+  display: flex; width: 100%; padding: 2px; gap: 2px;
+  background: var(--pico-card-sectioning-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 999px; cursor: pointer;
+}
+.queue-scope-opt {
+  flex: 1; padding: 0.2rem 0.4rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; text-align: center; white-space: nowrap;
+  color: var(--pico-muted-color);
+}
+.queue-scope-opt.is-on { background: var(--surface); color: var(--pico-color); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+/* Coarse pointers get a 44px tap target (the whole switch), same rule as the badges. */
+@media (pointer: coarse) { .queue-scope-btn { min-height: 44px; align-items: center; } }
+/* The count of work the current filter is hiding — muted, but present, so the per-file
+   default can never conceal a backlog silently. */
+.q-elsewhere { color: var(--pico-muted-color); }
+
 /* #171: the accepted-but-unapplied line. Tinted, not muted like the legend above it —
    this is the one queue state nothing else will chase, so it has to carry weight. */
 .queue-awaiting {

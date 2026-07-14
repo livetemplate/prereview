@@ -140,6 +140,66 @@ func TestQueue_AgentStillGetsEveryFilesWork(t *testing.T) {
 	}
 }
 
+// The queue scope switch (#171): the panel defaults to THIS FILE's work and can be widened
+// to the whole review. It is a VIEW filter — flipping it must never change what the agent is
+// handed, or a reviewer's choice of filter could strand work.
+func TestQueueScope_SwitchWidensTheViewNotTheAgentsWork(t *testing.T) {
+	s := twoFileState()
+	s.SingleFile = "" // a directory review over a.md + b.md
+	s.SelectedFile = "b.md"
+
+	// Default: this file.
+	if got := len(s.QueueItems()); got != 1 {
+		t.Errorf("default queue = %d rows, want 1 (b.md only)", got)
+	}
+	if s.QueueScopeLabel() != "This file" {
+		t.Errorf("label = %q, want \"This file\"", s.QueueScopeLabel())
+	}
+	// ...and it must ADVERTISE the work it is hiding, or the default quietly conceals a backlog.
+	if got := s.QueueHiddenCount(); got != 2 {
+		t.Errorf("QueueHiddenCount = %d, want 2 (a.md's comment + its accepted suggestion) — "+
+			"a per-file queue that doesn't say what it's hiding is just the old bug wearing a hat", got)
+	}
+
+	// Flipped: the whole review.
+	s.QueueGlobal = true
+	files := map[string]bool{}
+	for _, it := range s.QueueItems() {
+		files[it.File] = true
+	}
+	if !files["a.md"] || !files["b.md"] {
+		t.Errorf("global queue should span both files, got %v", files)
+	}
+	if s.QueueScopeLabel() != "All files" {
+		t.Errorf("label = %q, want \"All files\"", s.QueueScopeLabel())
+	}
+	if got := s.QueueHiddenCount(); got != 0 {
+		t.Errorf("QueueHiddenCount = %d, want 0 — nothing is hidden when showing everything", got)
+	}
+
+	// The agent's snapshot is IDENTICAL either way: the switch is a view filter.
+	agentWork := func(st PrereviewState) int {
+		return len(actionableComments(st.scopedComments(), st.Threads()))
+	}
+	s.QueueGlobal = false
+	perFile := agentWork(s)
+	s.QueueGlobal = true
+	global := agentWork(s)
+	if perFile != global {
+		t.Errorf("the agent's work changed with the reviewer's VIEW filter (%d vs %d) — a filter "+
+			"must never strand work the agent would otherwise pick up", perFile, global)
+	}
+}
+
+// In a SINGLE-FILE review there is nowhere else for work to be, so the switch is pointless
+// (the template hides it) and nothing is ever hidden.
+func TestQueueScope_SingleFileReviewHidesNothing(t *testing.T) {
+	s := twoFileState() // SingleFile == "b.md"
+	if got := s.QueueHiddenCount(); got != 0 {
+		t.Errorf("QueueHiddenCount = %d, want 0 — a single-file review has no elsewhere", got)
+	}
+}
+
 // (b) THE LANDMINE LOCK — must never regress.
 //
 // persist() atomically REWRITES comments.csv from the in-memory slice, from 16 call

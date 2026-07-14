@@ -442,6 +442,17 @@ type PrereviewState struct {
 	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
 	HideMarks bool `json:"hide_marks"`
 
+	// QueueGlobal widens the queue panel from THIS FILE's work to the whole review's
+	// (#171). Default false: the queue answers "what is happening to the document in
+	// front of me", which is what it's for in a single-file or doc review. Flip it in
+	// a many-file repo review to see the review-wide backlog and jump across files.
+	//
+	// A VIEW toggle only — it never changes what the agent is handed. The snapshot
+	// always carries every actionable item in the review (see EmitSnapshot), so work
+	// queued on another file is never stranded by the reviewer's choice of filter.
+	// Durable per-user view pref (uiprefs.go).
+	QueueGlobal bool `json:"queue_global"`
+
 	// ThemeMode is the Light/Dark/System color-mode preference (issue #60),
 	// cycled by the toolbar toggle. "" means System (the default): the page
 	// omits the data-mode attribute and follows the OS via prefers-color-scheme

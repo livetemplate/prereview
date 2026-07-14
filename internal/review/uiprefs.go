@@ -34,6 +34,12 @@ type UIPrefs struct {
 	FileView     bool   `json:"file_view"`
 	RawMarkdown  bool   `json:"raw_markdown"`
 	RawHTML      bool   `json:"raw_html"`
+	// QueueGlobal shows the whole review's work in the queue panel instead of just
+	// the current file's (#171). Default false = this file — the queue answers "what
+	// is happening to the document in front of me"; flip it to see the review-wide
+	// backlog. A view preference like the rest, so it belongs here and not in the
+	// session store.
+	QueueGlobal bool `json:"queue_global"`
 }
 
 // uiPrefsMu serialises writes to the prefs file — multiple tabs (sharing one
@@ -115,6 +121,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.FileView = p.FileView
 	state.RawMarkdown = p.RawMarkdown
 	state.RawHTML = p.RawHTML
+	state.QueueGlobal = p.QueueGlobal
 }
 
 // savePrefs persists the current view-style preferences to the per-user prefs
@@ -131,6 +138,7 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		FileView:     state.FileView,
 		RawMarkdown:  state.RawMarkdown,
 		RawHTML:      state.RawHTML,
+		QueueGlobal:  state.QueueGlobal,
 	}); err != nil {
 		slog.Warn("savePrefs", "err", err)
 	}

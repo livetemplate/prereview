@@ -135,6 +135,81 @@ func TestE2E_SingleFileScope(t *testing.T) {
 	}
 }
 
+// The queue scope switch (#171): the panel defaults to the current file's work and can be
+// widened to the whole review — and, crucially, it SAYS how much it is hiding, so the
+// per-file default can never conceal a backlog.
+func TestE2E_QueueScopeSwitch(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"a.md", "b.md"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("# T\n\nsome prose here\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pdir := filepath.Join(dir, ".prereview")
+	if err := os.MkdirAll(pdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seed := "id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url\n" +
+		"ca1,a.md,3,3,new,work on the OTHER file,2026-07-13T10:00:00Z,false,,,line,,\n" +
+		"cb1,b.md,3,3,new,work on THIS file,2026-07-13T10:00:00Z,false,,,line,,\n"
+	if err := os.WriteFile(filepath.Join(pdir, "comments.csv"), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A DIRECTORY review (not single-file), so both files are genuinely in scope.
+	p := bootChromeAgainstRepo(t, dir, 1400, 1000, "--agent")
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		return "\n--- server ---\n" + p.stderr.String() + "\n--- html ---\n" + html
+	}
+	p.waitReady()
+	p.clickFile("b.md")
+
+	// Default: THIS FILE. The queue shows b.md's work only — but says a.md's exists.
+	var rows []string
+	var hidden string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.queue-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.queue-scope-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`[...document.querySelectorAll('.queue-row .queue-loc')].map(e=>e.textContent)`, &rows),
+		chromedp.Text(`.q-elsewhere`, &hidden, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("queue scope switch should render in a directory review: %v%s", err, diag())
+	}
+	for _, r := range rows {
+		if strings.Contains(r, "a.md") {
+			t.Errorf("queue row %q from another file while the filter is This file%s", r, diag())
+		}
+	}
+	if hidden != "1" {
+		t.Errorf("the queue must ADVERTISE the work it hides: 'on other files' count = %q, want 1%s",
+			hidden, diag())
+	}
+
+	// Flip to ALL FILES → the other file's work appears.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='toggleQueueScope']`, chromedp.ByQuery),
+		chromedp.Click(`.queue-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.queue-row .queue-loc`, chromedp.ByQuery),
+		chromedp.Evaluate(`[...document.querySelectorAll('.queue-row .queue-loc')].map(e=>e.textContent)`, &rows),
+	); err != nil {
+		t.Fatalf("toggle to All files: %v%s", err, diag())
+	}
+	seenA, seenB := false, false
+	for _, r := range rows {
+		if strings.Contains(r, "a.md") {
+			seenA = true
+		}
+		if strings.Contains(r, "b.md") {
+			seenB = true
+		}
+	}
+	if !seenA || !seenB {
+		t.Errorf("All files should show both files' work, got %v%s", rows, diag())
+	}
+}
+
 // An accepted edit the agent never applies is the state that silently leaves the document
 // inconsistent. It must be loud: an amber count in the Queue and a warning on End session.
 func TestE2E_AwaitingApply(t *testing.T) {

@@ -643,8 +643,22 @@
       </form>
       <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
       {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      {{/* #171: what the queue is showing. Default is THIS FILE — the queue is about the
+           document in front of you. Flip to All files for a many-file repo review, where
+           the point is draining a backlog across files. Rendered OUTSIDE the HasQueue
+           guard below: HasQueue is per-file, so on a file with no work the guard is false,
+           and a switch hidden there would strand the reviewer with no way to reach the
+           work sitting on the other files. The filter is view-only — the agent is always
+           handed every actionable item in the review. */}}
+      {{if not .SingleFile}}
+      <form method="POST" class="queue-scope-form">
+        <button type="submit" name="toggleQueueScope" class="queue-scope-btn" role="menuitemcheckbox" aria-checked="{{if .QueueGlobal}}true{{else}}false{{end}}" title="Show this file's work, or the whole review's">
+          <span class="queue-scope-opt{{if not .QueueGlobal}} is-on{{end}}">This file</span><span class="queue-scope-opt{{if .QueueGlobal}} is-on{{end}}">All files</span>
+        </button>
+      </form>
+      {{end}}
       {{if .HasQueue}}
-      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}{{if .QueueHiddenCount}} · <span class="q-num q-elsewhere">{{.QueueHiddenCount}}</span> on other files{{end}}</div>
       {{/* #171: accepted edits the agent hasn't written to the file yet. prereview never
            writes user files — the agent applies and acks with `prereview applied`. Accept
            an edit after the agent's turn has ended and nothing ever applies it, so say so
@@ -676,6 +690,11 @@
         {{- end}}
       </div>
       {{end}}
+      {{else if .QueueHiddenCount}}
+      {{/* #171: nothing on THIS file, but the review has work elsewhere. Say so — a bare
+           "nothing queued" here would read as "the agent has no work", which is false, and
+           the per-file default would be quietly hiding a backlog. */}}
+      <div class="queue-empty">Nothing queued on this file — <strong>{{.QueueHiddenCount}}</strong> item{{if ne .QueueHiddenCount 1}}s{{end}} on other files. Switch to <strong>All files</strong> to see {{if eq .QueueHiddenCount 1}}it{{else}}them{{end}}.</div>
       {{else}}
       <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
       {{end}}

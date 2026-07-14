@@ -386,8 +386,16 @@
       </form>
       <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
       {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      
+      {{if not .SingleFile}}
+      <form method="POST" class="queue-scope-form">
+        <button type="submit" name="toggleQueueScope" class="queue-scope-btn" role="menuitemcheckbox" aria-checked="{{if .QueueGlobal}}true{{else}}false{{end}}" title="Show this file's work, or the whole review's">
+          <span class="queue-scope-opt{{if not .QueueGlobal}} is-on{{end}}">This file</span><span class="queue-scope-opt{{if .QueueGlobal}} is-on{{end}}">All files</span>
+        </button>
+      </form>
+      {{end}}
       {{if .HasQueue}}
-      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}</div>
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}{{if .QueueHiddenCount}} · <span class="q-num q-elsewhere">{{.QueueHiddenCount}}</span> on other files{{end}}</div>
       
       {{if .AwaitingApplyCount}}
       <div class="queue-awaiting"><span class="q-num q-awaiting">{{.AwaitingApplyCount}}</span> accepted, awaiting the agent to apply {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file</div>
@@ -411,9 +419,12 @@
         </form>{{end}}
       </div>
       {{end}}
+      {{else}}{{if .QueueHiddenCount}}
+      
+      <div class="queue-empty">Nothing queued on this file — <strong>{{.QueueHiddenCount}}</strong> item{{if ne .QueueHiddenCount 1}}s{{end}} on other files. Switch to <strong>All files</strong> to see {{if eq .QueueHiddenCount 1}}it{{else}}them{{end}}.</div>
       {{else}}
       <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
-      {{end}}
+      {{end}}{{end}}
       
       <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
     </div>
