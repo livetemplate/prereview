@@ -30,10 +30,14 @@ type UIPrefs struct {
 	SchemeName   string `json:"scheme_name"`
 	ThemeMode    string `json:"theme_mode"`
 	FocusMode    bool   `json:"focus_mode"`
-	HideMarks    bool   `json:"hide_marks"`
-	FileView     bool   `json:"file_view"`
-	RawMarkdown  bool   `json:"raw_markdown"`
-	RawHTML      bool   `json:"raw_html"`
+	// TocCollapsed hides the desktop table-of-contents column (#137). A durable
+	// desktop reading preference like FocusMode — its per-side twin — so it lives
+	// here, not in the relaunch-wiped session store.
+	TocCollapsed bool `json:"toc_collapsed"`
+	HideMarks    bool `json:"hide_marks"`
+	FileView     bool `json:"file_view"`
+	RawMarkdown  bool `json:"raw_markdown"`
+	RawHTML      bool `json:"raw_html"`
 	// QueueGlobal shows the whole review's work in the queue panel instead of just
 	// the current file's (#171). Default false = this file — the queue answers "what
 	// is happening to the document in front of me"; flip it to see the review-wide
@@ -117,6 +121,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.SchemeName = p.SchemeName
 	state.ThemeMode = p.ThemeMode
 	state.FocusMode = p.FocusMode
+	state.TocCollapsed = p.TocCollapsed
 	state.HideMarks = p.HideMarks
 	state.FileView = p.FileView
 	state.RawMarkdown = p.RawMarkdown
@@ -134,6 +139,7 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		SchemeName:   state.SchemeName,
 		ThemeMode:    state.ThemeMode,
 		FocusMode:    state.FocusMode,
+		TocCollapsed: state.TocCollapsed,
 		HideMarks:    state.HideMarks,
 		FileView:     state.FileView,
 		RawMarkdown:  state.RawMarkdown,

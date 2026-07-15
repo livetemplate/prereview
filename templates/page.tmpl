@@ -257,7 +257,7 @@
   ></span>{{end}}{{end}}{{end -}}
 </div>
 <header
-  class="bar{{if .FileDrawerOpen}} files-collapsed{{end}}"
+  class="bar"
   lvt-fx:url-hash="setURLHash"
   data-lvt-url-hash="{{.URLHash}}"
 >
@@ -1060,7 +1060,7 @@
   aria-label="Close file list"
 ></div>
 
-<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
 <dialog
   id="files-drawer"
   open
@@ -1071,6 +1071,23 @@
   data-resize-max="560"
   data-resize-store="prereview.drawerW"
 >
+  {{/* #137: desktop collapse/expand rail. The chevron points toward the edge the
+       drawer collapses to (left); when collapsed the drawer shrinks to a thin
+       rail and the chevron flips to point back (right) to reopen. Desktop-only
+       (CSS .drawer-collapse) — the mobile drawer uses the hamburger + backdrop.
+       toggleFiles is the same handler the "f" shortcut and mobile hamburger fire. */}}
+  <div class="drawer-collapse">
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleFiles"
+        class="collapse-toggle"
+        aria-label="{{if .FileDrawerOpen}}Show file list{{else}}Hide file list{{end}}"
+        aria-expanded="{{if .FileDrawerOpen}}false{{else}}true{{end}}"
+        title="{{if .FileDrawerOpen}}Show files{{else}}Hide files{{end}}{{with index $.KeyHint "toggleFiles"}} ({{.}}){{end}}"
+      >{{if .FileDrawerOpen}}{{template "iconChevronRight"}}{{else}}{{template "iconChevronLeft"}}{{end}}</button>
+    </form>
+  </div>
   <div class="drawer-head">
     <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
     <form method="POST">
@@ -1785,7 +1802,22 @@
      different story — see the closeTOC/navigateToHeading split below. */}}
 {{with .RenderedHeadings}}
 <aside class="toc-sidebar" aria-label="Table of contents">
-  <div class="toc-head"><strong>On this page</strong></div>
+  {{/* #137: in-TOC collapse chevron. Points right (toward the edge the column
+       collapses to); flips to point left when collapsed (the column is then a
+       thin rail holding just this button). Mirrors the drawer's rail control. */}}
+  <div class="toc-head">
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleTOC"
+        class="collapse-toggle"
+        aria-label="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}"
+        aria-expanded="{{if $.TocCollapsed}}false{{else}}true{{end}}"
+        title="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}{{with index $.KeyHint "toggleTOC"}} ({{.}}){{end}}"
+      >{{if $.TocCollapsed}}{{template "iconChevronLeft"}}{{else}}{{template "iconChevronRight"}}{{end}}</button>
+    </form>
+    <strong>On this page</strong>
+  </div>
   <nav class="toc-list">
     {{range .}}<a href="#{{.ID}}" lvt-spy-link class="toc-link toc-l{{.Level}}">{{.Text}}</a>
     {{end}}

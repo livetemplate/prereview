@@ -3687,6 +3687,146 @@ func TestE2E_FocusModeDesktop(t *testing.T) {
 	}
 }
 
+// TestE2E_SidebarCollapseDesktop covers #137: per-side collapse controls that
+// live INSIDE each desktop side column (not the top toolbar). Each column
+// collapses to a thin rail that keeps its reopen chevron on-screen.
+//   - The collapse chevron sits inside the sidebar (the drawer's rail row, the
+//     TOC's "On this page" head) — there is no toolbar button and the desktop
+//     hamburger is hidden.
+//   - Collapsing a side shrinks it to a rail (still present, list/label hidden)
+//     rather than removing it; the chevron reopens it.
+//   - Collapsing one side never touches the other.
+//   - Focus mode still hides BOTH outright; turning it off restores each side to
+//     the per-side state it had — a TOC collapsed before Focus stays collapsed.
+//
+// The toggles are server-side (ToggleFiles / ToggleTOC) re-rendered over the WS,
+// so each assertion polls for the morphed DOM rather than a synchronous flip.
+func TestE2E_SidebarCollapseDesktop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("e2e not supported on windows")
+	}
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdownTOC(t), 1200, 800)
+	p.waitReady()
+	p.clickFile("big.md")
+
+	// Baseline: the collapse chevron lives INSIDE each column (WaitVisible
+	// proves it), both columns are expanded (list + body showing), there is NO
+	// toolbar toggle, and the desktop hamburger is hidden (#137).
+	var tocListVisible, drawerBodyVisible, toolbarBtnAbsent, hamburgerHidden bool
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.toc-sidebar .toc-head .collapse-toggle`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#files-drawer .drawer-collapse .collapse-toggle`, chromedp.ByQuery),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.toc-sidebar .toc-list')).display !== 'none'`, &tocListVisible),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('#files-drawer .drawer-body')).display !== 'none'`, &drawerBodyVisible),
+		chromedp.Evaluate(`document.querySelector('.toc-toggle') === null`, &toolbarBtnAbsent),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector('.hamburger')).display === 'none'`, &hamburgerHidden),
+	); err != nil {
+		t.Fatalf("baseline query: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !tocListVisible || !drawerBodyVisible {
+		t.Errorf("both columns should be expanded by default (tocList=%v drawerBody=%v)", tocListVisible, drawerBodyVisible)
+	}
+	if !toolbarBtnAbsent {
+		t.Error("there should be no toolbar collapse button (.toc-toggle) — the controls live in the sidebars")
+	}
+	if !hamburgerHidden {
+		t.Error("the hamburger should be hidden on desktop (the in-drawer rail chevron owns collapse/reopen)")
+	}
+
+	// Collapse the TOC via its own chevron. The column becomes a rail: still
+	// present, but the list is hidden and the chevron (now a reopen control)
+	// stays visible. The drawer is untouched.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.toc-sidebar .collapse-toggle').click()`, nil),
+		chromedp.Poll(
+			`document.querySelector('.layout.toc-collapsed')`+
+				` && getComputedStyle(document.querySelector('.toc-sidebar')).display !== 'none'`+
+				` && getComputedStyle(document.querySelector('.toc-sidebar .toc-list')).display === 'none'`+
+				` && getComputedStyle(document.querySelector('.toc-sidebar .collapse-toggle')).display !== 'none'`+
+				` && getComputedStyle(document.querySelector('#files-drawer .drawer-body')).display !== 'none'`,
+			nil, chromedp.WithPollingTimeout(5*time.Second),
+		),
+	); err != nil {
+		t.Fatalf("collapse toc to rail: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Reopen the TOC via the rail chevron.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.toc-sidebar .collapse-toggle').click()`, nil),
+		chromedp.Poll(
+			`!document.querySelector('.layout.toc-collapsed') && getComputedStyle(document.querySelector('.toc-sidebar .toc-list')).display !== 'none'`,
+			nil, chromedp.WithPollingTimeout(5*time.Second),
+		),
+	); err != nil {
+		t.Fatalf("reopen toc: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Collapse the drawer via its in-drawer chevron. The drawer becomes a rail:
+	// still present but shrunk (< 80px) with its body hidden and the chevron
+	// still visible. The TOC is untouched.
+	var drawerWidth float64
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('#files-drawer .collapse-toggle').click()`, nil),
+		chromedp.Poll(
+			`document.querySelector('#files-drawer').classList.contains('is-open')`+
+				` && getComputedStyle(document.querySelector('#files-drawer')).display !== 'none'`+
+				` && getComputedStyle(document.querySelector('#files-drawer .drawer-body')).display === 'none'`+
+				` && getComputedStyle(document.querySelector('#files-drawer .collapse-toggle')).display !== 'none'`+
+				` && getComputedStyle(document.querySelector('.toc-sidebar .toc-list')).display !== 'none'`,
+			nil, chromedp.WithPollingTimeout(5*time.Second),
+		),
+		chromedp.Evaluate(`document.querySelector('#files-drawer').getBoundingClientRect().width`, &drawerWidth),
+	); err != nil {
+		t.Fatalf("collapse drawer to rail: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if drawerWidth >= 80 {
+		t.Errorf("collapsed drawer width = %.0fpx, want a thin rail (< 80px)", drawerWidth)
+	}
+
+	// Reopen the drawer via the rail chevron.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('#files-drawer .collapse-toggle').click()`, nil),
+		chromedp.Poll(
+			`getComputedStyle(document.querySelector('#files-drawer .drawer-body')).display !== 'none'`,
+			nil, chromedp.WithPollingTimeout(5*time.Second),
+		),
+	); err != nil {
+		t.Fatalf("reopen drawer: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// Focus-mode composition (no clobber): collapse the TOC, turn Focus ON
+	// (hides both columns outright), turn Focus OFF — the TOC must still be a
+	// collapsed rail because Focus mode never mutates the per-side state.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.toc-sidebar .collapse-toggle').click()`, nil),
+		chromedp.WaitVisible(`.layout.toc-collapsed`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("re-collapse toc before focus: %v\nstderr: %s", err, p.stderr.String())
+	}
+	p.openViewItem("toggleFocusMode")
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`.layout.focus-mode`, chromedp.ByQuery),
+		chromedp.Poll(
+			`getComputedStyle(document.querySelector('#files-drawer')).display === 'none' && getComputedStyle(document.querySelector('.toc-sidebar')).display === 'none'`,
+			nil, chromedp.WithPollingTimeout(5*time.Second),
+		),
+	); err != nil {
+		t.Fatalf("focus on over collapsed toc: %v\nstderr: %s", err, p.stderr.String())
+	}
+	p.openViewItem("toggleFocusMode")
+	if err := chromedp.Run(p.ctx,
+		chromedp.Poll(
+			`!document.querySelector('.layout.focus-mode')`+
+				` && document.querySelector('.layout.toc-collapsed')`+
+				` && getComputedStyle(document.querySelector('#files-drawer .drawer-body')).display !== 'none'`+
+				` && getComputedStyle(document.querySelector('.toc-sidebar .toc-list')).display === 'none'`,
+			nil, chromedp.WithPollingTimeout(5*time.Second),
+		),
+	); err != nil {
+		t.Fatalf("focus off restores per-side state (toc stays collapsed): %v\nstderr: %s", err, p.stderr.String())
+	}
+}
+
 // TestE2E_TOCOverlayMobile covers the mobile flow at 375x812: the
 // three-dots menu shows a "Table of contents" entry; tapping it opens
 // a full-viewport overlay; tapping an entry in the overlay closes it

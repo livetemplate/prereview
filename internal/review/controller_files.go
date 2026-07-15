@@ -104,6 +104,17 @@ func (c *PrereviewController) ToggleFiles(state PrereviewState, ctx *livetemplat
 	return state, nil
 }
 
+// ToggleTOC flips the desktop table-of-contents sidebar (the right column).
+// Bound to the bar's contents button and the "t" shortcut. Independent of the
+// file drawer (left) and of Focus mode, which hides both at once (#137). A
+// durable view preference like Focus mode, so it's saved to disk to survive a
+// relaunch.
+func (c *PrereviewController) ToggleTOC(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.TocCollapsed = !state.TocCollapsed
+	c.savePrefs(state)
+	return state, nil
+}
+
 // NextFile selects the next file in state.Files relative to SelectedFile.
 // Wraps to the first file from the last. If no file is selected, picks the
 // first file. Falls back to no-op for an empty file list.
