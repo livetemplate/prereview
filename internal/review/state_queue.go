@@ -27,7 +27,9 @@ const (
 
 // QueueState classifies a comment for the queue view. Resolved and outdated
 // comments have left the queue (the human closed them / the anchor vanished) and
-// return "" — the panel skips them.
+// return "" — the panel skips them. The #164 unread-reply reopen is layered ON TOP
+// of this by reopenIfReplied at the state level (this method has no thread access),
+// so a replied-on resolved/outdated/done comment counts as "queued" again.
 func (c Comment) QueueState() string {
 	switch {
 	case c.Resolved || c.AnchorOutdated():
@@ -39,6 +41,20 @@ func (c Comment) QueueState() string {
 	default:
 		return queueQueued
 	}
+}
+
+// reopenIfReplied overlays the #164 unread-reply signal on a queue lifecycle state: a
+// comment or suggestion whose thread ends with the reviewer is pending agent work again,
+// so it counts as "queued" whatever its base state (resolved / outdated / done / rejected
+// → queued). This keeps the toolbar count and panel in step with the agent's actionable
+// snapshot, which re-surfaces the same replied-on items (see actionableComments /
+// actionableDecisions). awaiting is PrereviewState.AwaitingAgent(); a draft never has a
+// thread, so it is never reopened here.
+func reopenIfReplied(base, id string, awaiting map[string]bool) string {
+	if awaiting[id] {
+		return queueQueued
+	}
+	return base
 }
 
 // suggestionQueueState classifies a suggestion for the queue view (#159). An
@@ -120,14 +136,15 @@ func (s PrereviewState) QueueHiddenCount() int {
 	if s.QueueGlobal {
 		return 0
 	}
+	awaiting := s.AwaitingAgent()
 	n := 0
 	for _, c := range s.scopedComments() {
-		if c.File != s.SelectedFile && c.QueueState() != "" {
+		if c.File != s.SelectedFile && reopenIfReplied(c.QueueState(), c.ID, awaiting) != "" {
 			n++
 		}
 	}
 	for _, sg := range s.scopedSuggestions() {
-		if sg.File != s.SelectedFile && s.suggestionQueueState(sg.ID) != "" {
+		if sg.File != s.SelectedFile && reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting) != "" {
 			n++
 		}
 	}
@@ -135,14 +152,15 @@ func (s PrereviewState) QueueHiddenCount() int {
 }
 
 func (s PrereviewState) countQueue(state string) int {
+	awaiting := s.AwaitingAgent()
 	n := 0
 	for _, c := range s.queueComments() {
-		if c.QueueState() == state {
+		if reopenIfReplied(c.QueueState(), c.ID, awaiting) == state {
 			n++
 		}
 	}
 	for _, sg := range s.queueSuggestions() {
-		if s.suggestionQueueState(sg.ID) == state {
+		if reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting) == state {
 			n++
 		}
 	}
@@ -216,7 +234,8 @@ type QueueItem struct {
 // QueueItems returns the queue rows ordered by lifecycle — queued (remaining)
 // first, then done, then drafts — so the panel leads with what still needs the
 // agent's attention. Resolved/outdated comments and un-queued suggestions are
-// excluded (QueueState "").
+// excluded (QueueState "") — UNLESS the reviewer replied on one last (#164), which
+// reopens it as "queued" work via reopenIfReplied.
 func (s PrereviewState) QueueItems() []QueueItem {
 	var queued, done, drafts []QueueItem
 	add := func(item QueueItem) {
@@ -229,11 +248,12 @@ func (s PrereviewState) QueueItems() []QueueItem {
 			drafts = append(drafts, item)
 		}
 	}
+	awaiting := s.AwaitingAgent()
 	for _, c := range s.queueComments() {
-		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: c.QueueState()})
+		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: reopenIfReplied(c.QueueState(), c.ID, awaiting)})
 	}
 	for _, sg := range s.queueSuggestions() {
-		st := s.suggestionQueueState(sg.ID)
+		st := reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting)
 		if st == "" {
 			continue
 		}
