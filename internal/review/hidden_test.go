@@ -51,7 +51,7 @@ func TestHideSuggestion(t *testing.T) {
 			{ID: "b", File: "a.md", ProposedText: "y"},
 		},
 	}
-	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "a", ""))
+	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "a"))
 	ids := visIDs(st)
 	if hasID(ids, "a") {
 		t.Errorf("hidden suggestion a still visible: %v", ids)
@@ -79,7 +79,7 @@ func TestHideSuggestionGroup(t *testing.T) {
 			{ID: "lone", File: "a.md", Side: "new", FromLine: 9, ToLine: 9, OriginalText: "foo", ProposedText: "bar"},
 		},
 	}
-	st, _ = c.HideSuggestionGroup(st, decisionCtx("hideSuggestionGroup", "a", ""))
+	st, _ = c.HideSuggestionGroup(st, decisionCtx("hideSuggestionGroup", "a"))
 	ids := visIDs(st)
 	if hasID(ids, "a") || hasID(ids, "b") {
 		t.Errorf("whole group should be hidden, still visible: %v", ids)
@@ -98,7 +98,7 @@ func TestHide_RevealsOnRevision(t *testing.T) {
 		SelectedFile: "a.md",
 		Suggestions:  []Suggestion{{ID: "a", File: "a.md", OriginalText: "o", ProposedText: "v1"}},
 	}
-	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "a", ""))
+	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "a"))
 	if hasID(visIDs(st), "a") {
 		t.Fatal("a should be hidden after HideSuggestion")
 	}
@@ -121,13 +121,13 @@ func TestShowHiddenSuggestions(t *testing.T) {
 			{ID: "z", File: "other.md", ProposedText: "z"},
 		},
 	}
-	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "a", ""))
+	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "a"))
 	// Hide one on another file too (simulate the reviewer having browsed there).
 	st.SelectedFile = "other.md"
-	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "z", ""))
+	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "z"))
 	// Back on a.md, "show hidden" clears only a.md's hide.
 	st.SelectedFile = "a.md"
-	st, _ = c.ShowHiddenSuggestions(st, decisionCtx("showHiddenSuggestions", "", ""))
+	st, _ = c.ShowHiddenSuggestions(st, decisionCtx("showHiddenSuggestions", ""))
 	if !hasID(visIDs(st), "a") {
 		t.Error("show hidden should bring a back on a.md")
 	}
@@ -144,7 +144,7 @@ func TestHideIsViewOnly(t *testing.T) {
 		SelectedFile: "a.md",
 		Suggestions:  []Suggestion{{ID: "a", File: "a.md", ProposedText: "x"}},
 	}
-	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "a", ""))
+	st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", "a"))
 	if len(st.Decisions) != 0 {
 		t.Errorf("hiding must not record a decision, got %+v", st.Decisions)
 	}

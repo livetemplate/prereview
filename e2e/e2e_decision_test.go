@@ -1,7 +1,7 @@
 //go:build browser
 
 // End-to-end coverage for issue #98 Phase 2: the reviewer's decision on an LLM
-// suggestion — accept / reject / request-revision (with a note), plus undo. The
+// suggestion — accept / reject, plus undo. The
 // verdict is recorded in the server-owned .prereview/suggestion-decisions.jsonl,
 // shows as a badge, survives a reload, and auto-drops when the suggestion is
 // revised (same id, new proposed text → fingerprint mismatch). Nothing is applied
@@ -78,69 +78,28 @@ func TestE2E_SuggestionDecisions(t *testing.T) {
 		t.Fatalf("accepted badge did not survive reload\nstderr: %s", p.stderr.String())
 	}
 
-	// Undo → back to the action row.
+	// Undo → back to the action row (Accept/Reject).
 	click(`button[name="clearSuggestionDecision"]`)
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`button[name="requestRevision"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`button[name="acceptSuggestion"]`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("action row should return after undo: %v\nstderr: %s", err, p.stderr.String())
 	}
 
-	// Request revision → inline note form → type a note → send.
-	click(`button[name="requestRevision"]`)
+	// Fingerprint drop: re-accept the suggestion, then the LLM revises it (same id,
+	// new proposed text). The stale "accepted" verdict must NOT ride the new proposal
+	// — the card returns to undecided (action row) with the new text.
+	//
+	// No peekRow here: the earlier peek persists (ToggledRows is server state), and
+	// re-accepting returns the row to its collapsed default, which REACTIVATES that
+	// stale toggle — so the row is already revealed. A second peek would toggle it
+	// back OFF and re-collapse the card (see RowToggled). Wait for the badge directly.
+	click(`button[name="acceptSuggestion"]`)
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.sg-revise-form textarea`, chromedp.ByQuery),
-		chromedp.SendKeys(`.sg-revise-form textarea`, "please keep it formal", chromedp.ByQuery),
-		chromedp.Sleep(300*time.Millisecond),
+		chromedp.WaitVisible(`.sg-verdict-badge.sg-accept`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("revision note form: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("re-accepted badge never appeared: %v\nstderr: %s", err, p.stderr.String())
 	}
-	click(`button[name="submitRevision"]`)
-	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.sg-verdict-badge.sg-revise`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.sg-revise-note`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("revision-requested badge/note never appeared: %v\nstderr: %s", err, p.stderr.String())
-	}
-	readNote := func() string {
-		var note string
-		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(document.querySelector('.sg-revise-note')?.textContent||"").trim()`, &note))
-		return note
-	}
-	if got := readNote(); got != "please keep it formal" {
-		t.Errorf("revision note text = %q, want %q", got, "please keep it formal")
-	}
-
-	// Edit the note in place: the Edit-note button re-opens the form pre-filled with
-	// the existing note; the reviewer can amend and re-send.
-	click(`button[name="requestRevision"]`)
-	var prefill string
-	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`.sg-revise-form textarea`, chromedp.ByQuery),
-		chromedp.Value(`.sg-revise-form textarea`, &prefill, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("edit-note form: %v\nstderr: %s", err, p.stderr.String())
-	}
-	if prefill != "please keep it formal" {
-		t.Errorf("edit form should pre-fill the existing note, got %q", prefill)
-	}
-	// Replace the textarea value (the form POST serializes the current DOM value, so
-	// no input-event/debounce race), then send.
-	if err := chromedp.Run(p.ctx, chromedp.Evaluate(
-		`document.querySelector('.sg-revise-form textarea').value = "on second thought, keep it casual"`, nil)); err != nil {
-		t.Fatalf("amend note: %v", err)
-	}
-	click(`button[name="submitRevision"]`)
-	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.sg-revise-note`, chromedp.ByQuery)); err != nil {
-		t.Fatalf("amended note missing: %v\nstderr: %s", err, p.stderr.String())
-	}
-	if got := readNote(); got != "on second thought, keep it casual" {
-		t.Errorf("amended note = %q, want the edited text", got)
-	}
-
-	// Fingerprint drop: the LLM revises the suggestion (same id, new proposed text).
-	// The stale "revision requested" verdict must NOT ride the new proposal — the
-	// card returns to undecided (action row) with the new text.
 	submitSuggestions(t, p.binary, p.repo, `[
 	  {"id":"code1","file":"app.go","from_line":4,"to_line":4,"original":"return \"hello world\"","proposed":"return fmt.Sprintf(\"hi %s\", name)","note":"revised per request"}
 	]`)

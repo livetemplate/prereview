@@ -14,7 +14,7 @@ import (
 
 // runSuggest implements `prereview suggest [--out <dir>] [--file <f>]`: the coding
 // agent (via the skill) submits proposed edits so the live review UI renders them
-// as inline suggestion boxes the reviewer can accept / reject / revise (issue #98).
+// as inline suggestion boxes the reviewer can accept / reject (issue #98).
 //
 // It reads a JSON payload from --file (or stdin) — a single object, a JSON array,
 // or newline-delimited objects (JSONL) — and APPENDS one normalized JSON line per

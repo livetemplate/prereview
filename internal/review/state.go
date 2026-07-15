@@ -162,14 +162,8 @@ type PrereviewState struct {
 	// file-comment composer.
 	Prompts []Prompt `json:"prompts"`
 
-	// RevisingSuggestionID is the suggestion whose inline "request revision" note
-	// form is open (mirrors EditingCommentID); RevisionDraft holds the in-progress
-	// note so it survives reconnects. Empty = no revision form open.
-	RevisingSuggestionID string `json:"revising_suggestion_id" lvt:"persist"`
-	RevisionDraft        string `json:"revision_draft" lvt:"persist"`
-
 	// ReplyingID is the comment/suggestion whose inline reply form is open (#149;
-	// mirrors RevisingSuggestionID); ReplyDraft holds the in-progress reply so it
+	// mirrors EditingCommentID); ReplyDraft holds the in-progress reply so it
 	// survives reconnects. Empty = no reply form open.
 	ReplyingID string `json:"replying_id" lvt:"persist"`
 	ReplyDraft string `json:"reply_draft" lvt:"persist"`

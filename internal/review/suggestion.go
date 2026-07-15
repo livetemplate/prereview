@@ -20,7 +20,7 @@ import (
 //     server-owned comments.csv, and consumed by the LLM on hand-off.
 //   - a SUGGESTION is authored by the LLM (via `prereview suggest`), stored in
 //     the agent-owned, append-only .prereview/suggestions.jsonl, and consumed by
-//     the human, who accepts / rejects / requests-revision (Phase 2). Those
+//     the human, who accepts / rejects (Phase 2). Those
 //     decisions ship back to the LLM on the next hand-off (Phase 3), and the LLM
 //     — not the server — applies the accepted edits. prereview stays read-only on
 //     the reviewed files.

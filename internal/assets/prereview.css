@@ -1918,7 +1918,7 @@ header.file-head .file-head-comment button svg { display: block; }
    badge (accented-yellow while accepted-but-unapplied, green once applied/rejected/resolved).
    Everything still PENDING stays visible inline: an unresolved comment, an UNDECIDED
    suggestion (so a proposed edit is right there to accept), and a suggestion awaiting the
-   agent — revision-requested (sg-revise) or being reverted (sg-revert). Collapsed cards are
+   agent — being reverted (sg-revert). Collapsed cards are
    reachable by clicking the badge (`.row-toggled`) or globally via "Show resolved"
    (.show-resolved). The M4 status/revert controls live inside the revealed card.
    #171: `.is-applied` collapses too, and NOT only via sg-accept. The agent can apply an
@@ -2457,7 +2457,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    deliberately distinct: an accent left-border + accent-tinted fill + sparkle
    label mark it as an agent-PROPOSED edit (vs the reviewer's own comment), and a
    red→green before/after mini-diff shows the change. Read-only in Phase 1 — the
-   accept/reject/revise action row arrives in Phase 2. Themes across schemes×modes
+   accept/reject action row arrives in Phase 2. Themes across schemes×modes
    via the --accent / --pr-add / --pr-del tokens (never hard-coded). */
 .inline-suggestion {
   margin: 0.45rem 0.4rem; padding: 0.5rem 0.7rem;
@@ -2515,9 +2515,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 .inline-suggestion .sg-hide-btn:hover { color: var(--accent); text-decoration: underline; }
 
-/* Decision surface (issue #98 Phase 2): the accept/reject/request-revision action
-   row, the verdict badge, and the inline revision-note form. Verdict colors reuse
-   the add/del/accent tokens so they theme across schemes×modes. */
+/* Decision surface (issue #98 Phase 2): the accept/reject action row and the
+   verdict badge. Verdict colors reuse the add/del/accent tokens so they theme
+   across schemes×modes. */
 .inline-suggestion .sg-actions {
   display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem;
 }
@@ -2531,7 +2531,6 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .sg-verdict-badge.sg-accept { color: var(--pr-open, #c9a000); }
 .inline-suggestion.is-applied .sg-verdict-badge.sg-accept { color: var(--pr-add); }
 .sg-verdict-badge.sg-reject { color: var(--pr-del); }
-.sg-verdict-badge.sg-revise { color: var(--accent); }
 /* A decided card is re-skinned to its STATE colour — the WHOLE box (all borders + a
    background wash), not just the left rail — so it reads unmistakably: accepted-pending →
    amber, applied → green, rejected → red. */
@@ -2551,19 +2550,6 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   background: color-mix(in srgb, var(--pr-del) 11%, var(--pr-comment-bg));
 }
 .inline-suggestion.is-decided.sg-reject .sg-diff { opacity: 0.6; }
-/* The reviewer's requested-change note (revise verdict). */
-.inline-suggestion .sg-revise-note {
-  margin-top: 0.45rem; padding: 0.35rem 0.55rem;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border-left: 2px solid var(--accent); border-radius: var(--radius-sm);
-  font-style: italic;
-}
-/* Inline "request revision" note form. */
-.inline-suggestion .sg-revise-form { margin-top: 0.5rem; }
-.inline-suggestion .sg-revise-form textarea {
-  width: 100%; min-height: 3.2rem; margin-bottom: 0.4rem;
-  font-family: var(--sans); font-size: 0.82rem;
-}
 .sg-decision-count { font-size: 0.78rem; color: var(--text-muted); }
 /* File-level comments section. Lives between the file-head and the
    body branch so it's visible above every preview mode (line view,
@@ -2764,7 +2750,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .thread-agent .thread-author { color: var(--accent); }
 .thread-when { font-size: 0.66rem; color: var(--pico-muted-color); }
 .thread-body { white-space: pre-wrap; word-break: break-word; font-size: 0.82rem; }
-/* #149 reviewer reply form (mirrors sg-revise-form) + the awaiting-agent badge. */
+/* #149 reviewer reply form + the awaiting-agent badge. */
 .reply-form { margin: 0.4rem 0 0.2rem; }
 .reply-form textarea {
   width: 100%; min-height: 3rem; margin-bottom: 0.4rem;

@@ -52,10 +52,9 @@ prereview --install-skill --client=claude        # one-time: install the Claude 
   hand-written CSV parser. (Streaming is the Claude Code default; other
   agents use a one-shot-per-batch flow — see [Works with any LLM CLI](#works-with-any-llm-cli).)
 - **Suggested edits, the other direction** — the agent proposes edits
-  inline (`prereview suggest`) as before → after boxes; you **accept**,
-  **reject**, or **ask for a revision** (with a note), and hand the batch
-  back. Accepted edits are the agent's to apply — prereview never touches
-  your files on its own.
+  inline (`prereview suggest`) as before → after boxes; you **accept** or
+  **reject**, and hand the batch back. Accepted edits are the agent's to
+  apply — prereview never touches your files on its own.
 - **Comment on a word or phrase, not just a line** — select any span of
   text (or a rendered Markdown phrase) and the comment anchors to exactly
   those characters. **⌘K / Ctrl-K** searches file names and contents across
@@ -79,7 +78,7 @@ Most "AI code review" tools have the model *find* the problems for you to
 read. prereview inverts that: **you** spot what's wrong — across any
 artifact, not just code — and the LLM does the *fixing*, locally, before
 you push. The loop runs both ways: the agent can also propose edits, and
-you're the one who accepts, rejects, or asks for a revision.
+you're the one who accepts or rejects them.
 
 - **vs. AI reviewers** (CodeRabbit, Gito, Ollama pre-commit hooks, Qodo) —
   they generate the review; prereview captures *your* judgment as
@@ -271,14 +270,14 @@ sidebar.
 LLM chat (*"review this doc and suggest edits in prereview"*), or right in a
 **comment** — leave one like *"suggest alternatives for this phrasing"* and
 hand off. Either way the agent submits them with `prereview suggest` and each
-renders inline as a before → after box. **Accept** to take it, **Reject** to
-drop it, or **Request revision** to send it back with a note — the decisions
-ride the next hand-off, and the agent applies the ones you accepted. Nothing
-is written to your files until then.
+renders inline as a before → after box. **Accept** to take it or **Reject** to
+drop it — the decisions ride the next hand-off, and the agent applies the ones
+you accepted. Want a different take? Reply on the suggestion's thread and the
+agent reworks it. Nothing is written to your files until then.
 
 <p align="center"><img src="docs/suggestion.gif" alt="An LLM-proposed edit shown inline as a before-after box; the reviewer clicks Accept and a verdict badge appears" width="760"></p>
 
-<p align="center"><sub><em>The agent suggests an edit; you accept, reject, or ask for a revision.</em></sub></p>
+<p align="center"><sub><em>The agent suggests an edit; you accept or reject it.</em></sub></p>
 
 **Annotate a live local site** (`--external`). Point prereview at a
 running dev server; it proxies the page so you can drag a box on any

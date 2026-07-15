@@ -9,8 +9,8 @@ import (
 
 // controller_reply.go — the reviewer→agent side of #149 threads: the reviewer posts a
 // reply under a comment/suggestion card. It appends a reviewer ThreadEntry and re-emits
-// the snapshot so the agent's `watch` picks it up. Mirrors the suggestion revise-form
-// (RequestRevision/SaveRevisionDraft/SubmitRevision).
+// the snapshot so the agent's `watch` picks it up. The inline form is armed by ReplyingID
+// / ReplyDraft (mirrors EditingCommentID for the comment edit-form).
 
 // OpenReply opens the inline reply form on the given comment/suggestion, draft empty.
 func (c *PrereviewController) OpenReply(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {

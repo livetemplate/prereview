@@ -22,7 +22,7 @@ func TestAcceptSuggestion_AutoRejectsGroup(t *testing.T) {
 	v := func(s PrereviewState, id string) SuggestionDecision { return s.DecisionsBySuggestion()[id] }
 
 	// Accept a → b, cc auto-rejected.
-	st, _ = c.AcceptSuggestion(st, decisionCtx("acceptSuggestion", "a", ""))
+	st, _ = c.AcceptSuggestion(st, decisionCtx("acceptSuggestion", "a"))
 	if v(st, "a").Verdict != verdictAccept {
 		t.Fatalf("a should be accepted, got %q", v(st, "a").Verdict)
 	}
@@ -37,7 +37,7 @@ func TestAcceptSuggestion_AutoRejectsGroup(t *testing.T) {
 	}
 
 	// Accept b → switches: b accepted, a & cc auto-rejected.
-	st, _ = c.AcceptSuggestion(st, decisionCtx("acceptSuggestion", "b", ""))
+	st, _ = c.AcceptSuggestion(st, decisionCtx("acceptSuggestion", "b"))
 	if v(st, "b").Verdict != verdictAccept {
 		t.Fatal("b should now be accepted")
 	}
@@ -46,7 +46,7 @@ func TestAcceptSuggestion_AutoRejectsGroup(t *testing.T) {
 	}
 
 	// Clear b's accept → the whole group re-opens.
-	st, _ = c.ClearSuggestionDecision(st, decisionCtx("clearSuggestionDecision", "b", ""))
+	st, _ = c.ClearSuggestionDecision(st, decisionCtx("clearSuggestionDecision", "b"))
 	if n := len(st.DecisionsBySuggestion()); n != 0 {
 		t.Errorf("clearing the accept should re-open the group (0 decisions), got %d", n)
 	}
@@ -79,7 +79,7 @@ func TestAcceptSuggestion_DoesNotOverGroup(t *testing.T) {
 		{ID: "here", File: "a.go", Side: "new", FromLine: 4, ToLine: 4, OriginalText: "return nil", ProposedText: "return err"},
 		{ID: "far", File: "a.go", Side: "new", FromLine: 40, ToLine: 40, OriginalText: "return nil", ProposedText: "return err2"},
 	}}
-	st, _ = c.AcceptSuggestion(st, decisionCtx("acceptSuggestion", "here", ""))
+	st, _ = c.AcceptSuggestion(st, decisionCtx("acceptSuggestion", "here"))
 	if _, decided := st.DecisionsBySuggestion()["far"]; decided {
 		t.Error("same text at a different location must NOT be auto-rejected (over-grouping)")
 	}
@@ -93,9 +93,9 @@ func TestClearAccept_PreservesUnrelatedManualReject(t *testing.T) {
 		groupAlt("a", "x"), groupAlt("b", "y"),
 		{ID: "other", File: "a.md", Side: "new", FromLine: 9, ToLine: 9, OriginalText: "foo", ProposedText: "bar"},
 	}}
-	st, _ = c.RejectSuggestion(st, decisionCtx("rejectSuggestion", "other", "")) // manual reject, different group
-	st, _ = c.AcceptSuggestion(st, decisionCtx("acceptSuggestion", "a", ""))     // auto-rejects b
-	st, _ = c.ClearSuggestionDecision(st, decisionCtx("clearSuggestionDecision", "a", ""))
+	st, _ = c.RejectSuggestion(st, decisionCtx("rejectSuggestion", "other")) // manual reject, different group
+	st, _ = c.AcceptSuggestion(st, decisionCtx("acceptSuggestion", "a"))     // auto-rejects b
+	st, _ = c.ClearSuggestionDecision(st, decisionCtx("clearSuggestionDecision", "a"))
 	if d := st.DecisionsBySuggestion()["other"]; d.Verdict != verdictReject || d.Auto {
 		t.Errorf("unrelated manual reject must survive the group re-open, got verdict=%q auto=%v", d.Verdict, d.Auto)
 	}
