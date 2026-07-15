@@ -493,41 +493,21 @@ func (p *runningPrereview) clickFile(path string) {
 // own open/close/click-away mechanics are covered by TestE2E_ToolbarViewDropdown.
 // Desktop-width only (the dropdown lives in .toolbar-inline, hidden <900px where
 // the .more-menu takes over).
-// The trigger click is RETRIED because `open` is a client-only class
-// (lvt-el:toggleClass — the server never emits it), so a server render landing while
-// the menu is up morphs the toolbar and STRIPS it: the menu closes under us. Any
-// caller that opens the menu right after an action whose render touches the View
-// panel (e.g. toggleResolved, whose resolved-filter items live in that panel) races
-// it. Reproduced at ~1-in-4 and the cause of the intermittent hangs in
-// TestE2E_ResolvedReloadStableAgent. The retry keeps the suite honest; the real fix is
-// upstream — livetemplate/client#147 (preserve client-toggled classes across a morph, as
-// the client already does for the lvt-fx:scroll / lvt-autofocus guards). Drop this retry
-// when that lands.
+//
+// This used to retry the trigger click to survive livetemplate/client#147 — a morph
+// stripping the client-only `.open` class, closing the menu under us at ~1-in-4. That
+// is fixed in client v0.18.1 (the client now preserves lvt-el class/attr state across a
+// morph), so the single-shot open is reliable again.
 func (p *runningPrereview) openViewItem(name string) {
 	p.t.Helper()
-	itemSel := fmt.Sprintf(`.tb-dropdown.open .tb-dropdown-panel button[name=%q]`, name)
-	for attempt := 0; attempt < 5; attempt++ {
-		if err := chromedp.Run(p.ctx, chromedp.Click(`.tb-dropdown-trigger`, chromedp.ByQuery)); err != nil {
-			p.t.Fatalf("openViewItem %s: click trigger: %v\nstderr: %s", name, err, p.stderr.String())
-		}
-		// Poll rather than WaitVisible: a stripped `open` never resolves, and we want
-		// to re-click instead of hanging until the package timeout.
-		for i := 0; i < 10; i++ {
-			var ok bool
-			_ = chromedp.Run(p.ctx, chromedp.Evaluate(
-				fmt.Sprintf(`!!document.querySelector('%s')`, itemSel), &ok))
-			if ok {
-				if err := chromedp.Run(p.ctx, chromedp.Evaluate(
-					fmt.Sprintf(`document.querySelector('.tb-dropdown-panel button[name="%s"]').click()`, name), nil),
-				); err != nil {
-					p.t.Fatalf("openViewItem %s: click item: %v\nstderr: %s", name, err, p.stderr.String())
-				}
-				return
-			}
-			_ = chromedp.Run(p.ctx, chromedp.Sleep(100*time.Millisecond))
-		}
+	itemSel := fmt.Sprintf(`.tb-dropdown-panel button[name=%q]`, name)
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.tb-dropdown-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.tb-dropdown.open `+itemSel, chromedp.ByQuery),
+		chromedp.Evaluate(fmt.Sprintf(`document.querySelector('.tb-dropdown-panel button[name="%s"]').click()`, name), nil),
+	); err != nil {
+		p.t.Fatalf("openViewItem %s: %v\nstderr: %s", name, err, p.stderr.String())
 	}
-	p.t.Fatalf("openViewItem %s: the View menu never stayed open across 5 attempts\nstderr: %s", name, p.stderr.String())
 }
 
 // clickLine selects the diff line identified by old/new line numbers.
