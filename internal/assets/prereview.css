@@ -1182,6 +1182,17 @@ header.file-head .file-head-actions {
    (pending apply)" line badge uses — the toolbar count and the badge on the line mean
    the same thing, so they read the same. */
 .q-awaiting { color: var(--pr-open, #c9a000); }
+/* #164: reviewer replied, the agent owes a response. Same --accent as the card's
+   awaiting-badge so the toolbar count and the on-card badge read as the same thing.
+   Rendered outside .queue-counts (it is whole-review, not per-file), so it carries its
+   own left margin + pill to sit apart from the label. */
+.q-awaiting-reply {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-radius: 0.4rem; padding: 0 0.3rem; margin-left: 0.35rem;
+}
+.queue-awaiting-reply { font-size: 0.78rem; color: var(--accent); margin: 0.1rem 0 0.15rem; }
+.queue-awaiting-reply .q-awaiting-reply { margin-left: 0; }
 /* Keep the whole chip (label · counts · chevron) on one line — it was wrapping
    the chevron to a second row on a narrow bar. */
 .queue-trigger { display: inline-flex; align-items: center; white-space: nowrap; flex: 0 0 auto; }

@@ -79,4 +79,38 @@ func TestE2E_QueueReopensOnReply(t *testing.T) {
 	if q, d := queueNums(); q != "1" || d != "0" {
 		t.Fatalf("after the reviewer reply, the done comment must reopen as queued: queued=%q done=%q, want 1/0%s", q, d, "\nstderr: "+p.stderr.String())
 	}
+
+	// The reopened work must also carry a review-wide "awaiting agent" indicator on the
+	// toolbar badge (#164), so it stays visible even after the reviewer navigates to a
+	// different file — the per-file queued count alone would vanish there.
+	awaitingReply := func() string {
+		var n string
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(document.querySelector('.queue-trigger .q-awaiting-reply')||{}).textContent||''`, &n))
+		return n
+	}
+	if n := awaitingReply(); n != "1" {
+		t.Fatalf("reopened reply must show a review-wide awaiting-agent indicator; got %q, want 1", n)
+	}
+
+	// The tally is PER-REPLY (#164): a SECOND reply on the same comment bumps it to 2 —
+	// each reply the agent still owes a response to is counted, not just the comment.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.inline-comment button[name='openReply']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.reply-form textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.reply-form textarea`, "and drop the trailing zeros", chromedp.ByQuery),
+		chromedp.Click(`button[name='postReply']`, chromedp.ByQuery),
+		chromedp.Sleep(400e6),
+	); err != nil {
+		t.Fatalf("second reviewer reply: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if n := awaitingReply(); n != "2" {
+		t.Fatalf("a second reply on the same comment must bump the per-reply tally; got %q, want 2%s", n, "\nstderr: "+p.stderr.String())
+	}
+
+	// Navigate to a different file: the per-file queued count disappears, but the
+	// review-wide reply tally MUST remain (the exact gap the reviewer hit).
+	p.clickFile("folded.go")
+	if n := awaitingReply(); n != "2" {
+		t.Fatalf("after switching files, the review-wide reply tally vanished (got %q, want 2) — reply work would be invisible%s", n, "\nstderr: "+p.stderr.String())
+	}
 }

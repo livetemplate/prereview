@@ -137,6 +137,79 @@ func TestQueueReopensOnReviewerReply(t *testing.T) {
 	}
 }
 
+// TestAwaitingReplyCount_PerReplyReviewWide: the toolbar reply tally (#164) is per-REPLY
+// (three replies in a row on one comment count as three), whole-review (a reply on a
+// non-selected file still counts, where the per-file QueuedCount would drop it), and drops
+// to zero for a thread the moment the agent replies.
+func TestAwaitingReplyCount_PerReplyReviewWide(t *testing.T) {
+	s := PrereviewState{
+		SelectedFile: "a.go",
+		Comments: []Comment{
+			{ID: "here", File: "a.go", ToLine: 1},
+			{ID: "elsewhere", File: "b.go", ToLine: 2, Processed: true}, // different file
+			{ID: "answered", File: "a.go", ToLine: 3, Processed: true},  // agent replied last
+		},
+		ThreadEntries: []ThreadEntry{
+			// "here": reviewer replied THREE times in a row → 3 unaddressed.
+			{TargetID: "here", Author: AuthorReviewer, At: 1},
+			{TargetID: "here", Author: AuthorReviewer, At: 2},
+			{TargetID: "here", Author: AuthorReviewer, At: 3},
+			// "elsewhere": one reply, on another file → still counts (review-wide).
+			{TargetID: "elsewhere", Author: AuthorAgent, At: 1},
+			{TargetID: "elsewhere", Author: AuthorReviewer, At: 2},
+			// "answered": reviewer replied, then the agent answered → 0 unaddressed.
+			{TargetID: "answered", Author: AuthorReviewer, At: 1},
+			{TargetID: "answered", Author: AuthorAgent, At: 2},
+		},
+	}
+
+	// Per-file QueuedCount (viewing a.go) counts COMMENTS, not replies: "here" (reopened)
+	// is one queued item however many times the reviewer replied; "elsewhere" is off-file.
+	if got := s.QueuedCount(); got != 1 {
+		t.Errorf("QueuedCount (per-file, a.go) = %d, want 1 (only 'here' as one item)", got)
+	}
+	// The tally is per-reply and whole-review: 3 (here) + 1 (elsewhere) + 0 (answered) = 4.
+	if got := s.AwaitingReplyCount(); got != 4 {
+		t.Errorf("AwaitingReplyCount = %d, want 4 (3 on 'here' + 1 cross-file + 0 answered)", got)
+	}
+
+	// A lone cross-file reply: per-file queue is empty (HasQueue false) yet the tally is 1,
+	// so the badge must surface it independent of HasQueue.
+	only := PrereviewState{
+		SelectedFile:  "a.go",
+		Comments:      []Comment{{ID: "elsewhere", File: "b.go", ToLine: 2, Processed: true}},
+		ThreadEntries: []ThreadEntry{{TargetID: "elsewhere", Author: AuthorReviewer, At: 1}},
+	}
+	if only.HasQueue() {
+		t.Error("HasQueue is per-file; a lone cross-file reply must not flip it true")
+	}
+	if got := only.AwaitingReplyCount(); got != 1 {
+		t.Errorf("AwaitingReplyCount = %d, want 1 even when HasQueue is false", got)
+	}
+}
+
+// TestTrailingReviewerReplies covers the per-reply counting primitive directly.
+func TestTrailingReviewerReplies(t *testing.T) {
+	rev, ag := ThreadEntry{Author: AuthorReviewer}, ThreadEntry{Author: AuthorAgent}
+	cases := []struct {
+		name   string
+		thread []ThreadEntry
+		want   int
+	}{
+		{"empty", nil, 0},
+		{"ends with agent", []ThreadEntry{rev, ag}, 0},
+		{"one trailing reviewer", []ThreadEntry{ag, rev}, 1},
+		{"three trailing reviewers", []ThreadEntry{ag, rev, rev, rev}, 3},
+		{"reviewer run reset by agent", []ThreadEntry{rev, rev, ag, rev}, 1},
+		{"all reviewer, no agent", []ThreadEntry{rev, rev}, 2},
+	}
+	for _, c := range cases {
+		if got := trailingReviewerReplies(c.thread); got != c.want {
+			t.Errorf("%s: trailingReviewerReplies = %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
 // TestSuggestionQueueProjection: an accepted suggestion is "queued" work (the
 // agent still has to apply it), an applied one is "done", and reject/undecided
 // stay out of the queue (#159). Suggestions ride the same counts/rows as comments.

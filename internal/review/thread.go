@@ -117,6 +117,23 @@ func hasUnreadReviewerReply(thread []ThreadEntry) bool {
 	return len(thread) > 0 && thread[len(thread)-1].Author == AuthorReviewer
 }
 
+// trailingReviewerReplies counts the run of REVIEWER entries at the END of a thread — the
+// replies the reviewer has posted since the agent last spoke, i.e. the messages still
+// awaiting an agent response. Zero when the thread is empty or ends with the agent. Unlike
+// hasUnreadReviewerReply (a yes/no "does this comment need the agent"), this is a tally:
+// three reviewer replies in a row count as three (#164, the per-reply queue counter), and
+// it drops back to zero the instant the agent replies.
+func trailingReviewerReplies(thread []ThreadEntry) int {
+	n := 0
+	for i := len(thread) - 1; i >= 0; i-- {
+		if thread[i].Author != AuthorReviewer {
+			break
+		}
+		n++
+	}
+	return n
+}
+
 // threadActionable decides whether a comment/suggestion belongs in the agent's
 // snapshot, given its thread and whether it is SETTLED — resolved by the reviewer OR
 // outdated because the agent edited the anchored line (#164). The unread-reply model

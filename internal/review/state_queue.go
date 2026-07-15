@@ -207,6 +207,34 @@ func (s PrereviewState) AwaitingApplyCount() int {
 	return n
 }
 
+// AwaitingReplyCount tallies, across the WHOLE REVIEW, every reviewer reply still awaiting
+// an agent response — the trailing run of reviewer entries on each comment/suggestion
+// thread (#164). It is a per-REPLY counter, not per-comment: three replies in a row on one
+// comment count as three, so the reviewer sees each reply register, and the tally drops to
+// zero for a thread the moment the agent replies.
+//
+// reopenIfReplied separately reopens a replied-on comment as "queued" in the per-file
+// counts, but QueuedCount/HasQueue are per-file (#171): reply on a comment, then look at
+// another file, and that work vanishes from the toolbar. So — like AwaitingApplyCount, and
+// for the same "don't strand cross-file work" reason — this tally is deliberately
+// whole-review and surfaced independently of the per-file HasQueue gate, so replies are
+// always visible on the Queue badge whatever file you are on. A draft never has a thread,
+// so it never contributes.
+func (s PrereviewState) AwaitingReplyCount() int {
+	threads := s.Threads()
+	if len(threads) == 0 {
+		return 0
+	}
+	n := 0
+	for _, c := range s.scopedComments() {
+		n += trailingReviewerReplies(threads[c.ID])
+	}
+	for _, sg := range s.scopedSuggestions() {
+		n += trailingReviewerReplies(threads[sg.ID])
+	}
+	return n
+}
+
 // HasQueue reports whether there's anything to show in the queue panel (any
 // draft/queued/done comment or accepted/applied suggestion). Gates the toolbar
 // indicator so it stays hidden on an empty review.
