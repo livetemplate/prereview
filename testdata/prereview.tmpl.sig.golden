@@ -378,7 +378,7 @@
   
   {{if .AgentMode}}
   <div class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-    <button type="button" id="queue-trigger-{{.EnqueueTick}}" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .HasQueue}}<span class="queue-counts">{{if .AwaitingApplyCount}}<span class="q-num q-awaiting" title="accepted, not yet applied to the file">{{.AwaitingApplyCount}}</span> · {{end}}<span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
+    <button type="button" id="queue-trigger-{{.EnqueueTick}}" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .AwaitingReplyCount}}<span class="q-num q-awaiting-reply" title="your replies still awaiting the agent (whole review)">{{.AwaitingReplyCount}}</span>{{end}}{{if .HasQueue}}<span class="queue-counts">{{if .AwaitingApplyCount}}<span class="q-num q-awaiting" title="accepted, not yet applied to the file">{{.AwaitingApplyCount}}</span> · {{end}}<span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
     <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
       
       <form method="POST" class="queue-pause-form">
@@ -394,6 +394,8 @@
         </button>
       </form>
       {{end}}
+      
+      {{if .AwaitingReplyCount}}<div class="queue-awaiting-reply"><span class="q-num q-awaiting-reply">{{.AwaitingReplyCount}}</span> repl{{if eq .AwaitingReplyCount 1}}y{{else}}ies{{end}} awaiting the agent (whole review)</div>{{end}}
       {{if .HasQueue}}
       <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}{{if .QueueHiddenCount}} · <span class="q-num q-elsewhere">{{.QueueHiddenCount}}</span> on other files{{end}}</div>
       

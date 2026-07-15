@@ -16,11 +16,11 @@ func TestQueueDerivation(t *testing.T) {
 		// sit on the file its comments are about.
 		SelectedFile: "a.go",
 		Comments: []Comment{
-			mk("q1", nil),                                      // queued (default)
-			mk("q2", nil),                                      // queued
-			mk("done1", func(c *Comment) { c.Processed = true }), // done
-			mk("draft1", func(c *Comment) { c.Draft = true }),  // draft
-			mk("res", func(c *Comment) { c.Resolved = true }),  // excluded
+			mk("q1", nil), // queued (default)
+			mk("q2", nil), // queued
+			mk("done1", func(c *Comment) { c.Processed = true }),            // done
+			mk("draft1", func(c *Comment) { c.Draft = true }),               // draft
+			mk("res", func(c *Comment) { c.Resolved = true }),               // excluded
 			mk("old", func(c *Comment) { c.AnchorStatus = anchorOutdated }), // excluded
 		},
 	}
@@ -61,6 +61,152 @@ func TestQueueDerivation(t *testing.T) {
 	// Empty review → no queue indicator.
 	if (PrereviewState{}).HasQueue() {
 		t.Error("HasQueue should be false on an empty review")
+	}
+}
+
+// TestQueueReopensOnReviewerReply: a reviewer reply on a settled comment/suggestion
+// (its thread ends with the reviewer) reopens it as "queued" work in the toolbar count
+// and panel, whatever its base state — #164. This keeps the queue in step with the agent
+// snapshot, which re-surfaces the same replied-on items. An agent-last thread does NOT
+// reopen (the agent is waiting on the reviewer), and a draft has no thread so it stays put.
+func TestQueueReopensOnReviewerReply(t *testing.T) {
+	mk := func(id string, set func(*Comment)) Comment {
+		c := Comment{ID: id, File: "a.go", ToLine: 1, Body: id}
+		if set != nil {
+			set(&c)
+		}
+		return c
+	}
+	replied := func(id string) []ThreadEntry { // reviewer speaks last → reopens
+		return []ThreadEntry{
+			{TargetID: id, Author: AuthorAgent, At: 1},
+			{TargetID: id, Author: AuthorReviewer, Body: "one more thing", At: 2},
+		}
+	}
+	var threads []ThreadEntry
+	for _, id := range []string{"done1", "res", "old", "sapp"} {
+		threads = append(threads, replied(id)...)
+	}
+	// done2: reviewer then agent — agent-last, still handled, must stay "done".
+	threads = append(threads,
+		ThreadEntry{TargetID: "done2", Author: AuthorReviewer, At: 1},
+		ThreadEntry{TargetID: "done2", Author: AuthorAgent, At: 2})
+
+	s := PrereviewState{
+		SelectedFile: "a.go",
+		Comments: []Comment{
+			mk("q1", nil), // queued (default)
+			mk("done1", func(c *Comment) { c.Processed = true }),            // done + reply → reopened
+			mk("done2", func(c *Comment) { c.Processed = true }),            // done + agent-last → stays done
+			mk("res", func(c *Comment) { c.Resolved = true }),               // resolved + reply → reopened
+			mk("old", func(c *Comment) { c.AnchorStatus = anchorOutdated }), // outdated + reply → reopened
+			mk("draft1", func(c *Comment) { c.Draft = true }),               // draft, no thread → stays draft
+		},
+		Suggestions:   []Suggestion{{ID: "sapp", File: "a.go", ToLine: 5}}, // applied + reply → reopened
+		Decisions:     []SuggestionDecision{{SuggestionID: "sapp", Verdict: verdictAccept}},
+		Applied:       map[string]bool{"sapp": true},
+		ThreadEntries: threads,
+	}
+
+	// Reopened: done1, res, old (comments) + sapp (suggestion), plus the fresh q1 → 5 queued.
+	if got := s.QueuedCount(); got != 5 {
+		t.Errorf("QueuedCount = %d, want 5 (q1 + done1/res/old + sapp reopened)", got)
+	}
+	// Only the agent-last done comment stays "done"; done1 and sapp left the done pile.
+	if got := s.DoneCount(); got != 1 {
+		t.Errorf("DoneCount = %d, want 1 (only the agent-last done stays done)", got)
+	}
+	if got := s.DraftCount(); got != 1 {
+		t.Errorf("DraftCount = %d, want 1 (a draft has no thread, never reopens)", got)
+	}
+
+	states := map[string]string{}
+	for _, it := range s.QueueItems() {
+		states[it.ID] = it.State
+	}
+	for _, id := range []string{"done1", "res", "old", "sapp"} {
+		if states[id] != queueQueued {
+			t.Errorf("reopened %q state = %q, want queued", id, states[id])
+		}
+	}
+	if states["done2"] != queueDone {
+		t.Errorf("agent-last done2 state = %q, want done (not reopened)", states["done2"])
+	}
+	if states["draft1"] != queueDraft {
+		t.Errorf("draft1 state = %q, want draft", states["draft1"])
+	}
+}
+
+// TestAwaitingReplyCount_PerReplyReviewWide: the toolbar reply tally (#164) is per-REPLY
+// (three replies in a row on one comment count as three), whole-review (a reply on a
+// non-selected file still counts, where the per-file QueuedCount would drop it), and drops
+// to zero for a thread the moment the agent replies.
+func TestAwaitingReplyCount_PerReplyReviewWide(t *testing.T) {
+	s := PrereviewState{
+		SelectedFile: "a.go",
+		Comments: []Comment{
+			{ID: "here", File: "a.go", ToLine: 1},
+			{ID: "elsewhere", File: "b.go", ToLine: 2, Processed: true}, // different file
+			{ID: "answered", File: "a.go", ToLine: 3, Processed: true},  // agent replied last
+		},
+		ThreadEntries: []ThreadEntry{
+			// "here": reviewer replied THREE times in a row → 3 unaddressed.
+			{TargetID: "here", Author: AuthorReviewer, At: 1},
+			{TargetID: "here", Author: AuthorReviewer, At: 2},
+			{TargetID: "here", Author: AuthorReviewer, At: 3},
+			// "elsewhere": one reply, on another file → still counts (review-wide).
+			{TargetID: "elsewhere", Author: AuthorAgent, At: 1},
+			{TargetID: "elsewhere", Author: AuthorReviewer, At: 2},
+			// "answered": reviewer replied, then the agent answered → 0 unaddressed.
+			{TargetID: "answered", Author: AuthorReviewer, At: 1},
+			{TargetID: "answered", Author: AuthorAgent, At: 2},
+		},
+	}
+
+	// Per-file QueuedCount (viewing a.go) counts COMMENTS, not replies: "here" (reopened)
+	// is one queued item however many times the reviewer replied; "elsewhere" is off-file.
+	if got := s.QueuedCount(); got != 1 {
+		t.Errorf("QueuedCount (per-file, a.go) = %d, want 1 (only 'here' as one item)", got)
+	}
+	// The tally is per-reply and whole-review: 3 (here) + 1 (elsewhere) + 0 (answered) = 4.
+	if got := s.AwaitingReplyCount(); got != 4 {
+		t.Errorf("AwaitingReplyCount = %d, want 4 (3 on 'here' + 1 cross-file + 0 answered)", got)
+	}
+
+	// A lone cross-file reply: per-file queue is empty (HasQueue false) yet the tally is 1,
+	// so the badge must surface it independent of HasQueue.
+	only := PrereviewState{
+		SelectedFile:  "a.go",
+		Comments:      []Comment{{ID: "elsewhere", File: "b.go", ToLine: 2, Processed: true}},
+		ThreadEntries: []ThreadEntry{{TargetID: "elsewhere", Author: AuthorReviewer, At: 1}},
+	}
+	if only.HasQueue() {
+		t.Error("HasQueue is per-file; a lone cross-file reply must not flip it true")
+	}
+	if got := only.AwaitingReplyCount(); got != 1 {
+		t.Errorf("AwaitingReplyCount = %d, want 1 even when HasQueue is false", got)
+	}
+}
+
+// TestTrailingReviewerReplies covers the per-reply counting primitive directly.
+func TestTrailingReviewerReplies(t *testing.T) {
+	rev, ag := ThreadEntry{Author: AuthorReviewer}, ThreadEntry{Author: AuthorAgent}
+	cases := []struct {
+		name   string
+		thread []ThreadEntry
+		want   int
+	}{
+		{"empty", nil, 0},
+		{"ends with agent", []ThreadEntry{rev, ag}, 0},
+		{"one trailing reviewer", []ThreadEntry{ag, rev}, 1},
+		{"three trailing reviewers", []ThreadEntry{ag, rev, rev, rev}, 3},
+		{"reviewer run reset by agent", []ThreadEntry{rev, rev, ag, rev}, 1},
+		{"all reviewer, no agent", []ThreadEntry{rev, rev}, 2},
+	}
+	for _, c := range cases {
+		if got := trailingReviewerReplies(c.thread); got != c.want {
+			t.Errorf("%s: trailingReviewerReplies = %d, want %d", c.name, got, c.want)
+		}
 	}
 }
 

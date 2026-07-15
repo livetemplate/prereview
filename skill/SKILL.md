@@ -127,8 +127,9 @@ Track this as a checklist; run it until you see the `end` event.
 
 Event fields and comment kinds are in
 [reference.md → Agent mode](./reference.md#agent-mode). The snapshot is pre-filtered to
-what needs you: unresolved, non-outdated, non-draft comments — **plus** any resolved
-comment the reviewer just replied on (see *Threads*). Each item may carry its `thread`.
+what needs you: unresolved, non-outdated, non-draft comments — **plus** any comment the
+reviewer just replied on, whatever its state (resolved, outdated, or already done — see
+*Threads*). Each item may carry its `thread`.
 
 ## Act on the comments
 
@@ -228,9 +229,11 @@ thread, address their latest point, and `prereview reply` with what you changed.
 **You never re-answer yourself.** The snapshot only carries items that need you — a
 **fresh** comment, or one the **reviewer replied on last**. Once you reply, the item
 drops out until the reviewer speaks again, so a thread whose last entry is *yours* is
-one you're already waiting on and you won't see it. (This is also why a **resolved**
-comment can reappear: the reviewer resolved it, then replied to reopen the conversation
-— treat that reply as the new instruction.)
+one you're already waiting on and you won't see it. (This is also why a **resolved,
+outdated, or already-done** comment can reappear: a reviewer reply reopens the
+conversation whatever the comment's state — treat that reply as the new instruction.
+`done` does not settle it a second time; only your `reply` flips the last entry back to
+you and drops it again.)
 
 ## Suggested edits (`prereview suggest`)
 

@@ -148,8 +148,9 @@ Three event types:
   still-actionable queue** (a superset, not a delta): act only on the **latest** and
   **dedupe by `id`**. Fields: `event, seq, ts, comments[], suggestions[]`. `comments`
   and `suggestions` are always present (`[]` when empty). The snapshot is pre-filtered
-  to what needs you: unresolved, non-outdated, non-draft comments — **plus** any
-  resolved comment the reviewer just replied on (see [Threads](#threads)); an item you
+  to what needs you: unresolved, non-outdated, non-draft comments — **plus** any comment
+  the reviewer just replied on, whatever its state (resolved, outdated, or already done;
+  see [Threads](#threads)); an item you
   replied on last drops out until the reviewer speaks again. While the reviewer has the
   queue **paused** (batching), no snapshot is emitted — mutations still persist, but
   `watch` blocks — and **resume** emits ONE coalesced snapshot of everything queued.
@@ -203,8 +204,10 @@ entry is `{ "author": "agent" | "reviewer", "body": "…", "at": "<RFC3339>" }`.
 - **Unread model (why items appear/disappear).** The snapshot carries an item only when
   it is **fresh** (no thread yet, unresolved) or its **last entry is the reviewer's**.
   Reply, and it drops out until the reviewer speaks again — you never re-answer yourself.
-  A **resolved** comment reappears iff the reviewer replied after resolving (reopening
-  the conversation); a reply never changes `resolved` on its own.
+  A **resolved, outdated, or already-done** comment reappears iff the reviewer replied on
+  it (reopening the conversation); the reply overrides the suppression but never changes
+  `resolved`/`outdated`/`done` on its own, and marking `done` again won't settle it —
+  only your `reply` drops it back out.
 
 Suggestion threads work identically — a `thread` on a `suggestions[]` entry.
 
