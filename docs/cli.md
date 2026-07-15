@@ -102,7 +102,7 @@ after the usual `READY`/`REPO` preamble) and mirrors it to
   `area` is a nested object, not a string). Shape:
   `{"event":"handoff","seq":N,"comments":[…],"suggestions":[…]}` — both arrays
   always present (`[]` when empty). Each `suggestions[]` entry carries the
-  `verdict` (`accept`/`reject`/`revise`), `note`, `original`, `proposed`, and
+  `verdict` (`accept`/`reject`), `note`, `original`, `proposed`, and
   `anchor_status`. The consumer dedupes by `id` across rounds.
 - `session_end` — once, on **End session**; the only terminator. The server
   shuts down right after.
@@ -149,7 +149,7 @@ prereview processed [--out <dir>] <comment-id>...
 ```
 
 - **`prereview suggest`** — submit **proposed edits** that render inline as
-  suggestion boxes the reviewer accepts / rejects / revises. Reads a JSON payload
+  suggestion boxes the reviewer accepts / rejects. Reads a JSON payload
   from `--file` or stdin — a single object, a JSON array, or newline-delimited
   objects — and appends them to `.prereview/suggestions.jsonl`. Each object:
   `{"id":"…","file":"…","from_line":N,"to_line":N,"side":"new","original":"…","proposed":"…","note":"…"}`
@@ -213,6 +213,6 @@ Alongside `comments.csv` and the `DONE` marker, `.prereview/` may hold:
 | `DONE` | server | one-shot hand-off marker (`--skill` without `--stream`) |
 | `events.jsonl` | server | the `--stream` event log (reset each launch) |
 | `suggestions.jsonl` | **agent** (`prereview suggest`) | proposed edits, rendered as suggestion boxes (durable) |
-| `suggestion-decisions.jsonl` | server | your accept/reject/revise verdicts on suggestions (durable) |
+| `suggestion-decisions.jsonl` | server | your accept/reject verdicts on suggestions (durable) |
 | `processed.jsonl` | **agent** (`prereview processed`) | comment ids marked worked-on (durable) |
 | `llm-status.json` | **agent** | the agent's live working/done status (reset each launch) |

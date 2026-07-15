@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strings"
 
 	"github.com/livetemplate/livetemplate"
 )
 
 // controller_suggestions.go holds the reviewer's decision actions on LLM
-// suggestions (issue #98 Phase 2): accept / reject / request-revision (with a
-// note), plus undo. Each follows the same mutate-in-memory → persist → rollback
+// suggestions (issue #98 Phase 2): accept / reject, plus undo. Each follows the
+// same mutate-in-memory → persist → rollback
 // contract as the comment actions, writing the server-owned
 // .prereview/suggestion-decisions.jsonl. Nothing is applied to the reviewed files
 // here — a decision is PENDING until the reviewer hands off (Phase 3).
@@ -43,15 +42,15 @@ func (c *PrereviewController) commitDecisions(state *PrereviewState, next []Sugg
 	c.scheduleEmit()
 }
 
-// setDecision upserts a single verdict for a suggestion (reject / revise). A
-// missing suggestion (raced away) is a no-op.
-func (c *PrereviewController) setDecision(state *PrereviewState, id, verdict, note string) {
+// setDecision upserts a single verdict for a suggestion (reject). A missing
+// suggestion (raced away) is a no-op.
+func (c *PrereviewController) setDecision(state *PrereviewState, id, verdict string) {
 	sg := state.findSuggestion(id)
 	if sg == nil {
 		slog.Warn("decision on unknown suggestion", "id", id, "verdict", verdict)
 		return
 	}
-	c.commitDecisions(state, upsertDecision(slices.Clone(state.Decisions), newDecision(*sg, verdict, note, false)))
+	c.commitDecisions(state, upsertDecision(slices.Clone(state.Decisions), newDecision(*sg, verdict, "", false)))
 }
 
 // AcceptSuggestion records an "accept" AND auto-rejects every OTHER suggestion in
@@ -61,7 +60,6 @@ func (c *PrereviewController) setDecision(state *PrereviewState, id, verdict, no
 // (so clearing the accept re-opens the group — see ClearSuggestionDecision). All
 // batched into one persist.
 func (c *PrereviewController) AcceptSuggestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RevisingSuggestionID = ""
 	id := ctx.GetString("id")
 	sg := state.findSuggestion(id)
 	if sg == nil {
@@ -114,58 +112,7 @@ func (c *PrereviewController) RequestRevert(state PrereviewState, ctx *livetempl
 
 // RejectSuggestion records a "reject" verdict.
 func (c *PrereviewController) RejectSuggestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RevisingSuggestionID = ""
-	c.setDecision(&state, ctx.GetString("id"), verdictReject, "")
-	return state, nil
-}
-
-// RequestRevision opens the inline note form on a suggestion (mirrors
-// EditComment arming EditingCommentID). The verdict is only recorded once the
-// note is submitted (SubmitRevision). If a revision note was already recorded for
-// this suggestion, the form opens pre-filled with it so the reviewer can EDIT the
-// note in place rather than undo-and-retype.
-func (c *PrereviewController) RequestRevision(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	id := ctx.GetString("id")
-	state.RevisingSuggestionID = id
-	state.RevisionDraft = ""
-	for _, d := range state.Decisions {
-		if d.SuggestionID == id && d.Verdict == verdictRevise {
-			state.RevisionDraft = d.Note // edit the existing note
-			break
-		}
-	}
-	return state, nil
-}
-
-// SaveRevisionDraft keeps the in-progress note across the debounced re-renders
-// (the textarea is lvt-form:preserve, but persisting the draft means it also
-// survives a reconnect) — mirrors SaveDraft for comments.
-func (c *PrereviewController) SaveRevisionDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RevisionDraft = ctx.GetString("note")
-	return state, nil
-}
-
-// SubmitRevision records a "revise" verdict with the reviewer's note and closes
-// the form. An empty note is rejected (the note IS the requested change), leaving
-// the form open so the reviewer can type one.
-func (c *PrereviewController) SubmitRevision(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	id := ctx.GetString("id")
-	note := strings.TrimSpace(ctx.GetString("note"))
-	if note == "" {
-		state.RevisingSuggestionID = id // keep the form open
-		state.RevisionDraft = ctx.GetString("note")
-		return state, nil
-	}
-	c.setDecision(&state, id, verdictRevise, note)
-	state.RevisingSuggestionID = ""
-	state.RevisionDraft = ""
-	return state, nil
-}
-
-// CancelRevision closes the note form without recording anything.
-func (c *PrereviewController) CancelRevision(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RevisingSuggestionID = ""
-	state.RevisionDraft = ""
+	c.setDecision(&state, ctx.GetString("id"), verdictReject)
 	return state, nil
 }
 

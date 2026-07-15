@@ -77,7 +77,7 @@ uses.
 ### Suggesting edits
 
 The protocol also runs the other way: an agent can **propose** edits the user
-accepts, rejects, or asks to revise.
+accepts or rejects.
 
 - **Submit** proposals with `prereview suggest` (a JSON payload on stdin or
   `--file`) — they append to `.prereview/suggestions.jsonl` and render inline as
@@ -87,10 +87,10 @@ accepts, rejects, or asks to revise.
   array (one entry per decided, non-outdated suggestion): `{id, file, from_line,
   to_line, side, verdict, note, original, proposed, anchor_status}`. Act by
   `verdict`: **`accept`** → apply the edit (replace `original` with `proposed` at
-  those lines — *you* write the file); **`reject`** → drop it; **`revise`** →
-  rework it and re-submit with the same `id` and new `proposed`. Only `ok`/`moved`
+  those lines — *you* write the file); **`reject`** → drop it. Only `ok`/`moved`
   statuses are emitted (both have trustworthy line numbers); an applied accept
-  drops off later hand-offs on its own.
+  drops off later hand-offs on its own. (Want to rework a proposal? The user
+  replies on its thread; you re-submit with the same `id` and new `proposed`.)
 
 `prereview processed <id>…` marks comments **worked on** (a UI badge), the same
 append-only, agent-writes / server-reads shape.
@@ -259,8 +259,9 @@ generic instruction is:
 Drop that into your agent's instruction/command/rules file and you're done. To
 also **propose** edits, add: *submit suggestions with `prereview suggest`
 (a JSON payload), and on each hand-off apply the `suggestions[]` decisions —
-`accept` → make the edit, `reject` → skip, `revise` → re-submit the same `id`
-with new `proposed` text.*
+`accept` → make the edit, `reject` → skip. If the user replies on a
+suggestion's thread asking for changes, re-submit the same `id` with new
+`proposed` text.*
 
 ## Status summary
 

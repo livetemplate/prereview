@@ -82,13 +82,14 @@ On each box:
 
 - **Accept** — take the edit.
 - **Reject** — drop it.
-- **Request revision** — send it back with a note (you can edit the note before
-  it goes).
+
+Want a different take? **Reply** on the suggestion's thread with what should
+change; the agent reworks it and re-submits (a reworked suggestion comes back
+for a fresh look).
 
 Decisions are **pending until you hand off** — exactly like comments. On the
-next **Hand off →** they ship to the agent, which applies the accepted edits,
-drops the rejected ones, and reworks the ones you asked to revise (a reworked
-suggestion comes back for a fresh look). prereview never edits your files
+next **Hand off →** they ship to the agent, which applies the accepted edits
+and drops the rejected ones. prereview never edits your files
 itself; the agent does, so an accepted edit shows up as a normal diff you can
 commit. Use **Show / hide suggestions** (or press <kbd>s</kbd>) to toggle the
 boxes while you read.

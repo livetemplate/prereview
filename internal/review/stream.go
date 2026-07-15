@@ -106,7 +106,7 @@ type StreamDecision struct {
 	FromLine     int    `json:"from_line"`
 	ToLine       int    `json:"to_line"`
 	Side         string `json:"side"`
-	Verdict      string `json:"verdict"` // accept | reject | revise | revert (#159 M4.2, wire-only)
+	Verdict      string `json:"verdict"` // accept | reject | revert (#159 M4.2, wire-only)
 	Note         string `json:"note,omitempty"`
 	Original     string `json:"original"`
 	Proposed     string `json:"proposed"`

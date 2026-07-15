@@ -109,7 +109,7 @@ directory from the stdout `REPO` line:
     ├── processed.jsonl             ← INBOUND: per-comment "done" markers (`prereview done`); append-only
     ├── llm-status.json             ← INBOUND: agent-status echo, watched by the server; reset each launch
     ├── suggestions.jsonl           ← INBOUND: the agent's proposed edits (`prereview suggest`); append-only, durable
-    └── suggestion-decisions.jsonl  ← reviewer's accept/reject/revise verdicts; server-owned, rewritten atomically, durable
+    └── suggestion-decisions.jsonl  ← reviewer's accept/reject verdicts; server-owned, rewritten atomically, durable
 ```
 
 The INBOUND files are written by the **agent** and read by the server (the reverse of
@@ -260,10 +260,6 @@ Act by `verdict`:
   and drops it from future snapshots (re-acking is harmless).
 - **`reject`** — the user declined it. **Drop it** — do not apply, do not re-submit.
   (It keeps reappearing; dedupe by `id` and skip it, like a handled comment.)
-- **`revise`** — the user wants a different take; `note` says how. Rework and
-  **re-submit via `prereview suggest` with the SAME `id`** and new `proposed`. That
-  revision resets the decision (the box goes back to undecided) and replaces the old
-  snapshot entry.
 - **`revert`** — the user wants an edit you already applied UNDONE. The file holds your
   applied `proposed`; **restore `original` over it** (the inverse), then
   **`prereview reverted "<id>"`** to ack. That nets it back out of "applied" and returns

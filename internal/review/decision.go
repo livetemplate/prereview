@@ -12,7 +12,7 @@ import (
 )
 
 // decision.go records the reviewer's verdict on each LLM suggestion (issue #98
-// Phase 2): accept / reject / request-revision (with a note). Unlike the
+// Phase 2): accept / reject. Unlike the
 // agent-owned suggestions.jsonl, the decisions file is SERVER-owned — the reviewer
 // makes the call in the browser — so the server is its sole writer and rewrites it
 // atomically on every change (a decision is mutable: accept→reject, or cleared).
@@ -34,20 +34,19 @@ import (
 // under .prereview/. Durable across launches (openStore does NOT reset it).
 const SuggestionDecisionFileName = "suggestion-decisions.jsonl"
 
-// Decision verdicts. "revise" carries a Note (the requested change). accept/reject/
-// revise are STORED on a decision; "revert" is wire-output only (#159 M4.2) — a
-// revert-pending accept is emitted to the agent with this verdict, never stored.
+// Decision verdicts. accept/reject are STORED on a decision; "revert" is
+// wire-output only (#159 M4.2) — a revert-pending accept is emitted to the agent
+// with this verdict, never stored.
 const (
 	verdictAccept = "accept"
 	verdictReject = "reject"
-	verdictRevise = "revise"
 	verdictRevert = "revert"
 )
 
 // SuggestionDecision is the reviewer's recorded verdict on one suggestion.
 type SuggestionDecision struct {
 	SuggestionID string    `json:"suggestion_id"`
-	Verdict      string    `json:"verdict"` // accept | reject | revise
+	Verdict      string    `json:"verdict"` // accept | reject
 	Note         string    `json:"note,omitempty"`
 	// Auto marks a reject that was a SIDE EFFECT of accepting another alternative
 	// in the same group (#117), as opposed to a reject the reviewer clicked. It
@@ -125,6 +124,12 @@ func loadDecisions(path string) []SuggestionDecision {
 		var d SuggestionDecision
 		if err := json.Unmarshal(line, &d); err != nil || d.SuggestionID == "" || d.Verdict == "" {
 			continue // torn/partial/blank/incomplete — skip
+		}
+		if d.Verdict == "revise" {
+			// #168: the "revise" verdict was removed. Drop any legacy on-disk row so
+			// it can never reach the UI/stream/queue — the suggestion reads as
+			// undecided again, and a reply on its thread is the replacement path.
+			continue
 		}
 		if _, seen := byID[d.SuggestionID]; !seen {
 			order = append(order, d.SuggestionID)

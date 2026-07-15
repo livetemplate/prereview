@@ -1,6 +1,6 @@
 ---
 name: prereview
-description: Launches an interactive browser review of the working tree (or any file, directory, or live local site) — code diffs, Markdown, HTML, images, by line, text range, block, or region. The reviewer queues comments in the browser; the coding agent launches `prereview --agent`, consumes the queue as a JSON event stream with `prereview watch`, and applies the fixes, marking each addressed comment done with `prereview done`. The agent can also submit suggested edits (`prereview suggest`) that render inline for the reviewer to accept, reject, or revise. Use when the user asks to review changes before a commit or push, leave comments on a diff or a doc, or have edits suggested in prereview.
+description: Launches an interactive browser review of the working tree (or any file, directory, or live local site) — code diffs, Markdown, HTML, images, by line, text range, block, or region. The reviewer queues comments in the browser; the coding agent launches `prereview --agent`, consumes the queue as a JSON event stream with `prereview watch`, and applies the fixes, marking each addressed comment done with `prereview done`. The agent can also submit suggested edits (`prereview suggest`) that render inline for the reviewer to accept or reject. Use when the user asks to review changes before a commit or push, leave comments on a diff or a doc, or have edits suggested in prereview.
 triggers:
   - prereview
   - review my changes
@@ -238,7 +238,7 @@ you and drops it again.)
 ## Suggested edits (`prereview suggest`)
 
 Comments flow **user → you**. Suggestions flow the other way: **you propose an edit,
-the user accepts / rejects / asks you to revise it.** Reach for this when the user asks
+the user accepts or rejects it.** Reach for this when the user asks
 you to *suggest edits* rather than just review — e.g. "review the doc and suggest
 edits", "propose tighter wording". Each suggestion renders as an inline box (a
 before→after mini-diff) that the user acts on; their decision comes back in the next
@@ -268,7 +268,7 @@ JSON
 ```
 
 Use a **stable `id`** you choose: re-submitting the same `id` *revises* that suggestion
-(last write wins); a new `id` adds one. Full field list and the accept/reject/revise
+(last write wins); a new `id` adds one. Full field list and the accept/reject
 loop are in [reference.md → Suggested edits](./reference.md#suggested-edits).
 
 On each snapshot, `suggestions[]` is a full snapshot of every decided suggestion
@@ -280,8 +280,6 @@ On each snapshot, `suggestions[]` is a full snapshot of every decided suggestion
   Idempotent — re-acking an id is harmless (two snapshots can carry the same accept
   before your ack lands, so dedupe by `id` like comments and ack once per id).
 - **`reject`** — drop it; do not apply or re-submit. Dedupe by `id` and skip it.
-- **`revise`** — rework the edit and **re-submit via `prereview suggest` with the SAME
-  `id`** and new `proposed` text; that resets the box to undecided for re-review.
 - **`revert`** — the reviewer changed their mind about an edit you already applied. The
   file currently holds your applied `proposed` text; **restore the `original` text over
   it** (the inverse of the accept), then **`prereview reverted "<id>"`** to ack. That

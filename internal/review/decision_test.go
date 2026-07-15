@@ -15,9 +15,9 @@ func decisionController(t *testing.T) *PrereviewController {
 	return &PrereviewController{CSVPath: filepath.Join(t.TempDir(), "comments.csv")}
 }
 
-func decisionCtx(action, id, note string) *livetemplate.Context {
+func decisionCtx(action, id string) *livetemplate.Context {
 	return livetemplate.NewContext(context.TODO(), action,
-		map[string]interface{}{"id": id, "note": note})
+		map[string]interface{}{"id": id})
 }
 
 func TestDecisions_RoundTripAndTolerant(t *testing.T) {
@@ -28,14 +28,30 @@ func TestDecisions_RoundTripAndTolerant(t *testing.T) {
 	}
 	in := []SuggestionDecision{
 		{SuggestionID: "s1", Verdict: verdictAccept, Fingerprint: "fp1"},
-		{SuggestionID: "s2", Verdict: verdictRevise, Note: "reword, please", Fingerprint: "fp2"},
+		{SuggestionID: "s2", Verdict: verdictReject, Note: "not this one", Fingerprint: "fp2"},
 	}
 	if err := writeDecisions(path, in); err != nil {
 		t.Fatalf("writeDecisions: %v", err)
 	}
 	got := loadDecisions(path)
-	if len(got) != 2 || got[0].SuggestionID != "s1" || got[1].Note != "reword, please" {
+	if len(got) != 2 || got[0].SuggestionID != "s1" || got[1].Note != "not this one" {
 		t.Fatalf("round-trip mismatch: %+v", got)
+	}
+}
+
+// TestDecisions_SkipsLegacyRevise verifies the #168 loader guard: the "revise"
+// verdict was removed, so a legacy on-disk revise row is dropped on load (never
+// reaching the UI/stream/queue) while valid rows around it survive.
+func TestDecisions_SkipsLegacyRevise(t *testing.T) {
+	path := filepath.Join(t.TempDir(), SuggestionDecisionFileName)
+	writeDecisions(path, []SuggestionDecision{
+		{SuggestionID: "s1", Verdict: verdictAccept, Fingerprint: "fp1"},
+		{SuggestionID: "s2", Verdict: "revise", Note: "legacy note", Fingerprint: "fp2"},
+		{SuggestionID: "s3", Verdict: verdictReject, Fingerprint: "fp3"},
+	})
+	got := loadDecisions(path)
+	if len(got) != 2 || got[0].SuggestionID != "s1" || got[1].SuggestionID != "s3" {
+		t.Fatalf("legacy revise row must be skipped, keeping s1+s3: %+v", got)
 	}
 }
 
@@ -94,20 +110,20 @@ func TestDecisionsBySuggestion_FingerprintGating(t *testing.T) {
 	}
 }
 
-func TestDecisionActions_AcceptRejectReviseUndo(t *testing.T) {
+func TestDecisionActions_AcceptRejectUndo(t *testing.T) {
 	c := decisionController(t)
 	sg := Suggestion{ID: "s1", File: "a.md", OriginalText: "o", ProposedText: "p"}
 	base := PrereviewState{Suggestions: []Suggestion{sg}}
 
 	// Accept, then reject (upsert), verifying persistence each time.
-	st, _ := c.AcceptSuggestion(base, decisionCtx("acceptSuggestion", "s1", ""))
+	st, _ := c.AcceptSuggestion(base, decisionCtx("acceptSuggestion", "s1"))
 	if st.DecisionsBySuggestion()["s1"].Verdict != verdictAccept {
 		t.Fatal("accept not recorded")
 	}
 	if got := loadDecisions(c.decisionsPath()); len(got) != 1 || got[0].Verdict != verdictAccept {
 		t.Fatalf("accept not persisted: %+v", got)
 	}
-	st, _ = c.RejectSuggestion(st, decisionCtx("rejectSuggestion", "s1", ""))
+	st, _ = c.RejectSuggestion(st, decisionCtx("rejectSuggestion", "s1"))
 	if st.DecisionsBySuggestion()["s1"].Verdict != verdictReject {
 		t.Fatal("reject did not supersede accept")
 	}
@@ -116,54 +132,11 @@ func TestDecisionActions_AcceptRejectReviseUndo(t *testing.T) {
 	}
 
 	// Undo clears it.
-	st, _ = c.ClearSuggestionDecision(st, decisionCtx("clearSuggestionDecision", "s1", ""))
+	st, _ = c.ClearSuggestionDecision(st, decisionCtx("clearSuggestionDecision", "s1"))
 	if len(st.DecisionsBySuggestion()) != 0 {
 		t.Error("undo should clear the decision")
 	}
 	if got := loadDecisions(c.decisionsPath()); len(got) != 0 {
 		t.Errorf("undo should persist an empty set, got %+v", got)
-	}
-}
-
-func TestRequestRevision_NoteFlow(t *testing.T) {
-	c := decisionController(t)
-	sg := Suggestion{ID: "s1", OriginalText: "o", ProposedText: "p"}
-	base := PrereviewState{Suggestions: []Suggestion{sg}}
-
-	// Opening the form arms RevisingSuggestionID but records nothing yet.
-	st, _ := c.RequestRevision(base, decisionCtx("requestRevision", "s1", ""))
-	if st.RevisingSuggestionID != "s1" {
-		t.Fatal("RequestRevision should open the form")
-	}
-	if len(st.DecisionsBySuggestion()) != 0 {
-		t.Error("opening the form must not record a decision")
-	}
-
-	// Submitting an empty note keeps the form open, no decision.
-	st, _ = c.SubmitRevision(st, decisionCtx("submitRevision", "s1", "   "))
-	if st.RevisingSuggestionID != "s1" || len(st.DecisionsBySuggestion()) != 0 {
-		t.Error("empty note must keep the form open and record nothing")
-	}
-
-	// A real note records a revise verdict with the note and closes the form.
-	st, _ = c.SubmitRevision(st, decisionCtx("submitRevision", "s1", "please soften the tone"))
-	d := st.DecisionsBySuggestion()["s1"]
-	if d.Verdict != verdictRevise || d.Note != "please soften the tone" {
-		t.Fatalf("revise not recorded with note: %+v", d)
-	}
-	if st.RevisingSuggestionID != "" {
-		t.Error("form should close after a successful submit")
-	}
-
-	// Re-opening the form on a suggestion that already has a revision note pre-fills
-	// the draft, so the reviewer edits it in place instead of retyping.
-	st, _ = c.RequestRevision(st, decisionCtx("requestRevision", "s1", ""))
-	if st.RevisionDraft != "please soften the tone" {
-		t.Errorf("RequestRevision should pre-fill the existing note, got %q", st.RevisionDraft)
-	}
-	// Editing to a new note updates the recorded decision.
-	st, _ = c.SubmitRevision(st, decisionCtx("submitRevision", "s1", "actually, make it terse"))
-	if got := st.DecisionsBySuggestion()["s1"].Note; got != "actually, make it terse" {
-		t.Errorf("edited note not saved, got %q", got)
 	}
 }
