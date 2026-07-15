@@ -247,6 +247,29 @@ func (s PrereviewState) HasQueue() bool {
 // worked) and a live pill.
 func (s PrereviewState) AgentWorking() bool { return s.LLMState == LLMStateWorking }
 
+// AgentWorkingLabel is the text for the live "working" pill/toast — non-empty only while
+// the agent is working (llm-status=working). It prefers the agent's own status message;
+// with none, it tells the reviewer what is happening: applying their reply(ies) when any
+// still await a response (#164 secondary — the reviewer wants to see their reply being
+// applied), else the generic handoff message. Empty when the agent is idle, so the caller
+// can gate on it directly.
+func (s PrereviewState) AgentWorkingLabel() string {
+	if !s.AgentWorking() {
+		return ""
+	}
+	if s.LLMMessage != "" {
+		return s.LLMMessage
+	}
+	switch n := s.AwaitingReplyCount(); {
+	case n == 1:
+		return "Applying your reply…"
+	case n > 1:
+		return "Applying your replies…"
+	default:
+		return "Working on your handoff…"
+	}
+}
+
 // QueueItem is one row of the queue panel — a presentation view over a comment or
 // an accepted suggestion (Kind distinguishes them so the row can render the ✦
 // marker and route its jump to the right target).

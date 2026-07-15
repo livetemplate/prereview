@@ -210,6 +210,54 @@ func TestTrailingReviewerReplies(t *testing.T) {
 	}
 }
 
+// TestAgentWorkingLabel: the live working pill/toast text (#164 secondary). Idle → empty;
+// an explicit agent message always wins; otherwise it reflects pending replies.
+func TestAgentWorkingLabel(t *testing.T) {
+	// One comment with a reviewer-last thread, so AwaitingReplyCount tracks the entries.
+	base := func(entries ...ThreadEntry) PrereviewState {
+		return PrereviewState{
+			SelectedFile:  "a.go",
+			Comments:      []Comment{{ID: "c", File: "a.go", ToLine: 1}},
+			ThreadEntries: entries,
+		}
+	}
+	oneReply := []ThreadEntry{{TargetID: "c", Author: AuthorReviewer, At: 1}}
+	twoReplies := []ThreadEntry{{TargetID: "c", Author: AuthorReviewer, At: 1}, {TargetID: "c", Author: AuthorReviewer, At: 2}}
+
+	// Idle → no label (so the caller renders no pill).
+	if got := base(oneReply...).AgentWorkingLabel(); got != "" {
+		t.Errorf("idle label = %q, want empty", got)
+	}
+
+	// Working with an explicit agent message → the message wins, replies notwithstanding.
+	s := base(oneReply...)
+	s.LLMState, s.LLMMessage = LLMStateWorking, "editing a.go"
+	if got := s.AgentWorkingLabel(); got != "editing a.go" {
+		t.Errorf("label with message = %q, want %q", got, "editing a.go")
+	}
+
+	// Working, no message, one pending reply → reply-aware fallback.
+	s = base(oneReply...)
+	s.LLMState = LLMStateWorking
+	if got := s.AgentWorkingLabel(); got != "Applying your reply…" {
+		t.Errorf("label (1 reply) = %q, want %q", got, "Applying your reply…")
+	}
+
+	// Working, no message, multiple pending replies → plural.
+	s = base(twoReplies...)
+	s.LLMState = LLMStateWorking
+	if got := s.AgentWorkingLabel(); got != "Applying your replies…" {
+		t.Errorf("label (2 replies) = %q, want %q", got, "Applying your replies…")
+	}
+
+	// Working, no message, no pending replies → generic handoff fallback (unchanged).
+	s = base()
+	s.LLMState = LLMStateWorking
+	if got := s.AgentWorkingLabel(); got != "Working on your handoff…" {
+		t.Errorf("label (no replies) = %q, want %q", got, "Working on your handoff…")
+	}
+}
+
 // TestSuggestionQueueProjection: an accepted suggestion is "queued" work (the
 // agent still has to apply it), an applied one is "done", and reject/undecided
 // stay out of the queue (#159). Suggestions ride the same counts/rows as comments.

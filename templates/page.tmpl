@@ -642,7 +642,7 @@
         <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}{{with index $.KeyHint "toggleAgentPause"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
       </form>
       <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
-      {{if .AgentWorking}}<div class="queue-working">⚡ Agent working…</div>{{end}}
+      {{with .AgentWorkingLabel}}<div class="queue-working">⚡ {{.}}</div>{{end}}
       {{/* #171: what the queue is showing. Default is THIS FILE — the queue is about the
            document in front of you. Flip to All files for a many-file repo review, where
            the point is draining a backlog across files. Rendered OUTSIDE the HasQueue
@@ -1047,7 +1047,7 @@
 {{if and .AgentMode (eq .LLMState "working")}}
 <div class="toast llm-working" role="status" aria-live="polite">
   <span class="llm-spinner" aria-hidden="true"></span>
-  <span class="toast-msg">{{if .LLMMessage}}{{.LLMMessage}}{{else}}Working on your handoff…{{end}}</span>
+  <span class="toast-msg">{{.AgentWorkingLabel}}</span>
 </div>
 {{end}}
 
