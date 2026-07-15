@@ -207,7 +207,7 @@
 {{else}}
 
 <div class="kbd-bindings" hidden aria-hidden="true">{{range .KeyBindings}}{{$b := .}}{{range $b.Keys}}{{if $b.Action}}<span lvt-on:window:keydown="{{$b.Action}}" lvt-key="{{.}}" lvt-mod:skip-when-typing></span>{{end}}{{end}}{{end}}</div>
-<header class="bar{{if .FileDrawerOpen}} files-collapsed{{end}}" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
+<header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
   <form method="POST">
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
   </form>
@@ -655,8 +655,14 @@
 
 <div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" lvt-on:click="closeFiles" aria-label="Close file list"></div>
 
-<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
 <dialog id="files-drawer" open class="{{if .FileDrawerOpen}}is-open{{end}}" lvt-fx:resize="--pr-drawer-w" data-resize-handle=".resize-handle" data-resize-min="200" data-resize-max="560" data-resize-store="prereview.drawerW">
+  
+  <div class="drawer-collapse">
+    <form method="POST">
+      <button type="submit" name="toggleFiles" class="collapse-toggle" aria-label="{{if .FileDrawerOpen}}Show file list{{else}}Hide file list{{end}}" aria-expanded="{{if .FileDrawerOpen}}false{{else}}true{{end}}" title="{{if .FileDrawerOpen}}Show files{{else}}Hide files{{end}}{{with index $.KeyHint "toggleFiles"}} ({{.}}){{end}}">{{if .FileDrawerOpen}}{{template "iconChevronRight"}}{{else}}{{template "iconChevronLeft"}}{{end}}</button>
+    </form>
+  </div>
   <div class="drawer-head">
     <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
     <form method="POST">
@@ -937,7 +943,13 @@
 
 {{with .RenderedHeadings}}
 <aside class="toc-sidebar" aria-label="Table of contents">
-  <div class="toc-head"><strong>On this page</strong></div>
+  
+  <div class="toc-head">
+    <form method="POST">
+      <button type="submit" name="toggleTOC" class="collapse-toggle" aria-label="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}" aria-expanded="{{if $.TocCollapsed}}false{{else}}true{{end}}" title="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}{{with index $.KeyHint "toggleTOC"}} ({{.}}){{end}}">{{if $.TocCollapsed}}{{template "iconChevronLeft"}}{{else}}{{template "iconChevronRight"}}{{end}}</button>
+    </form>
+    <strong>On this page</strong>
+  </div>
   <nav class="toc-list">
     {{range .}}<a href="#{{.ID}}" lvt-spy-link class="toc-link toc-l{{.Level}}">{{.Text}}</a>
     {{end}}

@@ -206,6 +206,15 @@ type PrereviewState struct {
 	// field (sidebar is always visible above 900px).
 	FileDrawerOpen bool `json:"file_drawer_open" lvt:"persist"`
 
+	// TocCollapsed hides the desktop table-of-contents sidebar (the right
+	// column, rendered only for Markdown with headings). Independent of the
+	// left drawer and of Focus mode — #137 wants per-side collapse control.
+	// A durable per-user view preference like FocusMode (its per-side twin),
+	// sourced from disk via uiprefs so it survives the relaunch-per-review
+	// workflow; the desktop CSS ignores it below 900px, where the TOC is a
+	// modal, not a column.
+	TocCollapsed bool `json:"toc_collapsed"`
+
 	// AnnoDrawerOpen toggles the --external annotations sidebar. Collapsed by
 	// default (zero value) so the framed live site gets the full width —
 	// especially on a phone; the header "Annotations (N)" button opens it.

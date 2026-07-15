@@ -549,8 +549,10 @@ func TestE2E_ShowResolvedFlash(t *testing.T) {
 }
 
 // TestE2E_DesktopFilesToggle pins that "f" collapses/expands the file-tree
-// sidebar on desktop (previously a no-op there), revealing the hamburger as the
-// reopen affordance while collapsed.
+// sidebar on desktop. Since #137 the collapse is a thin rail, not display:none:
+// the drawer stays on-screen (holding its reopen chevron) while its body hides,
+// so the reopen affordance is the in-rail chevron — the hamburger stays
+// mobile-only and is never revealed on desktop.
 func TestE2E_DesktopFilesToggle(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 	p.waitReady()
@@ -566,34 +568,39 @@ func TestE2E_DesktopFilesToggle(t *testing.T) {
 			`(()=>{const e=document.querySelector(`+"`"+sel+"`"+`);return !!e && getComputedStyle(e).display!=='none'})()`, &v))
 		return v
 	}
-	if !visible(`#files-drawer`) {
-		t.Fatalf("sidebar should be visible on desktop initially")
+	if !visible(`#files-drawer`) || !visible(`.drawer-body`) {
+		t.Fatalf("sidebar and its body should be visible on desktop initially")
 	}
-	// Collapse.
+	if !hidden(`.hamburger`) {
+		t.Fatalf("hamburger should be mobile-only (hidden) on desktop")
+	}
+	// Collapse: the drawer stays visible as a rail (its reopen chevron on-screen),
+	// only the body hides; the hamburger is never revealed.
 	_ = chromedp.Run(p.ctx, chromedp.KeyEvent("f"))
 	collapsed := false
 	for i := 0; i < 30; i++ {
-		if hidden(`#files-drawer`) && visible(`.hamburger`) {
+		if visible(`#files-drawer`) && hidden(`.drawer-body`) &&
+			visible(`#files-drawer .drawer-collapse .collapse-toggle`) && hidden(`.hamburger`) {
 			collapsed = true
 			break
 		}
 		time.Sleep(75 * time.Millisecond)
 	}
 	if !collapsed {
-		t.Errorf("f should hide the desktop sidebar and reveal the hamburger")
+		t.Errorf("f should collapse the desktop sidebar to a rail (body hidden, reopen chevron shown, hamburger still hidden)")
 	}
-	// Expand again.
+	// Expand again: the body comes back.
 	_ = chromedp.Run(p.ctx, chromedp.KeyEvent("f"))
 	back := false
 	for i := 0; i < 30; i++ {
-		if visible(`#files-drawer`) {
+		if visible(`.drawer-body`) {
 			back = true
 			break
 		}
 		time.Sleep(75 * time.Millisecond)
 	}
 	if !back {
-		t.Errorf("f again should restore the desktop sidebar")
+		t.Errorf("f again should restore the desktop sidebar body")
 	}
 }
 

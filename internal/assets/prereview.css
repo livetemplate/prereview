@@ -10,6 +10,9 @@
      gives heading prose 1-2 lines instead of the old cramped 3+. */
   --pr-drawer-w: 280px;
   --pr-toc-w: 340px;
+  /* Collapsed-sidebar rail width (#137): a thin strip that keeps the
+     reopen chevron on-screen instead of hiding the column outright. */
+  --pr-rail-w: 2.25rem;
 
   /* ── Typography ────────────────────────────────────────────────────
      Two faces, by role. Geist (sans) is the reading face for UI chrome
@@ -1369,6 +1372,25 @@ header.bar button { margin: 0; padding: 0.25rem 0.55rem; font-size: 0.85rem; min
   color: var(--pico-color);
 }
 .hamburger svg { display: block; pointer-events: none; }
+/* #137: in-sidebar collapse/expand chevron. Lives inside each side column (the
+   file drawer's rail row, the TOC's "On this page" head), NOT the top toolbar.
+   A borderless icon button; the chevron direction (set in the template) points
+   toward the edge the column collapses to, and flips to point back when it's a
+   collapsed rail. Desktop-only via the .drawer-collapse / rail rules below. */
+.collapse-toggle {
+  background: none; border: 0; margin: 0; cursor: pointer;
+  padding: 0.25rem; line-height: 1; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--pico-muted-color);
+}
+.collapse-toggle:hover, .collapse-toggle:focus-visible {
+  color: var(--pico-color); background: var(--pico-secondary-background, rgba(128, 128, 128, 0.14));
+}
+.collapse-toggle svg { display: block; pointer-events: none; }
+/* The drawer's collapse row is desktop-only chrome (mobile uses the hamburger
+   + backdrop); hidden here, revealed in the >=900px block. */
+.drawer-collapse { display: none; }
+.drawer-collapse form { margin: 0; }
 header.bar .nav-prev, header.bar .nav-next { margin: 0; }
 header.bar .nav-prev button, header.bar .nav-next button {
   padding: 0 0.4rem !important; min-width: 32px; min-height: 32px;
@@ -1395,7 +1417,13 @@ html body dialog#files-drawer {
   background: var(--pico-card-background-color);
   transform: translateX(-100%); transition: transform 220ms ease;
   z-index: 40;
-  overflow: hidden; display: flex; flex-direction: column; align-items: stretch;
+  overflow: hidden; display: flex; flex-direction: column;
+  /* Neutralize Pico's leaked dialog centering on BOTH axes: align-items:center
+     → stretch, and justify-content:center → flex-start. The expanded drawer only
+     avoided a mid-height float by luck (.drawer-body{flex:1} ate the slack); the
+     #137 collapsed rail has no growing child, so pin the main axis here for all
+     states rather than per-state. */
+  align-items: stretch; justify-content: flex-start;
 }
 html body dialog#files-drawer.is-open { transform: translateX(0); }
 /* All direct flex children should fill the drawer's width. */
@@ -2997,14 +3025,28 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      "narrower body"). Actual reading content that was too small (comment
      bodies) is bumped explicitly below, not via the body cascade. */
   html { font-size: 16px; }
-  /* The file tree is a persistent sidebar on desktop, so the hamburger is
-     normally hidden. But toggleFiles (the "f" shortcut) sets FileDrawerOpen,
-     which on desktop COLLAPSES the sidebar — the inverse of its mobile meaning
-     (mobile: open=visible overlay). When collapsed we hide the sidebar and
-     reveal the hamburger as the reopen affordance (f toggles it back too). */
+  /* Desktop: the file drawer is a persistent left column, so the mobile
+     hamburger is hidden — collapse/reopen is the in-drawer rail chevron (#137).
+     toggleFiles / "f" set FileDrawerOpen, which on desktop COLLAPSES the drawer
+     to a rail — the inverse of its mobile meaning (mobile: open=visible overlay). */
   .hamburger { display: none; }
-  header.bar.files-collapsed .hamburger { display: inline-flex; }
-  html body dialog#files-drawer.is-open { display: none; }
+  /* Collapse row: a slim right-aligned header holding the chevron. When the
+     drawer is collapsed it becomes the rail — see the .is-open rules below. */
+  .drawer-collapse {
+    display: flex; justify-content: flex-end; align-items: center;
+    flex: 0 0 auto; padding: 0.25rem 0.35rem;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+  }
+  /* Collapsed = a thin rail holding just the reopen chevron (NOT display:none,
+     so the control stays reachable inside the sidebar itself). Shrink the drawer
+     to the rail width and hide every child except the collapse row. */
+  html body dialog#files-drawer.is-open {
+    width: var(--pr-rail-w); max-width: var(--pr-rail-w); min-width: var(--pr-rail-w);
+  }
+  dialog#files-drawer.is-open > *:not(.drawer-collapse) { display: none; }
+  dialog#files-drawer.is-open .drawer-collapse {
+    justify-content: center; padding: 0.35rem 0; border-bottom: 0;
+  }
   .drawer-backdrop { display: none; }
   .layout { flex-direction: row; }
   html body dialog#files-drawer {
@@ -3113,10 +3155,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
     border-left: 1px solid var(--pico-muted-border-color);
   }
   .toc-sidebar .toc-head {
-    padding: 0.3rem 0.75rem 0.5rem;
+    display: flex; align-items: center; gap: 0.25rem;
+    padding: 0.3rem 0.5rem 0.5rem;
     font-size: 0.85rem; color: var(--pico-muted-color);
     text-transform: uppercase; letter-spacing: 0.06em;
   }
+  /* The "On this page" label takes the remaining width so the collapse chevron
+     sits flush at the inner (left) edge, mirroring the drawer's rail chevron. */
+  .toc-sidebar .toc-head strong { flex: 1; min-width: 0; }
   /* TOC fonts were 0.8/0.85/0.9rem (smaller than body) → unreadable on
      desktop. Bumped to 1/0.95/0.9rem with a slightly tighter line-
      height ladder so long wrapped titles don't dominate the sidebar. */
@@ -3133,6 +3179,19 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      already overlays/modals there, so the flag is a no-op. */
   .layout.focus-mode dialog#files-drawer { display: none; }
   .layout.focus-mode .toc-sidebar { display: none; }
+  /* #137: per-side collapse (independent of Focus mode). Each side collapses to
+     a thin rail (not display:none) so its reopen chevron stays inside the column
+     — the drawer via FileDrawerOpen (dialog#files-drawer.is-open, above), the
+     TOC via TocCollapsed → .layout.toc-collapsed here. Shrink the column to the
+     rail width and hide its list + label, leaving only the toc-head chevron.
+     Focus mode still hides BOTH outright (rules above); turning it off restores
+     each side to its own state because these selectors are independent. */
+  .layout.toc-collapsed .toc-sidebar { flex: 0 0 var(--pr-rail-w); }
+  /* Denylist (mirrors the drawer's rail): hide every child except the head, plus
+     the head's label — so a child added later can't leak into the rail. */
+  .layout.toc-collapsed .toc-sidebar > *:not(.toc-head),
+  .layout.toc-collapsed .toc-sidebar .toc-head strong { display: none; }
+  .layout.toc-collapsed .toc-sidebar .toc-head { justify-content: center; padding: 0.35rem 0; }
   /* Focus mode reclaims both side columns — let the reading column grow into
      the freed width (issue #59) instead of staying pinned at the narrow
      measure. The diff/code surface is already uncapped. Kept wider than the
