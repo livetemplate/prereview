@@ -130,11 +130,16 @@ func actionableDecisions(suggestions []Suggestion, decided map[string]Suggestion
 		// whole point. decided is already effective (DecisionsBySuggestion drops
 		// revert-complete), so d.Revert here ⟹ still applied ⟹ genuinely pending.
 		revertPending := isDecided && d.Revert
-		if !revertPending && (sg.AnchorOutdated() || applied[sg.ID]) {
+		thread := threadByID[sg.ID]
+		// #164: a fresh reviewer reply (thread ends with the reviewer) re-surfaces a
+		// suggestion the agent already handled (outdated/applied) — the same override the
+		// comment path applies — so the follow-up reaches the agent instead of being
+		// stranded on disk. revertPending already bypasses the suppression for its own reason.
+		unread := hasUnreadReviewerReply(thread)
+		if !revertPending && !unread && (sg.AnchorOutdated() || applied[sg.ID]) {
 			continue // outdated, or already applied by the agent (#159) → nothing to do
 		}
-		thread := threadByID[sg.ID]
-		if !isDecided && !hasUnreadReviewerReply(thread) {
+		if !isDecided && !unread {
 			continue // undecided and no reviewer reply → nothing for the agent
 		}
 		verdict := d.Verdict
@@ -248,16 +253,19 @@ func toStreamComment(c Comment) StreamComment {
 func actionableComments(comments []Comment, threadByID map[string][]ThreadEntry) []StreamComment {
 	out := make([]StreamComment, 0, len(comments))
 	for _, c := range comments {
-		// Drafts (#119) are the reviewer's not-yet-enqueued notes — kept out of
-		// the actionable snapshot until enqueued, exactly like resolved/outdated.
-		if c.AnchorOutdated() || c.Draft {
+		// Drafts (#119) are the reviewer's not-yet-enqueued notes — kept out of the
+		// actionable snapshot until enqueued. A draft was never handed to the agent, so
+		// it can't carry a thread; the reply override below never re-admits one.
+		if c.Draft {
 			continue
 		}
-		// #149 unread model: an unresolved fresh comment is actionable; a resolved
-		// one re-surfaces only when the reviewer replied last; an agent-last thread
-		// drops out (handled, awaiting the reviewer).
 		thread := threadByID[c.ID]
-		if !threadActionable(c.Resolved, thread) {
+		// #149/#164 unread model, via threadActionable: a comment is actionable when it is
+		// fresh-and-not-settled, or its thread ends with the reviewer. Passing "settled" as
+		// resolved OR outdated means a reviewer reply overrides BOTH — so a follow-up on a
+		// comment the agent edited (→ outdated) reaches the agent instead of being stranded
+		// on disk, while an agent-last (or untouched-outdated) comment still drops.
+		if !threadActionable(c.Resolved || c.AnchorOutdated(), thread) {
 			continue
 		}
 		sc := toStreamComment(c)

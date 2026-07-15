@@ -118,17 +118,19 @@ func hasUnreadReviewerReply(thread []ThreadEntry) bool {
 }
 
 // threadActionable decides whether a comment/suggestion belongs in the agent's
-// snapshot, given its resolved state and thread. The unread-reply model (#149), NOT
-// auto-reopen:
-//   - no thread yet      → actionable iff unresolved (the fresh-comment case).
-//   - thread, reviewer-last (unread) → actionable, even if resolved (the reviewer
-//     steered after resolving — re-surface it).
+// snapshot, given its thread and whether it is SETTLED — resolved by the reviewer OR
+// outdated because the agent edited the anchored line (#164). The unread-reply model
+// (#149), NOT auto-reopen:
+//   - no thread yet      → actionable iff not settled (the fresh-comment case).
+//   - thread, reviewer-last (unread) → actionable, even if settled: a fresh reviewer
+//     reply steers the agent again, overriding resolved AND outdated. Without this, a
+//     reply on a comment the agent edited was captured on disk but silently dropped.
 //   - thread, agent-last → NOT actionable (the agent replied and is waiting on the
 //     reviewer; without this it would re-act on a handled comment forever — the
-//     exact gap a plain !Resolved filter leaves open).
-func threadActionable(resolved bool, thread []ThreadEntry) bool {
+//     exact gap a plain !settled filter leaves open).
+func threadActionable(settled bool, thread []ThreadEntry) bool {
 	if len(thread) == 0 {
-		return !resolved
+		return !settled
 	}
 	return hasUnreadReviewerReply(thread)
 }

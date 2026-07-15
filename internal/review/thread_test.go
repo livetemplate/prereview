@@ -84,21 +84,23 @@ func TestThreads_GroupByTarget(t *testing.T) {
 func TestThreadActionable(t *testing.T) {
 	agentLast := []ThreadEntry{{Author: AuthorReviewer, At: 1}, {Author: AuthorAgent, At: 2}}
 	reviewerLast := []ThreadEntry{{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, At: 2}}
+	// settled == resolved OR outdated (#164): threadActionable treats both the same, so
+	// these cases cover the outdated axis too.
 	cases := []struct {
-		name     string
-		resolved bool
-		thread   []ThreadEntry
-		want     bool
+		name    string
+		settled bool
+		thread  []ThreadEntry
+		want    bool
 	}{
-		{"fresh unresolved", false, nil, true},
-		{"fresh resolved", true, nil, false},
-		{"agent-last, unresolved (handled, awaiting reviewer)", false, agentLast, false},
-		{"agent-last, resolved", true, agentLast, false},
-		{"reviewer-last, unresolved", false, reviewerLast, true},
-		{"reviewer-last, resolved (re-surface)", true, reviewerLast, true},
+		{"fresh not-settled", false, nil, true},
+		{"fresh settled", true, nil, false},
+		{"agent-last, not-settled (handled, awaiting reviewer)", false, agentLast, false},
+		{"agent-last, settled", true, agentLast, false},
+		{"reviewer-last, not-settled", false, reviewerLast, true},
+		{"reviewer-last, settled (re-surface)", true, reviewerLast, true},
 	}
 	for _, c := range cases {
-		if got := threadActionable(c.resolved, c.thread); got != c.want {
+		if got := threadActionable(c.settled, c.thread); got != c.want {
 			t.Errorf("%s: threadActionable=%v, want %v", c.name, got, c.want)
 		}
 	}
@@ -110,12 +112,21 @@ func TestThreadActionable(t *testing.T) {
 func TestActionableComments_UnreadOverlay(t *testing.T) {
 	comments := []Comment{
 		{ID: "resurface", Resolved: true},
+		// #164: the exact repro — the agent edited the line (→ outdated) and marked it
+		// done, then the reviewer replied. An unread reply must override the outdated
+		// filter, or the follow-up is captured on disk but never reaches the agent.
+		{ID: "outdated-reply", AnchorStatus: anchorOutdated},
+		// An outdated comment with the agent replying LAST stays dropped — nothing new
+		// for the agent, and outdated on its own is not actionable.
+		{ID: "outdated-handled", AnchorStatus: anchorOutdated},
 		{ID: "handled", Resolved: false},
 		{ID: "fresh", Resolved: false},
 	}
 	threads := map[string][]ThreadEntry{
-		"resurface": {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "one more thing", At: 2}},
-		"handled":   {{Author: AuthorReviewer, At: 1}, {Author: AuthorAgent, At: 2}},
+		"resurface":        {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "one more thing", At: 2}},
+		"outdated-reply":   {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "1000 can be written as 1k", At: 2}},
+		"outdated-handled": {{Author: AuthorReviewer, At: 1}, {Author: AuthorAgent, At: 2}},
+		"handled":          {{Author: AuthorReviewer, At: 1}, {Author: AuthorAgent, At: 2}},
 	}
 	got := actionableComments(comments, threads)
 	ids := map[string]StreamComment{}
@@ -128,6 +139,14 @@ func TestActionableComments_UnreadOverlay(t *testing.T) {
 	if len(ids["resurface"].Thread) != 2 || ids["resurface"].Thread[1].Author != AuthorReviewer {
 		t.Errorf("re-surfaced comment must carry its thread; got %+v", ids["resurface"].Thread)
 	}
+	if oc, ok := ids["outdated-reply"]; !ok {
+		t.Error("an OUTDATED comment with an unread reviewer reply must re-surface (#164)")
+	} else if len(oc.Thread) != 2 || oc.Thread[1].Body != "1000 can be written as 1k" {
+		t.Errorf("re-surfaced outdated comment must carry the follow-up; got %+v", oc.Thread)
+	}
+	if _, ok := ids["outdated-handled"]; ok {
+		t.Error("an outdated comment the agent replied to last must stay dropped (awaiting reviewer)")
+	}
 	if _, ok := ids["handled"]; ok {
 		t.Error("an unresolved comment the agent replied to last must NOT be actionable (awaiting reviewer)")
 	}
@@ -137,19 +156,42 @@ func TestActionableComments_UnreadOverlay(t *testing.T) {
 }
 
 // TestActionableDecisions_UnreadOverlay: a suggestion with an unread reviewer reply is
-// actionable even when undecided, and carries its thread.
+// actionable even when undecided, and carries its thread. It also re-surfaces one the
+// agent already APPLIED (outdated) — the #164 override, mirroring the comment path.
 func TestActionableDecisions_UnreadOverlay(t *testing.T) {
-	sugs := []Suggestion{{ID: "s1"}, {ID: "s2"}}
-	decided := map[string]SuggestionDecision{} // neither decided
+	sugs := []Suggestion{
+		{ID: "s1"},
+		{ID: "s2"},
+		// Accepted + applied by the agent (→ outdated), then the reviewer replied. The
+		// reply must override the applied/outdated suppression so the agent re-engages.
+		{ID: "applied-reply", AnchorStatus: anchorOutdated},
+	}
+	decided := map[string]SuggestionDecision{
+		"applied-reply": {SuggestionID: "applied-reply", Verdict: verdictAccept},
+	}
+	applied := map[string]bool{"applied-reply": true}
 	threads := map[string][]ThreadEntry{
-		"s1": {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "tweak it", At: 2}},
+		"s1":            {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "tweak it", At: 2}},
+		"applied-reply": {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "actually revert that", At: 2}},
 	}
-	got := actionableDecisions(sugs, decided, threads, nil)
-	if len(got) != 1 || got[0].ID != "s1" {
-		t.Fatalf("only the reviewer-replied suggestion should be actionable; got %+v", got)
+	got := actionableDecisions(sugs, decided, threads, applied)
+	ids := map[string]StreamDecision{}
+	for _, d := range got {
+		ids[d.ID] = d
 	}
-	if len(got[0].Thread) != 2 || got[0].Thread[1].Author != AuthorReviewer {
-		t.Errorf("actionable suggestion must carry its thread; got %+v", got[0].Thread)
+	if _, ok := ids["s1"]; !ok {
+		t.Error("the undecided reviewer-replied suggestion must be actionable")
+	}
+	if len(ids["s1"].Thread) != 2 || ids["s1"].Thread[1].Author != AuthorReviewer {
+		t.Errorf("actionable suggestion must carry its thread; got %+v", ids["s1"].Thread)
+	}
+	if _, ok := ids["s2"]; ok {
+		t.Error("an undecided suggestion with no reply must NOT be actionable")
+	}
+	if ar, ok := ids["applied-reply"]; !ok {
+		t.Error("an applied/outdated suggestion with an unread reviewer reply must re-surface (#164)")
+	} else if len(ar.Thread) != 2 || ar.Thread[1].Body != "actually revert that" {
+		t.Errorf("re-surfaced applied suggestion must carry the follow-up; got %+v", ar.Thread)
 	}
 }
 
