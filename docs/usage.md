@@ -39,11 +39,11 @@ re-encoding and resizing.
 prereview proxies a running dev server so you can drag a box on any part of the
 live page and comment; the annotation re-pins as the page scrolls.
 
-**See every comment in one place.** The **All comments** chip lists every
-comment across all files — line, text, file, and region kinds — each with a jump
-back to its source. **Show / hide resolved** keeps addressed comments out of the
-way (or hide a single resolved one to declutter without turning the whole group
-off).
+**See every comment in one place.** **All comments** (in the **View ▾** menu, or
+press <kbd>a</kbd>) lists every comment across all files — line, text, file, and
+region kinds — each with a jump back to its source. **Show / hide resolved** keeps
+addressed comments out of the way (or hide a single resolved one to declutter
+without turning the whole group off).
 
 **Search across files.** Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>)
 to open a search palette that matches both file names and line contents across
@@ -52,47 +52,51 @@ file and jumps to the line, revealing it even if it's inside a folded region.
 
 ## Sending work to your agent
 
-prereview is built to feed a coding agent. In **skill mode** (`--skill`, which
-an agent's `/prereview` command sets for you) the primary button is
-**Hand off →** instead of **Quit**:
+prereview is built to feed a coding agent. In **agent mode** (`--agent`, which
+an agent's `/prereview` command sets for you) the toolbar shows a **Queue**
+button (with an **End session** button) instead of **Quit**:
 
-1. You leave a batch of comments.
-2. You click **Hand off →** — prereview writes `.prereview/DONE`.
-3. The agent notices, reads `.prereview/comments.csv`, and applies the fixes.
-4. You review the result and hand off the next batch.
+1. You leave comments as you read.
+2. Each one **streams to the agent** the moment you save it — the agent reads it,
+   edits the file, and marks it **done**.
+3. Prefer to batch? Open the **Queue** dropdown and hit **⏸ Pause** — comments
+   are held until you **▶ Resume**, which releases them together.
+4. Click **End session** when you're finished; the agent stops watching.
 
-`comments.csv` is always the source of truth (RFC-4180, one row per comment), so
-any agent can consume it. With `--stream`, each hand-off instead emits a JSON
-snapshot on a continuous event stream for a multi-round LLM loop — see the CLI
-reference below.
+`comments.csv` is always the source of truth (RFC-4180, one row per comment), and
+in agent mode prereview also emits a continuous JSON event stream the agent
+consumes across many rounds — see the CLI reference below.
 
-While the agent works a batch, its **live status** (working / done) shows in the
-toolbar, and each comment it addresses gets a **worked on** badge — so you can
-see progress without leaving the page.
+While the agent works, its **live status** (working / done) shows in the toolbar,
+each comment it addresses gets a **done** badge, and the **Queue** dropdown tracks
+what's queued, done, and awaiting the agent. **Reply** on any comment for a
+two-way thread, and every batch the agent finishes is captured as a **file
+version** (with a changelog) in the **Versions** panel — view, diff, or restore
+it.
 
 ## Suggested edits
 
-The hand-off also runs the other way: your agent can *propose* edits and you
-decide on them. Ask it to review something and suggest edits (e.g. "review the
-doc for ambiguity and suggest edits in prereview"); it submits them with
-`prereview suggest`, and each appears inline as a **before → after** box —
-visually distinct from a comment.
+The loop also runs the other way: your agent can *propose* edits and you decide
+on them. Ask it to review something and suggest edits (e.g. "review the doc for
+ambiguity and suggest edits in prereview" — or use the file header's **Ask for
+suggestions** menu of ready-made prompts); it submits them with `prereview
+suggest`, and each appears inline as a **before → after** box, visually distinct
+from a comment.
 
 On each box:
 
-- **Accept** — take the edit.
+- **Accept** — take the edit. The agent applies it and the box shows *applied*
+  (**Revert** undoes an applied edit — the agent restores the original).
 - **Reject** — drop it.
 
 Want a different take? **Reply** on the suggestion's thread with what should
 change; the agent reworks it and re-submits (a reworked suggestion comes back
 for a fresh look).
 
-Decisions are **pending until you hand off** — exactly like comments. On the
-next **Hand off →** they ship to the agent, which applies the accepted edits
-and drops the rejected ones. prereview never edits your files
-itself; the agent does, so an accepted edit shows up as a normal diff you can
-commit. Use **Show / hide suggestions** (or press <kbd>s</kbd>) to toggle the
-boxes while you read.
+Your decisions reach the agent the same way comments do — continuously, no
+hand-off step. prereview never edits your files itself; the agent does, so an
+accepted edit shows up as a normal diff you can commit. Use **Show / hide
+suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
 
 ## Themes & modes
 
@@ -109,15 +113,15 @@ shortcuts.
 
 The review target is the trailing **positional path** (default: current
 directory), so a bare `prereview` just works. **Flags must come before the
-path** — `prereview --skill ./docs`, not `prereview ./docs --skill`.
+path** — `prereview --agent ./docs`, not `prereview ./docs --agent`.
 
 ```bash
 prereview                                # current dir (git repo or not)
 prereview ./PLAN.md                      # a single file
 prereview ./design-docs                  # a non-git directory — every file shown whole
 prereview --base origin/main ../service  # a different repo, diffed against a ref
-prereview --skill                        # LLM hand-off mode
-prereview --skill --stream               # multi-round JSON event stream for an LLM
+prereview --agent                        # agent mode: stream the queue for an LLM
+prereview --agent --replace              # take over an already-running session
 prereview --external http://localhost:5173 --out ./review   # annotate a live local site
 ```
 
@@ -131,15 +135,18 @@ commentable), with no diff and no base picker.
 | `--port <n>` | `0` | TCP port; `0` = a random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address. On a remote box with Tailscale, auto-binds the tailnet IP so a phone can reach it — never public. Avoid `0.0.0.0`. |
 | `--out <dir>` | the review path | Directory whose `.prereview/` holds the store. Required with `--external`. |
-| `--skill` | off | Show **Hand off →** (and write `.prereview/DONE`) instead of **Quit**. |
-| `--stream` | off | Emit a continuous JSON event stream for an LLM. Implies `--skill`. |
+| `--agent` | off | Run under a coding agent: stream the review queue as JSON events and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. (`--skill`/`--stream` are deprecated aliases.) |
+| `--replace` | off | Stop an already-running server for this store and take over. |
 | `--external <url>` | — | Annotate a live local site instead of files. Requires `--out`; ignores the path and `--base`. |
 
 Run-and-exit actions (they don't start the server): `--version`,
 `--install-skill` / `--client`, `--update`, `--uninstall`, `--no-update`.
 
-The agent side uses two subcommands you rarely run by hand: `prereview suggest`
-(submit proposed edits) and `prereview processed` (mark comments worked-on). See
+The agent side uses subcommands you rarely run by hand: `prereview watch` (read
+the event stream), `prereview comments --json` (list actionable comments),
+`prereview done` (mark comments done), `prereview status`, `prereview suggest`
+(propose edits), `prereview reply` (thread reply), and `prereview applied` /
+`reverted`. See
 [`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md).
 
 > [!TIP]

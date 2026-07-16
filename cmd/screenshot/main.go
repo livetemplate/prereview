@@ -318,7 +318,13 @@ func runReadmeShots(allocCtx context.Context, url, outDir string) {
 		{"file-comment", 1280, 800, "payment.go", nil},
 		{"all-comments", 1280, 800, "", []chromedp.Action{
 			clickJS(`button[name="toggleCommentList"]`),
-			chromedp.Sleep(600 * time.Millisecond),
+			chromedp.Sleep(400 * time.Millisecond),
+			// "All comments" now lives inside the View ▾ dropdown, so a click on it
+			// bubbles to the dropdown's toggleClass handler and pops the menu open —
+			// close it again so the shot shows the clean all-comments list, not a
+			// menu overlapping the first card.
+			chromedp.Evaluate(`document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`, nil),
+			chromedp.Sleep(300 * time.Millisecond),
 		}},
 		{"review-mobile", 390, 844, "payment.go:L18", []chromedp.Action{
 			typeComposer("Surface the gateway's real error here, not a generic string."),

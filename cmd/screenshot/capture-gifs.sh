@@ -47,7 +47,7 @@ echo "› creating demo repo"
 bash cmd/screenshot/demo-repo.sh "$demo" "$(pwd)/e2e/testdata/areacomments/diagram.png"
 
 echo "› starting demo-repo server"
-PREREVIEW_NO_UPDATE=1 "$bin" --skill --port 0 --host 127.0.0.1 "$demo" >"$log" 2>&1 &
+PREREVIEW_NO_UPDATE=1 "$bin" --agent --port 0 --host 127.0.0.1 "$demo" >"$log" 2>&1 &
 srv=$!
 url=$(wait_ready "$log")
 [ -n "$url" ] || { echo "server failed:"; cat "$log"; exit 1; }
@@ -81,7 +81,7 @@ siteurl=$(wait_ready "$sitelog")
 [ -n "$siteurl" ] || { echo "demo site failed:"; cat "$sitelog"; exit 1; }
 
 echo "› starting prereview --external"
-PREREVIEW_NO_UPDATE=1 "$bin" --external "$siteurl" --out "$extout" --skill --port 0 --host 127.0.0.1 >"$extlog" 2>&1 &
+PREREVIEW_NO_UPDATE=1 "$bin" --external "$siteurl" --out "$extout" --agent --port 0 --host 127.0.0.1 >"$extlog" 2>&1 &
 ext=$!
 exturl=$(wait_ready "$extlog")
 [ -n "$exturl" ] || { echo "external UI failed:"; cat "$extlog"; exit 1; }

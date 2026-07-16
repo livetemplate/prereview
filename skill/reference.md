@@ -324,10 +324,10 @@ shape as a snapshot.
 ### Header (load-bearing — column order is the contract)
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued
 ```
 
-Older CSVs may have 7–15 columns; columns 0–7 are stable, so index by position and
+Older CSVs may have 7–16 columns; columns 0–7 are stable, so index by position and
 treat missing trailing columns as empty/default. Columns are only ever appended.
 
 ### Column details
@@ -350,6 +350,7 @@ treat missing trailing columns as empty/default. Columns are only ever appended.
 | `from_col` | int (0-based rune) | `6` | Start of a `kind=text` range (rune offset into the raw line). `0` for every other kind. |
 | `to_col` | int (0-based rune) | `12` | End (exclusive) of the `kind=text` range. `0` for every other kind. |
 | `hidden` | bool | `true`, `false` | Reviewer-only view flag. **Ignore it** — never affects whether a row is actionable. |
+| `enqueued` | bool | `true`, `false` | Queue view flag (#119): `false` = a reviewer *draft* not yet released to the agent. **Ignore it** — the snapshot already excludes drafts. Absent on legacy rows (read as `true`). |
 
 ### Parsing example
 

@@ -226,7 +226,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		{"● Review session live — open in your browser:", "bullet"},
 		{"  http://127.0.0.1:8420  (tap to open →)", "link"},
 		{"", "sp"},
-		{"waiting for handoff…", "dim"},
+		{"watching the queue…", "dim"},
 	}
 	if err := chromedp.Run(tctx, chromedp.EmulateViewport(termW, termH)); err != nil {
 		log.Printf("[gif:hero] term viewport: %v", err)
@@ -575,19 +575,25 @@ func gifSuggestion(allocCtx context.Context, url, outDir string) {
 	_ = rec.captureComposite(bctx, tctx, 220) // the before→after box, agent waiting
 	_ = rec.captureComposite(bctx, tctx, 90)  // hold on the decision row
 
-	// Human clicks Accept → the verdict badge appears.
+	// Human clicks Accept → the verdict badge appears. Fire the click via JS
+	// (a direct form submit, not a coordinate click) and wait for the decided
+	// card to EXIST — not to be visible: on the rendered-Markdown view the accept
+	// re-render shifts the box out of the viewport, so a WaitVisible would block
+	// until the context deadline and drop this frame. Poll for existence, then
+	// scroll it back into view for the capture.
 	_ = chromedp.Run(bctx,
-		chromedp.Click(`.inline-suggestion button[name="acceptSuggestion"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.inline-suggestion.is-decided.sg-accept`, chromedp.ByQuery),
+		clickJS(`.inline-suggestion button[name="acceptSuggestion"]`),
+		chromedp.Poll(`!!document.querySelector('.inline-suggestion.is-decided.sg-accept')`, nil, chromedp.WithPollingTimeout(10*time.Second)),
 		chromedp.Sleep(300*time.Millisecond),
 		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
-		chromedp.Sleep(150*time.Millisecond),
+		chromedp.Sleep(200*time.Millisecond),
 	)
 
-	// Terminal: acknowledge the accept ships on the next hand-off.
+	// Terminal: the accept arrives in the next queue snapshot; the agent applies
+	// it and acks with `prereview applied`.
 	accepted := append(proposed[:5:5],
 		termLine{"", "sp"},
-		termLine{"✓ Accepted — will apply on your next hand-off", "bullet"},
+		termLine{"✓ Accepted — applying the edit now", "bullet"},
 	)
 	_ = termRender(tctx, accepted)
 	_ = rec.captureComposite(bctx, tctx, 260) // accepted, held longest
@@ -645,16 +651,24 @@ func gifThemes(allocCtx context.Context, url, outDir string) {
 		}
 		_ = chromedp.Run(ctx, chromedp.WaitVisible(`.code`, chromedp.ByQuery), chromedp.Sleep(200*time.Millisecond))
 		_ = rec.capture(ctx, 180) // Solarized (default)
-		// Cycle the scheme twice: Gruvbox, then Catppuccin. The scheme/mode buttons
-		// live in the desktop "View ▾" dropdown, so a chromedp.Click would block on
-		// visibility — clickJS fires the DOM click directly and the whole UI
-		// recolours regardless of whether the dropdown is open.
+		// The scheme/mode buttons live in the desktop "View ▾" dropdown, so a
+		// chromedp.Click would block on visibility — clickJS fires the DOM click
+		// directly. But the click bubbles to the dropdown's toggleClass and pops the
+		// menu open; close it after each click so every frame shows the clean
+		// full-UI recolour (the whole UI + syntax recolour regardless of the menu).
+		const closeMenu = `document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`
+		// Cycle the scheme twice: Gruvbox, then Catppuccin.
 		for range 2 {
-			_ = chromedp.Run(ctx, clickJS(`button[name="cycleScheme"]`), chromedp.Sleep(600*time.Millisecond))
+			_ = chromedp.Run(ctx, clickJS(`button[name="cycleScheme"]`), chromedp.Sleep(500*time.Millisecond),
+				chromedp.Evaluate(closeMenu, nil), chromedp.Sleep(150*time.Millisecond))
 			_ = rec.capture(ctx, 180)
 		}
-		// Flip the mode to Dark on the current scheme.
-		_ = chromedp.Run(ctx, clickJS(`button[name="cycleTheme"]`), chromedp.Sleep(600*time.Millisecond))
+		// Flip the mode to Dark on the current scheme. The default is System and the
+		// cycle is System → Light → Dark, so it takes TWO clicks to land on Dark.
+		_ = chromedp.Run(ctx,
+			clickJS(`button[name="cycleTheme"]`), chromedp.Sleep(300*time.Millisecond),
+			clickJS(`button[name="cycleTheme"]`), chromedp.Sleep(500*time.Millisecond),
+			chromedp.Evaluate(closeMenu, nil), chromedp.Sleep(150*time.Millisecond))
 		_ = rec.capture(ctx, 240) // dark mode, held longest
 		return rec.encode(filepath.Join(outDir, "themes.gif"))
 	})
