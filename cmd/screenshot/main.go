@@ -28,6 +28,7 @@ func main() {
 	readme := flag.Bool("readme", false, "capture the curated README screenshot set (needs a demo-repo server; see `make screenshots`)")
 	gifFlow := flag.String("gif", "", "capture a single animated GIF flow (hero); needs a demo-repo server")
 	repo := flag.String("repo", "", "demo repo working tree (the hero flow edits payment.go here to show Claude's fix)")
+	bin := flag.String("bin", "", "prereview binary, for flows that drive agent-side subcommands (status/reply) — versions/thread")
 	flag.Parse()
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -54,7 +55,7 @@ func main() {
 	}
 
 	if *gifFlow != "" {
-		runGif(allocCtx, *url, *gifFlow, *repo, *outDir)
+		runGif(allocCtx, *url, *gifFlow, *repo, *bin, *outDir)
 		return
 	}
 

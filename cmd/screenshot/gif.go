@@ -18,6 +18,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -25,6 +26,7 @@ import (
 	"image/png"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -136,9 +138,10 @@ func (r *gifRec) encode(path string) error {
 }
 
 // runGif dispatches a single named flow against a running demo-repo server.
-// repo is the demo working tree; only the hero flow needs it (to apply the
-// scripted "Claude edit" on disk).
-func runGif(allocCtx context.Context, url, name, repo, outDir string) {
+// repo is the demo working tree; the hero flow needs it to apply the scripted
+// "Claude edit" on disk, and the versions/thread flows additionally need bin to
+// drive the agent-side subcommands (status/reply) that seed real state.
+func runGif(allocCtx context.Context, url, name, repo, bin, outDir string) {
 	switch name {
 	case "hero":
 		gifHero(allocCtx, url, repo, outDir)
@@ -154,8 +157,325 @@ func runGif(allocCtx context.Context, url, name, repo, outDir string) {
 		gifSearch(allocCtx, url, outDir)
 	case "themes":
 		gifThemes(allocCtx, url, outDir)
+	case "versions":
+		gifVersions(allocCtx, url, repo, bin, outDir)
+	case "thread":
+		gifThread(allocCtx, url, repo, bin, outDir)
 	default:
-		log.Fatalf("unknown gif flow %q (have: hero|image|markdown|external|suggestion|search|themes)", name)
+		log.Fatalf("unknown gif flow %q (have: hero|image|markdown|external|suggestion|search|themes|versions|thread)", name)
+	}
+}
+
+// agentRun invokes the prereview binary as the coding agent would (status/reply)
+// against the demo store, propagating failures. It is deliberately NOT best-effort:
+// a swallowed `reply`/`status` error produces a GIF missing its payload, so the
+// caller aborts the flow rather than encode a misleading recording.
+func agentRun(bin string, args ...string) error {
+	cmd := exec.Command(bin, args...)
+	cmd.Env = append(os.Environ(), "PREREVIEW_NO_UPDATE=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s %v: %w\n%s", filepath.Base(bin), args, err, out)
+	}
+	log.Printf("[gif] %s %v → %s", filepath.Base(bin), args, bytes.TrimSpace(out))
+	return nil
+}
+
+// backoffFixedPayment is the scripted agent edit for the versions/thread flows: it
+// gives the retry loop exponential backoff and a 5s context deadline — exactly what
+// the changelog and the reviewer's comment describe. Authored (not a live LLM call)
+// so `make gifs` reproduces the same version diff every run.
+const backoffFixedPayment = `package payment
+
+import (
+	"context"
+	"errors"
+	"time"
+)
+
+// Charge captures a payment for an order. Amount is in minor units (cents).
+func Charge(orderID string, cents int64) error {
+	if cents <= 0 {
+		return errors.New("amount must be positive")
+	}
+	if orderID == "" {
+		return errors.New("missing order id")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	backoff := 50 * time.Millisecond
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if err := gateway.Submit(orderID, cents); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+			backoff *= 2
+		}
+	}
+	return errors.New("charge failed after retries")
+}
+
+// Refund reverses a prior capture in full.
+func Refund(orderID string) error {
+	return gateway.Reverse(orderID)
+}
+`
+
+// gifVersions — the artifact version store (#90/#155): the agent records a real
+// version (status working → edit payment.go → status done "<changelog>"), then the
+// reviewer opens the Versions panel to read the AI changelog and diff the baseline
+// against the current file. Composite (browser over terminal), like gifHero, to
+// show the version was produced by a finished agent batch. Runs against its OWN
+// fresh demo-repo server so the seeded state never bleeds into the other GIFs.
+func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
+	if bin == "" || repo == "" {
+		log.Printf("[gif:versions] needs --bin and --repo")
+		return
+	}
+
+	// 1) Agent records a version. The server's 750ms status watcher checkpoints on
+	// the working→done transition, binding the done message as the changelog (#155).
+	// The two writes must straddle at least one poll: if working→done lands inside a
+	// single 750ms window the watcher only ever sees "done" (no working→done edge)
+	// and never checkpoints, so sleep >1 interval between them.
+	// Flag order matters: Go's flag package stops at the first positional, so --out
+	// must precede the <state> <message> positionals or it is silently ignored and
+	// the status file lands in the CWD instead of the demo store the server watches.
+	if err := agentRun(bin, "status", "--out", repo, "working", "Reworking the charge retry loop"); err != nil {
+		log.Printf("[gif:versions] %v", err)
+		return
+	}
+	time.Sleep(1200 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(repo, "payment.go"), []byte(backoffFixedPayment), 0o644); err != nil {
+		log.Printf("[gif:versions] write payment.go: %v", err)
+		return
+	}
+	const changelog = "Add exponential backoff and a 5s context deadline to the retry loop so a stalled gateway can't hammer or hang a charge."
+	if err := agentRun(bin, "status", "--out", repo, "done", changelog); err != nil {
+		log.Printf("[gif:versions] %v", err)
+		return
+	}
+	// Let the checkpoint land (watcher polls every 750ms) before the browser mounts,
+	// so the very first render already sees version 2.
+	time.Sleep(1500 * time.Millisecond)
+
+	bctx, bcancel := chromedp.NewContext(allocCtx)
+	defer bcancel()
+	bctx, bt := context.WithTimeout(bctx, 90*time.Second)
+	defer bt()
+	tctx, tcancel := chromedp.NewContext(allocCtx)
+	defer tcancel()
+	tctx, tt := context.WithTimeout(tctx, 90*time.Second)
+	defer tt()
+
+	rec := &gifRec{}
+
+	// Terminal: the agent finished a batch, so a new version was recorded.
+	term := []termLine{
+		{"$ claude", "dim"},
+		{"> /prereview", "prompt"},
+		{"● Applied your comment — payment.go", "bullet"},
+		{"Edit payment.go", "bullet"},
+		{`+   ctx, cancel := context.WithTimeout(…, 5*time.Second)`, "add"},
+		{`+   case <-time.After(backoff): backoff *= 2`, "add"},
+		{"", "sp"},
+		{"✓ Done — recorded version 2", "bullet"},
+	}
+	if err := chromedp.Run(tctx, chromedp.EmulateViewport(termW, termH)); err != nil {
+		log.Printf("[gif:versions] term viewport: %v", err)
+		return
+	}
+	if err := termInit(tctx); err != nil {
+		log.Printf("[gif:versions] term init: %v", err)
+		return
+	}
+	if err := termRender(tctx, term); err != nil {
+		log.Printf("[gif:versions] term render: %v", err)
+		return
+	}
+
+	// Browser: open the review, then select payment.go by CLICKING it in the drawer
+	// — NOT via the #hash. The deep-link path sets the file + diff but does not
+	// refresh the Versions panel (it keeps the mount-default file's history), so a
+	// hash nav would show "1 · Original"; a click routes through selectFile →
+	// applyVersionList and shows both versions. Poll for the count to reach 2.
+	if err := chromedp.Run(bctx, base(url, "", 1280, 800)...); err != nil {
+		log.Printf("[gif:versions] open review: %v", err)
+		return
+	}
+	_ = chromedp.Run(bctx,
+		chromedp.Evaluate(`[...document.querySelectorAll('button[name="selectFile"]')].find(b=>/payment\.go/.test(b.textContent))?.click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	)
+	if err := chromedp.Run(bctx, chromedp.Poll(`document.querySelector('.versions-count')?.textContent==='2'`, nil, chromedp.WithPollingTimeout(10*time.Second))); err != nil {
+		log.Printf("[gif:versions] versions-count never reached 2: %v", err)
+		return
+	}
+	_ = rec.captureComposite(bctx, tctx, 160) // the diff, Versions chip shows 2
+
+	// Open the Versions panel (client-only lvt-el toggle).
+	_ = chromedp.Run(bctx, clickJS(`.versions-dropdown .versions-trigger`), chromedp.Sleep(500*time.Millisecond))
+	_ = rec.captureComposite(bctx, tctx, 150) // panel: Agent edit (current) + Original
+
+	// Expand the top row (Agent edit, current) → reveals the AI changelog.
+	_ = chromedp.Run(bctx,
+		chromedp.Evaluate(`document.querySelector('.version-row .version-summary-toggle')?.click()`, nil),
+		chromedp.Sleep(450*time.Millisecond))
+	_ = rec.captureComposite(bctx, tctx, 240) // changelog visible
+
+	// Expand the Original (baseline) row — it's non-current, so it carries the
+	// Diff/Restore actions — and diff it against the current file.
+	_ = chromedp.Run(bctx,
+		chromedp.Evaluate(`document.querySelectorAll('.version-row .version-summary-toggle')[1]?.click()`, nil),
+		chromedp.Sleep(400*time.Millisecond))
+	_ = rec.captureComposite(bctx, tctx, 160) // baseline row: View / Diff / Restore
+	_ = chromedp.Run(bctx,
+		clickJS(`.version-row:last-child button[name="diffVersion"]`),
+		chromedp.Poll(`!!document.querySelector('.version-view-banner')`, nil, chromedp.WithPollingTimeout(10*time.Second)),
+		chromedp.Sleep(500*time.Millisecond))
+	_ = rec.captureComposite(bctx, tctx, 320) // payoff: the read-only version diff
+
+	if err := rec.encode(filepath.Join(outDir, "versions.gif")); err != nil {
+		log.Printf("[gif:versions] encode: %v", err)
+	}
+}
+
+// gifThread — the two-way conversation (#149): the reviewer comments, the agent
+// replies (`prereview reply`) to explain what it did and ask a follow-up question,
+// and the reviewer answers back inline. Composite (browser over terminal) so both
+// sides of the thread are visible. Runs against its OWN fresh demo-repo server (the
+// retry-loop working tree), so the "no backoff or ctx" comment lands naturally.
+func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
+	if bin == "" || repo == "" {
+		log.Printf("[gif:thread] needs --bin and --repo")
+		return
+	}
+
+	bctx, bcancel := chromedp.NewContext(allocCtx)
+	defer bcancel()
+	bctx, bt := context.WithTimeout(bctx, 120*time.Second)
+	defer bt()
+	tctx, tcancel := chromedp.NewContext(allocCtx)
+	defer tcancel()
+	tctx, tt := context.WithTimeout(tctx, 120*time.Second)
+	defer tt()
+
+	rec := &gifRec{}
+
+	idle := []termLine{
+		{"$ claude", "dim"},
+		{"> /prereview", "prompt"},
+		{"● Review session live — open in your browser:", "bullet"},
+		{"  http://127.0.0.1:8420  (tap to open →)", "link"},
+		{"", "sp"},
+		{"watching the queue…", "dim"},
+	}
+	if err := chromedp.Run(tctx, chromedp.EmulateViewport(termW, termH)); err != nil {
+		log.Printf("[gif:thread] term viewport: %v", err)
+		return
+	}
+	if err := termInit(tctx); err != nil {
+		log.Printf("[gif:thread] term init: %v", err)
+		return
+	}
+	if err := termRender(tctx, idle); err != nil {
+		log.Printf("[gif:thread] term render: %v", err)
+		return
+	}
+
+	// Browser: comment on the retry loop (L13 in the working tree).
+	if err := chromedp.Run(bctx, base(url, "payment.go", 1280, 800)...); err != nil {
+		log.Printf("[gif:thread] open payment.go: %v", err)
+		return
+	}
+	_ = chromedp.Run(bctx,
+		chromedp.Navigate(navURL(url, "payment.go:L13")),
+		chromedp.Sleep(700*time.Millisecond),
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.composer')?.scrollIntoView({block:'center'})`, nil),
+		chromedp.Sleep(150*time.Millisecond),
+	)
+	_ = rec.captureComposite(bctx, tctx, 80) // empty composer
+	_ = chromedp.Run(bctx, chromedp.SendKeys(`.composer textarea`, "This retry loop has no backoff or ctx — a failing gateway gets hammered.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+	_ = rec.captureComposite(bctx, tctx, 140) // typed
+	_ = chromedp.Run(bctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(700*time.Millisecond))
+	_ = rec.captureComposite(bctx, tctx, 150) // comment saved
+
+	// Read the new comment's id from its card (the delete/reply forms carry it).
+	var id string
+	_ = chromedp.Run(bctx, chromedp.Evaluate(`document.querySelector('.inline-comment input[name="id"]')?.value||''`, &id))
+	if id == "" {
+		log.Printf("[gif:thread] could not read comment id from the saved card")
+		return
+	}
+
+	// Agent reads the comment and replies (`prereview reply` appends to
+	// agent-replies.jsonl). No status choreography here — the flow is about the
+	// conversation, and the scripted terminal narrates the agent side.
+	recv := append(idle[:4:4],
+		termLine{"", "sp"},
+		termLine{"Read 1 comment — payment.go:13", "bullet"},
+		termLine{`  "…no backoff or ctx — a failing gateway gets hammered."`, "dim"},
+	)
+	_ = termRender(tctx, recv)
+	_ = rec.captureComposite(bctx, tctx, 150)
+
+	// Conditional tense on purpose: the flow deliberately does NOT edit the file, so
+	// the diff still shows the bare retry loop. An agent that asks before editing is
+	// both coherent with the visible code and the more realistic interaction.
+	const reply = "Good catch — I can add exponential backoff. Want a context deadline too, or keep it unbounded?"
+	if err := agentRun(bin, "reply", "--body", reply, "--out", repo, id); err != nil {
+		log.Printf("[gif:thread] %v", err)
+		return
+	}
+	replied := append(recv[:len(recv):len(recv)],
+		termLine{"", "sp"},
+		termLine{"↳ Replied — asked whether to add a ctx deadline", "bullet"},
+	)
+	_ = termRender(tctx, replied)
+
+	// Browser: reload so Mount re-reads agent-replies.jsonl — the agent's reply now
+	// shows in the thread. Navigate to the bare file (no line hash) so no fresh
+	// composer opens over the card; poll for the agent entry, then scroll to it.
+	_ = chromedp.Run(bctx,
+		chromedp.Navigate("about:blank"),
+		chromedp.Sleep(150*time.Millisecond),
+		chromedp.Navigate(navURL(url, "payment.go")),
+		chromedp.WaitVisible(`.code`, chromedp.ByQuery),
+		chromedp.Poll(`!!document.querySelector('.thread .thread-agent')`, nil, chromedp.WithPollingTimeout(10*time.Second)),
+		chromedp.Evaluate(scrollCommentJS, nil),
+		chromedp.Sleep(300*time.Millisecond),
+	)
+	_ = rec.captureComposite(bctx, tctx, 240) // the agent's reply in the thread
+
+	// Reviewer replies back inline.
+	_ = chromedp.Run(bctx,
+		clickJS(`.inline-comment button[name="openReply"]`),
+		chromedp.WaitVisible(`.reply-form textarea`, chromedp.ByQuery),
+		chromedp.Evaluate(scrollCommentJS, nil),
+		chromedp.Sleep(150*time.Millisecond),
+	)
+	_ = rec.captureComposite(bctx, tctx, 90) // reply form open
+	_ = chromedp.Run(bctx, chromedp.SendKeys(`.reply-form textarea`, "Add a ctx deadline too — cap at 5s total.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+	_ = rec.captureComposite(bctx, tctx, 150) // typed
+	_ = chromedp.Run(bctx,
+		clickJS(`.reply-form button[name="postReply"]`),
+		chromedp.Sleep(700*time.Millisecond),
+		chromedp.Evaluate(scrollCommentJS, nil),
+		chromedp.Sleep(200*time.Millisecond),
+	)
+	follow := append(replied[:len(replied):len(replied)],
+		termLine{"", "sp"},
+		termLine{"Read your reply — capping total elapsed at 5s", "bullet"},
+	)
+	_ = termRender(tctx, follow)
+	_ = rec.captureComposite(bctx, tctx, 320) // the two-way thread, held longest
+
+	if err := rec.encode(filepath.Join(outDir, "thread.gif")); err != nil {
+		log.Printf("[gif:thread] encode: %v", err)
 	}
 }
 

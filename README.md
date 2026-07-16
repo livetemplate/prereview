@@ -287,6 +287,25 @@ thread and the agent reworks it. Nothing is written to your files until then.
 
 <p align="center"><sub><em>The agent suggests an edit; you accept or reject it.</em></sub></p>
 
+**Talk back — a two-way thread.** Every comment and suggestion carries a
+conversation: the agent **replies** to say what it did or ask a follow-up
+(`prereview reply`), and you answer inline. A reply you send re-enters the
+agent's queue, so the two of you converge without leaving the review.
+
+<p align="center"><img src="docs/thread.gif" alt="A reviewer comments on a retry loop; the agent replies in a thread asking whether to add a context deadline; the reviewer answers inline and the reply re-queues to the agent" width="760"></p>
+
+<p align="center"><sub><em>Comment, the agent replies, you answer back — a thread on every comment.</em></sub></p>
+
+**Roll back any agent edit.** Every batch the agent finishes is snapshotted as a
+**file version** carrying the agent's own changelog. Open the **Versions** panel
+to read what changed, **Diff** a version against the current file, or **Restore**
+it — an uncommitted safety net that works the same on git repos, plain
+directories, and single files.
+
+<p align="center"><img src="docs/versions.gif" alt="The Versions panel showing the agent-edit version with its changelog, then diffing the original baseline against the current file" width="760"></p>
+
+<p align="center"><sub><em>Each finished agent batch is a restorable version with a changelog.</em></sub></p>
+
 **Annotate a live local site** (`--external`). Point prereview at a
 running dev server; it proxies the page so you can drag a box on any
 region and comment — the annotation re-pins to the page as it scrolls.

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Regenerate the animated README GIFs in docs/. Builds prereview, then records
-# four scripted flows with chromedp and encodes them as pure-Go GIFs (no
+# nine scripted flows with chromedp and encodes them as pure-Go GIFs (no
 # ffmpeg/gifsicle). One command so the GIFs never drift:
 #
 #   make gifs
 #
-# hero/image/markdown run against one skill-mode demo-repo server; external runs
-# against a demo static site proxied by `prereview --external`.
+# hero/image/markdown/suggestion/search/themes run against one agent-mode
+# demo-repo server; versions/thread run against a SECOND, throwaway demo-repo
+# server (so their seeded agent state — recorded versions, replies, status — never
+# bleeds into the other flows' captures); external runs against a demo static site
+# proxied by `prereview --external`.
 #
 # Requires a chromium/chrome on PATH (or the NixOS path the helper probes).
 set -euo pipefail
@@ -15,8 +18,10 @@ cd "$(dirname "$0")/../.." # repo root
 
 bin=$(mktemp -u /tmp/prereview-gif.XXXXXX)
 demo=$(mktemp -d /tmp/prereview-gifdemo.XXXXXX)
+demo2=$(mktemp -d /tmp/prereview-gifdemo2.XXXXXX)
 extout=$(mktemp -d /tmp/prereview-gifext.XXXXXX)
 log=$(mktemp /tmp/prereview-gif-log.XXXXXX)
+log2=$(mktemp /tmp/prereview-gif-log2.XXXXXX)
 sitelog=$(mktemp /tmp/prereview-site-log.XXXXXX)
 extlog=$(mktemp /tmp/prereview-extui-log.XXXXXX)
 # Isolate the per-USER view prefs so captures are deterministic (default
@@ -26,10 +31,10 @@ extlog=$(mktemp /tmp/prereview-extui-log.XXXXXX)
 # doesn't exist yet, so the server starts from clean defaults and writes here.
 prefs=$(mktemp -u /tmp/prereview-gifprefs.XXXXXX)
 export PREREVIEW_UI_PREFS_PATH="$prefs"
-srv=""; site=""; ext=""
+srv=""; srv2=""; site=""; ext=""
 cleanup() {
-	for p in "$srv" "$site" "$ext"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
-	rm -rf "$demo" "$extout" "$bin" "$log" "$sitelog" "$extlog" "$prefs"
+	for p in "$srv" "$srv2" "$site" "$ext"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
+	rm -rf "$demo" "$demo2" "$extout" "$bin" "$log" "$log2" "$sitelog" "$extlog" "$prefs"
 }
 trap cleanup EXIT
 
@@ -72,6 +77,32 @@ done
 
 echo "› capturing gif:hero"
 GOWORK=off go run ./cmd/screenshot --gif hero --url "$url" --repo "$demo" --out docs
+
+# ---- versions / thread : each on its OWN throwaway demo-repo server ----------
+# These flows drive agent-side subcommands (status/reply) that mutate the store —
+# recorded versions, agent replies, edited files. A fresh repo + server PER FLOW
+# keeps that state out of the flows above (whose captures assume a pristine tree
+# and no status pill) AND out of each other (versions edits payment.go; thread
+# comments on the retry loop and needs it un-edited). The Go flow gets the binary
+# via --bin so it can invoke `prereview status`/`reply` itself.
+for flow in versions thread; do
+	echo "› creating demo repo for gif:$flow"
+	rm -rf "$demo2"
+	bash cmd/screenshot/demo-repo.sh "$demo2" "$(pwd)/e2e/testdata/areacomments/diagram.png"
+
+	echo "› starting server for gif:$flow"
+	: >"$log2"
+	PREREVIEW_NO_UPDATE=1 "$bin" --agent --port 0 --host 127.0.0.1 "$demo2" >"$log2" 2>&1 &
+	srv2=$!
+	url2=$(wait_ready "$log2")
+	[ -n "$url2" ] || { echo "server for gif:$flow failed:"; cat "$log2"; exit 1; }
+
+	echo "› capturing gif:$flow"
+	GOWORK=off go run ./cmd/screenshot --gif "$flow" --url "$url2" --repo "$demo2" --bin "$bin" --out docs
+
+	kill "$srv2" 2>/dev/null || true
+	srv2=""
+done
 
 # ---- external : demo static site proxied by prereview --external ------------
 echo "› starting demo site"
