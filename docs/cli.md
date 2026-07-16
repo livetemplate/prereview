@@ -1,7 +1,8 @@
 # prereview CLI reference
 
 Companion to the [README](../README.md). The README shows the common
-invocations; this is the full reference for every flag, mode, and combination.
+invocations; this is the full reference for every flag, mode, subcommand, and
+combination.
 
 ```
 Usage: prereview [flags] [path]
@@ -10,8 +11,8 @@ Usage: prereview [flags] [path]
 `path` is the review target — a git repo, a non-git directory, or a single
 file. It's the trailing **positional** argument and defaults to the current
 directory, so a bare `prereview` just works. **Flags must come before the
-path** (Go's flag parser stops at the first non-flag): `prereview --skill ./docs`,
-not `prereview ./docs --skill`.
+path** (Go's flag parser stops at the first non-flag): `prereview --agent ./docs`,
+not `prereview ./docs --agent`.
 
 ## Defaults
 
@@ -22,11 +23,10 @@ not `prereview ./docs --skill`.
 | `--port` | `0` | OS-assigned random free port |
 | `--host` | `127.0.0.1` | auto-resolves to the Tailscale IP on a remote box |
 | `--out` | the review path | the directory whose `.prereview/` holds the store |
-| `--skill` | off | UI shows **Quit** (not **Hand off → Claude**) |
-| `--stream` | off | one-shot DONE handoff (no JSON event stream) |
+| `--agent` | off | UI shows **Quit**; with `--agent`, a **Queue** + **End session** UI |
 
 So `prereview` ≡ `prereview --port 0 --host 127.0.0.1 .` reviewing the current
-git repo's working tree against `HEAD`.
+git repo's working tree against `HEAD`, in standalone (human-only) mode.
 
 ## Review modes (auto-detected from `path`)
 
@@ -41,7 +41,8 @@ git repo's working tree against `HEAD`.
 
 In no-git mode `--base` is ignored (there are no refs). The directory walk skips
 `.git/`, `.prereview/`, dotfiles/dotdirs, and files over the 1 MB render cap.
-Everything else — comments, CSV, re-anchoring, hand-off — is identical to git mode.
+Everything else — comments, CSV, re-anchoring, the agent queue — is identical to
+git mode.
 
 External mode is the exception to "auto-detected from `path`": it's turned on by
 the `--external <url>` flag and ignores `[path]` entirely — see below.
@@ -74,43 +75,61 @@ Annotations anchor to a **URL + region rectangle** rather than a file + line:
 they're stored as `kind=region` rows with the page in the `url` column and the
 rectangle (0..1 fractions of the page's document, so a re-pin survives scroll) in
 the `area` column. Like image-area comments they're **frozen** — no content
-re-anchoring.
+re-anchoring — and are informational feedback about a page, not file-edit
+directives.
 
 `--out` is **required** (there's no repo to default the store to), and `[path]`
 and `--base` are **ignored**.
 
-### Stream mode (`--stream`)
+### Agent mode (`--agent`)
 
-The default handoff is **one-shot**: the skill polls `.prereview/DONE` once,
-reads the CSV, acts, and stops. `--stream` turns the handoff into a **continuous,
-multi-round** session for an LLM consumer — no re-invocation between rounds, and
-no hand-written CSV parser.
+Standalone `prereview` is human-only: you review, comments save to
+`comments.csv`, and the top-bar button is **Quit**. `--agent` runs the review
+**under a coding agent** — it streams the review as a queue of JSON events the
+agent consumes with `prereview watch`, and swaps the UI for a **Queue**
+(⏸ Pause / ▶ Resume) control plus an **End session** button.
 
 ```bash
-prereview --skill --stream "$(pwd)"
+prereview --agent "$(pwd)"          # what an agent's skill/command runs for you
 ```
 
-`--stream` implies `--skill` and adds an **End session** button next to **Hand
-off →**. prereview emits a JSON event log to **stdout** (one object per line,
-after the usual `READY`/`REPO` preamble) and mirrors it to
-`.prereview/events.jsonl` (append-only, for replay):
+This replaces the old one-shot `--skill` / `--stream` / `.prereview/DONE`
+hand-off with a **continuous** model — no re-invocation between rounds, and no
+hand-written CSV parser:
 
-- `ready` — once, after the preamble.
-- `handoff` — on every **Hand off** click; a full snapshot of both the actionable
-  **comments** (unresolved, non-outdated) and your **decisions on suggestions** the
-  agent proposed, each as ready-to-use JSON (the opaque `anchor` is dropped and
-  `area` is a nested object, not a string). Shape:
-  `{"event":"handoff","seq":N,"comments":[…],"suggestions":[…]}` — both arrays
-  always present (`[]` when empty). Each `suggestions[]` entry carries the
-  `verdict` (`accept`/`reject`), `note`, `original`, `proposed`, and
-  `anchor_status`. The consumer dedupes by `id` across rounds.
-- `session_end` — once, on **End session**; the only terminator. The server
-  shuts down right after.
+- **The queue.** Every comment (and every accepted suggestion) rides a
+  `draft → queued → done` lifecycle. Comments you save while **live** are sent to
+  the agent immediately; **Pause** holds them so you can batch, and **Resume**
+  releases the whole batch at once. The Queue dropdown shows the counts (queued ·
+  done · draft, plus "accepted, awaiting apply" and reviewer replies still
+  awaiting the agent) and is the hub for Pause/Resume and End session.
+- **The event stream.** In agent mode, after the usual `READY`/`REPO` preamble
+  prereview emits one JSON object per line to **stdout** and mirrors it to
+  `.prereview/events.jsonl` (append-only, reset each launch). Three event types:
+  - **`ready`** (seq 0) — once, after the preamble. Carries `repo`, `csv`, and
+    optional `paused` / `skill_updated`.
+  - **`snapshot`** — on every queue mutation (debounced). A **full snapshot** of
+    the still-actionable queue: `{"event":"snapshot","seq":N,"comments":[…],
+    "suggestions":[…]}` (both arrays always present, `[]` when empty). Pre-filtered
+    to what needs the agent — unresolved, non-outdated, non-draft comments, plus
+    any comment the reviewer just replied on. The consumer dedupes by `id`.
+  - **`end`** — once, on **End session**; the only terminator. The server shuts
+    down right after.
+  Every event carries a monotonic `seq`. The CSV stays the authoritative store;
+  the stream is a convenience layer over it. Works in repo, no-git, and
+  `--external` modes.
+- **The reader.** The agent consumes the stream **only** with
+  `prereview watch --since <seq>` (see [Subcommands](#subcommands)) — never a
+  hand-rolled `tail`/`head`, which drops events when the tail isn't running. An
+  agent that can't background + block-read instead polls
+  `prereview comments --json` once per turn.
 
-Every event carries a monotonic `seq`, so repeated handoffs are distinguishable
-(the idempotent DONE marker can't do that). The CSV stays the authoritative
-store; the stream is a convenience layer over it. Works in repo, no-git, and
-`--external` modes.
+`--skill` and `--stream` are **deprecated aliases** of `--agent`: they still
+enable agent mode (so existing skills/scripts keep working) but print
+`prereview: --skill/--stream are deprecated; use --agent` to stderr. There is no
+longer a `--stream`-only variant or a `.prereview/DONE` marker.
+
+Full event-schema and comment-field docs: [skill/reference.md](../skill/reference.md).
 
 ## Flags
 
@@ -120,9 +139,10 @@ store; the stream is a convenience layer over it. Works in repo, no-git, and
 | `--port <n>` | `0` | TCP port; `0` = OS-assigned random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address — see [Binding](#binding--remote-access). |
 | `--external <url>` | — | Annotate a **live local site** instead of files: reverse-proxies `<url>` on a second origin and overlays region annotation. **Requires `--out`**; ignores `[path]` and `--base`. See [External mode](#external-mode---external). |
-| `--out <dir>` | the review path | Store root — the directory whose `.prereview/` holds `comments.csv` + `DONE`. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The `REPO` stdout line is the resolved store root. |
-| `--skill` | `false` | Show **Hand off → Claude** instead of **Quit**, and write `.prereview/DONE` on hand-off. The Claude Code skill sets this. |
-| `--stream` | `false` | Emit a continuous JSON event stream for an LLM (stdout + `.prereview/events.jsonl`): each Hand off emits a `handoff` snapshot, a new **End session** button emits a terminating `session_end`. **Implies `--skill`.** See [Stream mode](#stream-mode---stream). |
+| `--out <dir>` | the review path | Store root — the directory whose `.prereview/` holds `comments.csv` + the event log. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The `REPO` stdout line is the resolved store root, and the same value the [subcommands](#subcommands) take as `--out`. |
+| `--agent` | `false` | Run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`) and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. See [Agent mode](#agent-mode---agent). |
+| `--replace` | `false` | prereview refuses to start a second server for the same store (duplicate servers fight over it). `--replace` stops the running one and takes over. Comments auto-save, so nothing is lost. |
+| `--skill` / `--stream` | `false` | **Deprecated aliases of `--agent`** — still enable agent mode, print a deprecation warning. Use `--agent`. |
 
 ### Run-and-exit actions
 
@@ -139,28 +159,63 @@ These do one thing and exit — they don't start the server:
 
 ## Subcommands
 
-Two **bare-verb subcommands** (not flags) let a coding agent talk back to a
-running review. They write into the same `.prereview/` store the server watches,
-so their effect shows up live. You rarely run them by hand — the skill does.
+Beyond launching a review, `prereview` has **bare-verb subcommands** the coding
+agent uses to read from and write to a running review's `.prereview/` store.
+They write into the same store the server watches, so their effect shows up live.
+You rarely run them by hand — the skill does. Each takes `--out <dir>` (the printed
+`REPO` directory; defaults to the current dir). Run any with `-h` for its own flags.
 
 ```
+prereview watch     [--out <dir>] [--since <seq>]
+prereview comments  [--out <dir>] [--json] [--all]
+prereview done      [--out <dir>] [--file <f>|-] [--all-open] <comment-id>...
+prereview status    [--out <dir>] <working|done> [message]
 prereview suggest   [--out <dir>] [--file <payload.json>]
-prereview processed [--out <dir>] <comment-id>...
+prereview reply     [--out <dir>] (--body "…" | --file <f>|-) <id>
+prereview applied   [--out <dir>] [--file <f>|-] <suggestion-id>...
+prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
 ```
 
+- **`prereview watch`** — the **one** queue reader. Prints every event after
+  `--since <seq>` (default `-1` = from the start), **blocks** for the next when
+  caught up, returns a batch so the agent can act, and exits `0` only on the `end`
+  event. Loop by re-running with the highest `seq` seen. Reads the durable
+  `.prereview/events.jsonl`; writes nothing. Run it with a long timeout (e.g. 600s).
+- **`prereview comments`** — list the review's comments from a stable interface
+  (no CSV hand-parsing). Defaults to the actionable set; `--all` includes
+  resolved/outdated/draft. `--json` emits the **same shape as a `snapshot`**, so
+  you can pipe ids: `prereview comments --json | jq -r '.[].id' | prereview done --file -`.
+  This is the read path for agents that can't block on `watch`.
+- **`prereview done`** — mark comments **done** (a badge in the UI, so the reviewer
+  sees you acted). Ids come from args, `--file`/stdin (bare ids, a JSON array, or
+  JSONL objects with an `id`), or `--all-open` (the whole actionable set). Each
+  explicit id is **validated against `comments.csv`** — an unknown id fails
+  non-zero and is not recorded. Appends to `.prereview/processed.jsonl`.
+- **`prereview status`** — echo the agent's status to a live pill across every open
+  tab: `working` while applying a batch, `done` when finished. The `done` message
+  doubles as the version changelog entry (see [Versioning](#output) below). Writes
+  `.prereview/llm-status.json` atomically.
 - **`prereview suggest`** — submit **proposed edits** that render inline as
-  suggestion boxes the reviewer accepts / rejects. Reads a JSON payload
-  from `--file` or stdin — a single object, a JSON array, or newline-delimited
-  objects — and appends them to `.prereview/suggestions.jsonl`. Each object:
+  before → after boxes the reviewer **accepts** or **rejects**. Reads a JSON
+  payload from `--file` or stdin — a single object, a JSON array, or newline-
+  delimited objects — and appends to `.prereview/suggestions.jsonl`. Each object:
   `{"id":"…","file":"…","from_line":N,"to_line":N,"side":"new","original":"…","proposed":"…","note":"…"}`
-  (`id` optional but recommended — re-using it *revises* that suggestion;
-  `side` defaults to `new`; `to_line` defaults to `from_line`). The reviewer's
-  verdicts come back on the next `--stream` hand-off (see [Stream mode](#stream-mode---stream)).
-- **`prereview processed`** — mark one or more comments **worked on** (a badge in
-  the UI). Appends the given comment `id`s to `.prereview/processed.jsonl`.
-
-`--out` is the store root the review is running against (the `REPO` line), matching
-the `--out` flag; it defaults to the current directory.
+  (`id` optional but recommended — re-using it *replaces* that suggestion; `side`
+  defaults to `new`; `to_line` defaults to `from_line`). Decisions come back in
+  each `snapshot`'s `suggestions[]`.
+- **`prereview reply`** — post a **thread reply** on a comment **or** suggestion,
+  so the reviewer sees what you changed (and can reply back to steer you). The id
+  is validated against comments + suggestions. Appends to
+  `.prereview/agent-replies.jsonl`. See [Threads](../skill/reference.md#threads).
+- **`prereview applied`** — ack that you **applied** an accepted suggestion's edit
+  to the file, so the UI flips the card from "accepted" to "applied" and drops it
+  from the snapshot. Ids come from a snapshot's `suggestions[]` (`verdict=accept`);
+  validated against suggestions. Idempotent. Appends to `.prereview/applied.jsonl`.
+- **`prereview reverted`** — ack that you **reverted** an applied suggestion —
+  restored its `original` text after the reviewer asked to undo the accept
+  (delivered as `verdict=revert`). Nets the suggestion back out of "applied", so
+  the reviewer's card returns to undecided. Validated against suggestions.
+  Idempotent. Appends to `.prereview/reverted.jsonl`.
 
 ## Composing flags
 
@@ -168,24 +223,25 @@ Flags compose freely; just keep the path last.
 
 ```bash
 prereview --base origin/main ../service        # a different repo, diffed against a ref
-prereview --skill --base HEAD~3 "$(pwd)"        # skill mode, last-3-commits view
-prereview --skill --stream "$(pwd)"             # multi-round JSON event stream for an LLM
+prereview --agent --base HEAD~3 "$(pwd)"        # agent mode, last-3-commits view
+prereview --agent --replace "$(pwd)"            # take over an already-running session
 prereview --host 0.0.0.0 --port 8080            # explicit bind (see below)
 prereview --external http://localhost:5173 --out ./review   # annotate a live local site
 ```
 
-`--base` only affects git mode. `--skill` only changes the UI/hand-off; it
+`--base` only affects git mode. `--agent` only changes the UI/hand-off; it
 composes with any path and base.
 
 ## Binding & remote access
 
 `--host` defaults to `127.0.0.1` and is smart on remote boxes: on an SSH host
 with a tailnet, prereview binds the host's **Tailscale IP** so you can open the
-review from your phone over the tailnet — never the public internet. Passing
-`--host` explicitly is an absolute override (never auto-rebound). **Avoid
-`0.0.0.0`**: it exposes the source diff on every interface, including any public
-IP. The first stdout line is `READY <url>`; extra `ALT <url>` lines (e.g. the
-MagicDNS hostname) may follow.
+review from your phone over the tailnet — never the public internet. A remote box
+with no tailnet stays on `127.0.0.1` and prints a stderr warning telling you to
+pass an explicit `--host`. Passing `--host` explicitly is an absolute override
+(never auto-rebound). **Avoid `0.0.0.0`**: it exposes the source diff on every
+interface, including any public IP. The first stdout line is `READY <url>`; extra
+`ALT <url>` lines (e.g. the MagicDNS hostname) may follow.
 
 ## Environment
 
@@ -195,24 +251,46 @@ MagicDNS hostname) may follow.
 
 ## Output
 
-`<store-root>/.prereview/comments.csv` is the source of truth (RFC-4180, 16
-columns, atomically written). The store root is the review path by default; `--out`
-redirects it in any mode (and is required with `--external`). For a single-file
-review the `.prereview/` dir is the file's **parent** directory. The `REPO` line on
-stdout always points at the resolved store root. The `url` column carries the
-proxied page for `kind=region` rows (from `--external`); it's empty for every
-file-based kind, and `kind` also includes `text` (a character range, with
-`from_col`/`to_col`). See [skill/reference.md](../skill/reference.md) for the column
-schema and the stdout protocol.
+`<store-root>/.prereview/comments.csv` is the source of truth (RFC-4180, **17
+columns**, atomically written via tmp+fsync+rename). The store root is the review
+path by default; `--out` redirects it in any mode (and is required with
+`--external`). For a single-file review the `.prereview/` dir is the file's
+**parent** directory. The `REPO` line on stdout always points at the resolved
+store root.
 
-Alongside `comments.csv` and the `DONE` marker, `.prereview/` may hold:
+The header (column order is the contract; columns are only ever appended, so older
+CSVs may have fewer trailing columns — index by position, default missing ones to
+empty):
+
+```
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued
+```
+
+`kind` is `line` (default), `text` (a character range within a line, via
+`from_col`/`to_col` rune offsets), `file`, `area` (an image rectangle, `area`
+holds `{x,y,w,h}` fractions), or `region` (a live-site rectangle from `--external`,
+anchored to `url`). `hidden` and `enqueued` are reviewer/queue view flags. See
+[skill/reference.md](../skill/reference.md#csv-schema) for the full column docs.
+
+Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
+**agent** writes (via the subcommands) the server reads, and vice-versa:
 
 | File | Written by | Purpose |
 |---|---|---|
 | `comments.csv` | server | the comments (source of truth) |
-| `DONE` | server | one-shot hand-off marker (`--skill` without `--stream`) |
-| `events.jsonl` | server | the `--stream` event log (reset each launch) |
+| `events.jsonl` | server | the agent-mode event log (`ready`/`snapshot`/`end`); reset each launch |
 | `suggestions.jsonl` | **agent** (`prereview suggest`) | proposed edits, rendered as suggestion boxes (durable) |
-| `suggestion-decisions.jsonl` | server | your accept/reject verdicts on suggestions (durable) |
-| `processed.jsonl` | **agent** (`prereview processed`) | comment ids marked worked-on (durable) |
-| `llm-status.json` | **agent** | the agent's live working/done status (reset each launch) |
+| `suggestion-decisions.jsonl` | server | your accept/reject/revert verdicts (durable) |
+| `processed.jsonl` | **agent** (`prereview done`) | comment ids marked done (reset each launch) |
+| `applied.jsonl` | **agent** (`prereview applied`) | accepted-suggestion apply acks (durable) |
+| `reverted.jsonl` | **agent** (`prereview reverted`) | applied-suggestion revert acks (durable) |
+| `agent-replies.jsonl` | **agent** (`prereview reply`) | agent thread replies (durable) |
+| `reviewer-replies.jsonl` | server | reviewer thread replies (durable) |
+| `llm-status.json` | **agent** (`prereview status`) | the agent's live working/done status (reset each launch) |
+| `versions/` | server | per-file version checkpoints + content blobs and their changelog (durable) |
+
+When an agent finishes a batch that edited files, prereview snapshots a new
+**version** of each changed file into `versions/`, using the agent's `prereview
+status done` message as that version's changelog entry — surfaced in the file's
+**Versions** panel (View / Diff / Restore). See
+[skill/reference.md](../skill/reference.md#filesystem-layout) for the full layout.

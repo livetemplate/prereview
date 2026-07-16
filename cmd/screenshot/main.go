@@ -28,6 +28,7 @@ func main() {
 	readme := flag.Bool("readme", false, "capture the curated README screenshot set (needs a demo-repo server; see `make screenshots`)")
 	gifFlow := flag.String("gif", "", "capture a single animated GIF flow (hero); needs a demo-repo server")
 	repo := flag.String("repo", "", "demo repo working tree (the hero flow edits payment.go here to show Claude's fix)")
+	bin := flag.String("bin", "", "prereview binary, for flows that drive agent-side subcommands (status/reply) — versions/thread")
 	flag.Parse()
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
@@ -54,7 +55,7 @@ func main() {
 	}
 
 	if *gifFlow != "" {
-		runGif(allocCtx, *url, *gifFlow, *repo, *outDir)
+		runGif(allocCtx, *url, *gifFlow, *repo, *bin, *outDir)
 		return
 	}
 
@@ -318,7 +319,13 @@ func runReadmeShots(allocCtx context.Context, url, outDir string) {
 		{"file-comment", 1280, 800, "payment.go", nil},
 		{"all-comments", 1280, 800, "", []chromedp.Action{
 			clickJS(`button[name="toggleCommentList"]`),
-			chromedp.Sleep(600 * time.Millisecond),
+			chromedp.Sleep(400 * time.Millisecond),
+			// "All comments" now lives inside the View ▾ dropdown, so a click on it
+			// bubbles to the dropdown's toggleClass handler and pops the menu open —
+			// close it again so the shot shows the clean all-comments list, not a
+			// menu overlapping the first card.
+			chromedp.Evaluate(`document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`, nil),
+			chromedp.Sleep(300 * time.Millisecond),
 		}},
 		{"review-mobile", 390, 844, "payment.go:L18", []chromedp.Action{
 			typeComposer("Surface the gateway's real error here, not a generic string."),
