@@ -48,6 +48,98 @@ func seedVersionStore(t *testing.T, repo, path string, contents ...string) {
 	}
 }
 
+// seedTwoFileTimeline writes a single version timeline holding TWO files with
+// different history lengths: edited.go (baseline only → 1 version) and fresh.go
+// (baseline + one edit → 2 versions). Used by the deep-link panel test, where
+// the whole point is that the two files' timelines differ — an equal-length seed
+// would make the stale-panel bug invisible.
+func seedTwoFileTimeline(t *testing.T, repo string) {
+	t.Helper()
+	vdir := filepath.Join(repo, ".prereview", "versions")
+	if err := os.MkdirAll(filepath.Join(vdir, "blobs"), 0o755); err != nil {
+		t.Fatalf("mkdir version store: %v", err)
+	}
+	blob := func(content string) string {
+		sum := sha256.Sum256([]byte(content))
+		sha := hex.EncodeToString(sum[:])
+		if err := os.WriteFile(filepath.Join(vdir, "blobs", sha), []byte(content), 0o644); err != nil {
+			t.Fatalf("write blob: %v", err)
+		}
+		return sha
+	}
+	// Last seeded version of each file byte-matches setupFixtureRepo's working tree.
+	editedCur := blob("package edited\n\nfunc Hello() string {\n\treturn \"hello world\"\n}\n")
+	freshOld := blob("package fresh\n\nfunc Old() {}\n")
+	freshCur := blob("package fresh\n\nfunc New() {}\n")
+	lines := []string{
+		// seq 0 baseline: both files present at v0.
+		fmt.Sprintf(`{"seq":0,"ts":"2026-01-01T00:00:00Z","trigger":"baseline","summary":"","files":[{"path":"edited.go","sha":%q},{"path":"fresh.go","sha":%q}]}`, editedCur, freshOld),
+		// seq 1: only fresh.go changes → edited.go stays at 1, fresh.go reaches 2.
+		fmt.Sprintf(`{"seq":1,"ts":"2026-01-02T00:00:00Z","trigger":"llm-done","summary":"reworked fresh.go","files":[{"path":"fresh.go","sha":%q}]}`, freshCur),
+	}
+	if err := os.WriteFile(filepath.Join(vdir, "timeline.jsonl"), []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatalf("write timeline: %v", err)
+	}
+}
+
+// TestE2E_DeepLinkRefreshesVersionPanel is the browser-level guard for the
+// deep-link Versions-panel bug: opening a file via a #path permalink must show
+// THAT file's version timeline, not the mount-default file's. On load the SSR
+// selects edited.go (the alphabetically-first changed file, 1 version); the
+// directive then dispatches setURLHash for the #fresh.go in the URL, which must
+// re-populate the panel with fresh.go's 2 versions. Before the fix the handler
+// set SelectedFile but skipped applyVersionList, so the panel kept edited.go's
+// count — a stale "1" where "2" belongs. This is the exact inverse of the
+// versions.gif capture, which sidesteps the bug by clicking the drawer instead.
+func TestE2E_DeepLinkRefreshesVersionPanel(t *testing.T) {
+	repo := setupFixtureRepo(t)
+	seedTwoFileTimeline(t, repo)
+
+	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--agent")
+	diag := func() string {
+		var html string
+		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
+		return "\n--- server ---\n" + p.stderr.String() + "\n--- html ---\n" + html
+	}
+
+	// Load directly with #fresh.go — the permalink path. The directive's
+	// initial-arm dispatches setURLHash after the WS connects; the server
+	// re-selects fresh.go and (with the fix) refreshes the version list.
+	var selectedFile, versionsCount string
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(p.url+"#fresh.go"),
+		chromedp.WaitVisible(`header.bar`, chromedp.ByQuery),
+		// fresh.go carries 2 versions; wait for the count to land rather than
+		// racing a fixed sleep. On the buggy code this stays "1" (edited.go's
+		// stale list) and the poll times out — a legible failure.
+		chromedp.Poll(`document.querySelector('.versions-count')?.textContent === "2"`, nil, chromedp.WithPollingTimeout(6*time.Second)),
+		chromedp.Evaluate(`document.querySelector('main.viewer .file-head-name')?.getAttribute('title') || ''`, &selectedFile),
+		chromedp.Evaluate(`document.querySelector('.versions-count')?.textContent || ''`, &versionsCount),
+	); err != nil {
+		t.Fatalf("deep-link to fresh.go: %v%s", err, diag())
+	}
+	if selectedFile != "fresh.go" {
+		t.Errorf("selected file = %q, want fresh.go (deep-link did not navigate)%s", selectedFile, diag())
+	}
+	if versionsCount != "2" {
+		t.Errorf("Versions count = %q, want 2 (fresh.go's timeline); stale edited.go panel not refreshed%s", versionsCount, diag())
+	}
+
+	// The panel's rows match the count — open it and confirm 2 rows render.
+	var rows int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.versions-panel .version-row`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('.version-row').length`, &rows),
+	); err != nil {
+		t.Fatalf("open versions panel after deep-link: %v%s", err, diag())
+	}
+	if rows != 2 {
+		t.Errorf("expected 2 version rows for fresh.go, got %d%s", rows, diag())
+	}
+}
+
 // TestE2E_VersionTimeline exercises the artifact-versioning UI (#90): the
 // per-file Versions panel lists the timeline, "View" opens a prior version
 // read-only, and "Restore" rolls the file back on disk (decoupled from the
