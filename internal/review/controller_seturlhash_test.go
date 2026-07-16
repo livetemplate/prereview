@@ -2,6 +2,8 @@ package review
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/livetemplate/livetemplate"
@@ -63,5 +65,61 @@ func TestSetURLHash_EmptyHash_NoOp(t *testing.T) {
 	}
 	if out.SelectedFile != "kept.go" {
 		t.Errorf("SelectedFile mutated on empty hash: %q", out.SelectedFile)
+	}
+}
+
+// TestSetURLHash_RefreshesVersionList pins that navigating to a file via a
+// deep link repopulates the Versions panel with THAT file's timeline, not the
+// previously-selected file's. Regression guard for the bug where the deep-link
+// handler set SelectedFile/CurrentDiff but skipped applyVersionList, so a
+// permalink-opened file showed the mount-default file's version history.
+//
+// The two files MUST have different history lengths, because the bug hides
+// whenever every file has one version — the stale and correct lists coincide.
+// mount-default (aaa.txt) has 1 version; the linked file (zzz.txt) has 2.
+func TestSetURLHash_RefreshesVersionList(t *testing.T) {
+	work := t.TempDir()
+	store, err := NewVersionStore(filepath.Join(work, ".prereview", "versions"))
+	if err != nil {
+		t.Fatalf("NewVersionStore: %v", err)
+	}
+	def := writeRef(t, work, "aaa.txt", "default file, one version")
+	tgt := writeRef(t, work, "zzz.txt", "linked file, v0")
+
+	// seq 0: baseline — both files at v0.
+	if _, _, err := store.Checkpoint([]FileRef{def, tgt}, VersionTriggerBaseline, ""); err != nil {
+		t.Fatalf("baseline checkpoint: %v", err)
+	}
+	// seq 1: only zzz.txt changes → aaa.txt dedups to 1 entry, zzz.txt gets 2.
+	if err := os.WriteFile(tgt.AbsPath, []byte("linked file, v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.Checkpoint([]FileRef{def, tgt}, VersionTriggerLLMDone, "reworked"); err != nil {
+		t.Fatalf("edit checkpoint: %v", err)
+	}
+
+	c := &PrereviewController{RepoPath: work, NoGit: true, Versions: store}
+
+	// Start as Mount leaves it: mount-default file selected, its 1-entry timeline loaded.
+	state := PrereviewState{SelectedFile: "aaa.txt"}
+	c.applyVersionList(&state)
+	if len(state.Versions) != 1 {
+		t.Fatalf("precondition: aaa.txt should have 1 version, got %d", len(state.Versions))
+	}
+
+	// Deep-link to zzz.txt.
+	ctx := livetemplate.NewContext(context.TODO(), "setURLHash",
+		map[string]interface{}{"hash": "zzz.txt"})
+	out, err := c.SetURLHash(state, ctx)
+	if err != nil {
+		t.Fatalf("SetURLHash(zzz.txt): %v", err)
+	}
+	if out.SelectedFile != "zzz.txt" {
+		t.Fatalf("SelectedFile = %q, want zzz.txt", out.SelectedFile)
+	}
+	// The discriminating assertion: the panel now reflects zzz.txt (2 versions),
+	// not the stale aaa.txt list (1). Fails on the pre-fix code.
+	if len(out.Versions) != 2 {
+		t.Errorf("Versions has %d entries after deep-link, want 2 (zzz.txt's timeline); stale aaa.txt list not refreshed", len(out.Versions))
 	}
 }
