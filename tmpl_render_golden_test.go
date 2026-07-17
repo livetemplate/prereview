@@ -108,13 +108,7 @@ func TestTemplateRenderGolden(t *testing.T) {
 				t.Fatalf("read golden %s: %v\ncreate it with: go test -run TestTemplateRenderGolden -update-render .", goldenFile, err)
 			}
 			if got != string(want) {
-				off := firstDiffOffset(string(want), got)
-				lo := max(off-40, 0)
-				clip := func(s string) string {
-					return s[min(lo, len(s)):min(off+80, len(s))]
-				}
-				t.Errorf("rendered output for %q changed at offset %d.\nA pure page.tmpl extraction must be byte-identical here.\n golden: %q\n now:    %q",
-					tc.name, off, clip(string(want)), clip(got))
+				reportGoldenDiff(t, "rendered output", tc.name, string(want), got)
 			}
 		})
 	}
@@ -146,11 +140,7 @@ func TestTemplateUpdateGolden(t *testing.T) {
 				t.Fatalf("read golden %s: %v\ncreate it with: go test -run TestTemplateUpdateGolden -update-render .", goldenFile, err)
 			}
 			if got != string(want) {
-				off := firstDiffOffset(string(want), got)
-				lo := max(off-40, 0)
-				clip := func(s string) string { return s[min(lo, len(s)):min(off+80, len(s))] }
-				t.Errorf("update payload for %q changed at offset %d.\nA pure extraction must be byte-identical.\n golden: %q\n now:    %q",
-					tc.name, off, clip(string(want)), clip(got))
+				reportGoldenDiff(t, "update payload", tc.name, string(want), got)
 			}
 		})
 	}
@@ -225,6 +215,17 @@ func firstDiffOffset(a, b string) int {
 		i++
 	}
 	return i
+}
+
+// reportGoldenDiff fails t with a readable window around the first byte where got
+// diverges from want — a pure page.tmpl extraction must keep these byte-identical.
+func reportGoldenDiff(t *testing.T, what, name, want, got string) {
+	t.Helper()
+	off := firstDiffOffset(want, got)
+	lo := max(off-40, 0)
+	clip := func(s string) string { return s[min(lo, len(s)):min(off+80, len(s))] }
+	t.Errorf("%s for %q changed at offset %d — a pure extraction must be byte-identical.\n golden: %q\n now:    %q",
+		what, name, off, clip(want), clip(got))
 }
 
 // ---- fixtures: one per mutually-exclusive template branch ----
