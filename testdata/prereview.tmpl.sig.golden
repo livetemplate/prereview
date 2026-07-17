@@ -51,6 +51,30 @@
   </div>
   {{end}}
 </section>
+=== binaryView ===
+{{with $.CurrentDiff}}  
+  {{$kind := $.BinaryKind}}
+  {{if eq $kind "image"}}
+  
+  {{template "regionToggle" $}}{{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
+    <img src="/{{.Path}}" alt="{{.Path}}" {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}>
+    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}"></div>{{end}}
+    {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
+  </div></div>
+  {{else}}{{if eq $kind "pdf"}}
+  
+  <div class="binary-preview binary-pdf-card">
+    <div class="pdf-card-icon" aria-hidden="true">📄</div>
+    <strong class="pdf-card-name">{{.Path}}</strong>
+    <a role="button" class="contrast pdf-card-open" href="/{{.Path}}" target="_blank" rel="noopener">Open PDF in new tab →</a>
+  </div>
+  {{else}}{{if eq $kind "video"}}
+  <div class="binary-preview binary-video"><video controls preload="metadata" src="/{{.Path}}"></video></div>
+  {{else}}{{if eq $kind "audio"}}
+  <div class="binary-preview binary-audio"><audio controls preload="metadata" src="/{{.Path}}"></audio></div>
+  {{else}}
+  <p class="empty">Binary file — cannot display.</p>
+  {{end}}{{end}}{{end}}{{end}}{{end}}
 === blockComments ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === blockSuggestions ===
@@ -126,6 +150,14 @@
       </fieldset>
     </form>
   </footer></article></dialog>
+=== diffView ===
+{{with $.CurrentDiff}}  
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}"><div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion}}<span class="line-margin">
+        <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
+          <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
+        </button>
+      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
+{{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>{{end}}
 === endSessionDialog ===
 <dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p>{{if .AwaitingApplyCount}}
   <p class="end-warn" role="alert"><small><strong>{{.AwaitingApplyCount}} accepted edit{{if ne .AwaitingApplyCount 1}}s{{end}} not yet applied.</strong> The agent still has to write {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file (<code>prereview applied</code>). Ending now leaves the document without {{if eq .AwaitingApplyCount 1}}that change{{else}}those changes{{end}}.</small></p>{{end}}<footer>
@@ -231,6 +263,64 @@
   
   <div class="resize-handle" aria-hidden="true"></div>
 </dialog>
+=== fileHeader ===
+{{with $.CurrentDiff}}  <header class="file-head">{{if gt $.ReadPercent 0}}<div class="read-progress-fill" style="width: {{$.ReadPercent}}%" aria-hidden="true"></div>{{end}}<span class="file-head-name" title="{{.Path}}">{{if $.SelectedFileDir}}<span class="fh-dir">{{$.SelectedFileDir}}</span>{{end}}<strong class="fh-base">{{$.SelectedFileBase}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    
+    <span class="file-head-actions">
+    
+    {{if $.HasReadFrontier}}
+    <form method="POST" class="file-head-resume">
+      <button type="submit" name="jumpToReadFrontier" class="outline" title="Jump to the first content you haven't read yet">{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
+    </form>
+    {{end}}
+    
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
+    <form method="POST" class="file-head-comment">
+      <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
+    </form>
+    {{end}}
+    
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
+    <div class="tb-dropdown prompts-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="prompts-trigger" aria-haspopup="menu" title="Ask the agent for suggestions using a prebuilt prompt">{{template "iconSuggestion"}}<span class="prompts-trigger-label">Ask for suggestions</span></button>
+      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
+        {{range $.Prompts}}
+        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    
+    {{if $.Versions}}
+    <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="versions-trigger" aria-haspopup="menu" title="Versions of this file — view or roll back to a previous version">{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
+      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
+        
+        {{range $.Versions}}
+        <div class="version-row{{if .Viewing}} viewing{{end}}">
+          <button type="button" class="version-summary-toggle" lvt-el:toggleClass:on:click="expanded" data-lvt-target="closest:.version-row" aria-label="Show what changed and version actions"><span class="version-meta">
+            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
+            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
+          </span><span class="version-more" aria-hidden="true">⋯</span></button>
+          <div class="version-details">
+            {{if .Changelog}}<p class="version-changelog">{{.Changelog}}</p>{{end}}
+            <div class="version-summary">{{template "versionSummary" .Summary}}</div>
+            <span class="version-actions">
+              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
+              {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
+              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+            </span>
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    </span>
+  </header>{{end}}
+=== htmlView ===
+{{with $.CurrentDiff}}  
+  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
 === iconBook ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconChat14 ===
@@ -307,6 +397,10 @@
   
   <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
 </div>
+=== markdownView ===
+{{with $.CurrentDiff}}  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.md-block" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
+        <span class="line-mark{{if $ba.Open}} is-open{{else}}{{if $ba.Accepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$ba.Total}}</span>
+      </button>{{end}}<div class="md-rendered" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
 === moreMenu ===
 <div class="more-menu-backdrop{{if .MoreMenuOpen}} is-open{{end}}" lvt-on:click="closeMoreMenu" aria-hidden="true"></div>
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
@@ -524,60 +618,7 @@
 {{else}}
 {{with .CurrentDiff}}
 <article>
-  <header class="file-head">{{if gt $.ReadPercent 0}}<div class="read-progress-fill" style="width: {{$.ReadPercent}}%" aria-hidden="true"></div>{{end}}<span class="file-head-name" title="{{.Path}}">{{if $.SelectedFileDir}}<span class="fh-dir">{{$.SelectedFileDir}}</span>{{end}}<strong class="fh-base">{{$.SelectedFileBase}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
-    
-    <span class="file-head-actions">
-    
-    {{if $.HasReadFrontier}}
-    <form method="POST" class="file-head-resume">
-      <button type="submit" name="jumpToReadFrontier" class="outline" title="Jump to the first content you haven't read yet">{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
-    </form>
-    {{end}}
-    
-    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
-    <form method="POST" class="file-head-comment">
-      <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
-    </form>
-    {{end}}
-    
-    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
-    <div class="tb-dropdown prompts-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="prompts-trigger" aria-haspopup="menu" title="Ask the agent for suggestions using a prebuilt prompt">{{template "iconSuggestion"}}<span class="prompts-trigger-label">Ask for suggestions</span></button>
-      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
-        {{range $.Prompts}}
-        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
-    
-    {{if $.Versions}}
-    <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="versions-trigger" aria-haspopup="menu" title="Versions of this file — view or roll back to a previous version">{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
-      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
-        
-        {{range $.Versions}}
-        <div class="version-row{{if .Viewing}} viewing{{end}}">
-          <button type="button" class="version-summary-toggle" lvt-el:toggleClass:on:click="expanded" data-lvt-target="closest:.version-row" aria-label="Show what changed and version actions"><span class="version-meta">
-            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
-            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
-          </span><span class="version-more" aria-hidden="true">⋯</span></button>
-          <div class="version-details">
-            {{if .Changelog}}<p class="version-changelog">{{.Changelog}}</p>{{end}}
-            <div class="version-summary">{{template "versionSummary" .Summary}}</div>
-            <span class="version-actions">
-              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
-              {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
-              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
-            </span>
-          </div>
-        </div>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
-    </span>
-  </header>
+{{template "fileHeader" $}}
   {{if $.ViewingVersion}}
   
   <div class="version-view-banner" role="status">
@@ -604,44 +645,13 @@
   </div>
   {{end}}
   {{if .IsBinary}}
-  
-  {{$kind := $.BinaryKind}}
-  {{if eq $kind "image"}}
-  
-  {{template "regionToggle" $}}{{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
-    <img src="/{{.Path}}" alt="{{.Path}}" {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}>
-    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}"></div>{{end}}
-    {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
-  </div></div>
-  {{else}}{{if eq $kind "pdf"}}
-  
-  <div class="binary-preview binary-pdf-card">
-    <div class="pdf-card-icon" aria-hidden="true">📄</div>
-    <strong class="pdf-card-name">{{.Path}}</strong>
-    <a role="button" class="contrast pdf-card-open" href="/{{.Path}}" target="_blank" rel="noopener">Open PDF in new tab →</a>
-  </div>
-  {{else}}{{if eq $kind "video"}}
-  <div class="binary-preview binary-video"><video controls preload="metadata" src="/{{.Path}}"></video></div>
-  {{else}}{{if eq $kind "audio"}}
-  <div class="binary-preview binary-audio"><audio controls preload="metadata" src="/{{.Path}}"></audio></div>
-  {{else}}
-  <p class="empty">Binary file — cannot display.</p>
-  {{end}}{{end}}{{end}}{{end}}
+{{template "binaryView" $}}
   {{else}}{{if $.ShowRenderedHTML}}
-  
-  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>
+{{template "htmlView" $}}
   {{else}}{{if $.ShowRenderedMarkdown}}
-  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.md-block" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
-        <span class="line-mark{{if $ba.Open}} is-open{{else}}{{if $ba.Accepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$ba.Total}}</span>
-      </button>{{end}}<div class="md-rendered" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>
+{{template "markdownView" $}}
   {{else}}{{if .Lines}}
-  
-  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}"><div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion}}<span class="line-margin">
-        <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
-          <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
-        </button>
-      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
-{{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
+{{template "diffView" $}}
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
   {{end}}{{end}}{{end}}{{end}}
@@ -687,6 +697,11 @@
 <script defer src="/mermaid-init.js"></script>
 </body>
 </html>
+
+
+
+
+
 
 
 

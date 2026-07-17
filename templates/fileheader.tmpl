@@ -1,0 +1,114 @@
+{{define "fileHeader"}}{{with $.CurrentDiff}}  <header class="file-head">
+    {{- /* #128: reading-progress fill along the header's bottom edge. Absolutely
+           positioned (out of the flex flow), so it never shifts the header. */ -}}
+    {{- if gt $.ReadPercent 0}}<div class="read-progress-fill" style="width: {{$.ReadPercent}}%" aria-hidden="true"></div>{{end -}}
+    {{- /* Directory prefix muted + truncatable, basename bold + always in full,
+           so a long/deep path never wraps into a multi-line block (see .fh-dir /
+           .fh-base). Title carries the full path for hover/long-press. */ -}}
+    <span class="file-head-name" title="{{.Path}}">{{if $.SelectedFileDir}}<span class="fh-dir">{{$.SelectedFileDir}}</span>{{end}}<strong class="fh-base">{{$.SelectedFileBase}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    {{/* Right-aligned action group: comment-on-file + the versions control. Both
+         are compact chips sharing one row so the sticky header stays a single
+         thin line on every viewport. */}}
+    <span class="file-head-actions">
+    {{/* #128: jump to the read frontier — the first unread content. Shown only
+         when the file is partly read (some progress, not all), so it never
+         clutters a fresh or finished file. */}}
+    {{if $.HasReadFrontier}}
+    <form method="POST" class="file-head-resume">
+      <button
+        type="submit"
+        name="jumpToReadFrontier"
+        class="outline"
+        title="Jump to the first content you haven't read yet"
+      >{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
+    </form>
+    {{end}}
+    {{/* Comment on the whole file — sits in context next to the filename. Hidden
+         while the file composer is already open (self-toggle loop) or while
+         viewing a historical version (read-only). */}}
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
+    <form method="POST" class="file-head-comment">
+      <button
+        type="submit"
+        name="openFileComment"
+        class="contrast"
+        title="Add a comment about the whole file"
+        aria-label="Comment on file"
+      >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
+    </form>
+    {{end}}
+    {{/* #147: "Ask for suggestions" — pick a prebuilt prompt; it pre-fills the file
+         composer (tweak/scope, then Save) and the agent answers with inline
+         suggestions. Reuses the View-dropdown client primitive (lvt-el toggle +
+         click-away, no server state). Hidden while the file composer is open or a
+         historical version is shown, and only when prompts exist. */}}
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
+    <div
+      class="tb-dropdown prompts-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="prompts-trigger"
+        aria-haspopup="menu"
+        title="Ask the agent for suggestions using a prebuilt prompt"
+      >{{template "iconSuggestion"}}<span class="prompts-trigger-label">Ask for suggestions</span></button>
+      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
+        {{range $.Prompts}}
+        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    {{/* Versions panel (#90): the selected file's version timeline with view +
+         rollback. Reuses the View-dropdown client primitive (lvt-el toggle +
+         click-away, no server state, no custom JS). A compact chip (history icon
+         + count) matching the comment button; label hides on mobile. Only shows
+         once the file has recorded history. */}}
+    {{if $.Versions}}
+    <div
+      class="tb-dropdown versions-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="versions-trigger"
+        aria-haspopup="menu"
+        title="Versions of this file — view or roll back to a previous version"
+      >{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
+      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
+        {{/* #155: the row is compact by default (label · time · ⋯); the ⋯ toggle
+             expands it INLINE to reveal what changed + the actions, so the busy
+             three-button row no longer crowds every entry. Client-only lvt-el toggle
+             (like the parent dropdown) — a click inside the panel is not a click-away,
+             so it expands the row without closing the Versions dropdown. */}}
+        {{range $.Versions}}
+        <div class="version-row{{if .Viewing}} viewing{{end}}">
+          <button
+            type="button"
+            class="version-summary-toggle"
+            lvt-el:toggleClass:on:click="expanded"
+            data-lvt-target="closest:.version-row"
+            aria-label="Show what changed and version actions"
+          ><span class="version-meta">
+            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
+            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
+          </span><span class="version-more" aria-hidden="true">⋯</span></button>
+          <div class="version-details">
+            {{if .Changelog}}<p class="version-changelog">{{.Changelog}}</p>{{end}}
+            <div class="version-summary">{{template "versionSummary" .Summary}}</div>
+            <span class="version-actions">
+              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
+              {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
+              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+            </span>
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    </span>
+  </header>{{end}}{{end}}

@@ -1,0 +1,66 @@
+{{define "markdownView"}}{{with $.CurrentDiff}}  {{/* Rendered-Markdown view. Each top-level block is one clickable
+       unit carrying its REAL source line range (data-from/data-to);
+       SelectBlock turns that into the normal line-anchored selection,
+       so a comment made here round-trips with the raw line view and
+       the CSV — nothing is renumbered. Comments/composer interleave
+       by source line the same way the line view does, just matched to
+       a block's [StartLine,EndLine] span. */}}
+  {{- /* text-select on the rendered view: a native selection resolves to the
+         touched blocks' source line range (data-surface="block"), so a phrase
+         can be commented on in Preview too — not just the raw/code view. Columns
+         don't apply (rendered text != source), so it anchors line-level with the
+         phrase quoted. */ -}}
+  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3"
+       lvt-fx:text-select="selectText" data-surface="block">
+    {{- range $.RenderedMarkdown -}}
+    {{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be -}}
+    {{$mbstatus := index $.BlockDiffStatus $mbkey -}}
+    <div class="md-block
+    {{- if and
+        (ne $.SelectionEndMax 0)
+        (ge $.SelectionEndMax $bs)
+        (le $.SelectionEndMax $be)}} selected{{end -}}
+    {{- if $mbstatus}} md-{{$mbstatus}}{{end -}}
+    {{- if index $.RowToggled $mbkey}} row-toggled{{end -}}
+    "
+         data-key="{{$mbkey}}"
+         {{- if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>
+      {{- /* #165: the md-view has no gutter, so each block carries a state badge in its
+             top-right — yellow if any open annotation, else green — counting the block's
+             comments/suggestions. Done cards auto-collapse via CSS (like the diff view).
+             #174: clicking flips the block away from that default — revealing its done
+             cards, or collapsing its OPEN ones so they can be set aside. Server state
+             (ToggledRows), so a re-render can't morph the class away (#173). */ -}}
+      {{- $ba := index $.BlockAnnotations $mbkey -}}
+      {{- if gt $ba.Total 0 -}}
+      <button type="button" class="md-block-marks"
+              lvt-on:click="toggleRow"
+              data-row="{{$mbkey}}"
+              lvt-el:toggleClass:on:click="row-toggled"
+              data-lvt-target="closest:.md-block"
+              aria-label="Show or hide the annotations in this block"
+              title="Show/hide this block's annotations">
+        <span class="line-mark{{if $ba.Open}} is-open{{else if $ba.Accepted}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{$ba.Total}}</span>
+      </button>
+      {{- end -}}
+      {{- /* rendered markdown — clicking (or Enter when focused) selects the
+             block's source line span. tabindex makes it keyboard-focusable and
+             the keydown makes Enter activate it; it deliberately has NO
+             role="button" — Pico paints every [role=button] as a filled blue
+             button, and this is prose, not a button (it also holds arbitrary
+             rendered HTML incl. its own links, which stay independently
+             focusable). */ -}}
+      <div
+        class="md-rendered"
+        tabindex="0"
+        lvt-on:click="selectBlock"
+        lvt-on:keydown="selectBlock"
+        lvt-key="Enter"
+        data-from="{{$bs}}"
+        data-to="{{$be}}"
+      >{{.HTML}}</div>
+      {{- template "blockComments" . -}}
+      {{- template "blockSuggestions" . -}}
+    </div>
+    {{- end -}}
+  </div>{{end}}{{end}}

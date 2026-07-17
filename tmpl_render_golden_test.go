@@ -196,9 +196,25 @@ func updateFixtures() []updateFixture {
 	cardAfter.Comments = []review.Comment{{ID: "c1", File: "app.go", Body: "rename", Kind: "line", FromLine: 2, ToLine: 2, Side: "new", Processed: true}}
 	cardAfter.ThreadEntries = []review.ThreadEntry{{TargetID: "c1", Author: "agent", Body: "done", At: 1700000000000000000}}
 
+	// markdown-view re-entry: a comment appears on a rendered md block, re-
+	// rendering inside {{with $.CurrentDiff}} where the $bs/$be/$mbkey clusters
+	// live — the highest-risk sub-view for an update-path divergence.
+	mdBefore := repoBase()
+	mdBefore.SelectedFile = "README.md"
+	mdBefore.CurrentDiff = &gitdiff.FileDiff{
+		Path:           "README.md",
+		Lines:          []gitdiff.DiffLine{{Kind: "add", NewNum: 1, Content: "# Title"}},
+		MarkdownBlocks: []gitdiff.MarkdownBlock{{HTML: "<h1>Title</h1>", StartLine: 1, EndLine: 1}},
+	}
+	mdAfter := mdBefore
+	mdAfter.Comments = []review.Comment{
+		{ID: "m1", File: "README.md", Body: "tighten this heading", Kind: "line", FromLine: 1, ToLine: 1, Side: "new"},
+	}
+
 	return []updateFixture{
 		{"toolbar-pill", tbBefore, tbAfter},
 		{"diff-card-thread", cardBefore, cardAfter},
+		{"markdown-block-comment", mdBefore, mdAfter},
 	}
 }
 

@@ -1,0 +1,61 @@
+{{define "binaryView"}}{{with $.CurrentDiff}}  {{/* Binary files: now that the HTTP static fallback serves the bytes
+       (issue #13), the browser can render images, PDFs, video and audio
+       inline. The src is the working-tree path under the repo root,
+       served by staticFallback in main.go — its allowlist must stay in
+       sync with state.BinaryKind. Unknown binary kinds (zip, etc.)
+       still fall back to the cannot-display copy. */}}
+  {{$kind := $.BinaryKind}}
+  {{if eq $kind "image"}}
+  {{/* Annotable image with two modes via the shared region toggle (issue #57).
+       DISARMED (default): the <img> carries no capture directive and no
+       touch-action lock, so touch pinch-zooms / scrolls to examine the image
+       natively (the viewport allows user scaling) — previously every touch
+       started a comment and the image couldn't be zoomed. ARMED: the
+       lvt-fx:area-select directive + touch-action:none capture a pointer drag
+       into a region comment. Mirrors how the rendered-HTML / external views
+       gate their capture overlay. The saved-area overlays render in BOTH modes
+       so existing comments stay visible while zooming; only NEW capture is
+       gated. position:relative on .image-with-areas anchors the % overlays. */}}
+  {{template "regionToggle" $}}
+  {{- if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end -}}
+  <div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
+    <img
+      src="/{{.Path}}"
+      alt="{{.Path}}"
+      {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}
+    >
+    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}"
+        data-key="ao-{{.ID}}"
+        style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
+        title="{{.Body}}"></div>{{end}}
+    {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending"
+        data-key="ao-pending"
+        style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
+  </div></div>
+  {{else if eq $kind "pdf"}}
+  {{/* Chrome 117+ ships a deliberately-minimal embed viewer for same-
+       origin PDFs (compact thumbnail + "Open" button) regardless of
+       <embed>/<iframe>/<object> or Content-Disposition: inline — it's
+       a PDFium sandbox policy, not something HTML/headers can override.
+       PDF.js would unlock the full inline viewer at ~500KB gz cost;
+       not worth the bundle weight here. So: clean card with the
+       filename and an "Open in new tab" CTA — single click hands off
+       to Chrome's full standalone viewer. */}}
+  <div class="binary-preview binary-pdf-card">
+    <div class="pdf-card-icon" aria-hidden="true">📄</div>
+    <strong class="pdf-card-name">{{.Path}}</strong>
+    <a
+      role="button"
+      class="contrast pdf-card-open"
+      href="/{{.Path}}"
+      target="_blank"
+      rel="noopener"
+    >Open PDF in new tab →</a>
+  </div>
+  {{else if eq $kind "video"}}
+  <div class="binary-preview binary-video"><video controls preload="metadata" src="/{{.Path}}"></video></div>
+  {{else if eq $kind "audio"}}
+  <div class="binary-preview binary-audio"><audio controls preload="metadata" src="/{{.Path}}"></audio></div>
+  {{else}}
+  <p class="empty">Binary file — cannot display.</p>
+  {{end}}{{end}}{{end}}
