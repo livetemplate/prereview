@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+>
+<title>prereview · /repo</title>
+<link rel="stylesheet" href="/pico.min.css">
+<link rel="stylesheet" href="/livetemplate.css">
+<link rel="stylesheet" href="/syntax.css">
+<link rel="stylesheet" href="/prereview.css">
+</head>
+<body
+  data-lvt-loading-debounce-ms="200"
+  data-lvt-heartbeat-ms="10000"
+><div data-lvt-id="lvt-ID" data-lvt-loading="true">
+
+<div class="theme-root" data-scheme="solarized">
+
+<span class="kbd-esc" hidden aria-hidden="true"
+  lvt-on:window:keydown="clearSelection"
+  lvt-key="Escape"
+></span>
+
+
+
+<header class="bar bar-external">
+  <span class="ext-target">prereview · annotating <code>http://localhost:3000</code> <span class="ext-page">http://localhost:3000/</span></span>
+  <span class="bar-actions"><form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleAnnotations"
+        class="outline secondary anno-toggle"
+        aria-pressed="false"
+        title="Show/hide annotations"
+      >💬 0</button>
+    </form><form method="POST" style="margin:0">
+      <button
+        type="button"
+        command="show-modal"
+        commandfor="confirm-quit"
+        class="contrast"
+        title="Stop the prereview server"
+      >Quit</button>
+    </form></span>
+</header>
+<div class="layout layout-external">
+  <main class="viewer ext-viewer">
+    <form method="POST" class="region-toggle">
+  <button
+    type="submit"
+    name="toggleRegionSelect"
+    class="outline secondary"
+    aria-pressed="false"
+  >▭ Select a region to comment</button>
+</form>
+    <div class="preview-stage ext-stage"
+         lvt-fx:proxy-bridge="setProxyURL"
+         data-key="ext-stage">
+      
+      <iframe
+        class="ext-frame"
+        src="http://localhost:7000"
+        title="Live preview of http://localhost:3000"
+        lvt-ignore
+      ></iframe>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer"></div>
+      
+    </div>
+    
+  </main>
+  <aside
+    class="ext-sidebar"
+    aria-label="Annotations"
+  >
+    <header class="ext-sidebar-head"><strong>Annotations (0)</strong><form method="POST" style="margin:0">
+        <button
+          type="submit"
+          name="toggleAnnotations"
+          class="outline secondary close-btn"
+          aria-label="Close annotations"
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M6 6l12 12M18 6L6 18"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button>
+      </form></header>
+    <div class="ext-sidebar-body"><p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p></div>
+  </aside>
+</div>
+<footer class="app-footer" role="contentinfo"><small>prereview v · external mode · <code>http://localhost:3000</code></small></footer>
+
+
+
+
+<dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
+    <form method="POST">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-quit"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="quit"
+          class="contrast"
+        >Quit</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog>
+
+</div>
+</div><script defer src="/livetemplate-client.js"></script>
+
+<script defer src="/mermaid-init.js"></script>
+</body>
+</html>
+
+

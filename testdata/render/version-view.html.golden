@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+>
+<title>prereview · /repo</title>
+<link rel="stylesheet" href="/pico.min.css">
+<link rel="stylesheet" href="/livetemplate.css">
+<link rel="stylesheet" href="/syntax.css">
+<link rel="stylesheet" href="/prereview.css">
+</head>
+<body
+  data-lvt-loading-debounce-ms="200"
+  data-lvt-heartbeat-ms="10000"
+><div data-lvt-id="lvt-ID" data-lvt-loading="true">
+
+<div class="theme-root" data-scheme="solarized">
+
+<span class="kbd-esc" hidden aria-hidden="true"
+  lvt-on:window:keydown="clearSelection"
+  lvt-key="Escape"
+></span>
+
+
+
+<div class="kbd-bindings" hidden aria-hidden="true"><span
+    lvt-on:window:keydown="nextFile"
+    lvt-key="j"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="prevFile"
+    lvt-key="k"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="cursorDown"
+    lvt-key="ArrowDown"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="cursorUp"
+    lvt-key="ArrowUp"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="nextComment"
+    lvt-key="n"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="prevComment"
+    lvt-key="p"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="openFileComment"
+    lvt-key="c"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="toggleFiles"
+    lvt-key="f"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="toggleTOC"
+    lvt-key="t"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="openSearch"
+    lvt-key="Mod&#43;k"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="toggleCommentList"
+    lvt-key="a"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="toggleShowResolved"
+    lvt-key="r"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="toggleSuggestions"
+    lvt-key="s"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="toggleFocusMode"
+    lvt-key="."
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="toggleKeyboardHelp"
+    lvt-key="?"
+    lvt-mod:skip-when-typing
+  ></span></div>
+<header
+  class="bar"
+  lvt-fx:url-hash="setURLHash"
+  data-lvt-url-hash="app.go"
+>
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleFiles"
+      class="hamburger outline contrast"
+      aria-label="Toggle files"
+    ><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path
+  d="M4 7h16M4 12h16M4 17h16"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button>
+  </form>
+  
+  
+  <form method="POST">
+    <button
+      type="submit"
+      name="openSearch"
+      class="search-btn outline contrast"
+      aria-label="Search files"
+      title="Search files (⌘/Ctrl + K)"
+    ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+    cx="11" cy="11" r="7"
+    stroke="currentColor" stroke-width="1.7" fill="none"
+  /><path
+    d="M16 16l5 5"
+    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"
+  /></svg></button>
+  </form>
+  
+  <div class="title">
+    <span class="title-main"><span class="title-file">app.go</span></span>
+  </div>
+  
+  <div class="toolbar-inline">
+    <div class="tb-group tb-counters">
+      
+      <small class="auto-saved-long">2 files · 2 changed · 0/2 viewed</small>
+    </div>
+    
+    <div class="tb-group tb-toggles">
+      
+      
+      
+      
+      
+      <form method="POST" class="tb-radios" aria-label="File view">
+        <label><input
+          type="radio"
+          name="view"
+          value="diff"
+          checked
+          lvt-on:change="setFileViewMode"
+        >Diff</label>
+        <label><input
+          type="radio"
+          name="view"
+          value="file"
+          
+          lvt-on:change="setFileViewMode"
+        >File</label>
+      </form>
+      
+    </div>
+    
+    
+    <div
+      class="tb-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="contrast theme-toggle tb-dropdown-trigger"
+        aria-haspopup="menu"
+        title="View options — focus, color scheme &amp; mode, comment filters, help"
+      ><span class="tb-label">View</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M6 9l6 6 6-6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  fill="none"
+/></svg></button>
+      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
+        
+        
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleFocusMode"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"
+  stroke="currentColor"
+  stroke-width="1.8"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  fill="none"
+/></svg></span>
+            <span class="menu-label">Focus <kbd class="kbd-hint" aria-hidden="true">.</kbd></span>
+          </button>
+        </form>
+        
+        
+        <form method="POST">
+          <button
+            type="submit"
+            name="cycleScheme"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+  stroke-linejoin="round"
+/><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg></span>
+            <span class="menu-label">Scheme: Solarized</span>
+            <span class="menu-meta">Gruvbox →</span>
+          </button>
+        </form>
+        <form method="POST">
+          <button
+            type="submit"
+            name="cycleTheme"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8.5"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg></span>
+            <span class="menu-label">Mode: System</span>
+            <span class="menu-meta">Light →</span>
+          </button>
+        </form>
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleKeyboardHelp"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon" aria-hidden="true">?</span>
+            <span class="menu-label">Keyboard shortcuts</span>
+          </button>
+        </form>
+        
+        <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
+          <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg></span>
+          <span class="menu-label">Usage guide</span>
+        </a>
+      </div>
+    </div>
+  </div>
+  
+  
+  <form method="POST" class="nav-prev">
+    <button
+      type="submit"
+      name="prevFile"
+      title="Previous file"
+      aria-label="Previous file"
+      class="contrast"
+    ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M15 6l-6 6 6 6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg><span class="nav-label">Prev <kbd class="kbd-hint" aria-hidden="true">k</kbd></span></button>
+  </form>
+  <form method="POST" class="nav-next">
+    <button
+      type="submit"
+      name="nextFile"
+      title="Next file"
+      aria-label="Next file"
+      class="contrast"
+    ><span class="nav-label">Next <kbd class="kbd-hint" aria-hidden="true">j</kbd></span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M9 6l6 6-6 6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button>
+  </form>
+  
+  
+  
+  <form method="POST" class="tb-action">
+    <button
+      type="button"
+      command="show-modal"
+      commandfor="confirm-quit"
+      class="contrast"
+      title="Stop the prereview server"
+    >Quit</button>
+  </form>
+  
+  
+  <form method="POST" style="margin:0">
+    <button
+      type="submit"
+      name="toggleMoreMenu"
+      class="more-trigger"
+      aria-label="More options"
+      aria-haspopup="menu"
+      aria-expanded="false"
+    >
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <circle cx="12" cy="5" r="1.8" fill="currentColor"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
+        <circle cx="12" cy="19" r="1.8" fill="currentColor"/>
+      </svg>
+    </button>
+  </form>
+</header>
+
+
+<div
+  class="more-menu-backdrop"
+  lvt-on:click="closeMoreMenu"
+  aria-hidden="true"
+></div>
+<div
+  class="more-menu"
+  role="menu"
+  aria-label="More options"
+>
+  <div class="menu-info">2 files · 2 changed · 0/2 viewed</div>
+  
+  
+  <form method="POST">
+    <button type="submit" name="prevFile" class="menu-item" role="menuitem">
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M15 6l-6 6 6 6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Previous file</span>
+    </button>
+  </form>
+  <form method="POST">
+    <button type="submit" name="nextFile" class="menu-item" role="menuitem">
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M9 6l6 6-6 6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Next file</span>
+    </button>
+  </form>
+  
+  
+  <form method="POST">
+    <button
+      type="submit"
+      name="cycleScheme"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+  stroke-linejoin="round"
+/><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg></span>
+      <span class="menu-label">Scheme: Solarized</span>
+      <span class="menu-meta">Gruvbox →</span>
+    </button>
+  </form>
+  <form method="POST">
+    <button
+      type="submit"
+      name="cycleTheme"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8.5"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg></span>
+      <span class="menu-label">Mode: System</span>
+      <span class="menu-meta">Light →</span>
+    </button>
+  </form>
+  
+  
+  
+  
+  
+  
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleFileView"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon">
+        
+        
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M6 3h8l4 4v14H6z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /><path
+    d="M14 3v4h4"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg>
+        
+      </span>
+      <span class="menu-label">View file</span>
+    </button>
+  </form>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  <div
+    class="menu-info"
+    style="border-bottom: 0; margin-bottom: 0; font-style: italic;"
+  >No comments yet — tap a line to add one.</div>
+  
+  
+  
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleKeyboardHelp"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon" aria-hidden="true">?</span>
+      <span class="menu-label">Keyboard shortcuts</span>
+    </button>
+  </form>
+  
+  <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
+    <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg></span>
+    <span class="menu-label">Usage guide</span>
+  </a>
+</div>
+
+
+
+
+
+
+
+
+
+<div
+  class="drawer-backdrop"
+  lvt-on:click="closeFiles"
+  aria-label="Close file list"
+></div>
+
+<div class="layout">
+<dialog
+  id="files-drawer"
+  open
+  class=""
+  lvt-fx:resize="--pr-drawer-w"
+  data-resize-handle=".resize-handle"
+  data-resize-min="200"
+  data-resize-max="560"
+  data-resize-store="prereview.drawerW"
+>
+  
+  <div class="drawer-collapse">
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleFiles"
+        class="collapse-toggle"
+        aria-label="Hide file list"
+        aria-expanded="true"
+        title="Hide files (f)"
+      ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M15 6l-6 6 6 6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button>
+    </form>
+  </div>
+  <div class="drawer-head">
+    <strong>2 files</strong>
+    <form method="POST">
+      <button
+        type="submit"
+        name="closeFiles"
+        class="outline close-btn"
+        aria-label="Close"
+      ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M6 6l12 12M18 6L6 18"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button>
+    </form>
+  </div>
+  
+  
+  
+  
+  <div class="drawer-base">
+    <form method="POST" class="base-select-form">
+      <label for="base-input">Base</label>
+      <select id="base-input" name="ref" lvt-on:change="setBase">
+        
+      </select>
+    </form>
+  </div>
+  
+  <div class="drawer-search">
+    <form method="POST" lvt-form:preserve>
+      <input type="text" name="filter" placeholder="Filter files…" value=""
+             lvt-on:input="setFileFilter" lvt-mod:debounce="200"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             enterkeyhint="search">
+    </form>
+  </div>
+  
+  
+  <div class="drawer-body">
+    
+    <ul class="file-tree"><li class="tree-file" data-key="app.go">
+  <div class="file-row" style="--depth:0">
+    <form method="POST" class="file-select-form">
+      <input type="hidden" name="path" value="app.go">
+      <button type="submit" name="selectFile" class="file-btn outline contrast is-selected" title="app.go"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+        <span class="file-label"><span class="file-name">app</span><span class="file-ext">.go</span></span>
+        <span class="file-meta"><small class="diff-stats"><span class="add">+3</span><span class="del">-1</span></small></span>
+      </button>
+    </form>
+    <form method="POST" class="file-viewed-form">
+      <input type="hidden" name="path" value="app.go">
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+    </form>
+  </div>
+</li><li class="tree-file" data-key="README.md">
+  <div class="file-row" style="--depth:0">
+    <form method="POST" class="file-select-form">
+      <input type="hidden" name="path" value="README.md">
+      <button type="submit" name="selectFile" class="file-btn outline contrast" title="README.md"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+        <span class="file-label"><span class="file-name">README</span><span class="file-ext">.md</span></span>
+        <span class="file-meta"><small class="diff-stats"><span class="add">+2</span></small></span>
+      </button>
+    </form>
+    <form method="POST" class="file-viewed-form">
+      <input type="hidden" name="path" value="README.md">
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+    </form>
+  </div>
+</li></ul>
+  </div>
+  
+  <div class="resize-handle" aria-hidden="true"></div>
+</dialog>
+
+<main class="viewer"
+      lvt-fx:viewport-report="reportViewport"
+      data-lvt-viewport-items=".line, .md-block">
+
+
+<article>
+  <header class="file-head"><span class="file-head-name" title="app.go"><strong class="fh-base">app.go</strong></span>
+    
+    <span class="file-head-actions">
+    
+    
+    
+    
+    
+    
+    
+    
+    </span>
+  </header>
+  
+  
+  <div class="version-view-banner" role="status">
+    <span>Viewing a previous version (read-only).</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
+  </div>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  <div class="code"
+       data-key="code-app.go"
+       data-path="app.go"
+       lvt-fx:scroll="reset-on:data-path"
+       lvt-fx:text-select="selectText"
+       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row" data-key="row-L1-1"><div tabindex="0"
+              lvt-on:click="selectLine"
+              lvt-on:keydown="selectLine"
+              lvt-key="Enter"
+              data-line="1"
+              data-side="new"
+              class="line ctx"
+              data-key="L1-1"><span class="gutter"><span class="gutter-mark">&nbsp; </span>1</span><span class="content chroma" data-line-text>package main</span></div></div>
+<div class="line-row" data-key="row-L2-0"><div tabindex="0"
+              lvt-on:click="selectLine"
+              lvt-on:keydown="selectLine"
+              lvt-key="Enter"
+              data-line="2"
+              data-side="old"
+              class="line del"
+              data-key="L2-0"><span class="gutter"><span class="gutter-mark">- </span>2</span><span class="content chroma" data-line-text>var x = 1</span></div></div>
+<div class="line-row" data-key="row-L0-2"><div tabindex="0"
+              lvt-on:click="selectLine"
+              lvt-on:keydown="selectLine"
+              lvt-key="Enter"
+              data-line="2"
+              data-side="new"
+              class="line add"
+              data-key="L0-2"><span class="gutter"><span class="gutter-mark">+ </span>2</span><span class="content chroma" data-line-text>var x = 2</span></div></div>
+<div class="code-sentinel" aria-hidden="true"></div></div>
+  
+</article>
+
+
+
+
+
+
+
+
+</main>
+
+
+
+</div>
+
+
+
+<div
+  class="kbd-help-backdrop"
+  lvt-on:click="toggleKeyboardHelp"
+  aria-hidden="true"
+></div>
+<div
+  class="kbd-help-modal"
+  role="dialog"
+  aria-label="Keyboard shortcuts"
+  aria-modal="true"
+>
+  <div class="kbd-help-head">
+    <strong>Keyboard shortcuts</strong>
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleKeyboardHelp"
+        class="outline close-btn"
+        aria-label="Close"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M6 6l12 12M18 6L6 18"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg>
+      </button>
+    </form>
+  </div>
+  <dl class="kbd-help-list">
+    <div class="kbd-row"><dt><kbd>j</kbd></dt><dd>Next file</dd></div>
+    <div class="kbd-row"><dt><kbd>k</kbd></dt><dd>Previous file</dd></div>
+    <div class="kbd-row"><dt><kbd>↓</kbd></dt><dd>Move line cursor down</dd></div>
+    <div class="kbd-row"><dt><kbd>↑</kbd></dt><dd>Move line cursor up</dd></div>
+    <div class="kbd-row"><dt><kbd>n</kbd></dt><dd>Next comment</dd></div>
+    <div class="kbd-row"><dt><kbd>p</kbd></dt><dd>Previous comment</dd></div>
+    <div class="kbd-row"><dt><kbd>c</kbd></dt><dd>Comment on this file</dd></div>
+    <div class="kbd-row"><dt><kbd>f</kbd></dt><dd>Toggle file tree</dd></div>
+    <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
+    <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
+    <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
+    <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
+    <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
+    <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>
+    <div class="kbd-row"><dt><kbd>?</kbd></dt><dd>Keyboard shortcuts</dd></div>
+    <div class="kbd-row"><dt><kbd>Esc</kbd></dt><dd>Cancel / close</dd></div>
+    <div class="kbd-row"><dt><kbd>Enter</kbd></dt><dd>Comment on the line cursor</dd></div>
+    <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; Enter</kbd></dt><dd>Save comment</dd></div>
+  </dl>
+  <p class="kbd-help-note">Drawing a precise region on rendered HTML or an image needs a mouse — from the keyboard, comment on the whole block or image instead.</p>
+  
+  <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
+</div>
+
+
+<div
+  class="search-backdrop"
+  lvt-on:click="closeSearch"
+  aria-hidden="true"
+></div>
+<div
+  class="search-modal"
+  role="dialog"
+  aria-label="Search files"
+  aria-modal="true"
+>
+  
+</div>
+
+<footer class="app-footer" role="contentinfo">
+  prereview v · built with <a
+    href="https://github.com/livetemplate/livetemplate"
+    target="_blank"
+    rel="noopener noreferrer"
+  >livetemplate</a>
+</footer>
+
+
+
+
+<dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
+    <form method="POST">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-quit"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="quit"
+          class="contrast"
+        >Quit</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog>
+
+</div>
+</div><script defer src="/livetemplate-client.js"></script>
+
+<script defer src="/mermaid-init.js"></script>
+</body>
+</html>
+
+
