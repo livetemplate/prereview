@@ -55,7 +55,17 @@ var templatesFS embed.FS
 // partials and is parsed into the same set (order among them is irrelevant). Adding
 // a component = create the file + append it here. Single source of truth shared by
 // stageTemplates and the signature guard.
-var templateOrder = []string{"page.tmpl", "toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl", "toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl", "filedrawer.tmpl", "allcomments.tmpl", "fileheader.tmpl", "binaryview.tmpl", "htmlview.tmpl", "markdownview.tmpl", "diffview.tmpl", "partials.tmpl", "icons.tmpl"}
+var templateOrder = []string{
+	"page.tmpl", // the shell / entry template — MUST be first
+	// one file per UI component (define-only; parse order among them is irrelevant)
+	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
+	"toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl",
+	"filedrawer.tmpl", "allcomments.tmpl",
+	// the {{with .CurrentDiff}} file-view sub-views
+	"fileheader.tmpl", "binaryview.tmpl", "htmlview.tmpl", "markdownview.tmpl", "diffview.tmpl",
+	// shared comment/region partials + SVG icons
+	"partials.tmpl", "icons.tmpl",
+}
 
 // Skill files embedded so `prereview --install-skill` can drop them
 // into ~/.claude/skills/prereview/ without the user hand-copying (and
