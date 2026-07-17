@@ -300,12 +300,47 @@ func renderFixtures() []renderFixture {
 		ProxyBaseURL: "http://localhost:7000",
 	}
 
-	// version-view (historical read-only)
+	// version-view (historical read-only) + a populated version timeline so the
+	// file-header Versions panel (Phase 2) is exercised, not dark.
 	version := repoBase()
 	version.CurrentDiff = goDiff()
 	version.ViewingVersion = true
 	version.VersionViewSeq = 1
-	version.Versions = []review.VersionListItem{}
+	version.Versions = []review.VersionListItem{
+		{Seq: 2, Label: "Agent edit", When: "14:03", Current: true},
+		{Seq: 1, Label: "Original", When: "14:00", Viewing: true},
+	}
+
+	// search palette open (inner search-head/body markup lit)
+	searchOpen := repoBase()
+	searchOpen.CurrentDiff = goDiff()
+	searchOpen.SearchOpen = true
+	searchOpen.SearchQuery = "app"
+	searchOpen.SearchHits = []review.SearchHit{
+		{File: "app.go", Kind: "line", NewNum: 2, Line: "var x = 2"},
+		{File: "app.go", Kind: "file"},
+	}
+
+	// status banners: Quitting / SessionEnded (each its own, they read differently)
+	quitting := repoBase()
+	quitting.CurrentDiff = goDiff()
+	quitting.Quitting = true
+
+	sessionEnded := repoBase()
+	sessionEnded.CurrentDiff = goDiff()
+	sessionEnded.SessionEnded = true
+
+	// transient toasts + in-viewer prompts, all lit at once (independent {{if}}s)
+	toasts := repoBase()
+	toasts.CurrentDiff = goDiff()
+	toasts.AgentMode = true
+	toasts.Flash = "Saved."
+	toasts.LLMState = "working"
+	toasts.LLMMessage = "applying"
+	toasts.LastDeletedComment = &review.Comment{ID: "d1", File: "app.go", Body: "gone", Kind: "line", FromLine: 1, ToLine: 1, Side: "new"}
+	toasts.ReanchorCommentID = "c9"
+	toasts.PendingRefresh = true
+	toasts.AgentPaused = true
 
 	// agent mode with a queued comment (work-queue dropdown + card)
 	agent := repoBase()
@@ -335,6 +370,10 @@ func renderFixtures() []renderFixture {
 		{"external", external},
 		{"version-view", version},
 		{"agent-mode", agent},
+		{"search-open", searchOpen},
+		{"banners-quitting", quitting},
+		{"banners-session-ended", sessionEnded},
+		{"toasts", toasts},
 		{"empty-pick-file", emptyPick},
 		{"empty-no-files", emptyNoFiles},
 	}

@@ -80,6 +80,10 @@
     lvt-key="s"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="toggleAgentPause"
+    lvt-key="q"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleFocusMode"
     lvt-key="."
     lvt-mod:skip-when-typing
@@ -313,15 +317,49 @@
   
   
   
-  <form method="POST" class="tb-action">
+  <div
+    class="tb-dropdown queue-dropdown is-paused"
+    lvt-el:toggleClass:on:click="open"
+    lvt-el:removeClass:on:click-away="open"
+  >
     <button
       type="button"
-      command="show-modal"
-      commandfor="confirm-quit"
-      class="contrast"
-      title="Stop the prereview server"
-    >Quit</button>
-  </form>
+      id="queue-trigger-0"
+      class="contrast tb-dropdown-trigger queue-trigger is-working is-paused"
+      aria-haspopup="menu"
+      title="Batching — comments held, not sent. Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"
+    ><span class="queue-paused-dot" aria-hidden="true">⏸</span><span class="tb-label">Queue</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M6 9l6 6 6-6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  fill="none"
+/></svg></button>
+    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
+      
+      <form method="POST" class="queue-pause-form">
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn is-paused">▶ Resume — send batch <kbd class="kbd-hint" aria-hidden="true">q</kbd></button>
+      </form>
+      <div class="queue-mode is-batching">Batching: comments are held, not sent. Resume sends them together.</div>
+      <div class="queue-working">⚡ applying</div>
+      
+      
+      <form method="POST" class="queue-scope-form">
+        <button type="submit" name="toggleQueueScope" class="queue-scope-btn" role="menuitemcheckbox" aria-checked="false" title="Show this file's work, or the whole review's">
+          <span class="queue-scope-opt is-on">This file</span><span class="queue-scope-opt">All files</span>
+        </button>
+      </form>
+      
+      
+      
+      
+      <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
+      
+      
+      <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
+    </div>
+  </div>
   
   
   <form method="POST" style="margin:0">
@@ -494,6 +532,35 @@
 
 
 
+<div
+  class="toast flash-toast"
+  role="status"
+  lvt-fx:auto-click="3000:clearFlash"
+>
+  <span class="toast-msg">Saved.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button
+      type="submit"
+      name="clearFlash"
+      class="toast-dismiss"
+      aria-label="Dismiss"
+    >
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M6 6l12 12M18 6L6 18"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg>
+    </button>
+  </form>
+</div>
+
+
+<div class="toast llm-working" role="status" aria-live="polite">
+  <span class="llm-spinner" aria-hidden="true"></span>
+  <span class="toast-msg">applying</span>
+</div>
 
 
 
@@ -622,81 +689,25 @@
     
     
     
-    
-    
-    
-    
-    <div
-      class="tb-dropdown versions-dropdown"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
+    <form method="POST" class="file-head-comment">
       <button
-        type="button"
-        class="versions-trigger"
-        aria-haspopup="menu"
-        title="Versions of this file — view or roll back to a previous version"
+        type="submit"
+        name="openFileComment"
+        class="contrast"
+        title="Add a comment about the whole file"
+        aria-label="Comment on file"
       ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-    d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3.5 2"
-    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"
-  /></svg><span class="versions-trigger-label">Versions</span><span class="versions-count">2</span></button>
-      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
-        
-        
-        <div class="version-row">
-          <button
-            type="button"
-            class="version-summary-toggle"
-            lvt-el:toggleClass:on:click="expanded"
-            data-lvt-target="closest:.version-row"
-            aria-label="Show what changed and version actions"
-          ><span class="version-meta">
-            <span class="version-label">Agent edit</span>
-            <span class="version-when">14:03 · current</span>
-          </span><span class="version-more" aria-hidden="true">⋯</span></button>
-          <div class="version-details">
-            
-            <div class="version-summary"><span class="vs-stat"><span class="vs-add">+0</span> <span class="vs-rem">−0</span></span></div>
-            <span class="version-actions">
-              <form method="POST"><input type="hidden" name="seq" value="2"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
-              
-            </span>
-          </div>
-        </div>
-        
-        <div class="version-row viewing">
-          <button
-            type="button"
-            class="version-summary-toggle"
-            lvt-el:toggleClass:on:click="expanded"
-            data-lvt-target="closest:.version-row"
-            aria-label="Show what changed and version actions"
-          ><span class="version-meta">
-            <span class="version-label">Original</span>
-            <span class="version-when">14:00</span>
-          </span><span class="version-more" aria-hidden="true">⋯</span></button>
-          <div class="version-details">
-            
-            <div class="version-summary"><span class="vs-stat"><span class="vs-add">+0</span> <span class="vs-rem">−0</span></span></div>
-            <span class="version-actions">
-              <form method="POST"><input type="hidden" name="seq" value="1"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
-              <form method="POST"><input type="hidden" name="seq" value="1"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
-              <form method="POST"><input type="hidden" name="seq" value="1"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>
-            </span>
-          </div>
-        </div>
-        
-      </div>
-    </div>
+    d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"
+    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"
+  /></svg><span class="file-head-comment-label">Comment on file <kbd class="kbd-hint" aria-hidden="true">c</kbd></span></button>
+    </form>
+    
+    
+    
+    
     
     </span>
   </header>
-  
-  
-  <div class="version-view-banner" role="status">
-    <span>Viewing a previous version (read-only).</span>
-    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
-  </div>
   
   
   
@@ -743,9 +754,56 @@
 
 
 
+<div class="undo-toast" role="status">
+  <span>Comment on <code>app.go</code> L1 deleted</span>
+  <span class="toast-actions">
+    <form method="POST" style="margin:0;display:inline">
+      <button type="submit" name="undoDelete" class="undo-btn">Undo</button>
+    </form>
+    <form method="POST" class="toast-dismiss-form">
+      <button type="submit" name="dismissUndo" class="toast-dismiss" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M6 6l12 12M18 6L6 18"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button>
+    </form>
+  </span>
+</div>
 
 
 
+<div class="reanchor-prompt" role="status">
+  <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="clearSelection" class="toast-dismiss" aria-label="Cancel re-anchoring"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M6 6l12 12M18 6L6 18"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button>
+  </form>
+</div>
+
+
+
+<div class="reanchor-prompt refresh-prompt" role="status">
+  <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
+  </form>
+</div>
+
+
+
+<div class="reanchor-prompt paused-prompt" role="status">
+  <span>⏸ Batching — comments are held, not sent to the agent yet.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="resumeAgent" class="refresh-btn">Resume — send batch</button>
+  </form>
+</div>
 
 </main>
 
@@ -799,6 +857,7 @@
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
+    <div class="kbd-row"><dt><kbd>q</kbd></dt><dd>Pause / resume the agent queue</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>
     <div class="kbd-row"><dt><kbd>?</kbd></dt><dd>Keyboard shortcuts</dd></div>
     <div class="kbd-row"><dt><kbd>Esc</kbd></dt><dd>Cancel / close</dd></div>
@@ -835,24 +894,24 @@
 
 
 
-
-<dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
+<dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p><footer>
     <form method="POST">
       <fieldset role="group">
         <button
           type="button"
           command="close"
-          commandfor="confirm-quit"
+          commandfor="confirm-end-session"
           class="secondary"
         >Cancel</button>
         <button
           type="submit"
-          name="quit"
+          name="endSession"
           class="contrast"
-        >Quit</button>
+        >End session</button>
       </fieldset>
     </form>
   </footer></article></dialog>
+
 
 </div>
 </div><script defer src="/livetemplate-client.js"></script>

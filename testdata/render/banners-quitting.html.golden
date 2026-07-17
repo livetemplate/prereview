@@ -490,6 +490,10 @@
 </div>
 
 
+<div class="banner-stopping" role="status">
+  Server stopping… you can close this tab.
+</div>
+
 
 
 
@@ -622,81 +626,25 @@
     
     
     
-    
-    
-    
-    
-    <div
-      class="tb-dropdown versions-dropdown"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
+    <form method="POST" class="file-head-comment">
       <button
-        type="button"
-        class="versions-trigger"
-        aria-haspopup="menu"
-        title="Versions of this file — view or roll back to a previous version"
+        type="submit"
+        name="openFileComment"
+        class="contrast"
+        title="Add a comment about the whole file"
+        aria-label="Comment on file"
       ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-    d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3.5 2"
-    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"
-  /></svg><span class="versions-trigger-label">Versions</span><span class="versions-count">2</span></button>
-      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
-        
-        
-        <div class="version-row">
-          <button
-            type="button"
-            class="version-summary-toggle"
-            lvt-el:toggleClass:on:click="expanded"
-            data-lvt-target="closest:.version-row"
-            aria-label="Show what changed and version actions"
-          ><span class="version-meta">
-            <span class="version-label">Agent edit</span>
-            <span class="version-when">14:03 · current</span>
-          </span><span class="version-more" aria-hidden="true">⋯</span></button>
-          <div class="version-details">
-            
-            <div class="version-summary"><span class="vs-stat"><span class="vs-add">+0</span> <span class="vs-rem">−0</span></span></div>
-            <span class="version-actions">
-              <form method="POST"><input type="hidden" name="seq" value="2"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
-              
-            </span>
-          </div>
-        </div>
-        
-        <div class="version-row viewing">
-          <button
-            type="button"
-            class="version-summary-toggle"
-            lvt-el:toggleClass:on:click="expanded"
-            data-lvt-target="closest:.version-row"
-            aria-label="Show what changed and version actions"
-          ><span class="version-meta">
-            <span class="version-label">Original</span>
-            <span class="version-when">14:00</span>
-          </span><span class="version-more" aria-hidden="true">⋯</span></button>
-          <div class="version-details">
-            
-            <div class="version-summary"><span class="vs-stat"><span class="vs-add">+0</span> <span class="vs-rem">−0</span></span></div>
-            <span class="version-actions">
-              <form method="POST"><input type="hidden" name="seq" value="1"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
-              <form method="POST"><input type="hidden" name="seq" value="1"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
-              <form method="POST"><input type="hidden" name="seq" value="1"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>
-            </span>
-          </div>
-        </div>
-        
-      </div>
-    </div>
+    d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"
+    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"
+  /></svg><span class="file-head-comment-label">Comment on file <kbd class="kbd-hint" aria-hidden="true">c</kbd></span></button>
+    </form>
+    
+    
+    
+    
     
     </span>
   </header>
-  
-  
-  <div class="version-view-banner" role="status">
-    <span>Viewing a previous version (read-only).</span>
-    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
-  </div>
   
   
   
