@@ -1,0 +1,65 @@
+{{define "tocOverlay" -}}
+{{with .RenderedHeadings}}
+<div
+  class="toc-backdrop{{if $.TOCOpen}} is-open{{end}}"
+  lvt-on:click="closeTOC"
+  aria-hidden="true"
+></div>
+<div
+  class="toc-modal{{if $.TOCOpen}} is-open{{end}}"
+  role="dialog"
+  aria-label="Table of contents"
+  aria-modal="true"
+>
+  <div class="toc-modal-head">
+    <strong>On this page</strong>
+    <form method="POST">
+      <button
+        type="submit"
+        name="closeTOC"
+        class="outline close-btn"
+        aria-label="Close"
+      >
+        {{template "iconClose16"}}
+      </button>
+    </form>
+  </div>
+  <nav class="toc-modal-list">
+    {{range .}}<a
+      href="#{{.ID}}"
+      lvt-spy-link
+      lvt-on:click="navigateToHeading"
+      data-id="{{.ID}}"
+      class="toc-link toc-l{{.Level}}"
+    >{{.Text}}</a>
+    {{end}}
+  </nav>
+</div>
+{{end}}
+{{- end -}}
+{{define "tocSidebar" -}}
+{{with .RenderedHeadings}}
+<aside class="toc-sidebar" aria-label="Table of contents">
+  {{/* #137: in-TOC collapse chevron. Points right (toward the edge the column
+       collapses to); flips to point left when collapsed (the column is then a
+       thin rail holding just this button). Mirrors the drawer's rail control. */}}
+  <div class="toc-head">
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleTOC"
+        class="collapse-toggle"
+        aria-label="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}"
+        aria-expanded="{{if $.TocCollapsed}}false{{else}}true{{end}}"
+        title="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}{{with index $.KeyHint "toggleTOC"}} ({{.}}){{end}}"
+      >{{if $.TocCollapsed}}{{template "iconChevronLeft"}}{{else}}{{template "iconChevronRight"}}{{end}}</button>
+    </form>
+    <strong>On this page</strong>
+  </div>
+  <nav class="toc-list">
+    {{range .}}<a href="#{{.ID}}" lvt-spy-link class="toc-link toc-l{{.Level}}">{{.Text}}</a>
+    {{end}}
+  </nav>
+</aside>
+{{end}}
+{{- end -}}

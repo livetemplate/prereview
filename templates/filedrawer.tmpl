@@ -1,0 +1,110 @@
+{{define "fileDrawer" -}}
+<dialog
+  id="files-drawer"
+  open
+  class="{{if .FileDrawerOpen}}is-open{{end}}"
+  lvt-fx:resize="--pr-drawer-w"
+  data-resize-handle=".resize-handle"
+  data-resize-min="200"
+  data-resize-max="560"
+  data-resize-store="prereview.drawerW"
+>
+  {{/* #137: desktop collapse/expand rail. The chevron points toward the edge the
+       drawer collapses to (left); when collapsed the drawer shrinks to a thin
+       rail and the chevron flips to point back (right) to reopen. Desktop-only
+       (CSS .drawer-collapse) — the mobile drawer uses the hamburger + backdrop.
+       toggleFiles is the same handler the "f" shortcut and mobile hamburger fire. */}}
+  <div class="drawer-collapse">
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleFiles"
+        class="collapse-toggle"
+        aria-label="{{if .FileDrawerOpen}}Show file list{{else}}Hide file list{{end}}"
+        aria-expanded="{{if .FileDrawerOpen}}false{{else}}true{{end}}"
+        title="{{if .FileDrawerOpen}}Show files{{else}}Hide files{{end}}{{with index $.KeyHint "toggleFiles"}} ({{.}}){{end}}"
+      >{{if .FileDrawerOpen}}{{template "iconChevronRight"}}{{else}}{{template "iconChevronLeft"}}{{end}}</button>
+    </form>
+  </div>
+  <div class="drawer-head">
+    <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
+    <form method="POST">
+      <button
+        type="submit"
+        name="closeFiles"
+        class="outline close-btn"
+        aria-label="Close"
+      >{{template "iconClose16"}}</button>
+    </form>
+  </div>
+  {{/* The all-comments overview button used to live here, but the sidebar is for
+       files (#111) — it's reachable from the toolbar "View ▾" dropdown, the mobile
+       ⋮ menu, and the `a` shortcut. */}}
+  {{/* Base picker — native select so iOS renders the platform wheel
+       (a text input opens the keyboard with autofill noise). Options
+       come from state.BaseChoices: HEAD~N presets + every local and
+       remote-tracking branch, plus the current Base if it was set via
+       --base to something not enumerated. Changing it submits
+       immediately via lvt-on:change. The old freeform "Custom ref…"
+       input was dropped — the enumerated presets cover the real
+       cases (incl. origin/main) without the text-input friction. */}}
+  {{/* No git base ⇒ no refs to compare against; hide the picker
+       entirely (single-file / non-git-directory review). */}}
+  {{if not .NoGit}}
+  <div class="drawer-base">
+    <form method="POST" class="base-select-form">
+      <label for="base-input">Base</label>
+      <select id="base-input" name="ref" lvt-on:change="setBase">
+        {{range .BaseChoices}}
+        <option value="{{.}}"{{if eq . $.Base}} selected{{end}}>{{.}}</option>
+        {{end}}
+      </select>
+    </form>
+  </div>
+  {{end}}
+  <div class="drawer-search">
+    <form method="POST" lvt-form:preserve>
+      <input type="text" name="filter" placeholder="Filter files…" value="{{.FileFilter}}"
+             lvt-on:input="setFileFilter" lvt-mod:debounce="200"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             enterkeyhint="search">
+    </form>
+  </div>
+  {{/* Scope toggle. Only meaningful when the repo has BOTH changed and
+       unchanged files — if every file changed (changed == total) or
+       none did (changed == 0, scope falls back to all anyway) there's
+       nothing to switch between, so hide it. */}}
+  {{if and (gt .ChangedFilesCount 0) (lt .ChangedFilesCount (len .Files))}}
+  <div class="drawer-scope">
+    <form method="POST">
+      <button type="submit" name="toggleFileScope" class="scope-toggle{{if not .ShowAllFiles}} is-on{{end}}"
+              title="
+              {{- if .ShowAllFiles}}Show only files changed vs {{.Base}}
+              {{- else}}Show all {{len .Files}} tracked files{{end -}}
+              ">
+        {{if .ShowAllFiles -}}
+        All {{len .Files}} files · show changed only
+        {{- else -}}
+        Changed {{.ChangedFilesCount}} · show all {{len .Files}}
+        {{- end}}
+      </button>
+    </form>
+  </div>
+  {{end}}
+  <div class="drawer-body">
+    {{/* The file browser (folder tree when unfiltered, flat path list while
+         filtering) is rendered in Go and injected here. livetemplate flattens
+         {{template}} calls at parse time and so cannot host a self-recursive
+         tree template; rendering the recursive markup in Go and injecting it
+         as template.HTML is the same native-<details> pattern tinkerdown uses
+         for its nested nav. The <details lvt-ignore-attrs> open state survives
+         re-renders via the upstream morphdom durability fix. */}}
+    {{.FileBrowserHTML}}
+  </div>
+  {{/* Drag handle on the drawer's right edge — the lvt-fx:resize directive
+       (livetemplate client) makes it resize the sidebar live, persisting the
+       width to localStorage. Desktop-only (hidden under the mobile breakpoint
+       where the drawer is an overlay). */}}
+  <div class="resize-handle" aria-hidden="true"></div>
+</dialog>
+{{- end -}}

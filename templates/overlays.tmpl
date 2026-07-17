@@ -1,0 +1,112 @@
+{{define "searchPalette" -}}
+<div
+  class="search-backdrop{{if .SearchOpen}} is-open{{end}}"
+  lvt-on:click="closeSearch"
+  aria-hidden="true"
+></div>
+<div
+  class="search-modal{{if .SearchOpen}} is-open{{end}}"
+  role="dialog"
+  aria-label="Search files"
+  aria-modal="true"
+>
+  {{if .SearchOpen}}
+  <div class="search-head">
+    <span class="search-head-icon">{{template "iconSearch"}}</span>
+    <form method="POST" lvt-form:preserve class="search-input-form">
+      <input
+        type="text"
+        name="q"
+        value="{{.SearchQuery}}"
+        placeholder="Search file names & contents…"
+        lvt-autofocus
+        lvt-on:input="setSearchQuery"
+        lvt-mod:debounce="200"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        enterkeyhint="search"
+      >
+    </form>
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleSearchScope"
+        class="search-scope outline"
+        title="Toggle search scope (changed files vs all files)"
+      >{{.SearchScopeLabel}} <span class="search-scope-count">{{.SearchScopeCount}}</span></button>
+    </form>
+    <form method="POST">
+      <button
+        type="submit"
+        name="closeSearch"
+        class="outline close-btn"
+        aria-label="Close"
+      >{{template "iconClose16"}}</button>
+    </form>
+  </div>
+  <div class="search-body">
+    {{if .SearchHits}}
+    <ul class="search-list">
+      {{- range .SearchHits}}
+      <li class="search-item{{if eq .Kind "file"}} is-file{{end}}">
+        <form method="POST">
+          <input type="hidden" name="file" value="{{.File}}">
+          <input type="hidden" name="old" value="{{.OldNum}}">
+          <input type="hidden" name="new" value="{{.NewNum}}">
+          <button type="submit" name="jumpToSearchResult" class="search-hit">
+            <span class="search-where"><code>{{.File}}</code>{{if eq .Kind "line"}} <small>L{{.NewNum}}</small>{{else}} <small class="search-filematch">file name</small>{{end}}</span>
+            {{- if eq .Kind "line"}}<span class="search-line">{{.Line}}</span>{{end -}}
+          </button>
+        </form>
+      </li>
+      {{- end}}
+    </ul>
+    {{if .SearchTruncated}}<p class="search-note">Showing the first {{len .SearchHits}} matches — narrow your search.</p>{{end}}
+    {{else if .SearchQuery}}
+    <p class="search-empty">No matches for “{{.SearchQuery}}”.</p>
+    {{else}}
+    <p class="search-empty">Type to search file names and contents.</p>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{- end -}}
+{{define "kbdHelp" -}}
+<div
+  class="kbd-help-backdrop{{if .KeyHelpOpen}} is-open{{end}}"
+  lvt-on:click="toggleKeyboardHelp"
+  aria-hidden="true"
+></div>
+<div
+  class="kbd-help-modal{{if .KeyHelpOpen}} is-open{{end}}"
+  role="dialog"
+  aria-label="Keyboard shortcuts"
+  aria-modal="true"
+>
+  <div class="kbd-help-head">
+    <strong>Keyboard shortcuts</strong>
+    <form method="POST">
+      <button
+        type="submit"
+        name="toggleKeyboardHelp"
+        class="outline close-btn"
+        aria-label="Close"
+      >
+        {{template "iconClose16"}}
+      </button>
+    </form>
+  </div>
+  <dl class="kbd-help-list">
+    {{- range .KeyBindings}}
+    <div class="kbd-row"><dt><kbd>{{.Display}}</kbd></dt><dd>{{.Label}}</dd></div>
+    {{- end}}
+  </dl>
+  <p class="kbd-help-note">Drawing a precise region on rendered HTML or an image needs a mouse — from the keyboard, comment on the whole block or image instead.</p>
+  {{/* The full usage guide is a standalone page (/_usage), opened in a new tab
+       so the review session is left intact. The reserved "_" path can't be
+       shadowed by a repo file named usage/usage.md — see registerAssetRoutes. */}}
+  <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
+</div>
+{{- end -}}

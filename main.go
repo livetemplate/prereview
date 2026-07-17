@@ -52,7 +52,7 @@ var templatesFS embed.FS
 // livetemplate's main template (its top-level markup becomes "prereview"); the
 // other files contribute only {{define}} partials and are parsed into the same
 // set. Single source of truth shared by stageTemplates and the signature guard.
-var templateOrder = []string{"page.tmpl", "toolbar.tmpl", "partials.tmpl", "icons.tmpl"}
+var templateOrder = []string{"page.tmpl", "toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl", "toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl", "filedrawer.tmpl", "allcomments.tmpl", "partials.tmpl", "icons.tmpl"}
 
 // Skill files embedded so `prereview --install-skill` can drop them
 // into ~/.claude/skills/prereview/ without the user hand-copying (and

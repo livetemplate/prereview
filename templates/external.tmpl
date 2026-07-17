@@ -1,0 +1,183 @@
+{{define "externalBody" -}}
+{{/* --external (live-site) view. The proxied site renders in a cross-origin
+     iframe (src = the second-origin proxy); the region overlay is toggle-
+     armed (same UX as the HTML preview) so the live page stays interactive
+     when off and captures a drawn box when on. lvt-fx:proxy-bridge wires the
+     injected beacon's nav (→ setProxyURL) + scroll (→ pin-layer transform).
+     Annotations anchor to URL + region (kind=region); the pin layer re-pins
+     them on the live page, the sidebar lists them across pages. */}}
+<header class="bar bar-external">
+  <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>
+    {{- if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end -}}
+  </span>
+  <span class="bar-actions">
+    {{- /* annotation-count toggle */ -}}
+    <form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleAnnotations"
+        class="outline secondary anno-toggle"
+        aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}"
+        title="Show/hide annotations"
+      >💬 {{len $.AllRegionComments}}</button>
+    </form>
+    {{- if .AgentMode -}}
+    {{/* Continuous enqueue (#119): annotations stream to the agent as you make
+         them; pausing BATCHES them instead (held, sent together on resume) — not
+         a stop. Mirrors the repo-mode toolbar. */}}
+    <form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleAgentPause"
+        class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}"
+        title="{{if .AgentPaused}}Batching — annotations held, not sent. Resume to send the batch.{{else}}Live — each annotation is sent as you make it. Pause to batch them instead.{{end}}"
+      >{{if .AgentPaused}}▶ Resume — send batch{{else}}⏸ Pause — batch{{end}}</button>
+    </form>
+    {{- /* session terminator — opens the confirm dialog (#58) instead of ending
+           immediately; the dialog's button fires endSession. */ -}}
+    <form method="POST" style="margin:0">
+      <button
+        type="button"
+        command="show-modal"
+        commandfor="confirm-end-session"
+        class="contrast"
+        title="Emit session_end and stop the server — your agent stops consuming the stream"
+      >End session</button>
+    </form>
+    {{- else -}}
+    <form method="POST" style="margin:0">
+      <button
+        type="button"
+        command="show-modal"
+        commandfor="confirm-quit"
+        class="contrast"
+        title="Stop the prereview server"
+      >Quit</button>
+    </form>
+    {{- end -}}
+  </span>
+</header>
+<div class="layout layout-external">
+  <main class="viewer ext-viewer">
+    {{template "regionToggle" $}}
+    <div class="preview-stage ext-stage"
+         lvt-fx:proxy-bridge="setProxyURL"
+         data-key="ext-stage"
+         {{- with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+      {{/* lvt-ignore: morphdom must never re-process this iframe. Its src is
+           set once (SSR); as the user navigates the live site in-app the
+           content moves while the src attribute stays put. Without this, any
+           server render re-emits src={{`{{.ProxyBaseURL}}`}} and morphdom
+           resets the iframe back to the home page. (lvt-ignore-attrs is NOT
+           enough — it only back-fills dropped attrs; the template always has
+           src, so morphdom would still sync it.) */}}
+      <iframe
+        class="ext-frame"
+        src="{{.ProxyBaseURL}}"
+        title="Live preview of {{.TargetURL}}"
+        lvt-ignore
+      ></iframe>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">
+        {{- range $.RegionComments -}}
+        <button type="button"
+                class="area-overlay pin-btn
+                {{- if .Resolved}} is-resolved{{end}}
+                {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}
+                "
+                lvt-on:click="editComment"
+                data-id="{{.ID}}"
+                data-key="pin-{{.ID}}"
+                style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
+                title="{{.Body}}"
+                aria-label="Edit annotation"></button>
+        {{- end -}}
+        {{- if eq $.CommentMode "region" -}}
+        <div class="area-overlay area-overlay-pending"
+             data-key="pin-pending"
+             style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>
+        {{- end -}}
+      </div>
+      {{if .RegionSelectArmed}}<div
+        class="region-overlay"
+        lvt-fx:region-select="selectRegion"
+        data-surface="page"
+        data-key="ext-region-overlay"
+      ></div>{{end}}
+    </div>
+    {{if eq $.CommentMode "region"}}{{template "composer" $}}{{end}}
+  </main>
+  <aside
+    class="ext-sidebar{{if .AnnoDrawerOpen}} is-open{{end}}"
+    aria-label="Annotations"
+  >
+    <header class="ext-sidebar-head"><strong>Annotations ({{len $.AllRegionComments}})</strong>
+      {{- /* close annotations */ -}}
+      <form method="POST" style="margin:0">
+        <button
+          type="submit"
+          name="toggleAnnotations"
+          class="outline secondary close-btn"
+          aria-label="Close annotations"
+        >{{template "iconClose16"}}</button>
+      </form>
+    {{- /* */ -}}
+    </header>
+    <div class="ext-sidebar-body">
+      {{- range $.AllRegionComments -}}
+      <div
+        class="inline-comment ext-anno
+        {{- if .Resolved}} is-resolved{{end}}
+        {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}
+        "
+        data-key="{{.ID}}"
+        lvt-fx:animate="fade"
+      >
+        {{- /* locate form */ -}}
+        <form method="POST" class="anno-locate-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button
+            type="submit"
+            name="focusComment"
+            class="anno-locate"
+            title="Locate this region on the page"
+          ><span class="ext-page-link">📍 {{.URL}}</span>
+          {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
+          {{- /* */ -}}<span class="anno-body">{{.Body}}</span></button>
+        </form>
+        {{- /* resolve / edit / delete */ -}}
+        <div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="toggleResolved"
+        class="outline"
+      >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>
+          {{- if not .Resolved -}}
+          <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="editComment"
+        class="outline"
+      >Edit</button>
+    </form>
+          {{- end -}}
+          <button
+      type="button"
+      class="secondary outline"
+      command="show-modal"
+      commandfor="confirm-delete-{{.ID}}"
+    >Delete</button>
+          {{- template "deleteDialogTagged" . -}}
+        </div></div>
+      {{- else -}}
+      <p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>
+      {{- end -}}
+    </div>
+  </aside>
+</div>
+<footer class="app-footer" role="contentinfo"><small>prereview
+  {{- if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
+{{- end -}}
