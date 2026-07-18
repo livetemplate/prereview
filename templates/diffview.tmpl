@@ -1,0 +1,106 @@
+{{define "diffView"}}{{with $.CurrentDiff}}  {{/* data-key by path is load-bearing, NOT just a scroll-reset hack:
+       per-row keys are "L<old>-<new>" which COLLIDE across files
+       (every file has an L1-1, L2-2…). Without a path-scoped key on
+       the container, morphdom matches old file's L1-1 to new file's
+       L1-1, reuses the node, and the tree-diff leaves stale content —
+       you get the previous file's lines bleeding into the new file.
+       Keying .code by path forces a clean subtree replace on switch.
+       Measured: this costs no extra bandwidth — livetemplate resends
+       {{range}} statics on a full content swap regardless of the key.
+       Bonus: a fresh element also starts at scroll (0,0). */}}
+  <div class="code
+    {{- if eq .Note "file added"}} pure-add
+    {{- else if eq .Note "file deleted"}} pure-del{{end}}
+    {{- if $.FileView}} file-view{{end -}}
+    "
+       data-key="code-{{.Path}}"
+       data-path="{{.Path}}"
+       lvt-fx:scroll="reset-on:data-path"
+       lvt-fx:text-select="selectText"
+       style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">
+    {{- range $.VisibleLines -}}
+    {{- if eq .Kind "fold" -}}
+    <div
+      class="line-row fold-row"
+      data-key="F{{.OldNum}}-{{.NewNum}}"
+      aria-hidden="true"
+    ><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>
+    {{- else -}}
+    {{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end -}}
+    {{- /* $lside is this row's diff side (matches data-side). A diff line
+           number is NOT unique — a modified line exists as both a del (old)
+           and an add (new) row with the same $ln — so the composer, cards, and
+           composing-marker must also match the SELECTED side, or they render
+           on both rows. */ -}}
+    {{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end -}}
+    {{- /* #151: how many comments / suggestions render on THIS row (this line, this
+           side)? CommentCountLines/SuggestionCountLines are keyed "<line>-<side>" and
+           are built from the SAME filtered maps the card ranges below render, so a
+           badge's number matches what actually renders on the row (never both
+           old+new). $hasComment/$hasSuggestion (count>0) drive the #136 presence gate.
+           A zero-arg map lookup — NOT an assign-inside-range, which breaks the
+           framework's live render. */ -}}
+    {{$rowkey := printf "%d-%s" $ln $lside -}}
+    {{$commentCount := index $.CommentCountLines $rowkey -}}
+    {{$suggestionCount := index $.SuggestionCountLines $rowkey -}}
+    {{$hasComment := gt $commentCount 0 -}}
+    {{$hasSuggestion := gt $suggestionCount 0 -}}
+    {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
+    <div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
+      {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
+      {{- /* A selectable div (not <button>): <button> content is non-
+             selectable in UA styles, which would block native text selection.
+             Same pattern as .md-rendered above — tabindex + click/keydown so
+             collapsed activation still selects the whole line, while a
+             non-collapsed drag is caught by lvt-fx:text-select on .code.
+             data-line-text marks the text container so text-select's column
+             count excludes the gutter. */ -}}
+      <div tabindex="0"
+              lvt-on:click="selectLine"
+              lvt-on:keydown="selectLine"
+              lvt-key="Enter"
+              data-line="{{$ln}}"
+              data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}"
+              class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"
+              {{- if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}
+              data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else if eq .Kind "del"}}-{{else}}&nbsp;{{end}} </span>{{$ln}}</span>
+              {{- /* */ -}}<span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>
+      {{- /* #165: ONE state-coloured right-margin badge per line — the TOTAL annotation
+             count (comments + suggestions), coloured YELLOW when any are open (unresolved
+             comment / unaccepted suggestion) or GREEN when all are done.
+             #174: clicking it flips the row away from its default: a done row REVEALS its
+             collapsed cards (the old "peek"), an OPEN row COLLAPSES them, so a comment can
+             be set aside and returned to later without resolving it. The class is SERVER
+             state (ToggledRows) — as a client-only class it was morphed away by the next
+             re-render (#173). lvt-el keeps the tap instant; the server render converges.
+             Sibling of .line so the click can't bubble to selectLine; sits in the reserved
+             right padding. */ -}}
+      {{- if or $hasComment $hasSuggestion -}}
+      <span class="line-margin">
+        <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}"
+                lvt-on:click="toggleRow"
+                data-row="{{$rowkey}}"
+                lvt-el:toggleClass:on:click="row-toggled"
+                data-lvt-target="closest:.line-row"
+                aria-label="Show or hide the annotations on this line"
+                title="Show/hide this line's annotations">
+          <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
+        </button>
+      </span>
+      {{- end -}}
+      {{- /* comments anchored to this line (on THIS side), then the composer when
+             this line+side is selected — both gated on $lside so a modified line's
+             old/new rows don't each render the same card/composer */ -}}
+      {{- range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end -}}
+      {{- /* LLM suggestion boxes anchored to this line (on THIS side) */ -}}
+      {{- range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end -}}
+      {{- if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside) -}}
+      {{template "composer" $}}
+      {{- end -}}</div>
+    {{- /* each code line ends with one trailing newline, as the original markup emitted */}}
+{{end -}}
+    {{- end -}}
+    {{- /* bottom sentinel for the scroll/intersection observer */ -}}
+    <div class="code-sentinel" aria-hidden="true"></div>
+    {{- /* */ -}}
+  </div>{{end}}{{end}}

@@ -2,21 +2,59 @@
 
 ## Template layout (`templates/`)
 
-The page template is split into single-responsibility files under `templates/`,
-parsed together by livetemplate (`stageTemplates` in `store.go` →
-`WithParseFiles`, ordered by `templateOrder` in `main.go`):
+The page is split **one component per file** (#122), parsed together by
+livetemplate (`stageTemplates` in `store.go` → `WithParseFiles`, ordered by
+`templateOrder` in `main.go`):
 
-- **`page.tmpl`** — the page shell and all rendered views. It is the **main**
-  template (its top-level markup becomes the `"prereview"` entry); it must be
-  parsed first.
+- **`page.tmpl`** — the **main** template: the `<html>/<head>/<body>` shell, the
+  `.theme-root` wrapper, the top-level `{{if .ExternalMode}}` dispatch, the
+  `{{with .CurrentDiff}}` file-view scaffold (article + view-ladder conditions),
+  scripts, footer. It is the ONLY file that carries top-level body text (its
+  markup becomes the `"prereview"` entry) and **must be parsed first**. It calls
+  each component with `{{template "x" $}}`.
+- **Component files** — each `{{define}}`-only, one UI component apiece:
+  `toolbar.tmpl`, `viewmenu.tmpl`, `workqueue.tmpl`, `moremenu.tmpl`,
+  `banners.tmpl`, `filedrawer.tmpl`, `allcomments.tmpl`, `toc.tmpl`,
+  `overlays.tmpl`, `external.tmpl`, and the file-view sub-views
+  `fileheader.tmpl` / `binaryview.tmpl` / `htmlview.tmpl` / `markdownview.tmpl` /
+  `diffview.tmpl`.
 - **`partials.tmpl`** — `{{define}}`-only: the reusable comment/region render
   partials (`composer`, `blockComments`, `commentCard*`, `deleteDialog*`,
   `regionToggle`).
 - **`icons.tmpl`** — `{{define}}`-only: the SVG icon partials.
 
-Partials files must contain **only** `{{define}}` blocks + comments/whitespace —
-any top-level rendered text there would clobber `page.tmpl`'s body (Go's "only
-one Parse call may carry body text" rule).
+Every file except `page.tmpl` must contain **only** `{{define}}` blocks +
+comments/whitespace — any top-level rendered text there would clobber
+`page.tmpl`'s body (Go's "only one Parse call may carry body text" rule).
+**Adding a component = create the file + append it to `templateOrder`**
+(`main.go`); the `//go:embed templates/*.tmpl` glob picks it up automatically.
+
+### Rules when extracting / editing a component (read before you split more)
+
+- **Always pass the root state: `{{template "x" $}}`.** In Go templates `$`
+  rebinds to the *argument*, so passing `.` (e.g. a `CurrentDiff`) would make the
+  100+ `$.Field` references inside resolve against the wrong data. Every define is
+  called with `$`.
+- **Re-establish local scope INSIDE the define, not at the call.** A file-view
+  component that needs `.Path`/`.Lines` opens `{{with $.CurrentDiff}}…{{end}}` in
+  its own body (see `diffview.tmpl` etc.), so `.` = `CurrentDiff` and `$` stays
+  the root state — exactly the binding it had inline.
+- **Never split a `{{$var := …}}` from its use.** Lexical vars are scoped to the
+  declaring template and don't cross a `{{template}}` call; extract whole views
+  (the `$ln/$lside/$lkey`, `$bs/$be/$mbkey`, `$fcs/$acs` clusters stay together).
+- **Preserve source indentation.** The `{{- -}}` trim markers eat leading
+  whitespace, which livetemplate emits verbatim; an indented define body is
+  wrapped `{{define "x"}}…{{end}}` (no trims) so its bytes are exact.
+
+### The rendering-neutrality guard
+
+Because extraction turns inline markup into a `{{template}}` action, it *changes*
+the signature (below) — so `TestTemplateRenderGolden` (`tmpl_render_golden_test.go`)
+is the neutrality proof: it renders the real `"prereview"` template for a fixture
+per branch and diffs the full HTML — on both the initial tree (`Execute`) and the
+live-update payload (`ExecuteUpdates`) — against `testdata/render/*.golden`. A
+pure relocation keeps every golden byte-identical. Regenerate intentionally with
+`go test -run 'TestTemplateRenderGolden|TestTemplateUpdateGolden' -update-render .`.
 
 ## Editing the templates (read before you touch them)
 

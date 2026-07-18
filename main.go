@@ -38,21 +38,34 @@ Subcommands (for the coding agent; each takes --out <REPO>):
   Run a subcommand with -h for its own flags, e.g. ` + "`prereview done -h`" + `.
 `
 
-// templatesFS holds the split template set: page.tmpl (the page shell — the
-// entry template) plus partials.tmpl (reusable comment/region render partials)
-// and icons.tmpl (SVG icon {{define}}s). They are staged to a temp dir at
-// startup because livetemplate.New requires template files on disk
-// (see stageTemplates). The output-equivalence guard concatenates them in
-// templateOrder and stays byte-identical to the pre-split monolith.
+// templatesFS holds the split template set (#122): page.tmpl is the page shell —
+// the entry template — and every other file is a {{define}}-only component it
+// invokes with {{template "x" $}} (toolbar, view menu, the file-view sub-views,
+// the comment/icon partials, …). One component per file. They are staged to a
+// temp dir at startup because livetemplate.New requires template files on disk
+// (see stageTemplates). TestTemplateRenderGolden proves the split is rendering-
+// neutral; TestTemplateOutputSignature guards each file against reflow.
 //
 //go:embed templates/*.tmpl
 var templatesFS embed.FS
 
 // templateOrder is the canonical parse order: page.tmpl MUST be first — it is
-// livetemplate's main template (its top-level markup becomes "prereview"); the
-// other files contribute only {{define}} partials and are parsed into the same
-// set. Single source of truth shared by stageTemplates and the signature guard.
-var templateOrder = []string{"page.tmpl", "partials.tmpl", "icons.tmpl"}
+// livetemplate's main template (its top-level markup becomes "prereview") and the
+// only file that may carry body text; every other file contributes only {{define}}
+// partials and is parsed into the same set (order among them is irrelevant). Adding
+// a component = create the file + append it here. Single source of truth shared by
+// stageTemplates and the signature guard.
+var templateOrder = []string{
+	"page.tmpl", // the shell / entry template — MUST be first
+	// one file per UI component (define-only; parse order among them is irrelevant)
+	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
+	"toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl",
+	"filedrawer.tmpl", "allcomments.tmpl",
+	// the {{with .CurrentDiff}} file-view sub-views
+	"fileheader.tmpl", "binaryview.tmpl", "htmlview.tmpl", "markdownview.tmpl", "diffview.tmpl",
+	// shared comment/region partials + SVG icons
+	"partials.tmpl", "icons.tmpl",
+}
 
 // Skill files embedded so `prereview --install-skill` can drop them
 // into ~/.claude/skills/prereview/ without the user hand-copying (and

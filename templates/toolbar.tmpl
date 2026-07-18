@@ -1,0 +1,205 @@
+{{define "toolbar" -}}
+<header
+  class="bar"
+  lvt-fx:url-hash="setURLHash"
+  data-lvt-url-hash="{{.URLHash}}"
+>
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleFiles"
+      class="hamburger outline contrast"
+      aria-label="Toggle files"
+    >{{template "iconHamburger"}}</button>
+  </form>
+  {{/* Search palette trigger (issue #91). Always visible (outside the
+       desktop-only toolbar-inline) so it's reachable on a phone too; the Mod+k
+       shortcut (documented in the help overlay) is the desktop path. Repo mode
+       only — there are no files to search in --external mode. */}}
+  {{if not .ExternalMode}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="openSearch"
+      class="search-btn outline contrast"
+      aria-label="Search files"
+      title="Search files (⌘/Ctrl + K)"
+    >{{template "iconSearch"}}</button>
+  </form>
+  {{end}}
+  <div class="title">
+    <span class="title-main">
+      {{- if .ShowAllComments}}{{/* No title in all-comments mode — the "Show all comments (N) ☑" checkbox in the toolbar already conveys the view. */}}
+      {{- else if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>
+      {{- else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>
+      {{- end -}}
+    </span>
+  </div>
+  {{/* Desktop-only inline chip group. On mobile these same actions live
+       in the 3-dots overflow menu below — single source of truth, just
+       presented in the layout that fits.
+
+       Grouped into .tb-group segments (counters | view toggles) with
+       a CSS divider between them; the prev/next and Quit forms below
+       form their own groups via .tb-group-divider on first-of-group. */}}
+  <div class="toolbar-inline">
+    <div class="tb-group tb-counters">
+      {{/* File-count status text. The "Show resolved" filter and the
+           "⚠ outdated" button used to sit here; they now live in the
+           "View ▾" dropdown below (their toggleShowResolved /
+           toggleCommentList actions are unchanged), keeping the inline
+           bar to one short text chip so it can't crop the right edge. */}}
+      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
+    </div>
+    {{if .CurrentDiff}}
+    <div class="tb-group tb-toggles">
+      {{/* Native HTML radio groups for view-mode toggles. Auto-submit
+           on change via livetemplate's `lvt-on:change` (same pattern as
+           the Base picker <select> in the file drawer). Setters
+           (SetMarkdownView / SetFileViewMode) read the form's `view`
+           field — idempotent, so clicking the already-active radio is a
+           genuine no-op (vs. the old toggle action which would have
+           flipped). Browser-native radio visuals beat any custom
+           segmented control: clear "one of N" affordance, no squish
+           bugs, accent-color matches the toolbar contrast. */}}
+      {{if .IsMarkdown}}
+      <form method="POST" class="tb-radios" aria-label="Markdown view">
+        <label><input
+          type="radio"
+          name="view"
+          value="rendered"
+          {{if not .RawMarkdown}}checked{{end}}
+          lvt-on:change="setMarkdownView"
+        >Preview</label>
+        <label><input
+          type="radio"
+          name="view"
+          value="raw"
+          {{if .RawMarkdown}}checked{{end}}
+          lvt-on:change="setMarkdownView"
+        >Raw</label>
+      </form>
+      {{end}}
+      {{if .IsHTML}}
+      <form method="POST" class="tb-radios" aria-label="HTML view">
+        <label><input
+          type="radio"
+          name="view"
+          value="rendered"
+          {{if not .RawHTML}}checked{{end}}
+          lvt-on:change="setHTMLView"
+        >Preview</label>
+        <label><input
+          type="radio"
+          name="view"
+          value="raw"
+          {{if .RawHTML}}checked{{end}}
+          lvt-on:change="setHTMLView"
+        >Raw</label>
+      </form>
+      {{end}}
+      {{/* Diff / File inline radios (desktop). Shown for code, HTML-raw, and
+           Markdown (raw + preview) — in preview the Diff/File choice gates the
+           rendered change-bars (#110), matching what it does in raw. Hidden in
+           HTML preview, whose highlight is deferred (it'd be a no-op there). On
+           mobile the whole inline bar collapses into the 3-dots menu, which
+           carries the same toggle. */}}
+      {{if not .ShowRenderedHTML}}
+      <form method="POST" class="tb-radios" aria-label="File view">
+        <label><input
+          type="radio"
+          name="view"
+          value="diff"
+          {{if not .FileView}}checked{{end}}
+          lvt-on:change="setFileViewMode"
+        >Diff</label>
+        <label><input
+          type="radio"
+          name="view"
+          value="file"
+          {{if .FileView}}checked{{end}}
+          lvt-on:change="setFileViewMode"
+        >File</label>
+      </form>
+      {{end}}
+    </div>
+    {{end}}
+    {{/* "View ▾" dropdown — groups the low-frequency toolbar controls (focus,
+         color scheme/mode, comment filters, help) so the inline bar stays to a
+         few primary chips and never crops the right edge. Built on the docs'
+         client primitive (reference/client-attributes.md): the trigger toggles
+         `.open` on the wrapper (closest-match click delegation), click-away
+         removes it — NO server state, NO custom JS. The `.open` class lives only
+         client-side; prereview has no background re-render, so every morph is
+         user-initiated and coincides with a click that already closed the menu
+         (item click, click-away, or keyboard action) — hence no lvt-ignore-attrs.
+         The same six actions are mirrored in the mobile .more-menu below; this is
+         the desktop presentation (the wrapper sits in desktop-only .toolbar-inline).
+         aria-expanded is intentionally omitted: a client class-toggle can't keep
+         it in sync. */}}
+{{template "viewMenu" $}}
+  </div>
+  {{/* "Comment on file" used to live here; it now sits in the file header
+       (.file-head) next to the filename, which declutters the toolbar. */}}
+  {{if gt (len .Files) 1}}
+  <form method="POST" class="nav-prev">
+    <button
+      type="submit"
+      name="prevFile"
+      title="Previous file"
+      aria-label="Previous file"
+      class="contrast"
+    >{{template "iconChevronLeft"}}<span class="nav-label">Prev{{with index $.KeyHint "prevFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
+  </form>
+  <form method="POST" class="nav-next">
+    <button
+      type="submit"
+      name="nextFile"
+      title="Next file"
+      aria-label="Next file"
+      class="contrast"
+    ><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
+  </form>
+  {{end}}
+  {{/* Work queue (#119) — the hub for a continuous-enqueue session: what's queued
+       / worked-on / held as drafts, PLUS Pause/Resume and End session. A direct
+       child of the bar (reachable on mobile) placed AFTER the flex:1 .title so it
+       sits on the RIGHT — its panel opens over the content, clear of the file
+       drawer (the bar's z-index sits below the drawer's, so a left-opening panel
+       would render behind it). */}}
+  {{if .AgentMode}}
+{{template "workQueue" $}}
+  {{else}}
+  <form method="POST" class="tb-action">
+    <button
+      type="button"
+      command="show-modal"
+      commandfor="confirm-quit"
+      class="contrast"
+      title="Stop the prereview server"
+    >Quit</button>
+  </form>
+  {{end}}
+  {{/* 3-dots trigger — mobile only (hidden on desktop via CSS). Placed
+       last so it visually anchors the right edge of the toolbar; the
+       menu opens directly below it (also right-edge aligned). Uses an
+       SVG icon — the `⋮` unicode glyph renders zero-width on iOS Safari's
+       UI font. */}}
+  <form method="POST" style="margin:0">
+    <button
+      type="submit"
+      name="toggleMoreMenu"
+      class="more-trigger"
+      aria-label="More options"
+      aria-haspopup="menu"
+      aria-expanded="{{if .MoreMenuOpen}}true{{else}}false{{end}}"
+    >
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <circle cx="12" cy="5" r="1.8" fill="currentColor"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
+        <circle cx="12" cy="19" r="1.8" fill="currentColor"/>
+      </svg>
+    </button>
+  </form>
+</header>
+{{- end -}}

@@ -1,0 +1,88 @@
+{{define "viewerPrompts" -}}
+{{if and .LastDeletedComment (not .Quitting)}}
+<div class="undo-toast" role="status">
+  <span>Comment on <code>{{.LastDeletedComment.File}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
+  <span class="toast-actions">
+    <form method="POST" style="margin:0;display:inline">
+      <button type="submit" name="undoDelete" class="undo-btn">Undo</button>
+    </form>
+    <form method="POST" class="toast-dismiss-form">
+      <button type="submit" name="dismissUndo" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
+    </form>
+  </span>
+</div>
+{{end}}
+
+{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
+<div class="reanchor-prompt" role="status">
+  <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="clearSelection" class="toast-dismiss" aria-label="Cancel re-anchoring">{{template "iconClose14"}}</button>
+  </form>
+</div>
+{{end}}
+{{if .PendingRefresh}}
+{{/* Frozen-view nudge (#119): the agent edited files ON DISK; this view is
+     deliberately still showing the pre-edit version so scroll/drafts survive.
+     Say that plainly — the old "✓ Changes applied" read as "already in your
+     view" and made the frozen view look like a leak (live-test feedback). */}}
+<div class="reanchor-prompt refresh-prompt" role="status">
+  <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
+  </form>
+</div>
+{{end}}
+{{if .AgentPaused}}
+{{/* Paused = batching (#119): comments are held, not sent one-by-one. Set only
+     by the manual Pause toggle — a rollback no longer force-pauses (send-mode is
+     decoupled from rollback; see RestoreVersion). The wording describes the
+     STATE (batching), not any cause. Resume releases the held batch in one
+     snapshot. */}}
+<div class="reanchor-prompt paused-prompt" role="status">
+  <span>⏸ Batching — comments are held, not sent to the agent yet.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="resumeAgent" class="refresh-btn">Resume — send batch</button>
+  </form>
+</div>
+{{end}}
+{{- end -}}
+{{define "statusBanners" -}}
+{{if .Quitting}}
+<div class="banner-stopping" role="status">
+  Server stopping… you can close this tab.
+</div>
+{{end}}
+
+{{if .SessionEnded}}
+<div class="banner-stopping" role="status">
+  Session ended — Claude has been notified. You can close this tab.
+</div>
+{{end}}
+
+{{if .Flash}}
+<div
+  class="toast flash-toast"
+  role="status"
+  lvt-fx:auto-click="3000:clearFlash"
+>
+  <span class="toast-msg">{{.Flash}}</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button
+      type="submit"
+      name="clearFlash"
+      class="toast-dismiss"
+      aria-label="Dismiss"
+    >
+      {{template "iconClose14"}}
+    </button>
+  </form>
+</div>
+{{end}}
+{{if and .AgentMode (eq .LLMState "working")}}
+<div class="toast llm-working" role="status" aria-live="polite">
+  <span class="llm-spinner" aria-hidden="true"></span>
+  <span class="toast-msg">{{.AgentWorkingLabel}}</span>
+</div>
+{{end}}
+{{- end -}}

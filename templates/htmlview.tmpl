@@ -1,0 +1,48 @@
+{{define "htmlView"}}{{with $.CurrentDiff}}  {{/* Rendered-HTML view. The whole file renders once in a sandboxed
+       <iframe srcdoc> — a real document, so var()/@media/vw/sticky all
+       resolve against the iframe viewport (a shadow root can't do this).
+       Each top-level <body> child in the srcdoc carries its REAL source
+       line range (data-from / data-to). The sandbox is allow-scripts WITHOUT
+       allow-same-origin: the page's own scripts RUN (so JS-generated CSS like
+       the Tailwind Play CDN renders, #63) but the opaque origin blocks all
+       access to the parent app. That also means the parent can't read the
+       iframe's contentDocument, so lvt-fx:preview-bridge takes the height +
+       block rects the in-iframe beacon (previewBridgeJS) posts out. Selecting
+       a region to comment on is driven by a parent-document overlay, not from
+       inside the iframe — iOS does not deliver iframe-internal events to parent
+       listeners. Comments and the composer render in a list BELOW the preview
+       (they can't interleave into the iframe document). */}}
+  <div class="html-view" data-key="html-{{.Path}}">
+    {{- /* region-select toggle */ -}}
+    {{template "regionToggle" $}}
+    {{- /* sandboxed iframe preview + draw-a-region overlay */ -}}
+    <div class="preview-stage"><iframe
+      class="html-preview"
+      sandbox="allow-scripts"
+      srcdoc="{{$.RenderedHTMLDoc}}"
+      lvt-fx:preview-bridge
+      title="HTML preview of {{.Path}}"
+    ></iframe>
+      {{- if $.RegionSelectArmed -}}
+      <div
+        class="region-overlay"
+        lvt-fx:region-select="selectBlock"
+        data-surface="html"
+        data-key="region-html-{{.Path}}"
+      ></div>
+      {{- end -}}
+    </div>
+    {{- /* per-block comment anchors, keyed to source line range */ -}}
+    {{- range $.RenderedHTML -}}
+    {{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be -}}
+    <div
+      class="html-block
+      {{- if and
+          (ne $.SelectionEndMax 0)
+          (ge $.SelectionEndMax $bs)
+          (le $.SelectionEndMax $be)}} selected{{end -}}
+      "
+      data-key="{{$hbkey}}"
+    >{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>
+    {{- end -}}
+  </div>{{end}}{{end}}

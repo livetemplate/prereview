@@ -1,3 +1,80 @@
+=== allComments ===
+<section class="all-comments">
+  <header class="ac-head">
+    <strong>All comments ({{.CommentCount}})</strong>
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
+    </form>
+  </header>
+  {{if .VisibleComments}}
+  <ul class="ac-list">
+    {{range .VisibleComments}}
+    <li class="ac-item{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}">
+      <form method="POST" class="ac-jump">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button type="submit" name="jumpToComment" class="ac-jump-btn">
+          <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} <small class="processed-badge">worked on</small>{{end}}</div>
+          <div class="ac-body">{{.Body}}</div>
+        </button>
+      </form>
+      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
+      <div class="ac-actions">
+        <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>
+        {{if .Resolved}}<form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="hideComment" class="outline">Hide</button>
+        </form>{{end}}
+        {{if and (not .Resolved) .AnchorOutdated}}<form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="reanchorComment" class="outline">Re-anchor</button>
+        </form>{{end}}
+        {{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="editComment" class="outline">Edit</button>
+        </form>{{end}}
+        <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
+        {{template "deleteDialog" .}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  
+  <div class="ac-empty">
+    <p class="ac-empty-msg">{{if and (gt .CommentCount 0) (not .ShowResolved)}}{{.CommentCount}} resolved comment{{if ne .CommentCount 1}}s{{end}} hidden — toggle “Show resolved” to see them.{{else}}No comments yet.{{end}}</p>
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleCommentList" class="contrast ac-empty-back" title="Return to the file you were viewing">← Back to file</button>
+    </form>
+  </div>
+  {{end}}
+</section>
+=== binaryView ===
+{{with $.CurrentDiff}}  
+  {{$kind := $.BinaryKind}}
+  {{if eq $kind "image"}}
+  
+  {{template "regionToggle" $}}{{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
+    <img src="/{{.Path}}" alt="{{.Path}}" {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}>
+    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}"></div>{{end}}
+    {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
+  </div></div>
+  {{else}}{{if eq $kind "pdf"}}
+  
+  <div class="binary-preview binary-pdf-card">
+    <div class="pdf-card-icon" aria-hidden="true">📄</div>
+    <strong class="pdf-card-name">{{.Path}}</strong>
+    <a role="button" class="contrast pdf-card-open" href="/{{.Path}}" target="_blank" rel="noopener">Open PDF in new tab →</a>
+  </div>
+  {{else}}{{if eq $kind "video"}}
+  <div class="binary-preview binary-video"><video controls preload="metadata" src="/{{.Path}}"></video></div>
+  {{else}}{{if eq $kind "audio"}}
+  <div class="binary-preview binary-audio"><audio controls preload="metadata" src="/{{.Path}}"></audio></div>
+  {{else}}
+  <p class="empty">Binary file — cannot display.</p>
+  {{end}}{{end}}{{end}}{{end}}{{end}}
 === blockComments ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === blockSuggestions ===
@@ -73,6 +150,14 @@
       </fieldset>
     </form>
   </footer></article></dialog>
+=== diffView ===
+{{with $.CurrentDiff}}  
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}"><div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion}}<span class="line-margin">
+        <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
+          <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
+        </button>
+      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
+{{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>{{end}}
 === endSessionDialog ===
 <dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p>{{if .AwaitingApplyCount}}
   <p class="end-warn" role="alert"><small><strong>{{.AwaitingApplyCount}} accepted edit{{if ne .AwaitingApplyCount 1}}s{{end}} not yet applied.</strong> The agent still has to write {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file (<code>prereview applied</code>). Ending now leaves the document without {{if eq .AwaitingApplyCount 1}}that change{{else}}those changes{{end}}.</small></p>{{end}}<footer>
@@ -83,6 +168,159 @@
       </fieldset>
     </form>
   </footer></article></dialog>
+=== externalBody ===
+
+<header class="bar bar-external">
+  <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
+  <span class="bar-actions"><form method="POST" style="margin:0">
+      <button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button>
+    </form>{{if .AgentMode}}
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Batching — annotations held, not sent. Resume to send the batch.{{else}}Live — each annotation is sent as you make it. Pause to batch them instead.{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{else}}⏸ Pause — batch{{end}}</button>
+    </form><form method="POST" style="margin:0">
+      <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
+    </form>{{else}}<form method="POST" style="margin:0">
+      <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
+    </form>{{end}}</span>
+</header>
+<div class="layout layout-external">
+  <main class="viewer ext-viewer">
+    {{template "regionToggle" $}}
+    <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+      
+      <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
+      {{if .RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
+    </div>
+    {{if eq $.CommentMode "region"}}{{template "composer" $}}{{end}}
+  </main>
+  <aside class="ext-sidebar{{if .AnnoDrawerOpen}} is-open{{end}}" aria-label="Annotations">
+    <header class="ext-sidebar-head"><strong>Annotations ({{len $.AllRegionComments}})</strong><form method="POST" style="margin:0">
+        <button type="submit" name="toggleAnnotations" class="outline secondary close-btn" aria-label="Close annotations">{{template "iconClose16"}}</button>
+      </form></header>
+    <div class="ext-sidebar-body">{{range $.AllRegionComments}}<div class="inline-comment ext-anno{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"><form method="POST" class="anno-locate-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="focusComment" class="anno-locate" title="Locate this region on the page"><span class="ext-page-link">📍 {{.URL}}</span>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}<span class="anno-body">{{.Body}}</span></button>
+        </form><div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>{{if not .Resolved}}<form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button type="submit" name="editComment" class="outline">Edit</button>
+    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
+  </aside>
+</div>
+<footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
+=== fileDrawer ===
+<dialog id="files-drawer" open class="{{if .FileDrawerOpen}}is-open{{end}}" lvt-fx:resize="--pr-drawer-w" data-resize-handle=".resize-handle" data-resize-min="200" data-resize-max="560" data-resize-store="prereview.drawerW">
+  
+  <div class="drawer-collapse">
+    <form method="POST">
+      <button type="submit" name="toggleFiles" class="collapse-toggle" aria-label="{{if .FileDrawerOpen}}Show file list{{else}}Hide file list{{end}}" aria-expanded="{{if .FileDrawerOpen}}false{{else}}true{{end}}" title="{{if .FileDrawerOpen}}Show files{{else}}Hide files{{end}}{{with index $.KeyHint "toggleFiles"}} ({{.}}){{end}}">{{if .FileDrawerOpen}}{{template "iconChevronRight"}}{{else}}{{template "iconChevronLeft"}}{{end}}</button>
+    </form>
+  </div>
+  <div class="drawer-head">
+    <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
+    <form method="POST">
+      <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close">{{template "iconClose16"}}</button>
+    </form>
+  </div>
+  
+  
+  
+  {{if not .NoGit}}
+  <div class="drawer-base">
+    <form method="POST" class="base-select-form">
+      <label for="base-input">Base</label>
+      <select id="base-input" name="ref" lvt-on:change="setBase">
+        {{range .BaseChoices}}
+        <option value="{{.}}"{{if eq . $.Base}} selected{{end}}>{{.}}</option>
+        {{end}}
+      </select>
+    </form>
+  </div>
+  {{end}}
+  <div class="drawer-search">
+    <form method="POST" lvt-form:preserve>
+      <input type="text" name="filter" placeholder="Filter files…" value="{{.FileFilter}}" lvt-on:input="setFileFilter" lvt-mod:debounce="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    </form>
+  </div>
+  
+  {{if and (gt .ChangedFilesCount 0) (lt .ChangedFilesCount (len .Files))}}
+  <div class="drawer-scope">
+    <form method="POST">
+      <button type="submit" name="toggleFileScope" class="scope-toggle{{if not .ShowAllFiles}} is-on{{end}}" title="{{if .ShowAllFiles}}Show only files changed vs {{.Base}}{{else}}Show all {{len .Files}} tracked files{{end}}">
+        {{if .ShowAllFiles}}All {{len .Files}} files · show changed only{{else}}Changed {{.ChangedFilesCount}} · show all {{len .Files}}{{end}}
+      </button>
+    </form>
+  </div>
+  {{end}}
+  <div class="drawer-body">
+    
+    {{.FileBrowserHTML}}
+  </div>
+  
+  <div class="resize-handle" aria-hidden="true"></div>
+</dialog>
+=== fileHeader ===
+{{with $.CurrentDiff}}  <header class="file-head">{{if gt $.ReadPercent 0}}<div class="read-progress-fill" style="width: {{$.ReadPercent}}%" aria-hidden="true"></div>{{end}}<span class="file-head-name" title="{{.Path}}">{{if $.SelectedFileDir}}<span class="fh-dir">{{$.SelectedFileDir}}</span>{{end}}<strong class="fh-base">{{$.SelectedFileBase}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    
+    <span class="file-head-actions">
+    
+    {{if $.HasReadFrontier}}
+    <form method="POST" class="file-head-resume">
+      <button type="submit" name="jumpToReadFrontier" class="outline" title="Jump to the first content you haven't read yet">{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
+    </form>
+    {{end}}
+    
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
+    <form method="POST" class="file-head-comment">
+      <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
+    </form>
+    {{end}}
+    
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
+    <div class="tb-dropdown prompts-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="prompts-trigger" aria-haspopup="menu" title="Ask the agent for suggestions using a prebuilt prompt">{{template "iconSuggestion"}}<span class="prompts-trigger-label">Ask for suggestions</span></button>
+      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
+        {{range $.Prompts}}
+        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    
+    {{if $.Versions}}
+    <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="versions-trigger" aria-haspopup="menu" title="Versions of this file — view or roll back to a previous version">{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
+      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
+        
+        {{range $.Versions}}
+        <div class="version-row{{if .Viewing}} viewing{{end}}">
+          <button type="button" class="version-summary-toggle" lvt-el:toggleClass:on:click="expanded" data-lvt-target="closest:.version-row" aria-label="Show what changed and version actions"><span class="version-meta">
+            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
+            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
+          </span><span class="version-more" aria-hidden="true">⋯</span></button>
+          <div class="version-details">
+            {{if .Changelog}}<p class="version-changelog">{{.Changelog}}</p>{{end}}
+            <div class="version-summary">{{template "versionSummary" .Summary}}</div>
+            <span class="version-actions">
+              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
+              {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
+              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
+            </span>
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    </span>
+  </header>{{end}}
+=== htmlView ===
+{{with $.CurrentDiff}}  
+  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
 === iconBook ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconChat14 ===
@@ -141,314 +379,29 @@
 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none" /></svg>
 === iconWarning ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 4l9 15H3z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round" /><path d="M12 10v4M12 16.5v.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
-=== prereview ===
-<!DOCTYPE html>
-
-<html lang="en" data-theme="light">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>prereview · {{.RepoPath}}</title>
-<link rel="stylesheet" href="/pico.min.css">
-<link rel="stylesheet" href="/livetemplate.css">
-<link rel="stylesheet" href="/syntax.css">
-<link rel="stylesheet" href="/prereview.css">
-</head>
-<body data-lvt-loading-debounce-ms="200" data-lvt-heartbeat-ms="10000">
-
-<div class="theme-root" data-scheme="{{.DataScheme}}"{{with .DataMode}} data-mode="{{.}}"{{end}}>
-
-<span class="kbd-esc" hidden aria-hidden="true" lvt-on:window:keydown="clearSelection" lvt-key="Escape"></span>
-
-{{if .ExternalMode}}
-
-<header class="bar bar-external">
-  <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
-  <span class="bar-actions"><form method="POST" style="margin:0">
-      <button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button>
-    </form>{{if .AgentMode}}
-    <form method="POST" style="margin:0">
-      <button type="submit" name="toggleAgentPause" class="contrast tb-pause{{if .AgentPaused}} is-paused{{end}}" title="{{if .AgentPaused}}Batching — annotations held, not sent. Resume to send the batch.{{else}}Live — each annotation is sent as you make it. Pause to batch them instead.{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{else}}⏸ Pause — batch{{end}}</button>
-    </form><form method="POST" style="margin:0">
-      <button type="button" command="show-modal" commandfor="confirm-end-session" class="contrast" title="Emit session_end and stop the server — your agent stops consuming the stream">End session</button>
-    </form>{{else}}<form method="POST" style="margin:0">
-      <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
-    </form>{{end}}</span>
-</header>
-<div class="layout layout-external">
-  <main class="viewer ext-viewer">
-    {{template "regionToggle" $}}
-    <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
-      
-      <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
-      {{if .RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
-    </div>
-    {{if eq $.CommentMode "region"}}{{template "composer" $}}{{end}}
-  </main>
-  <aside class="ext-sidebar{{if .AnnoDrawerOpen}} is-open{{end}}" aria-label="Annotations">
-    <header class="ext-sidebar-head"><strong>Annotations ({{len $.AllRegionComments}})</strong><form method="POST" style="margin:0">
-        <button type="submit" name="toggleAnnotations" class="outline secondary close-btn" aria-label="Close annotations">{{template "iconClose16"}}</button>
-      </form></header>
-    <div class="ext-sidebar-body">{{range $.AllRegionComments}}<div class="inline-comment ext-anno{{if .Resolved}} is-resolved{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"><form method="POST" class="anno-locate-form">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="focusComment" class="anno-locate" title="Locate this region on the page"><span class="ext-page-link">📍 {{.URL}}</span>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}<span class="anno-body">{{.Body}}</span></button>
-        </form><div class="ic-actions">
+=== kbdHelp ===
+<div class="kbd-help-backdrop{{if .KeyHelpOpen}} is-open{{end}}" lvt-on:click="toggleKeyboardHelp" aria-hidden="true"></div>
+<div class="kbd-help-modal{{if .KeyHelpOpen}} is-open{{end}}" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
+  <div class="kbd-help-head">
+    <strong>Keyboard shortcuts</strong>
     <form method="POST">
-      <input type="hidden" name="id" value="{{.ID}}">
-      <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if not .Resolved}}<form method="POST">
-      <input type="hidden" name="id" value="{{.ID}}">
-      <button type="submit" name="editComment" class="outline">Edit</button>
-    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
-  </aside>
+      <button type="submit" name="toggleKeyboardHelp" class="outline close-btn" aria-label="Close">
+        {{template "iconClose16"}}
+      </button>
+    </form>
+  </div>
+  <dl class="kbd-help-list">{{range .KeyBindings}}
+    <div class="kbd-row"><dt><kbd>{{.Display}}</kbd></dt><dd>{{.Label}}</dd></div>{{end}}
+  </dl>
+  <p class="kbd-help-note">Drawing a precise region on rendered HTML or an image needs a mouse — from the keyboard, comment on the whole block or image instead.</p>
+  
+  <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
 </div>
-<footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
-{{else}}
-
-<div class="kbd-bindings" hidden aria-hidden="true">{{range .KeyBindings}}{{$b := .}}{{range $b.Keys}}{{if $b.Action}}<span lvt-on:window:keydown="{{$b.Action}}" lvt-key="{{.}}" lvt-mod:skip-when-typing></span>{{end}}{{end}}{{end}}</div>
-<header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
-  <form method="POST">
-    <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
-  </form>
-  
-  {{if not .ExternalMode}}
-  <form method="POST">
-    <button type="submit" name="openSearch" class="search-btn outline contrast" aria-label="Search files" title="Search files (⌘/Ctrl + K)">{{template "iconSearch"}}</button>
-  </form>
-  {{end}}
-  <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}</span>
-  </div>
-  
-  <div class="toolbar-inline">
-    <div class="tb-group tb-counters">
-      
-      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
-    </div>
-    {{if .CurrentDiff}}
-    <div class="tb-group tb-toggles">
-      
-      {{if .IsMarkdown}}
-      <form method="POST" class="tb-radios" aria-label="Markdown view">
-        <label><input type="radio" name="view" value="rendered" {{if not .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Preview</label>
-        <label><input type="radio" name="view" value="raw" {{if .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Raw</label>
-      </form>
-      {{end}}
-      {{if .IsHTML}}
-      <form method="POST" class="tb-radios" aria-label="HTML view">
-        <label><input type="radio" name="view" value="rendered" {{if not .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Preview</label>
-        <label><input type="radio" name="view" value="raw" {{if .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Raw</label>
-      </form>
-      {{end}}
-      
-      {{if not .ShowRenderedHTML}}
-      <form method="POST" class="tb-radios" aria-label="File view">
-        <label><input type="radio" name="view" value="diff" {{if not .FileView}}checked{{end}} lvt-on:change="setFileViewMode">Diff</label>
-        <label><input type="radio" name="view" value="file" {{if .FileView}}checked{{end}} lvt-on:change="setFileViewMode">File</label>
-      </form>
-      {{end}}
-    </div>
-    {{end}}
-    
-    <div class="tb-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="contrast theme-toggle tb-dropdown-trigger" aria-haspopup="menu" title="View options — focus, color scheme &amp; mode, comment filters, help"><span class="tb-label">View</span>{{template "iconChevronDown"}}</button>
-      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
-        {{if .CurrentDiff}}
-        
-        <form method="POST">
-          <button type="submit" name="toggleFocusMode" class="menu-item{{if .FocusMode}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{template "iconFocus"}}</span>
-            <span class="menu-label">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        <form method="POST">
-          <button type="submit" name="cycleScheme" class="menu-item" role="menuitem">
-            <span class="menu-icon">{{template "iconPalette"}}</span>
-            <span class="menu-label">Scheme: {{.SchemeLabel}}</span>
-            <span class="menu-meta">{{.NextSchemeLabel}} →</span>
-          </button>
-        </form>
-        <form method="POST">
-          <button type="submit" name="cycleTheme" class="menu-item" role="menuitem">
-            <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}</span>
-            <span class="menu-label">Mode: {{.ThemeModeLabel}}</span>
-            <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
-          </button>
-        </form>
-        
-        {{if gt .CommentCount 0}}
-        <form method="POST">
-          <button type="submit" name="toggleCommentList" class="menu-item{{if .ShowAllComments}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{template "iconComments"}}</span>
-            <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{.CommentCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if gt .ResolvedCount 0}}
-        <form method="POST">
-          <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{if .ShowResolved}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
-            <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{.ResolvedCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
-        <form method="POST">
-          <button type="submit" name="unhideAllResolved" class="menu-item" role="menuitem">
-            <span class="menu-icon">{{template "iconCircle16"}}</span>
-            <span class="menu-label">Unhide</span>
-            <span class="menu-meta">{{.HiddenResolvedCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if gt .SuggestionCount 0}}
-        <form method="POST">
-          <button type="submit" name="toggleSuggestions" class="menu-item{{if not .HideSuggestions}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{template "iconSuggestion"}}</span>
-            <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{.SuggestionCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if $.HasMarks}}
-        <form method="POST">
-          <button type="submit" name="toggleMarks" class="menu-item{{if not .HideMarks}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
-            <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}{{with index $.KeyHint "toggleMarks"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if gt .HiddenSuggestionCount 0}}
-        <form method="POST">
-          <button type="submit" name="showHiddenSuggestions" class="menu-item" role="menuitem">
-            <span class="menu-icon">{{template "iconSuggestion"}}</span>
-            <span class="menu-label">Show hidden suggestions</span>
-            <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if gt .DecisionCount 0}}
-        <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
-        {{end}}
-        
-        {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
-        <form method="POST">
-          <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">
-            <span class="menu-icon">{{template "iconWarning"}}</span>
-            <span class="menu-label">Outdated</span>
-            <span class="menu-meta">{{.OutdatedCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        <form method="POST">
-          <button type="submit" name="toggleKeyboardHelp" class="menu-item" role="menuitem">
-            <span class="menu-icon" aria-hidden="true">?</span>
-            <span class="menu-label">Keyboard shortcuts</span>
-          </button>
-        </form>
-        
-        <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
-          <span class="menu-icon">{{template "iconBook"}}</span>
-          <span class="menu-label">Usage guide</span>
-        </a>
-      </div>
-    </div>
-  </div>
-  
-  {{if gt (len .Files) 1}}
-  <form method="POST" class="nav-prev">
-    <button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast">{{template "iconChevronLeft"}}<span class="nav-label">Prev{{with index $.KeyHint "prevFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
-  </form>
-  <form method="POST" class="nav-next">
-    <button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
-  </form>
-  {{end}}
-  
-  {{if .AgentMode}}
-  <div class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-    <button type="button" id="queue-trigger-{{.EnqueueTick}}" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .AwaitingReplyCount}}<span class="q-num q-awaiting-reply" title="your replies still awaiting the agent (whole review)">{{.AwaitingReplyCount}}</span>{{end}}{{if .HasQueue}}<span class="queue-counts">{{if .AwaitingApplyCount}}<span class="q-num q-awaiting" title="accepted, not yet applied to the file">{{.AwaitingApplyCount}}</span> · {{end}}<span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
-    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
-      
-      <form method="POST" class="queue-pause-form">
-        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}{{with index $.KeyHint "toggleAgentPause"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
-      </form>
-      <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
-      {{with .AgentWorkingLabel}}<div class="queue-working">⚡ {{.}}</div>{{end}}
-      
-      {{if not .SingleFile}}
-      <form method="POST" class="queue-scope-form">
-        <button type="submit" name="toggleQueueScope" class="queue-scope-btn" role="menuitemcheckbox" aria-checked="{{if .QueueGlobal}}true{{else}}false{{end}}" title="Show this file's work, or the whole review's">
-          <span class="queue-scope-opt{{if not .QueueGlobal}} is-on{{end}}">This file</span><span class="queue-scope-opt{{if .QueueGlobal}} is-on{{end}}">All files</span>
-        </button>
-      </form>
-      {{end}}
-      
-      {{if .AwaitingReplyCount}}<div class="queue-awaiting-reply"><span class="q-num q-awaiting-reply">{{.AwaitingReplyCount}}</span> repl{{if eq .AwaitingReplyCount 1}}y{{else}}ies{{end}} awaiting the agent (whole review)</div>{{end}}
-      {{if .HasQueue}}
-      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}{{if .QueueHiddenCount}} · <span class="q-num q-elsewhere">{{.QueueHiddenCount}}</span> on other files{{end}}</div>
-      
-      {{if .AwaitingApplyCount}}
-      <div class="queue-awaiting"><span class="q-num q-awaiting">{{.AwaitingApplyCount}}</span> accepted, awaiting the agent to apply {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file</div>
-      {{end}}
-      {{range .QueueItems}}
-      
-      <div class="queue-row queue-{{.State}} queue-kind-{{.Kind}}">
-        <form method="POST" class="queue-jump-form">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="{{if eq .Kind "suggestion"}}jumpToSuggestion{{else}}jumpToComment{{end}}" class="queue-item" title="Go to this {{.Kind}}">
-            {{if eq .Kind "suggestion"}}<span class="queue-kind-icon" aria-hidden="true">✦</span>{{end}}
-            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
-            <span class="queue-body">{{.Body}}</span>
-            <span class="queue-loc" title="{{.File}}{{if .Line}}:{{.Line}}{{end}}">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
-          </button>
-        </form>{{if and (eq .State "done") (eq .Kind "comment")}}
-        
-        <form method="POST" class="queue-reenqueue-form">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
-        </form>{{end}}
-      </div>
-      {{end}}
-      {{else}}{{if .QueueHiddenCount}}
-      
-      <div class="queue-empty">Nothing queued on this file — <strong>{{.QueueHiddenCount}}</strong> item{{if ne .QueueHiddenCount 1}}s{{end}} on other files. Switch to <strong>All files</strong> to see {{if eq .QueueHiddenCount 1}}it{{else}}them{{end}}.</div>
-      {{else}}
-      <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
-      {{end}}{{end}}
-      
-      <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
-    </div>
-  </div>
-  {{else}}
-  <form method="POST" class="tb-action">
-    <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
-  </form>
-  {{end}}
-  
-  <form method="POST" style="margin:0">
-    <button type="submit" name="toggleMoreMenu" class="more-trigger" aria-label="More options" aria-haspopup="menu" aria-expanded="{{if .MoreMenuOpen}}true{{else}}false{{end}}">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <circle cx="12" cy="5" r="1.8" fill="currentColor"/>
-        <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
-        <circle cx="12" cy="19" r="1.8" fill="currentColor"/>
-      </svg>
-    </button>
-  </form>
-</header>
-
-
+=== markdownView ===
+{{with $.CurrentDiff}}  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.md-block" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
+        <span class="line-mark{{if $ba.Open}} is-open{{else}}{{if $ba.Accepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$ba.Total}}</span>
+      </button>{{end}}<div class="md-rendered" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
+=== moreMenu ===
 <div class="more-menu-backdrop{{if .MoreMenuOpen}} is-open{{end}}" lvt-on:click="closeMoreMenu" aria-hidden="true"></div>
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed{{if gt .CommentCount 0}} · {{.CommentCount}} comment{{if ne .CommentCount 1}}s{{end}}{{end}}</div>
@@ -622,202 +575,50 @@
     <span class="menu-label">Usage guide</span>
   </a>
 </div>
+=== prereview ===
+<!DOCTYPE html>
 
-{{if .Quitting}}
-<div class="banner-stopping" role="status">
-  Server stopping… you can close this tab.
-</div>
-{{end}}
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>prereview · {{.RepoPath}}</title>
+<link rel="stylesheet" href="/pico.min.css">
+<link rel="stylesheet" href="/livetemplate.css">
+<link rel="stylesheet" href="/syntax.css">
+<link rel="stylesheet" href="/prereview.css">
+</head>
+<body data-lvt-loading-debounce-ms="200" data-lvt-heartbeat-ms="10000">
 
-{{if .SessionEnded}}
-<div class="banner-stopping" role="status">
-  Session ended — Claude has been notified. You can close this tab.
-</div>
-{{end}}
+<div class="theme-root" data-scheme="{{.DataScheme}}"{{with .DataMode}} data-mode="{{.}}"{{end}}>
 
-{{if .Flash}}
-<div class="toast flash-toast" role="status" lvt-fx:auto-click="3000:clearFlash">
-  <span class="toast-msg">{{.Flash}}</span>
-  <form method="POST" class="toast-dismiss-form">
-    <button type="submit" name="clearFlash" class="toast-dismiss" aria-label="Dismiss">
-      {{template "iconClose14"}}
-    </button>
-  </form>
-</div>
-{{end}}
-{{if and .AgentMode (eq .LLMState "working")}}
-<div class="toast llm-working" role="status" aria-live="polite">
-  <span class="llm-spinner" aria-hidden="true"></span>
-  <span class="toast-msg">{{.AgentWorkingLabel}}</span>
-</div>
-{{end}}
+<span class="kbd-esc" hidden aria-hidden="true" lvt-on:window:keydown="clearSelection" lvt-key="Escape"></span>
+
+{{if .ExternalMode}}
+{{template "externalBody" $}}
+{{else}}
+
+<div class="kbd-bindings" hidden aria-hidden="true">{{range .KeyBindings}}{{$b := .}}{{range $b.Keys}}{{if $b.Action}}<span lvt-on:window:keydown="{{$b.Action}}" lvt-key="{{.}}" lvt-mod:skip-when-typing></span>{{end}}{{end}}{{end}}</div>
+{{template "toolbar" $}}
+
+
+{{template "moreMenu" $}}
+
+{{template "statusBanners" $}}
 
 
 <div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" lvt-on:click="closeFiles" aria-label="Close file list"></div>
 
 <div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
-<dialog id="files-drawer" open class="{{if .FileDrawerOpen}}is-open{{end}}" lvt-fx:resize="--pr-drawer-w" data-resize-handle=".resize-handle" data-resize-min="200" data-resize-max="560" data-resize-store="prereview.drawerW">
-  
-  <div class="drawer-collapse">
-    <form method="POST">
-      <button type="submit" name="toggleFiles" class="collapse-toggle" aria-label="{{if .FileDrawerOpen}}Show file list{{else}}Hide file list{{end}}" aria-expanded="{{if .FileDrawerOpen}}false{{else}}true{{end}}" title="{{if .FileDrawerOpen}}Show files{{else}}Hide files{{end}}{{with index $.KeyHint "toggleFiles"}} ({{.}}){{end}}">{{if .FileDrawerOpen}}{{template "iconChevronRight"}}{{else}}{{template "iconChevronLeft"}}{{end}}</button>
-    </form>
-  </div>
-  <div class="drawer-head">
-    <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
-    <form method="POST">
-      <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close">{{template "iconClose16"}}</button>
-    </form>
-  </div>
-  
-  
-  
-  {{if not .NoGit}}
-  <div class="drawer-base">
-    <form method="POST" class="base-select-form">
-      <label for="base-input">Base</label>
-      <select id="base-input" name="ref" lvt-on:change="setBase">
-        {{range .BaseChoices}}
-        <option value="{{.}}"{{if eq . $.Base}} selected{{end}}>{{.}}</option>
-        {{end}}
-      </select>
-    </form>
-  </div>
-  {{end}}
-  <div class="drawer-search">
-    <form method="POST" lvt-form:preserve>
-      <input type="text" name="filter" placeholder="Filter files…" value="{{.FileFilter}}" lvt-on:input="setFileFilter" lvt-mod:debounce="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-    </form>
-  </div>
-  
-  {{if and (gt .ChangedFilesCount 0) (lt .ChangedFilesCount (len .Files))}}
-  <div class="drawer-scope">
-    <form method="POST">
-      <button type="submit" name="toggleFileScope" class="scope-toggle{{if not .ShowAllFiles}} is-on{{end}}" title="{{if .ShowAllFiles}}Show only files changed vs {{.Base}}{{else}}Show all {{len .Files}} tracked files{{end}}">
-        {{if .ShowAllFiles}}All {{len .Files}} files · show changed only{{else}}Changed {{.ChangedFilesCount}} · show all {{len .Files}}{{end}}
-      </button>
-    </form>
-  </div>
-  {{end}}
-  <div class="drawer-body">
-    
-    {{.FileBrowserHTML}}
-  </div>
-  
-  <div class="resize-handle" aria-hidden="true"></div>
-</dialog>
+{{template "fileDrawer" $}}
 
 <main class="viewer" lvt-fx:viewport-report="reportViewport" data-lvt-viewport-items=".line, .md-block">
 {{if .ShowAllComments}}
-<section class="all-comments">
-  <header class="ac-head">
-    <strong>All comments ({{.CommentCount}})</strong>
-    <form method="POST" style="margin:0">
-      <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
-    </form>
-  </header>
-  {{if .VisibleComments}}
-  <ul class="ac-list">
-    {{range .VisibleComments}}
-    <li class="ac-item{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}">
-      <form method="POST" class="ac-jump">
-        <input type="hidden" name="id" value="{{.ID}}">
-        <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} <small class="processed-badge">worked on</small>{{end}}</div>
-          <div class="ac-body">{{.Body}}</div>
-        </button>
-      </form>
-      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
-      <div class="ac-actions">
-        <form method="POST">
-      <input type="hidden" name="id" value="{{.ID}}">
-      <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>
-        {{if .Resolved}}<form method="POST">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="hideComment" class="outline">Hide</button>
-        </form>{{end}}
-        {{if and (not .Resolved) .AnchorOutdated}}<form method="POST">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="reanchorComment" class="outline">Re-anchor</button>
-        </form>{{end}}
-        {{if and (not .Resolved) (not .AnchorOutdated)}}<form method="POST">
-          <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="editComment" class="outline">Edit</button>
-        </form>{{end}}
-        <button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>
-        {{template "deleteDialog" .}}
-      </div>
-    </li>
-    {{end}}
-  </ul>
-  {{else}}
-  
-  <div class="ac-empty">
-    <p class="ac-empty-msg">{{if and (gt .CommentCount 0) (not .ShowResolved)}}{{.CommentCount}} resolved comment{{if ne .CommentCount 1}}s{{end}} hidden — toggle “Show resolved” to see them.{{else}}No comments yet.{{end}}</p>
-    <form method="POST" style="margin:0">
-      <button type="submit" name="toggleCommentList" class="contrast ac-empty-back" title="Return to the file you were viewing">← Back to file</button>
-    </form>
-  </div>
-  {{end}}
-</section>
+{{template "allComments" $}}
 {{else}}
 {{with .CurrentDiff}}
 <article>
-  <header class="file-head">{{if gt $.ReadPercent 0}}<div class="read-progress-fill" style="width: {{$.ReadPercent}}%" aria-hidden="true"></div>{{end}}<span class="file-head-name" title="{{.Path}}">{{if $.SelectedFileDir}}<span class="fh-dir">{{$.SelectedFileDir}}</span>{{end}}<strong class="fh-base">{{$.SelectedFileBase}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
-    
-    <span class="file-head-actions">
-    
-    {{if $.HasReadFrontier}}
-    <form method="POST" class="file-head-resume">
-      <button type="submit" name="jumpToReadFrontier" class="outline" title="Jump to the first content you haven't read yet">{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
-    </form>
-    {{end}}
-    
-    {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
-    <form method="POST" class="file-head-comment">
-      <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
-    </form>
-    {{end}}
-    
-    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
-    <div class="tb-dropdown prompts-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="prompts-trigger" aria-haspopup="menu" title="Ask the agent for suggestions using a prebuilt prompt">{{template "iconSuggestion"}}<span class="prompts-trigger-label">Ask for suggestions</span></button>
-      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
-        {{range $.Prompts}}
-        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
-    
-    {{if $.Versions}}
-    <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="versions-trigger" aria-haspopup="menu" title="Versions of this file — view or roll back to a previous version">{{template "iconHistory14"}}<span class="versions-trigger-label">Versions</span><span class="versions-count">{{len $.Versions}}</span></button>
-      <div class="tb-dropdown-panel versions-panel" role="menu" aria-label="File versions">
-        
-        {{range $.Versions}}
-        <div class="version-row{{if .Viewing}} viewing{{end}}">
-          <button type="button" class="version-summary-toggle" lvt-el:toggleClass:on:click="expanded" data-lvt-target="closest:.version-row" aria-label="Show what changed and version actions"><span class="version-meta">
-            <span class="version-label">{{.Label}}{{if .Deleted}} · deleted{{end}}</span>
-            <span class="version-when">{{.When}}{{if .Current}} · current{{end}}</span>
-          </span><span class="version-more" aria-hidden="true">⋯</span></button>
-          <div class="version-details">
-            {{if .Changelog}}<p class="version-changelog">{{.Changelog}}</p>{{end}}
-            <div class="version-summary">{{template "versionSummary" .Summary}}</div>
-            <span class="version-actions">
-              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="viewVersion" class="version-btn">View</button></form>
-              {{if not .Current}}<form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="diffVersion" class="version-btn">Diff</button></form>
-              <form method="POST"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreVersion" class="version-btn version-restore">Restore</button></form>{{end}}
-            </span>
-          </div>
-        </div>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
-    </span>
-  </header>
+{{template "fileHeader" $}}
   {{if $.ViewingVersion}}
   
   <div class="version-view-banner" role="status">
@@ -844,44 +645,13 @@
   </div>
   {{end}}
   {{if .IsBinary}}
-  
-  {{$kind := $.BinaryKind}}
-  {{if eq $kind "image"}}
-  
-  {{template "regionToggle" $}}{{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
-    <img src="/{{.Path}}" alt="{{.Path}}" {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}>
-    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{.Body}}"></div>{{end}}
-    {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
-  </div></div>
-  {{else}}{{if eq $kind "pdf"}}
-  
-  <div class="binary-preview binary-pdf-card">
-    <div class="pdf-card-icon" aria-hidden="true">📄</div>
-    <strong class="pdf-card-name">{{.Path}}</strong>
-    <a role="button" class="contrast pdf-card-open" href="/{{.Path}}" target="_blank" rel="noopener">Open PDF in new tab →</a>
-  </div>
-  {{else}}{{if eq $kind "video"}}
-  <div class="binary-preview binary-video"><video controls preload="metadata" src="/{{.Path}}"></video></div>
-  {{else}}{{if eq $kind "audio"}}
-  <div class="binary-preview binary-audio"><audio controls preload="metadata" src="/{{.Path}}"></audio></div>
-  {{else}}
-  <p class="empty">Binary file — cannot display.</p>
-  {{end}}{{end}}{{end}}{{end}}
+{{template "binaryView" $}}
   {{else}}{{if $.ShowRenderedHTML}}
-  
-  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>
+{{template "htmlView" $}}
   {{else}}{{if $.ShowRenderedMarkdown}}
-  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.md-block" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
-        <span class="line-mark{{if $ba.Open}} is-open{{else}}{{if $ba.Accepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$ba.Total}}</span>
-      </button>{{end}}<div class="md-rendered" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>
+{{template "markdownView" $}}
   {{else}}{{if .Lines}}
-  
-  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}"><div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion}}<span class="line-margin">
-        <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
-          <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
-        </button>
-      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
-{{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>
+{{template "diffView" $}}
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
   {{end}}{{end}}{{end}}{{end}}
@@ -898,140 +668,19 @@
 {{end}}
 {{end}}
 
-{{if and .LastDeletedComment (not .Quitting)}}
-<div class="undo-toast" role="status">
-  <span>Comment on <code>{{.LastDeletedComment.File}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
-  <span class="toast-actions">
-    <form method="POST" style="margin:0;display:inline">
-      <button type="submit" name="undoDelete" class="undo-btn">Undo</button>
-    </form>
-    <form method="POST" class="toast-dismiss-form">
-      <button type="submit" name="dismissUndo" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
-    </form>
-  </span>
-</div>
-{{end}}
-
-{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
-<div class="reanchor-prompt" role="status">
-  <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
-  <form method="POST" class="toast-dismiss-form">
-    <button type="submit" name="clearSelection" class="toast-dismiss" aria-label="Cancel re-anchoring">{{template "iconClose14"}}</button>
-  </form>
-</div>
-{{end}}
-{{if .PendingRefresh}}
-
-<div class="reanchor-prompt refresh-prompt" role="status">
-  <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
-  <form method="POST" class="toast-dismiss-form">
-    <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
-  </form>
-</div>
-{{end}}
-{{if .AgentPaused}}
-
-<div class="reanchor-prompt paused-prompt" role="status">
-  <span>⏸ Batching — comments are held, not sent to the agent yet.</span>
-  <form method="POST" class="toast-dismiss-form">
-    <button type="submit" name="resumeAgent" class="refresh-btn">Resume — send batch</button>
-  </form>
-</div>
-{{end}}
+{{template "viewerPrompts" $}}
 </main>
 
 
-{{with .RenderedHeadings}}
-<aside class="toc-sidebar" aria-label="Table of contents">
-  
-  <div class="toc-head">
-    <form method="POST">
-      <button type="submit" name="toggleTOC" class="collapse-toggle" aria-label="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}" aria-expanded="{{if $.TocCollapsed}}false{{else}}true{{end}}" title="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}{{with index $.KeyHint "toggleTOC"}} ({{.}}){{end}}">{{if $.TocCollapsed}}{{template "iconChevronLeft"}}{{else}}{{template "iconChevronRight"}}{{end}}</button>
-    </form>
-    <strong>On this page</strong>
-  </div>
-  <nav class="toc-list">
-    {{range .}}<a href="#{{.ID}}" lvt-spy-link class="toc-link toc-l{{.Level}}">{{.Text}}</a>
-    {{end}}
-  </nav>
-</aside>
-{{end}}
+{{template "tocSidebar" $}}
 </div>
 
-{{with .RenderedHeadings}}
-<div class="toc-backdrop{{if $.TOCOpen}} is-open{{end}}" lvt-on:click="closeTOC" aria-hidden="true"></div>
-<div class="toc-modal{{if $.TOCOpen}} is-open{{end}}" role="dialog" aria-label="Table of contents" aria-modal="true">
-  <div class="toc-modal-head">
-    <strong>On this page</strong>
-    <form method="POST">
-      <button type="submit" name="closeTOC" class="outline close-btn" aria-label="Close">
-        {{template "iconClose16"}}
-      </button>
-    </form>
-  </div>
-  <nav class="toc-modal-list">
-    {{range .}}<a href="#{{.ID}}" lvt-spy-link lvt-on:click="navigateToHeading" data-id="{{.ID}}" class="toc-link toc-l{{.Level}}">{{.Text}}</a>
-    {{end}}
-  </nav>
-</div>
-{{end}}
+{{template "tocOverlay" $}}
 
-<div class="kbd-help-backdrop{{if .KeyHelpOpen}} is-open{{end}}" lvt-on:click="toggleKeyboardHelp" aria-hidden="true"></div>
-<div class="kbd-help-modal{{if .KeyHelpOpen}} is-open{{end}}" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
-  <div class="kbd-help-head">
-    <strong>Keyboard shortcuts</strong>
-    <form method="POST">
-      <button type="submit" name="toggleKeyboardHelp" class="outline close-btn" aria-label="Close">
-        {{template "iconClose16"}}
-      </button>
-    </form>
-  </div>
-  <dl class="kbd-help-list">{{range .KeyBindings}}
-    <div class="kbd-row"><dt><kbd>{{.Display}}</kbd></dt><dd>{{.Label}}</dd></div>{{end}}
-  </dl>
-  <p class="kbd-help-note">Drawing a precise region on rendered HTML or an image needs a mouse — from the keyboard, comment on the whole block or image instead.</p>
-  
-  <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
-</div>
+{{template "kbdHelp" $}}
 
 {{if not .ExternalMode}}
-<div class="search-backdrop{{if .SearchOpen}} is-open{{end}}" lvt-on:click="closeSearch" aria-hidden="true"></div>
-<div class="search-modal{{if .SearchOpen}} is-open{{end}}" role="dialog" aria-label="Search files" aria-modal="true">
-  {{if .SearchOpen}}
-  <div class="search-head">
-    <span class="search-head-icon">{{template "iconSearch"}}</span>
-    <form method="POST" lvt-form:preserve class="search-input-form">
-      <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search file names & contents…" lvt-autofocus lvt-on:input="setSearchQuery" lvt-mod:debounce="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-    </form>
-    <form method="POST">
-      <button type="submit" name="toggleSearchScope" class="search-scope outline" title="Toggle search scope (changed files vs all files)">{{.SearchScopeLabel}} <span class="search-scope-count">{{.SearchScopeCount}}</span></button>
-    </form>
-    <form method="POST">
-      <button type="submit" name="closeSearch" class="outline close-btn" aria-label="Close">{{template "iconClose16"}}</button>
-    </form>
-  </div>
-  <div class="search-body">
-    {{if .SearchHits}}
-    <ul class="search-list">{{range .SearchHits}}
-      <li class="search-item{{if eq .Kind "file"}} is-file{{end}}">
-        <form method="POST">
-          <input type="hidden" name="file" value="{{.File}}">
-          <input type="hidden" name="old" value="{{.OldNum}}">
-          <input type="hidden" name="new" value="{{.NewNum}}">
-          <button type="submit" name="jumpToSearchResult" class="search-hit">
-            <span class="search-where"><code>{{.File}}</code>{{if eq .Kind "line"}} <small>L{{.NewNum}}</small>{{else}} <small class="search-filematch">file name</small>{{end}}</span>{{if eq .Kind "line"}}<span class="search-line">{{.Line}}</span>{{end}}</button>
-        </form>
-      </li>{{end}}
-    </ul>
-    {{if .SearchTruncated}}<p class="search-note">Showing the first {{len .SearchHits}} matches — narrow your search.</p>{{end}}
-    {{else}}{{if .SearchQuery}}
-    <p class="search-empty">No matches for “{{.SearchQuery}}”.</p>
-    {{else}}
-    <p class="search-empty">Type to search file names and contents.</p>
-    {{end}}{{end}}
-  </div>
-  {{end}}
-</div>
+{{template "searchPalette" $}}
 {{end}}
 <footer class="app-footer" role="contentinfo">
   prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · built with <a href="https://github.com/livetemplate/livetemplate" target="_blank" rel="noopener noreferrer">livetemplate</a>
@@ -1080,6 +729,13 @@
 
 
 
+
+
+
+
+
+
+
 === quitDialog ===
 <dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
     <form method="POST">
@@ -1093,6 +749,73 @@
 <form method="POST" class="region-toggle">
   <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
 </form>
+=== searchPalette ===
+<div class="search-backdrop{{if .SearchOpen}} is-open{{end}}" lvt-on:click="closeSearch" aria-hidden="true"></div>
+<div class="search-modal{{if .SearchOpen}} is-open{{end}}" role="dialog" aria-label="Search files" aria-modal="true">
+  {{if .SearchOpen}}
+  <div class="search-head">
+    <span class="search-head-icon">{{template "iconSearch"}}</span>
+    <form method="POST" lvt-form:preserve class="search-input-form">
+      <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search file names & contents…" lvt-autofocus lvt-on:input="setSearchQuery" lvt-mod:debounce="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    </form>
+    <form method="POST">
+      <button type="submit" name="toggleSearchScope" class="search-scope outline" title="Toggle search scope (changed files vs all files)">{{.SearchScopeLabel}} <span class="search-scope-count">{{.SearchScopeCount}}</span></button>
+    </form>
+    <form method="POST">
+      <button type="submit" name="closeSearch" class="outline close-btn" aria-label="Close">{{template "iconClose16"}}</button>
+    </form>
+  </div>
+  <div class="search-body">
+    {{if .SearchHits}}
+    <ul class="search-list">{{range .SearchHits}}
+      <li class="search-item{{if eq .Kind "file"}} is-file{{end}}">
+        <form method="POST">
+          <input type="hidden" name="file" value="{{.File}}">
+          <input type="hidden" name="old" value="{{.OldNum}}">
+          <input type="hidden" name="new" value="{{.NewNum}}">
+          <button type="submit" name="jumpToSearchResult" class="search-hit">
+            <span class="search-where"><code>{{.File}}</code>{{if eq .Kind "line"}} <small>L{{.NewNum}}</small>{{else}} <small class="search-filematch">file name</small>{{end}}</span>{{if eq .Kind "line"}}<span class="search-line">{{.Line}}</span>{{end}}</button>
+        </form>
+      </li>{{end}}
+    </ul>
+    {{if .SearchTruncated}}<p class="search-note">Showing the first {{len .SearchHits}} matches — narrow your search.</p>{{end}}
+    {{else}}{{if .SearchQuery}}
+    <p class="search-empty">No matches for “{{.SearchQuery}}”.</p>
+    {{else}}
+    <p class="search-empty">Type to search file names and contents.</p>
+    {{end}}{{end}}
+  </div>
+  {{end}}
+</div>
+=== statusBanners ===
+{{if .Quitting}}
+<div class="banner-stopping" role="status">
+  Server stopping… you can close this tab.
+</div>
+{{end}}
+
+{{if .SessionEnded}}
+<div class="banner-stopping" role="status">
+  Session ended — Claude has been notified. You can close this tab.
+</div>
+{{end}}
+
+{{if .Flash}}
+<div class="toast flash-toast" role="status" lvt-fx:auto-click="3000:clearFlash">
+  <span class="toast-msg">{{.Flash}}</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="clearFlash" class="toast-dismiss" aria-label="Dismiss">
+      {{template "iconClose14"}}
+    </button>
+  </form>
+</div>
+{{end}}
+{{if and .AgentMode (eq .LLMState "working")}}
+<div class="toast llm-working" role="status" aria-live="polite">
+  <span class="llm-spinner" aria-hidden="true"></span>
+  <span class="toast-msg">{{.AgentWorkingLabel}}</span>
+</div>
+{{end}}
 === suggestionCard ===
 {{$d := index $.DecisionsBySuggestion .ID}}{{$applied := index $.Applied .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
     </span>
@@ -1118,5 +841,325 @@
     <div class="thread-meta"><span class="thread-author">{{.Author}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
     <div class="thread-body">{{.Body}}</div>
   </div>{{end}}</div>{{end}}
+=== tocOverlay ===
+{{with .RenderedHeadings}}
+<div class="toc-backdrop{{if $.TOCOpen}} is-open{{end}}" lvt-on:click="closeTOC" aria-hidden="true"></div>
+<div class="toc-modal{{if $.TOCOpen}} is-open{{end}}" role="dialog" aria-label="Table of contents" aria-modal="true">
+  <div class="toc-modal-head">
+    <strong>On this page</strong>
+    <form method="POST">
+      <button type="submit" name="closeTOC" class="outline close-btn" aria-label="Close">
+        {{template "iconClose16"}}
+      </button>
+    </form>
+  </div>
+  <nav class="toc-modal-list">
+    {{range .}}<a href="#{{.ID}}" lvt-spy-link lvt-on:click="navigateToHeading" data-id="{{.ID}}" class="toc-link toc-l{{.Level}}">{{.Text}}</a>
+    {{end}}
+  </nav>
+</div>
+{{end}}
+=== tocSidebar ===
+{{with .RenderedHeadings}}
+<aside class="toc-sidebar" aria-label="Table of contents">
+  
+  <div class="toc-head">
+    <form method="POST">
+      <button type="submit" name="toggleTOC" class="collapse-toggle" aria-label="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}" aria-expanded="{{if $.TocCollapsed}}false{{else}}true{{end}}" title="{{if $.TocCollapsed}}Show contents{{else}}Hide contents{{end}}{{with index $.KeyHint "toggleTOC"}} ({{.}}){{end}}">{{if $.TocCollapsed}}{{template "iconChevronLeft"}}{{else}}{{template "iconChevronRight"}}{{end}}</button>
+    </form>
+    <strong>On this page</strong>
+  </div>
+  <nav class="toc-list">
+    {{range .}}<a href="#{{.ID}}" lvt-spy-link class="toc-link toc-l{{.Level}}">{{.Text}}</a>
+    {{end}}
+  </nav>
+</aside>
+{{end}}
+=== toolbar ===
+<header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
+  <form method="POST">
+    <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
+  </form>
+  
+  {{if not .ExternalMode}}
+  <form method="POST">
+    <button type="submit" name="openSearch" class="search-btn outline contrast" aria-label="Search files" title="Search files (⌘/Ctrl + K)">{{template "iconSearch"}}</button>
+  </form>
+  {{end}}
+  <div class="title">
+    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}</span>
+  </div>
+  
+  <div class="toolbar-inline">
+    <div class="tb-group tb-counters">
+      
+      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
+    </div>
+    {{if .CurrentDiff}}
+    <div class="tb-group tb-toggles">
+      
+      {{if .IsMarkdown}}
+      <form method="POST" class="tb-radios" aria-label="Markdown view">
+        <label><input type="radio" name="view" value="rendered" {{if not .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Preview</label>
+        <label><input type="radio" name="view" value="raw" {{if .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Raw</label>
+      </form>
+      {{end}}
+      {{if .IsHTML}}
+      <form method="POST" class="tb-radios" aria-label="HTML view">
+        <label><input type="radio" name="view" value="rendered" {{if not .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Preview</label>
+        <label><input type="radio" name="view" value="raw" {{if .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Raw</label>
+      </form>
+      {{end}}
+      
+      {{if not .ShowRenderedHTML}}
+      <form method="POST" class="tb-radios" aria-label="File view">
+        <label><input type="radio" name="view" value="diff" {{if not .FileView}}checked{{end}} lvt-on:change="setFileViewMode">Diff</label>
+        <label><input type="radio" name="view" value="file" {{if .FileView}}checked{{end}} lvt-on:change="setFileViewMode">File</label>
+      </form>
+      {{end}}
+    </div>
+    {{end}}
+    
+{{template "viewMenu" $}}
+  </div>
+  
+  {{if gt (len .Files) 1}}
+  <form method="POST" class="nav-prev">
+    <button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast">{{template "iconChevronLeft"}}<span class="nav-label">Prev{{with index $.KeyHint "prevFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
+  </form>
+  <form method="POST" class="nav-next">
+    <button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
+  </form>
+  {{end}}
+  
+  {{if .AgentMode}}
+{{template "workQueue" $}}
+  {{else}}
+  <form method="POST" class="tb-action">
+    <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
+  </form>
+  {{end}}
+  
+  <form method="POST" style="margin:0">
+    <button type="submit" name="toggleMoreMenu" class="more-trigger" aria-label="More options" aria-haspopup="menu" aria-expanded="{{if .MoreMenuOpen}}true{{else}}false{{end}}">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <circle cx="12" cy="5" r="1.8" fill="currentColor"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
+        <circle cx="12" cy="19" r="1.8" fill="currentColor"/>
+      </svg>
+    </button>
+  </form>
+</header>
 === versionSummary ===
 {{if .Initial}}<span class="vs-note">Initial version — the starting point.</span>{{else}}{{if .Deleted}}<span class="vs-note">File removed at this version.</span>{{else}}{{if .Binary}}<span class="vs-note">Binary file changed.</span>{{else}}<span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>{{end}}{{end}}{{end}}
+=== viewMenu ===
+    <div class="tb-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="contrast theme-toggle tb-dropdown-trigger" aria-haspopup="menu" title="View options — focus, color scheme &amp; mode, comment filters, help"><span class="tb-label">View</span>{{template "iconChevronDown"}}</button>
+      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
+        {{if .CurrentDiff}}
+        
+        <form method="POST">
+          <button type="submit" name="toggleFocusMode" class="menu-item{{if .FocusMode}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{template "iconFocus"}}</span>
+            <span class="menu-label">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        <form method="POST">
+          <button type="submit" name="cycleScheme" class="menu-item" role="menuitem">
+            <span class="menu-icon">{{template "iconPalette"}}</span>
+            <span class="menu-label">Scheme: {{.SchemeLabel}}</span>
+            <span class="menu-meta">{{.NextSchemeLabel}} →</span>
+          </button>
+        </form>
+        <form method="POST">
+          <button type="submit" name="cycleTheme" class="menu-item" role="menuitem">
+            <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}</span>
+            <span class="menu-label">Mode: {{.ThemeModeLabel}}</span>
+            <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
+          </button>
+        </form>
+        
+        {{if gt .CommentCount 0}}
+        <form method="POST">
+          <button type="submit" name="toggleCommentList" class="menu-item{{if .ShowAllComments}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{template "iconComments"}}</span>
+            <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.CommentCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if gt .ResolvedCount 0}}
+        <form method="POST">
+          <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{if .ShowResolved}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+            <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.ResolvedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
+        <form method="POST">
+          <button type="submit" name="unhideAllResolved" class="menu-item" role="menuitem">
+            <span class="menu-icon">{{template "iconCircle16"}}</span>
+            <span class="menu-label">Unhide</span>
+            <span class="menu-meta">{{.HiddenResolvedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if gt .SuggestionCount 0}}
+        <form method="POST">
+          <button type="submit" name="toggleSuggestions" class="menu-item{{if not .HideSuggestions}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{template "iconSuggestion"}}</span>
+            <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.SuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if $.HasMarks}}
+        <form method="POST">
+          <button type="submit" name="toggleMarks" class="menu-item{{if not .HideMarks}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
+            <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}{{with index $.KeyHint "toggleMarks"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if gt .HiddenSuggestionCount 0}}
+        <form method="POST">
+          <button type="submit" name="showHiddenSuggestions" class="menu-item" role="menuitem">
+            <span class="menu-icon">{{template "iconSuggestion"}}</span>
+            <span class="menu-label">Show hidden suggestions</span>
+            <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if gt .DecisionCount 0}}
+        <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
+        {{end}}
+        
+        {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
+        <form method="POST">
+          <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">
+            <span class="menu-icon">{{template "iconWarning"}}</span>
+            <span class="menu-label">Outdated</span>
+            <span class="menu-meta">{{.OutdatedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        <form method="POST">
+          <button type="submit" name="toggleKeyboardHelp" class="menu-item" role="menuitem">
+            <span class="menu-icon" aria-hidden="true">?</span>
+            <span class="menu-label">Keyboard shortcuts</span>
+          </button>
+        </form>
+        
+        <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
+          <span class="menu-icon">{{template "iconBook"}}</span>
+          <span class="menu-label">Usage guide</span>
+        </a>
+      </div>
+    </div>
+=== viewerPrompts ===
+{{if and .LastDeletedComment (not .Quitting)}}
+<div class="undo-toast" role="status">
+  <span>Comment on <code>{{.LastDeletedComment.File}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
+  <span class="toast-actions">
+    <form method="POST" style="margin:0;display:inline">
+      <button type="submit" name="undoDelete" class="undo-btn">Undo</button>
+    </form>
+    <form method="POST" class="toast-dismiss-form">
+      <button type="submit" name="dismissUndo" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
+    </form>
+  </span>
+</div>
+{{end}}
+
+{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
+<div class="reanchor-prompt" role="status">
+  <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="clearSelection" class="toast-dismiss" aria-label="Cancel re-anchoring">{{template "iconClose14"}}</button>
+  </form>
+</div>
+{{end}}
+{{if .PendingRefresh}}
+
+<div class="reanchor-prompt refresh-prompt" role="status">
+  <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
+  </form>
+</div>
+{{end}}
+{{if .AgentPaused}}
+
+<div class="reanchor-prompt paused-prompt" role="status">
+  <span>⏸ Batching — comments are held, not sent to the agent yet.</span>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="resumeAgent" class="refresh-btn">Resume — send batch</button>
+  </form>
+</div>
+{{end}}
+=== workQueue ===
+  <div class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+    <button type="button" id="queue-trigger-{{.EnqueueTick}}" class="contrast tb-dropdown-trigger queue-trigger{{if .AgentWorking}} is-working{{end}}{{if .AgentPaused}} is-paused{{end}}" aria-haspopup="menu" title="{{if .AgentPaused}}Batching — comments held, not sent. {{end}}Work queue: queued, worked-on, drafts; Pause/Resume + End session inside">{{if .AgentPaused}}<span class="queue-paused-dot" aria-hidden="true">⏸</span>{{end}}<span class="tb-label">Queue</span>{{if .AwaitingReplyCount}}<span class="q-num q-awaiting-reply" title="your replies still awaiting the agent (whole review)">{{.AwaitingReplyCount}}</span>{{end}}{{if .HasQueue}}<span class="queue-counts">{{if .AwaitingApplyCount}}<span class="q-num q-awaiting" title="accepted, not yet applied to the file">{{.AwaitingApplyCount}}</span> · {{end}}<span class="q-num q-queued">{{.QueuedCount}}</span>{{if .DoneCount}} · <span class="q-num q-done">{{.DoneCount}}</span>{{end}}{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span>{{end}}</span>{{end}}{{template "iconChevronDown"}}</button>
+    <div class="tb-dropdown-panel queue-panel" role="menu" aria-label="Work queue">
+      
+      <form method="POST" class="queue-pause-form">
+        <button type="submit" name="toggleAgentPause" class="queue-pause-btn{{if .AgentPaused}} is-paused{{end}}">{{if .AgentPaused}}▶ Resume — send batch{{if .QueuedCount}} ({{.QueuedCount}}){{end}}{{else}}⏸ Pause — batch comments{{end}}{{with index $.KeyHint "toggleAgentPause"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>
+      <div class="queue-mode{{if .AgentPaused}} is-batching{{end}}">{{if .AgentPaused}}Batching: comments are held, not sent. Resume sends them together.{{else}}Live: each comment is sent to the agent as you save it.{{end}}</div>
+      {{with .AgentWorkingLabel}}<div class="queue-working">⚡ {{.}}</div>{{end}}
+      
+      {{if not .SingleFile}}
+      <form method="POST" class="queue-scope-form">
+        <button type="submit" name="toggleQueueScope" class="queue-scope-btn" role="menuitemcheckbox" aria-checked="{{if .QueueGlobal}}true{{else}}false{{end}}" title="Show this file's work, or the whole review's">
+          <span class="queue-scope-opt{{if not .QueueGlobal}} is-on{{end}}">This file</span><span class="queue-scope-opt{{if .QueueGlobal}} is-on{{end}}">All files</span>
+        </button>
+      </form>
+      {{end}}
+      
+      {{if .AwaitingReplyCount}}<div class="queue-awaiting-reply"><span class="q-num q-awaiting-reply">{{.AwaitingReplyCount}}</span> repl{{if eq .AwaitingReplyCount 1}}y{{else}}ies{{end}} awaiting the agent (whole review)</div>{{end}}
+      {{if .HasQueue}}
+      <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}{{if .QueueHiddenCount}} · <span class="q-num q-elsewhere">{{.QueueHiddenCount}}</span> on other files{{end}}</div>
+      
+      {{if .AwaitingApplyCount}}
+      <div class="queue-awaiting"><span class="q-num q-awaiting">{{.AwaitingApplyCount}}</span> accepted, awaiting the agent to apply {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file</div>
+      {{end}}
+      {{range .QueueItems}}
+      
+      <div class="queue-row queue-{{.State}} queue-kind-{{.Kind}}">
+        <form method="POST" class="queue-jump-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="{{if eq .Kind "suggestion"}}jumpToSuggestion{{else}}jumpToComment{{end}}" class="queue-item" title="Go to this {{.Kind}}">
+            {{if eq .Kind "suggestion"}}<span class="queue-kind-icon" aria-hidden="true">✦</span>{{end}}
+            <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
+            <span class="queue-body">{{.Body}}</span>
+            <span class="queue-loc" title="{{.File}}{{if .Line}}:{{.Line}}{{end}}">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
+          </button>
+        </form>{{if and (eq .State "done") (eq .Kind "comment")}}
+        
+        <form method="POST" class="queue-reenqueue-form">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="reenqueueComment" class="queue-reenqueue" title="Re-enqueue — ask the agent to redo this" aria-label="Re-enqueue">↺</button>
+        </form>{{end}}
+      </div>
+      {{end}}
+      {{else}}{{if .QueueHiddenCount}}
+      
+      <div class="queue-empty">Nothing queued on this file — <strong>{{.QueueHiddenCount}}</strong> item{{if ne .QueueHiddenCount 1}}s{{end}} on other files. Switch to <strong>All files</strong> to see {{if eq .QueueHiddenCount 1}}it{{else}}them{{end}}.</div>
+      {{else}}
+      <div class="queue-empty">Nothing queued yet — comments you add stream to the agent automatically.</div>
+      {{end}}{{end}}
+      
+      <button type="button" command="show-modal" commandfor="confirm-end-session" class="queue-end-btn" role="menuitem">End session</button>
+    </div>
+  </div>

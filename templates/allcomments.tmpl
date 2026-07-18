@@ -1,0 +1,106 @@
+{{define "allComments" -}}
+<section class="all-comments">
+  <header class="ac-head">
+    <strong>All comments ({{.CommentCount}})</strong>
+    <form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleCommentList"
+        class="outline contrast"
+        title="Return to the file you were viewing"
+      >Back</button>
+    </form>
+  </header>
+  {{if .VisibleComments}}
+  <ul class="ac-list">
+    {{range .VisibleComments}}
+    <li
+      class="ac-item{{if .Resolved}} is-resolved{{end}}"
+      data-key="{{.ID}}"
+    >
+      <form method="POST" class="ac-jump">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button type="submit" name="jumpToComment" class="ac-jump-btn">
+          <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>
+            {{- if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}
+            {{- if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}
+            {{- if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}
+            {{- if .Processed}} <small class="processed-badge">worked on</small>{{end -}}
+          </div>
+          <div class="ac-body">{{.Body}}</div>
+        </button>
+      </form>
+      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
+      <div class="ac-actions">
+        <form method="POST">
+      <input type="hidden" name="id" value="{{.ID}}">
+      <button
+        type="submit"
+        name="toggleResolved"
+        class="outline"
+      >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
+    </form>
+        {{if .Resolved -}}
+        <form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button
+            type="submit"
+            name="hideComment"
+            class="outline"
+          >Hide</button>
+        </form>
+        {{- end}}
+        {{if and (not .Resolved) .AnchorOutdated -}}
+        <form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button
+            type="submit"
+            name="reanchorComment"
+            class="outline"
+          >Re-anchor</button>
+        </form>
+        {{- end}}
+        {{if and (not .Resolved) (not .AnchorOutdated) -}}
+        <form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button
+            type="submit"
+            name="editComment"
+            class="outline"
+          >Edit</button>
+        </form>
+        {{- end}}
+        <button
+      type="button"
+      class="secondary outline"
+      command="show-modal"
+      commandfor="confirm-delete-{{.ID}}"
+    >Delete</button>
+        {{template "deleteDialog" .}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  {{/* Empty overview: a centered message + a prominent Back so the user
+       isn't stranded on a near-blank page with only the small sticky-
+       header Back (issue #27). Both empty branches get the Back; the
+       resolved-hidden branch keeps its "toggle Show resolved" hint. */}}
+  <div class="ac-empty">
+    <p class="ac-empty-msg">
+      {{- if and (gt .CommentCount 0) (not .ShowResolved)}}{{.CommentCount}} resolved comment{{if ne .CommentCount 1}}s{{end}} hidden — toggle “Show resolved” to see them.
+      {{- else}}No comments yet.
+      {{- end -}}
+    </p>
+    <form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleCommentList"
+        class="contrast ac-empty-back"
+        title="Return to the file you were viewing"
+      >← Back to file</button>
+    </form>
+  </div>
+  {{end}}
+</section>
+{{- end -}}

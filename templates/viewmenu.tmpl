@@ -1,0 +1,194 @@
+{{define "viewMenu"}}    <div
+      class="tb-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="contrast theme-toggle tb-dropdown-trigger"
+        aria-haspopup="menu"
+        title="View options — focus, color scheme &amp; mode, comment filters, help"
+      ><span class="tb-label">View</span>{{template "iconChevronDown"}}</button>
+      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
+        {{if .CurrentDiff}}
+        {{/* Focus — hide the side columns for distraction-free reading. Gated
+             on an open file (with none open the drawer is the only way to pick
+             one). Label flips, same as the old inline button. */}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleFocusMode"
+            class="menu-item{{if .FocusMode}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconFocus"}}</span>
+            <span class="menu-label">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Color scheme + mode — cycle Solarized → Gruvbox → Catppuccin and
+             System → Light → Dark; meta shows what the next click switches to.
+             Always shown (global reading preferences, useful before any file). */}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="cycleScheme"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconPalette"}}</span>
+            <span class="menu-label">Scheme: {{.SchemeLabel}}</span>
+            <span class="menu-meta">{{.NextSchemeLabel}} →</span>
+          </button>
+        </form>
+        <form method="POST">
+          <button
+            type="submit"
+            name="cycleTheme"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}</span>
+            <span class="menu-label">Mode: {{.ThemeModeLabel}}</span>
+            <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
+          </button>
+        </form>
+        {{/* All comments — the desktop view-all entry, mirroring the file
+             drawer's "All comments" button and the mobile menu (same
+             toggleCommentList action). Surfacing it here also makes it reachable
+             in Focus mode, where the drawer is hidden. Label flips to "Back"
+             while the all-comments view is open. */}}
+        {{if gt .CommentCount 0}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleCommentList"
+            class="menu-item{{if .ShowAllComments}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconComments"}}</span>
+            <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.CommentCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Show-resolved FILTER — toggles whether resolved comments appear in
+             the view (toggleShowResolved, unchanged from the old inline checkbox). */}}
+        {{if gt .ResolvedCount 0}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleShowResolved"
+            class="menu-item{{if .ShowResolved}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{if .ShowResolved}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+            <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.ResolvedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Unhide individually-hidden resolved comments (issue #88). Only while
+             Show-resolved is ON and at least one resolved comment is re-hidden. */}}
+        {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="unhideAllResolved"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconCircle16"}}</span>
+            <span class="menu-label">Unhide</span>
+            <span class="menu-meta">{{.HiddenResolvedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Suggestions toggle (issue #98) — show/hide the LLM's inline suggestion
+             boxes on this file. Only when the file has suggestions. */}}
+        {{if gt .SuggestionCount 0}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleSuggestions"
+            class="menu-item{{if not .HideSuggestions}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconSuggestion"}}</span>
+            <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.SuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* #151: hide/show the per-line count badges + their inline cards on this
+             file, so the diff reads clean. Only when the file has badges. */}}
+        {{if $.HasMarks}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleMarks"
+            class="menu-item{{if not .HideMarks}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
+            <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}{{with index $.KeyHint "toggleMarks"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Show individually-hidden suggestions on this file (hide feature). Only
+             when at least one suggestion is hidden. */}}
+        {{if gt .HiddenSuggestionCount 0}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="showHiddenSuggestions"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconSuggestion"}}</span>
+            <span class="menu-label">Show hidden suggestions</span>
+            <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Recorded suggestion decisions (issue #98 Phase 2). Neutral copy — the
+             hand-off doesn't carry them until Phase 3. */}}
+        {{if gt .DecisionCount 0}}
+        <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
+        {{end}}
+        {{/* Outdated comments needing re-anchoring (toggleCommentList, unchanged). */}}
+        {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleCommentList"
+            class="menu-item"
+            role="menuitem"
+            title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix"
+          >
+            <span class="menu-icon">{{template "iconWarning"}}</span>
+            <span class="menu-label">Outdated</span>
+            <span class="menu-meta">{{.OutdatedCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        {{/* Keyboard shortcuts — same toggleKeyboardHelp action as the "?" key. */}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleKeyboardHelp"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon" aria-hidden="true">?</span>
+            <span class="menu-label">Keyboard shortcuts</span>
+          </button>
+        </form>
+        {{/* Usage guide — a standalone page (/_usage), new tab so the review
+             session is left intact. A plain link, not a POST action. */}}
+        <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
+          <span class="menu-icon">{{template "iconBook"}}</span>
+          <span class="menu-label">Usage guide</span>
+        </a>
+      </div>
+    </div>{{end}}
