@@ -1857,17 +1857,17 @@ header.file-head .file-head-comment button svg { display: block; }
    no interactive sub-elements, so visibility-skip is safe there.
 
    Previously this rule also set `contain: layout style` on every
-   .line-row for an extra isolation guard. Removed because `contain:
-   layout` clips descendants' overflow from the parent's reported
-   dimensions — and the .line inside has `width: max-content`
-   that can be MUCH wider than the .code container. With layout
-   containment, the parent .line-row's width stayed at the .code
-   width, and `.code`'s `overflow-x: auto` had nothing to scroll past.
-   Result: horizontal scroll on long lines stopped working entirely.
-   Off-screen rows get layout containment naturally via content-
-   visibility's implicit `contain: size`; on-screen rows pay no extra
-   isolation cost but their wide buttons correctly extend the
-   scroll-width of `.code`. */
+   .line-row for an extra isolation guard, and removing it was believed
+   to restore desktop horizontal scroll. It did NOT: `content-visibility:
+   auto` applies `contain: layout paint style` to EVERY row on its own —
+   on-screen rows included; only `size` containment is gated on the
+   subtree actually being skipped. So dropping the explicit `contain`
+   changed nothing, and long desktop lines stayed clipped (scrollWidth
+   pinned at the container width) until the row itself was sized to
+   max-content — see the `.code .line-row` width rule in the
+   `@media (min-width: 900px)` block, guarded by
+   TestE2E_LongLineDesktopScrolls. Don't reintroduce an explicit
+   `contain` here expecting it to matter either way. */
 .code .line-row {
   line-height: 1.2;
   min-width: 100%;
@@ -3105,6 +3105,25 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   .code { overflow-x: auto; }
   .code .content { white-space: pre; overflow-wrap: normal; }
   .code .line { width: max-content; min-width: 100%; }
+  /* The .line above grows to max-content, but its PARENT row must grow with
+     it or the scroll never materialises. `content-visibility: auto` (see the
+     .line-row rule) applies `contain: layout paint style` to EVERY row —
+     on-screen ones included; only `size` containment is gated on being
+     skipped. Layout containment stops a descendant's scrollable overflow from
+     propagating to ancestors and paint containment clips it, so a 2375px-wide
+     .line inside an auto-width row left `.code`'s scrollWidth pinned at the
+     container width: the line was clipped, unreachable, with nothing to
+     scroll. (This is also why removing the explicit `contain: layout style`
+     from .line-row was a no-op — content-visibility re-imposes it.)
+
+     Sizing the row itself to max-content fixes it without giving up the
+     virtualization win: the .line no longer overflows its row, so there is
+     nothing for paint containment to clip, and the row's own border-box width
+     legitimately extends `.code`'s scroll range. Scoped to the same selector
+     as the content-visibility rule so composer / inline-comment rows keep
+     their auto width (max-content on a row holding a textarea would size to
+     the unwrapped draft text). Guarded by TestE2E_LongLineDesktopScrolls. */
+  .code .line-row:not(:has(.composer)):not(:has(.inline-comment)) { width: max-content; min-width: 100%; }
   /* The rendered-Markdown reading surface is the primary desktop view
      (proposal docs). Keep it at the 16px desktop base (1rem): the earlier
      1.25rem (20px) bump read as too big on wide monitors — users were
