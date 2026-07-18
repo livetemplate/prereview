@@ -23,8 +23,6 @@ package e2e
 
 import (
 	"context"
-	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -40,10 +38,7 @@ func TestE2E_ViewPrefsSurviveRelaunch(t *testing.T) {
 	}
 	chromium := findChromium(t)
 	repo := setupFixtureRepo(t)
-	binary := filepath.Join(t.TempDir(), "prereview")
-	if out, err := exec.Command("go", "build", "-o", binary, "..").CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
+	binary := prereviewBinary(t)
 
 	// One browser spanning both server lifetimes.
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],

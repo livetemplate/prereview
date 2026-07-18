@@ -83,10 +83,7 @@ func bootChromeStream(t *testing.T) (*runningPrereview, *bytesBuf, <-chan error)
 func bootChromeStreamRepo(t *testing.T, repo string) (*runningPrereview, *bytesBuf, <-chan error) {
 	t.Helper()
 	chromium := findChromium(t)
-	binary := filepath.Join(t.TempDir(), "prereview")
-	if out, err := exec.Command("go", "build", "-o", binary, "..").CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
+	binary := prereviewBinary(t)
 	url, srv, stderr, stdoutBuf := startPrereviewStream(t, binary, repo)
 
 	waitCh := make(chan error, 1)

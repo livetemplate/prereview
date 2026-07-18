@@ -234,13 +234,9 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 	}
 	chromium := findChromium(t)
 
-	// Build the binary into a temp path so we don't depend on `make build`.
-	binary := filepath.Join(t.TempDir(), "prereview")
-	build := exec.Command("go", "build", "-o", binary, "..")
-	build.Dir = "."
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
+	// Built once for the whole suite (see prereviewBinary) so we don't depend
+	// on `make build`.
+	binary := prereviewBinary(t)
 
 	repo := setupFixtureRepo(t)
 	url, srv, stderr := startPrereview(t, binary, repo)
@@ -389,11 +385,7 @@ func bootChromeAgainstPrereview(t *testing.T, viewportW, viewportH int, extraArg
 func bootChromeAgainstRepo(t *testing.T, repo string, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
 	t.Helper()
 	chromium := findChromium(t)
-	binary := filepath.Join(t.TempDir(), "prereview")
-	build := exec.Command("go", "build", "-o", binary, "..")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
+	binary := prereviewBinary(t)
 	url, srv, stderr := startPrereview(t, binary, repo, extraArgs...)
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],

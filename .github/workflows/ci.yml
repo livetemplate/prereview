@@ -244,3 +244,63 @@ jobs:
           ls dist/prereview_*_darwin_arm64.tar.gz >/dev/null
           ls dist/prereview_*_windows_amd64.zip >/dev/null
           echo "goreleaser artifacts OK"
+
+  browser-e2e:
+    name: Browser e2e (shard ${{ matrix.shard }}/4)
+    # The ~145 chromedp tests were build-tag gated (-tags browser) and never
+    # ran in CI, so a whole class of regression could only be caught by hand:
+    # anything that renders correctly on first paint but breaks the live
+    # WebSocket update path, or breaks in the browser while every server-side
+    # test stays green. The livetemplate v0.19 bump (#188) was the worked
+    # example — CI structurally could not tell whether the vendored client
+    # still applied the new payload format.
+    #
+    # Sharded 4 ways because the suite has no t.Parallel and is strictly
+    # serial within a process.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      # ubuntu-latest ships Google Chrome preinstalled, but pin it explicitly:
+      # if it ever disappears from the image, findChromium would t.Skip every
+      # test and this required check would go green having tested nothing.
+      # e2e-shard.sh fails hard rather than skip — this step just makes the
+      # dependency visible and gives a clearer error if the image changes.
+      - name: Verify a browser is present
+        run: |
+          set -euo pipefail
+          command -v google-chrome >/dev/null || command -v chromium >/dev/null || {
+            echo "no browser on the runner image"; exit 1; }
+          (google-chrome --version || chromium --version) 2>/dev/null
+      # Each test spawns its own Chrome, and chromedp gives the browser ~20s to
+      # publish its DevTools websocket endpoint. On a cold runner the very first
+      # launch can exceed that (observed: "websocket url timeout reached" at
+      # 21.1s), failing whichever test happened to go first. One throwaway
+      # headless launch pulls the binary and its libraries into page cache so
+      # the first *test* isn't the one paying that cost.
+      - name: Warm the browser (avoid a cold-start timeout on the first test)
+        run: |
+          set -euo pipefail
+          bin="$(command -v chromium || command -v google-chrome)"
+          time "$bin" --headless --no-sandbox --disable-gpu --dump-dom about:blank >/dev/null
+      - name: Run e2e shard
+        run: scripts/e2e-shard.sh ${{ matrix.shard }} 4
+      # The suite captures browser console, server stderr, WS frames and
+      # screenshots; on failure that context is the whole point of having it.
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-shard-${{ matrix.shard }}-artifacts
+          path: |
+            e2e/testdata/**/*.png
+            /tmp/prereview-e2e-*
+          if-no-files-found: ignore
+          retention-days: 7
