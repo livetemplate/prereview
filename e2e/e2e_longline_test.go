@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/chromedp/chromedp"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/chromedp"
 )
 
 // longCodeLine is far wider than any viewport under test (~340 chars), so on

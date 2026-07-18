@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -124,10 +123,7 @@ func startPrereviewExternal(t *testing.T, binary, target, out string) (string, *
 func bootChromeExternal(t *testing.T, target string, viewportW, viewportH int) *runningPrereview {
 	t.Helper()
 	chromium := findChromium(t)
-	binary := filepath.Join(t.TempDir(), "prereview")
-	if out, err := exec.Command("go", "build", "-o", binary, "..").CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
+	binary := prereviewBinary(t)
 	out := t.TempDir()
 	url, srv, stderr := startPrereviewExternal(t, binary, target, out)
 

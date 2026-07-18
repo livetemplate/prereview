@@ -15,7 +15,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -93,11 +92,7 @@ func TestE2E_LLMStatusMultiTab(t *testing.T) {
 	}
 	chromium := findChromium(t)
 
-	binary := filepath.Join(t.TempDir(), "prereview")
-	build := exec.Command("go", "build", "-o", binary, "..")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
+	binary := prereviewBinary(t)
 
 	repo := setupFixtureRepo(t)
 	// --agent starts the llm-status watcher (agentMode gates it).
@@ -285,10 +280,7 @@ func TestE2E_LLMStatusTwoTabJoinerClears(t *testing.T) {
 		t.Skip("e2e not supported on windows")
 	}
 	chromium := findChromium(t)
-	binary := filepath.Join(t.TempDir(), "prereview")
-	if out, err := exec.Command("go", "build", "-o", binary, "..").CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
+	binary := prereviewBinary(t)
 	repo := setupFixtureRepo(t)
 	url, srv, stderr := startPrereview(t, binary, repo, "--agent")
 	defer func() { _ = srv.Process.Kill(); _, _ = srv.Process.Wait() }()
