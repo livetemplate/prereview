@@ -36,7 +36,8 @@ export GOWORK=off
 # --- guard 1: a browser must exist, or every test would skip into a green pass.
 # Keep this list in sync with findChromium in e2e/e2e_test.go.
 browser=""
-for c in /usr/bin/google-chrome /usr/bin/chromium /usr/bin/chromium-browser /usr/bin/chrome; do
+for c in /run/current-system/sw/bin/chromium /usr/bin/chromium /usr/bin/chromium-browser \
+         /usr/bin/google-chrome /usr/bin/chrome; do
   [ -x "$c" ] && { browser="$c"; break; }
 done
 [ -z "$browser" ] && browser="$(command -v chromium || command -v google-chrome || true)"
