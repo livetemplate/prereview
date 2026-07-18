@@ -91,7 +91,7 @@ func TestTemplateRenderGolden(t *testing.T) {
 			if again := renderInitial(t, tc.state); again != got {
 				t.Fatalf("non-deterministic render for %q: two runs differ (or the id normalizer is stale)", tc.name)
 			}
-			checkGolden(t, filepath.Join(renderGoldenDir, tc.name+".html.golden"), "rendered output", tc.name, got)
+			checkGolden(t, filepath.Join(renderGoldenDir, tc.name+".html.golden"), renderGolden, tc.name, got)
 		})
 	}
 }
@@ -109,7 +109,7 @@ func TestTemplateUpdateGolden(t *testing.T) {
 			if again := renderUpdate(t, tc.before, tc.after); again != got {
 				t.Fatalf("non-deterministic update payload for %q (or the id normalizer is stale)", tc.name)
 			}
-			checkGolden(t, filepath.Join(renderGoldenDir, "update-"+tc.name+".payload.golden"), "update payload", tc.name, got)
+			checkGolden(t, filepath.Join(renderGoldenDir, "update-"+tc.name+".payload.golden"), payloadGolden, tc.name, got)
 		})
 	}
 }
@@ -174,10 +174,45 @@ func updateFixtures() []updateFixture {
 	}
 }
 
+// goldenKind labels a golden set and carries the diagnosis shown when it
+// mismatches. The two sets fail for materially different reasons, so a single
+// generic "a pure extraction must be byte-identical" message would point the
+// next reader at the wrong cause — see payloadGolden.
+type goldenKind struct {
+	what string
+	hint string
+}
+
+var (
+	// renderGolden is the rendered HTML: prereview's own markup, nothing else.
+	renderGolden = goldenKind{
+		what: "rendered output",
+		hint: "  This is prereview's own markup, so a diff here is a real rendering change.\n" +
+			"  A pure template extraction (inline markup -> {{define}} + {{template}} call)\n" +
+			"  must leave it byte-identical.",
+	}
+	// payloadGolden is the ExecuteUpdates payload — livetemplate's wire format,
+	// which is why it can break without prereview changing at all.
+	payloadGolden = goldenKind{
+		what: "update payload",
+		hint: "  These bytes are livetemplate's fragment-diff WIRE FORMAT, not just prereview\n" +
+			"  markup, so there are two very different causes:\n" +
+			"    (a) a template change altered the rendered region, or\n" +
+			"    (b) livetemplate changed its payload encoding — i.e. a version bump,\n" +
+			"        with prereview's markup completely untouched.\n" +
+			"  Tell them apart before you touch anything: a bare `go test` resolves\n" +
+			"  livetemplate through the parent go.work (the local checkout), while go.mod\n" +
+			"  pins the version CI builds. If `GOWORK=off go test` PASSES and this fails,\n" +
+			"  it is (b) — the workspace is building unreleased livetemplate, not a\n" +
+			"  regression in your change. (Seen for real: v0.18.1 encodes a list update as\n" +
+			"  [[\"r\",<hash>],[\"a\",[...]]]; v0.19 encodes it as {\"d\":[...]}.)",
+	}
+)
+
 // checkGolden compares got against the golden at path, or (under -update-render)
-// rewrites it. `what`/`name` label the artifact in a mismatch message. It owns the
+// rewrites it. `kind`/`name` label the artifact in a mismatch message. It owns the
 // directory-creation so either golden set can be regenerated on its own.
-func checkGolden(t *testing.T, path, what, name, got string) {
+func checkGolden(t *testing.T, path string, kind goldenKind, name, got string) {
 	t.Helper()
 	if *updateRender {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -194,19 +229,23 @@ func checkGolden(t *testing.T, path, what, name, got string) {
 		t.Fatalf("read golden %s: %v\ncreate it with: go test -run 'TestTemplate.*Golden' -update-render .", path, err)
 	}
 	if got != string(want) {
-		reportGoldenDiff(t, what, name, string(want), got)
+		reportGoldenDiff(t, kind, name, string(want), got)
 	}
 }
 
 // reportGoldenDiff fails t with a readable window around the first byte where got
-// diverges from want — a pure page.tmpl extraction must keep these byte-identical.
+// diverges from want, plus the kind's diagnosis hint and the regeneration path.
 // It reuses firstDivergence (tmpl_signature_test.go), which returns the offset and
 // a context window from each side (got first, then want).
-func reportGoldenDiff(t *testing.T, what, name, want, got string) {
+func reportGoldenDiff(t *testing.T, kind goldenKind, name, want, got string) {
 	t.Helper()
 	off, gotCtx, wantCtx := firstDivergence(want, got)
-	t.Errorf("%s for %q changed at offset %d — a pure extraction must be byte-identical.\n golden: %q\n now:    %q",
-		what, name, off, wantCtx, gotCtx)
+	t.Errorf("%s for %q changed at offset %d.\n golden: %q\n now:    %q\n\n%s\n\n"+
+		"  If the change IS intended, regenerate and commit the goldens in the same change:\n"+
+		"    go test -run 'TestTemplate.*Golden' -update-render .\n"+
+		"  Then read the regenerated diff before committing — confirm it has the shape you\n"+
+		"  expect (markup vs. wire-format), so a real regression can't ride along unnoticed.",
+		kind.what, name, off, wantCtx, gotCtx, kind.hint)
 }
 
 // ---- fixtures: one per mutually-exclusive template branch ----

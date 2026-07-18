@@ -54,7 +54,23 @@ is the neutrality proof: it renders the real `"prereview"` template for a fixtur
 per branch and diffs the full HTML — on both the initial tree (`Execute`) and the
 live-update payload (`ExecuteUpdates`) — against `testdata/render/*.golden`. A
 pure relocation keeps every golden byte-identical. Regenerate intentionally with
-`go test -run 'TestTemplateRenderGolden|TestTemplateUpdateGolden' -update-render .`.
+`go test -run 'TestTemplate.*Golden' -update-render .` — and read the regenerated
+diff before committing, so a real regression can't ride along with an intended one.
+
+**Run it with `GOWORK=off`.** The two golden sets fail for different reasons:
+
+- the 18 `*.html.golden` are prereview's own **markup** — a diff is a real
+  rendering change;
+- the 3 `update-*.payload.golden` are livetemplate's fragment-diff **wire
+  format**, so they also break when *livetemplate* changes, with prereview
+  untouched.
+
+The parent `go.work` resolves livetemplate to the local checkout while `go.mod`
+pins the version CI builds, so a bare `go test ./...` can fail all three payload
+goldens on a perfectly good tree (observed: v0.18.1 encodes a list update as
+`[["r",<hash>],["a",[...]]]`, v0.19 as `{"d":[...]}`). If `GOWORK=off go test`
+passes and a bare one doesn't, that's the workspace — not your change. The
+mismatch message spells this out; see also `prereview-worktree-gowork-off`.
 
 ## Editing the templates (read before you touch them)
 
