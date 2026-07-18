@@ -279,6 +279,17 @@ jobs:
           command -v google-chrome >/dev/null || command -v chromium >/dev/null || {
             echo "no browser on the runner image"; exit 1; }
           (google-chrome --version || chromium --version) 2>/dev/null
+      # Each test spawns its own Chrome, and chromedp gives the browser ~20s to
+      # publish its DevTools websocket endpoint. On a cold runner the very first
+      # launch can exceed that (observed: "websocket url timeout reached" at
+      # 21.1s), failing whichever test happened to go first. One throwaway
+      # headless launch pulls the binary and its libraries into page cache so
+      # the first *test* isn't the one paying that cost.
+      - name: Warm the browser (avoid a cold-start timeout on the first test)
+        run: |
+          set -euo pipefail
+          bin="$(command -v chromium || command -v google-chrome)"
+          time "$bin" --headless --no-sandbox --disable-gpu --dump-dom about:blank >/dev/null
       - name: Run e2e shard
         run: scripts/e2e-shard.sh ${{ matrix.shard }} 4
       # The suite captures browser console, server stderr, WS frames and

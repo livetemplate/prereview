@@ -611,6 +611,9 @@ func TestE2E_KeyboardLineCursor(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800)
 	p.waitReady()
 	p.clickFile("edited.go")
+	// eval runs a fixed, literal JS snippet in the headless browser via
+	// chromedp (no untrusted input) — the standard way to read DOM state in
+	// these tests, unrelated to JavaScript's eval() on dynamic strings.
 	eval := func(js string) string {
 		var s string
 		_ = chromedp.Run(p.ctx, chromedp.Evaluate(js, &s))
@@ -631,9 +634,20 @@ func TestE2E_KeyboardLineCursor(t *testing.T) {
 	if first == "" {
 		t.Fatalf("no cursor line after ArrowDown")
 	}
-	// The cursor line is focused (so Enter activates it).
-	if foc := eval(`(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('is-cursor'))?'y':'n'`); foc != "y" {
-		t.Errorf("cursor line should be focused, activeElement=%s", eval(`document.activeElement?document.activeElement.className:'?'`))
+	// The cursor line is focused (so Enter activates it). Poll rather than
+	// sample once: WaitVisible above returns as soon as the server-rendered
+	// .is-cursor class is in the DOM, but the client applies .focus() a tick
+	// later. Reading activeElement immediately catches that gap on a loaded
+	// machine (observed failing in CI, passing locally).
+	focused := false
+	for i := 0; i < 40 && !focused; i++ {
+		focused = eval(`(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('is-cursor'))?'y':'n'`) == "y"
+		if !focused {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	if !focused {
+		t.Errorf("cursor line should be focused within 2s, activeElement=%s", eval(`document.activeElement?document.activeElement.className:'?'`))
 	}
 
 	// ArrowDown again moves the cursor to a different line.
