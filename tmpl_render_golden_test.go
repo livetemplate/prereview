@@ -36,7 +36,7 @@ import (
 const renderGoldenDir = "testdata/render"
 
 var updateRender = flag.Bool("update-render", false,
-	"regenerate testdata/render/*.html.golden from the current templates/ set")
+	"regenerate the render + update-payload goldens under testdata/render/ from the current templates/ set")
 
 // newLiveTemplate stages the embedded template set and parses it exactly as the
 // server does. Each call returns a fresh instance so Execute/ExecuteUpdates
@@ -89,27 +89,9 @@ func TestTemplateRenderGolden(t *testing.T) {
 			// golden comparison a coin flip.
 			got := renderInitial(t, tc.state)
 			if again := renderInitial(t, tc.state); again != got {
-				t.Fatalf("non-deterministic render for %q: two runs differ", tc.name)
+				t.Fatalf("non-deterministic render for %q: two runs differ (or the id normalizer is stale)", tc.name)
 			}
-
-			goldenFile := filepath.Join(renderGoldenDir, tc.name+".html.golden")
-			if *updateRender {
-				if err := os.MkdirAll(renderGoldenDir, 0o755); err != nil {
-					t.Fatalf("mkdir %s: %v", renderGoldenDir, err)
-				}
-				if err := os.WriteFile(goldenFile, []byte(got), 0o644); err != nil {
-					t.Fatalf("write %s: %v", goldenFile, err)
-				}
-				t.Logf("wrote %s (%d bytes)", goldenFile, len(got))
-				return
-			}
-			want, err := os.ReadFile(goldenFile)
-			if err != nil {
-				t.Fatalf("read golden %s: %v\ncreate it with: go test -run TestTemplateRenderGolden -update-render .", goldenFile, err)
-			}
-			if got != string(want) {
-				reportGoldenDiff(t, "rendered output", tc.name, string(want), got)
-			}
+			checkGolden(t, filepath.Join(renderGoldenDir, tc.name+".html.golden"), "rendered output", tc.name, got)
 		})
 	}
 }
@@ -125,23 +107,9 @@ func TestTemplateUpdateGolden(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := renderUpdate(t, tc.before, tc.after)
 			if again := renderUpdate(t, tc.before, tc.after); again != got {
-				t.Fatalf("non-deterministic update payload for %q", tc.name)
+				t.Fatalf("non-deterministic update payload for %q (or the id normalizer is stale)", tc.name)
 			}
-			goldenFile := filepath.Join(renderGoldenDir, "update-"+tc.name+".payload.golden")
-			if *updateRender {
-				if err := os.WriteFile(goldenFile, []byte(got), 0o644); err != nil {
-					t.Fatalf("write %s: %v", goldenFile, err)
-				}
-				t.Logf("wrote %s (%d bytes)", goldenFile, len(got))
-				return
-			}
-			want, err := os.ReadFile(goldenFile)
-			if err != nil {
-				t.Fatalf("read golden %s: %v\ncreate it with: go test -run TestTemplateUpdateGolden -update-render .", goldenFile, err)
-			}
-			if got != string(want) {
-				reportGoldenDiff(t, "update payload", tc.name, string(want), got)
-			}
+			checkGolden(t, filepath.Join(renderGoldenDir, "update-"+tc.name+".payload.golden"), "update payload", tc.name, got)
 		})
 	}
 }
@@ -169,16 +137,14 @@ type updateFixture struct {
 
 func updateFixtures() []updateFixture {
 	// toolbar region: the agent "working" pill appears (LLMState transition).
-	tbBefore := repoBase()
-	tbBefore.CurrentDiff = goDiff()
+	tbBefore := goBase()
 	tbBefore.AgentMode = true
 	tbAfter := tbBefore
 	tbAfter.LLMState = "working"
 	tbAfter.LLMMessage = "applying"
 
 	// diff-line card region: an agent reply + worked-on badge reaches the card.
-	cardBefore := repoBase()
-	cardBefore.CurrentDiff = goDiff()
+	cardBefore := goBase()
 	cardBefore.Comments = []review.Comment{
 		{ID: "c1", File: "app.go", Body: "rename", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
 	}
@@ -208,24 +174,39 @@ func updateFixtures() []updateFixture {
 	}
 }
 
-func firstDiffOffset(a, b string) int {
-	n := min(len(a), len(b))
-	i := 0
-	for i < n && a[i] == b[i] {
-		i++
+// checkGolden compares got against the golden at path, or (under -update-render)
+// rewrites it. `what`/`name` label the artifact in a mismatch message. It owns the
+// directory-creation so either golden set can be regenerated on its own.
+func checkGolden(t *testing.T, path, what, name, got string) {
+	t.Helper()
+	if *updateRender {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+		t.Logf("wrote %s (%d bytes)", path, len(got))
+		return
 	}
-	return i
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read golden %s: %v\ncreate it with: go test -run 'TestTemplate.*Golden' -update-render .", path, err)
+	}
+	if got != string(want) {
+		reportGoldenDiff(t, what, name, string(want), got)
+	}
 }
 
 // reportGoldenDiff fails t with a readable window around the first byte where got
 // diverges from want — a pure page.tmpl extraction must keep these byte-identical.
+// It reuses firstDivergence (tmpl_signature_test.go), which returns the offset and
+// a context window from each side (got first, then want).
 func reportGoldenDiff(t *testing.T, what, name, want, got string) {
 	t.Helper()
-	off := firstDiffOffset(want, got)
-	lo := max(off-40, 0)
-	clip := func(s string) string { return s[min(lo, len(s)):min(off+80, len(s))] }
+	off, gotCtx, wantCtx := firstDivergence(want, got)
 	t.Errorf("%s for %q changed at offset %d — a pure extraction must be byte-identical.\n golden: %q\n now:    %q",
-		what, name, off, clip(want), clip(got))
+		what, name, off, wantCtx, gotCtx)
 }
 
 // ---- fixtures: one per mutually-exclusive template branch ----
@@ -260,10 +241,17 @@ func goDiff() *gitdiff.FileDiff {
 	}
 }
 
+// goBase is repoBase already viewing app.go's Go diff — the common starting point
+// for the fixtures that exercise the diff/code view (as opposed to md/html/binary).
+func goBase() review.PrereviewState {
+	s := repoBase()
+	s.CurrentDiff = goDiff()
+	return s
+}
+
 func renderFixtures() []renderFixture {
 	// diff (code line) view
-	diff := repoBase()
-	diff.CurrentDiff = goDiff()
+	diff := goBase()
 
 	// rendered-Markdown view
 	md := repoBase()
@@ -301,8 +289,7 @@ func renderFixtures() []renderFixture {
 	}
 
 	// all-comments overview
-	allComments := repoBase()
-	allComments.CurrentDiff = goDiff()
+	allComments := goBase()
 	allComments.ShowAllComments = true
 	allComments.Comments = []review.Comment{
 		{ID: "c1", File: "app.go", Body: "fix this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
@@ -319,8 +306,7 @@ func renderFixtures() []renderFixture {
 
 	// version-view (historical read-only) + a populated version timeline so the
 	// file-header Versions panel (Phase 2) is exercised, not dark.
-	version := repoBase()
-	version.CurrentDiff = goDiff()
+	version := goBase()
 	version.ViewingVersion = true
 	version.VersionViewSeq = 1
 	version.Versions = []review.VersionListItem{
@@ -329,8 +315,7 @@ func renderFixtures() []renderFixture {
 	}
 
 	// search palette open (inner search-head/body markup lit)
-	searchOpen := repoBase()
-	searchOpen.CurrentDiff = goDiff()
+	searchOpen := goBase()
 	searchOpen.SearchOpen = true
 	searchOpen.SearchQuery = "app"
 	searchOpen.SearchHits = []review.SearchHit{
@@ -339,17 +324,14 @@ func renderFixtures() []renderFixture {
 	}
 
 	// status banners: Quitting / SessionEnded (each its own, they read differently)
-	quitting := repoBase()
-	quitting.CurrentDiff = goDiff()
+	quitting := goBase()
 	quitting.Quitting = true
 
-	sessionEnded := repoBase()
-	sessionEnded.CurrentDiff = goDiff()
+	sessionEnded := goBase()
 	sessionEnded.SessionEnded = true
 
 	// transient toasts + in-viewer prompts, all lit at once (independent {{if}}s)
-	toasts := repoBase()
-	toasts.CurrentDiff = goDiff()
+	toasts := goBase()
 	toasts.AgentMode = true
 	toasts.Flash = "Saved."
 	toasts.LLMState = "working"
@@ -360,8 +342,7 @@ func renderFixtures() []renderFixture {
 	toasts.AgentPaused = true
 
 	// agent mode with a queued comment (work-queue dropdown + card)
-	agent := repoBase()
-	agent.CurrentDiff = goDiff()
+	agent := goBase()
 	agent.AgentMode = true
 	agent.Comments = []review.Comment{
 		{ID: "c1", File: "app.go", Body: "rename", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
