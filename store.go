@@ -82,6 +82,23 @@ func userPromptsDir() string {
 	return filepath.Join(dir, "prereview", "prompts")
 }
 
+// userQuizzesDir is the comprehension-quiz prompt overlay directory (#191):
+// ~/.config/prereview/quizzes. PREREVIEW_QUIZZES_DIR overrides it. Kept separate
+// from the suggestions library above because the two answer with different verbs
+// — a quiz prompt asks for `prereview quiz`, a suggestions prompt for
+// `prereview suggest` — so mixing them in one directory would put the wrong
+// instructions in the wrong picker. Same "" fallback: built-ins still ship.
+func userQuizzesDir() string {
+	if p := os.Getenv("PREREVIEW_QUIZZES_DIR"); p != "" {
+		return p
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "prereview", "quizzes")
+}
+
 // resolveStoreRoot picks the directory whose .prereview/ holds annotations:
 // --out when set (available in every mode so it's never a silently-ignored
 // flag), else the default review root.
