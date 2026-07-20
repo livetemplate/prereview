@@ -674,9 +674,14 @@ func TestE2E_FileHeadAnnotationsCollapse(t *testing.T) {
 	submitQuiz(t, p, quizJSON)
 	waitForQuizEntry(t, p)
 
-	// The head badge exists and counts what is there.
-	if n := evalInt(t, p, `document.querySelectorAll('.file-head-marks .line-marks').length`); n != 1 {
-		t.Fatalf("the file head must show the shared annotation badge, got %d", n)
+	// The head badge exists, counts what is there, and sits in the same right-gutter
+	// container a diff row uses — as a plain flex child it rendered on the LEFT.
+	if n := evalInt(t, p, `document.querySelectorAll('.file-head-marks > .line-margin > .line-marks').length`); n != 1 {
+		t.Fatalf("the file-head badge must live in the .line-margin right gutter, like a diff row's, got %d", n)
+	}
+	// It must actually be to the RIGHT of the cards it controls.
+	if side := evalStr(t, p, `(()=>{const b=document.querySelector('.file-head-marks .line-marks'), c=document.querySelector('.file-head-cards'); if(!b||!c) return "missing"; return b.getBoundingClientRect().left > c.getBoundingClientRect().left ? "right" : "left";})()`); side != "right" {
+		t.Errorf("the file-head badge must sit to the right of its cards, was on the %s", side)
 	}
 	// It is the SAME control the diff rows use — not a quiz-specific one.
 	if n := evalInt(t, p, `document.querySelectorAll(".file-head-marks button[name='toggleQuizCard'], .quiz-card button[name='toggleQuizCard']").length`); n != 0 {

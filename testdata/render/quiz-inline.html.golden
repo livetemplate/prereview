@@ -705,13 +705,15 @@
   <div class="file-head-marks">
     
     
-    <button type="button" class="line-marks"
-            lvt-on:click="toggleRow"
-            data-row="file"
-            lvt-el:toggleClass:on:click="row-toggled"
-            data-lvt-target="closest:.file-head-marks"
-            aria-label="Show or hide this file's annotations"
-            title="Show/hide this file's annotations"><span class="line-mark is-open" aria-hidden="true">2</span></button>
+    <span class="line-margin">
+      <button type="button" class="line-marks"
+              lvt-on:click="toggleRow"
+              data-row="file"
+              lvt-el:toggleClass:on:click="row-toggled"
+              data-lvt-target="closest:.file-head-marks"
+              aria-label="Show or hide this file's annotations"
+              title="Show/hide this file's annotations"><span class="line-mark is-open" aria-hidden="true">2</span></button>
+    </span>
     
     <div class="file-head-cards">
       <div class="quiz-card" data-key="quiz-q3">

@@ -3408,7 +3408,8 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    row shows — so collapsing a file comment, an area comment or an unanchored quiz
    question is the same gesture as collapsing a line's annotations. Before this the
    file head had no badge at all, so those annotations could not be folded at all. */
-.file-head-marks { display: flex; align-items: flex-start; gap: 0.4rem; margin: 0 0 0.5rem; }
-.file-head-marks > .line-marks { flex: 0 0 auto; margin-top: 0.35rem; }
-.file-head-cards { flex: 1 1 auto; min-width: 0; }
+.file-head-marks { position: relative; margin: 0 0 0.5rem; }
+/* Reserve room on the right so the absolutely-positioned badge never overlaps a
+   card's content — the file-head analogue of .has-line-marks .content padding. */
+.file-head-marks > .file-head-cards { padding-right: 2.6rem; }
 .file-head-cards > .file-comments { margin: 0; }
