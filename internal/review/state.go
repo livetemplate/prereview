@@ -353,6 +353,13 @@ type PrereviewState struct {
 	ScrollToQuizID string `json:"scroll_to_quiz_id"`
 	SelectedQuizID string `json:"selected_quiz_id"`
 
+	// CollapsedQuiz folds individual question cards to their header, keyed by
+	// question id. The row badge folds every annotation on a line together, but a
+	// file-level question has no row — so without this the one card most likely to
+	// be in the way (it sits at the top of the file) could not be folded at all.
+	// Session-scoped like ToggledRows: it survives a reconnect, not a relaunch.
+	CollapsedQuiz map[string]bool `json:"collapsed_quiz" lvt:"persist"`
+
 	// QuizNavDismissed hides the quiz navigator for this session. The bar appears
 	// automatically whenever the file has a quiz — discoverability has been this
 	// feature's recurring failure, so it is not behind a menu — but it must be

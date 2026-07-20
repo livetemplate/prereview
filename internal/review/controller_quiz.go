@@ -278,6 +278,23 @@ func (c *PrereviewController) JumpToQuestion(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
+// ToggleQuizCard folds one question card to its header, or unfolds it.
+func (c *PrereviewController) ToggleQuizCard(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("questionId")
+	if id == "" {
+		return state, fmt.Errorf("toggleQuizCard: missing questionId")
+	}
+	if state.CollapsedQuiz == nil {
+		state.CollapsedQuiz = map[string]bool{}
+	}
+	if state.CollapsedQuiz[id] {
+		delete(state.CollapsedQuiz, id)
+	} else {
+		state.CollapsedQuiz[id] = true
+	}
+	return state, nil
+}
+
 // DismissQuizNav puts the navigator away for this session.
 func (c *PrereviewController) DismissQuizNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.QuizNavDismissed = true

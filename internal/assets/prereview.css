@@ -3402,3 +3402,15 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 }
 .quiz-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 .quiz-nav-actions button { margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.72rem; }
+
+/* The per-card fold control. The row badge folds every annotation on a line at
+   once, but a file-level question has no row — and that is the card most likely
+   to be in the way, since it sits at the top of the file. A folded card keeps its
+   probe and prompt so it still says what it is about. */
+.quiz-fold {
+  margin: 0; padding: 0 0.3rem; min-height: 0; line-height: 1;
+  background: none; border: none; color: var(--pico-muted-color);
+  font-size: 0.9rem; cursor: pointer;
+}
+.quiz-fold:hover { color: var(--accent); }
+.quiz-card.is-folded .quiz-prompt { margin-bottom: 0; }

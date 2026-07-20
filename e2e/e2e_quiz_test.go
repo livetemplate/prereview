@@ -659,3 +659,95 @@ func TestE2E_QuizNavigatorFollowsScroll(t *testing.T) {
 		t.Errorf("scrolling back must return the highlight to the first question; got %q, expected %q", back, first)
 	}
 }
+
+// Every question folds, wherever it renders. The row badge folds a whole line's
+// annotations at once, but a file-level question has no row — so it had no fold
+// control at all, and that is the card most likely to be in the way, since it
+// sits at the top of the file. Reported as "not able to collapse a quiz question".
+func TestE2E_QuizQuestionFoldsIndividually(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	p.clickFile("edited.go")
+	submitQuiz(t, p, quizJSON)
+	waitForQuizEntry(t, p)
+
+	// EVERY card has a fold control — including the ones at the file head, which
+	// live outside any diff row.
+	cards := evalInt(t, p, `document.querySelectorAll('.quiz-card').length`)
+	folds := evalInt(t, p, `document.querySelectorAll(".quiz-card button[name='toggleQuizCard']").length`)
+	if folds != cards {
+		t.Fatalf("every question must be foldable; %d cards but only %d fold controls", cards, folds)
+	}
+	atHead := evalInt(t, p, `[...document.querySelectorAll('.quiz-card')].filter(c=>!c.closest('.line-row')).length`)
+	headFolds := evalInt(t, p, `[...document.querySelectorAll('.quiz-card')].filter(c=>!c.closest('.line-row') && c.querySelector("button[name='toggleQuizCard']")).length`)
+	if atHead == 0 || headFolds != atHead {
+		t.Errorf("the file-head questions are the ones with no row badge, so they most need\n"+
+			"their own control; %d at the head, %d of them foldable", atHead, headFolds)
+	}
+
+	// Folding hides the options but keeps the prompt, so a folded card still says
+	// what it is about rather than becoming an anonymous stub.
+	optsBefore := evalInt(t, p, `document.querySelectorAll(".quiz-card[data-key='quiz-q1'] .quiz-options").length`)
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector(".quiz-card[data-key='quiz-q1'] button[name='toggleQuizCard']").click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("fold: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if n := evalInt(t, p, `document.querySelectorAll(".quiz-card[data-key='quiz-q1'] .quiz-options").length`); n != 0 || optsBefore == 0 {
+		t.Errorf("folding must hide the options (%d before, %d after)", optsBefore, n)
+	}
+	if txt := evalStr(t, p, `document.querySelector(".quiz-card[data-key='quiz-q1']").innerText`); !strings.Contains(txt, "QUESTION-ONE") {
+		t.Errorf("a folded card must keep its prompt, or it is an anonymous stub; got %q", txt)
+	}
+	// And unfolds again.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector(".quiz-card[data-key='quiz-q1'] button[name='toggleQuizCard']").click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("unfold: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if n := evalInt(t, p, `document.querySelectorAll(".quiz-card[data-key='quiz-q1'] .quiz-options").length`); n == 0 {
+		t.Error("unfolding must bring the options back")
+	}
+}
+
+// Tapping the badge of a question with NO line — file-level or ungrounded — used
+// to pin the highlight there permanently: the viewport can say nothing about a
+// question that has no position, and it was honoured unconditionally. Scrolling
+// afterwards moved nothing, which reads exactly like the highlight not following
+// the scroll at all.
+func TestE2E_QuizNavigatorUnanchoredSelectionDoesNotStick(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupLongFileRepo(t), 1200, 800, "--agent")
+	p.waitReady()
+	p.clickFile("long.txt")
+	submitQuiz(t, p, `{"id":"zs","file":"long.txt","questions":[
+	  {"id":"f","kind":"file","probe":"decision","prompt":"Q-FILE","options":["x","y"],"answer":0,"why":"wf"},
+	  {"id":"a","kind":"line","probe":"consequence","prompt":"Q-A","options":["x","y"],"answer":0,"why":"wa","from_line":10,"to_line":10,"side":"new"},
+	  {"id":"b","kind":"line","probe":"rationale","prompt":"Q-B","options":["x","y"],"answer":0,"why":"wb","from_line":130,"to_line":130,"side":"new"}]}`)
+	waitForQuizEntry(t, p)
+
+	current := func() string {
+		return evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.is-current'); return b? b.textContent : "none"})()`)
+	}
+	// Select the FILE-level question (badge 1), which has no line.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('.quiz-nav-dot')[0].click()`, nil),
+		chromedp.Sleep(700*time.Millisecond),
+	); err != nil {
+		t.Fatalf("tap: %v\nstderr: %s", err, p.stderr.String())
+	}
+	tapped := current()
+
+	// Now scroll to a line-anchored question. Position must take over.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{const c=document.querySelector(".quiz-card[data-key='quiz-b']"); if(c) c.scrollIntoView({block:'center'});})()`, nil),
+		chromedp.Sleep(1400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("scroll: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if after := current(); after == tapped {
+		t.Errorf("scrolling to a line-anchored question must move the highlight off the\n"+
+			"unanchored one; it stayed on badge %q — the highlight is pinned, not following", after)
+	}
+}
