@@ -298,6 +298,20 @@ numbers** — read the file first. Use `"kind": "file"` rather than a made-up li
 Make every wrong option plausible - something a careful reader might actually
 believe. A quiz you can pass without reading the diff is worthless.
 
+**The reviewer can reply to a question.** A quiz is a conversation, not a verdict:
+they may say an option is ambiguous, or that a question is simply wrong. Those
+replies arrive in the snapshot's `thread` exactly like a reply on a comment, and
+you answer with `prereview reply` — addressing the question by the composite id
+`"<quizID>:<questionID>"`, since a question id is only unique within its quiz:
+
+```bash
+prereview reply --out "<REPO>" "z1:q3" --body "Fair - option 2 was ambiguous. Revised."
+```
+
+If the reviewer is right that a question is wrong, **fix it**: re-submit the quiz
+with the same `id` (last write wins) with that question corrected, then reply
+saying what you changed.
+
 Submit a JSON payload — a single object, a JSON array, or newline-delimited objects —
 on stdin or via `--file`. The running UI picks them up live (no restart):
 

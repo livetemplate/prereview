@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
 // quiz.go wires the #191 comprehension quiz: the reviewer asks for a quiz about
@@ -202,6 +203,22 @@ var builtinQuizzesFS embed.FS
 // prompt can make a quiz boring but not structurally invalid or hallucinated.
 func LoadQuizPrompts(userDir string) []Prompt {
 	return loadPromptLibrary(builtinQuizzesFS, "builtin_quizzes", userDir)
+}
+
+// QuizThreadID is a question's identity for THREADS. Question ids are only unique
+// within their quiz ("q1" appears in every quiz), while a thread target id is
+// global — so the two are joined. Colon-separated because it is typed by a human
+// or an agent on the `prereview reply` command line, unlike the NUL-joined
+// internal answer key.
+func QuizThreadID(quizID, questionID string) string { return quizID + ":" + questionID }
+
+// SplitQuizThreadID reverses QuizThreadID; ok is false when s is not a composite.
+func SplitQuizThreadID(s string) (quizID, questionID string, ok bool) {
+	i := strings.IndexByte(s, ':')
+	if i <= 0 || i == len(s)-1 {
+		return "", "", false
+	}
+	return s[:i], s[i+1:], true
 }
 
 // NewQuizID mints a stable, sortable id when the agent omits one. Exported

@@ -585,5 +585,28 @@
     {{end}}
   </ul>
   {{if .Answered}}<p class="quiz-why{{if .Correct}} is-correct{{else}} is-wrong{{end}}"><small>{{.Why}}</small></p>{{end}}
+  {{- /* #191 conversation on the question itself: ask the agent to clarify a
+         confusing option, or to revise a question you think is wrong. Same
+         thread machinery comments and suggestions use — the only new part is the
+         composite target id, since a question id is unique only within its quiz. */ -}}
+  {{- template "thread" .Thread -}}
+  {{if .Replying}}
+  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ThreadID}}">
+    <textarea
+      name="body"
+      placeholder="Ask the agent to clarify or revise this question…"
+      lvt-on:input="saveReplyDraft"
+      lvt-mod:debounce="200"
+      lvt-autofocus
+    >{{.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>
+  {{else}}
+  <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="{{.ThreadID}}"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
+  {{end}}
 </div>
 {{end}}

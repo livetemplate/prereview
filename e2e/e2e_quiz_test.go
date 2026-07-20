@@ -401,3 +401,63 @@ func TestE2E_QuizMeConfirmsAndBlocksDoubleTap(t *testing.T) {
 	}
 	t.Fatalf("after the quiz arrives the control must be tappable again\nstderr: %s", p.stderr.String())
 }
+
+// A quiz question is a conversation, not a verdict. The reviewer can push back on
+// one — "this option is ambiguous", "I think this is wrong" — and the agent can
+// answer or revise. Reported as: "we should also be able to reply to a quiz
+// question to have a conversation with the LLM to clarify or update things".
+//
+// This reuses the #149 thread machinery wholesale. The only new part is the
+// target id: a question id is unique only WITHIN its quiz, so the thread target
+// is the composite "<quizID>:<questionID>".
+func TestE2E_QuizQuestionThread(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	p.clickFile("edited.go")
+	submitQuiz(t, p, quizJSON)
+	waitForQuizEntry(t, p)
+
+	// Reviewer replies on the question, in place.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.quiz-card[data-key='quiz-q1'] button[name='openReply']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.quiz-card[data-key='quiz-q1'] .reply-form textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.quiz-card[data-key='quiz-q1'] .reply-form textarea`, "REVIEWER-ASKS why is option 2 right?", chromedp.ByQuery),
+		chromedp.Click(`.quiz-card[data-key='quiz-q1'] button[name='postReply']`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("reply on a question: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if txt := evalStr(t, p, `document.querySelector(".quiz-card[data-key='quiz-q1']").innerText`); !strings.Contains(txt, "REVIEWER-ASKS") {
+		t.Fatalf("the reviewer's reply must appear under the question, got %q", txt)
+	}
+
+	// The agent answers out of process, addressing the question by its composite id
+	// — exactly as it would reply to a comment or a suggestion.
+	out, err := exec.Command(p.binary, "reply", "--out", p.repo, "--body", "AGENT-ANSWERS because rename is atomic", "z1:q1").CombinedOutput()
+	if err != nil {
+		t.Fatalf("prereview reply on a quiz question: %v\n%s", err, out)
+	}
+	// Poll for the CONTENT, not just for a thread element: the reviewer's own reply
+	// already created one, so waiting on `.thread` would pass instantly and prove
+	// nothing about the agent's message arriving.
+	var txt string
+	for i := 0; i < 60; i++ {
+		txt = evalStr(t, p, `document.querySelector(".quiz-card[data-key='quiz-q1']").innerText`)
+		if strings.Contains(txt, "AGENT-ANSWERS") {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !strings.Contains(txt, "AGENT-ANSWERS") {
+		t.Errorf("the agent's reply must appear live under the question (watcher fan-out), got %q\nstderr: %s", txt, p.stderr.String())
+	}
+	// The conversation belongs to THIS question only.
+	if other := evalStr(t, p, `document.querySelector(".quiz-card[data-key='quiz-q2']").innerText`); strings.Contains(other, "AGENT-ANSWERS") {
+		t.Error("a reply must attach to its own question, not leak onto the next one")
+	}
+
+	// An unknown question id fails loudly rather than recording a dangling thread.
+	if out, err := exec.Command(p.binary, "reply", "--out", p.repo, "--body", "x", "z1:nope").CombinedOutput(); err == nil {
+		t.Errorf("replying to a non-existent question must fail; got success: %s", out)
+	}
+}

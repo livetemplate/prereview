@@ -51,7 +51,10 @@ Anchor each with `kind`: "line" (default) needs a real from_line, "file" is for 
 question about the change as a whole or about something absent. Never guess line
 numbers - prereview flags a cited line that is not in the diff.
 
-Then `done` the request comment and `reply` a one-line summary.
+Then `done` the request comment and `reply` a one-line summary. The reviewer can
+reply to an individual question to query or challenge it; answer with
+`prereview reply "<quizID>:<questionID>" --body "..."`, and re-submit the quiz
+with the same id if they are right that a question needs fixing.
 
 Status echo: tell the review UI what you're doing so it shows a live pill across
 every open tab — `working` while you apply a batch, `done` when finished:

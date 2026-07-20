@@ -16,10 +16,17 @@ type QuizItem struct {
 	// QuizID is carried on the row so the card partial is SELF-CONTAINED: it can
 	// build its answer form without reaching for root state, which keeps it
 	// renderable from the diff view, the file head and the overview alike.
-	QuizID   string
-	Answered bool
-	Choice   int // the option the reviewer picked; meaningless unless Answered
-	Correct  bool
+	QuizID string
+	// ThreadID is this question's global identity for the #149 conversation
+	// machinery, and Thread the conversation so far. Carried on the row so the card
+	// partial stays self-contained.
+	ThreadID   string
+	Thread     []ThreadEntry
+	Replying   bool
+	ReplyDraft string
+	Answered   bool
+	Choice     int // the option the reviewer picked; meaningless unless Answered
+	Correct    bool
 }
 
 // CurrentQuiz returns the quiz for the selected file, or nil. The agent can
@@ -49,9 +56,15 @@ func (s PrereviewState) QuizItems() []QuizItem {
 	if q == nil {
 		return nil
 	}
+	threads := s.Threads()
 	out := make([]QuizItem, 0, len(q.Questions))
 	for _, qu := range q.Questions {
-		item := QuizItem{Question: qu, QuizID: q.ID}
+		tid := QuizThreadID(q.ID, qu.ID)
+		item := QuizItem{Question: qu, QuizID: q.ID, ThreadID: tid, Thread: threads[tid]}
+		if s.ReplyingID == tid {
+			item.Replying = true
+			item.ReplyDraft = s.ReplyDraft
+		}
 		if a, ok := s.QuizAnswers[answerKey(q.ID, qu.ID)]; ok {
 			item.Answered = true
 			item.Choice = a.Choice

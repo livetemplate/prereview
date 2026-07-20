@@ -699,6 +699,8 @@
     
   </ul>
   
+  <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q3"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
+  
 </div>
 <div class="quiz-card" data-key="quiz-q4">
   <div class="quiz-card-head"><span class="quiz-probe quiz-probe-decision">decision</span></div>
@@ -719,6 +721,8 @@
     </li>
     
   </ul>
+  
+  <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q4"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
   
 </div>
 
@@ -762,6 +766,8 @@
     
   </ul>
   
+  <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q2"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
+  
 </div>
 </div>
 <div class="line-row" data-key="row-L2-0"><div tabindex="0"
@@ -799,6 +805,8 @@
     
   </ul>
   <p class="quiz-why is-correct"><small>it is a buffer</small></p>
+  <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q1"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
+  
 </div>
 </div>
 <div class="code-sentinel" aria-hidden="true"></div></div>
