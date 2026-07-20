@@ -521,6 +521,27 @@ func TestE2E_QuizNavigator(t *testing.T) {
 		t.Errorf("tapping badge 3 must mark question 3's card as the scroll target, got %q", target)
 	}
 
+	// "You are here". Tapping a badge must highlight IT — without this the strip
+	// scrolls you somewhere and then gives no sign of where you landed.
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav-dot.is-current').length`); n != 1 {
+		t.Errorf("exactly one badge must be marked current after a jump, got %d", n)
+	}
+	cur := evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.is-current'); return b? b.textContent : "none"})()`)
+	if cur != "3" {
+		t.Errorf("the badge that was tapped must be the highlighted one, got %q", cur)
+	}
+	// The highlight PERSISTS across renders — it is not a one-shot like the scroll.
+	// Answering moves it to the question being worked on rather than losing it.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector(".quiz-card[data-key='quiz-q2'] .quiz-options li:nth-child(1) button[name='answerQuestion']").click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("answer q2: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if cur := evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.is-current'); return b? b.textContent : "none"})()`); cur != "2" {
+		t.Errorf("answering a question must move the highlight to it, got %q", cur)
+	}
+
 	// Dismiss puts it away.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='dismissQuizNav']`, chromedp.ByQuery),
@@ -585,5 +606,56 @@ func TestE2E_QuizListsHaveNoStrayMarkers(t *testing.T) {
 			t.Errorf("%s must not paint a list marker — %d element(s) still do; the number or\n"+
 				"option text is legible in the DOM either way, which is why this needs asserting", sel, n)
 		}
+	}
+}
+
+// The highlight follows the SCROLL, not just taps. Tapping a badge only tells you
+// where you went; scrolling past a question should light its badge, which is what
+// makes the strip a position indicator rather than a history of clicks.
+//
+// It rides the read-progress viewport reporter that already runs on every scroll
+// — nothing new is reported to the server, and the shared read-progress state is
+// only read, never redefined.
+func TestE2E_QuizNavigatorFollowsScroll(t *testing.T) {
+	// Reuses the read-progress suite's tall fixture: long.txt is 150 all-new lines,
+	// so only one question can be on screen at a time. The standard fixture's
+	// edited.go is five lines — every question is visible at once there, which
+	// would make this assertion vacuous rather than passing.
+	p := bootChromeAgainstRepo(t, setupLongFileRepo(t), 1200, 800, "--agent")
+	p.waitReady()
+	p.clickFile("long.txt")
+
+	// Questions spread far enough apart that only one can be on screen at a time.
+	submitQuiz(t, p, `{"id":"zz","file":"long.txt","questions":[
+	  {"id":"a","kind":"line","probe":"consequence","prompt":"Q-A","options":["x","y"],"answer":0,"why":"wa","from_line":10,"to_line":10,"side":"new"},
+	  {"id":"b","kind":"line","probe":"rationale","prompt":"Q-B","options":["x","y"],"answer":0,"why":"wb","from_line":100,"to_line":100,"side":"new"},
+	  {"id":"c","kind":"line","probe":"localization","prompt":"Q-C","options":["x","y"],"answer":0,"why":"wc","from_line":140,"to_line":140,"side":"new"}]}`)
+	waitForQuizEntry(t, p)
+
+	currentBadge := func() string {
+		return evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.is-current'); return b? b.textContent : "none"})()`)
+	}
+	scrollTo := func(key string) string {
+		if err := chromedp.Run(p.ctx,
+			chromedp.Evaluate(`(()=>{const c=document.querySelector(".quiz-card[data-key='`+key+`']"); if(c) c.scrollIntoView({block:'center'});})()`, nil),
+			chromedp.Sleep(1200*time.Millisecond),
+		); err != nil {
+			t.Fatalf("scroll to %s: %v\nstderr: %s", key, err, p.stderr.String())
+		}
+		return currentBadge()
+	}
+
+	first, last := scrollTo("quiz-a"), scrollTo("quiz-c")
+	if first == "none" || last == "none" {
+		t.Fatalf("scrolling a question into view must highlight its badge; got %q then %q\nstderr: %s", first, last, p.stderr.String())
+	}
+	if first == last {
+		t.Errorf("the highlight must MOVE as different questions come into view; scrolling to\n"+
+			"the first and the last question both reported badge %q — that is click history,\n"+
+			"not position", first)
+	}
+	// And back again, so it tracks in both directions rather than only advancing.
+	if back := scrollTo("quiz-a"); back != first {
+		t.Errorf("scrolling back must return the highlight to the first question; got %q, expected %q", back, first)
 	}
 }

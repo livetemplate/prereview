@@ -1,6 +1,9 @@
 package review
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // state_quiz.go holds the quiz view's read helpers.
 //
@@ -29,6 +32,9 @@ type QuizItem struct {
 	ReplyDraft string
 	// ScrollTo marks the card the navigator just jumped to, for one render.
 	ScrollTo bool
+	// Current marks the question the reviewer is on — the highlighted badge. Unlike
+	// ScrollTo it persists, so the strip keeps showing where you were.
+	Current  bool
 	Answered bool
 	Choice   int // the option the reviewer picked; meaningless unless Answered
 	Correct  bool
@@ -61,12 +67,14 @@ func (s PrereviewState) QuizItems() []QuizItem {
 	if q == nil {
 		return nil
 	}
+	current := s.currentQuizID()
 	threads := s.Threads()
 	out := make([]QuizItem, 0, len(q.Questions))
 	for i, qu := range q.Questions {
 		tid := QuizThreadID(q.ID, qu.ID)
 		item := QuizItem{Question: qu, QuizID: q.ID, Num: i + 1, ThreadID: tid, Thread: threads[tid]}
 		item.ScrollTo = s.ScrollToQuizID == qu.ID
+		item.Current = current == qu.ID
 		if s.ReplyingID == tid {
 			item.Replying = true
 			item.ReplyDraft = s.ReplyDraft
@@ -297,5 +305,79 @@ func (s PrereviewState) QuizOpenLines() map[string]bool {
 	if len(out) == 0 {
 		return nil
 	}
+	return out
+}
+
+// currentQuizID is the question the navigator highlights.
+//
+// It prefers whatever is ON SCREEN: as the reviewer scrolls the diff, the badge
+// for the question in view lights up, which is the whole point of a navigator —
+// tapping to jump only tells you where you went, not where you are.
+//
+// The viewport bounds come from the read-progress reporter that already runs on
+// every scroll (ReportViewport). Nothing new is reported to the server and the
+// shared read-progress state is only READ here, never redefined — this feature
+// rides an existing signal rather than adding a competing one.
+//
+// The explicit selection is the fallback, for when no question is in view (just
+// after a tap, before the scroll settles, or while reading code between them).
+func (s PrereviewState) currentQuizID() string {
+	top, bottom := s.viewportLines()
+	inView := func(q Question) bool {
+		return top > 0 && q.FromLine >= top && (bottom == 0 || q.FromLine <= bottom)
+	}
+	ordered := s.quizQuestionsInLineOrder()
+	// An explicit tap WINS while its question is still reachable. Letting the
+	// viewport override it outright meant that on a short file — where several
+	// questions are visible at once — tapping badge 3 highlighted badge 1, because
+	// the topmost in-view question always won. Scrolling away hands control back.
+	//
+	// Checked against EVERY question, not just the line-ordered ones: a file-level
+	// or ungrounded question has no line, so the viewport can never speak for or
+	// against it. Those are honoured whenever they are the explicit selection —
+	// otherwise tapping their badge could never highlight anything.
+	if id := s.SelectedQuizID; id != "" {
+		if q := s.CurrentQuiz(); q != nil {
+			for _, qu := range q.Questions {
+				if qu.ID != id {
+					continue
+				}
+				if !qu.LineAnchored() || qu.Ungrounded() || inView(qu) {
+					return id
+				}
+			}
+		}
+	}
+	for _, q := range ordered {
+		if inView(q) {
+			return q.ID
+		}
+	}
+	return s.SelectedQuizID
+}
+
+// viewportLines is the currently visible line range, 0 when unknown.
+func (s PrereviewState) viewportLines() (top, bottom int) {
+	if s.SelectedFile == "" {
+		return 0, 0
+	}
+	return keyLine(s.LastReadTopKey[s.SelectedFile]), keyLine(s.LastViewBottomKey[s.SelectedFile])
+}
+
+// quizQuestionsInLineOrder are the current quiz's line-anchored questions sorted
+// by the line they sit on — the order the reviewer meets them scrolling down,
+// which is not necessarily the order the agent wrote them.
+func (s PrereviewState) quizQuestionsInLineOrder() []Question {
+	q := s.CurrentQuiz()
+	if q == nil {
+		return nil
+	}
+	out := make([]Question, 0, len(q.Questions))
+	for _, qu := range q.Questions {
+		if qu.LineAnchored() && !qu.Ungrounded() {
+			out = append(out, qu)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].FromLine < out[j].FromLine })
 	return out
 }

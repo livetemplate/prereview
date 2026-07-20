@@ -195,6 +195,12 @@ func (c *PrereviewController) AnswerQuestion(state PrereviewState, ctx *livetemp
 	state.QuizAnswers[answerKey(quizID, questionID)] = QuizAnswer{
 		QuizID: quizID, QuestionID: questionID, Choice: choice, At: time.Now().UnixNano(),
 	}
+	// Answering moves "you are here" too, so the highlight follows the question
+	// being worked on rather than only the last one reached via the strip. The
+	// scroll nudge is cleared: the reviewer is already looking at this card, and
+	// re-firing it would yank the page.
+	state.SelectedQuizID = questionID
+	state.ScrollToQuizID = ""
 	if err := saveQuizAnswers(c.quizAnswersPath(), state.QuizAnswers); err != nil {
 		return state, fmt.Errorf("persist quiz answer: %w", err)
 	}
@@ -268,6 +274,7 @@ func (c *PrereviewController) JumpToQuestion(state PrereviewState, ctx *livetemp
 	// the diff, so staying on the overview screen would scroll nothing.
 	state.ShowQuiz = false
 	state.ScrollToQuizID = id
+	state.SelectedQuizID = id
 	return state, nil
 }
 

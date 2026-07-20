@@ -3394,5 +3394,11 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .quiz-nav-dot.is-open { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .quiz-nav-dot.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, var(--surface)); color: inherit; }
 .quiz-nav-dot.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 16%, var(--surface)); color: inherit; }
+/* "You are here". A ring rather than a colour change, because the badge's COLOUR
+   already carries answered-right / answered-wrong / open — overloading it would
+   lose that. The ring sits outside the border so it reads on every state. */
+.quiz-nav-dot.is-current {
+  outline: 2px solid var(--accent); outline-offset: 1px; font-weight: 700;
+}
 .quiz-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 .quiz-nav-actions button { margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.72rem; }

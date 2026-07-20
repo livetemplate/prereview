@@ -663,7 +663,7 @@
     <span class="quiz-nav-label">{{$.QuizNavLabel}}</span>
     <ul class="quiz-nav-dots">
       {{range $it := $.QuizItems}}
-      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="{{$it.ID}}"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-{{$it.NavState}}" title="{{$it.Prompt}}">{{$it.Num}}</button></form></li>
+      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="{{$it.ID}}"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-{{$it.NavState}}{{if $it.Current}} is-current{{end}}" title="{{$it.Prompt}}">{{$it.Num}}</button></form></li>
       {{end}}
     </ul>
     <span class="quiz-nav-actions">

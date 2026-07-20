@@ -299,6 +299,14 @@ type PrereviewState struct {
 	ReadThrough    map[string]int    `json:"read_through" lvt:"persist"`
 	LastReadTopKey map[string]string `json:"last_read_top_key" lvt:"persist"`
 
+	// LastViewBottomKey is the BOTTOM-most visible key per file. ReadThrough
+	// already consumes the bottom key, but as a high-water MARK (furthest ever
+	// read); this keeps the raw current value, which is what "what is on screen
+	// right now" needs. Deliberately a separate field rather than a change to
+	// ReadThrough's meaning — that one drives the read rail, and redefining it
+	// would quietly move an unrelated feature.
+	LastViewBottomKey map[string]string `json:"last_view_bottom_key" lvt:"persist"`
+
 	// ScrollToReadKey is the transient scroll-restore target: SelectFile sets it to
 	// the file's LastReadTopKey so the browser re-opens where the reviewer left off.
 	// NOT persisted — a one-render nudge (like ScrollToCommentID), cleared once the
@@ -336,9 +344,14 @@ type PrereviewState struct {
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
 
 	// ScrollToQuizID, when non-empty for one render, scrolls that question's card
-	// into view — the same one-render nudge ScrollToCommentID is. Set by the quiz
-	// navigator and cleared on the next action.
+	// into view — the same one-render nudge ScrollToCommentID is.
+	//
+	// SelectedQuizID is the separate, PERSISTENT "you are here": the navigator
+	// badge for it renders highlighted. They are two fields because they have
+	// opposite lifetimes — the scroll must fire once and stop, while the highlight
+	// has to survive every later render or the strip forgets where you were.
 	ScrollToQuizID string `json:"scroll_to_quiz_id"`
+	SelectedQuizID string `json:"selected_quiz_id"`
 
 	// QuizNavDismissed hides the quiz navigator for this session. The bar appears
 	// automatically whenever the file has a quiz — discoverability has been this

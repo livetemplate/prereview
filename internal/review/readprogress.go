@@ -58,6 +58,12 @@ func (c *PrereviewController) ReportViewport(state PrereviewState, ctx *livetemp
 			state.ReadThrough[file] = n
 		}
 	}
+	if bottom := ctx.GetString("bottomKey"); bottom != "" {
+		if state.LastViewBottomKey == nil {
+			state.LastViewBottomKey = map[string]string{}
+		}
+		state.LastViewBottomKey[file] = bottom
+	}
 	if top := ctx.GetString("topKey"); top != "" {
 		if state.LastReadTopKey == nil {
 			state.LastReadTopKey = map[string]string{}
