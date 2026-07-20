@@ -298,6 +298,11 @@ func (s PrereviewState) AnnotationCountLines() map[string]int {
 	for k, n := range s.SuggestionCountLines() {
 		out[k] += n
 	}
+	// #191: a quiz question is an annotation on the line, so it counts toward the
+	// row badge and collapses with the rest.
+	for k, n := range s.QuizCountLines() {
+		out[k] += n
+	}
 	if len(out) == 0 {
 		return nil
 	}
@@ -312,6 +317,9 @@ func (s PrereviewState) AnnotationOpenLines() map[string]bool {
 		out[k] = true
 	}
 	for k := range s.SuggestionOpenLines() {
+		out[k] = true
+	}
+	for k := range s.QuizOpenLines() {
 		out[k] = true
 	}
 	if len(out) == 0 {

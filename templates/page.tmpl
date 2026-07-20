@@ -134,6 +134,22 @@
        line view; the gutter / line badge is replaced with a "file" tag
        via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
        per-comment actions — no new endpoints. */}}
+  {{/* #191 quiz navigator — a badge per question, so moving between them is a tap
+       rather than a scroll-and-hope. Sticky, so it stays reachable while reading. */}}
+  {{if $.ShowQuizNav}}
+  <div class="quiz-nav" role="navigation" aria-label="Quiz questions">
+    <span class="quiz-nav-label">{{$.QuizNavLabel}}</span>
+    <ul class="quiz-nav-dots">
+      {{range $it := $.QuizItems}}
+      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="{{$it.ID}}"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-{{$it.NavState}}" title="{{$it.Prompt}}">{{$it.Num}}</button></form></li>
+      {{end}}
+    </ul>
+    <span class="quiz-nav-actions">
+      <form method="POST" style="margin:0"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>
+      <form method="POST" style="margin:0"><button type="submit" name="dismissQuizNav" class="outline" title="Hide the quiz navigator">×</button></form>
+    </span>
+  </div>
+  {{end}}
   {{/* #191: quiz questions with no line anchor (kind=file) sit at the file head,
        the same position a kind=file COMMENT occupies — they are about the change
        as a whole, or about something absent from it. */}}

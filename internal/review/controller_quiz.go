@@ -256,6 +256,27 @@ func findQuestion(quizzes []Quiz, quizID, questionID string) *Question {
 	return nil
 }
 
+// JumpToQuestion scrolls a question's card into view from the navigator. The
+// questions live inline in the diff now, so "go to question 4" is a scroll, not a
+// screen change — the reviewer keeps their place in the code.
+func (c *PrereviewController) JumpToQuestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("questionId")
+	if id == "" {
+		return state, fmt.Errorf("jumpToQuestion: missing questionId")
+	}
+	// Leaving the overview is part of the jump: the card being scrolled to is in
+	// the diff, so staying on the overview screen would scroll nothing.
+	state.ShowQuiz = false
+	state.ScrollToQuizID = id
+	return state, nil
+}
+
+// DismissQuizNav puts the navigator away for this session.
+func (c *PrereviewController) DismissQuizNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.QuizNavDismissed = true
+	return state, nil
+}
+
 // ToggleQuiz flips between the diff viewer and the comprehension-quiz view for
 // the selected file. Mirrors ToggleCommentList: closes the overflow menu so the
 // result is visible immediately, and is not persisted — reopening the browser

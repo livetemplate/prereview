@@ -335,6 +335,17 @@ type PrereviewState struct {
 	Quizzes     []Quiz                `json:"quizzes"`
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
 
+	// ScrollToQuizID, when non-empty for one render, scrolls that question's card
+	// into view — the same one-render nudge ScrollToCommentID is. Set by the quiz
+	// navigator and cleared on the next action.
+	ScrollToQuizID string `json:"scroll_to_quiz_id"`
+
+	// QuizNavDismissed hides the quiz navigator for this session. The bar appears
+	// automatically whenever the file has a quiz — discoverability has been this
+	// feature's recurring failure, so it is not behind a menu — but it must be
+	// possible to put away while reading the diff.
+	QuizNavDismissed bool `json:"quiz_nav_dismissed"`
+
 	// QuizRequestedFile is the file a "Quiz me" request was just sent for, so the
 	// control can show "Quiz requested…" instead of inviting a second tap. Cleared
 	// as soon as a quiz for that file arrives (applyQuiz).

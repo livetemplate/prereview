@@ -152,7 +152,7 @@
   </footer></article></dialog>
 === diffView ===
 {{with $.CurrentDiff}}  
-  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}"><div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion}}<span class="line-margin">
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$hasQuiz := gt (index $.QuizCountLines $rowkey) 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion $hasQuiz}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}"><div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion $hasQuiz}}<span class="line-margin">
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
           <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
@@ -658,6 +658,21 @@
   {{end}}
   
   
+  {{if $.ShowQuizNav}}
+  <div class="quiz-nav" role="navigation" aria-label="Quiz questions">
+    <span class="quiz-nav-label">{{$.QuizNavLabel}}</span>
+    <ul class="quiz-nav-dots">
+      {{range $it := $.QuizItems}}
+      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="{{$it.ID}}"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-{{$it.NavState}}" title="{{$it.Prompt}}">{{$it.Num}}</button></form></li>
+      {{end}}
+    </ul>
+    <span class="quiz-nav-actions">
+      <form method="POST" style="margin:0"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>
+      <form method="POST" style="margin:0"><button type="submit" name="dismissQuizNav" class="outline" title="Hide the quiz navigator">×</button></form>
+    </span>
+  </div>
+  {{end}}
+  
   {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
@@ -782,7 +797,8 @@
   </footer></article></dialog>
 === quizCard ===
 <div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}">
-  <div class="quiz-card-head"><span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>
+  
+  <div class="quiz-card-head"{{if .ScrollTo}} lvt-fx:scroll="into-view" tabindex="-1"{{end}}><span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>
   <p class="quiz-prompt">{{.Prompt}}</p>
   <ul class="quiz-options">
     {{$item := .}}

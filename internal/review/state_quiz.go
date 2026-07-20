@@ -17,6 +17,9 @@ type QuizItem struct {
 	// build its answer form without reaching for root state, which keeps it
 	// renderable from the diff view, the file head and the overview alike.
 	QuizID string
+	// Num is the question's 1-based position, for the navigator badge. (An earlier
+	// Index field was removed as dead code; the navigator gave it a purpose.)
+	Num int
 	// ThreadID is this question's global identity for the #149 conversation
 	// machinery, and Thread the conversation so far. Carried on the row so the card
 	// partial stays self-contained.
@@ -24,9 +27,11 @@ type QuizItem struct {
 	Thread     []ThreadEntry
 	Replying   bool
 	ReplyDraft string
-	Answered   bool
-	Choice     int // the option the reviewer picked; meaningless unless Answered
-	Correct    bool
+	// ScrollTo marks the card the navigator just jumped to, for one render.
+	ScrollTo bool
+	Answered bool
+	Choice   int // the option the reviewer picked; meaningless unless Answered
+	Correct  bool
 }
 
 // CurrentQuiz returns the quiz for the selected file, or nil. The agent can
@@ -58,9 +63,10 @@ func (s PrereviewState) QuizItems() []QuizItem {
 	}
 	threads := s.Threads()
 	out := make([]QuizItem, 0, len(q.Questions))
-	for _, qu := range q.Questions {
+	for i, qu := range q.Questions {
 		tid := QuizThreadID(q.ID, qu.ID)
-		item := QuizItem{Question: qu, QuizID: q.ID, ThreadID: tid, Thread: threads[tid]}
+		item := QuizItem{Question: qu, QuizID: q.ID, Num: i + 1, ThreadID: tid, Thread: threads[tid]}
+		item.ScrollTo = s.ScrollToQuizID == qu.ID
 		if s.ReplyingID == tid {
 			item.Replying = true
 			item.ReplyDraft = s.ReplyDraft
@@ -222,6 +228,74 @@ func (s PrereviewState) FileQuizItems() []QuizItem {
 		if it.Kind == QuestionKindFile || it.Ungrounded() {
 			out = append(out, it)
 		}
+	}
+	return out
+}
+
+// ShowQuizNav gates the navigator: it appears whenever the open file has a quiz,
+// unless dismissed or the overview is already showing (where it would duplicate
+// the list it sits above).
+func (s PrereviewState) ShowQuizNav() bool {
+	return s.HasQuiz() && !s.QuizNavDismissed && !s.ShowQuiz
+}
+
+// QuizNavLabel summarises the navigator's state, e.g. "2/5 answered · 1 right".
+//
+// Progress and score are DIFFERENT fractions, and an earlier version showed
+// "1/5 answered" beside a "0/5" chip — two ratios side by side that looked like
+// they should agree. They are one phrase now, and the chip says what it does
+// ("Overview") rather than carrying a competing number.
+func (s PrereviewState) QuizNavLabel() string {
+	n, total := s.QuizAnsweredCount(), s.QuizQuestionCount()
+	if n == 0 {
+		return fmt.Sprintf("%d questions", total)
+	}
+	return fmt.Sprintf("%d/%d answered · %d right", n, total, s.QuizCorrectCount())
+}
+
+// NavState is the badge state for one question: "correct", "wrong" or "open".
+// Precomputed because a template cannot call a method with arguments.
+func (it QuizItem) NavState() string {
+	switch {
+	case !it.Answered:
+		return "open"
+	case it.Correct:
+		return "correct"
+	default:
+		return "wrong"
+	}
+}
+
+// QuizCountLines counts the quiz questions anchored to each row, keyed
+// "<line>-<side>" exactly like CommentCountLines — so a question contributes to
+// the row's annotation badge and can be collapsed with everything else on that
+// line. A quiz question is an annotation; it collapses like one.
+func (s PrereviewState) QuizCountLines() map[string]int {
+	out := map[string]int{}
+	for end, items := range s.QuizByEndLine() {
+		for _, it := range items {
+			out[fmt.Sprintf("%d-%s", end, it.Side)]++
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// QuizOpenLines marks rows carrying an UNANSWERED question — open work, so the
+// badge reads open (yellow) rather than done, matching an unresolved comment.
+func (s PrereviewState) QuizOpenLines() map[string]bool {
+	out := map[string]bool{}
+	for end, items := range s.QuizByEndLine() {
+		for _, it := range items {
+			if !it.Answered {
+				out[fmt.Sprintf("%d-%s", end, it.Side)] = true
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

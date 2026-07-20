@@ -1973,6 +1973,8 @@ header.file-head .file-head-comment button svg { display: block; }
    `.row-toggled` is emitted by the SERVER (state.ToggledRows). It used to be a client-only
    class, which meant the next re-render morphed it away and silently re-collapsed a card the
    reviewer had just opened (#173). */
+.line-row.row-toggled .quiz-card,
+.md-block.row-toggled .quiz-card,
 .line-row.row-toggled .inline-comment:not(.is-resolved),
 .line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
 .md-block.row-toggled .inline-comment:not(.is-resolved),
@@ -3287,12 +3289,17 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .quiz .quiz-head button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
 .quiz .quiz-score { color: var(--accent); font-variant-numeric: tabular-nums; }
 .quiz .quiz-sub { margin: 0 0.5rem 0.75rem; color: var(--pico-muted-color); }
-/* list-style must be reset on the ITEMS too, not just the list: the options are
-   a <ul> nested inside the questions <ol>, and Pico re-asserts a marker on the
-   nested level, which paints a stray square left of every option. The DOM tests
-   can't see this — only a screenshot can. */
+/* list-style must be reset on the ITEMS too, not just the list: these are <ul>s
+   nested inside other lists, and Pico re-asserts a marker on the nested level,
+   which paints a stray square next to every item. A DOM test cannot see it — the
+   text is still there, the marker is painted beside it — so it has slipped
+   through twice: once on the options, once on the navigator badges, where the
+   square sat on top of the question number.
+   EVERY quiz list belongs in this one rule. Adding a list elsewhere and styling
+   it separately is how this recurs. */
 .quiz .quiz-list, .quiz .quiz-list > li,
-.quiz-options, .quiz-options > li { list-style: none; }
+.quiz-options, .quiz-options > li,
+.quiz-nav-dots, .quiz-nav-dots > li { list-style: none; }
 .quiz .quiz-list { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; }
 .quiz .quiz-q {
   margin: 0; padding: 0.7rem; border: 1px solid var(--pr-comment-bd);
@@ -3361,3 +3368,31 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .quiz-card-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
 .quiz-card .quiz-prompt { margin: 0 0 0.5rem; }
 .quiz-card.is-answered { border-left-color: var(--pico-muted-border-color); }
+
+/* ── #191 quiz navigator ────────────────────────────────────────────────────
+   The questions live inline in the diff, which is right for answering them but
+   loses the "take the quiz" shape — there was no way to get from question 2 to
+   question 3 except scrolling and hoping. This is a sticky strip of one tiny
+   badge per question: tap to jump, colour says answered-right / answered-wrong /
+   still open. It appears on its own whenever the file has a quiz, because
+   discoverability has been this feature's recurring failure; the × puts it away. */
+.quiz-nav {
+  position: sticky; top: 0; z-index: 6;
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  padding: 0.4rem 0.6rem; margin: 0 0 0.4rem;
+  background: var(--pico-card-background-color);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.quiz-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; }
+.quiz-nav-dots { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 0; padding: 0; }
+.quiz-nav-dot {
+  min-width: 1.7em; padding: 0.1rem 0.35rem; margin: 0; min-height: 0;
+  font-size: 0.72rem; font-variant-numeric: tabular-nums; line-height: 1.6;
+  border-radius: var(--radius-sm); border: 1px solid var(--pico-muted-border-color);
+  background: var(--surface); color: var(--pico-muted-color); cursor: pointer;
+}
+.quiz-nav-dot.is-open { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.quiz-nav-dot.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, var(--surface)); color: inherit; }
+.quiz-nav-dot.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 16%, var(--surface)); color: inherit; }
+.quiz-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
+.quiz-nav-actions button { margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.72rem; }

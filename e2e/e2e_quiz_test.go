@@ -461,3 +461,129 @@ func TestE2E_QuizQuestionThread(t *testing.T) {
 		t.Errorf("replying to a non-existent question must fail; got success: %s", out)
 	}
 }
+
+// Anchoring questions to lines recovered the code as context but lost the "take
+// the quiz" shape: there was no way from question 2 to question 3 except
+// scrolling and hoping. The navigator is a strip of one badge per question —
+// tap to jump, colour tells you where you are.
+func TestE2E_QuizNavigator(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 390, 844, "--agent") // the phone case
+	p.waitReadyAt(390, 844)
+	p.clickFile("edited.go")
+
+	// No quiz yet, so nothing to navigate.
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav').length`); n != 0 {
+		t.Fatalf("the navigator must not appear before a quiz exists, got %d", n)
+	}
+
+	submitQuiz(t, p, quizJSON)
+	waitForQuizEntry(t, p)
+
+	// It appears on its own — not behind a menu. Discoverability has been this
+	// feature's repeated failure, so the bar is not something to go looking for.
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav').length`); n != 1 {
+		t.Fatalf("the navigator must appear once the file has a quiz, got %d", n)
+	}
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav-dot').length`); n != 4 {
+		t.Fatalf("one badge per question; expected 4, got %d", n)
+	}
+	if lbl := evalStr(t, p, `[...document.querySelectorAll('.quiz-nav-dot')].map(b=>b.textContent).join("")`); lbl != "1234" {
+		t.Errorf("badges must be numbered 1..N so they read as positions, got %q", lbl)
+	}
+
+	// Every badge starts open; answering one flips just that badge.
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav-dot.is-open').length`); n != 4 {
+		t.Errorf("all questions start unanswered, got %d open", n)
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.quiz-card[data-key='quiz-q1'] .quiz-options li:nth-child(2) button[name='answerQuestion']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("answer: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav-dot.is-correct').length`); n != 1 {
+		t.Errorf("answering correctly must show on its badge; got %d correct", n)
+	}
+
+	// Tapping a badge targets THAT question's card for scroll. Asserted on the
+	// server-emitted scroll attribute rather than pixel geometry: that attribute is
+	// the durable fact, and the client centres whatever carries it.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelectorAll('.quiz-nav-dot')[2].click()`, nil),
+		chromedp.Sleep(600*time.Millisecond),
+	); err != nil {
+		t.Fatalf("tap badge 3: %v\nstderr: %s", err, p.stderr.String())
+	}
+	// The colon in the attribute name must be escaped for querySelector; the extra
+	// backslashes survive Go -> JS -> CSS.
+	target := evalStr(t, p, `(()=>{const h=document.querySelector('.quiz-card-head[lvt-fx\\:scroll]'); return h? h.closest('.quiz-card').dataset.key : "none"})()`)
+	if target != "quiz-q3" {
+		t.Errorf("tapping badge 3 must mark question 3's card as the scroll target, got %q", target)
+	}
+
+	// Dismiss puts it away.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='dismissQuizNav']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("dismiss: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav').length`); n != 0 {
+		t.Errorf("the navigator must be dismissible while reading the diff, got %d", n)
+	}
+}
+
+// A quiz question is an annotation, so it collapses like one: it counts toward
+// the row's annotation badge, and the badge folds it away with the comments and
+// suggestions on that line.
+func TestE2E_QuizQuestionCollapsesWithTheRow(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	p.clickFile("edited.go")
+	submitQuiz(t, p, quizJSON)
+	waitForQuizEntry(t, p)
+
+	// A row carrying only a question still gets a badge — otherwise there would be
+	// no way to collapse it, and no marker that the line carries anything.
+	if n := evalInt(t, p, `document.querySelectorAll('.line-row.has-line-marks .line-marks').length`); n < 1 {
+		t.Fatalf("a line with a quiz question must show the annotation badge, got %d", n)
+	}
+
+	visible := func() int {
+		return evalInt(t, p, `[...document.querySelectorAll('.line-row .quiz-card')].filter(c=>c.offsetParent!==null).length`)
+	}
+	before := visible()
+	if before < 1 {
+		t.Fatalf("expected at least one inline question visible, got %d", before)
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.line-row.has-line-marks .line-marks').click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("toggle row: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if after := visible(); after >= before {
+		t.Errorf("the row badge must fold the question away like any other annotation; %d visible before, %d after", before, after)
+	}
+}
+
+// A stray list marker is a PAINT bug: the text is present, so every DOM
+// assertion passes while a square sits next to (or on top of) it. It slipped
+// through twice — first beside the answer options, then over the navigator's
+// question numbers. computed list-style-type is the one machine-checkable
+// property that distinguishes "rendered correctly" from "text exists".
+func TestE2E_QuizListsHaveNoStrayMarkers(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	p.clickFile("edited.go")
+	submitQuiz(t, p, quizJSON)
+	waitForQuizEntry(t, p)
+
+	for _, sel := range []string{".quiz-options", ".quiz-options > li", ".quiz-nav-dots", ".quiz-nav-dots > li"} {
+		js := `[...document.querySelectorAll('` + sel + `')].map(e=>getComputedStyle(e).listStyleType).filter(v=>v!=='none').length`
+		if n := evalInt(t, p, js); n != 0 {
+			t.Errorf("%s must not paint a list marker — %d element(s) still do; the number or\n"+
+				"option text is legible in the DOM either way, which is why this needs asserting", sel, n)
+		}
+	}
+}

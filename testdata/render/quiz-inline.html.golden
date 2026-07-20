@@ -679,7 +679,29 @@
   
   
   
+  
+  <div class="quiz-nav" role="navigation" aria-label="Quiz questions">
+    <span class="quiz-nav-label">1/4 answered · 1 right</span>
+    <ul class="quiz-nav-dots">
+      
+      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q1"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-correct" title="What breaks?">1</button></form></li>
+      
+      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q2"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-open" title="Why this way?">2</button></form></li>
+      
+      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q3"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-open" title="Where does it live?">3</button></form></li>
+      
+      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q4"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-open" title="What did you decide unasked?">4</button></form></li>
+      
+    </ul>
+    <span class="quiz-nav-actions">
+      <form method="POST" style="margin:0"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>
+      <form method="POST" style="margin:0"><button type="submit" name="dismissQuizNav" class="outline" title="Hide the quiz navigator">×</button></form>
+    </span>
+  </div>
+  
+  
   <div class="quiz-card" data-key="quiz-q3">
+  
   <div class="quiz-card-head"><span class="quiz-probe quiz-probe-localization">localization</span><span class="quiz-ungrounded" title="This question cites L999, which is not in this diff — treat it with suspicion">⚠ cites L999, not in this diff</span></div>
   <p class="quiz-prompt">Where does it live?</p>
   <ul class="quiz-options">
@@ -703,6 +725,7 @@
   
 </div>
 <div class="quiz-card" data-key="quiz-q4">
+  
   <div class="quiz-card-head"><span class="quiz-probe quiz-probe-decision">decision</span></div>
   <p class="quiz-prompt">What did you decide unasked?</p>
   <ul class="quiz-options">
@@ -739,14 +762,25 @@
        data-path="app.go"
        lvt-fx:scroll="reset-on:data-path"
        lvt-fx:text-select="selectText"
-       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row" data-key="row-L1-1"><div tabindex="0"
+       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row has-line-marks" data-key="row-L1-1"><div tabindex="0"
               lvt-on:click="selectLine"
               lvt-on:keydown="selectLine"
               lvt-key="Enter"
               data-line="1"
               data-side="new"
               class="line ctx"
-              data-key="L1-1"><span class="gutter"><span class="gutter-mark">&nbsp; </span>1</span><span class="content chroma" data-line-text>package main</span></div><div class="quiz-card" data-key="quiz-q2">
+              data-key="L1-1"><span class="gutter"><span class="gutter-mark">&nbsp; </span>1</span><span class="content chroma" data-line-text>package main</span></div><span class="line-margin">
+        <button type="button" class="line-marks"
+                lvt-on:click="toggleRow"
+                data-row="1-new"
+                lvt-el:toggleClass:on:click="row-toggled"
+                data-lvt-target="closest:.line-row"
+                aria-label="Show or hide the annotations on this line"
+                title="Show/hide this line's annotations">
+          <span class="line-mark is-open" aria-hidden="true">1</span>
+        </button>
+      </span><div class="quiz-card" data-key="quiz-q2">
+  
   <div class="quiz-card-head"><span class="quiz-probe quiz-probe-rationale">rationale</span></div>
   <p class="quiz-prompt">Why this way?</p>
   <ul class="quiz-options">
@@ -778,14 +812,25 @@
               data-side="old"
               class="line del"
               data-key="L2-0"><span class="gutter"><span class="gutter-mark">- </span>2</span><span class="content chroma" data-line-text>var x = 1</span></div></div>
-<div class="line-row" data-key="row-L0-2"><div tabindex="0"
+<div class="line-row has-line-marks" data-key="row-L0-2"><div tabindex="0"
               lvt-on:click="selectLine"
               lvt-on:keydown="selectLine"
               lvt-key="Enter"
               data-line="2"
               data-side="new"
               class="line add"
-              data-key="L0-2"><span class="gutter"><span class="gutter-mark">+ </span>2</span><span class="content chroma" data-line-text>var x = 2</span></div><div class="quiz-card is-answered" data-key="quiz-q1">
+              data-key="L0-2"><span class="gutter"><span class="gutter-mark">+ </span>2</span><span class="content chroma" data-line-text>var x = 2</span></div><span class="line-margin">
+        <button type="button" class="line-marks"
+                lvt-on:click="toggleRow"
+                data-row="2-new"
+                lvt-el:toggleClass:on:click="row-toggled"
+                data-lvt-target="closest:.line-row"
+                aria-label="Show or hide the annotations on this line"
+                title="Show/hide this line's annotations">
+          <span class="line-mark is-done" aria-hidden="true">1</span>
+        </button>
+      </span><div class="quiz-card is-answered" data-key="quiz-q1">
+  
   <div class="quiz-card-head"><span class="quiz-probe quiz-probe-consequence">consequence</span></div>
   <p class="quiz-prompt">What breaks?</p>
   <ul class="quiz-options">
