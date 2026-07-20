@@ -94,6 +94,9 @@
       {{- range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end -}}
       {{- /* LLM suggestion boxes anchored to this line (on THIS side) */ -}}
       {{- range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end -}}
+      {{- /* quiz questions anchored to this line (#191) — an annotation like the
+             two above, so the code the question asks about IS its context */ -}}
+      {{- range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end -}}
       {{- if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside) -}}
       {{template "composer" $}}
       {{- end -}}</div>

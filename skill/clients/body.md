@@ -45,9 +45,12 @@ needs `options` (2+), a 0-based `answer`, a `why` explaining it, and
 localization, consequence, rationale, or `decision` - the last meaning "what did
 you decide that the reviewer never asked for" (an unrequested dependency, a
 changed default, a skipped edge case). Include at least one `decision` question
-when the diff contains such a choice, and none when it genuinely does not. A
-`decision` about something absent has no lines: use "from_line": 0. Every other
-probe must cite a line that really exists - prereview flags the ones that do not.
+when the diff contains such a choice, and none when it genuinely does not.
+
+Anchor each with `kind`: "line" (default) needs a real from_line, "file" is for a
+question about the change as a whole or about something absent. Never guess line
+numbers - prereview flags a cited line that is not in the diff.
+
 Then `done` the request comment and `reply` a one-line summary.
 
 Status echo: tell the review UI what you're doing so it shows a live pill across

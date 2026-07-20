@@ -12,6 +12,7 @@ import (
 func validQuestion() Question {
 	return Question{
 		ID:       "q1",
+		Kind:     QuestionKindLine,
 		Probe:    ProbeConsequence,
 		Prompt:   "What breaks if the buffer is filtered at load?",
 		Options:  []string{"Nothing", "Rows are deleted from disk"},
@@ -58,7 +59,7 @@ func TestValidateQuiz_RejectsMalformedQuestions(t *testing.T) {
 		// teaches nothing, so an empty `why` is a hard failure, not a warning.
 		{"no explanation", func(q *Quiz) { q.Questions[0].Why = "" }, "missing \"why\""},
 		{"inverted range", func(q *Quiz) { q.Questions[0].ToLine = 1 }, "precedes"},
-		{"negative from_line", func(q *Quiz) { q.Questions[0].FromLine = -3 }, ">= 0"},
+		{"line question with no line", func(q *Quiz) { q.Questions[0].FromLine = 0 }, "from_line"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			q := validQuiz()
@@ -75,29 +76,57 @@ func TestValidateQuiz_RejectsMalformedQuestions(t *testing.T) {
 	}
 }
 
-// Anchorlessness is a privilege of `decision`, whose subject can be an omission
-// with no lines to point at. If any probe could drop its anchor, the server-side
-// grounding check would be trivially bypassable — so this pair of cases is what
-// keeps that check meaningful.
-func TestValidateQuiz_OnlyDecisionMayOmitItsAnchor(t *testing.T) {
-	t.Run("decision may", func(t *testing.T) {
+// A question that CLAIMS to be line-anchored must carry a line. Dropping the line
+// while keeping kind=line would sail past the server's grounding check by making
+// no claim to falsify — exactly the dodge that check exists to prevent. Asking
+// about the change as a whole (or something absent from it) is kind=file, which
+// is a declared position rather than a missing one.
+func TestValidateQuiz_LineKindsMustCarryALine(t *testing.T) {
+	t.Run("file kind may omit the line", func(t *testing.T) {
 		q := validQuiz()
-		q.Questions[0].Probe = ProbeDecision
-		q.Questions[0].FromLine = 0
-		q.Questions[0].ToLine = 0
+		q.Questions[0].Kind = QuestionKindFile
+		q.Questions[0].FromLine, q.Questions[0].ToLine = 0, 0
 		if err := ValidateQuiz(q); err != nil {
-			t.Fatalf("a decision about an omission has nothing to anchor to; it must be allowed, got: %v", err)
+			t.Fatalf("a file-level question has nothing to anchor to; it must be allowed, got: %v", err)
 		}
 	})
-	for _, probe := range []string{ProbeChangeType, ProbeLocalization, ProbeConsequence, ProbeRationale} {
-		t.Run(probe+" may not", func(t *testing.T) {
+	for _, kind := range []string{QuestionKindLine, QuestionKindText} {
+		t.Run(kind+" may not", func(t *testing.T) {
 			q := validQuiz()
-			q.Questions[0].Probe = probe
-			q.Questions[0].FromLine = 0
-			q.Questions[0].ToLine = 0
-			if err := ValidateQuiz(q); err == nil {
-				t.Fatalf("%s must carry a line anchor — letting it go anchorless would let any\n"+
-					"question skip the grounding check by claiming to be about an absence", probe)
+			q.Questions[0].Kind = kind
+			q.Questions[0].FromLine, q.Questions[0].ToLine = 0, 0
+			err := ValidateQuiz(q)
+			if err == nil {
+				t.Fatalf("a %q question without a line must be rejected", kind)
+			}
+			if !strings.Contains(err.Error(), QuestionKindFile) {
+				t.Errorf("the error should point at kind %q as the right way to ask an\n"+
+					"unanchored question, got: %v", QuestionKindFile, err)
+			}
+		})
+	}
+}
+
+// Every kind must actually carry its own anchor, so a question can't declare a
+// kind it has no data for.
+func TestValidateQuiz_EachKindNeedsItsAnchor(t *testing.T) {
+	for _, tc := range []struct {
+		name, wantSub string
+		mutate        func(*Quiz)
+	}{
+		{"unknown kind", "unknown kind", func(q *Quiz) { q.Questions[0].Kind = "vibes" }},
+		{"area without a rectangle", "area", func(q *Quiz) { q.Questions[0].Kind = QuestionKindArea }},
+		{"region without a url", "url", func(q *Quiz) { q.Questions[0].Kind = QuestionKindRegion }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := validQuiz()
+			tc.mutate(&q)
+			err := ValidateQuiz(q)
+			if err == nil {
+				t.Fatalf("%s must be rejected", tc.name)
+			}
+			if !strings.Contains(err.Error(), tc.wantSub) {
+				t.Errorf("error should mention %q, got: %v", tc.wantSub, err)
 			}
 		})
 	}
@@ -122,17 +151,16 @@ func TestNormalizeQuiz_FillsDefaults(t *testing.T) {
 	}
 }
 
-// A `decision` question about an omission must survive normalization with its
-// zero from_line intact — if NormalizeQuiz "helpfully" defaulted it to 1, the
-// question would silently acquire a bogus anchor.
-func TestNormalizeQuiz_KeepsAnchorlessDecisionAnchorless(t *testing.T) {
+// A file-level question must survive normalization without acquiring a bogus
+// line anchor.
+func TestNormalizeQuiz_KeepsFileQuestionAnchorless(t *testing.T) {
 	q := NormalizeQuiz(Quiz{
 		File:      "a.go",
-		Questions: []Question{{Probe: ProbeDecision, Prompt: "what did you decide?", Options: []string{"a", "b"}, Why: "because"}},
+		Questions: []Question{{Kind: QuestionKindFile, Probe: ProbeDecision, Prompt: "what did you decide?", Options: []string{"a", "b"}, Why: "because"}},
 	})
 	if !q.Questions[0].Anchorless() {
-		t.Errorf("an anchorless decision must stay anchorless through normalization, got from_line=%d",
-			q.Questions[0].FromLine)
+		t.Errorf("a file-level question must stay anchorless through normalization, got kind=%q from_line=%d",
+			q.Questions[0].Kind, q.Questions[0].FromLine)
 	}
 }
 

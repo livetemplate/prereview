@@ -659,7 +659,7 @@
     </form>
   </header>
   
-  <p class="quiz-sub"><small>on <code>app.go</code> — answer before you accept, to check you actually read it</small></p>
+  <p class="quiz-sub"><small>on <code>app.go</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
   <ol class="quiz-list">
     
     <li class="quiz-q is-answered" data-key="q1">
@@ -674,18 +674,6 @@
         
       </div>
       <p class="quiz-prompt">What breaks?</p>
-      
-      
-      <div class="quiz-code" aria-label="the code this question is about">
-        
-        <div class="quiz-code-line ctx"><span class="quiz-code-num">1</span><code></code></div>
-        
-        <div class="quiz-code-line del"><span class="quiz-code-num">2</span><code></code></div>
-        
-        <div class="quiz-code-line add is-cited"><span class="quiz-code-num">2</span><code></code></div>
-        
-      </div>
-      
       <ul class="quiz-options">
         
         
@@ -716,15 +704,13 @@
         <span class="quiz-probe quiz-probe-rationale">rationale</span>
         
         <form method="POST" style="margin:0">
-          <input type="hidden" name="line" value="3">
+          <input type="hidden" name="line" value="1">
           <input type="hidden" name="side" value="new">
-          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">L3</button>
+          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">L1</button>
         </form>
         
       </div>
       <p class="quiz-prompt">Why this way?</p>
-      
-      
       <ul class="quiz-options">
         
         
@@ -762,8 +748,6 @@
         
       </div>
       <p class="quiz-prompt">Where does it live?</p>
-      
-      
       <ul class="quiz-options">
         
         
@@ -801,8 +785,6 @@
         
       </div>
       <p class="quiz-prompt">What did you decide unasked?</p>
-      
-      
       <ul class="quiz-options">
         
         

@@ -12,7 +12,7 @@
     </form>
   </header>
   {{if $.HasQuiz}}
-  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — answer before you accept, to check you actually read it</small></p>
+  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
   <ol class="quiz-list">
     {{range $.QuizItems}}
     <li class="quiz-q{{if .Answered}} is-answered{{end}}" data-key="{{.ID}}">
@@ -31,17 +31,6 @@
         {{end}}
       </div>
       <p class="quiz-prompt">{{.Prompt}}</p>
-      {{/* The cited code, inline. The quiz replaces the diff, so without this the
-           reviewer has to leave, find the lines, read them and come back — by
-           which point the question needs re-reading too. Cited lines are solid;
-           the couple of context lines around them are dimmed for orientation. */}}
-      {{if .Excerpt}}
-      <div class="quiz-code" aria-label="the code this question is about">
-        {{range .Excerpt}}
-        <div class="quiz-code-line {{.Kind}}{{if .Cited}} is-cited{{end}}"><span class="quiz-code-num">{{if .NewNum}}{{.NewNum}}{{else}}{{.OldNum}}{{end}}</span><code>{{.HighlightedContent}}</code></div>
-        {{end}}
-      </div>
-      {{end}}
       <ul class="quiz-options">
         {{$item := .}}
         {{range $i, $opt := .Options}}

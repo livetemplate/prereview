@@ -68,6 +68,25 @@ const (
 	ProbeDecision     = "decision"
 )
 
+// Question anchor kinds — the SAME vocabulary comments use (see csv/schema.go),
+// so a quiz question is anchored exactly like every other annotation in
+// prereview rather than inventing a parallel notion of "where this points".
+//
+// v1 renders `line` and `file`; `text`, `area` and `region` are accepted and
+// stored so that adding their UI later is pure rendering work and never a
+// migration of quizzes already on disk.
+const (
+	QuestionKindLine   = "line"   // a line range in the diff (the default)
+	QuestionKindText   = "text"   // a character range within a line
+	QuestionKindFile   = "file"   // the change as a whole, or something absent from it
+	QuestionKindArea   = "area"   // a rectangle on an image
+	QuestionKindRegion = "region" // a box on a live page (external mode)
+)
+
+var questionKinds = []string{
+	QuestionKindLine, QuestionKindText, QuestionKindFile, QuestionKindArea, QuestionKindRegion,
+}
+
 // probeKinds is the accepted set, ordered for a stable error message.
 var probeKinds = []string{
 	ProbeChangeType, ProbeLocalization, ProbeConsequence, ProbeRationale, ProbeDecision,
@@ -118,24 +137,42 @@ type Quiz struct {
 // ProbeDecision, whose subject can be an omission ("chose not to add a test for
 // the error path") with no lines to point at. Every other probe must anchor.
 type Question struct {
-	ID       string   `json:"id"`
-	Probe    string   `json:"probe"`
-	Prompt   string   `json:"prompt"`
-	Options  []string `json:"options"`
-	Answer   int      `json:"answer"` // 0-based index into Options
-	Why      string   `json:"why"`
-	FromLine int      `json:"from_line"` // 0 == deliberately anchorless (decision only)
-	ToLine   int      `json:"to_line"`
-	Side     string   `json:"side"` // "new" (default) | "old"
+	ID      string   `json:"id"`
+	Kind    string   `json:"kind"` // line (default) | text | file | area | region
+	Probe   string   `json:"probe"`
+	Prompt  string   `json:"prompt"`
+	Options []string `json:"options"`
+	Answer  int      `json:"answer"` // 0-based index into Options
+	Why     string   `json:"why"`
+
+	// Anchor, by kind — the same fields the CSV carries for comments.
+	FromLine int    `json:"from_line"` // line/text
+	ToLine   int    `json:"to_line"`
+	FromCol  int    `json:"from_col"` // text
+	ToCol    int    `json:"to_col"`
+	Side     string `json:"side"`           // "new" (default) | "old"
+	Area     *Area  `json:"area,omitempty"` // area: {x,y,w,h} 0..1 fractions
+	URL      string `json:"url,omitempty"`  // region: the live page
 
 	// AnchorStatus is DERIVED at load time by applyQuiz against the live diff —
 	// kept off the JSON so the append-only file stays the agent's pure input.
 	AnchorStatus string `json:"-"`
 }
 
-// Anchorless reports that the question deliberately has no line anchor, which
-// only ProbeDecision may do. Distinct from Ungrounded.
-func (q Question) Anchorless() bool { return q.FromLine == 0 }
+// LineAnchored reports that the question points at a line range — the kinds the
+// grounding check applies to.
+func (q Question) LineAnchored() bool {
+	return q.Kind == QuestionKindLine || q.Kind == QuestionKindText
+}
+
+// Anchorless reports that the question carries no line anchor. It is now a
+// property of the KIND (file/area/region) rather than a from_line==0 sentinel, so
+// "this question is about the change as a whole, or about something absent from
+// it" is stated in the same vocabulary comments use.
+//
+// Still distinct from Ungrounded: anchorless is a declared position, ungrounded
+// is a claimed line that does not resolve.
+func (q Question) Anchorless() bool { return !q.LineAnchored() }
 
 // Ungrounded reports that the question claimed a line range that does not resolve
 // in the current diff — a hallucinated anchor, rendered with a warning.
@@ -360,16 +397,33 @@ func ValidateQuiz(q Quiz) error {
 		if qu.Why == "" {
 			return fmt.Errorf("%s: missing \"why\" (the explanation shown after answering)", where)
 		}
-		// Anchorlessness is a privilege of `decision`, whose subject can be an
-		// omission. Letting any probe drop its anchor would gut the grounding check.
-		if qu.Anchorless() && qu.Probe != ProbeDecision {
-			return fmt.Errorf("%s: only a %q question may omit its line anchor (\"from_line\": 0)", where, ProbeDecision)
+		if !slices.Contains(questionKinds, qu.Kind) {
+			return fmt.Errorf("%s: unknown kind %q (want one of %v)", where, qu.Kind, questionKinds)
 		}
-		if qu.FromLine < 0 {
-			return fmt.Errorf("%s: \"from_line\" must be >= 0", where)
-		}
-		if !qu.Anchorless() && qu.ToLine < qu.FromLine {
-			return fmt.Errorf("%s: \"to_line\" (%d) precedes \"from_line\" (%d)", where, qu.ToLine, qu.FromLine)
+		// Each kind must actually carry its anchor. A line question without a line
+		// is the case that matters: it would sail past the server's grounding check
+		// by making no claim to falsify, which is exactly the dodge that check
+		// exists to prevent. Use kind "file" to ask about the change as a whole.
+		switch qu.Kind {
+		case QuestionKindLine, QuestionKindText:
+			if qu.FromLine < 1 {
+				return fmt.Errorf("%s: a %q question needs \"from_line\" >= 1 (use kind %q to ask about the change as a whole, or about something absent from it)",
+					where, qu.Kind, QuestionKindFile)
+			}
+			if qu.ToLine < qu.FromLine {
+				return fmt.Errorf("%s: \"to_line\" (%d) precedes \"from_line\" (%d)", where, qu.ToLine, qu.FromLine)
+			}
+			if qu.Kind == QuestionKindText && qu.ToCol < qu.FromCol {
+				return fmt.Errorf("%s: \"to_col\" (%d) precedes \"from_col\" (%d)", where, qu.ToCol, qu.FromCol)
+			}
+		case QuestionKindArea:
+			if qu.Area == nil || (qu.Area.W == 0 && qu.Area.H == 0) {
+				return fmt.Errorf("%s: an %q question needs a non-empty \"area\" rectangle", where, QuestionKindArea)
+			}
+		case QuestionKindRegion:
+			if qu.URL == "" {
+				return fmt.Errorf("%s: a %q question needs the page \"url\" it points at", where, QuestionKindRegion)
+			}
 		}
 	}
 	return nil
@@ -386,10 +440,15 @@ func NormalizeQuiz(q Quiz) Quiz {
 		if qu.ID == "" {
 			qu.ID = fmt.Sprintf("q%d", i+1)
 		}
+		if qu.Kind == "" {
+			// Line is the default, matching how the agent will nearly always anchor
+			// and mirroring the comment CSV where "" reads as a line comment.
+			qu.Kind = QuestionKindLine
+		}
 		if qu.Side == "" {
 			qu.Side = "new"
 		}
-		if !qu.Anchorless() && qu.ToLine < qu.FromLine {
+		if qu.LineAnchored() && qu.ToLine < qu.FromLine {
 			qu.ToLine = qu.FromLine
 		}
 	}

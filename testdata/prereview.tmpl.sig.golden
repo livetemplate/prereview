@@ -156,7 +156,7 @@
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
           <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
-      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
+      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
 {{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>{{end}}
 === endSessionDialog ===
 <dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p>{{if .AwaitingApplyCount}}
@@ -657,6 +657,8 @@
   </div>
   {{end}}
   
+  
+  {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
   
@@ -768,6 +770,7 @@
 
 
 
+
 === quitDialog ===
 <dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
     <form method="POST">
@@ -777,6 +780,25 @@
       </fieldset>
     </form>
   </footer></article></dialog>
+=== quizCard ===
+<div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}">
+  <div class="quiz-card-head"><span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>
+  <p class="quiz-prompt">{{.Prompt}}</p>
+  <ul class="quiz-options">
+    {{$item := .}}
+    {{range $i, $opt := .Options}}
+    <li>
+      {{if $item.Answered}}
+      <div class="quiz-option{{if eq $i $item.Answer}} is-correct{{end}}{{if and (eq $i $item.Choice) (ne $i $item.Answer)}} is-wrong{{end}}"><span class="quiz-mark">{{if eq $i $item.Answer}}✓{{else}}{{if eq $i $item.Choice}}✗{{else}} {{end}}{{end}}</span>{{$opt}}</div>
+      {{else}}
+      <form method="POST" style="margin:0"><input type="hidden" name="quizId" value="{{$item.QuizID}}"><input type="hidden" name="questionId" value="{{$item.ID}}"><input type="hidden" name="choice" value="{{$i}}"><button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button></form>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+  {{if .Answered}}<p class="quiz-why{{if .Correct}} is-correct{{else}} is-wrong{{end}}"><small>{{.Why}}</small></p>{{end}}
+</div>
+
 === quizView ===
 <section class="quiz">
   <header class="quiz-head">
@@ -786,7 +808,7 @@
     </form>
   </header>
   {{if $.HasQuiz}}
-  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — answer before you accept, to check you actually read it</small></p>
+  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
   <ol class="quiz-list">
     {{range $.QuizItems}}
     <li class="quiz-q{{if .Answered}} is-answered{{end}}" data-key="{{.ID}}">
@@ -805,14 +827,6 @@
         {{end}}{{end}}
       </div>
       <p class="quiz-prompt">{{.Prompt}}</p>
-      
-      {{if .Excerpt}}
-      <div class="quiz-code" aria-label="the code this question is about">
-        {{range .Excerpt}}
-        <div class="quiz-code-line {{.Kind}}{{if .Cited}} is-cited{{end}}"><span class="quiz-code-num">{{if .NewNum}}{{.NewNum}}{{else}}{{.OldNum}}{{end}}</span><code>{{.HighlightedContent}}</code></div>
-        {{end}}
-      </div>
-      {{end}}
       <ul class="quiz-options">
         {{$item := .}}
         {{range $i, $opt := .Options}}

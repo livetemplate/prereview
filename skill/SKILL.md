@@ -285,10 +285,15 @@ dependency, a changed default, a widened interface, a skipped edge case. Include
 least one whenever the diff contains such a choice. If you genuinely made none,
 write no `decision` question: an honest omission beats a manufactured surprise.
 
-A `decision` about something **absent** ("chose not to add a test for the error
-path") has no lines to point at - set `"from_line": 0`. Only `decision` questions
-may do that; prereview rejects any other probe without an anchor, and flags a
-question whose cited line is not in the diff, so **do not guess line numbers**.
+Anchor each question the way you would anchor a comment, with `kind`:
+`"line"` (the default) for a line range, or `"file"` for a question about the
+change as a whole — including one about something **absent** ("chose not to add a
+test for the error path"), which has no lines to point at. `text`, `area` and
+`region` are accepted for parity with comments but are not rendered yet.
+
+A `"line"` question MUST carry a real `from_line`: prereview rejects one without,
+and flags a question whose cited line is not in the diff, so **do not guess line
+numbers** — read the file first. Use `"kind": "file"` rather than a made-up line.
 
 Make every wrong option plausible - something a careful reader might actually
 believe. A quiz you can pass without reading the diff is worthless.

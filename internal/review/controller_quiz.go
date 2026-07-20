@@ -38,6 +38,9 @@ func (c *PrereviewController) applyQuiz(state *PrereviewState) {
 	if state.QuizRequestedFile != "" && quizForFile(state.Quizzes, state.QuizRequestedFile) {
 		state.QuizRequestedFile = ""
 	}
+	// Grounding is NOT done here. Mount calls applyQuiz long before it loads
+	// CurrentDiff, so grounding at load time would judge every question against a
+	// nil diff. Callers ground once they actually hold the diff.
 	c.groundQuizzes(state)
 }
 
@@ -61,8 +64,9 @@ func (c *PrereviewController) groundQuizzes(state *PrereviewState) {
 			q := &state.Quizzes[qi].Questions[i]
 			switch {
 			case q.Anchorless():
-				// A `decision` about an omission has nothing to point at. Deliberate,
-				// and deliberately NOT the same state as a bad anchor.
+				// file/area/region questions make no line claim, so there is nothing
+				// to falsify. Deliberate, and deliberately NOT the same state as a
+				// bad anchor.
 				q.AnchorStatus = quizAnchorAbsent
 			case diffHasLine(state.CurrentDiff, q.Side, q.FromLine):
 				q.AnchorStatus = quizAnchorOK

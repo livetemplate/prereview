@@ -128,9 +128,9 @@ func TestRunQuiz_RejectsMalformedQuizNamingTheQuestion(t *testing.T) {
 			"unknown probe",
 		},
 		{
-			"non-decision without an anchor",
+			"line question with no line",
 			strings.Replace(quizPayload, `"from_line": 10`, `"from_line": 0`, 1),
-			"line anchor",
+			"from_line",
 		},
 		{"empty payload", "   ", "empty payload"},
 	} {
@@ -168,19 +168,20 @@ func TestRunQuiz_RejectsTheWholeBatchIfAnyQuizIsBad(t *testing.T) {
 	}
 }
 
-// A `decision` question may be about something absent, which has no lines to
-// point at. This is the one probe allowed through without an anchor.
-func TestRunQuiz_AcceptsAnchorlessDecision(t *testing.T) {
+// A question about the change as a whole — or about something absent from it —
+// is kind=file, the same vocabulary a whole-file comment uses. It carries no line
+// and must round-trip that way.
+func TestRunQuiz_AcceptsFileLevelQuestion(t *testing.T) {
 	out := t.TempDir()
 	payload := `{"file":"a.go","questions":[
-	  {"probe":"decision","prompt":"what did you decide on your own?",
+	  {"kind":"file","probe":"decision","prompt":"what did you decide on your own?",
 	   "options":["added a retry","skipped the error-path test"],"answer":1,
-	   "why":"the request never mentioned tests","from_line":0}]}`
+	   "why":"the request never mentioned tests"}]}`
 	if err := runQuizWith(t, out, payload); err != nil {
-		t.Fatalf("a decision about an omission must be accepted without an anchor, got: %v", err)
+		t.Fatalf("a file-level question must be accepted without a line anchor, got: %v", err)
 	}
 	got := quizLines(t, out)
-	if len(got) != 1 || got[0].Questions[0].FromLine != 0 {
-		t.Errorf("the anchorless decision must round-trip with from_line 0, got %+v", got)
+	if len(got) != 1 || got[0].Questions[0].FromLine != 0 || got[0].Questions[0].Kind != "file" {
+		t.Errorf("the file-level question must round-trip with kind=file and no line, got %+v", got)
 	}
 }

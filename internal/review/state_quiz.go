@@ -1,10 +1,6 @@
 package review
 
-import (
-	"fmt"
-
-	"github.com/livetemplate/prereview/gitdiff"
-)
+import "fmt"
 
 // state_quiz.go holds the quiz view's read helpers.
 //
@@ -17,74 +13,13 @@ import (
 // row, so the template needs no lookups and no per-row logic.
 type QuizItem struct {
 	Question
+	// QuizID is carried on the row so the card partial is SELF-CONTAINED: it can
+	// build its answer form without reaching for root state, which keeps it
+	// renderable from the diff view, the file head and the overview alike.
+	QuizID   string
 	Answered bool
 	Choice   int // the option the reviewer picked; meaningless unless Answered
 	Correct  bool
-	// Excerpt is the cited code, shown inline under the question.
-	//
-	// The quiz replaces the diff, so without this a reviewer had to leave the
-	// quiz, find the lines, read them, and come back — by which point the
-	// question needed re-reading too. That is a memory test, not a comprehension
-	// test. Reported from real use; the fix is to bring the code to the question
-	// rather than sending the reader to the code.
-	//
-	// Empty for an anchorless `decision` question, which is about something that
-	// is not in the diff and therefore has nothing to show.
-	Excerpt []QuizExcerptLine
-}
-
-// QuizExcerptLine is one line of the inline excerpt. Cited marks the lines the
-// question actually points at, so surrounding context can be dimmed — the reader
-// needs a little context to orient, but must still see what is being asked about.
-type QuizExcerptLine struct {
-	gitdiff.DiffLine
-	Cited bool
-}
-
-const (
-	// quizExcerptContext is how many lines of orientation to show either side of
-	// the cited range. Two is enough to place the code without burying the question.
-	quizExcerptContext = 2
-	// quizExcerptMax caps the excerpt so a question citing a huge range cannot push
-	// the options off the screen — the jump link is still there for full context.
-	quizExcerptMax = 14
-)
-
-// excerptFor returns the cited lines (plus a little context) from the current
-// diff. Nil when the question is anchorless or the diff is not the one the
-// question belongs to.
-func (s PrereviewState) excerptFor(q Question) []QuizExcerptLine {
-	if q.Anchorless() || s.CurrentDiff == nil {
-		return nil
-	}
-	lines := s.CurrentDiff.Lines
-	useOld := q.Side == "old"
-	first, last := -1, -1
-	for i, l := range lines {
-		n := l.NewNum
-		if useOld {
-			n = l.OldNum
-		}
-		if n >= q.FromLine && n <= max(q.ToLine, q.FromLine) && n > 0 {
-			if first < 0 {
-				first = i
-			}
-			last = i
-		}
-	}
-	if first < 0 {
-		return nil // the cited range is not in this diff — the ungrounded case
-	}
-	lo := max(0, first-quizExcerptContext)
-	hi := min(len(lines)-1, last+quizExcerptContext)
-	if hi-lo+1 > quizExcerptMax {
-		hi = lo + quizExcerptMax - 1
-	}
-	out := make([]QuizExcerptLine, 0, hi-lo+1)
-	for i := lo; i <= hi; i++ {
-		out = append(out, QuizExcerptLine{DiffLine: lines[i], Cited: i >= first && i <= last})
-	}
-	return out
 }
 
 // CurrentQuiz returns the quiz for the selected file, or nil. The agent can
@@ -116,7 +51,7 @@ func (s PrereviewState) QuizItems() []QuizItem {
 	}
 	out := make([]QuizItem, 0, len(q.Questions))
 	for _, qu := range q.Questions {
-		item := QuizItem{Question: qu, Excerpt: s.excerptFor(qu)}
+		item := QuizItem{Question: qu, QuizID: q.ID}
 		if a, ok := s.QuizAnswers[answerKey(q.ID, qu.ID)]; ok {
 			item.Answered = true
 			item.Choice = a.Choice
@@ -225,4 +160,55 @@ func (s PrereviewState) QuizResults() []StreamQuiz {
 // inviting a second tap that would queue a duplicate.
 func (s PrereviewState) QuizPending() bool {
 	return s.QuizRequestedFile != "" && s.QuizRequestedFile == s.SelectedFile && !s.HasQuiz()
+}
+
+// QuizByEndLine groups the current quiz's LINE-anchored questions by the line
+// they end on, so the diff view can render each one inline right under the code
+// it asks about — the same shape CommentsByEndLine and SuggestionsByEndLine use.
+//
+// This is what makes a quiz question just another annotation. The first version
+// put the quiz on its own screen and then had to reproduce the cited code inside
+// it, which was a worse re-implementation of the diff view; anchoring the
+// question to the line makes the code its own context.
+func (s PrereviewState) QuizByEndLine() map[int][]QuizItem {
+	if s.SelectedFile == "" {
+		return nil
+	}
+	out := map[int][]QuizItem{}
+	for _, it := range s.QuizItems() {
+		// Ungrounded questions have no line that exists, so they cannot render
+		// here; FileQuizItems picks them up at the file head instead.
+		if !it.LineAnchored() || it.Ungrounded() {
+			continue
+		}
+		end := it.ToLine
+		if end < it.FromLine {
+			end = it.FromLine
+		}
+		out[end] = append(out[end], it)
+	}
+	return out
+}
+
+// FileQuizItems are the questions that have no valid position inside the diff, so
+// they render at the file head — exactly where a kind=file COMMENT renders.
+//
+// Two groups land here, for different reasons:
+//
+//   - kind=file: about the change as a whole, or about something absent from it.
+//     It never had a line, by design.
+//   - UNGROUNDED: it claims a line the diff does not contain, so there is nowhere
+//     to anchor it. These MUST still render. Anchoring questions inline means an
+//     unresolvable anchor has no home, and quietly dropping it would HIDE a
+//     hallucinated question instead of surfacing it — undoing the entire point of
+//     the grounding check. The reviewer needs to see that the agent asked about
+//     code that isn't there.
+func (s PrereviewState) FileQuizItems() []QuizItem {
+	var out []QuizItem
+	for _, it := range s.QuizItems() {
+		if it.Kind == QuestionKindFile || it.Ungrounded() {
+			out = append(out, it)
+		}
+	}
+	return out
 }

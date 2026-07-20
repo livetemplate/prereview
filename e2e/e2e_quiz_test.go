@@ -42,9 +42,9 @@ const quizJSON = `{
     {"id":"q3","probe":"rationale","prompt":"QUESTION-THREE why this way?",
      "options":["speed","clarity"],"answer":1,
      "why":"EXPLAIN-THREE it reads better","from_line":900,"to_line":900,"side":"new"},
-    {"id":"q4","probe":"decision","prompt":"QUESTION-FOUR what did you decide unasked?",
+    {"id":"q4","kind":"file","probe":"decision","prompt":"QUESTION-FOUR what did you decide unasked?",
      "options":["added a dependency","skipped the error-path test"],"answer":1,
-     "why":"EXPLAIN-FOUR the request never mentioned tests","from_line":0}
+     "why":"EXPLAIN-FOUR the request never mentioned tests"}
   ]
 }`
 
@@ -119,6 +119,51 @@ func TestE2E_QuizAppearsLiveAndAnswers(t *testing.T) {
 
 	// The entry appears LIVE via the watcher fan-out — no reload.
 	waitForQuizEntry(t, p)
+
+	// PRIMARY SURFACE: the questions are annotations in the diff, like comments and
+	// suggestions — not a separate screen. Assert that BEFORE opening the overview.
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-card').length`); n != 4 {
+		t.Fatalf("every question must render as an inline annotation; expected 4, got %d", n)
+	}
+	// A line-anchored question renders inside the row it asks about, so the code is
+	// its own context — that is the whole reason for anchoring them.
+	//
+	// These next two assertions also guard an ORDERING bug that was latent for two
+	// phases: Mount loaded the quizzes ~100 lines before it loaded CurrentDiff, so
+	// grounding compared every cited line against a nil diff and condemned the whole
+	// quiz. It stayed invisible while the quiz was a separate screen, because
+	// ToggleQuiz re-grounded on open, by which point the diff was in hand. If
+	// grounding regresses that way again, every question lands at the file head
+	// flagged ungrounded — so inRow drops to 0 and the ungrounded count jumps.
+	inRow := evalInt(t, p, `document.querySelectorAll('.line-row .quiz-card, .code .quiz-card').length`)
+	if inRow < 2 {
+		t.Errorf("line-anchored questions must render within the diff rows, got %d", inRow)
+	}
+	// The UNGROUNDED question cites a line the diff does not have, so it has no row
+	// to live in. It must still be VISIBLE (at the file head) — dropping it would
+	// hide a hallucinated question instead of surfacing it, which would quietly
+	// undo the grounding check.
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-card .quiz-ungrounded').length`); n != 1 {
+		t.Errorf("the ungrounded question must still render, with its warning; got %d", n)
+	}
+
+	// The explanation stays hidden until you answer — otherwise there is no
+	// retrieval practice, just reading.
+	if txt := evalStr(t, p, `document.body.innerText`); strings.Contains(txt, "EXPLAIN-ONE") {
+		t.Fatal("the explanation must stay hidden until the question is answered")
+	}
+
+	// Answer one INLINE, where the reviewer actually meets it.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.quiz-card[data-key='quiz-q1'] .quiz-options li:nth-child(2) button[name='answerQuestion']`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("answer inline: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if txt := evalStr(t, p, `document.querySelector(".quiz-card[data-key='quiz-q1']").innerText`); !strings.Contains(txt, "EXPLAIN-ONE") {
+		t.Errorf("answering inline must reveal the explanation in place, got %q", txt)
+	}
+
 	openQuiz(t, p)
 
 	if n := evalInt(t, p, `document.querySelectorAll('.quiz .quiz-q').length`); n != 4 {
@@ -145,32 +190,6 @@ func TestE2E_QuizAppearsLiveAndAnswers(t *testing.T) {
 		t.Fatalf("the 2 grounded questions must each offer a jump; got %d", n)
 	}
 
-	// The cited code is shown INLINE. Without it the quiz replaces the diff and the
-	// reviewer has to leave, read, and come back — reported from real use as
-	// "I need to switch to the code and read it once more, then come back".
-	//
-	// Exactly the two GROUNDED questions get an excerpt: the ungrounded one has no
-	// resolvable lines to show, and the anchorless decision is about something that
-	// is not in the diff at all.
-	if n := evalInt(t, p, `document.querySelectorAll('.quiz .quiz-code').length`); n != 2 {
-		t.Fatalf("each grounded question must show its cited code inline; expected 2, got %d", n)
-	}
-	// The cited lines must be distinguishable from the context lines around them,
-	// or the excerpt shows code without showing which part is being asked about.
-	if n := evalInt(t, p, `document.querySelectorAll('.quiz .quiz-code-line.is-cited').length`); n < 2 {
-		t.Errorf("cited lines must be marked apart from context lines, got %d", n)
-	}
-	// The excerpt shows the real line content, not a placeholder.
-	if txt := evalStr(t, p, `document.querySelector('.quiz .quiz-code').innerText`); !strings.Contains(txt, "func") && !strings.Contains(txt, "package") {
-		t.Errorf("the excerpt must contain the actual source line, got %q", txt)
-	}
-
-	// The explanation is hidden until you answer — otherwise there is no retrieval
-	// practice, just reading.
-	if body := evalStr(t, p, `document.querySelector('.quiz').textContent`); strings.Contains(body, "EXPLAIN-ONE") {
-		t.Fatal("the explanation must stay hidden until the question is answered")
-	}
-
 	// Answer q1 correctly (option index 1).
 	answer := func(questionID string, choice int) {
 		sel := fmt.Sprintf(`.quiz-q[data-key='%s'] .quiz-options li:nth-child(%d) button[name='answerQuestion']`, questionID, choice+1)
@@ -181,8 +200,6 @@ func TestE2E_QuizAppearsLiveAndAnswers(t *testing.T) {
 			t.Fatalf("answer %s: %v\nstderr: %s", questionID, err, p.stderr.String())
 		}
 	}
-	answer("q1", 1)
-
 	body := evalStr(t, p, `document.querySelector('.quiz').textContent`)
 	if !strings.Contains(body, "EXPLAIN-ONE") {
 		t.Fatalf("answering must reveal the explanation; quiz text was:\n%s", body)

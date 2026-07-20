@@ -569,3 +569,21 @@
 <span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>
 {{- end -}}
 {{- end}}
+{{define "quizCard"}}<div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}">
+  <div class="quiz-card-head"><span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>
+  <p class="quiz-prompt">{{.Prompt}}</p>
+  <ul class="quiz-options">
+    {{$item := .}}
+    {{range $i, $opt := .Options}}
+    <li>
+      {{if $item.Answered}}
+      <div class="quiz-option{{if eq $i $item.Answer}} is-correct{{end}}{{if and (eq $i $item.Choice) (ne $i $item.Answer)}} is-wrong{{end}}"><span class="quiz-mark">{{if eq $i $item.Answer}}✓{{else if eq $i $item.Choice}}✗{{else}} {{end}}</span>{{$opt}}</div>
+      {{else}}
+      <form method="POST" style="margin:0"><input type="hidden" name="quizId" value="{{$item.QuizID}}"><input type="hidden" name="questionId" value="{{$item.ID}}"><input type="hidden" name="choice" value="{{$i}}"><button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button></form>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+  {{if .Answered}}<p class="quiz-why{{if .Correct}} is-correct{{else}} is-wrong{{end}}"><small>{{.Why}}</small></p>{{end}}
+</div>
+{{end}}

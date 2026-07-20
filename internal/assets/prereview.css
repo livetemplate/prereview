@@ -3292,22 +3292,22 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    nested level, which paints a stray square left of every option. The DOM tests
    can't see this — only a screenshot can. */
 .quiz .quiz-list, .quiz .quiz-list > li,
-.quiz .quiz-options, .quiz .quiz-options > li { list-style: none; }
+.quiz-options, .quiz-options > li { list-style: none; }
 .quiz .quiz-list { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; }
 .quiz .quiz-q {
   margin: 0; padding: 0.7rem; border: 1px solid var(--pr-comment-bd);
   border-radius: var(--radius-sm); background: var(--pr-comment-bg);
 }
 .quiz .quiz-q-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-.quiz .quiz-probe {
+.quiz-probe {
   font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
   padding: 0.1rem 0.4rem; border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
 }
 /* The `decision` probe is the one that surfaces choices the reviewer never
    asked for, so it is visually louder than the four comprehension probes. */
-.quiz .quiz-probe-decision { background: color-mix(in srgb, var(--accent) 34%, transparent); font-weight: 600; }
-.quiz .quiz-jump {
+.quiz-probe-decision { background: color-mix(in srgb, var(--accent) 34%, transparent); font-weight: 600; }
+.quiz-jump {
   margin: 0; padding: 0.1rem 0.45rem; font-size: 0.75rem; min-height: 0;
   background: transparent; border: 1px solid var(--pico-muted-border-color);
   border-radius: var(--radius-sm); color: var(--accent); font-variant-numeric: tabular-nums;
@@ -3315,24 +3315,24 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 /* An UNGROUNDED question cited a line that isn't in the diff — a hallucinated
    anchor. It must read as a warning, and must never look like the neutral
    "about something absent" marker, which is a legitimate anchorless state. */
-.quiz .quiz-ungrounded { font-size: 0.75rem; color: var(--pr-del); }
-.quiz .quiz-absent { font-size: 0.75rem; color: var(--pico-muted-color); font-style: italic; }
-.quiz .quiz-prompt { margin: 0 0 0.6rem; }
-.quiz .quiz-options { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-.quiz .quiz-option {
+.quiz-ungrounded { font-size: 0.75rem; color: var(--pr-del); }
+.quiz-absent { font-size: 0.75rem; color: var(--pico-muted-color); font-style: italic; }
+.quiz-prompt { margin: 0 0 0.6rem; }
+.quiz-options { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.quiz-option {
   display: block; width: 100%; text-align: left; margin: 0;
   padding: 0.45rem 0.6rem; border-radius: var(--radius-sm);
   border: 1px solid var(--pico-muted-border-color);
   background: var(--surface); color: inherit; font-size: 0.9rem; min-height: 0;
 }
-.quiz .quiz-option-btn { cursor: pointer; }
-.quiz .quiz-option-btn:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
-.quiz .quiz-option.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 12%, var(--surface)); }
-.quiz .quiz-option.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 12%, var(--surface)); }
-.quiz .quiz-mark { display: inline-block; width: 1.1em; font-weight: 700; }
-.quiz .quiz-why { margin: 0.55rem 0 0; padding-left: 0.6rem; border-left: 2px solid var(--pico-muted-border-color); color: var(--pico-muted-color); }
-.quiz .quiz-why.is-correct { border-left-color: var(--pr-add); }
-.quiz .quiz-why.is-wrong { border-left-color: var(--pr-del); }
+.quiz-option-btn { cursor: pointer; }
+.quiz-option-btn:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.quiz-option.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 12%, var(--surface)); }
+.quiz-option.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 12%, var(--surface)); }
+.quiz-mark { display: inline-block; width: 1.1em; font-weight: 700; }
+.quiz-why { margin: 0.55rem 0 0; padding-left: 0.6rem; border-left: 2px solid var(--pico-muted-border-color); color: var(--pico-muted-color); }
+.quiz-why.is-correct { border-left-color: var(--pr-add); }
+.quiz-why.is-wrong { border-left-color: var(--pr-del); }
 .quiz .quiz-foot { display: flex; align-items: center; gap: 0.8rem; margin: 1rem 0.5rem 0.5rem; }
 .quiz .quiz-foot button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
 .quiz .quiz-done { margin: 0; }
@@ -3349,23 +3349,15 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .quiz-trigger.is-pending { opacity: 0.6; cursor: default; }
 .quiz-trigger.is-pending svg { color: var(--pico-muted-color); }
 
-/* The inline code excerpt on a quiz question. Deliberately compact and
-   horizontally scrollable rather than wrapped: a wrapped line misrepresents the
-   code the question is asking about. */
-.quiz .quiz-code {
-  margin: 0 0 0.6rem; padding: 0.35rem 0; overflow-x: auto;
-  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
-  background: var(--surface); font-size: 0.8rem; line-height: 1.5;
+/* The quiz question as an INLINE ANNOTATION — it renders in a diff row next to
+   comment and suggestion cards, at the file head, and in the overview, so it
+   carries its own box rather than inheriting one from a screen. */
+.quiz-card {
+  margin: 0.35rem 0 0.35rem 0; padding: 0.6rem 0.7rem;
+  border: 1px solid var(--pr-comment-bd); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm); background: var(--pr-comment-bg);
+  white-space: normal; font-size: 0.9rem;
 }
-.quiz .quiz-code-line { display: flex; gap: 0.5rem; white-space: pre; padding: 0 0.5rem; }
-.quiz .quiz-code-line code { background: none; padding: 0; font-size: inherit; }
-.quiz .quiz-code-num {
-  flex: 0 0 2.5em; text-align: right; color: var(--pico-muted-color);
-  font-variant-numeric: tabular-nums; user-select: none;
-}
-/* Context lines are dimmed so the CITED lines — the ones the question is about —
-   stay the thing your eye lands on. */
-.quiz .quiz-code-line { opacity: 0.45; }
-.quiz .quiz-code-line.is-cited { opacity: 1; }
-.quiz .quiz-code-line.add.is-cited { background: color-mix(in srgb, var(--pr-add) 14%, transparent); }
-.quiz .quiz-code-line.del.is-cited { background: color-mix(in srgb, var(--pr-del) 14%, transparent); }
+.quiz-card-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
+.quiz-card .quiz-prompt { margin: 0 0 0.5rem; }
+.quiz-card.is-answered { border-left-color: var(--pico-muted-border-color); }

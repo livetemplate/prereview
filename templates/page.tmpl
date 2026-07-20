@@ -134,6 +134,10 @@
        line view; the gutter / line badge is replaced with a "file" tag
        via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
        per-comment actions — no new endpoints. */}}
+  {{/* #191: quiz questions with no line anchor (kind=file) sit at the file head,
+       the same position a kind=file COMMENT occupies — they are about the change
+       as a whole, or about something absent from it. */}}
+  {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
   {{/* The file composer opens as a blocking modal (below), not inline here — a
