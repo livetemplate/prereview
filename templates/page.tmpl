@@ -150,12 +150,29 @@
     </span>
   </div>
   {{end}}
-  {{/* #191: quiz questions with no line anchor (kind=file) sit at the file head,
-       the same position a kind=file COMMENT occupies — they are about the change
-       as a whole, or about something absent from it. */}}
-  {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}
+  {{/* The file-head annotation group: file-level comments, image-area comments,
+       and quiz questions with no line (kind=file, or an anchor that doesn't
+       resolve). They share ONE row key so the existing toggleRow / ToggledRows
+       machinery collapses them exactly like a diff row's annotations — these had
+       no badge at all before, so a file comment could never be folded either. */}}
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
+  <div class="file-head-marks{{if index $.RowToggled "file"}} row-toggled{{end}}">
+    {{/* Only the BADGE is conditional. The wrapper always renders: it also holds
+         the area composer, and gating the container on "are there annotations yet"
+         hid the control that CREATES them — starting an image-area comment left
+         the composer unrendered and the flow dead. */}}
+    {{if gt $.FileHeadAnnotationCount 0}}
+    <button type="button" class="line-marks"
+            lvt-on:click="toggleRow"
+            data-row="file"
+            lvt-el:toggleClass:on:click="row-toggled"
+            data-lvt-target="closest:.file-head-marks"
+            aria-label="Show or hide this file's annotations"
+            title="Show/hide this file's annotations"><span class="line-mark{{if $.FileHeadHasOpen}} is-open{{else}} is-done{{end}}" aria-hidden="true">{{$.FileHeadAnnotationCount}}</span></button>
+    {{end}}
+    <div class="file-head-cards">
+      {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}
   {{/* The file composer opens as a blocking modal (below), not inline here — a
        mid-page scroll position used to leave it off-screen. Area mode keeps its
        inline composer (it anchors to the image region). This section still lists
@@ -167,6 +184,8 @@
     {{if eq $.CommentMode "area"}}{{template "composer" $}}{{end}}
   </section>
   {{end}}
+    </div>
+  </div>
   {{/* File-comment modal (#—): pressing `c` opens a blocking, viewport-centered
        composer so it's reachable regardless of scroll position. Backdrop click /
        Esc / Cancel / Save all close it (clearSelection resets CommentMode). The

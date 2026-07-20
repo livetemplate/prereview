@@ -34,15 +34,10 @@ type QuizItem struct {
 	ScrollTo bool
 	// Current marks the question the reviewer is on — the highlighted badge. Unlike
 	// ScrollTo it persists, so the strip keeps showing where you were.
-	Current bool
-	// Collapsed folds this card to its header. The row badge folds everything on a
-	// line at once, but a question at the FILE HEAD has no row and so had no way to
-	// be folded at all — and a single tall question among several is worth folding
-	// on its own regardless.
-	Collapsed bool
-	Answered  bool
-	Choice    int // the option the reviewer picked; meaningless unless Answered
-	Correct   bool
+	Current  bool
+	Answered bool
+	Choice   int // the option the reviewer picked; meaningless unless Answered
+	Correct  bool
 }
 
 // CurrentQuiz returns the quiz for the selected file, or nil. The agent can
@@ -80,7 +75,6 @@ func (s PrereviewState) QuizItems() []QuizItem {
 		item := QuizItem{Question: qu, QuizID: q.ID, Num: i + 1, ThreadID: tid, Thread: threads[tid]}
 		item.ScrollTo = s.ScrollToQuizID == qu.ID
 		item.Current = current == qu.ID
-		item.Collapsed = s.CollapsedQuiz[qu.ID]
 		if s.ReplyingID == tid {
 			item.Replying = true
 			item.ReplyDraft = s.ReplyDraft
@@ -420,4 +414,32 @@ func (s PrereviewState) quizQuestionsInLineOrder() []Question {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].FromLine < out[j].FromLine })
 	return out
+}
+
+// FileHeadAnnotationCount is how many annotations sit at the file head — the
+// number the shared row badge shows there. Counts file-level and area comments
+// alongside the head quiz questions, because they all collapse together.
+func (s PrereviewState) FileHeadAnnotationCount() int {
+	return len(s.FileLevelComments()) + len(s.AreaComments()) + len(s.FileQuizItems())
+}
+
+// FileHeadHasOpen reports whether anything at the file head is still open work,
+// which is what makes the shared badge read "open" rather than "done".
+func (s PrereviewState) FileHeadHasOpen() bool {
+	for _, c := range s.FileLevelComments() {
+		if !c.Resolved {
+			return true
+		}
+	}
+	for _, c := range s.AreaComments() {
+		if !c.Resolved {
+			return true
+		}
+	}
+	for _, it := range s.FileQuizItems() {
+		if !it.Answered {
+			return true
+		}
+	}
+	return false
 }

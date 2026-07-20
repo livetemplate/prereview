@@ -700,14 +700,26 @@
   </div>
   
   
-  <div class="quiz-card" data-key="quiz-q3">
+  
+  
+  <div class="file-head-marks">
+    
+    
+    <button type="button" class="line-marks"
+            lvt-on:click="toggleRow"
+            data-row="file"
+            lvt-el:toggleClass:on:click="row-toggled"
+            data-lvt-target="closest:.file-head-marks"
+            aria-label="Show or hide this file's annotations"
+            title="Show/hide this file's annotations"><span class="line-mark is-open" aria-hidden="true">2</span></button>
+    
+    <div class="file-head-cards">
+      <div class="quiz-card" data-key="quiz-q3">
   
   <div class="quiz-card-head">
-    <form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q3"><button type="submit" name="toggleQuizCard" class="quiz-fold" aria-expanded="true" title="Fold this question away">▾</button></form>
     <span class="quiz-probe quiz-probe-localization">localization</span><span class="quiz-ungrounded" title="This question cites L999, which is not in this diff — treat it with suspicion">⚠ cites L999, not in this diff</span>
   </div>
   <p class="quiz-prompt">Where does it live?</p>
-  
   <ul class="quiz-options">
     
     
@@ -725,18 +737,15 @@
     
   </ul>
   
-  
   <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q3"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
   
 </div>
 <div class="quiz-card" data-key="quiz-q4">
   
   <div class="quiz-card-head">
-    <form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q4"><button type="submit" name="toggleQuizCard" class="quiz-fold" aria-expanded="true" title="Fold this question away">▾</button></form>
     <span class="quiz-probe quiz-probe-decision">decision</span>
   </div>
   <p class="quiz-prompt">What did you decide unasked?</p>
-  
   <ul class="quiz-options">
     
     
@@ -754,15 +763,14 @@
     
   </ul>
   
-  
   <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q4"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
   
 </div>
 
   
   
-  
-  
+    </div>
+  </div>
   
   
   
@@ -792,11 +800,9 @@
       </span><div class="quiz-card" data-key="quiz-q2">
   
   <div class="quiz-card-head">
-    <form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q2"><button type="submit" name="toggleQuizCard" class="quiz-fold" aria-expanded="true" title="Fold this question away">▾</button></form>
     <span class="quiz-probe quiz-probe-rationale">rationale</span>
   </div>
   <p class="quiz-prompt">Why this way?</p>
-  
   <ul class="quiz-options">
     
     
@@ -813,7 +819,6 @@
     </li>
     
   </ul>
-  
   
   <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q2"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
   
@@ -847,11 +852,9 @@
       </span><div class="quiz-card is-answered" data-key="quiz-q1">
   
   <div class="quiz-card-head">
-    <form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q1"><button type="submit" name="toggleQuizCard" class="quiz-fold" aria-expanded="true" title="Fold this question away">▾</button></form>
     <span class="quiz-probe quiz-probe-consequence">consequence</span>
   </div>
   <p class="quiz-prompt">What breaks?</p>
-  
   <ul class="quiz-options">
     
     
@@ -869,7 +872,6 @@
     
   </ul>
   <p class="quiz-why is-correct"><small>it is a buffer</small></p>
-  
   <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q1"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
   
 </div>

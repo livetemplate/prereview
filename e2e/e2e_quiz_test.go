@@ -660,55 +660,55 @@ func TestE2E_QuizNavigatorFollowsScroll(t *testing.T) {
 	}
 }
 
-// Every question folds, wherever it renders. The row badge folds a whole line's
-// annotations at once, but a file-level question has no row — so it had no fold
-// control at all, and that is the card most likely to be in the way, since it
-// sits at the top of the file. Reported as "not able to collapse a quiz question".
-func TestE2E_QuizQuestionFoldsIndividually(t *testing.T) {
+// Annotations at the FILE HEAD collapse with the same badge a diff row uses.
+//
+// This was reported as "not able to collapse a quiz question", and the first fix
+// was a quiz-only fold control — a second collapse mechanism beside the one that
+// already worked. The real gap was general: the file head had no badge at all, so
+// a file-level COMMENT could never be folded either. One shared row key ("file")
+// fixes both, and quiz cards need nothing of their own.
+func TestE2E_FileHeadAnnotationsCollapse(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
 	p.waitReady()
 	p.clickFile("edited.go")
 	submitQuiz(t, p, quizJSON)
 	waitForQuizEntry(t, p)
 
-	// EVERY card has a fold control — including the ones at the file head, which
-	// live outside any diff row.
-	cards := evalInt(t, p, `document.querySelectorAll('.quiz-card').length`)
-	folds := evalInt(t, p, `document.querySelectorAll(".quiz-card button[name='toggleQuizCard']").length`)
-	if folds != cards {
-		t.Fatalf("every question must be foldable; %d cards but only %d fold controls", cards, folds)
+	// The head badge exists and counts what is there.
+	if n := evalInt(t, p, `document.querySelectorAll('.file-head-marks .line-marks').length`); n != 1 {
+		t.Fatalf("the file head must show the shared annotation badge, got %d", n)
 	}
-	atHead := evalInt(t, p, `[...document.querySelectorAll('.quiz-card')].filter(c=>!c.closest('.line-row')).length`)
-	headFolds := evalInt(t, p, `[...document.querySelectorAll('.quiz-card')].filter(c=>!c.closest('.line-row') && c.querySelector("button[name='toggleQuizCard']")).length`)
-	if atHead == 0 || headFolds != atHead {
-		t.Errorf("the file-head questions are the ones with no row badge, so they most need\n"+
-			"their own control; %d at the head, %d of them foldable", atHead, headFolds)
+	// It is the SAME control the diff rows use — not a quiz-specific one.
+	if n := evalInt(t, p, `document.querySelectorAll(".file-head-marks button[name='toggleQuizCard'], .quiz-card button[name='toggleQuizCard']").length`); n != 0 {
+		t.Errorf("there must be no quiz-only fold control; the row badge already does this, "+
+			"and a second mechanism is exactly the inconsistency this feature kept being pulled toward (%d found)", n)
 	}
 
-	// Folding hides the options but keeps the prompt, so a folded card still says
-	// what it is about rather than becoming an anonymous stub.
-	optsBefore := evalInt(t, p, `document.querySelectorAll(".quiz-card[data-key='quiz-q1'] .quiz-options").length`)
+	visible := func() int {
+		return evalInt(t, p, `[...document.querySelectorAll('.file-head-cards .quiz-card')].filter(c=>c.offsetParent!==null).length`)
+	}
+	before := visible()
+	if before < 1 {
+		t.Fatalf("expected at least one unanchored question at the file head, got %d", before)
+	}
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelector(".quiz-card[data-key='quiz-q1'] button[name='toggleQuizCard']").click()`, nil),
+		chromedp.Evaluate(`document.querySelector('.file-head-marks .line-marks').click()`, nil),
 		chromedp.Sleep(400*time.Millisecond),
 	); err != nil {
-		t.Fatalf("fold: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("toggle file head: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if n := evalInt(t, p, `document.querySelectorAll(".quiz-card[data-key='quiz-q1'] .quiz-options").length`); n != 0 || optsBefore == 0 {
-		t.Errorf("folding must hide the options (%d before, %d after)", optsBefore, n)
+	if after := visible(); after != 0 {
+		t.Errorf("the head badge must fold its annotations away; %d visible before, %d after", before, after)
 	}
-	if txt := evalStr(t, p, `document.querySelector(".quiz-card[data-key='quiz-q1']").innerText`); !strings.Contains(txt, "QUESTION-ONE") {
-		t.Errorf("a folded card must keep its prompt, or it is an anonymous stub; got %q", txt)
-	}
-	// And unfolds again.
+	// ...and back.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelector(".quiz-card[data-key='quiz-q1'] button[name='toggleQuizCard']").click()`, nil),
+		chromedp.Evaluate(`document.querySelector('.file-head-marks .line-marks').click()`, nil),
 		chromedp.Sleep(400*time.Millisecond),
 	); err != nil {
-		t.Fatalf("unfold: %v\nstderr: %s", err, p.stderr.String())
+		t.Fatalf("untoggle: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if n := evalInt(t, p, `document.querySelectorAll(".quiz-card[data-key='quiz-q1'] .quiz-options").length`); n == 0 {
-		t.Error("unfolding must bring the options back")
+	if after := visible(); after != before {
+		t.Errorf("toggling back must restore them; %d before, %d after", before, after)
 	}
 }
 

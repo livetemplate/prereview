@@ -569,16 +569,14 @@
 <span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>
 {{- end -}}
 {{- end}}
-{{define "quizCard"}}<div class="quiz-card{{if .Answered}} is-answered{{end}}{{if .Collapsed}} is-folded{{end}}" data-key="quiz-{{.ID}}">
+{{define "quizCard"}}<div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}">
   {{/* The scroll target is the HEAD, not the card: the client centres whatever it
        scrolls to, and a card with four options is taller than a phone screen — so
        centring the card put the question itself off the top of the viewport. */}}
   <div class="quiz-card-head"{{if .ScrollTo}} lvt-fx:scroll="into-view" tabindex="-1"{{end}}>
-    <form method="POST" style="margin:0"><input type="hidden" name="questionId" value="{{.ID}}"><button type="submit" name="toggleQuizCard" class="quiz-fold" aria-expanded="{{if .Collapsed}}false{{else}}true{{end}}" title="{{if .Collapsed}}Show this question{{else}}Fold this question away{{end}}">{{if .Collapsed}}▸{{else}}▾{{end}}</button></form>
     <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}
   </div>
   <p class="quiz-prompt">{{.Prompt}}</p>
-  {{if not .Collapsed}}
   <ul class="quiz-options">
     {{$item := .}}
     {{range $i, $opt := .Options}}
@@ -592,7 +590,6 @@
     {{end}}
   </ul>
   {{if .Answered}}<p class="quiz-why{{if .Correct}} is-correct{{else}} is-wrong{{end}}"><small>{{.Why}}</small></p>{{end}}
-  {{end}}
   {{- /* #191 conversation on the question itself: ask the agent to clarify a
          confusing option, or to revise a question you think is wrong. Same
          thread machinery comments and suggestions use — the only new part is the

@@ -1975,6 +1975,7 @@ header.file-head .file-head-comment button svg { display: block; }
    reviewer had just opened (#173). */
 .line-row.row-toggled .quiz-card,
 .md-block.row-toggled .quiz-card,
+.file-head-marks.row-toggled .file-head-cards,
 .line-row.row-toggled .inline-comment:not(.is-resolved),
 .line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
 .md-block.row-toggled .inline-comment:not(.is-resolved),
@@ -3403,14 +3404,11 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .quiz-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 .quiz-nav-actions button { margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.72rem; }
 
-/* The per-card fold control. The row badge folds every annotation on a line at
-   once, but a file-level question has no row — and that is the card most likely
-   to be in the way, since it sits at the top of the file. A folded card keeps its
-   probe and prompt so it still says what it is about. */
-.quiz-fold {
-  margin: 0; padding: 0 0.3rem; min-height: 0; line-height: 1;
-  background: none; border: none; color: var(--pico-muted-color);
-  font-size: 0.9rem; cursor: pointer;
-}
-.quiz-fold:hover { color: var(--accent); }
-.quiz-card.is-folded .quiz-prompt { margin-bottom: 0; }
+/* The file-head annotation group. It reuses .line-marks — the same badge a diff
+   row shows — so collapsing a file comment, an area comment or an unanchored quiz
+   question is the same gesture as collapsing a line's annotations. Before this the
+   file head had no badge at all, so those annotations could not be folded at all. */
+.file-head-marks { display: flex; align-items: flex-start; gap: 0.4rem; margin: 0 0 0.5rem; }
+.file-head-marks > .line-marks { flex: 0 0 auto; margin-top: 0.35rem; }
+.file-head-cards { flex: 1 1 auto; min-width: 0; }
+.file-head-cards > .file-comments { margin: 0; }
