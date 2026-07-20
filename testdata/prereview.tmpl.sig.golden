@@ -805,6 +805,14 @@
         {{end}}{{end}}
       </div>
       <p class="quiz-prompt">{{.Prompt}}</p>
+      
+      {{if .Excerpt}}
+      <div class="quiz-code" aria-label="the code this question is about">
+        {{range .Excerpt}}
+        <div class="quiz-code-line {{.Kind}}{{if .Cited}} is-cited{{end}}"><span class="quiz-code-num">{{if .NewNum}}{{.NewNum}}{{else}}{{.OldNum}}{{end}}</span><code>{{.HighlightedContent}}</code></div>
+        {{end}}
+      </div>
+      {{end}}
       <ul class="quiz-options">
         {{$item := .}}
         {{range $i, $opt := .Options}}

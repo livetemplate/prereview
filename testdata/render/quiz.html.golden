@@ -674,6 +674,18 @@
         
       </div>
       <p class="quiz-prompt">What breaks?</p>
+      
+      
+      <div class="quiz-code" aria-label="the code this question is about">
+        
+        <div class="quiz-code-line ctx"><span class="quiz-code-num">1</span><code></code></div>
+        
+        <div class="quiz-code-line del"><span class="quiz-code-num">2</span><code></code></div>
+        
+        <div class="quiz-code-line add is-cited"><span class="quiz-code-num">2</span><code></code></div>
+        
+      </div>
+      
       <ul class="quiz-options">
         
         
@@ -711,6 +723,8 @@
         
       </div>
       <p class="quiz-prompt">Why this way?</p>
+      
+      
       <ul class="quiz-options">
         
         
@@ -748,6 +762,8 @@
         
       </div>
       <p class="quiz-prompt">Where does it live?</p>
+      
+      
       <ul class="quiz-options">
         
         
@@ -785,6 +801,8 @@
         
       </div>
       <p class="quiz-prompt">What did you decide unasked?</p>
+      
+      
       <ul class="quiz-options">
         
         

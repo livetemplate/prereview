@@ -145,6 +145,26 @@ func TestE2E_QuizAppearsLiveAndAnswers(t *testing.T) {
 		t.Fatalf("the 2 grounded questions must each offer a jump; got %d", n)
 	}
 
+	// The cited code is shown INLINE. Without it the quiz replaces the diff and the
+	// reviewer has to leave, read, and come back — reported from real use as
+	// "I need to switch to the code and read it once more, then come back".
+	//
+	// Exactly the two GROUNDED questions get an excerpt: the ungrounded one has no
+	// resolvable lines to show, and the anchorless decision is about something that
+	// is not in the diff at all.
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz .quiz-code').length`); n != 2 {
+		t.Fatalf("each grounded question must show its cited code inline; expected 2, got %d", n)
+	}
+	// The cited lines must be distinguishable from the context lines around them,
+	// or the excerpt shows code without showing which part is being asked about.
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz .quiz-code-line.is-cited').length`); n < 2 {
+		t.Errorf("cited lines must be marked apart from context lines, got %d", n)
+	}
+	// The excerpt shows the real line content, not a placeholder.
+	if txt := evalStr(t, p, `document.querySelector('.quiz .quiz-code').innerText`); !strings.Contains(txt, "func") && !strings.Contains(txt, "package") {
+		t.Errorf("the excerpt must contain the actual source line, got %q", txt)
+	}
+
 	// The explanation is hidden until you answer — otherwise there is no retrieval
 	// practice, just reading.
 	if body := evalStr(t, p, `document.querySelector('.quiz').textContent`); strings.Contains(body, "EXPLAIN-ONE") {

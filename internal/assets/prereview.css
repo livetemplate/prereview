@@ -3348,3 +3348,24 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    exactly what made a real reviewer tap twice and queue a duplicate. */
 .quiz-trigger.is-pending { opacity: 0.6; cursor: default; }
 .quiz-trigger.is-pending svg { color: var(--pico-muted-color); }
+
+/* The inline code excerpt on a quiz question. Deliberately compact and
+   horizontally scrollable rather than wrapped: a wrapped line misrepresents the
+   code the question is asking about. */
+.quiz .quiz-code {
+  margin: 0 0 0.6rem; padding: 0.35rem 0; overflow-x: auto;
+  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
+  background: var(--surface); font-size: 0.8rem; line-height: 1.5;
+}
+.quiz .quiz-code-line { display: flex; gap: 0.5rem; white-space: pre; padding: 0 0.5rem; }
+.quiz .quiz-code-line code { background: none; padding: 0; font-size: inherit; }
+.quiz .quiz-code-num {
+  flex: 0 0 2.5em; text-align: right; color: var(--pico-muted-color);
+  font-variant-numeric: tabular-nums; user-select: none;
+}
+/* Context lines are dimmed so the CITED lines — the ones the question is about —
+   stay the thing your eye lands on. */
+.quiz .quiz-code-line { opacity: 0.45; }
+.quiz .quiz-code-line.is-cited { opacity: 1; }
+.quiz .quiz-code-line.add.is-cited { background: color-mix(in srgb, var(--pr-add) 14%, transparent); }
+.quiz .quiz-code-line.del.is-cited { background: color-mix(in srgb, var(--pr-del) 14%, transparent); }
