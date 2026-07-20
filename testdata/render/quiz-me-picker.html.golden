@@ -499,10 +499,6 @@
 
 
 
-<div class="banner-stopping" role="status">
-  Session ended — Claude has been notified. You can close this tab.
-</div>
-
 
 
 
@@ -646,6 +642,28 @@
   /></svg><span class="file-head-comment-label">Comment on file <kbd class="kbd-hint" aria-hidden="true">c</kbd></span></button>
     </form>
     
+    
+    
+    
+    <div
+      class="tb-dropdown prompts-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="quiz-trigger"
+        aria-haspopup="menu"
+        title="Ask the agent for a comprehension quiz about this diff"
+      ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="quiz-trigger-label">Quiz me</span></button>
+      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Quiz prompts">
+        
+        <form method="POST"><input type="hidden" name="slug" value="comprehension"><button type="submit" name="requestQuiz" class="prompt-row" title="generate a quiz">Quiz me on this diff</button></form>
+        
+        <form method="POST"><input type="hidden" name="slug" value="security"><button type="submit" name="requestQuiz" class="prompt-row" title="security quiz">Quiz me like a security reviewer</button></form>
+        
+      </div>
+    </div>
     
     
     

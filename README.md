@@ -40,6 +40,12 @@ prereview --install-skill --client=claude        # one-time: install the Claude 
 
 ## Features
 
+- **Comprehension quiz** - ask the agent to quiz you on the diff you are about to
+  accept. Multiple choice, graded instantly, with an explanation per question and
+  a jump to the lines it asks about. Every question cites a line range and
+  prereview verifies it exists, so a hallucinated question is flagged rather than
+  believed.
+
 - **Review any artifact, at the granularity that fits** — a line or range
   in a diff; a whole file; a rendered **Markdown** or **HTML** block (the
   comment anchors to real source lines); a dragged **region of a binary

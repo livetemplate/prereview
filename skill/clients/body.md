@@ -34,6 +34,22 @@ block on a stream, `prereview watch --out <REPO> --since <seq>` delivers each ne
 batch and exits on the terminating `end` event — otherwise just re-read
 `prereview comments --json`.
 
+If a comment asks for a comprehension quiz (the reviewer clicked "Quiz me"), do
+not edit files and do not suggest edits - reply with a quiz instead:
+
+    prereview quiz --out <REPO> --file quiz.json
+
+Write 3-5 multiple-choice questions grounded strictly in that file's diff. Each
+needs `options` (2+), a 0-based `answer`, a `why` explaining it, and
+`from_line`/`to_line`/`side` locating it. Tag each with a `probe`: change-type,
+localization, consequence, rationale, or `decision` - the last meaning "what did
+you decide that the reviewer never asked for" (an unrequested dependency, a
+changed default, a skipped edge case). Include at least one `decision` question
+when the diff contains such a choice, and none when it genuinely does not. A
+`decision` about something absent has no lines: use "from_line": 0. Every other
+probe must cite a line that really exists - prereview flags the ones that do not.
+Then `done` the request comment and `reply` a one-line summary.
+
 Status echo: tell the review UI what you're doing so it shows a live pill across
 every open tab — `working` while you apply a batch, `done` when finished:
 

@@ -95,6 +95,49 @@ func diffHasLine(diff *gitdiff.FileDiff, side string, n int) bool {
 	return ok
 }
 
+// RequestQuiz asks the agent for a quiz about the selected file, by SAVING a
+// file-level comment whose body is the quiz prompt.
+//
+// It deliberately sends immediately rather than pre-filling the composer the way
+// PickPrompt does (#147). "Quiz me" should be one tap — this tool is mostly used
+// from a phone — and unlike a suggestions prompt there is rarely anything to
+// tweak. The cost is that the request is VISIBLE in the reviewer's own queue: an
+// earlier design hoped to hide it with Comment.Hidden, but that flag only applies
+// to RESOLVED comments ("Hidden is meaningless on them", state.go), so there is
+// no way to hide it and no reason to invent one. A saved Prompt comment already
+// behaves exactly this way, and the visible row doubles as a record of what was
+// asked, with the agent's reply threaded under it.
+func (c *PrereviewController) RequestQuiz(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if state.SelectedFile == "" {
+		return state, fmt.Errorf("requestQuiz: no file selected")
+	}
+	body := quizPromptBody(state.QuizPrompts, ctx.GetString("slug"))
+	if body == "" {
+		return state, nil // no prompts, or a stale slug from an old render
+	}
+	resetToFileComment(&state)
+	state.DraftBody = ""
+	return c.addFileLevelComment(state, body)
+}
+
+// quizPromptBody picks the requested prompt's body, falling back to the first
+// when no slug was sent — which is the common case, since a single-prompt library
+// renders a plain button with nothing to choose.
+func quizPromptBody(prompts []Prompt, slug string) string {
+	if len(prompts) == 0 {
+		return ""
+	}
+	if slug == "" {
+		return prompts[0].Body
+	}
+	for _, p := range prompts {
+		if p.Slug == slug {
+			return p.Body
+		}
+	}
+	return ""
+}
+
 // AnswerQuestion records the reviewer's choice for one question and reveals its
 // explanation. Answers are the reviewer's, so they go in the server-owned file —
 // never into the agent's append-only quiz.jsonl.

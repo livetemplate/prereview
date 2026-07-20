@@ -65,6 +65,12 @@ type PrereviewController struct {
 	// merged with the embedded built-ins in LoadPrompts. "" = built-ins only.
 	PromptsDir string
 
+	// QuizzesDir is the user overlay for #191 quiz prompts
+	// (~/.config/prereview/quizzes). Read every Mount and merged with the embedded
+	// built-ins in LoadQuizPrompts. "" = built-ins only. Separate from PromptsDir
+	// because the two libraries answer with different verbs.
+	QuizzesDir string
+
 	// Emitter is the agent-mode JSON event log writer (stdout +
 	// .prereview/events.jsonl). Non-nil only in agent mode; the emit path and
 	// EndSession guard on nil so non-agent sessions emit nothing.
@@ -371,6 +377,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// overlay dir) for the file-header picker. Cheap; refreshed each connect so a
 	// user's edits to their prompt files show without a relaunch.
 	state.Prompts = LoadPrompts(c.PromptsDir)
+	state.QuizPrompts = LoadQuizPrompts(c.QuizzesDir)
 	c.applyQuiz(&state)
 
 	// AgentMode is mirror-only: refresh from the controller every connect so a

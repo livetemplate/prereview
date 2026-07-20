@@ -253,6 +253,46 @@ file** — the reviewer accepts/rejects each box), then `done` the prompt commen
 `reply` a one-line summary ("proposed N edits below"). This is the one case where a
 comment wants **suggestions, not a direct fix** — the body says so; follow it.
 
+## Comprehension quizzes (`prereview quiz`, #191)
+
+The reviewer can also ask for a **comprehension quiz** about a file's diff, via
+"Quiz me" in the file header. Like a prompt it arrives as a `kind=file` comment,
+and its body spells out the contract — but it wants **neither a fix nor a
+suggestion**. Answer with `prereview quiz`, never `prereview suggest`, and do not
+edit any files.
+
+```bash
+prereview quiz --out "<REPO>" --file quiz.json    # or pipe JSON on stdin
+```
+
+Then `done` the request comment and `reply` a one-liner ("5 questions, 2 about
+decisions you didn't ask for").
+
+Write 3-5 multiple-choice questions grounded **strictly in that diff**. Each needs
+`options` (>= 2), a 0-based `answer`, a `why` explaining it (shown after the
+reviewer answers - this is where the teaching happens), and `from_line`/`to_line`/
+`side` pointing at the lines it is about. Tag each with a `probe`:
+
+- `change-type` - what kind of change this is
+- `localization` - where a behavior lives in the diff
+- `consequence` - what breaks if it is wrong or misread
+- `rationale` - why it is done this way and not the obvious alternative
+- `decision` - **what you decided on your own that the reviewer never asked for**
+
+That last one matters most. The other four test whether they understood what IS in
+the diff; `decision` surfaces what they might have OBJECTED to - an unrequested
+dependency, a changed default, a widened interface, a skipped edge case. Include at
+least one whenever the diff contains such a choice. If you genuinely made none,
+write no `decision` question: an honest omission beats a manufactured surprise.
+
+A `decision` about something **absent** ("chose not to add a test for the error
+path") has no lines to point at - set `"from_line": 0`. Only `decision` questions
+may do that; prereview rejects any other probe without an anchor, and flags a
+question whose cited line is not in the diff, so **do not guess line numbers**.
+
+Make every wrong option plausible - something a careful reader might actually
+believe. A quiz you can pass without reading the diff is worthless.
+
 Submit a JSON payload — a single object, a JSON array, or newline-delimited objects —
 on stdin or via `--file`. The running UI picks them up live (no restart):
 

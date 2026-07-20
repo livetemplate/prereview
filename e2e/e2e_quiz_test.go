@@ -258,3 +258,59 @@ func TestE2E_QuizRetakeClearsAnswers(t *testing.T) {
 		t.Fatalf("after a retake every option must be answerable again (4 questions x 2 options); got %d", n)
 	}
 }
+
+// The request half of the loop: tapping "Quiz me" in the file header saves a
+// file-level comment carrying the quiz prompt, which reaches the agent through
+// the ordinary comment queue. No new comment kind, no second channel.
+//
+// The request is deliberately VISIBLE in the reviewer's own queue — Comment.Hidden
+// only applies to resolved comments, so there is no way to hide it and no reason
+// to invent one. A saved Prompt comment already behaves this way.
+func TestE2E_QuizMeRequestsAQuiz(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	p.clickFile("edited.go")
+
+	// REGRESSION GUARD. "Quiz me" and "Ask for suggestions" sit side by side in the
+	// file header. They looked alike, so the quiz control first reused the
+	// `.prompts-trigger` class — which made that selector ambiguous and silently
+	// re-pointed TestE2E_PromptPicker's click at the wrong button. It did not fail:
+	// it HUNG, waiting forever for a dropdown that never opened, and took the whole
+	// suite past its timeout. Assert the selector still resolves to exactly one
+	// element so the next person gets an instant, explained failure instead.
+	if n := evalInt(t, p, `document.querySelectorAll('.prompts-trigger').length`); n != 1 {
+		t.Fatalf(".prompts-trigger must match exactly the suggestions trigger, got %d —\n"+
+			"a second element sharing that class hangs TestE2E_PromptPicker rather than failing it", n)
+	}
+
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(`button[name='requestQuiz']`, chromedp.ByQuery),
+		chromedp.Click(`button[name='requestQuiz']`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("tap Quiz me: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// One file-level comment, whose body is the quiz prompt the agent will act on.
+	rows := p.readCSV()
+	if len(rows) != 2 { // header + 1
+		t.Fatalf("Quiz me must save exactly one request comment, got %d row(s): %v", len(rows), rows)
+	}
+	const fileCol, bodyCol, kindCol = 1, 5, 10
+	if got := rows[1][fileCol]; got != "edited.go" {
+		t.Errorf("the request must anchor to the selected file, got %q", got)
+	}
+	if got := rows[1][kindCol]; got != "file" {
+		t.Errorf("the request must be a file-level comment (kind=file), got %q", got)
+	}
+	body := rows[1][bodyCol]
+	// The body IS the contract the agent follows, so the two instructions that keep
+	// it from doing the wrong thing must survive into the queue.
+	if !strings.Contains(body, "prereview quiz") {
+		t.Errorf("the request body must name the verb to answer with; got:\n%s", body)
+	}
+	if !strings.Contains(body, "prereview suggest") {
+		t.Errorf("the request body must say NOT to use `prereview suggest` — otherwise the\n"+
+			"agent treats a quiz request like a prompt and proposes edits; got:\n%s", body)
+	}
+}

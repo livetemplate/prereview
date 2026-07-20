@@ -72,7 +72,8 @@ func (c *PrereviewController) emitSnapshot() {
 	st.Applied = loadAppliedSet(c.CSVPath)    // #159: applied acks drop from the snapshot
 	c.relocateAll(st)                         // re-anchor comments against fresh disk (base-safe, #121)
 	c.relocateSuggestionsAll(st)              // re-anchor suggestions likewise
-	if err := c.Emitter.EmitSnapshot(st.scopedComments(), st.scopedSuggestions(), st.DecisionsBySuggestion(), st.Threads(), st.Applied, c.isPaused(), time.Now()); err != nil {
+	c.applyQuiz(st)                           // #191: advisory quiz results (never gates)
+	if err := c.Emitter.EmitSnapshot(st.scopedComments(), st.scopedSuggestions(), st.DecisionsBySuggestion(), st.Threads(), st.Applied, st.QuizResults(), c.isPaused(), time.Now()); err != nil {
 		slog.Warn("emit snapshot", "err", err)
 	}
 }

@@ -281,3 +281,41 @@ func writeQuizFile(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+// The agent snapshot carries quiz results so it can tell "accepted after a
+// comprehension check" from "accepted without one". Taken must distinguish
+// "not attempted" from "attempted and scored 0" — otherwise a reviewer who got
+// everything wrong is indistinguishable from one who never opened the quiz.
+func TestQuizResults_ReportsScoreAndWhetherTaken(t *testing.T) {
+	st := PrereviewState{
+		Quizzes: []Quiz{
+			{ID: "z1", File: "a.go", Questions: []Question{
+				{ID: "q1", Answer: 1}, {ID: "q2", Answer: 0}, {ID: "q3", Answer: 1},
+			}},
+			{ID: "z2", File: "b.go", Questions: []Question{{ID: "q1", Answer: 0}}},
+		},
+		QuizAnswers: map[string]QuizAnswer{
+			answerKey("z1", "q1"): {QuizID: "z1", QuestionID: "q1", Choice: 1}, // right
+			answerKey("z1", "q2"): {QuizID: "z1", QuestionID: "q2", Choice: 1}, // wrong
+		},
+	}
+	got := st.QuizResults()
+	if len(got) != 2 {
+		t.Fatalf("every quiz must be reported, got %d", len(got))
+	}
+	if !got[0].Taken || got[0].Score != 1 || got[0].Total != 3 {
+		t.Errorf("z1: want taken=true score=1 total=3, got %+v", got[0])
+	}
+	if got[1].Taken {
+		t.Errorf("z2 was never answered, so Taken must be false — a 0/1 score would\n"+
+			"wrongly read as 'they tried and failed'; got %+v", got[1])
+	}
+}
+
+// No quizzes ⇒ nil, so the `quizzes` key is omitted entirely and the snapshot
+// shape is byte-identical for every review that doesn't use the feature.
+func TestQuizResults_NilWhenNoQuizzes(t *testing.T) {
+	if got := (PrereviewState{}).QuizResults(); got != nil {
+		t.Errorf("no quizzes must yield nil so the wire format is unchanged, got %v", got)
+	}
+}

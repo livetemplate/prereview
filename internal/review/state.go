@@ -162,6 +162,12 @@ type PrereviewState struct {
 	// file-comment composer.
 	Prompts []Prompt `json:"prompts"`
 
+	// QuizPrompts is the #191 quiz-prompt library — built-ins plus the user's
+	// ~/.config/prereview/quizzes/ overlay — loaded every Mount like Prompts.
+	// Drives the file-header "Quiz me" control: one prompt renders a plain
+	// one-tap button, several render a picker.
+	QuizPrompts []Prompt `json:"quiz_prompts"`
+
 	// ReplyingID is the comment/suggestion whose inline reply form is open (#149;
 	// mirrors EditingCommentID); ReplyDraft holds the in-progress reply so it
 	// survives reconnects. Empty = no reply form open.

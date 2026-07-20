@@ -121,3 +121,32 @@ func (q Question) AnchorLabel() string {
 func (q Question) Jumpable() bool {
 	return !q.Anchorless() && q.AnchorStatus == quizAnchorOK
 }
+
+// QuizResults reports every quiz's outcome for the agent snapshot (#191).
+//
+// It is ADVISORY: it never gates a verdict, it just lets the agent tell "accepted
+// after a comprehension check" from "accepted without one". That distinction is
+// the whole point — an accept records that the reviewer clicked, and this is the
+// only signal that says whether they also understood.
+//
+// Unlike the view helpers it walks EVERY quiz, not just the selected file's, since
+// the snapshot is not scoped to whatever file happens to be open.
+func (s PrereviewState) QuizResults() []StreamQuiz {
+	if len(s.Quizzes) == 0 {
+		return nil
+	}
+	out := make([]StreamQuiz, 0, len(s.Quizzes))
+	for _, q := range s.Quizzes {
+		r := StreamQuiz{File: q.File, QuizID: q.ID, Total: len(q.Questions)}
+		for _, qu := range q.Questions {
+			if a, ok := s.QuizAnswers[answerKey(q.ID, qu.ID)]; ok {
+				r.Taken = true
+				if a.Choice == qu.Answer {
+					r.Score++
+				}
+			}
+		}
+		out = append(out, r)
+	}
+	return out
+}

@@ -361,6 +361,17 @@ func renderFixtures() []renderFixture {
 		"z1\x00q1": {QuizID: "z1", QuestionID: "q1", Choice: 1},
 	}
 
+	// the file-header "Quiz me" control, which degrades by library size: ONE
+	// prompt renders a plain one-tap button (the phone case), two or more render a
+	// picker. Both shapes are pinned so the degrade logic can't silently regress.
+	quizBtn := goBase()
+	quizBtn.QuizPrompts = []review.Prompt{{Slug: "comprehension", Title: "Quiz me on this diff", Body: "generate a quiz"}}
+	quizPicker := goBase()
+	quizPicker.QuizPrompts = []review.Prompt{
+		{Slug: "comprehension", Title: "Quiz me on this diff", Body: "generate a quiz"},
+		{Slug: "security", Title: "Quiz me like a security reviewer", Body: "security quiz"},
+	}
+
 	// quiz view with no quiz for the selected file — the empty state must offer a
 	// way out, or the reviewer is stranded on a near-blank page (issue #27).
 	quizEmpty := goBase()
@@ -438,6 +449,8 @@ func renderFixtures() []renderFixture {
 		{"all-comments", allComments},
 		{"quiz", quiz},
 		{"quiz-empty", quizEmpty},
+		{"quiz-me-button", quizBtn},
+		{"quiz-me-picker", quizPicker},
 		{"external", external},
 		{"version-view", version},
 		{"agent-mode", agent},
