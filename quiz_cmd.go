@@ -33,7 +33,7 @@ import (
 func runQuiz(args []string) error {
 	fs := flag.NewFlagSet("quiz", flag.ContinueOnError)
 	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
-	file := fs.String("file", "", "read the JSON payload from this file instead of stdin")
+	file := fs.String("file", "", "read the JSON payload from this file, or \"-\" for stdin (the default when omitted)")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview quiz [--out <dir>] [--file <quiz.json>]\n\n"+
@@ -62,9 +62,12 @@ func runQuiz(args []string) error {
 		return err
 	}
 
+	// "-" means stdin, matching `done`/`reply`/`applied`. Without it an agent that
+	// pipes a payload with `--file -` (the idiom those verbs document) gets a
+	// baffling `open -: no such file or directory`.
 	var raw []byte
 	var err error
-	if *file != "" {
+	if *file != "" && *file != "-" {
 		raw, err = os.ReadFile(*file)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", *file, err)

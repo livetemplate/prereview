@@ -72,6 +72,10 @@
     lvt-key="a"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="toggleQuiz"
+    lvt-key="z"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleShowResolved"
     lvt-key="r"
     lvt-mod:skip-when-typing
@@ -239,6 +243,8 @@
             <span class="menu-meta">Light →</span>
           </button>
         </form>
+        
+        
         
         
         
@@ -445,6 +451,7 @@
       <span class="menu-label">View raw source</span>
     </button>
   </form>
+  
   
   
   
@@ -727,6 +734,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
+    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Comprehension quiz</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>

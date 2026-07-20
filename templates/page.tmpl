@@ -111,7 +111,9 @@
              only one renders at a time, and both carry a data-key the server
              parses to a source line (L<old>-<new> / MB-<start>-<end>). */}}
       data-lvt-viewport-items=".line, .md-block">
-{{if .ShowAllComments}}
+{{if .ShowQuiz}}
+{{template "quizView" $}}
+{{else if .ShowAllComments}}
 {{template "allComments" $}}
 {{else}}
 {{with .CurrentDiff}}

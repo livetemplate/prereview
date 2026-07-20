@@ -63,6 +63,7 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"t"}, Display: "t", Action: "toggleTOC", Label: "Toggle table of contents"},
 	{Keys: []string{"Mod+k"}, Display: "⌘/Ctrl + K", Action: "openSearch", Label: "Search files"},
 	{Keys: []string{"a"}, Display: "a", Action: "toggleCommentList", Label: "All comments"},
+	{Keys: []string{"z"}, Display: "z", Action: "toggleQuiz", Label: "Comprehension quiz"},
 	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved comments"},
 	{Keys: []string{"s"}, Display: "s", Action: "toggleSuggestions", Label: "Show / hide suggestions"},
 	{Keys: []string{"q"}, Display: "q", Action: "toggleAgentPause", Label: "Pause / resume the agent queue", StreamOnly: true},

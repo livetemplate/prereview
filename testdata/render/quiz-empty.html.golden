@@ -95,7 +95,7 @@
 <header
   class="bar"
   lvt-fx:url-hash="setURLHash"
-  data-lvt-url-hash="logo.png"
+  data-lvt-url-hash="app.go"
 >
   <form method="POST">
     <button
@@ -130,7 +130,7 @@
   </form>
   
   <div class="title">
-    <span class="title-main"><span class="title-file">logo.png</span></span>
+    <span class="title-main"><span class="title-file">app.go</span></span>
   </div>
   
   <div class="toolbar-inline">
@@ -586,7 +586,7 @@
   <div class="file-row" style="--depth:0">
     <form method="POST" class="file-select-form">
       <input type="hidden" name="path" value="app.go">
-      <button type="submit" name="selectFile" class="file-btn outline contrast" title="app.go"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <button type="submit" name="selectFile" class="file-btn outline contrast is-selected" title="app.go"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
         <span class="file-label"><span class="file-name">app</span><span class="file-ext">.go</span></span>
         <span class="file-meta"><small class="diff-stats"><span class="add">+3</span><span class="del">-1</span></small></span>
       </button>
@@ -620,66 +620,28 @@
       lvt-fx:viewport-report="reportViewport"
       data-lvt-viewport-items=".line, .md-block">
 
-
-<article>
-  <header class="file-head"><span class="file-head-name" title="logo.png"><strong class="fh-base">logo.png</strong> <small>file added</small></span>
-    
-    <span class="file-head-actions">
-    
-    
-    
-    
-    <form method="POST" class="file-head-comment">
+<section class="quiz">
+  <header class="quiz-head">
+    <strong>Comprehension quiz</strong>
+    <form method="POST" style="margin:0">
       <button
         type="submit"
-        name="openFileComment"
-        class="contrast"
-        title="Add a comment about the whole file"
-        aria-label="Comment on file"
-      ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-    d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"
-    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"
-  /></svg><span class="file-head-comment-label">Comment on file <kbd class="kbd-hint" aria-hidden="true">c</kbd></span></button>
+        name="toggleQuiz"
+        class="outline contrast"
+        title="Return to the file you were viewing"
+      >Back</button>
     </form>
-    
-    
-    
-    
-    
-    </span>
   </header>
   
+  <div class="empty quiz-empty">
+    <p>No quiz for this file yet.</p>
+    <p><small>Use <strong>Quiz me</strong> in the file header to ask the agent for one.</small></p>
+    <form method="POST">
+      <button type="submit" name="toggleQuiz" class="outline contrast">Back to the file</button>
+    </form>
+  </div>
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  <form method="POST" class="region-toggle">
-  <button
-    type="submit"
-    name="toggleRegionSelect"
-    class="outline secondary"
-    aria-pressed="false"
-  >▭ Select a region to comment</button>
-</form><small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small><div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-logo.png">
-    <img
-      src="/logo.png"
-      alt="logo.png"
-      style="user-select:none;-webkit-user-select:none;"
-    >
-    
-    
-  </div></div>
-  
-  
-</article>
+</section>
 
 
 

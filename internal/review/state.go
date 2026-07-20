@@ -316,6 +316,19 @@ type PrereviewState struct {
 	// back in the diff view.
 	ShowAllComments bool `json:"show_all_comments"`
 
+	// ShowQuiz toggles the #191 comprehension-quiz view for the selected file
+	// (replaces the diff viewer, like ShowAllComments). Not persisted, and reset
+	// by every navigation action for the same reason: a view that survives a jump
+	// to another file would strand the reviewer somewhere they didn't ask to be.
+	ShowQuiz bool `json:"show_quiz"`
+
+	// Quizzes are the agent-written comprehension quizzes (.prereview/quiz.jsonl),
+	// and QuizAnswers the reviewer's responses keyed "<quizID>\x00<questionID>".
+	// Neither is persisted — the files are the source of truth, re-read every
+	// Mount and on each watcher tick, exactly like Comments and Suggestions.
+	Quizzes     []Quiz                `json:"quizzes"`
+	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
+
 	// ScrollToCommentID, when non-empty for one render, drives the
 	// `lvt-fx:scroll="into-view"` directive on the matching inline-comment.
 	// Set by JumpToComment; the framework's one-shot guard

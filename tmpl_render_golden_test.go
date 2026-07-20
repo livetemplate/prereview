@@ -334,6 +334,38 @@ func renderFixtures() []renderFixture {
 		{ID: "c1", File: "app.go", Body: "fix this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
 	}
 
+	// quiz view (#191) — one question of each interesting kind: answered-correct,
+	// unanswered, an UNGROUNDED anchor (cited a line the diff doesn't have), and an
+	// anchorless `decision`. Those last two render differently on purpose and must
+	// stay visually distinguishable, so both are pinned here.
+	quiz := goBase()
+	quiz.ShowQuiz = true
+	quiz.Quizzes = []review.Quiz{{
+		ID: "z1", File: "app.go",
+		Questions: []review.Question{
+			{ID: "q1", Probe: review.ProbeConsequence, Prompt: "What breaks?",
+				Options: []string{"nothing", "the write"}, Answer: 1, Why: "it is a buffer",
+				FromLine: 2, ToLine: 2, Side: "new", AnchorStatus: "ok"},
+			{ID: "q2", Probe: review.ProbeRationale, Prompt: "Why this way?",
+				Options: []string{"speed", "clarity"}, Answer: 1, Why: "reads better",
+				FromLine: 3, ToLine: 3, Side: "new", AnchorStatus: "ok"},
+			{ID: "q3", Probe: review.ProbeLocalization, Prompt: "Where does it live?",
+				Options: []string{"here", "there"}, Answer: 0, Why: "top of the file",
+				FromLine: 999, ToLine: 999, Side: "new", AnchorStatus: "ungrounded"},
+			{ID: "q4", Probe: review.ProbeDecision, Prompt: "What did you decide unasked?",
+				Options: []string{"a dependency", "skipping a test"}, Answer: 1,
+				Why: "the request never mentioned tests", AnchorStatus: "absent"},
+		},
+	}}
+	quiz.QuizAnswers = map[string]review.QuizAnswer{
+		"z1\x00q1": {QuizID: "z1", QuestionID: "q1", Choice: 1},
+	}
+
+	// quiz view with no quiz for the selected file — the empty state must offer a
+	// way out, or the reviewer is stranded on a near-blank page (issue #27).
+	quizEmpty := goBase()
+	quizEmpty.ShowQuiz = true
+
 	// external (live-site) mode
 	external := review.PrereviewState{
 		RepoPath:     "/repo",
@@ -404,6 +436,8 @@ func renderFixtures() []renderFixture {
 		{"binary-audio", binary("sound.mp3")},
 		{"binary-fallback", binary("archive.zip")},
 		{"all-comments", allComments},
+		{"quiz", quiz},
+		{"quiz-empty", quizEmpty},
 		{"external", external},
 		{"version-view", version},
 		{"agent-mode", agent},

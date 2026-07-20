@@ -2,6 +2,7 @@ package review
 
 import (
 	"bufio"
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -272,6 +273,39 @@ func loadQuizAnswers(path string) map[string]QuizAnswer {
 		out[k] = a
 	}
 	return out
+}
+
+// saveQuizAnswers rewrites the reviewer's answers atomically (temp + rename in
+// the same dir), so the 750ms poller never sees a torn file. A full rewrite is
+// safe here precisely because this file has ONE writer — the server. quiz.jsonl,
+// which the agent appends to, is never rewritten.
+func saveQuizAnswers(path string, answers map[string]QuizAnswer) error {
+	// Sort by key so the file is stable across writes and diffable by hand.
+	keys := make([]string, 0, len(answers))
+	for k := range answers {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	for _, k := range keys {
+		if err := enc.Encode(answers[k]); err != nil {
+			return fmt.Errorf("encode answer %s: %w", k, err)
+		}
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".quiz-answers-*.tmp")
+	if err != nil {
+		return fmt.Errorf("temp file: %w", err)
+	}
+	defer os.Remove(tmp.Name()) // no-op once the rename succeeds
+	if _, err := tmp.Write(buf.Bytes()); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close: %w", err)
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // ValidateQuiz enforces the STRUCTURAL half of the question contract. It lives

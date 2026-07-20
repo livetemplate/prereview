@@ -1,0 +1,77 @@
+{{define "quizView" -}}
+<section class="quiz">
+  <header class="quiz-head">
+    <strong>Comprehension quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</strong>
+    <form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleQuiz"
+        class="outline contrast"
+        title="Return to the file you were viewing"
+      >Back</button>
+    </form>
+  </header>
+  {{if $.HasQuiz}}
+  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — answer before you accept, to check you actually read it</small></p>
+  <ol class="quiz-list">
+    {{range $.QuizItems}}
+    <li class="quiz-q{{if .Answered}} is-answered{{end}}" data-key="{{.ID}}">
+      <div class="quiz-q-head">
+        <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>
+        {{if .Jumpable}}
+        <form method="POST" style="margin:0">
+          <input type="hidden" name="line" value="{{.FromLine}}">
+          <input type="hidden" name="side" value="{{.Side}}">
+          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">{{.AnchorLabel}}</button>
+        </form>
+        {{else if .Ungrounded}}
+        <span class="quiz-ungrounded" title="The quiz cited {{.AnchorLabel}}, but that line is not in this diff — treat the question with suspicion">⚠ cited {{.AnchorLabel}}, not in this diff</span>
+        {{else}}
+        <span class="quiz-absent" title="This question is about something the change does NOT contain, so there is no line to jump to">about something absent</span>
+        {{end}}
+      </div>
+      <p class="quiz-prompt">{{.Prompt}}</p>
+      <ul class="quiz-options">
+        {{$item := .}}
+        {{range $i, $opt := .Options}}
+        <li>
+          {{if $item.Answered}}
+          <div class="quiz-option{{if eq $i $item.Answer}} is-correct{{end}}{{if and (eq $i $item.Choice) (ne $i $item.Answer)}} is-wrong{{end}}">
+            <span class="quiz-mark">{{if eq $i $item.Answer}}✓{{else if eq $i $item.Choice}}✗{{else}} {{end}}</span>{{$opt}}
+          </div>
+          {{else}}
+          <form method="POST" style="margin:0">
+            <input type="hidden" name="quizId" value="{{$.CurrentQuiz.ID}}">
+            <input type="hidden" name="questionId" value="{{$item.ID}}">
+            <input type="hidden" name="choice" value="{{$i}}">
+            <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button>
+          </form>
+          {{end}}
+        </li>
+        {{end}}
+      </ul>
+      {{if .Answered}}
+      <p class="quiz-why{{if .Correct}} is-correct{{else}} is-wrong{{end}}"><small>{{.Why}}</small></p>
+      {{end}}
+    </li>
+    {{end}}
+  </ol>
+  <footer class="quiz-foot">
+    {{if $.QuizComplete}}<p class="quiz-done"><strong>{{$.QuizScoreLabel}}</strong> — every question answered.</p>{{end}}
+    {{if gt $.QuizAnsweredCount 0}}
+    <form method="POST" style="margin:0">
+      <button type="submit" name="retakeQuiz" class="outline" title="Clear your answers and take it again">Retake</button>
+    </form>
+    {{end}}
+  </footer>
+  {{else}}
+  <div class="empty quiz-empty">
+    <p>No quiz for this file yet.</p>
+    <p><small>Use <strong>Quiz me</strong> in the file header to ask the agent for one.</small></p>
+    <form method="POST">
+      <button type="submit" name="toggleQuiz" class="outline contrast">Back to the file</button>
+    </form>
+  </div>
+  {{end}}
+</section>
+{{end}}

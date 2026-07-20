@@ -355,6 +355,8 @@
 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
 === iconPalette ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round" /><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg>
+=== iconQuiz ===
+<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 === iconRendered ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
 === iconSearch ===
@@ -501,6 +503,15 @@
     </button>
   </form>
   {{end}}
+  {{if .HasQuiz}}
+  <form method="POST">
+    <button type="submit" name="toggleQuiz" class="menu-item" role="menuitem">
+      <span class="menu-icon">{{template "iconQuiz"}}</span>
+      <span class="menu-label">{{if .ShowQuiz}}Back{{else}}Quiz{{end}}{{with index $.KeyHint "toggleQuiz"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+      <span class="menu-meta">{{.QuizScoreLabel}}</span>
+    </button>
+  </form>
+  {{end}}
   {{if gt .ResolvedCount 0}}
   <form method="POST">
     <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">
@@ -613,7 +624,9 @@
 {{template "fileDrawer" $}}
 
 <main class="viewer" lvt-fx:viewport-report="reportViewport" data-lvt-viewport-items=".line, .md-block">
-{{if .ShowAllComments}}
+{{if .ShowQuiz}}
+{{template "quizView" $}}
+{{else}}{{if .ShowAllComments}}
 {{template "allComments" $}}
 {{else}}
 {{with .CurrentDiff}}
@@ -666,7 +679,7 @@
   </div>
   {{end}}
 {{end}}
-{{end}}
+{{end}}{{end}}
 
 {{template "viewerPrompts" $}}
 </main>
@@ -736,6 +749,8 @@
 
 
 
+
+
 === quitDialog ===
 <dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
     <form method="POST">
@@ -745,6 +760,78 @@
       </fieldset>
     </form>
   </footer></article></dialog>
+=== quizView ===
+<section class="quiz">
+  <header class="quiz-head">
+    <strong>Comprehension quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</strong>
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleQuiz" class="outline contrast" title="Return to the file you were viewing">Back</button>
+    </form>
+  </header>
+  {{if $.HasQuiz}}
+  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — answer before you accept, to check you actually read it</small></p>
+  <ol class="quiz-list">
+    {{range $.QuizItems}}
+    <li class="quiz-q{{if .Answered}} is-answered{{end}}" data-key="{{.ID}}">
+      <div class="quiz-q-head">
+        <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>
+        {{if .Jumpable}}
+        <form method="POST" style="margin:0">
+          <input type="hidden" name="line" value="{{.FromLine}}">
+          <input type="hidden" name="side" value="{{.Side}}">
+          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">{{.AnchorLabel}}</button>
+        </form>
+        {{else}}{{if .Ungrounded}}
+        <span class="quiz-ungrounded" title="The quiz cited {{.AnchorLabel}}, but that line is not in this diff — treat the question with suspicion">⚠ cited {{.AnchorLabel}}, not in this diff</span>
+        {{else}}
+        <span class="quiz-absent" title="This question is about something the change does NOT contain, so there is no line to jump to">about something absent</span>
+        {{end}}{{end}}
+      </div>
+      <p class="quiz-prompt">{{.Prompt}}</p>
+      <ul class="quiz-options">
+        {{$item := .}}
+        {{range $i, $opt := .Options}}
+        <li>
+          {{if $item.Answered}}
+          <div class="quiz-option{{if eq $i $item.Answer}} is-correct{{end}}{{if and (eq $i $item.Choice) (ne $i $item.Answer)}} is-wrong{{end}}">
+            <span class="quiz-mark">{{if eq $i $item.Answer}}✓{{else}}{{if eq $i $item.Choice}}✗{{else}} {{end}}{{end}}</span>{{$opt}}
+          </div>
+          {{else}}
+          <form method="POST" style="margin:0">
+            <input type="hidden" name="quizId" value="{{$.CurrentQuiz.ID}}">
+            <input type="hidden" name="questionId" value="{{$item.ID}}">
+            <input type="hidden" name="choice" value="{{$i}}">
+            <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button>
+          </form>
+          {{end}}
+        </li>
+        {{end}}
+      </ul>
+      {{if .Answered}}
+      <p class="quiz-why{{if .Correct}} is-correct{{else}} is-wrong{{end}}"><small>{{.Why}}</small></p>
+      {{end}}
+    </li>
+    {{end}}
+  </ol>
+  <footer class="quiz-foot">
+    {{if $.QuizComplete}}<p class="quiz-done"><strong>{{$.QuizScoreLabel}}</strong> — every question answered.</p>{{end}}
+    {{if gt $.QuizAnsweredCount 0}}
+    <form method="POST" style="margin:0">
+      <button type="submit" name="retakeQuiz" class="outline" title="Clear your answers and take it again">Retake</button>
+    </form>
+    {{end}}
+  </footer>
+  {{else}}
+  <div class="empty quiz-empty">
+    <p>No quiz for this file yet.</p>
+    <p><small>Use <strong>Quiz me</strong> in the file header to ask the agent for one.</small></p>
+    <form method="POST">
+      <button type="submit" name="toggleQuiz" class="outline contrast">Back to the file</button>
+    </form>
+  </div>
+  {{end}}
+</section>
+
 === regionToggle ===
 <form method="POST" class="region-toggle">
   <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
@@ -987,6 +1074,16 @@
             <span class="menu-icon">{{template "iconComments"}}</span>
             <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
             <span class="menu-meta">{{.CommentCount}}</span>
+          </button>
+        </form>
+        {{end}}
+        
+        {{if .HasQuiz}}
+        <form method="POST">
+          <button type="submit" name="toggleQuiz" class="menu-item{{if .ShowQuiz}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{template "iconQuiz"}}</span>
+            <span class="menu-label">{{if .ShowQuiz}}Back{{else}}Quiz{{end}}{{with index $.KeyHint "toggleQuiz"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.QuizScoreLabel}}</span>
           </button>
         </form>
         {{end}}

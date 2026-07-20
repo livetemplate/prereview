@@ -371,6 +371,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// overlay dir) for the file-header picker. Cheap; refreshed each connect so a
 	// user's edits to their prompt files show without a relaunch.
 	state.Prompts = LoadPrompts(c.PromptsDir)
+	c.applyQuiz(&state)
 
 	// AgentMode is mirror-only: refresh from the controller every connect so a
 	// binary launched with --agent renders the right button even after a

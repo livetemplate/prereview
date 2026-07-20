@@ -61,7 +61,7 @@ var templateOrder = []string{
 	// one file per UI component (define-only; parse order among them is irrelevant)
 	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
 	"toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl",
-	"filedrawer.tmpl", "allcomments.tmpl",
+	"filedrawer.tmpl", "allcomments.tmpl", "quiz.tmpl",
 	// the {{with .CurrentDiff}} file-view sub-views
 	"fileheader.tmpl", "binaryview.tmpl", "htmlview.tmpl", "markdownview.tmpl", "diffview.tmpl",
 	// shared comment/region partials + SVG icons

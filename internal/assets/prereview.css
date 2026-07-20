@@ -3265,3 +3265,75 @@ main.viewer { overscroll-behavior: contain; }
 }
 .app-footer a { color: inherit; text-decoration: underline; }
 .app-footer a:hover { color: var(--pico-primary); }
+
+/* ── #191 comprehension quiz ────────────────────────────────────────────────
+   Same shell as the all-comments overview (sticky head, flex column so the
+   empty state can centre), so the two full-viewer views feel like siblings.
+   Colours come from the semantic tokens, never literals, so the quiz
+   re-skins with every scheme x mode like everything else. */
+.quiz { padding: 0.5rem; }
+main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
+.quiz .quiz-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
+  margin-bottom: 0.5rem; position: sticky; top: 0;
+  background: var(--pico-card-background-color); z-index: 5;
+}
+.quiz .quiz-head button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.quiz .quiz-score { color: var(--accent); font-variant-numeric: tabular-nums; }
+.quiz .quiz-sub { margin: 0 0.5rem 0.75rem; color: var(--pico-muted-color); }
+/* list-style must be reset on the ITEMS too, not just the list: the options are
+   a <ul> nested inside the questions <ol>, and Pico re-asserts a marker on the
+   nested level, which paints a stray square left of every option. The DOM tests
+   can't see this — only a screenshot can. */
+.quiz .quiz-list, .quiz .quiz-list > li,
+.quiz .quiz-options, .quiz .quiz-options > li { list-style: none; }
+.quiz .quiz-list { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.quiz .quiz-q {
+  margin: 0; padding: 0.7rem; border: 1px solid var(--pr-comment-bd);
+  border-radius: var(--radius-sm); background: var(--pr-comment-bg);
+}
+.quiz .quiz-q-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.quiz .quiz-probe {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+}
+/* The `decision` probe is the one that surfaces choices the reviewer never
+   asked for, so it is visually louder than the four comprehension probes. */
+.quiz .quiz-probe-decision { background: color-mix(in srgb, var(--accent) 34%, transparent); font-weight: 600; }
+.quiz .quiz-jump {
+  margin: 0; padding: 0.1rem 0.45rem; font-size: 0.75rem; min-height: 0;
+  background: transparent; border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--radius-sm); color: var(--accent); font-variant-numeric: tabular-nums;
+}
+/* An UNGROUNDED question cited a line that isn't in the diff — a hallucinated
+   anchor. It must read as a warning, and must never look like the neutral
+   "about something absent" marker, which is a legitimate anchorless state. */
+.quiz .quiz-ungrounded { font-size: 0.75rem; color: var(--pr-del); }
+.quiz .quiz-absent { font-size: 0.75rem; color: var(--pico-muted-color); font-style: italic; }
+.quiz .quiz-prompt { margin: 0 0 0.6rem; }
+.quiz .quiz-options { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.quiz .quiz-option {
+  display: block; width: 100%; text-align: left; margin: 0;
+  padding: 0.45rem 0.6rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--pico-muted-border-color);
+  background: var(--surface); color: inherit; font-size: 0.9rem; min-height: 0;
+}
+.quiz .quiz-option-btn { cursor: pointer; }
+.quiz .quiz-option-btn:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.quiz .quiz-option.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 12%, var(--surface)); }
+.quiz .quiz-option.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 12%, var(--surface)); }
+.quiz .quiz-mark { display: inline-block; width: 1.1em; font-weight: 700; }
+.quiz .quiz-why { margin: 0.55rem 0 0; padding-left: 0.6rem; border-left: 2px solid var(--pico-muted-border-color); color: var(--pico-muted-color); }
+.quiz .quiz-why.is-correct { border-left-color: var(--pr-add); }
+.quiz .quiz-why.is-wrong { border-left-color: var(--pr-del); }
+.quiz .quiz-foot { display: flex; align-items: center; gap: 0.8rem; margin: 1rem 0.5rem 0.5rem; }
+.quiz .quiz-foot button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.quiz .quiz-done { margin: 0; }
+.quiz .quiz-empty {
+  flex: 1; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; gap: 1rem;
+  text-align: center; color: var(--pico-muted-color); padding: 2rem;
+}
+.quiz .quiz-empty p { margin: 0; }
