@@ -756,3 +756,55 @@ func TestE2E_QuizNavigatorUnanchoredSelectionDoesNotStick(t *testing.T) {
 			"unanchored one; it stayed on badge %q — the highlight is pinned, not following", after)
 	}
 }
+
+// Tapping a question's breadcrumb EXPANDS it if collapsed, not just scrolls.
+//
+// Reported together: "collapsed badges are not visible. clicking breadcrumbs on
+// top doesn't expand the collapsed question." Both are one flow — you collapse a
+// question, its gutter badge is small (and for the file-head question, occluded
+// by the sticky navigator), so the reliable way back is the breadcrumb, which
+// lists every question and is always on screen. Before this it only scrolled,
+// landing you on a hidden card.
+func TestE2E_BreadcrumbExpandsCollapsedQuestion(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 390, 844, "--agent")
+	p.waitReadyAt(390, 844)
+	p.clickFile("edited.go")
+	submitQuiz(t, p, quizJSON)
+	waitForQuizEntry(t, p)
+
+	// q4 is the kind=file question; q3 (ungrounded) also renders at the head, so
+	// target q4 specifically rather than "the head card".
+	headCard := `.file-head-cards .quiz-card[data-key="quiz-q4"]`
+	if n := evalInt(t, p, `document.querySelectorAll('`+headCard+`').length`); n != 1 {
+		t.Fatalf("expected the kind=file question at the head, got %d", n)
+	}
+	visible := func() bool {
+		return evalInt(t, p, `(()=>{const c=document.querySelector('`+headCard+`'); return c&&c.offsetParent!==null?1:0})()`) == 1
+	}
+	if !visible() {
+		t.Fatal("the file-head question should start visible")
+	}
+
+	// Collapse it via its badge.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.file-head-marks .line-marks').click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("collapse: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if visible() {
+		t.Fatal("clicking the badge must collapse the file-head question")
+	}
+
+	// Tap q4's breadcrumb. Its number is its position in the strip; find it by the
+	// hidden questionId the badge's form carries, rather than assuming an index.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(()=>{const f=[...document.querySelectorAll('.quiz-nav-dots form')].find(f=>f.querySelector('input[name=questionId]').value==='q4'); if(f) f.querySelector('.quiz-nav-dot').click();})()`, nil),
+		chromedp.Sleep(500*time.Millisecond),
+	); err != nil {
+		t.Fatalf("tap breadcrumb: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if !visible() {
+		t.Errorf("tapping a collapsed question's breadcrumb must EXPAND it, not just scroll\nstderr: %s", p.stderr.String())
+	}
+}
