@@ -319,3 +319,34 @@ func TestQuizResults_NilWhenNoQuizzes(t *testing.T) {
 		t.Errorf("no quizzes must yield nil so the wire format is unchanged, got %v", got)
 	}
 }
+
+// The built-in prompt's body becomes the REQUEST COMMENT, which renders in full
+// in the file view. An early version ran to ~40 lines and buried the diff behind
+// a wall of instructions on a phone — the reviewer opened the file and saw the
+// prompt, not the code.
+//
+// The detailed contract belongs in the skill (SKILL.md / clients/body.md), which
+// reaches every agent out of band; the comment only needs the essentials. This
+// caps the body so that regression can't creep back silently.
+func TestBuiltinQuizPrompt_StaysShortEnoughForTheQueue(t *testing.T) {
+	var body string
+	for _, p := range LoadQuizPrompts("") {
+		if p.Slug == "comprehension" {
+			body = p.Body
+		}
+	}
+	if body == "" {
+		t.Fatal("the built-in comprehension prompt must ship")
+	}
+	if n := len(strings.Split(body, "\n")); n > 16 {
+		t.Errorf("the request comment renders in full in the file view, so the built-in\n"+
+			"prompt body must stay short; got %d lines. Put detail in the skill instead.", n)
+	}
+	// The two instructions that stop the agent doing the wrong thing must survive
+	// any shortening — without them a quiz request reads like a suggestions prompt.
+	for _, must := range []string{"prereview quiz", "prereview suggest", "decision"} {
+		if !strings.Contains(body, must) {
+			t.Errorf("the body must still mention %q, or the agent can't tell what to do", must)
+		}
+	}
+}
