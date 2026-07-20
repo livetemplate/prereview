@@ -335,6 +335,16 @@ type PrereviewState struct {
 	Quizzes     []Quiz                `json:"quizzes"`
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
 
+	// QuizRequestedFile is the file a "Quiz me" request was just sent for, so the
+	// control can show "Quiz requested…" instead of inviting a second tap. Cleared
+	// as soon as a quiz for that file arrives (applyQuiz).
+	//
+	// It exists because the first version gave NO feedback: the request saved a
+	// comment, nothing visibly changed, and a real reviewer on a phone tapped again
+	// and queued a duplicate. A UI hint, deliberately not persisted — worst case a
+	// reconnect re-offers the button, which is merely the old behaviour.
+	QuizRequestedFile string `json:"quiz_requested_file"`
+
 	// ScrollToCommentID, when non-empty for one render, drives the
 	// `lvt-fx:scroll="into-view"` directive on the matching inline-comment.
 	// Set by JumpToComment; the framework's one-shot guard

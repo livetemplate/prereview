@@ -314,3 +314,53 @@ func TestE2E_QuizMeRequestsAQuiz(t *testing.T) {
 			"agent treats a quiz request like a prompt and proposes edits; got:\n%s", body)
 	}
 }
+
+// Reported from a real phone: tapping "Quiz me" changed nothing visible, so the
+// reviewer tapped again and queued a DUPLICATE request. Saving the comment is
+// silent by nature — on a narrow viewport the queue is behind a menu — so the
+// absence of feedback read as "it didn't work".
+//
+// Two things must now be true: the tap is confirmed, and a second tap cannot
+// queue a duplicate while the first is unanswered.
+func TestE2E_QuizMeConfirmsAndBlocksDoubleTap(t *testing.T) {
+	// A phone-sized viewport, because that is where this was found.
+	p := bootChromeAgainstPrereview(t, 390, 844, "--agent")
+	p.waitReadyAt(390, 844)
+	p.clickFile("edited.go")
+
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name='requestQuiz']`, chromedp.ByQuery),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("tap Quiz me: %v\nstderr: %s", err, p.stderr.String())
+	}
+
+	// 1. The tap is acknowledged.
+	if n := evalInt(t, p, `document.querySelectorAll('.toast').length`); n == 0 {
+		t.Error("tapping Quiz me must confirm the request — silence is what caused the double-tap")
+	}
+
+	// 2. The control no longer invites a second tap while the request is pending.
+	if n := evalInt(t, p, `document.querySelectorAll("button[name='requestQuiz']").length`); n != 0 {
+		t.Errorf("while a request is unanswered the button must be replaced by a pending\n"+
+			"state, so a second tap cannot queue a duplicate; found %d tappable button(s)", n)
+	}
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-trigger.is-pending').length`); n != 1 {
+		t.Errorf("expected the pending marker to be shown, got %d", n)
+	}
+
+	// Exactly one request reached the queue.
+	if rows := p.readCSV(); len(rows) != 2 { // header + 1
+		t.Fatalf("exactly one quiz request must be queued, got %d row(s)", len(rows)-1)
+	}
+
+	// 3. Once the agent answers, the control comes back so another quiz can be asked.
+	submitQuiz(t, p, quizJSON)
+	for i := 0; i < 60; i++ {
+		if evalInt(t, p, `document.querySelectorAll("button[name='requestQuiz']").length`) > 0 {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("after the quiz arrives the control must be tappable again\nstderr: %s", p.stderr.String())
+}

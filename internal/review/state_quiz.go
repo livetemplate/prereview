@@ -150,3 +150,10 @@ func (s PrereviewState) QuizResults() []StreamQuiz {
 	}
 	return out
 }
+
+// QuizPending reports that a "Quiz me" request for the selected file is awaiting
+// an answer, so the control shows a disabled "Quiz requested…" rather than
+// inviting a second tap that would queue a duplicate.
+func (s PrereviewState) QuizPending() bool {
+	return s.QuizRequestedFile != "" && s.QuizRequestedFile == s.SelectedFile && !s.HasQuiz()
+}

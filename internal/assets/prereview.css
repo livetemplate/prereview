@@ -3342,3 +3342,9 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
   text-align: center; color: var(--pico-muted-color); padding: 2rem;
 }
 .quiz .quiz-empty p { margin: 0; }
+
+/* "Quiz requested…" — the control while a request is queued. Not a button: there
+   is nothing useful a second tap could do, and the first version's silence is
+   exactly what made a real reviewer tap twice and queue a duplicate. */
+.quiz-trigger.is-pending { opacity: 0.6; cursor: default; }
+.quiz-trigger.is-pending svg { color: var(--pico-muted-color); }

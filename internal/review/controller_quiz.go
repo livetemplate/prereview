@@ -33,6 +33,11 @@ func (c *PrereviewController) quizAnswersPath() string { return QuizAnswersPath(
 func (c *PrereviewController) applyQuiz(state *PrereviewState) {
 	state.Quizzes = loadQuizzes(c.quizPath())
 	state.QuizAnswers = loadQuizAnswers(c.quizAnswersPath())
+	// The request has been answered — stop showing "Quiz requested…" and let the
+	// control invite a fresh one again.
+	if state.QuizRequestedFile != "" && quizForFile(state.Quizzes, state.QuizRequestedFile) {
+		state.QuizRequestedFile = ""
+	}
 	c.groundQuizzes(state)
 }
 
@@ -117,7 +122,26 @@ func (c *PrereviewController) RequestQuiz(state PrereviewState, ctx *livetemplat
 	}
 	resetToFileComment(&state)
 	state.DraftBody = ""
-	return c.addFileLevelComment(state, body)
+	state, err := c.addFileLevelComment(state, body)
+	if err != nil {
+		return state, err
+	}
+	// Say so. Saving the comment changes nothing the reviewer can see — especially
+	// on a phone, where the queue is behind a menu — so without this the only
+	// feedback is silence, and silence reads as "it didn't work".
+	state.QuizRequestedFile = state.SelectedFile
+	state.Flash = "Quiz requested — the agent will answer shortly"
+	return state, nil
+}
+
+// quizForFile reports whether any quiz targets file.
+func quizForFile(quizzes []Quiz, file string) bool {
+	for _, q := range quizzes {
+		if q.File == file {
+			return true
+		}
+	}
+	return false
 }
 
 // quizPromptBody picks the requested prompt's body, falling back to the first

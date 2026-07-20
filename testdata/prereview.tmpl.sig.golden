@@ -281,7 +281,9 @@
     {{end}}
     
     {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.QuizPrompts}}
-    {{if eq (len $.QuizPrompts) 1}}
+    {{if $.QuizPending}}
+    <span class="quiz-trigger is-pending" title="The request is queued — the agent will answer shortly">{{template "iconQuiz"}}<span class="quiz-trigger-label">Quiz requested…</span></span>
+    {{else}}{{if eq (len $.QuizPrompts) 1}}
     <form method="POST" style="margin:0"><button type="submit" name="requestQuiz" class="quiz-trigger" title="Ask the agent for a comprehension quiz about this diff">{{template "iconQuiz"}}<span class="quiz-trigger-label">Quiz me</span></button></form>
     {{else}}
     <div class="tb-dropdown prompts-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
@@ -292,7 +294,7 @@
         {{end}}
       </div>
     </div>
-    {{end}}
+    {{end}}{{end}}
     {{end}}
     
     {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
