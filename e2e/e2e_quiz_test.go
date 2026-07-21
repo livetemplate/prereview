@@ -674,14 +674,32 @@ func TestE2E_FileHeadAnnotationsCollapse(t *testing.T) {
 	submitQuiz(t, p, quizJSON)
 	waitForQuizEntry(t, p)
 
-	// The head badge exists, counts what is there, and sits in the same right-gutter
-	// container a diff row uses — as a plain flex child it rendered on the LEFT.
-	if n := evalInt(t, p, `document.querySelectorAll('.file-head-marks > .line-margin > .line-marks').length`); n != 1 {
-		t.Fatalf("the file-head badge must live in the .line-margin right gutter, like a diff row's, got %d", n)
+	// The head badge exists, counts what is there, and is a right-aligned in-flow row
+	// above the cards — NOT the diff row's absolute gutter badge, which collapsed to
+	// zero height and hid under the sticky nav when the group was folded.
+	if n := evalInt(t, p, `document.querySelectorAll('.file-head-marks > .file-head-badge-row > .line-marks').length`); n != 1 {
+		t.Fatalf("the file-head badge must be an in-flow header row, got %d", n)
 	}
-	// It must actually be to the RIGHT of the cards it controls.
-	if side := evalStr(t, p, `(()=>{const b=document.querySelector('.file-head-marks .line-marks'), c=document.querySelector('.file-head-cards'); if(!b||!c) return "missing"; return b.getBoundingClientRect().left > c.getBoundingClientRect().left ? "right" : "left";})()`); side != "right" {
-		t.Errorf("the file-head badge must sit to the right of its cards, was on the %s", side)
+	if side := evalStr(t, p, `(()=>{const b=document.querySelector('.file-head-marks .line-marks'), c=document.querySelector('.file-head-cards .quiz-card'); if(!b||!c) return "missing"; return b.getBoundingClientRect().right >= c.getBoundingClientRect().right - 40 ? "right" : "left";})()`); side != "right" {
+		t.Errorf("the file-head badge must be right-aligned, was %s", side)
+	}
+	// And it must STAY visible when the group is collapsed — the whole point of the
+	// in-flow row. An absolute badge pinned to the article top vanished under the nav.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.file-head-marks .line-marks').click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("collapse: %v\nstderr: %s", err, p.stderr.String())
+	}
+	if v := evalInt(t, p, `(()=>{const b=document.querySelector('.file-head-marks .line-marks'); if(!b||b.offsetParent===null) return 0; const r=b.getBoundingClientRect(); return r.width>0 && r.height>0 ? 1 : 0})()`); v != 1 {
+		t.Error("the file-head badge must stay laid out when the group is collapsed, so the toggle back is reachable")
+	}
+	// Expand again so the fold/unfold flow below starts from a known open state.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('.file-head-marks .line-marks').click()`, nil),
+		chromedp.Sleep(400*time.Millisecond),
+	); err != nil {
+		t.Fatalf("re-expand: %v\nstderr: %s", err, p.stderr.String())
 	}
 	// It is the SAME control the diff rows use — not a quiz-specific one.
 	if n := evalInt(t, p, `document.querySelectorAll(".file-head-marks button[name='toggleQuizCard'], .quiz-card button[name='toggleQuizCard']").length`); n != 0 {

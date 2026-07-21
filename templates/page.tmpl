@@ -160,11 +160,15 @@
   <div class="file-head-marks{{if index $.RowToggled "file"}} row-toggled{{end}}">
     {{/* Only the BADGE is conditional; the wrapper always renders because it also
          holds the area composer, and gating the container on "are there
-         annotations yet" would hide the control that CREATES them. The badge sits
-         in the same .line-margin right-gutter container a diff row uses — as a
-         left flex child it landed on the wrong side of the cards. */}}
+         annotations yet" would hide the control that CREATES them.
+
+         The badge is an IN-FLOW header row, right-aligned, NOT the diff row's
+         absolute gutter badge. A diff row aligns its badge to a code line; the
+         file head has no line, so an absolute badge collapsed to zero height and
+         hid under the sticky navigator when the group was folded. An in-flow row
+         keeps real height, so the toggle stays visible and reachable collapsed. */}}
     {{if gt $.FileHeadAnnotationCount 0}}
-    <span class="line-margin">
+    <div class="file-head-badge-row">
       <button type="button" class="line-marks"
               lvt-on:click="toggleRow"
               data-row="file"
@@ -172,7 +176,7 @@
               data-lvt-target="closest:.file-head-marks"
               aria-label="Show or hide this file's annotations"
               title="Show/hide this file's annotations"><span class="line-mark{{if $.FileHeadHasOpen}} is-open{{else}} is-done{{end}}" aria-hidden="true">{{$.FileHeadAnnotationCount}}</span></button>
-    </span>
+    </div>
     {{end}}
     <div class="file-head-cards">
       {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}

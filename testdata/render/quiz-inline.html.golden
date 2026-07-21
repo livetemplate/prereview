@@ -705,7 +705,7 @@
   <div class="file-head-marks">
     
     
-    <span class="line-margin">
+    <div class="file-head-badge-row">
       <button type="button" class="line-marks"
               lvt-on:click="toggleRow"
               data-row="file"
@@ -713,7 +713,7 @@
               data-lvt-target="closest:.file-head-marks"
               aria-label="Show or hide this file's annotations"
               title="Show/hide this file's annotations"><span class="line-mark is-open" aria-hidden="true">2</span></button>
-    </span>
+    </div>
     
     <div class="file-head-cards">
       <div class="quiz-card" data-key="quiz-q3">
