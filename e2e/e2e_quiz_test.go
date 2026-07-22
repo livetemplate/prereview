@@ -505,41 +505,20 @@ func TestE2E_QuizNavigator(t *testing.T) {
 		t.Errorf("answering correctly must show on its badge; got %d correct", n)
 	}
 
-	// Tapping a badge targets THAT question's card for scroll. Asserted on the
-	// server-emitted scroll attribute rather than pixel geometry: that attribute is
-	// the durable fact, and the client centres whatever carries it.
+	// The "you are here" highlight is CLIENT-SIDE (lvt-spy toggles lvt-active on the
+	// badge whose card is on screen) — no server round-trip, so it never lags. The
+	// badge is an <a href="#qc-…">, so a tap scrolls to the card natively and the
+	// spy lights that badge. (Scroll-following is exercised thoroughly in
+	// TestE2E_QuizNavigatorFollowsScroll; here we just confirm a tap lands a
+	// highlight at all.)
 	if err := chromedp.Run(p.ctx,
 		chromedp.Evaluate(`document.querySelectorAll('.quiz-nav-dot')[2].click()`, nil),
-		chromedp.Sleep(600*time.Millisecond),
+		chromedp.Sleep(700*time.Millisecond),
 	); err != nil {
 		t.Fatalf("tap badge 3: %v\nstderr: %s", err, p.stderr.String())
 	}
-	// The colon in the attribute name must be escaped for querySelector; the extra
-	// backslashes survive Go -> JS -> CSS.
-	target := evalStr(t, p, `(()=>{const h=document.querySelector('.quiz-card-head[lvt-fx\\:scroll]'); return h? h.closest('.quiz-card').dataset.key : "none"})()`)
-	if target != "quiz-q3" {
-		t.Errorf("tapping badge 3 must mark question 3's card as the scroll target, got %q", target)
-	}
-
-	// "You are here". Tapping a badge must highlight IT — without this the strip
-	// scrolls you somewhere and then gives no sign of where you landed.
-	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav-dot.is-current').length`); n != 1 {
-		t.Errorf("exactly one badge must be marked current after a jump, got %d", n)
-	}
-	cur := evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.is-current'); return b? b.textContent : "none"})()`)
-	if cur != "3" {
-		t.Errorf("the badge that was tapped must be the highlighted one, got %q", cur)
-	}
-	// The highlight PERSISTS across renders — it is not a one-shot like the scroll.
-	// Answering moves it to the question being worked on rather than losing it.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelector(".quiz-card[data-key='quiz-q2'] .quiz-options li:nth-child(1) button[name='answerQuestion']").click()`, nil),
-		chromedp.Sleep(400*time.Millisecond),
-	); err != nil {
-		t.Fatalf("answer q2: %v\nstderr: %s", err, p.stderr.String())
-	}
-	if cur := evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.is-current'); return b? b.textContent : "none"})()`); cur != "2" {
-		t.Errorf("answering a question must move the highlight to it, got %q", cur)
+	if n := evalInt(t, p, `document.querySelectorAll('.quiz-nav-dot.lvt-active').length`); n < 1 {
+		t.Errorf("after tapping a badge, the spy must light a badge; got %d active", n)
 	}
 
 	// Dismiss puts it away.
@@ -609,13 +588,10 @@ func TestE2E_QuizListsHaveNoStrayMarkers(t *testing.T) {
 	}
 }
 
-// The highlight follows the SCROLL, not just taps. Tapping a badge only tells you
-// where you went; scrolling past a question should light its badge, which is what
-// makes the strip a position indicator rather than a history of clicks.
-//
-// It rides the read-progress viewport reporter that already runs on every scroll
-// — nothing new is reported to the server, and the shared read-progress state is
-// only read, never redefined.
+// The highlight follows the SCROLL, client-side. lvt-spy (the same primitive the
+// TOC uses) toggles lvt-active on the badge whose question card is on screen, with
+// no server round-trip — which is what makes it track without the lag the old
+// server-side version had on a phone.
 func TestE2E_QuizNavigatorFollowsScroll(t *testing.T) {
 	// Reuses the read-progress suite's tall fixture: long.txt is 150 all-new lines,
 	// so only one question can be on screen at a time. The standard fixture's
@@ -628,35 +604,37 @@ func TestE2E_QuizNavigatorFollowsScroll(t *testing.T) {
 	// Questions spread far enough apart that only one can be on screen at a time.
 	submitQuiz(t, p, `{"id":"zz","file":"long.txt","questions":[
 	  {"id":"a","kind":"line","probe":"consequence","prompt":"Q-A","options":["x","y"],"answer":0,"why":"wa","from_line":10,"to_line":10,"side":"new"},
-	  {"id":"b","kind":"line","probe":"rationale","prompt":"Q-B","options":["x","y"],"answer":0,"why":"wb","from_line":100,"to_line":100,"side":"new"},
-	  {"id":"c","kind":"line","probe":"localization","prompt":"Q-C","options":["x","y"],"answer":0,"why":"wc","from_line":140,"to_line":140,"side":"new"}]}`)
+	  {"id":"b","kind":"line","probe":"rationale","prompt":"Q-B","options":["x","y"],"answer":0,"why":"wb","from_line":60,"to_line":60,"side":"new"},
+	  {"id":"c","kind":"line","probe":"localization","prompt":"Q-C","options":["x","y"],"answer":0,"why":"wc","from_line":110,"to_line":110,"side":"new"}]}`)
 	waitForQuizEntry(t, p)
 
 	currentBadge := func() string {
-		return evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.is-current'); return b? b.textContent : "none"})()`)
+		return evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.lvt-active'); return b? b.textContent : "none"})()`)
 	}
+	// A card activates once its TOP scrolls above the spy trigger line, so scroll
+	// each card to the top of the viewport (block:"start") to make it the active
+	// one — matching how a reader scrolling down meets each question in turn.
 	scrollTo := func(key string) string {
 		if err := chromedp.Run(p.ctx,
-			chromedp.Evaluate(`(()=>{const c=document.querySelector(".quiz-card[data-key='`+key+`']"); if(c) c.scrollIntoView({block:'center'});})()`, nil),
-			chromedp.Sleep(1200*time.Millisecond),
+			chromedp.Evaluate(`(()=>{const c=document.querySelector(".quiz-card[data-key='`+key+`']"); if(c) c.scrollIntoView({block:'start'});})()`, nil),
+			chromedp.Sleep(700*time.Millisecond),
 		); err != nil {
 			t.Fatalf("scroll to %s: %v\nstderr: %s", key, err, p.stderr.String())
 		}
 		return currentBadge()
 	}
 
-	first, last := scrollTo("quiz-a"), scrollTo("quiz-c")
-	if first == "none" || last == "none" {
-		t.Fatalf("scrolling a question into view must highlight its badge; got %q then %q\nstderr: %s", first, last, p.stderr.String())
+	// Scrolling down through the questions must advance the highlight, and scrolling
+	// back up must retreat it — a position indicator, not a history of clicks.
+	atA, atB, atC := scrollTo("quiz-a"), scrollTo("quiz-b"), scrollTo("quiz-c")
+	if atA == "none" || atB == "none" || atC == "none" {
+		t.Fatalf("each question scrolled to the top must light a badge; got a=%q b=%q c=%q\nstderr: %s", atA, atB, atC, p.stderr.String())
 	}
-	if first == last {
-		t.Errorf("the highlight must MOVE as different questions come into view; scrolling to\n"+
-			"the first and the last question both reported badge %q — that is click history,\n"+
-			"not position", first)
+	if atA == atB || atB == atC {
+		t.Errorf("the highlight must ADVANCE as each question passes the top; got a=%q b=%q c=%q — that is not tracking position", atA, atB, atC)
 	}
-	// And back again, so it tracks in both directions rather than only advancing.
-	if back := scrollTo("quiz-a"); back != first {
-		t.Errorf("scrolling back must return the highlight to the first question; got %q, expected %q", back, first)
+	if back := scrollTo("quiz-a"); back != atA {
+		t.Errorf("scrolling back up must retreat the highlight to the first question; got %q, expected %q", back, atA)
 	}
 }
 
@@ -735,46 +713,6 @@ func TestE2E_FileHeadAnnotationsCollapse(t *testing.T) {
 	}
 }
 
-// Tapping the badge of a question with NO line — file-level or ungrounded — used
-// to pin the highlight there permanently: the viewport can say nothing about a
-// question that has no position, and it was honoured unconditionally. Scrolling
-// afterwards moved nothing, which reads exactly like the highlight not following
-// the scroll at all.
-func TestE2E_QuizNavigatorUnanchoredSelectionDoesNotStick(t *testing.T) {
-	p := bootChromeAgainstRepo(t, setupLongFileRepo(t), 1200, 800, "--agent")
-	p.waitReady()
-	p.clickFile("long.txt")
-	submitQuiz(t, p, `{"id":"zs","file":"long.txt","questions":[
-	  {"id":"f","kind":"file","probe":"decision","prompt":"Q-FILE","options":["x","y"],"answer":0,"why":"wf"},
-	  {"id":"a","kind":"line","probe":"consequence","prompt":"Q-A","options":["x","y"],"answer":0,"why":"wa","from_line":10,"to_line":10,"side":"new"},
-	  {"id":"b","kind":"line","probe":"rationale","prompt":"Q-B","options":["x","y"],"answer":0,"why":"wb","from_line":130,"to_line":130,"side":"new"}]}`)
-	waitForQuizEntry(t, p)
-
-	current := func() string {
-		return evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.is-current'); return b? b.textContent : "none"})()`)
-	}
-	// Select the FILE-level question (badge 1), which has no line.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelectorAll('.quiz-nav-dot')[0].click()`, nil),
-		chromedp.Sleep(700*time.Millisecond),
-	); err != nil {
-		t.Fatalf("tap: %v\nstderr: %s", err, p.stderr.String())
-	}
-	tapped := current()
-
-	// Now scroll to a line-anchored question. Position must take over.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`(()=>{const c=document.querySelector(".quiz-card[data-key='quiz-b']"); if(c) c.scrollIntoView({block:'center'});})()`, nil),
-		chromedp.Sleep(1400*time.Millisecond),
-	); err != nil {
-		t.Fatalf("scroll: %v\nstderr: %s", err, p.stderr.String())
-	}
-	if after := current(); after == tapped {
-		t.Errorf("scrolling to a line-anchored question must move the highlight off the\n"+
-			"unanchored one; it stayed on badge %q — the highlight is pinned, not following", after)
-	}
-}
-
 // Tapping a question's breadcrumb EXPANDS it if collapsed, not just scrolls.
 //
 // Reported together: "collapsed badges are not visible. clicking breadcrumbs on
@@ -814,15 +752,16 @@ func TestE2E_BreadcrumbExpandsCollapsedQuestion(t *testing.T) {
 		t.Fatal("clicking the badge must collapse the file-head question")
 	}
 
-	// Tap q4's breadcrumb. Its number is its position in the strip; find it by the
-	// hidden questionId the badge's form carries, rather than assuming an index.
+	// Tap q4's breadcrumb (an <a href="#qc-q4">). Native anchor navigation sets the
+	// URL hash, and the :target CSS force-shows the addressed card even though its
+	// row is collapsed — the expand is pure client-side, no server round-trip.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`(()=>{const f=[...document.querySelectorAll('.quiz-nav-dots form')].find(f=>f.querySelector('input[name=questionId]').value==='q4'); if(f) f.querySelector('.quiz-nav-dot').click();})()`, nil),
+		chromedp.Evaluate(`document.querySelector('.quiz-nav-dot[href="#qc-q4"]').click()`, nil),
 		chromedp.Sleep(500*time.Millisecond),
 	); err != nil {
 		t.Fatalf("tap breadcrumb: %v\nstderr: %s", err, p.stderr.String())
 	}
 	if !visible() {
-		t.Errorf("tapping a collapsed question's breadcrumb must EXPAND it, not just scroll\nstderr: %s", p.stderr.String())
+		t.Errorf("tapping a collapsed question's breadcrumb must reveal it (via :target); it stayed hidden\nstderr: %s", p.stderr.String())
 	}
 }

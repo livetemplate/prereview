@@ -647,7 +647,8 @@
       data-lvt-viewport-items=".line, .md-block">
 
 
-<article>
+
+<article lvt-spy=".quiz-card">
   <header class="file-head"><span class="file-head-name" title="app.go"><strong class="fh-base">app.go</strong></span>
     
     <span class="file-head-actions">
@@ -684,13 +685,13 @@
     <span class="quiz-nav-label">1/4 answered · 1 right</span>
     <ul class="quiz-nav-dots">
       
-      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q1"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-correct" title="What breaks?">1</button></form></li>
+      <li><a href="#qc-q1" lvt-spy-link class="quiz-nav-dot is-correct" title="What breaks?">1</a></li>
       
-      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q2"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-open" title="Why this way?">2</button></form></li>
+      <li><a href="#qc-q2" lvt-spy-link class="quiz-nav-dot is-open" title="Why this way?">2</a></li>
       
-      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q3"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-open" title="Where does it live?">3</button></form></li>
+      <li><a href="#qc-q3" lvt-spy-link class="quiz-nav-dot is-open" title="Where does it live?">3</a></li>
       
-      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="q4"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-open" title="What did you decide unasked?">4</button></form></li>
+      <li><a href="#qc-q4" lvt-spy-link class="quiz-nav-dot is-open" title="What did you decide unasked?">4</a></li>
       
     </ul>
     <span class="quiz-nav-actions">
@@ -716,7 +717,7 @@
     </div>
     
     <div class="file-head-cards">
-      <div class="quiz-card" data-key="quiz-q3">
+      <div class="quiz-card" data-key="quiz-q3" id="qc-q3">
   
   <div class="quiz-card-head">
     <span class="quiz-probe quiz-probe-localization">localization</span><span class="quiz-ungrounded" title="This question cites L999, which is not in this diff — treat it with suspicion">⚠ cites L999, not in this diff</span>
@@ -742,7 +743,7 @@
   <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="z1:q3"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
   
 </div>
-<div class="quiz-card" data-key="quiz-q4">
+<div class="quiz-card" data-key="quiz-q4" id="qc-q4">
   
   <div class="quiz-card-head">
     <span class="quiz-probe quiz-probe-decision">decision</span>
@@ -799,7 +800,7 @@
                 title="Show/hide this line's annotations">
           <span class="line-mark is-open" aria-hidden="true">1</span>
         </button>
-      </span><div class="quiz-card" data-key="quiz-q2">
+      </span><div class="quiz-card" data-key="quiz-q2" id="qc-q2">
   
   <div class="quiz-card-head">
     <span class="quiz-probe quiz-probe-rationale">rationale</span>
@@ -851,7 +852,7 @@
                 title="Show/hide this line's annotations">
           <span class="line-mark is-done" aria-hidden="true">1</span>
         </button>
-      </span><div class="quiz-card is-answered" data-key="quiz-q1">
+      </span><div class="quiz-card is-answered" data-key="quiz-q1" id="qc-q1">
   
   <div class="quiz-card-head">
     <span class="quiz-probe quiz-probe-consequence">consequence</span>

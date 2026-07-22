@@ -117,7 +117,11 @@
 {{template "allComments" $}}
 {{else}}
 {{with .CurrentDiff}}
-<article>
+{{/* #191: lvt-spy makes the quiz navigator highlight the on-screen question
+     CLIENT-SIDE (rAF scroll listener toggling lvt-active on the matching
+     lvt-spy-link), the same primitive the TOC uses — no per-scroll server
+     round-trip, which is what made the highlight lag on a phone. */}}
+<article{{if $.HasQuiz}} lvt-spy=".quiz-card"{{end}}>
 {{template "fileHeader" $}}
   {{if $.ViewingVersion}}
   {{/* Read-only banner while viewing a historical version. Commenting is gated
@@ -141,7 +145,7 @@
     <span class="quiz-nav-label">{{$.QuizNavLabel}}</span>
     <ul class="quiz-nav-dots">
       {{range $it := $.QuizItems}}
-      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="{{$it.ID}}"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-{{$it.NavState}}{{if $it.Current}} is-current{{end}}" title="{{$it.Prompt}}">{{$it.Num}}</button></form></li>
+      <li><a href="#qc-{{$it.ID}}" lvt-spy-link class="quiz-nav-dot is-{{$it.NavState}}" title="{{$it.Prompt}}">{{$it.Num}}</a></li>
       {{end}}
     </ul>
     <span class="quiz-nav-actions">

@@ -1,9 +1,6 @@
 package review
 
-import (
-	"fmt"
-	"sort"
-)
+import "fmt"
 
 // state_quiz.go holds the quiz view's read helpers.
 //
@@ -30,14 +27,9 @@ type QuizItem struct {
 	Thread     []ThreadEntry
 	Replying   bool
 	ReplyDraft string
-	// ScrollTo marks the card the navigator just jumped to, for one render.
-	ScrollTo bool
-	// Current marks the question the reviewer is on — the highlighted badge. Unlike
-	// ScrollTo it persists, so the strip keeps showing where you were.
-	Current  bool
-	Answered bool
-	Choice   int // the option the reviewer picked; meaningless unless Answered
-	Correct  bool
+	Answered   bool
+	Choice     int // the option the reviewer picked; meaningless unless Answered
+	Correct    bool
 }
 
 // CurrentQuiz returns the quiz for the selected file, or nil. The agent can
@@ -67,14 +59,11 @@ func (s PrereviewState) QuizItems() []QuizItem {
 	if q == nil {
 		return nil
 	}
-	current := s.currentQuizID()
 	threads := s.Threads()
 	out := make([]QuizItem, 0, len(q.Questions))
 	for i, qu := range q.Questions {
 		tid := QuizThreadID(q.ID, qu.ID)
 		item := QuizItem{Question: qu, QuizID: q.ID, Num: i + 1, ThreadID: tid, Thread: threads[tid]}
-		item.ScrollTo = s.ScrollToQuizID == qu.ID
-		item.Current = current == qu.ID
 		if s.ReplyingID == tid {
 			item.Replying = true
 			item.ReplyDraft = s.ReplyDraft
@@ -309,114 +298,6 @@ func (s PrereviewState) QuizOpenLines() map[string]bool {
 	if len(out) == 0 {
 		return nil
 	}
-	return out
-}
-
-// currentQuizID is the question the navigator highlights.
-//
-// It prefers whatever is ON SCREEN: as the reviewer scrolls the diff, the badge
-// for the question in view lights up, which is the whole point of a navigator —
-// tapping to jump only tells you where you went, not where you are.
-//
-// The viewport bounds come from the read-progress reporter that already runs on
-// every scroll (ReportViewport). Nothing new is reported to the server and the
-// shared read-progress state is only READ here, never redefined — this feature
-// rides an existing signal rather than adding a competing one.
-//
-// The explicit selection is the fallback, for when no question is in view (just
-// after a tap, before the scroll settles, or while reading code between them).
-func (s PrereviewState) currentQuizID() string {
-	top, bottom := s.viewportLines()
-	if top == 0 {
-		return s.SelectedQuizID // no viewport report yet
-	}
-	// A question with no line is NOT positionless: file-level and ungrounded ones
-	// render at the FILE HEAD, so their position is "the top of the file". Treating
-	// them that way keeps one uniform rule instead of a special case — and the
-	// special case was a bug, because honouring an unanchored selection whenever
-	// the viewport "could not speak" pinned the highlight there permanently.
-	headTop := s.firstDiffLine()
-	inView := func(q Question) bool {
-		if !q.LineGrounded() {
-			return headTop > 0 && top <= headTop
-		}
-		return q.FromLine >= top && (bottom == 0 || q.FromLine <= bottom)
-	}
-
-	// Document order: the head questions first, then the line-anchored ones in the
-	// order the reviewer meets them scrolling down.
-	ordered := append(s.headQuestions(), s.quizQuestionsInLineOrder()...)
-
-	// An explicit tap wins while its question is still on screen; scrolling away
-	// hands control back to position. Without the first clause, a short file where
-	// several questions are visible at once would always highlight the topmost, so
-	// tapping badge 3 would light badge 1.
-	for _, q := range ordered {
-		if q.ID == s.SelectedQuizID && inView(q) {
-			return q.ID
-		}
-	}
-	for _, q := range ordered {
-		if inView(q) {
-			return q.ID
-		}
-	}
-	return s.SelectedQuizID
-}
-
-// headQuestions are the ones rendered at the file head — no line anchor, or an
-// anchor that does not resolve.
-func (s PrereviewState) headQuestions() []Question {
-	q := s.CurrentQuiz()
-	if q == nil {
-		return nil
-	}
-	var out []Question
-	for _, qu := range q.Questions {
-		if !qu.LineGrounded() {
-			out = append(out, qu)
-		}
-	}
-	return out
-}
-
-// firstDiffLine is the lowest new-side line number the diff carries — "the top of
-// the file" for deciding whether the head questions are on screen.
-func (s PrereviewState) firstDiffLine() int {
-	if s.CurrentDiff == nil {
-		return 0
-	}
-	for _, l := range s.CurrentDiff.Lines {
-		if l.NewNum > 0 {
-			return l.NewNum
-		}
-	}
-	return 0
-}
-
-// viewportLines is the currently visible line range, 0 when unknown.
-func (s PrereviewState) viewportLines() (top, bottom int) {
-	if s.SelectedFile == "" {
-		return 0, 0
-	}
-	return keyLine(s.LastReadTopKey[s.SelectedFile]), keyLine(s.LastViewBottomKey[s.SelectedFile])
-}
-
-// quizQuestionsInLineOrder are the current quiz's line-anchored questions sorted
-// by the line they sit on — the order the reviewer meets them scrolling down,
-// which is not necessarily the order the agent wrote them.
-func (s PrereviewState) quizQuestionsInLineOrder() []Question {
-	q := s.CurrentQuiz()
-	if q == nil {
-		return nil
-	}
-	out := make([]Question, 0, len(q.Questions))
-	for _, qu := range q.Questions {
-		if qu.LineGrounded() {
-			out = append(out, qu)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].FromLine < out[j].FromLine })
 	return out
 }
 

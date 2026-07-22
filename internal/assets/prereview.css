@@ -1975,7 +1975,7 @@ header.file-head .file-head-comment button svg { display: block; }
    reviewer had just opened (#173). */
 .line-row.row-toggled .quiz-card,
 .md-block.row-toggled .quiz-card,
-.file-head-marks.row-toggled .file-head-cards,
+.file-head-marks.row-toggled .file-head-cards > .quiz-card,
 .line-row.row-toggled .inline-comment:not(.is-resolved),
 .line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
 .md-block.row-toggled .inline-comment:not(.is-resolved),
@@ -3395,12 +3395,24 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .quiz-nav-dot.is-open { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .quiz-nav-dot.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, var(--surface)); color: inherit; }
 .quiz-nav-dot.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 16%, var(--surface)); color: inherit; }
-/* "You are here". A ring rather than a colour change, because the badge's COLOUR
-   already carries answered-right / answered-wrong / open — overloading it would
-   lose that. The ring sits outside the border so it reads on every state. */
-.quiz-nav-dot.is-current {
+/* "You are here". Driven CLIENT-SIDE by the lvt-spy scroll-spy (it toggles
+   lvt-active on the badge whose question card is on screen) — no server
+   round-trip, so it tracks the scroll without lag. A ring rather than a colour
+   change, because the badge's COLOUR already carries right / wrong / open;
+   overloading it would lose that. The ring sits outside the border so it reads on
+   every state. */
+.quiz-nav-dot.lvt-active {
   outline: 2px solid var(--accent); outline-offset: 1px; font-weight: 700;
 }
+.quiz-nav-dot { text-decoration: none; }
+/* Native anchor scroll (href="#qc-…") lands the card at the top of the scroll
+   container, which is under the sticky navigator — so reserve the strip's height
+   plus the sticky toolbar above it, and the tap lands the question in the clear. */
+.quiz-card { scroll-margin-top: 7rem; }
+/* The spy's "active" trigger line: a card counts as the current one once its top
+   passes below the sticky nav (~6rem down), not at viewport top 0 (which is under
+   the nav). */
+article[lvt-spy] { --lvt-spy-margin: 7rem; }
 .quiz-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 .quiz-nav-actions button { margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.72rem; }
 
@@ -3414,3 +3426,14 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    instead of pinning to the article top under the sticky navigator. */
 .file-head-badge-row { display: flex; justify-content: flex-end; margin-bottom: 0.3rem; }
 .file-head-cards > .file-comments { margin: 0; }
+
+/* Tapping a navigator badge is <a href="#qc-…">, so the browser sets that hash.
+   :target then force-shows the addressed card even if its row is collapsed —
+   pure CSS, no server round-trip. That is how "tap a breadcrumb to bring back a
+   collapsed question" works: the hash IS the expand. It overrides the collapse
+   rules above (higher specificity via :target). */
+.line-row.row-toggled .quiz-card:target,
+.md-block.row-toggled .quiz-card:target,
+.file-head-marks.row-toggled .file-head-cards > .quiz-card:target { display: block; }
+/* And give the peeked card a moment of emphasis so the eye lands on it. */
+.quiz-card:target { outline: 2px solid var(--accent); outline-offset: 2px; }

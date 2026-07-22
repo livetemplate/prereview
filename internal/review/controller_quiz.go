@@ -195,12 +195,6 @@ func (c *PrereviewController) AnswerQuestion(state PrereviewState, ctx *livetemp
 	state.QuizAnswers[answerKey(quizID, questionID)] = QuizAnswer{
 		QuizID: quizID, QuestionID: questionID, Choice: choice, At: time.Now().UnixNano(),
 	}
-	// Answering moves "you are here" too, so the highlight follows the question
-	// being worked on rather than only the last one reached via the strip. The
-	// scroll nudge is cleared: the reviewer is already looking at this card, and
-	// re-firing it would yank the page.
-	state.SelectedQuizID = questionID
-	state.ScrollToQuizID = ""
 	if err := saveQuizAnswers(c.quizAnswersPath(), state.QuizAnswers); err != nil {
 		return state, fmt.Errorf("persist quiz answer: %w", err)
 	}
@@ -260,55 +254,6 @@ func findQuestion(quizzes []Quiz, quizID, questionID string) *Question {
 		}
 	}
 	return nil
-}
-
-// JumpToQuestion scrolls a question's card into view from the navigator. The
-// questions live inline in the diff now, so "go to question 4" is a scroll, not a
-// screen change — the reviewer keeps their place in the code.
-func (c *PrereviewController) JumpToQuestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	id := ctx.GetString("questionId")
-	if id == "" {
-		return state, fmt.Errorf("jumpToQuestion: missing questionId")
-	}
-	// Leaving the overview is part of the jump: the card being scrolled to is in
-	// the diff, so staying on the overview screen would scroll nothing.
-	state.ShowQuiz = false
-	state.ScrollToQuizID = id
-	state.SelectedQuizID = id
-	// EXPAND the question's row if it was collapsed. You tapped its badge to GO to
-	// it, so it must be visible when you arrive — otherwise the navigator scrolls
-	// to a hidden card and there is nothing to see. This also makes the navigator
-	// the reliable way to recover a collapsed question: its badge in the gutter is
-	// small and easy to lose, but its number in the strip is always there.
-	c.expandQuestionRow(&state, id)
-	return state, nil
-}
-
-// expandQuestionRow clears any collapse on the row a question renders in, so its
-// card shows. A quiz card is hidden only while its row carries the row-toggled
-// class, which is present when ToggledRows[key] matches the row's default — so
-// dropping that entry restores the card. The key is the file head for an
-// unanchored question, or "<line>-<side>" for a line-anchored one.
-func (c *PrereviewController) expandQuestionRow(state *PrereviewState, id string) {
-	q := state.CurrentQuiz()
-	if q == nil {
-		return
-	}
-	// AnchorStatus is derived (json:"-"), so it may be zero on a fresh handler
-	// state — re-ground so Ungrounded() below is trustworthy, or a hallucinated
-	// question (which renders at the file head) would be mistaken for a line one.
-	c.groundQuizzes(state)
-	key := FileHeadRowKey
-	for _, qu := range q.Questions {
-		if qu.ID != id {
-			continue
-		}
-		if qu.LineGrounded() {
-			key = fmt.Sprintf("%d-%s", qu.EndLine(), qu.Side)
-		}
-		break
-	}
-	delete(state.ToggledRows, key)
 }
 
 // DismissQuizNav puts the navigator away for this session.

@@ -647,7 +647,8 @@
 {{template "allComments" $}}
 {{else}}
 {{with .CurrentDiff}}
-<article>
+
+<article{{if $.HasQuiz}} lvt-spy=".quiz-card"{{end}}>
 {{template "fileHeader" $}}
   {{if $.ViewingVersion}}
   
@@ -663,7 +664,7 @@
     <span class="quiz-nav-label">{{$.QuizNavLabel}}</span>
     <ul class="quiz-nav-dots">
       {{range $it := $.QuizItems}}
-      <li><form method="POST" style="margin:0"><input type="hidden" name="questionId" value="{{$it.ID}}"><button type="submit" name="jumpToQuestion" class="quiz-nav-dot is-{{$it.NavState}}{{if $it.Current}} is-current{{end}}" title="{{$it.Prompt}}">{{$it.Num}}</button></form></li>
+      <li><a href="#qc-{{$it.ID}}" lvt-spy-link class="quiz-nav-dot is-{{$it.NavState}}" title="{{$it.Prompt}}">{{$it.Num}}</a></li>
       {{end}}
     </ul>
     <span class="quiz-nav-actions">
@@ -806,9 +807,9 @@
     </form>
   </footer></article></dialog>
 === quizCard ===
-<div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}">
+<div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
   
-  <div class="quiz-card-head"{{if .ScrollTo}} lvt-fx:scroll="into-view" tabindex="-1"{{end}}>
+  <div class="quiz-card-head">
     <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}
   </div>
   <p class="quiz-prompt">{{.Prompt}}</p>
