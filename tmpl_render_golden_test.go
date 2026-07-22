@@ -334,6 +334,42 @@ func renderFixtures() []renderFixture {
 		{ID: "c1", File: "app.go", Body: "fix this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
 	}
 
+	// quiz view (#191) — one question of each interesting kind: answered-correct,
+	// unanswered, an UNGROUNDED anchor (cited a line the diff doesn't have), and an
+	// anchorless `decision`. Those last two render differently on purpose and must
+	// stay visually distinguishable, so both are pinned here.
+	quiz := goBase()
+	quiz.ShowQuiz = true
+	quiz.Quizzes = quizFixtureQuizzes()
+	quiz.QuizAnswers = map[string]review.QuizAnswer{
+		"z1\x00q1": {QuizID: "z1", QuestionID: "q1", Choice: 1},
+	}
+
+	// the file-header "Quiz me" control, which degrades by library size: ONE
+	// prompt renders a plain one-tap button (the phone case), two or more render a
+	// picker. Both shapes are pinned so the degrade logic can't silently regress.
+	quizBtn := goBase()
+	quizBtn.QuizPrompts = []review.Prompt{{Slug: "comprehension", Title: "Quiz me on this diff", Body: "generate a quiz"}}
+	quizPicker := goBase()
+	quizPicker.QuizPrompts = []review.Prompt{
+		{Slug: "comprehension", Title: "Quiz me on this diff", Body: "generate a quiz"},
+		{Slug: "security", Title: "Quiz me like a security reviewer", Body: "security quiz"},
+	}
+
+	// #191: the quiz questions rendered INLINE in the diff — the primary surface.
+	// The separate quiz screen is only the overview, so without this fixture the
+	// annotation rendering (line-anchored cards + the file-head card) is unguarded.
+	quizInline := goBase()
+	quizInline.Quizzes = quizFixtureQuizzes()
+	quizInline.QuizAnswers = map[string]review.QuizAnswer{
+		"z1\x00q1": {QuizID: "z1", QuestionID: "q1", Choice: 1},
+	}
+
+	// quiz view with no quiz for the selected file — the empty state must offer a
+	// way out, or the reviewer is stranded on a near-blank page (issue #27).
+	quizEmpty := goBase()
+	quizEmpty.ShowQuiz = true
+
 	// external (live-site) mode
 	external := review.PrereviewState{
 		RepoPath:     "/repo",
@@ -404,6 +440,11 @@ func renderFixtures() []renderFixture {
 		{"binary-audio", binary("sound.mp3")},
 		{"binary-fallback", binary("archive.zip")},
 		{"all-comments", allComments},
+		{"quiz", quiz},
+		{"quiz-empty", quizEmpty},
+		{"quiz-inline", quizInline},
+		{"quiz-me-button", quizBtn},
+		{"quiz-me-picker", quizPicker},
 		{"external", external},
 		{"version-view", version},
 		{"agent-mode", agent},
@@ -414,4 +455,28 @@ func renderFixtures() []renderFixture {
 		{"empty-pick-file", emptyPick},
 		{"empty-no-files", emptyNoFiles},
 	}
+}
+
+// quizFixtureQuizzes is the quiz data shared by the inline and overview
+// fixtures: one answered line question, one unanswered, one UNGROUNDED (cites a
+// line the diff does not have) and one file-level. Those last two render
+// differently on purpose and must stay distinguishable.
+func quizFixtureQuizzes() []review.Quiz {
+	return []review.Quiz{{
+		ID: "z1", File: "app.go",
+		Questions: []review.Question{
+			{ID: "q1", Kind: review.QuestionKindLine, Probe: review.ProbeConsequence, Prompt: "What breaks?",
+				Options: []string{"nothing", "the write"}, Answer: 1, Why: "it is a buffer",
+				FromLine: 2, ToLine: 2, Side: "new", AnchorStatus: "ok"},
+			{ID: "q2", Kind: review.QuestionKindLine, Probe: review.ProbeRationale, Prompt: "Why this way?",
+				Options: []string{"speed", "clarity"}, Answer: 1, Why: "reads better",
+				FromLine: 1, ToLine: 1, Side: "new", AnchorStatus: "ok"},
+			{ID: "q3", Kind: review.QuestionKindLine, Probe: review.ProbeLocalization, Prompt: "Where does it live?",
+				Options: []string{"here", "there"}, Answer: 0, Why: "top of the file",
+				FromLine: 999, ToLine: 999, Side: "new", AnchorStatus: "ungrounded"},
+			{ID: "q4", Kind: review.QuestionKindFile, Probe: review.ProbeDecision, Prompt: "What did you decide unasked?",
+				Options: []string{"a dependency", "skipping a test"}, Answer: 1,
+				Why: "the request never mentioned tests", AnchorStatus: "absent"},
+		},
+	}}
 }

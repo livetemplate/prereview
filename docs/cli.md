@@ -171,6 +171,8 @@ prereview comments  [--out <dir>] [--json] [--all]
 prereview done      [--out <dir>] [--file <f>|-] [--all-open] <comment-id>...
 prereview status    [--out <dir>] <working|done> [message]
 prereview suggest   [--out <dir>] [--file <payload.json>]
+- `prereview quiz` - submit a comprehension quiz about a file's diff for the
+  reviewer to answer; writes `.prereview/quiz.jsonl`.
 prereview reply     [--out <dir>] (--body "…" | --file <f>|-) <id>
 prereview applied   [--out <dir>] [--file <f>|-] <suggestion-id>...
 prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
@@ -244,6 +246,12 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 `ALT <url>` lines (e.g. the MagicDNS hostname) may follow.
 
 ## Environment
+
+- `PREREVIEW_QUIZZES_DIR` - override the quiz-prompt overlay directory
+  (default `~/.config/prereview/quizzes`). Drop a `*.md` file there to add your
+  own quiz prompt, or reuse a built-in's filename to replace it. The prompt is
+  guidance only: prereview still enforces the question schema and still checks
+  that every cited line exists in the diff, whatever prompt produced the quiz.
 
 | Var | Effect |
 |---|---|

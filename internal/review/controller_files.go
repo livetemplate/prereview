@@ -84,7 +84,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	// #128: re-open at the last read location — stamp a one-shot scroll on the
 	// line the reviewer last had at the top of the viewport for this file.
 	state.ScrollToReadKey = state.LastReadTopKey[path]
-	state.RevealFile = ""           // a search-jump's full-file reveal was for the previous file
+	state.RevealFile = "" // a search-jump's full-file reveal was for the previous file
 	state.FileDrawerOpen = false
 	// Picking a file from the drawer while the all-comments view is
 	// open implies "leave this overview, go look at that file" — same
@@ -92,6 +92,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	// the user would land on the all-comments view with a freshly-
 	// selected (but invisible) file behind it.
 	state.ShowAllComments = false
+	state.ShowQuiz = false
 	c.relocateSelected(&state)
 	c.applyVersionList(&state) // per-file version timeline (#90) — refresh for the new file
 	return state, nil
@@ -214,6 +215,7 @@ func (c *PrereviewController) stepComment(state PrereviewState, delta int) (Prer
 		c.applyVersionList(&state) // per-file version timeline (#90)
 	}
 	state.ShowAllComments = false
+	state.ShowQuiz = false
 	state.ScrollToCommentID = target.ID
 	state.ScrollToHeadingID = ""
 	return state, nil

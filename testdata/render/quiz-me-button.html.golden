@@ -95,7 +95,7 @@
 <header
   class="bar"
   lvt-fx:url-hash="setURLHash"
-  data-lvt-url-hash="index.html"
+  data-lvt-url-hash="app.go"
 >
   <form method="POST">
     <button
@@ -130,7 +130,7 @@
   </form>
   
   <div class="title">
-    <span class="title-main"><span class="title-file">index.html</span></span>
+    <span class="title-main"><span class="title-file">app.go</span></span>
   </div>
   
   <div class="toolbar-inline">
@@ -143,24 +143,24 @@
       
       
       
-      <form method="POST" class="tb-radios" aria-label="HTML view">
+      
+      
+      <form method="POST" class="tb-radios" aria-label="File view">
         <label><input
           type="radio"
           name="view"
-          value="rendered"
+          value="diff"
           checked
-          lvt-on:change="setHTMLView"
-        >Preview</label>
+          lvt-on:change="setFileViewMode"
+        >Diff</label>
         <label><input
           type="radio"
           name="view"
-          value="raw"
+          value="file"
           
-          lvt-on:change="setHTMLView"
-        >Raw</label>
+          lvt-on:change="setFileViewMode"
+        >File</label>
       </form>
-      
-      
       
     </div>
     
@@ -430,28 +430,29 @@
   
   
   
+  
   <form method="POST">
     <button
       type="submit"
-      name="toggleRawHTML"
-      class="menu-item is-on"
+      name="toggleFileView"
+      class="menu-item"
       role="menuitem"
     >
       <span class="menu-icon">
+        
         
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M6 3h8l4 4v14H6z"
     stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
   /><path
-    d="M9 9h4M9 12h6M9 15h6"
-    stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+    d="M14 3v4h4"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
   /></svg>
         
       </span>
-      <span class="menu-label">View raw source</span>
+      <span class="menu-label">View file</span>
     </button>
   </form>
-  
   
   
   
@@ -585,7 +586,7 @@
   <div class="file-row" style="--depth:0">
     <form method="POST" class="file-select-form">
       <input type="hidden" name="path" value="app.go">
-      <button type="submit" name="selectFile" class="file-btn outline contrast" title="app.go"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <button type="submit" name="selectFile" class="file-btn outline contrast is-selected" title="app.go"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
         <span class="file-label"><span class="file-name">app</span><span class="file-ext">.go</span></span>
         <span class="file-meta"><small class="diff-stats"><span class="add">+3</span><span class="del">-1</span></small></span>
       </button>
@@ -622,7 +623,7 @@
 
 
 <article>
-  <header class="file-head"><span class="file-head-name" title="index.html"><strong class="fh-base">index.html</strong></span>
+  <header class="file-head"><span class="file-head-name" title="app.go"><strong class="fh-base">app.go</strong></span>
     
     <span class="file-head-actions">
     
@@ -642,6 +643,10 @@
   /></svg><span class="file-head-comment-label">Comment on file <kbd class="kbd-hint" aria-hidden="true">c</kbd></span></button>
     </form>
     
+    
+    
+    
+    <form method="POST" style="margin:0"><button type="submit" name="requestQuiz" class="quiz-trigger" title="Ask the agent for a comprehension quiz about this diff"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="quiz-trigger-label">Quiz me</span></button></form>
     
     
     
@@ -670,23 +675,36 @@
   
   
   
-  <div class="html-view" data-key="html-index.html"><form method="POST" class="region-toggle">
-  <button
-    type="submit"
-    name="toggleRegionSelect"
-    class="outline secondary"
-    aria-pressed="false"
-  >▭ Select a region to comment</button>
-</form><div class="preview-stage"><iframe
-      class="html-preview"
-      sandbox="allow-scripts"
-      srcdoc="&lt;body&gt;&lt;p data-from=&#34;1&#34; data-to=&#34;1&#34;&gt;hi&lt;/p&gt;&lt;/body&gt;"
-      lvt-fx:preview-bridge
-      title="HTML preview of index.html"
-    ></iframe></div><div
-      class="html-block"
-      data-key="HB-1-1"
-    ></div></div>
+  <div class="code"
+       data-key="code-app.go"
+       data-path="app.go"
+       lvt-fx:scroll="reset-on:data-path"
+       lvt-fx:text-select="selectText"
+       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row" data-key="row-L1-1"><div tabindex="0"
+              lvt-on:click="selectLine"
+              lvt-on:keydown="selectLine"
+              lvt-key="Enter"
+              data-line="1"
+              data-side="new"
+              class="line ctx"
+              data-key="L1-1"><span class="gutter"><span class="gutter-mark">&nbsp; </span>1</span><span class="content chroma" data-line-text>package main</span></div></div>
+<div class="line-row" data-key="row-L2-0"><div tabindex="0"
+              lvt-on:click="selectLine"
+              lvt-on:keydown="selectLine"
+              lvt-key="Enter"
+              data-line="2"
+              data-side="old"
+              class="line del"
+              data-key="L2-0"><span class="gutter"><span class="gutter-mark">- </span>2</span><span class="content chroma" data-line-text>var x = 1</span></div></div>
+<div class="line-row" data-key="row-L0-2"><div tabindex="0"
+              lvt-on:click="selectLine"
+              lvt-on:keydown="selectLine"
+              lvt-key="Enter"
+              data-line="2"
+              data-side="new"
+              class="line add"
+              data-key="L0-2"><span class="gutter"><span class="gutter-mark">+ </span>2</span><span class="content chroma" data-line-text>var x = 2</span></div></div>
+<div class="code-sentinel" aria-hidden="true"></div></div>
   
 </article>
 

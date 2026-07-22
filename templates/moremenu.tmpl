@@ -153,6 +153,20 @@
     </button>
   </form>
   {{end}}
+  {{if .HasQuiz}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleQuiz"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon">{{template "iconQuiz"}}</span>
+      <span class="menu-label">{{if .ShowQuiz}}Back{{else}}Quiz{{end}}{{with index $.KeyHint "toggleQuiz"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+      <span class="menu-meta">{{.QuizScoreLabel}}</span>
+    </button>
+  </form>
+  {{end}}
   {{if gt .ResolvedCount 0}}
   <form method="POST">
     <button

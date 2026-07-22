@@ -72,6 +72,10 @@
     lvt-key="a"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="toggleQuiz"
+    lvt-key="z"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleShowResolved"
     lvt-key="r"
     lvt-mod:skip-when-typing
@@ -260,6 +264,8 @@
             <span class="menu-meta">1</span>
           </button>
         </form>
+        
+        
         
         
         
@@ -562,6 +568,7 @@
   
   
   
+  
   <form method="POST">
     <button
       type="submit"
@@ -733,6 +740,7 @@
       data-lvt-viewport-items=".line, .md-block">
 
 
+
 <article>
   <header class="file-head"><span class="file-head-name" title="app.go"><strong class="fh-base">app.go</strong></span>
     
@@ -758,6 +766,8 @@
     
     
     
+    
+    
     </span>
   </header>
   
@@ -766,6 +776,16 @@
   
   
   
+  
+  <div class="file-head-marks">
+    
+    
+    <div class="file-head-cards">
+      
+  
+  
+    </div>
+  </div>
   
   
   
@@ -909,6 +929,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
+    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Comprehension quiz</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
     <div class="kbd-row"><dt><kbd>q</kbd></dt><dd>Pause / resume the agent queue</dd></div>

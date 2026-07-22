@@ -30,6 +30,7 @@ Subcommands (for the coding agent; each takes --out <REPO>):
   reverted   ack that you reverted an applied suggestion (restored its original text after a revert request)
   done       mark comments worked on (validated against comments.csv; --file -/--all-open)
   reply      post a thread reply on a comment or suggestion so the reviewer sees what you did (--body/--file)
+  quiz       submit a comprehension quiz about a file's diff for the reviewer to answer (--file/stdin)
   status     echo the agent's status to the review UI: status <working|done> [message]
   suggest    submit proposed edits as inline suggestion boxes (--file/stdin)
   watch      deliver the next batch of queue events after --since <seq> (blocks when caught up), until the terminating end event
@@ -60,7 +61,7 @@ var templateOrder = []string{
 	// one file per UI component (define-only; parse order among them is irrelevant)
 	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
 	"toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl",
-	"filedrawer.tmpl", "allcomments.tmpl",
+	"filedrawer.tmpl", "allcomments.tmpl", "quiz.tmpl",
 	// the {{with .CurrentDiff}} file-view sub-views
 	"fileheader.tmpl", "binaryview.tmpl", "htmlview.tmpl", "markdownview.tmpl", "diffview.tmpl",
 	// shared comment/region partials + SVG icons
@@ -110,6 +111,18 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "suggest" {
 		if err := runSuggest(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview suggest:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `prereview quiz [--out <dir>] [--file <f>]` — the coding agent submits a
+	// comprehension quiz about a file's diff, which the review UI renders for the
+	// reviewer to answer before accepting the change (#191). A bare positional verb
+	// like `done`/`suggest`, so intercept it before flag parsing.
+	if len(os.Args) > 1 && os.Args[1] == "quiz" {
+		if err := runQuiz(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview quiz:", err)
 			os.Exit(1)
 		}
 		return

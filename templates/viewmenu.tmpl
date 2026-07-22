@@ -72,6 +72,22 @@
           </button>
         </form>
         {{end}}
+        {{/* #191 comprehension quiz — only offered once the agent has generated one
+             for this file; "Quiz me" in the file header is how you ask for it. */}}
+        {{if .HasQuiz}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleQuiz"
+            class="menu-item{{if .ShowQuiz}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{template "iconQuiz"}}</span>
+            <span class="menu-label">{{if .ShowQuiz}}Back{{else}}Quiz{{end}}{{with index $.KeyHint "toggleQuiz"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-meta">{{.QuizScoreLabel}}</span>
+          </button>
+        </form>
+        {{end}}
         {{/* Show-resolved FILTER — toggles whether resolved comments appear in
              the view (toggleShowResolved, unchanged from the old inline checkbox). */}}
         {{if gt .ResolvedCount 0}}

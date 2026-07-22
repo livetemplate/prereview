@@ -23,16 +23,18 @@ func (c *PrereviewController) statusPath() string {
 
 // agentSignalFingerprint is a cheap combined change key for the inbound
 // agent-written files the watcher fans out on: the global status file, the
-// per-comment processed-markers file, and the LLM's suggestions file (#98). Any
-// one changing flips the key, so a single watcher covers all three without extra
-// goroutines — a new suggestion appears live with no server restart.
+// per-comment processed-markers file, the LLM's suggestions file (#98), the
+// thread replies, the applied/reverted acks, and the quiz file (#191). Any one
+// changing flips the key, so a single watcher covers them all without extra
+// goroutines — a new suggestion or quiz appears live with no server restart.
 func (c *PrereviewController) agentSignalFingerprint() string {
 	return statusFingerprint(c.statusPath()) + "|" +
 		statusFingerprint(c.processedPath()) + "|" +
 		statusFingerprint(c.suggestionsPath()) + "|" +
 		statusFingerprint(AgentRepliesPath(c.CSVPath)) + "|" +
 		statusFingerprint(AppliedPath(c.CSVPath)) + "|" +
-		statusFingerprint(RevertedPath(c.CSVPath))
+		statusFingerprint(RevertedPath(c.CSVPath)) + "|" +
+		statusFingerprint(c.quizPath())
 }
 
 // applyLLMStatus refreshes the LLM-status fields on state from the status file.
@@ -99,6 +101,9 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// ...and on an applied.jsonl change (#159): reload the applied set so an accepted
 	// suggestion flips to "applied" live.
 	state.Applied = loadAppliedSet(c.CSVPath)
+	// ...and on a quiz.jsonl change (#191): reload the quizzes and re-ground them
+	// against the live diff, so a freshly generated quiz appears with no reload.
+	c.applyQuiz(&state)
 	// #116: if the agent submitted a brand-new suggestion while the inline boxes
 	// were toggled off, reveal them — a hidden toggle must never silently swallow
 	// fresh proposals. Gated on a genuinely-new ID (a revision re-appends the same

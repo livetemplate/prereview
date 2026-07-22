@@ -521,6 +521,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	// from the all-comments view this drops back into the file so the
 	// edit composer is actually visible (no-op when already in the diff).
 	state.ShowAllComments = false
+	state.ShowQuiz = false
 	return state, nil
 }
 
@@ -555,6 +556,7 @@ func (c *PrereviewController) ReanchorComment(state PrereviewState, ctx *livetem
 	state.EditingCommentID = ""
 	state.LastDeletedComment = nil
 	state.ShowAllComments = false
+	state.ShowQuiz = false
 	return state, nil
 }
 

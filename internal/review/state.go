@@ -162,6 +162,12 @@ type PrereviewState struct {
 	// file-comment composer.
 	Prompts []Prompt `json:"prompts"`
 
+	// QuizPrompts is the #191 quiz-prompt library — built-ins plus the user's
+	// ~/.config/prereview/quizzes/ overlay — loaded every Mount like Prompts.
+	// Drives the file-header "Quiz me" control: one prompt renders a plain
+	// one-tap button, several render a picker.
+	QuizPrompts []Prompt `json:"quiz_prompts"`
+
 	// ReplyingID is the comment/suggestion whose inline reply form is open (#149;
 	// mirrors EditingCommentID); ReplyDraft holds the in-progress reply so it
 	// survives reconnects. Empty = no reply form open.
@@ -315,6 +321,35 @@ type PrereviewState struct {
 	// diff viewer). Not persisted — closing/reopening the browser starts
 	// back in the diff view.
 	ShowAllComments bool `json:"show_all_comments"`
+
+	// ShowQuiz toggles the #191 comprehension-quiz view for the selected file
+	// (replaces the diff viewer, like ShowAllComments). Not persisted, and reset
+	// by every navigation action for the same reason: a view that survives a jump
+	// to another file would strand the reviewer somewhere they didn't ask to be.
+	ShowQuiz bool `json:"show_quiz"`
+
+	// Quizzes are the agent-written comprehension quizzes (.prereview/quiz.jsonl),
+	// and QuizAnswers the reviewer's responses keyed "<quizID>\x00<questionID>".
+	// Neither is persisted — the files are the source of truth, re-read every
+	// Mount and on each watcher tick, exactly like Comments and Suggestions.
+	Quizzes     []Quiz                `json:"quizzes"`
+	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
+
+	// QuizNavDismissed hides the quiz navigator for this session. The bar appears
+	// automatically whenever the file has a quiz — discoverability has been this
+	// feature's recurring failure, so it is not behind a menu — but it must be
+	// possible to put away while reading the diff.
+	QuizNavDismissed bool `json:"quiz_nav_dismissed"`
+
+	// QuizRequestedFile is the file a "Quiz me" request was just sent for, so the
+	// control can show "Quiz requested…" instead of inviting a second tap. Cleared
+	// as soon as a quiz for that file arrives (applyQuiz).
+	//
+	// It exists because the first version gave NO feedback: the request saved a
+	// comment, nothing visibly changed, and a real reviewer on a phone tapped again
+	// and queued a duplicate. A UI hint, deliberately not persisted — worst case a
+	// reconnect re-offers the button, which is merely the old behaviour.
+	QuizRequestedFile string `json:"quiz_requested_file"`
 
 	// ScrollToCommentID, when non-empty for one render, drives the
 	// `lvt-fx:scroll="into-view"` directive on the matching inline-comment.

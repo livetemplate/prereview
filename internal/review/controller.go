@@ -65,6 +65,12 @@ type PrereviewController struct {
 	// merged with the embedded built-ins in LoadPrompts. "" = built-ins only.
 	PromptsDir string
 
+	// QuizzesDir is the user overlay for #191 quiz prompts
+	// (~/.config/prereview/quizzes). Read every Mount and merged with the embedded
+	// built-ins in LoadQuizPrompts. "" = built-ins only. Separate from PromptsDir
+	// because the two libraries answer with different verbs.
+	QuizzesDir string
+
 	// Emitter is the agent-mode JSON event log writer (stdout +
 	// .prereview/events.jsonl). Non-nil only in agent mode; the emit path and
 	// EndSession guard on nil so non-agent sessions emit nothing.
@@ -371,6 +377,12 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// overlay dir) for the file-header picker. Cheap; refreshed each connect so a
 	// user's edits to their prompt files show without a relaunch.
 	state.Prompts = LoadPrompts(c.PromptsDir)
+	state.QuizPrompts = LoadQuizPrompts(c.QuizzesDir)
+	// Loads the quizzes and the reviewer's answers. Grounding is deliberately NOT
+	// done here: CurrentDiff is not loaded until ~100 lines below, so grounding at
+	// this point would compare every cited line against a nil diff and mark the
+	// whole quiz ungrounded. c.groundQuizzes runs after the diff is in hand.
+	c.applyQuiz(&state)
 
 	// AgentMode is mirror-only: refresh from the controller every connect so a
 	// binary launched with --agent renders the right button even after a
@@ -479,6 +491,11 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// Same for the selected file's suggestions (#98): a suggestion whose target
 	// text was edited away renders `outdated`; one whose text moved follows it.
 	c.relocateSuggestionsSelected(&state)
+	// ...and ground the quiz questions (#191) against the same just-loaded diff:
+	// a question citing a line the diff no longer has renders `ungrounded`. This
+	// MUST come after CurrentDiff is set — grounding earlier compares against nil
+	// and condemns every question.
+	c.groundQuizzes(&state)
 	// Artifact versioning (#90): populate the selected file's version timeline
 	// and the paused state. Mount always shows the LIVE diff (ViewingVersion
 	// defaults false and isn't persisted), so a reconnect naturally leaves any

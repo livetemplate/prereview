@@ -111,11 +111,17 @@
              only one renders at a time, and both carry a data-key the server
              parses to a source line (L<old>-<new> / MB-<start>-<end>). */}}
       data-lvt-viewport-items=".line, .md-block">
-{{if .ShowAllComments}}
+{{if .ShowQuiz}}
+{{template "quizView" $}}
+{{else if .ShowAllComments}}
 {{template "allComments" $}}
 {{else}}
 {{with .CurrentDiff}}
-<article>
+{{/* #191: lvt-spy makes the quiz navigator highlight the on-screen question
+     CLIENT-SIDE (rAF scroll listener toggling lvt-active on the matching
+     lvt-spy-link), the same primitive the TOC uses — no per-scroll server
+     round-trip, which is what made the highlight lag on a phone. */}}
+<article{{if $.HasQuiz}} lvt-spy=".quiz-card"{{end}}>
 {{template "fileHeader" $}}
   {{if $.ViewingVersion}}
   {{/* Read-only banner while viewing a historical version. Commenting is gated
@@ -132,8 +138,52 @@
        line view; the gutter / line badge is replaced with a "file" tag
        via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
        per-comment actions — no new endpoints. */}}
+  {{/* #191 quiz navigator — a badge per question, so moving between them is a tap
+       rather than a scroll-and-hope. Sticky, so it stays reachable while reading. */}}
+  {{if $.ShowQuizNav}}
+  <div class="quiz-nav" role="navigation" aria-label="Quiz questions">
+    <span class="quiz-nav-label">{{$.QuizNavLabel}}</span>
+    <ul class="quiz-nav-dots">
+      {{range $it := $.QuizItems}}
+      <li><a href="#qc-{{$it.ID}}" lvt-spy-link class="quiz-nav-dot is-{{$it.NavState}}" title="{{$it.Prompt}}">{{$it.Num}}</a></li>
+      {{end}}
+    </ul>
+    <span class="quiz-nav-actions">
+      <form method="POST" style="margin:0"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>
+      <form method="POST" style="margin:0"><button type="submit" name="dismissQuizNav" class="outline" title="Hide the quiz navigator">×</button></form>
+    </span>
+  </div>
+  {{end}}
+  {{/* The file-head annotation group: file-level comments, image-area comments,
+       and quiz questions with no line (kind=file, or an anchor that doesn't
+       resolve). They share ONE row key so the existing toggleRow / ToggledRows
+       machinery collapses them exactly like a diff row's annotations — these had
+       no badge at all before, so a file comment could never be folded either. */}}
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}
+  <div class="file-head-marks{{if index $.RowToggled "file"}} row-toggled{{end}}">
+    {{/* Only the BADGE is conditional; the wrapper always renders because it also
+         holds the area composer, and gating the container on "are there
+         annotations yet" would hide the control that CREATES them.
+
+         The badge is an IN-FLOW header row, right-aligned, NOT the diff row's
+         absolute gutter badge. A diff row aligns its badge to a code line; the
+         file head has no line, so an absolute badge collapsed to zero height and
+         hid under the sticky navigator when the group was folded. An in-flow row
+         keeps real height, so the toggle stays visible and reachable collapsed. */}}
+    {{if gt $.FileHeadAnnotationCount 0}}
+    <div class="file-head-badge-row">
+      <button type="button" class="line-marks"
+              lvt-on:click="toggleRow"
+              data-row="file"
+              lvt-el:toggleClass:on:click="row-toggled"
+              data-lvt-target="closest:.file-head-marks"
+              aria-label="Show or hide this file's annotations"
+              title="Show/hide this file's annotations"><span class="line-mark{{if $.FileHeadHasOpen}} is-open{{else}} is-done{{end}}" aria-hidden="true">{{$.FileHeadAnnotationCount}}</span></button>
+    </div>
+    {{end}}
+    <div class="file-head-cards">
+      {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}
   {{/* The file composer opens as a blocking modal (below), not inline here — a
        mid-page scroll position used to leave it off-screen. Area mode keeps its
        inline composer (it anchors to the image region). This section still lists
@@ -145,6 +195,8 @@
     {{if eq $.CommentMode "area"}}{{template "composer" $}}{{end}}
   </section>
   {{end}}
+    </div>
+  </div>
   {{/* File-comment modal (#—): pressing `c` opens a blocking, viewport-centered
        composer so it's reachable regardless of scroll position. Backdrop click /
        Esc / Cancel / Save all close it (clearSelection resets CommentMode). The

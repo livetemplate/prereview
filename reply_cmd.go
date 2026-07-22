@@ -119,11 +119,27 @@ func validateReplyTarget(csvPath, id string) error {
 			known = true
 		}
 	}
+	// ...or a quiz question (#191), addressed as "<quizID>:<questionID>" because a
+	// question id is unique only WITHIN its quiz while a thread target is global.
+	quizzes := review.LoadQuizzes(csvPath)
+	if qid, quest, ok := review.SplitQuizThreadID(id); ok {
+		for _, q := range quizzes {
+			if q.ID != qid {
+				continue
+			}
+			for _, qu := range q.Questions {
+				if qu.ID == quest {
+					known = true
+				}
+			}
+		}
+	}
 	if known {
 		return nil
 	}
-	if (cerr != nil || len(rows) == 0) && len(sugs) == 0 {
-		return fmt.Errorf("no comments or suggestions found at %s — is --out the review's directory?", filepath.Dir(csvPath))
+	if (cerr != nil || len(rows) == 0) && len(sugs) == 0 && len(quizzes) == 0 {
+		return fmt.Errorf("no comments, suggestions or quizzes found at %s — is --out the review's directory?", filepath.Dir(csvPath))
 	}
-	return fmt.Errorf("unknown id %q — not a comment or suggestion (use `prereview comments --json` to list ids)", id)
+	return fmt.Errorf("unknown id %q — not a comment, suggestion, or quiz question "+
+		"(a question is addressed as \"<quizID>:<questionID>\"; use `prereview comments --json` to list comment ids)", id)
 }

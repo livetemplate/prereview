@@ -38,7 +38,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
-	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, false, fixedTS); err != nil {
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
 		t.Fatalf("EmitSnapshot: %v", err)
 	}
 	if err := es.EmitEnd(fixedTS); err != nil {
@@ -102,7 +102,7 @@ func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	if err := es.EmitReady("/r", "/r/c.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
-	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
 		t.Fatalf("handoff: %v", err)
 	}
 	if err := es.EmitEnd(fixedTS); err != nil {

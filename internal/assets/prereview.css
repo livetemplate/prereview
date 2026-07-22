@@ -1135,7 +1135,11 @@ header.file-head .file-head-actions {
 .version-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .version-btn:disabled { opacity: 0.5; cursor: default; }
 /* #147 "Ask for suggestions" picker — reuses the versions-dropdown chrome. */
-.prompts-trigger {
+/* The quiz trigger is styled identically to the suggestions trigger but MUST
+   keep its own class: they sit side by side in the file header, and a shared
+   class makes `.prompts-trigger` ambiguous — which silently re-pointed an
+   existing e2e selector at the wrong button. Group the styles, not the names. */
+.prompts-trigger, .quiz-trigger {
   display: inline-flex; align-items: center; gap: 0.35rem;
   margin: 0; padding: 0.2rem 0.55rem; min-height: 0;
   font-size: 0.8rem; font-weight: 500; white-space: nowrap;
@@ -1143,10 +1147,11 @@ header.file-head .file-head-actions {
   border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
   cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
 }
-.prompts-trigger:hover, .prompts-trigger:focus-visible {
+.prompts-trigger:hover, .prompts-trigger:focus-visible,
+.quiz-trigger:hover, .quiz-trigger:focus-visible {
   background: var(--soft-bg-hover); border-color: var(--accent);
 }
-.prompts-trigger svg { display: block; color: var(--accent); }
+.prompts-trigger svg, .quiz-trigger svg { display: block; color: var(--accent); }
 .prompts-panel { min-width: 15rem; padding: 0.3rem; }
 .prompts-panel form { margin: 0; }
 .prompt-row {
@@ -1822,7 +1827,7 @@ header.file-head .file-head-comment button:focus-visible {
 header.file-head .file-head-comment button svg { display: block; }
 .file-head-comment-label { display: none; }
 .versions-trigger-label { display: none; }
-.prompts-trigger-label { display: none; }
+.prompts-trigger-label, .quiz-trigger-label { display: none; }
 
 /* Diff viewer container — was <pre> but that preserves whitespace which
    made every template-loop newline a visible blank line. Now a <div>
@@ -1968,6 +1973,9 @@ header.file-head .file-head-comment button svg { display: block; }
    `.row-toggled` is emitted by the SERVER (state.ToggledRows). It used to be a client-only
    class, which meant the next re-render morphed it away and silently re-collapsed a card the
    reviewer had just opened (#173). */
+.line-row.row-toggled .quiz-card,
+.md-block.row-toggled .quiz-card,
+.file-head-marks.row-toggled .file-head-cards > .quiz-card,
 .line-row.row-toggled .inline-comment:not(.is-resolved),
 .line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
 .md-block.row-toggled .inline-comment:not(.is-resolved),
@@ -3136,7 +3144,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   /* Desktop has room for the "Comment on file" text label; mobile stays icon-only. */
   .file-head-comment-label { display: inline; }
   .versions-trigger-label { display: inline; }
-  .prompts-trigger-label { display: inline; }
+  .prompts-trigger-label, .quiz-trigger-label { display: inline; }
   /* The filename already headlines the diff (.file-head) and the
      all-comments view (.ac-head). Showing it again in the top bar is
      pure duplication on desktop — drop just the filename, keep the
@@ -3265,3 +3273,179 @@ main.viewer { overscroll-behavior: contain; }
 }
 .app-footer a { color: inherit; text-decoration: underline; }
 .app-footer a:hover { color: var(--pico-primary); }
+
+/* ── #191 comprehension quiz ────────────────────────────────────────────────
+   Same shell as the all-comments overview (sticky head, flex column so the
+   empty state can centre), so the two full-viewer views feel like siblings.
+   Colours come from the semantic tokens, never literals, so the quiz
+   re-skins with every scheme x mode like everything else. */
+.quiz { padding: 0.5rem; }
+main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
+.quiz .quiz-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.5rem; border-bottom: 1px solid var(--pico-muted-border-color);
+  margin-bottom: 0.5rem; position: sticky; top: 0;
+  background: var(--pico-card-background-color); z-index: 5;
+}
+.quiz .quiz-head button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.quiz .quiz-score { color: var(--accent); font-variant-numeric: tabular-nums; }
+.quiz .quiz-sub { margin: 0 0.5rem 0.75rem; color: var(--pico-muted-color); }
+/* list-style must be reset on the ITEMS too, not just the list: these are <ul>s
+   nested inside other lists, and Pico re-asserts a marker on the nested level,
+   which paints a stray square next to every item. A DOM test cannot see it — the
+   text is still there, the marker is painted beside it — so it has slipped
+   through twice: once on the options, once on the navigator badges, where the
+   square sat on top of the question number.
+   EVERY quiz list belongs in this one rule. Adding a list elsewhere and styling
+   it separately is how this recurs. */
+.quiz .quiz-list, .quiz .quiz-list > li,
+.quiz-options, .quiz-options > li,
+.quiz-nav-dots, .quiz-nav-dots > li { list-style: none; }
+.quiz .quiz-list { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.quiz .quiz-q {
+  margin: 0; padding: 0.7rem; border: 1px solid var(--pr-comment-bd);
+  border-radius: var(--radius-sm); background: var(--pr-comment-bg);
+}
+.quiz .quiz-q-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.quiz-probe {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+}
+/* The `decision` probe is the one that surfaces choices the reviewer never
+   asked for, so it is visually louder than the four comprehension probes. */
+.quiz-probe-decision { background: color-mix(in srgb, var(--accent) 34%, transparent); font-weight: 600; }
+.quiz-jump {
+  margin: 0; padding: 0.1rem 0.45rem; font-size: 0.75rem; min-height: 0;
+  background: transparent; border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--radius-sm); color: var(--accent); font-variant-numeric: tabular-nums;
+}
+/* An UNGROUNDED question cited a line that isn't in the diff — a hallucinated
+   anchor. It must read as a warning, and must never look like the neutral
+   "about something absent" marker, which is a legitimate anchorless state. */
+.quiz-ungrounded { font-size: 0.75rem; color: var(--pr-del); }
+.quiz-absent { font-size: 0.75rem; color: var(--pico-muted-color); font-style: italic; }
+.quiz-prompt { margin: 0 0 0.6rem; }
+.quiz-options { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.quiz-option {
+  display: block; width: 100%; text-align: left; margin: 0;
+  padding: 0.45rem 0.6rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--pico-muted-border-color);
+  background: var(--surface); color: inherit; font-size: 0.9rem; min-height: 0;
+}
+.quiz-option-btn { cursor: pointer; }
+.quiz-option-btn:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.quiz-option.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 12%, var(--surface)); }
+.quiz-option.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 12%, var(--surface)); }
+.quiz-mark { display: inline-block; width: 1.1em; font-weight: 700; }
+.quiz-why { margin: 0.55rem 0 0; padding-left: 0.6rem; border-left: 2px solid var(--pico-muted-border-color); color: var(--pico-muted-color); }
+.quiz-why.is-correct { border-left-color: var(--pr-add); }
+.quiz-why.is-wrong { border-left-color: var(--pr-del); }
+.quiz .quiz-foot { display: flex; align-items: center; gap: 0.8rem; margin: 1rem 0.5rem 0.5rem; }
+.quiz .quiz-foot button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.quiz .quiz-done { margin: 0; }
+.quiz .quiz-empty {
+  flex: 1; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; gap: 1rem;
+  text-align: center; color: var(--pico-muted-color); padding: 2rem;
+}
+.quiz .quiz-empty p { margin: 0; }
+
+/* "Quiz requested…" — the control while a request is queued. Not a button: there
+   is nothing useful a second tap could do, and the first version's silence is
+   exactly what made a real reviewer tap twice and queue a duplicate. */
+.quiz-trigger.is-pending { opacity: 0.6; cursor: default; }
+.quiz-trigger.is-pending svg { color: var(--pico-muted-color); }
+
+/* The quiz question as an INLINE ANNOTATION — it renders in a diff row next to
+   comment and suggestion cards, at the file head, and in the overview, so it
+   carries its own box rather than inheriting one from a screen. */
+.quiz-card {
+  margin: 0.35rem 0 0.35rem 0; padding: 0.6rem 0.7rem;
+  border: 1px solid var(--pr-comment-bd); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm); background: var(--pr-comment-bg);
+  white-space: normal; font-size: 0.9rem;
+}
+.quiz-card-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
+.quiz-card .quiz-prompt { margin: 0 0 0.5rem; }
+.quiz-card.is-answered { border-left-color: var(--pico-muted-border-color); }
+
+/* ── #191 quiz navigator ────────────────────────────────────────────────────
+   The questions live inline in the diff, which is right for answering them but
+   loses the "take the quiz" shape — there was no way to get from question 2 to
+   question 3 except scrolling and hoping. This is a sticky strip of one tiny
+   badge per question: tap to jump, colour says answered-right / answered-wrong /
+   still open. It appears on its own whenever the file has a quiz, because
+   discoverability has been this feature's recurring failure; the × puts it away. */
+.quiz-nav {
+  position: sticky; top: 0; z-index: 6;
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  padding: 0.4rem 0.6rem; margin: 0 0 0.4rem;
+  background: var(--pico-card-background-color);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+.quiz-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; }
+.quiz-nav-dots { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 0; padding: 0; }
+.quiz-nav-dot {
+  min-width: 1.7em; padding: 0.1rem 0.35rem; margin: 0; min-height: 0;
+  font-size: 0.72rem; font-variant-numeric: tabular-nums; line-height: 1.6;
+  border-radius: var(--radius-sm); border: 1px solid var(--pico-muted-border-color);
+  background: var(--surface); color: var(--pico-muted-color); cursor: pointer;
+}
+.quiz-nav-dot.is-open { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.quiz-nav-dot.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, var(--surface)); color: inherit; }
+.quiz-nav-dot.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 16%, var(--surface)); color: inherit; }
+/* "You are here". Driven CLIENT-SIDE by the lvt-spy scroll-spy (it toggles
+   lvt-active on the badge whose question card is on screen) — no server
+   round-trip, so it tracks the scroll without lag. A ring rather than a colour
+   change, because the badge's COLOUR already carries right / wrong / open;
+   overloading it would lose that. The ring sits outside the border so it reads on
+   every state. */
+.quiz-nav-dot.lvt-active {
+  outline: 2px solid var(--accent); outline-offset: 1px; font-weight: 700;
+}
+.quiz-nav-dot { text-decoration: none; }
+/* Native anchor scroll (href="#qc-…") lands the card at the top of the scroll
+   container, which is under the sticky navigator — so reserve the strip's height
+   plus the sticky toolbar above it, and the tap lands the question in the clear. */
+.quiz-card { scroll-margin-top: 7rem; }
+/* The spy's "active" trigger line, ~40% down the viewport. Two reasons it is not
+   near the top: (1) the active question should be the one you are READING (mid
+   screen), not one that has scrolled almost out of view; (2) the LAST question,
+   near the file end, can never be scrolled to the very top, so a top-edge trigger
+   would leave it un-highlighted the whole time you read it — at the bottom of the
+   page its badge would never light. 40vh clears both. */
+main.viewer > article[lvt-spy] {
+  --lvt-spy-margin: 40vh;
+  /* "Scroll beyond last line" (the pattern VS Code and docs sites use): reserve a
+     screenful below the diff so the LAST question can scroll up to the 40vh
+     trigger line and light its badge. Without it the last card tops out mid-screen
+     at max scroll — its top never reaches the trigger — so at the bottom of the
+     page its badge would never activate. Only when a quiz is present (this rule is
+     scoped to article[lvt-spy]). */
+  padding-bottom: 55vh;
+}
+.quiz-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
+.quiz-nav-actions button { margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.72rem; }
+
+/* The file-head annotation group. It reuses .line-marks — the same badge a diff
+   row shows — so collapsing a file comment, an area comment or an unanchored quiz
+   question is the same gesture as collapsing a line's annotations. Before this the
+   file head had no badge at all, so those annotations could not be folded at all. */
+.file-head-marks { margin: 0 0 0.5rem; }
+/* The badge is a right-aligned in-flow row above the cards — not an absolute
+   gutter badge — so it stays visible when the group is collapsed to nothing,
+   instead of pinning to the article top under the sticky navigator. */
+.file-head-badge-row { display: flex; justify-content: flex-end; margin-bottom: 0.3rem; }
+.file-head-cards > .file-comments { margin: 0; }
+
+/* Tapping a navigator badge is <a href="#qc-…">, so the browser sets that hash.
+   :target then force-shows the addressed card even if its row is collapsed —
+   pure CSS, no server round-trip. That is how "tap a breadcrumb to bring back a
+   collapsed question" works: the hash IS the expand. It overrides the collapse
+   rules above (higher specificity via :target). */
+.line-row.row-toggled .quiz-card:target,
+.md-block.row-toggled .quiz-card:target,
+.file-head-marks.row-toggled .file-head-cards > .quiz-card:target { display: block; }
+/* And give the peeked card a moment of emphasis so the eye lands on it. */
+.quiz-card:target { outline: 2px solid var(--accent); outline-offset: 2px; }
