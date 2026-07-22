@@ -765,3 +765,47 @@ func TestE2E_BreadcrumbExpandsCollapsedQuestion(t *testing.T) {
 		t.Errorf("tapping a collapsed question's breadcrumb must reveal it (via :target); it stayed hidden\nstderr: %s", p.stderr.String())
 	}
 }
+
+// The navigator badges are numbered by DOCUMENT position — top to bottom — not by
+// the agent's JSON order. Reported: "Are the questions not sequential from top to
+// bottom? I'm at the bottom and the highlighted question number is three." So at
+// the bottom of the page the active badge must be the HIGHEST number, and the
+// badge numbers must increase with the cards' vertical position.
+func TestE2E_QuizNavigatorNumbersAreTopToBottom(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupLongFileRepo(t), 390, 844, "--agent")
+	p.waitReadyAt(390, 844)
+	p.clickFile("long.txt")
+	submitQuiz(t, p, `{"id":"zn","file":"long.txt","questions":[
+	  {"id":"a","kind":"line","probe":"consequence","prompt":"QA","options":["x","y"],"answer":0,"why":"wa","from_line":20,"to_line":20,"side":"new"},
+	  {"id":"b","kind":"line","probe":"rationale","prompt":"QB","options":["x","y"],"answer":0,"why":"wb","from_line":80,"to_line":80,"side":"new"},
+	  {"id":"c","kind":"line","probe":"localization","prompt":"QC","options":["x","y"],"answer":0,"why":"wc","from_line":140,"to_line":140,"side":"new"}]}`)
+	waitForQuizEntry(t, p)
+
+	// Badge number must increase with the target card's vertical position.
+	monotonic := evalInt(t, p, `(()=>{
+		const dots=[...document.querySelectorAll('.quiz-nav-dot')];
+		const rows=dots.map(a=>{
+			const c=document.getElementById(a.getAttribute('href').slice(1));
+			return {num:parseInt(a.textContent,10), y:c?c.getBoundingClientRect().top+document.querySelector('main.viewer').scrollTop:0};
+		});
+		for(let i=1;i<rows.length;i++){ if(rows[i].num<rows[i-1].num || rows[i].y<rows[i-1].y) return 0; }
+		return 1;
+	})()`)
+	if monotonic != 1 {
+		t.Error("badge numbers must increase with the question's vertical position (top-to-bottom)")
+	}
+
+	// At the very bottom, the LAST question's badge is the active one — the
+	// scroll-beyond-last-line padding lets it reach the spy trigger.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`const m=document.querySelector('main.viewer'); m.scrollTop=m.scrollHeight; m.dispatchEvent(new Event('scroll'));`, nil),
+		chromedp.Sleep(900*time.Millisecond),
+	); err != nil {
+		t.Fatalf("scroll to bottom: %v\nstderr: %s", err, p.stderr.String())
+	}
+	active := evalStr(t, p, `(()=>{const b=document.querySelector('.quiz-nav-dot.lvt-active'); return b? b.textContent : "none"})()`)
+	last := evalStr(t, p, `(()=>{const d=[...document.querySelectorAll('.quiz-nav-dot')]; return d.length? d[d.length-1].textContent : "none"})()`)
+	if active != last {
+		t.Errorf("at the bottom of the page the active badge must be the last one (%s), got %s", last, active)
+	}
+}

@@ -662,84 +662,6 @@
   <p class="quiz-sub"><small>on <code>app.go</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
   <ol class="quiz-list">
     
-    <li class="quiz-q is-answered" data-key="q1">
-      <div class="quiz-q-head">
-        <span class="quiz-probe quiz-probe-consequence">consequence</span>
-        
-        <form method="POST" style="margin:0">
-          <input type="hidden" name="line" value="2">
-          <input type="hidden" name="side" value="new">
-          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">L2</button>
-        </form>
-        
-      </div>
-      <p class="quiz-prompt">What breaks?</p>
-      <ul class="quiz-options">
-        
-        
-        <li>
-          
-          <div class="quiz-option">
-            <span class="quiz-mark"> </span>nothing
-          </div>
-          
-        </li>
-        
-        <li>
-          
-          <div class="quiz-option is-correct">
-            <span class="quiz-mark">✓</span>the write
-          </div>
-          
-        </li>
-        
-      </ul>
-      
-      <p class="quiz-why is-correct"><small>it is a buffer</small></p>
-      
-    </li>
-    
-    <li class="quiz-q" data-key="q2">
-      <div class="quiz-q-head">
-        <span class="quiz-probe quiz-probe-rationale">rationale</span>
-        
-        <form method="POST" style="margin:0">
-          <input type="hidden" name="line" value="1">
-          <input type="hidden" name="side" value="new">
-          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">L1</button>
-        </form>
-        
-      </div>
-      <p class="quiz-prompt">Why this way?</p>
-      <ul class="quiz-options">
-        
-        
-        <li>
-          
-          <form method="POST" style="margin:0">
-            <input type="hidden" name="quizId" value="z1">
-            <input type="hidden" name="questionId" value="q2">
-            <input type="hidden" name="choice" value="0">
-            <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">speed</button>
-          </form>
-          
-        </li>
-        
-        <li>
-          
-          <form method="POST" style="margin:0">
-            <input type="hidden" name="quizId" value="z1">
-            <input type="hidden" name="questionId" value="q2">
-            <input type="hidden" name="choice" value="1">
-            <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">clarity</button>
-          </form>
-          
-        </li>
-        
-      </ul>
-      
-    </li>
-    
     <li class="quiz-q" data-key="q3">
       <div class="quiz-q-head">
         <span class="quiz-probe quiz-probe-localization">localization</span>
@@ -811,6 +733,84 @@
         </li>
         
       </ul>
+      
+    </li>
+    
+    <li class="quiz-q" data-key="q2">
+      <div class="quiz-q-head">
+        <span class="quiz-probe quiz-probe-rationale">rationale</span>
+        
+        <form method="POST" style="margin:0">
+          <input type="hidden" name="line" value="1">
+          <input type="hidden" name="side" value="new">
+          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">L1</button>
+        </form>
+        
+      </div>
+      <p class="quiz-prompt">Why this way?</p>
+      <ul class="quiz-options">
+        
+        
+        <li>
+          
+          <form method="POST" style="margin:0">
+            <input type="hidden" name="quizId" value="z1">
+            <input type="hidden" name="questionId" value="q2">
+            <input type="hidden" name="choice" value="0">
+            <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">speed</button>
+          </form>
+          
+        </li>
+        
+        <li>
+          
+          <form method="POST" style="margin:0">
+            <input type="hidden" name="quizId" value="z1">
+            <input type="hidden" name="questionId" value="q2">
+            <input type="hidden" name="choice" value="1">
+            <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">clarity</button>
+          </form>
+          
+        </li>
+        
+      </ul>
+      
+    </li>
+    
+    <li class="quiz-q is-answered" data-key="q1">
+      <div class="quiz-q-head">
+        <span class="quiz-probe quiz-probe-consequence">consequence</span>
+        
+        <form method="POST" style="margin:0">
+          <input type="hidden" name="line" value="2">
+          <input type="hidden" name="side" value="new">
+          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">L2</button>
+        </form>
+        
+      </div>
+      <p class="quiz-prompt">What breaks?</p>
+      <ul class="quiz-options">
+        
+        
+        <li>
+          
+          <div class="quiz-option">
+            <span class="quiz-mark"> </span>nothing
+          </div>
+          
+        </li>
+        
+        <li>
+          
+          <div class="quiz-option is-correct">
+            <span class="quiz-mark">✓</span>the write
+          </div>
+          
+        </li>
+        
+      </ul>
+      
+      <p class="quiz-why is-correct"><small>it is a buffer</small></p>
       
     </li>
     

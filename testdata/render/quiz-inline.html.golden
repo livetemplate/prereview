@@ -685,13 +685,13 @@
     <span class="quiz-nav-label">1/4 answered · 1 right</span>
     <ul class="quiz-nav-dots">
       
-      <li><a href="#qc-q1" lvt-spy-link class="quiz-nav-dot is-correct" title="What breaks?">1</a></li>
+      <li><a href="#qc-q3" lvt-spy-link class="quiz-nav-dot is-open" title="Where does it live?">1</a></li>
       
-      <li><a href="#qc-q2" lvt-spy-link class="quiz-nav-dot is-open" title="Why this way?">2</a></li>
+      <li><a href="#qc-q4" lvt-spy-link class="quiz-nav-dot is-open" title="What did you decide unasked?">2</a></li>
       
-      <li><a href="#qc-q3" lvt-spy-link class="quiz-nav-dot is-open" title="Where does it live?">3</a></li>
+      <li><a href="#qc-q2" lvt-spy-link class="quiz-nav-dot is-open" title="Why this way?">3</a></li>
       
-      <li><a href="#qc-q4" lvt-spy-link class="quiz-nav-dot is-open" title="What did you decide unasked?">4</a></li>
+      <li><a href="#qc-q1" lvt-spy-link class="quiz-nav-dot is-correct" title="What breaks?">4</a></li>
       
     </ul>
     <span class="quiz-nav-actions">

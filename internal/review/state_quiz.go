@@ -1,6 +1,9 @@
 package review
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // state_quiz.go holds the quiz view's read helpers.
 //
@@ -61,9 +64,9 @@ func (s PrereviewState) QuizItems() []QuizItem {
 	}
 	threads := s.Threads()
 	out := make([]QuizItem, 0, len(q.Questions))
-	for i, qu := range q.Questions {
+	for _, qu := range q.Questions {
 		tid := QuizThreadID(q.ID, qu.ID)
-		item := QuizItem{Question: qu, QuizID: q.ID, Num: i + 1, ThreadID: tid, Thread: threads[tid]}
+		item := QuizItem{Question: qu, QuizID: q.ID, ThreadID: tid, Thread: threads[tid]}
 		if s.ReplyingID == tid {
 			item.Replying = true
 			item.ReplyDraft = s.ReplyDraft
@@ -74,6 +77,25 @@ func (s PrereviewState) QuizItems() []QuizItem {
 			item.Correct = a.Choice == qu.Answer
 		}
 		out = append(out, item)
+	}
+	// Number and order the items by DOCUMENT position — head questions (which
+	// render at the file head, above the diff) first, then line-anchored ones by
+	// line — NOT by the agent's JSON order. So the navigator badges read 1..N
+	// top-to-bottom: at the bottom of the page the highlighted badge is the last
+	// number, which is what a reader expects. Numbering by JSON order made the
+	// badge at the bottom show whatever index the agent happened to give it.
+	sort.SliceStable(out, func(i, j int) bool {
+		hi, hj := !out[i].LineGrounded(), !out[j].LineGrounded()
+		if hi != hj {
+			return hi // head questions sort before line-anchored ones
+		}
+		if hi {
+			return false // both at the head — keep their existing (stable) order
+		}
+		return out[i].FromLine < out[j].FromLine
+	})
+	for i := range out {
+		out[i].Num = i + 1
 	}
 	return out
 }

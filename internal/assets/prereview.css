@@ -3409,10 +3409,22 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    container, which is under the sticky navigator — so reserve the strip's height
    plus the sticky toolbar above it, and the tap lands the question in the clear. */
 .quiz-card { scroll-margin-top: 7rem; }
-/* The spy's "active" trigger line: a card counts as the current one once its top
-   passes below the sticky nav (~6rem down), not at viewport top 0 (which is under
-   the nav). */
-article[lvt-spy] { --lvt-spy-margin: 7rem; }
+/* The spy's "active" trigger line, ~40% down the viewport. Two reasons it is not
+   near the top: (1) the active question should be the one you are READING (mid
+   screen), not one that has scrolled almost out of view; (2) the LAST question,
+   near the file end, can never be scrolled to the very top, so a top-edge trigger
+   would leave it un-highlighted the whole time you read it — at the bottom of the
+   page its badge would never light. 40vh clears both. */
+main.viewer > article[lvt-spy] {
+  --lvt-spy-margin: 40vh;
+  /* "Scroll beyond last line" (the pattern VS Code and docs sites use): reserve a
+     screenful below the diff so the LAST question can scroll up to the 40vh
+     trigger line and light its badge. Without it the last card tops out mid-screen
+     at max scroll — its top never reaches the trigger — so at the bottom of the
+     page its badge would never activate. Only when a quiz is present (this rule is
+     scoped to article[lvt-spy]). */
+  padding-bottom: 55vh;
+}
 .quiz-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 .quiz-nav-actions button { margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.72rem; }
 
