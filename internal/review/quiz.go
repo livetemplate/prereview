@@ -179,6 +179,27 @@ func (q Question) Anchorless() bool { return !q.LineAnchored() }
 // in the current diff — a hallucinated anchor, rendered with a warning.
 func (q Question) Ungrounded() bool { return q.AnchorStatus == quizAnchorUngrounded }
 
+// LineGrounded reports that the question is anchored to a line AND that line
+// resolves in the current diff — i.e. it renders inline under its code rather than
+// at the file head. Its negation is the head set: unanchored kinds and hallucinated
+// (ungrounded) anchors alike lose their inline home.
+//
+// NOT the same as Jumpable, which is stricter (AnchorStatus == "ok"): an
+// unset AnchorStatus (grounding not yet run) counts as grounded here but is not
+// jumpable, matching every site that partitions head-vs-line by !Ungrounded().
+func (q Question) LineGrounded() bool { return q.LineAnchored() && !q.Ungrounded() }
+
+// EndLine is the line a question trails — the row its inline card renders under.
+// Clamped up to FromLine so a malformed to_line (reachable only from a
+// hand-appended quiz.jsonl line; NormalizeQuiz fixes the write path) never
+// underflows the row key.
+func (q Question) EndLine() int {
+	if q.ToLine < q.FromLine {
+		return q.FromLine
+	}
+	return q.ToLine
+}
+
 // QuizAnswer is one reviewer response, in the server-owned answers file. Choice
 // indexes into the question's Options; -1 means cleared (a retake).
 type QuizAnswer struct {

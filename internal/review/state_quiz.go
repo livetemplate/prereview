@@ -203,15 +203,12 @@ func (s PrereviewState) QuizByEndLine() map[int][]QuizItem {
 	}
 	out := map[int][]QuizItem{}
 	for _, it := range s.QuizItems() {
-		// Ungrounded questions have no line that exists, so they cannot render
-		// here; FileQuizItems picks them up at the file head instead.
-		if !it.LineAnchored() || it.Ungrounded() {
+		// Only questions with a resolved line have a row to render under;
+		// unanchored and ungrounded ones go to the file head (FileQuizItems).
+		if !it.LineGrounded() {
 			continue
 		}
-		end := it.ToLine
-		if end < it.FromLine {
-			end = it.FromLine
-		}
+		end := it.EndLine()
 		out[end] = append(out[end], it)
 	}
 	return out
@@ -233,7 +230,12 @@ func (s PrereviewState) QuizByEndLine() map[int][]QuizItem {
 func (s PrereviewState) FileQuizItems() []QuizItem {
 	var out []QuizItem
 	for _, it := range s.QuizItems() {
-		if it.Kind == QuestionKindFile || it.Ungrounded() {
+		// Exactly the complement of QuizByEndLine's inline set: anything not
+		// line-grounded renders here. For v1 that is precisely kind=file and
+		// ungrounded questions; stating it as !LineGrounded() keeps this the exact
+		// inverse of the inline predicate, so a future area/region question can
+		// never fall through the gap between the two and render nowhere.
+		if !it.LineGrounded() {
 			out = append(out, it)
 		}
 	}
@@ -282,7 +284,7 @@ func (s PrereviewState) QuizCountLines() map[string]int {
 	out := map[string]int{}
 	for end, items := range s.QuizByEndLine() {
 		for _, it := range items {
-			out[fmt.Sprintf("%d-%s", end, it.Side)]++
+			countRowSides(out, end, it.Side)
 		}
 	}
 	if len(out) == 0 {
@@ -298,7 +300,9 @@ func (s PrereviewState) QuizOpenLines() map[string]bool {
 	for end, items := range s.QuizByEndLine() {
 		for _, it := range items {
 			if !it.Answered {
-				out[fmt.Sprintf("%d-%s", end, it.Side)] = true
+				for _, k := range rowKeysFor(end, it.Side) {
+					out[k] = true
+				}
 			}
 		}
 	}
@@ -333,7 +337,7 @@ func (s PrereviewState) currentQuizID() string {
 	// the viewport "could not speak" pinned the highlight there permanently.
 	headTop := s.firstDiffLine()
 	inView := func(q Question) bool {
-		if !q.LineAnchored() || q.Ungrounded() {
+		if !q.LineGrounded() {
 			return headTop > 0 && top <= headTop
 		}
 		return q.FromLine >= top && (bottom == 0 || q.FromLine <= bottom)
@@ -369,7 +373,7 @@ func (s PrereviewState) headQuestions() []Question {
 	}
 	var out []Question
 	for _, qu := range q.Questions {
-		if !qu.LineAnchored() || qu.Ungrounded() {
+		if !qu.LineGrounded() {
 			out = append(out, qu)
 		}
 	}
@@ -408,7 +412,7 @@ func (s PrereviewState) quizQuestionsInLineOrder() []Question {
 	}
 	out := make([]Question, 0, len(q.Questions))
 	for _, qu := range q.Questions {
-		if qu.LineAnchored() && !qu.Ungrounded() {
+		if qu.LineGrounded() {
 			out = append(out, qu)
 		}
 	}

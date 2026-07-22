@@ -303,12 +303,8 @@ func (c *PrereviewController) expandQuestionRow(state *PrereviewState, id string
 		if qu.ID != id {
 			continue
 		}
-		if qu.LineAnchored() && !qu.Ungrounded() {
-			end := qu.ToLine
-			if end < qu.FromLine {
-				end = qu.FromLine
-			}
-			key = fmt.Sprintf("%d-%s", end, qu.Side)
+		if qu.LineGrounded() {
+			key = fmt.Sprintf("%d-%s", qu.EndLine(), qu.Side)
 		}
 		break
 	}
