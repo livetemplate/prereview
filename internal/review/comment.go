@@ -172,6 +172,13 @@ func (c Comment) AnchorOutdated() bool { return c.AnchorStatus == anchorOutdated
 // content after the file changed (purely informational in the UI).
 func (c Comment) AnchorMoved() bool { return c.AnchorStatus == anchorMoved }
 
+// AnchorEdited reports that exactly the commented lines were edited in place
+// (the recorded text changed but its surrounding context is intact) — a
+// deterministic "likely addressed" hint. Unlike outdated it stays ACTIONABLE:
+// edited is not proof the point was correctly handled, so it is badged, never
+// hidden, until the reviewer resolves it.
+func (c Comment) AnchorEdited() bool { return c.AnchorStatus == anchorEdited }
+
 // LineSpan returns "L42" for single-line, "L42-L48" for ranges,
 // "file" for whole-file comments, "area" for image-area comments, and
 // "region" for live-site comments — used in the template badge and the

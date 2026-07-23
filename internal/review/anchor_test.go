@@ -103,9 +103,20 @@ func TestRelocate_Table(t *testing.T) {
 			wantFrom: 3, wantTo: 3, wantStatus: anchorOK, wantChanged: false,
 		},
 		{
-			name: "anchored line edited (outdated, ints untouched)",
+			// The commented line's text changed but its before/after neighbors are
+			// intact and in place → edited in place (Tier B), a "likely addressed"
+			// hint, NOT outdated.
+			name: "anchored line edited in place (edited)",
 			orig: []string{"A", "B", "TARGET sentence", "C"}, from: 3, to: 3,
 			modified: []string{"A", "B", "TARGET sentence EDITED", "C"},
+			wantFrom: 3, wantTo: 3, wantStatus: anchorEdited, wantChanged: true,
+		},
+		{
+			// Same edit, but the after-context also changed → we can't confidently
+			// call it an in-place edit (could be a restructure), so: outdated.
+			name: "edited line with disturbed context stays outdated",
+			orig: []string{"A", "B", "TARGET sentence", "C"}, from: 3, to: 3,
+			modified: []string{"A", "B", "TARGET sentence EDITED", "different now"},
 			wantFrom: 3, wantTo: 3, wantStatus: anchorOutdated, wantChanged: true,
 		},
 		{

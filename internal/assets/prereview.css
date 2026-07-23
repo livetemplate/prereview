@@ -2813,6 +2813,15 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
 }
+/* "likely addressed" = exactly the commented lines were edited in place (anchor
+   status "edited", Tier B): a deterministic positive hint, distinct from moved
+   (grey) and outdated (red). Reads green like an addition — the region changed
+   in response — but stays actionable until the reviewer resolves. */
+.inline-comment .edited-badge, .all-comments .edited-badge {
+  background: var(--pr-add-bg); color: var(--pr-add);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
 /* "worked on" = the coding agent addressed this comment (issue #88), driven by
    the .prereview/processed.jsonl markers. Uses the theme accent so it reads as a
    distinct, positive state next to resolved (green) / moved / outdated (red). */

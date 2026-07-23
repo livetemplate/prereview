@@ -2240,9 +2240,12 @@ func TestE2E_CommentReanchor_FlagsAndReattaches(t *testing.T) {
 		t.Fatalf("add comment: %v%s", err, diag())
 	}
 
-	// Rewrite the TARGET sentence's text (content gone, same line count).
+	// Orphan the comment: the TARGET text is gone AND its before-context changed,
+	// so it can't relocate and isn't an in-place edit either → outdated (Tier B
+	// only reads an intact-on-both-sides edit as "edited"; here the before side
+	// moved). The trailing line is kept as the re-anchor target below.
 	if err := os.WriteFile(filepath.Join(dir, "docs.md"),
-		[]byte("# Reanchor Fixture\n\nFirst context sentence stays put.\nSecond context sentence also stable.\nCompletely different replacement line.\nTrailing sentence after the target.\n"),
+		[]byte("# Reanchor Fixture\n\nRewritten opening, nothing like before.\nA second rewritten line here too.\nThe target line is entirely replaced.\nTrailing sentence after the target.\n"),
 		0o644); err != nil {
 		t.Fatalf("rewrite doc: %v", err)
 	}
