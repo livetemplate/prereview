@@ -109,6 +109,13 @@ type PrereviewController struct {
 	// clearing.
 	session livetemplate.Session
 
+	// reviewedGen is bumped by WatchLLMStatus whenever a reviewed file changes on
+	// disk — the deterministic "the reviewed file was edited" signal, no agent
+	// command required. A tab whose SeenReviewedGen lags this gets a
+	// PendingRefresh nudge. Atomic: written by the watcher goroutine, read in
+	// Mount and LLMStatusChanged.
+	reviewedGen atomic.Int64
+
 	// Continuous emission (#119). A single debounced timer coalesces a burst of
 	// mutations into one snapshot emit (see controller_emit.go). emitMu guards the
 	// timer. inEmit is set while emitSnapshot runs so its own self-heal persist
@@ -321,6 +328,11 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// tagged, and we don't want it to be — comments can be large).
 	// The CSV file is the source of truth.
 	state.Comments = c.loadCommentsFromDisk()
+
+	// This tab is (re)building its diff from the live file now, so mark it caught
+	// up to the current reviewedGen. A later reviewed-file edit bumps the gen past
+	// this and re-arms the refresh nudge in LLMStatusChanged.
+	state.SeenReviewedGen = c.reviewedGen.Load()
 
 	// Refresh the agent's inbound status (.prereview/llm-status.json) on every
 	// connect so a newly-opened or reconnecting tab renders current status
