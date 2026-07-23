@@ -26,6 +26,12 @@ const (
 	anchorOK       = "ok"
 	anchorMoved    = "moved"
 	anchorOutdated = "outdated"
+	// anchorEdited: the recorded text is gone from its lines and appears nowhere
+	// else, BUT the surrounding context still matches at the recorded position —
+	// i.e. exactly these lines were edited in place. A deterministic "likely
+	// addressed" signal, distinct from outdated (region deleted/restructured). It
+	// stays actionable (a badge, not a drop): edited != correctly addressed.
+	anchorEdited   = "edited"
 	anchorContextN = 3 // lines of before/after context kept for disambiguation
 )
 
@@ -257,7 +263,21 @@ func relocateLineRange(lines []string, fromLine, toLine *int, status *string, an
 
 	switch len(starts) {
 	case 0:
-		*status = anchorOutdated
+		// Recorded text is gone from its lines and appears nowhere else. If the
+		// region is still BRACKETED by its recorded context — the before AND after
+		// neighbors both sit where they were — then exactly these lines were EDITED
+		// in place: a deterministic "likely addressed". Requiring both sides is what
+		// separates an in-place edit from a deletion, which shifts the after-context
+		// up so it no longer matches at the recorded position. A side with no
+		// recorded context can't disagree, but at least one side must exist to judge.
+		beforeOK := len(anchor.Before) == 0 || neighborScore(lines, *fromLine-1, -1, anchor.Before) > 0
+		afterOK := len(anchor.After) == 0 || neighborScore(lines, *toLine+1, +1, anchor.After) > 0
+		hasContext := len(anchor.Before) > 0 || len(anchor.After) > 0
+		if hasContext && beforeOK && afterOK {
+			*status = anchorEdited
+		} else {
+			*status = anchorOutdated
+		}
 		return *status != prevStatus
 	case 1:
 		return moveRangeTo(fromLine, toLine, status, starts[0], span, prevStatus)

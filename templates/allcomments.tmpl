@@ -24,6 +24,7 @@
           <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>
             {{- if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}
             {{- if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}
+            {{- if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}
             {{- if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}
             {{- if .Processed}} <small class="processed-badge">worked on</small>{{end -}}
           </div>
