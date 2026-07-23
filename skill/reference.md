@@ -48,7 +48,8 @@ for its own flags, or `prereview help` for the top-level list.
 | `prereview done [--file <f>\|-] [--all-open] <id>...` | Mark comments **done** (badge them in the UI). Ids come from args, `--file`/stdin (bare ids, a JSON array, or JSONL objects with an `id`), or `--all-open` (the whole actionable set). Each explicit id is **validated against `comments.csv`** — an unknown id fails with a non-zero exit and is not recorded. |
 | `prereview status <working\|done> [message]` | Echo the agent's status to the review UI (a live pill across every open tab): `working` while applying a batch, `done` when finished. Writes `llm-status.json` atomically. |
 | `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](#suggested-edits). |
-| `prereview reply <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment **or** suggestion, so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. See [Threads](#threads). |
+| `prereview quiz [--file <f>\|-]` | Submit a **comprehension quiz** about a file's diff for the reviewer to answer (append to `quiz.jsonl`). Each question needs >= 2 `options`, a 0-based `answer`, a `why`, and `from_line`/`to_line`/`side`; `probe` is one of change-type / localization / consequence / rationale / decision. **Validated before anything is written** — an out-of-range answer, a missing explanation, or a non-`decision` question without a line anchor fails with a non-zero exit naming the question. The server additionally flags a question whose cited line is not in the diff. |
+| `prereview reply <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment, suggestion **or quiz question** (the latter addressed as `<quizID>:<questionID>`), so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. See [Threads](#threads). |
 | `prereview applied <suggestion-id>...` | Ack that you applied an **accepted** suggestion's edit to the file, so the UI marks it "applied" and drops it from the snapshot. Ids come from a snapshot's `suggestions[]` (`verdict=accept`); validated against suggestions. Idempotent. |
 | `prereview reverted <suggestion-id>...` | Ack that you **reverted** an applied suggestion — restored its `original` text after the reviewer asked to undo the accept (delivered as `verdict=revert`). Nets the suggestion back out of "applied" → the card returns to undecided. Validated against suggestions. Idempotent. |
 
@@ -109,7 +110,9 @@ directory from the stdout `REPO` line:
     ├── processed.jsonl             ← INBOUND: per-comment "done" markers (`prereview done`); append-only
     ├── llm-status.json             ← INBOUND: agent-status echo, watched by the server; reset each launch
     ├── suggestions.jsonl           ← INBOUND: the agent's proposed edits (`prereview suggest`); append-only, durable
-    └── suggestion-decisions.jsonl  ← reviewer's accept/reject verdicts; server-owned, rewritten atomically, durable
+    ├── suggestion-decisions.jsonl  ← reviewer's accept/reject verdicts; server-owned, rewritten atomically, durable
+    ├── quiz.jsonl                  ← INBOUND: comprehension quizzes (`prereview quiz`); append-only, durable
+    └── quiz-answers.jsonl          ← reviewer's quiz answers; server-owned, rewritten atomically, durable
 ```
 
 The INBOUND files are written by the **agent** and read by the server (the reverse of

@@ -287,6 +287,7 @@ func (c *PrereviewController) NavigateToHeading(state PrereviewState, ctx *livet
 	}
 	state.TOCOpen = false
 	state.ShowAllComments = false
+	state.ShowQuiz = false
 	state.ScrollToHeadingID = id
 	// Heading scroll and comment scroll/focus are mutually exclusive intents —
 	// clear any pending comment target so it doesn't steal the scroll/focus
@@ -350,6 +351,7 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 		state.CurrentDiff = diff
 	}
 	state.ShowAllComments = false
+	state.ShowQuiz = false
 	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
 	return state, nil

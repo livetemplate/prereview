@@ -298,6 +298,11 @@ func (s PrereviewState) AnnotationCountLines() map[string]int {
 	for k, n := range s.SuggestionCountLines() {
 		out[k] += n
 	}
+	// #191: a quiz question is an annotation on the line, so it counts toward the
+	// row badge and collapses with the rest.
+	for k, n := range s.QuizCountLines() {
+		out[k] += n
+	}
 	if len(out) == 0 {
 		return nil
 	}
@@ -312,6 +317,9 @@ func (s PrereviewState) AnnotationOpenLines() map[string]bool {
 		out[k] = true
 	}
 	for k := range s.SuggestionOpenLines() {
+		out[k] = true
+	}
+	for k := range s.QuizOpenLines() {
 		out[k] = true
 	}
 	if len(out) == 0 {
@@ -332,6 +340,14 @@ func (s PrereviewState) AnnotationAcceptedLines() map[string]bool {
 // its cards inline; a row whose work is all done/accepted collapses them behind the badge.
 // ToggledRows stores which of these the reviewer was flipping away from.
 const (
+	// FileHeadRowKey is the row key for the file-head annotation group: file-level
+	// comments, image-area comments, and quiz questions with no line. They render
+	// above the diff rather than in a row, so they had no badge and no way to be
+	// collapsed at all — for comments as much as for quizzes. Giving the group a
+	// key lets it reuse toggleRow / ToggledRows / RowToggled unchanged, instead of
+	// growing a second collapse mechanism beside the one that already works.
+	FileHeadRowKey = "file"
+
 	rowStateOpen      = "open"
 	rowStateCollapsed = "collapsed"
 )

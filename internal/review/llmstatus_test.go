@@ -174,6 +174,61 @@ func TestLLMStatusChangedPendingRefresh(t *testing.T) {
 	}
 }
 
+// TestLLMStatusChangedFileEditNudge is the deterministic half of the feature: a
+// reviewed-file edit (the watcher bumped reviewedGen) nudges PendingRefresh with
+// NO agent status written — the agent forgetting `status`/`done` can no longer
+// hide that it edited.
+func TestLLMStatusChangedFileEditNudge(t *testing.T) {
+	c, sp := newStatusController(t)
+	if err := os.WriteFile(sp, []byte(`{}`), 0o644); err != nil { // idle status, no working→done
+		t.Fatal(err)
+	}
+	c.reviewedGen.Store(1) // the watcher saw a raw file edit and bumped the gen
+
+	// A tab that last rebuilt at gen 0 gets the nudge — deterministically.
+	st, _ := c.LLMStatusChanged(PrereviewState{SeenReviewedGen: 0}, nil)
+	if !st.PendingRefresh {
+		t.Fatal("reviewedGen>SeenReviewedGen must set PendingRefresh (raw file edit, no agent command)")
+	}
+	// A tab already caught up (it just rebuilt via Mount) must not nudge.
+	st2, _ := c.LLMStatusChanged(PrereviewState{SeenReviewedGen: 1}, nil)
+	if st2.PendingRefresh {
+		t.Fatal("a caught-up tab (SeenReviewedGen==reviewedGen) must not nudge")
+	}
+}
+
+// TestReviewedFilesFingerprint pins the trigger: the key changes iff a file in
+// the review SCOPE changes, so the watcher fires on a plan edit but ignores
+// unrelated files.
+func TestReviewedFilesFingerprint(t *testing.T) {
+	repo := t.TempDir()
+	doc := filepath.Join(repo, "doc.md")
+	if err := os.WriteFile(doc, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &PrereviewController{RepoPath: repo, NoGit: true, SingleFile: "doc.md", Versions: &VersionStore{}}
+
+	fp1 := c.reviewedFilesFingerprint()
+	if fp1 == "" {
+		t.Fatal("fingerprint is empty — the reviewed file is not in scope")
+	}
+	if err := os.WriteFile(doc, []byte("v2 is longer"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if fp2 := c.reviewedFilesFingerprint(); fp2 == fp1 {
+		t.Fatalf("fingerprint unchanged after editing the reviewed file: %q", fp2)
+	}
+
+	// A sibling file outside the review scope must NOT move the fingerprint.
+	before := c.reviewedFilesFingerprint()
+	if err := os.WriteFile(filepath.Join(repo, "unrelated.txt"), []byte("noise"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if after := c.reviewedFilesFingerprint(); after != before {
+		t.Fatalf("fingerprint moved on a non-scoped file: %q -> %q", before, after)
+	}
+}
+
 func TestWatchLLMStatusFiresOnChangeOnly(t *testing.T) {
 	c, sp := newStatusController(t)
 	fs := &fakeSession{actions: make(chan string, 8)}
@@ -200,6 +255,80 @@ func TestWatchLLMStatusFiresOnChangeOnly(t *testing.T) {
 	// Second, different write → fans out again.
 	writeStatus(t, sp, `{"state":"done","message":"finished"}`)
 	assertFire(t, fs, "second write")
+}
+
+// TestWatchLLMStatusFileEditVersions covers A2: a reviewed-file edit outside a
+// status batch checkpoints a deterministic version (the diff), the SHA dedup
+// suppresses a no-op touch, and an edit made WHILE working defers to the
+// working→done checkpoint so the agent's changelog is never lost.
+func TestWatchLLMStatusFileEditVersions(t *testing.T) {
+	repo := t.TempDir()
+	doc := filepath.Join(repo, "doc.md")
+	if err := os.WriteFile(doc, []byte("v0"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	vs, err := NewVersionStore(filepath.Join(repo, ".prereview", "versions"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	csv := filepath.Join(repo, ".prereview", "comments.csv")
+	if err := os.MkdirAll(filepath.Dir(csv), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := &PrereviewController{RepoPath: repo, NoGit: true, SingleFile: "doc.md", Versions: vs, CSVPath: csv}
+	sp := c.statusPath()
+	c.checkpointVersions(VersionTriggerBaseline, "") // v0
+
+	fs := &fakeSession{actions: make(chan string, 8)}
+	c.sessionMu.Lock()
+	c.session = fs
+	c.sessionMu.Unlock()
+	stop := make(chan struct{})
+	defer close(stop)
+	go c.WatchLLMStatus(stop, 10*time.Millisecond)
+	assertNoFire(t, fs, 80*time.Millisecond, "before any change")
+
+	want := func(n int, when string) {
+		t.Helper()
+		cps, _ := vs.Checkpoints()
+		if len(cps) != n {
+			t.Fatalf("%s: %d versions, want %d", when, len(cps), n)
+		}
+	}
+	want(1, "baseline")
+
+	// Raw edit, no agent status → a deterministic file-edit version.
+	writeStatus(t, doc, "v1 edited on disk")
+	assertFire(t, fs, "raw edit")
+	want(2, "after raw edit")
+
+	// A pure mtime bump (content unchanged): the fingerprint moves so the watcher
+	// fires, but the SHA dedup records no new version. Chtimes forces a distinct
+	// mtime regardless of the filesystem's mtime granularity (#121).
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(doc, future, future); err != nil {
+		t.Fatal(err)
+	}
+	assertFire(t, fs, "mtime-only touch")
+	want(2, "after mtime-only touch (SHA dedup)")
+
+	// Agent goes working, then edits: the file-edit checkpoint is SUPPRESSED (the
+	// pending done owns it), so no version yet.
+	writeStatus(t, sp, `{"state":"working"}`)
+	assertFire(t, fs, "status working")
+	writeStatus(t, doc, "v2 edited while working")
+	assertFire(t, fs, "edit while working")
+	want(2, "edit while working stays suppressed")
+
+	// working→done → the llm-done checkpoint records the edited content once, with
+	// the changelog (never lost to a file-edit no-op).
+	writeStatus(t, sp, `{"state":"done","message":"reworked the intro"}`)
+	assertFire(t, fs, "status done")
+	want(3, "working→done")
+	cps, _ := vs.Checkpoints()
+	if last := cps[len(cps)-1]; last.Trigger != VersionTriggerLLMDone || last.Changelog != "reworked the intro" {
+		t.Fatalf("final version: trigger=%q changelog=%q, want llm-done/'reworked the intro'", last.Trigger, last.Changelog)
+	}
 }
 
 func TestWatchLLMStatusSkipsWhenNoSession(t *testing.T) {

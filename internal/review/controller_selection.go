@@ -383,6 +383,7 @@ func (c *PrereviewController) SetURLHash(state PrereviewState, ctx *livetemplate
 		state.ReanchorCommentID = ""
 		state.FileDrawerOpen = false
 		state.ShowAllComments = false
+		state.ShowQuiz = false
 		// Refresh the per-file version timeline for the newly linked file, same as
 		// SelectFile/stepFile/search do — otherwise the Versions panel keeps the
 		// previously-selected file's history (the deep-link's mount-default on load).

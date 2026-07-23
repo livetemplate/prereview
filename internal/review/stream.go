@@ -70,7 +70,14 @@ type StreamEvent struct {
 	Suggestions *[]StreamDecision `json:"suggestions,omitempty"` // snapshot
 	// Paused reports that the reviewer paused the queue (batching): the agent's
 	// `watch` will block until resume, which then delivers one coalesced snapshot.
-	Paused bool `json:"paused,omitempty"` // ready / snapshot
+	Paused bool `json:"paused,omitempty"`
+
+	// Quizzes reports the reviewer's comprehension-quiz results (#191) — one row
+	// per quiz the agent generated. ADVISORY ONLY: it never gates anything, it
+	// tells the agent whether a file was accepted after a comprehension check or
+	// without one. Omitted entirely when no quiz exists, so the snapshot shape is
+	// unchanged for every review that doesn't use the feature.
+	Quizzes []StreamQuiz `json:"quizzes,omitempty"` // ready / snapshot
 	// SkillUpdated is set on the `ready` event when this launch refreshed the
 	// installed prereview skill to match the (possibly self-updated) binary — so
 	// the agent's loaded skill is now stale. The agent should re-read the skill
@@ -192,6 +199,17 @@ type StreamComment struct {
 	// agent has the full exchange — and can tell a fresh comment (no thread) from a
 	// reviewer reply it must respond to (the last entry's author is "reviewer").
 	Thread []StreamReply `json:"thread,omitempty"`
+}
+
+// StreamQuiz is one quiz's outcome as the agent sees it. Taken is false when the
+// reviewer has not answered anything yet — distinct from a 0/N score, which means
+// they answered and got them all wrong.
+type StreamQuiz struct {
+	File   string `json:"file"`
+	QuizID string `json:"quiz_id"`
+	Taken  bool   `json:"taken"`
+	Score  int    `json:"score"`
+	Total  int    `json:"total"`
 }
 
 // StreamReply is one consumer-facing thread entry (#149): who said it, what, when.
@@ -325,10 +343,10 @@ func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool,
 // Both snapshots are always non-nil slices so their keys are always present
 // (`[]` when nothing is actionable). decided is the fingerprint-matched decision
 // map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
-func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, paused bool, ts time.Time) error {
+func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, quizzes []StreamQuiz, paused bool, ts time.Time) error {
 	csnap := actionableComments(comments, threadByID)
 	dsnap := actionableDecisions(suggestions, decided, threadByID, applied)
-	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Paused: paused}, ts)
+	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Quizzes: quizzes, Paused: paused}, ts)
 }
 
 // EmitEnd emits the single terminator — the only event the consumer

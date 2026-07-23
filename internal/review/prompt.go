@@ -33,10 +33,19 @@ type Prompt struct {
 // user dir, or an unreadable / title-only file, is skipped — the picker must never
 // break a review.
 func LoadPrompts(userDir string) []Prompt {
+	return loadPromptLibrary(builtinPromptsFS, "builtin_prompts", userDir)
+}
+
+// loadPromptLibrary is the shared built-ins-plus-user-overlay loader behind both
+// prompt libraries: the #147 "ask for suggestions" prompts and the #191 quiz
+// prompts. Factored rather than copied so the two can't drift on the rules that
+// matter — override-by-slug, sort-by-title, and skip-don't-fail — since a user's
+// library must never be able to break a review.
+func loadPromptLibrary(builtinFS embed.FS, builtinDir, userDir string) []Prompt {
 	bySlug := map[string]Prompt{}
-	if entries, err := builtinPromptsFS.ReadDir("builtin_prompts"); err == nil {
+	if entries, err := builtinFS.ReadDir(builtinDir); err == nil {
 		for _, e := range entries {
-			b, _ := builtinPromptsFS.ReadFile("builtin_prompts/" + e.Name()) // just-listed → readable
+			b, _ := builtinFS.ReadFile(builtinDir + "/" + e.Name()) // just-listed → readable
 			if p, ok := parsePromptBytes(e.Name(), b); ok {
 				bySlug[p.Slug] = p
 			}

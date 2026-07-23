@@ -140,6 +140,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		CSVPath:     csvPath,
 		UIPrefsPath: uiPrefsPath(),
 		PromptsDir:  userPromptsDir(),
+		QuizzesDir:  userQuizzesDir(),
 		Version:     version,
 		CSVWriter:   csvWriter,
 		AgentMode:   agentMode,

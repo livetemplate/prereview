@@ -37,6 +37,36 @@
       >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
     {{end}}
+    {{/* #191: "Quiz me" — asks the agent for a comprehension quiz about this diff.
+         Beside the suggestions picker, not inside it: a quiz is not a suggestion,
+         and it answers with `prereview quiz`, not `prereview suggest`. Sends on a
+         single tap (the phone case) when the library holds one prompt; with two or
+         more it becomes a picker reusing the same client-only dropdown primitive. */}}
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.QuizPrompts}}
+    {{if $.QuizPending}}
+    <span class="quiz-trigger is-pending" title="The request is queued — the agent will answer shortly">{{template "iconQuiz"}}<span class="quiz-trigger-label">Quiz requested…</span></span>
+    {{else if eq (len $.QuizPrompts) 1}}
+    <form method="POST" style="margin:0"><button type="submit" name="requestQuiz" class="quiz-trigger" title="Ask the agent for a comprehension quiz about this diff">{{template "iconQuiz"}}<span class="quiz-trigger-label">Quiz me</span></button></form>
+    {{else}}
+    <div
+      class="tb-dropdown prompts-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button
+        type="button"
+        class="quiz-trigger"
+        aria-haspopup="menu"
+        title="Ask the agent for a comprehension quiz about this diff"
+      >{{template "iconQuiz"}}<span class="quiz-trigger-label">Quiz me</span></button>
+      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Quiz prompts">
+        {{range $.QuizPrompts}}
+        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="requestQuiz" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    {{end}}
     {{/* #147: "Ask for suggestions" — pick a prebuilt prompt; it pre-fills the file
          composer (tweak/scope, then Save) and the agent answers with inline
          suggestions. Reuses the View-dropdown client primitive (lvt-el toggle +

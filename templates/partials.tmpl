@@ -570,3 +570,49 @@
 <span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>
 {{- end -}}
 {{- end}}
+{{define "quizCard"}}<div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
+  {{/* The scroll target is the HEAD, not the card: the client centres whatever it
+       scrolls to, and a card with four options is taller than a phone screen — so
+       centring the card put the question itself off the top of the viewport. */}}
+  <div class="quiz-card-head">
+    <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}
+  </div>
+  <p class="quiz-prompt">{{.Prompt}}</p>
+  <ul class="quiz-options">
+    {{$item := .}}
+    {{range $i, $opt := .Options}}
+    <li>
+      {{if $item.Answered}}
+      <div class="quiz-option{{if eq $i $item.Answer}} is-correct{{end}}{{if and (eq $i $item.Choice) (ne $i $item.Answer)}} is-wrong{{end}}"><span class="quiz-mark">{{if eq $i $item.Answer}}✓{{else if eq $i $item.Choice}}✗{{else}} {{end}}</span>{{$opt}}</div>
+      {{else}}
+      <form method="POST" style="margin:0"><input type="hidden" name="quizId" value="{{$item.QuizID}}"><input type="hidden" name="questionId" value="{{$item.ID}}"><input type="hidden" name="choice" value="{{$i}}"><button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button></form>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+  {{if .Answered}}<p class="quiz-why{{if .Correct}} is-correct{{else}} is-wrong{{end}}"><small>{{.Why}}</small></p>{{end}}
+  {{- /* #191 conversation on the question itself: ask the agent to clarify a
+         confusing option, or to revise a question you think is wrong. Same
+         thread machinery comments and suggestions use — the only new part is the
+         composite target id, since a question id is unique only within its quiz. */ -}}
+  {{- template "thread" .Thread -}}
+  {{if .Replying}}
+  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ThreadID}}">
+    <textarea
+      name="body"
+      placeholder="Ask the agent to clarify or revise this question…"
+      lvt-on:input="saveReplyDraft"
+      lvt-mod:debounce="200"
+      lvt-autofocus
+    >{{.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>
+  {{else}}
+  <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="{{.ThreadID}}"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
+  {{end}}
+</div>
+{{end}}
