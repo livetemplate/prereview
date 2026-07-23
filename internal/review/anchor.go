@@ -264,14 +264,17 @@ func relocateLineRange(lines []string, fromLine, toLine *int, status *string, an
 	switch len(starts) {
 	case 0:
 		// Recorded text is gone from its lines and appears nowhere else. If the
-		// region is still BRACKETED by its recorded context — the before AND after
-		// neighbors both sit where they were — then exactly these lines were EDITED
-		// in place: a deterministic "likely addressed". Requiring both sides is what
-		// separates an in-place edit from a deletion, which shifts the after-context
-		// up so it no longer matches at the recorded position. A side with no
-		// recorded context can't disagree, but at least one side must exist to judge.
-		beforeOK := len(anchor.Before) == 0 || neighborScore(lines, *fromLine-1, -1, anchor.Before) > 0
-		afterOK := len(anchor.After) == 0 || neighborScore(lines, *toLine+1, +1, anchor.After) > 0
+		// IMMEDIATELY-adjacent neighbor on each side still sits where it was, exactly
+		// these lines were EDITED in place: a deterministic "likely addressed".
+		// Checking the nearest neighbor (not any context line) is what separates an
+		// in-place edit from a deletion or a restructure — a deletion shifts the
+		// after-neighbor up, a restructure changes the before-neighbor — and avoids a
+		// far-off blank line coincidentally passing. A side with no recorded context
+		// can't disagree, but at least one side must exist to judge.
+		beforeOK := len(anchor.Before) == 0 ||
+			(*fromLine >= 2 && normLine(lines[*fromLine-2]) == anchor.Before[len(anchor.Before)-1])
+		afterOK := len(anchor.After) == 0 ||
+			(*toLine < len(lines) && normLine(lines[*toLine]) == anchor.After[0])
 		hasContext := len(anchor.Before) > 0 || len(anchor.After) > 0
 		if hasContext && beforeOK && afterOK {
 			*status = anchorEdited
