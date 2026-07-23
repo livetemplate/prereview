@@ -38,6 +38,12 @@ const (
 	VersionTriggerBaseline = "baseline"
 	VersionTriggerLLMDone  = "llm-done"
 	VersionTriggerRollback = "rollback"
+	// FileEdit fires when a reviewed file changes on disk outside a status batch
+	// (the agent edited without going working→done, or wrote no status at all), so
+	// the reviewer still gets a version with the diff of what changed. It carries
+	// no changelog — the diff is the deterministic record. Ordered after LLMDone in
+	// the watcher, so a done-message version wins when both apply (SHA no-op).
+	VersionTriggerFileEdit = "file-edit"
 )
 
 // ErrVersionTombstone is returned by Restore when the requested version is a

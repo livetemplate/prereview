@@ -207,6 +207,13 @@ type PrereviewState struct {
 	// rebuilds the diff fresh, so the nudge is moot after a reload.
 	PendingRefresh bool `json:"pending_refresh"`
 
+	// SeenReviewedGen is the controller's reviewedGen this tab last rebuilt its
+	// diff at (set in Mount). LLMStatusChanged nudges PendingRefresh when the
+	// controller's reviewedGen has moved past it — i.e. the reviewed file was
+	// edited on disk since this tab last rendered, with no agent command. Not
+	// persisted; Mount resets it.
+	SeenReviewedGen int64 `json:"-"`
+
 	// Mobile drawer visibility. Persisted so a reconnect mid-drawer doesn't
 	// surprise the user with a closed drawer. The desktop CSS ignores this
 	// field (sidebar is always visible above 900px).

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/livetemplate/livetemplate"
@@ -35,6 +36,27 @@ func (c *PrereviewController) agentSignalFingerprint() string {
 		statusFingerprint(AppliedPath(c.CSVPath)) + "|" +
 		statusFingerprint(RevertedPath(c.CSVPath)) + "|" +
 		statusFingerprint(c.quizPath())
+}
+
+// reviewedFilesFingerprint is a cheap mtime+size key over the files under REVIEW
+// (versionScope) — the deterministic "the reviewed file was edited" signal,
+// independent of any agent command. An empty scope (external mode, or no version
+// store) yields "", so the watcher simply never fires on a reviewed-file change
+// there. It's the same shape as agentSignalFingerprint, just over review content
+// instead of the agent's sidecar files.
+//
+// Cost: a stat per scoped file each poll. In single-file / NoGit mode (how muster
+// reviews a plan) that is one stat; recomputing versionScope every tick keeps a
+// newly-touched file's first edit detectable (it enters scope only once touched).
+// In git mode versionScope runs `git` name-status per tick — a fine background
+// cost for a local tool, and the sole reason to revisit if a huge repo ever drags.
+func (c *PrereviewController) reviewedFilesFingerprint() string {
+	var b strings.Builder
+	for _, f := range c.versionScope() {
+		b.WriteString(statusFingerprint(f.AbsPath))
+		b.WriteByte('|')
+	}
+	return b.String()
 }
 
 // applyLLMStatus refreshes the LLM-status fields on state from the status file.
@@ -126,6 +148,14 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 		// the working pill and the refresh bar mutually exclusive.
 		state.PendingRefresh = false
 	}
+	// A reviewed file was edited on disk since this tab last rebuilt its diff
+	// (deterministic, no agent command). Offer the same non-intrusive refresh the
+	// working→done path does — the view stays frozen (scroll/drafts survive) until
+	// the reviewer refreshes, which rebuilds and re-anchors. Placed after the
+	// switch so a raw edit surfaces even when the agent never wrote a status.
+	if c.reviewedGen.Load() != state.SeenReviewedGen {
+		state.PendingRefresh = true
+	}
 	return state, nil
 }
 
@@ -153,6 +183,10 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 	// changing fans out LLMStatusChanged, which refreshes status AND the "worked
 	// on" badges. Combining the fingerprints keeps this a single cheap stat pair.
 	last := c.agentSignalFingerprint() // don't broadcast the pre-existing state at startup
+	// Also fingerprint the REVIEWED files, so a raw edit to the plan (no agent
+	// command) is a first-class trigger alongside the sidecar signals — the agent
+	// forgetting to write a status can no longer hide the fact that it edited.
+	lastReviewed := c.reviewedFilesFingerprint()
 	// Track the agent's status state so we can checkpoint a version on the
 	// working→done transition. openStore removes llm-status.json on launch, so a
 	// fresh session starts idle and the first real "done" is a genuine transition.
@@ -163,10 +197,19 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 			return
 		case <-ticker.C:
 			fp := c.agentSignalFingerprint()
-			if fp == last {
+			reviewed := c.reviewedFilesFingerprint()
+			if fp == last && reviewed == lastReviewed {
 				continue
 			}
-			last = fp
+			reviewedChanged := reviewed != lastReviewed
+			last, lastReviewed = fp, reviewed
+			if reviewedChanged {
+				// A reviewed file changed on disk — deterministic, no agent command.
+				// Bump the gen so open tabs surface it (the refresh nudge) in
+				// LLMStatusChanged. The re-anchor/rebuild happens on refresh, like the
+				// working→done path, so the view stays frozen until the reviewer acts.
+				c.reviewedGen.Add(1)
+			}
 			// Checkpoint an artifact version when the agent finishes a batch
 			// (working→done): its edits are now on disk, so this is the natural
 			// "one version per work-cycle" boundary. Done in this single per-server
@@ -179,6 +222,15 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 			cur, _ := readLLMStatus(c.statusPath())
 			if prevState == LLMStateWorking && cur.State == LLMStateDone {
 				c.checkpointVersions(VersionTriggerLLMDone, cur.Message)
+			}
+			// A reviewed file was edited outside a status batch — the agent never
+			// went "working", or wrote no status at all. Checkpoint a version so the
+			// reviewer still gets the diff of what changed, deterministically. Ordered
+			// AFTER the llm-done checkpoint so an edit+done in the same tick keeps the
+			// richer done-changelog version (this becomes a SHA no-op). Suppressed
+			// while working: the pending done will checkpoint it with its message.
+			if reviewedChanged && cur.State != LLMStateWorking {
+				c.checkpointVersions(VersionTriggerFileEdit, "")
 			}
 			prevState = cur.State
 			c.sessionMu.Lock()

@@ -154,12 +154,15 @@ read in the context of the full set. Comment kinds (`line`/`text`/`file`/`area`/
 `region`), resolved handling, and re-anchoring are detailed in
 [reference.md → Comment data](./reference.md#comment-data).
 
-## Echo your status (so the reviewer sees progress)
+## Echo your status (optional — the reviewer already sees your edits)
 
-While you work, echo what you're doing so the running UI shows a live status pill
-across every open tab — so the user knows you picked up their comments. This is a
-one-way *echo*, separate from the `done` marking below; skipping it never breaks the
-review, but always do it:
+prereview watches the reviewed files: the moment you edit one, every open tab gets a
+"refresh to see the changes" nudge — with NO command from you. So the reviewer already
+knows you acted; the deterministic signal is the file-watch, not this echo. `status` is
+an *enrichment* on top: a live "working…" pill with a human-readable message while you
+work, and a one-line changelog when you finish. Skipping it never breaks anything, and
+it can no longer hide your edits — but a short `working` note reassures mid-batch, and
+the `done` message becomes the version changelog:
 
 ```bash
 prereview status --out "<REPO>" working "Applying your review"   # starting a batch
@@ -170,13 +173,14 @@ Keep the working message short and plain. **Do not put a comment count in it** �
 queue can grow while you work, so any number goes stale. The status resets on each
 fresh launch; you write nothing on `end` (the server is shutting down).
 
-**The `done` message is the version changelog (#155).** When you finish a batch that
-edited files, prereview snapshots a new version — and your `done` message becomes that
-version's changelog entry, shown in the file's Versions panel. So make it a short,
-plain-language sentence describing *what you changed to the docs* this batch ("Fixed the
-subject–verb agreement in the API section"), not what you were busy doing. One line; no
-diff or counts (prereview shows the +add/−del itself). Skip the message on a batch that
-changed no files.
+**The `done` message is the version changelog (#155).** prereview snapshots a new
+version whenever a reviewed file changes on disk — even a bare edit with no status gets
+one (its diff is the record). When you *do* finish a batch with `status done`, your
+message becomes that version's changelog entry, shown in the file's Versions panel. So
+make it a short, plain-language sentence describing *what you changed to the docs* this
+batch ("Fixed the subject–verb agreement in the API section"), not what you were busy
+doing. One line; no diff or counts (prereview shows the +add/−del itself). Skip the
+message on a batch that changed no files.
 
 ## Mark each comment you addressed — REQUIRED
 
