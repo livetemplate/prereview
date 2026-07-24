@@ -78,8 +78,15 @@ var skillMD string
 //go:embed skill/reference.md
 var skillReferenceMD string
 
-// Version set via -ldflags at build time.
+// Version set via -ldflags at build time, and left as "dev" by a plain
+// `go build`/`go install`. init resolves the latter against the embedded
+// build info so a `go install <mod>@vX.Y.Z` binary knows its own release
+// version — see update.ReleaseVersion. Resolved in init, not in main, so
+// that every read of version (including --version and the on-run update
+// check) sees the same value.
 var version = "dev"
+
+func init() { version = update.ReleaseVersion(version) }
 
 // reviewPath is the path to review: the first positional argument, or "."
 // (current directory) when none is given. It's a git repo, a non-git

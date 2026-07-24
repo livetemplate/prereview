@@ -21,6 +21,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -33,7 +34,7 @@ import (
 // prints to the user, so keep them human-readable. The on-run path
 // treats the "expected, not really a failure" ones as no-ops.
 var (
-	ErrDevBuild         = errors.New("not a released build (version is \"dev\"); install a release from https://github.com/livetemplate/prereview/releases or via `go install github.com/livetemplate/prereview@latest`")
+	ErrDevBuild         = errors.New("not a released build (version is \"dev\"); this binary was built from a source tree. Install a release from https://github.com/livetemplate/prereview/releases or via `go install github.com/livetemplate/prereview@latest`")
 	ErrGoBuildCache     = errors.New("running from the go build cache (go run); self-update is only for installed release binaries")
 	ErrAlreadyCurrent   = errors.New("already on the latest version")
 	ErrThrottled        = errors.New("update check skipped (already checked within the last hour)")
@@ -101,6 +102,68 @@ func splitVersion(v string) [3]int {
 		out[i] = n
 	}
 	return out
+}
+
+// ReleaseVersion resolves the running binary's version, given the value
+// of main.version.
+//
+// goreleaser stamps -X main.version on release builds, so a non-"dev"
+// ldflagVersion is authoritative. A `go install <mod>@vX.Y.Z` build gets
+// no ldflag and so reports the "dev" default even though it *is* a
+// release — but Go records the module version in the embedded build
+// info, so recover it from there. Without this, `go install` (which the
+// ErrDevBuild message recommends) produces a binary that can never
+// self-update.
+//
+// The fallback is deliberately strict: only a bare vX.Y.Z tag counts. A
+// local `go build` also embeds a version, but as a pseudo-version
+// ("v0.24.5-0.20260723204349-<sha>"), often with a "+dirty" suffix, and
+// a build with no VCS info reports "(devel)". Treating any of those as a
+// release would let the on-run check overwrite a developer's own build
+// with a download. Anything unrecognized stays "dev", which costs the
+// user only a manual install.
+func ReleaseVersion(ldflagVersion string) string {
+	return releaseVersion(ldflagVersion, debug.ReadBuildInfo)
+}
+
+// releaseVersion is ReleaseVersion with the build-info source injected,
+// since a test binary's own build info is not the one under test.
+func releaseVersion(ldflagVersion string, readBuildInfo func() (*debug.BuildInfo, bool)) string {
+	if ldflagVersion != "dev" {
+		return ldflagVersion
+	}
+	info, ok := readBuildInfo()
+	if !ok || !isReleaseTag(info.Main.Version) {
+		return "dev"
+	}
+	// goreleaser's {{.Version}} carries no leading "v" but build info's
+	// does; strip it so --version reads the same either way.
+	return strings.TrimPrefix(info.Main.Version, "v")
+}
+
+// isReleaseTag reports whether v is a bare "vMAJOR.MINOR.PATCH" tag:
+// three non-empty numeric components and nothing else. A pre-release or
+// build suffix (a pseudo-version's "-<timestamp>-<sha>", "+dirty"),
+// "(devel)", and the empty string all fail — see ReleaseVersion for why
+// those must not be treated as releases.
+func isReleaseTag(v string) bool {
+	rest, ok := strings.CutPrefix(v, "v")
+	if !ok {
+		return false
+	}
+	n := 0
+	for p := range strings.SplitSeq(rest, ".") {
+		n++
+		if p == "" {
+			return false
+		}
+		for _, c := range p {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+	}
+	return n == 3
 }
 
 // ResolveExecutablePath returns the real on-disk path of the running
