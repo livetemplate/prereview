@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -447,4 +448,70 @@ func slurp(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(b)
+}
+
+func TestIsReleaseTag(t *testing.T) {
+	cases := []struct {
+		v    string
+		want bool
+	}{
+		{"v0.25.0", true},
+		{"v1.0.0", true},
+		{"v10.20.30", true},
+		// Everything below must NOT be treated as a release: self-update
+		// would overwrite a locally built binary with a download.
+		{"", false},
+		{"dev", false},
+		{"(devel)", false},
+		{"0.25.0", false},    // no leading "v" — not what build info emits
+		{"v0.25", false},     // two components
+		{"v0.25.0.1", false}, // four
+		{"v0.25.", false},
+		{"v0.25.0-rc1", false},
+		{"v0.25.0+dirty", false},
+		// The pseudo-version a dirty `go build` embeds — the exact shape
+		// that regressed a user into an un-updatable "dev" binary.
+		{"v0.24.5-0.20260723204349-7ab83524cad7+dirty", false},
+		{"v0.24.5-0.20260723204349-7ab83524cad7", false},
+	}
+	for _, c := range cases {
+		if got := isReleaseTag(c.v); got != c.want {
+			t.Errorf("isReleaseTag(%q) = %v, want %v", c.v, got, c.want)
+		}
+	}
+}
+
+func TestReleaseVersion(t *testing.T) {
+	buildInfo := func(modVersion string) func() (*debug.BuildInfo, bool) {
+		return func() (*debug.BuildInfo, bool) {
+			return &debug.BuildInfo{Main: debug.Module{Version: modVersion}}, true
+		}
+	}
+	noBuildInfo := func() (*debug.BuildInfo, bool) { return nil, false }
+
+	cases := []struct {
+		name     string
+		ldflag   string
+		readInfo func() (*debug.BuildInfo, bool)
+		want     string
+	}{
+		// goreleaser stamped it: authoritative, build info irrelevant.
+		{"release build", "0.25.0", buildInfo("(devel)"), "0.25.0"},
+		// `go install <mod>@vX.Y.Z`: no ldflag, clean tag in build info.
+		// The "v" is stripped so --version matches a goreleaser build.
+		{"go install of a tag", "dev", buildInfo("v0.25.0"), "0.25.0"},
+		// Local builds stay "dev".
+		{"dirty local build", "dev", buildInfo("v0.24.5-0.20260723204349-7ab83524cad7+dirty"), "dev"},
+		{"pseudo-version", "dev", buildInfo("v0.24.5-0.20260723204349-7ab83524cad7"), "dev"},
+		{"no vcs info", "dev", buildInfo("(devel)"), "dev"},
+		{"empty module version", "dev", buildInfo(""), "dev"},
+		{"no build info at all", "dev", noBuildInfo, "dev"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := releaseVersion(c.ldflag, c.readInfo); got != c.want {
+				t.Errorf("releaseVersion(%q, …) = %q, want %q", c.ldflag, got, c.want)
+			}
+		})
+	}
 }
