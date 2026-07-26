@@ -25,8 +25,9 @@ no API key anywhere.
 
 ## The protocol (this is all an agent needs)
 
-When an agent runs `prereview --agent`, it writes everything to a `.prereview/`
-directory (printed as the `REPO` line on stdout) and streams a JSON event log.
+When an agent runs `prereview --agent`, it writes everything to one store
+directory (printed as the `STORE` line on stdout; `REPO` names the directory the
+reviewed files are under) and streams a JSON event log.
 Three things matter to an agent — the last two are two views of the same queue:
 
 ### 1. `.prereview/comments.csv` — the source of truth
@@ -51,7 +52,7 @@ columns; index by position and default missing ones to empty. Full column docs:
 ### 2. `prereview comments --json` — the portable read (poll)
 
 ```bash
-prereview comments --out <REPO> --json
+prereview comments --out <STORE> --json
 ```
 
 Returns the still-actionable set (resolved / outdated / draft already excluded) as
@@ -64,7 +65,7 @@ agent-agnostic.
 ### 3. `prereview watch` — the live stream (block)
 
 ```bash
-prereview watch --out <REPO> --since <seq>
+prereview watch --out <STORE> --since <seq>
 ```
 
 In agent mode prereview emits one JSON object per line to stdout and to
@@ -90,14 +91,14 @@ practice, only Claude Code does reliably (see
 
 ### Marking your work
 
-- **`prereview done --out <REPO> <id>…`** — after each edit that addresses a
+- **`prereview done --out <STORE> <id>…`** — after each edit that addresses a
   comment, mark it **done** so the reviewer sees a badge (an unmarked comment
   looks ignored). Ids are validated against the review; an unknown id fails. Use
   `--all-open` once you've handled the whole batch.
-- **`prereview status --out <REPO> working|done [message]`** — echo a live pill
+- **`prereview status --out <STORE> working|done [message]`** — echo a live pill
   across every open browser tab. Keep the message short; the `done` message
   doubles as the file's version changelog entry.
-- **`prereview reply --out <REPO> <id> --body "…"`** — post a one-line thread
+- **`prereview reply --out <STORE> <id> --body "…"`** — post a one-line thread
   reply saying what you changed. The reviewer can reply back to steer you; a
   comment whose last thread entry is the reviewer's comes back in the next
   snapshot for you to address.
@@ -255,7 +256,9 @@ aider has no user-global command registry, so the installer writes an executable
 
 - **Installs:** `~/.config/prereview/aider/prereview-aider.sh` (executable)
 - **Mode:** poll. aider is one-instruction-then-exit by design; it can't watch a
-  stream, so the wrapper reads `.prereview/comments.csv` for context per run.
+  stream, so the wrapper reads the store's `comments.csv` for context per run
+  (`.prereview/comments.csv` by default; set `PREREVIEW_CSV=<STORE>/comments.csv`
+  for a single-file review, whose store is its own).
 - **Invoke:** `~/.config/prereview/aider/prereview-aider.sh <files…>` (run from
   the repo root, after commenting in prereview). Add `--edit-format diff` for
   small models; set the model with `--model …` or `AIDER_MODEL`.
@@ -285,12 +288,13 @@ Any agent works if it can run `prereview comments --json` and edit files. The
 generic instruction is:
 
 > Run `prereview --agent "$(pwd)" &`. Tell the user the printed `READY <url>`
-> (as a clickable Markdown link) and to click **End session** when done. Whenever
-> they've commented (or on your next turn), run `prereview comments --out <REPO>
+> (as a clickable Markdown link) and to click **End session** when done; keep the
+> printed `STORE <dir>` line — it is `--out` for every subcommand. Whenever
+> they've commented (or on your next turn), run `prereview comments --out <STORE>
 > --json`, take every returned row, and apply them as one coherent change. Use
 > `file` + `from_line`/`to_line` to locate each comment and `body` for intent;
-> dedupe by `id` across turns. After each edit, `prereview done --out <REPO> <id>`.
-> Echo `prereview status --out <REPO> working|done`. Repeat until End session.
+> dedupe by `id` across turns. After each edit, `prereview done --out <STORE> <id>`.
+> Echo `prereview status --out <STORE> working|done`. Repeat until End session.
 
 Drop that into your agent's instruction/command/rules file and you're done. To
 also **propose** edits, add: *submit suggestions with `prereview suggest`

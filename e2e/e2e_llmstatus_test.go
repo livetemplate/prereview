@@ -96,7 +96,7 @@ func TestE2E_LLMStatusMultiTab(t *testing.T) {
 
 	repo := setupFixtureRepo(t)
 	// --agent starts the llm-status watcher (agentMode gates it).
-	url, srv, stderr := startPrereview(t, binary, repo, "--agent")
+	url, _, srv, stderr := startPrereview(t, binary, repo, "--agent")
 	defer func() {
 		_ = srv.Process.Kill()
 		_, _ = srv.Process.Wait()
@@ -282,7 +282,7 @@ func TestE2E_LLMStatusTwoTabJoinerClears(t *testing.T) {
 	chromium := findChromium(t)
 	binary := prereviewBinary(t)
 	repo := setupFixtureRepo(t)
-	url, srv, stderr := startPrereview(t, binary, repo, "--agent")
+	url, _, srv, stderr := startPrereview(t, binary, repo, "--agent")
 	defer func() { _ = srv.Process.Kill(); _, _ = srv.Process.Wait() }()
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],

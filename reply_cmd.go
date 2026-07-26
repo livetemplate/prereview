@@ -24,10 +24,10 @@ import (
 // The id is VALIDATED against comments.csv AND suggestions — a reply targets a
 // comment OR a suggestion — so a typo'd id fails loudly with a non-zero exit instead
 // of recording a reply that renders nowhere. --out is the directory whose .prereview/
-// holds the review (the REPO path prereview prints at launch); defaults to cwd.
+// holds the review (the STORE path prereview prints at launch); defaults to cwd.
 func runReply(args []string) error {
 	fs := flag.NewFlagSet("reply", flag.ContinueOnError)
-	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
+	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	body := fs.String("body", "", "the reply text — a brief note on what you did")
 	file := fs.String("file", "", "read the reply body from this file, or \"-\" for stdin (instead of --body)")
 	fs.Usage = func() {
@@ -35,7 +35,7 @@ func runReply(args []string) error {
 			"Usage: prereview reply [--out <dir>] (--body \"…\" | --file <f>|-) <comment-or-suggestion-id>\n\n"+
 				"  Post a thread reply on a comment or suggestion so the reviewer sees what\n"+
 				"  you did (or your follow-up). Run by the coding agent after addressing a\n"+
-				"  comment; --out must match the review's directory (the REPO line). The id is\n"+
+				"  comment; --out must match the review's store (the STORE line). The id is\n"+
 				"  validated against comments.csv and suggestions — list ids with\n"+
 				"  `prereview comments --json`.\n")
 	}

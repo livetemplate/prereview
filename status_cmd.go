@@ -15,19 +15,19 @@ import (
 // runStatus implements `prereview status <working|done> [message] [--out <dir>]`:
 // the coding agent echoes what it's doing so the live review UI shows a status
 // pill across every open tab — `working` while applying a batch, `done` when
-// finished. It writes <REPO>/.prereview/llm-status.json ATOMICALLY (temp file +
+// finished. It writes <STORE>/llm-status.json ATOMICALLY (temp file +
 // rename) so the server's watcher never reads a half-written file. This is the
 // CLI owning the write the agent used to hand-roll as a shell helper.
 func runStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
-	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
+	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview status <working|done> [message] [--out <dir>]\n\n"+
 				"  Echo the agent's status to the live review UI (a pill shown across every\n"+
 				"  open tab): `working` while applying a batch, `done` when finished. The\n"+
 				"  optional message is short human detail (keep it plain). Written atomically\n"+
-				"  to <REPO>/.prereview/llm-status.json; --out must match the REPO line.\n")
+				"  to <STORE>/llm-status.json; --out must match the STORE line.\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err

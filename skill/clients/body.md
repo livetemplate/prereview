@@ -7,13 +7,14 @@ Setup — only if a prereview server is not already running for this repo:
 
 The first stdout line is `READY <url>`. Give that URL to the reviewer as a
 clickable Markdown link and tell them to leave comments and click **End session**
-when finished. A second line, `REPO <dir>`, names the directory whose
-`.prereview/` holds the data — read everything relative to it.
+when finished. Two more lines follow: `REPO <dir>` names the directory the
+reviewed files are under (resolve each comment's `file` against it), and
+`STORE <dir>` names this review's store — pass that one to `--out`.
 
 Read the actionable comments as JSON (no CSV parsing) whenever the reviewer says
 they have commented, or has clicked End session:
 
-    prereview comments --out <REPO> --json
+    prereview comments --out <STORE> --json
 
 That is the complete set of still-actionable comments (resolved / outdated /
 draft already excluded). Apply them as ONE coherent change, not row by row: read
@@ -26,18 +27,18 @@ guidance; `area` = a rectangle on an image (`area` = {x,y,w,h} fractions);
 After every edit that addresses a comment, mark it done (the id is validated
 against the review — an unknown id fails):
 
-    prereview done --out <REPO> <id>
+    prereview done --out <STORE> <id>
 
 Re-run `prereview comments --json` for more (the reviewer can keep commenting);
 dedupe by `id`. Stop when the reviewer clicks End session. If your harness can
-block on a stream, `prereview watch --out <REPO> --since <seq>` delivers each new
+block on a stream, `prereview watch --out <STORE> --since <seq>` delivers each new
 batch and exits on the terminating `end` event — otherwise just re-read
 `prereview comments --json`.
 
 If a comment asks for a comprehension quiz (the reviewer clicked "Quiz me"), do
 not edit files and do not suggest edits - reply with a quiz instead:
 
-    prereview quiz --out <REPO> --file quiz.json
+    prereview quiz --out <STORE> --file quiz.json
 
 Write 3-5 multiple-choice questions grounded strictly in that file's diff. Each
 needs `options` (2+), a 0-based `answer`, a `why` explaining it, and
@@ -59,8 +60,8 @@ with the same id if they are right that a question needs fixing.
 Status echo: tell the review UI what you're doing so it shows a live pill across
 every open tab — `working` while you apply a batch, `done` when finished:
 
-    prereview status --out <REPO> working "Applying your review"
-    prereview status --out <REPO> done
+    prereview status --out <STORE> working "Applying your review"
+    prereview status --out <STORE> done
 
 Keep the message short and plain (or omit it); do not put a comment count in it
 (the queue can grow while you work). The status resets on each fresh launch.

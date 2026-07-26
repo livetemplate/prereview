@@ -25,11 +25,11 @@ import (
 // server's loader keeps the last write per id), so the agent can update a proposal
 // without piling up duplicates.
 //
-// --out is the directory whose .prereview/ holds the review — the REPO path
+// --out is this review's store — the STORE path
 // prereview prints at launch — mirroring the processed subcommand.
 func runSuggest(args []string) error {
 	fs := flag.NewFlagSet("suggest", flag.ContinueOnError)
-	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
+	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	file := fs.String("file", "", "read the JSON payload from this file instead of stdin")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
@@ -46,7 +46,7 @@ func runSuggest(args []string) error {
 				"      \"proposed\": \"the replacement text\",\n"+
 				"      \"note\":     \"why (optional)\"\n"+
 				"    }\n\n"+
-				"  --out must match the review's directory (the REPO line).\n")
+				"  --out must match the review's store (the STORE line).\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err

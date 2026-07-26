@@ -29,7 +29,7 @@ const (
 const LLMStatusPollInterval = 750 * time.Millisecond
 
 // LLMStatus is the inbound signal the agent writes to
-// <REPO>/.prereview/llm-status.json so the running review server can show what
+// <STORE>/llm-status.json so the running review server can show what
 // the agent is doing. It is the reverse of the outbound event stream
 // (stream.go): the agent is the writer, the server the reader.
 type LLMStatus struct {

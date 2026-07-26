@@ -171,14 +171,20 @@ func (q Question) Jumpable() bool {
 // the whole point — an accept records that the reviewer clicked, and this is the
 // only signal that says whether they also understood.
 //
-// Unlike the view helpers it walks EVERY quiz, not just the selected file's, since
-// the snapshot is not scoped to whatever file happens to be open.
+// Unlike the view helpers it walks every quiz, not just the selected file's, since
+// the snapshot is not scoped to whatever file happens to be open — but it IS scoped
+// to the review (inScope), the same as scopedComments and scopedSuggestions. Without
+// that, a single-file review sharing a pre-#199 store reported the sibling file's
+// quizzes as this file's comprehension record.
 func (s PrereviewState) QuizResults() []StreamQuiz {
 	if len(s.Quizzes) == 0 {
 		return nil
 	}
 	out := make([]StreamQuiz, 0, len(s.Quizzes))
 	for _, q := range s.Quizzes {
+		if !s.inScope(q.File) {
+			continue
+		}
 		r := StreamQuiz{File: q.File, QuizID: q.ID, Total: len(q.Questions)}
 		for _, qu := range q.Questions {
 			if a, ok := s.QuizAnswers[answerKey(q.ID, qu.ID)]; ok {

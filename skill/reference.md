@@ -30,16 +30,16 @@ this file is the lookup for **what every value means**.
 | `--port` | `0` | no | TCP port to listen on. `0` = OS-assigned (random free port — what the agent should normally use to avoid collisions). |
 | `--host` | `127.0.0.1` | no | Host/IP to bind on. **Auto-resolved when not set explicitly:** a remote (SSH) box with a tailnet binds its Tailscale IP (phone-reachable, never public); a remote box with no tailnet stays `127.0.0.1` and prints a stderr warning; local stays `127.0.0.1`. An explicit value is an absolute override and is never auto-rebound — avoid `0.0.0.0`, which exposes the source diff on every interface including any public IP. |
 | `--external` | — | no | Annotate a live local website instead of files: reverse-proxies the URL on a second origin and overlays region annotation. Requires `--out`; ignores `[path]`/`--base`. See [External mode](#external-mode). |
-| `--out` | the review path | with `--external` | Directory whose `.prereview/` holds `comments.csv`. Defaults to the review path; required with `--external`. Also the `--out <REPO>` argument the [agent subcommands](#agent-subcommands) take. |
+| `--out` | the review path | with `--external` | Directory to create the store under (its `.prereview/` holds `comments.csv`). Defaults to the review path; required with `--external`. The resolved store is printed as the `STORE` line — that, not this, is the `--out <STORE>` argument the [agent subcommands](#agent-subcommands) take. |
 | `--version` | — | no | Print build version and exit. |
 | `--update` / `--uninstall` | — | no | Download+install the latest release, or remove the binary. prereview also self-updates + re-syncs the installed skill on a normal launch (see `skill_updated` in [Agent mode](#agent-mode)); `PREREVIEW_NO_UPDATE=1` or `--no-update` skips the on-run check. |
 
 ## Agent subcommands
 
 Besides launching a review, `prereview` has verb subcommands the coding agent uses to
-read from and write to a running review's `.prereview/` store. Each takes `--out
-<REPO>` (the printed `REPO` directory; defaults to the current dir). Run any with `-h`
-for its own flags, or `prereview help` for the top-level list.
+read from and write to a running review's store. Each takes `--out <STORE>` (the
+printed `STORE` directory; defaults to the current dir). Run any with `-h` for its own
+flags, or `prereview help` for the top-level list.
 
 | Subcommand | Purpose |
 |---|---|
@@ -62,6 +62,7 @@ READY http://<host>:<port>
 ALT   http://<host>:<port>     (zero or more; only when on a tailnet)
 PROXY http://<host>:<port>     (external mode only; the proxy origin the UI frames)
 REPO  <absolute review-root directory>
+STORE <absolute store directory>
 ```
 
 `READY` is the **first line** and carries the canonical, always-reachable URL
@@ -70,15 +71,25 @@ the e2e harness machine-parse — match the literal prefix `READY ` and take the
 Zero or more `ALT` lines follow with additional reachable forms (chiefly the MagicDNS
 hostname); they are purely additive and parsers may ignore them. In external mode one
 extra `PROXY <url>` line follows the `ALT` lines (before `REPO`) — additive too;
-`READY` remains the canonical UI url. `REPO` is the directory whose `.prereview/` holds
-the store — equal to the path argument for a git repo or non-git directory, and the
-file's **parent** directory for a single-file review. Operate relative to the `REPO`
-line, not the raw path argument. All other output is slog-formatted and goes to stderr
-— including the "remote box, no tailnet" fallback warning.
+`READY` remains the canonical UI url.
+
+The last two lines carry the two paths, and they are **not** the same thing:
+
+- `REPO` is the directory the reviewed files are under — equal to the path argument
+  for a git repo or non-git directory, and the file's **parent** directory for a
+  single-file review. Resolve a comment's `file` against it, not against the raw path
+  argument.
+- `STORE` is where this review's annotations and event log live, and the value every
+  subcommand takes as `--out`. It is `<REPO>/.prereview` for a repo or directory
+  review and a per-target subdirectory of it for a single-file one (#199) — so pass
+  the printed line through rather than constructing it.
+
+All other output is slog-formatted and goes to stderr — including the "remote box, no
+tailnet" fallback warning.
 
 In **agent mode** (`--agent`), after the preamble prereview emits one JSON object per
 line (JSONL) to stdout — a `ready` event, a `snapshot` per queue mutation, then a
-single `end` — and mirrors the same lines to `<REPO>/.prereview/events.jsonl`. The
+single `end` — and mirrors the same lines to `<STORE>/events.jsonl`. The
 plaintext `READY ` line still comes first, so the preamble parse is unchanged (JSON
 lines start with `{`). See [Agent mode](#agent-mode) for the schema.
 
@@ -99,20 +110,19 @@ it.
 
 ## Filesystem layout
 
-Everything prereview writes lives under `<REPO>/.prereview/`, where `<REPO>` is the
-directory from the stdout `REPO` line:
+Everything prereview writes lives under `<STORE>/`, the directory from the stdout
+`STORE` line:
 
 ```
-<REPO>/
-└── .prereview/
-    ├── comments.csv                ← source of truth, rewritten atomically on every change
-    ├── events.jsonl                ← agent mode only (--agent); append-only JSON event log, reset each launch
-    ├── processed.jsonl             ← INBOUND: per-comment "done" markers (`prereview done`); append-only
-    ├── llm-status.json             ← INBOUND: agent-status echo, watched by the server; reset each launch
-    ├── suggestions.jsonl           ← INBOUND: the agent's proposed edits (`prereview suggest`); append-only, durable
-    ├── suggestion-decisions.jsonl  ← reviewer's accept/reject verdicts; server-owned, rewritten atomically, durable
-    ├── quiz.jsonl                  ← INBOUND: comprehension quizzes (`prereview quiz`); append-only, durable
-    └── quiz-answers.jsonl          ← reviewer's quiz answers; server-owned, rewritten atomically, durable
+<STORE>/
+├── comments.csv                ← source of truth, rewritten atomically on every change
+├── events.jsonl                ← agent mode only (--agent); append-only JSON event log, reset each launch
+├── processed.jsonl             ← INBOUND: per-comment "done" markers (`prereview done`); append-only
+├── llm-status.json             ← INBOUND: agent-status echo, watched by the server; reset each launch
+├── suggestions.jsonl           ← INBOUND: the agent's proposed edits (`prereview suggest`); append-only, durable
+├── suggestion-decisions.jsonl  ← reviewer's accept/reject verdicts; server-owned, rewritten atomically, durable
+├── quiz.jsonl                  ← INBOUND: comprehension quizzes (`prereview quiz`); append-only, durable
+└── quiz-answers.jsonl          ← reviewer's quiz answers; server-owned, rewritten atomically, durable
 ```
 
 The INBOUND files are written by the **agent** and read by the server (the reverse of
@@ -124,16 +134,26 @@ the server polls it (~0.75s) and pushes the status to every open browser tab. Mi
 `processed.jsonl` reset on each fresh launch; `suggestions.jsonl` /
 `suggestion-decisions.jsonl` are durable across launches.
 
-For a git repo or non-git directory `<REPO>` is the path argument. For a single-file
-review `<REPO>` is the file's **parent** directory, so sibling files reviewed from that
-directory share one `comments.csv` (the `file` column disambiguates rows). `.prereview/`
-is created eagerly on startup. Add it to the repo's `.gitignore`.
+For a git repo or non-git directory the store is `<path argument>/.prereview/`. A
+single-file review gets its **own** store, one per reviewed file, under the parent
+directory's `.prereview/files/`: reviews of two files in one directory are independent
+sessions that can run at the same time, and neither can see the other's queue (#199).
+The store is created eagerly on startup. Add `.prereview/` to the repo's `.gitignore` —
+one entry still covers everything.
+
+A single-file review is also independent of a **directory** review of the same
+directory: they are two stores, so comments left in one do not appear in the other.
+
+Upgrading from a prereview that predates #199: single-file reviews used to share the
+parent directory's `comments.csv`. The first launch on the new layout **copies** the
+reviewed file's rows — with their done markers and thread replies — into that file's
+own store; the old shared file is left untouched.
 
 ## Agent mode
 
 `--agent` streams the review queue for a coding-agent consumer. prereview emits a JSON
 event log — to stdout (live) and
-`<REPO>/.prereview/events.jsonl` (durable replay) — that the agent reads continuously
+`<STORE>/events.jsonl` (durable replay) — that the agent reads continuously
 with **`prereview watch --since <seq>`** (the one reader; do not hand-roll `tail`/`head`,
 which drops events whenever the tail isn't running). Consume it until the `end` event.
 
@@ -197,7 +217,7 @@ A **thread** is the two-way conversation on a comment or suggestion (#149). It r
 each snapshot item as a `thread` array (present only when non-empty), oldest first; each
 entry is `{ "author": "agent" | "reviewer", "body": "…", "at": "<RFC3339>" }`.
 
-- **You → reviewer:** `prereview reply --out "<REPO>" <id> --body "…"` appends an
+- **You → reviewer:** `prereview reply --out "<STORE>" <id> --body "…"` appends an
   `agent` entry the reviewer sees under the card. Post one after addressing a comment to
   say what you changed (alongside the `done` mark). Validated against comments +
   suggestions, like `done`.
@@ -218,7 +238,7 @@ Suggestion threads work identically — a `thread` on a `suggestions[]` entry.
 
 The agent proposes edits with `prereview suggest` (a JSON payload — a single object, a
 JSON array, or newline-delimited objects — on stdin or via `--file`). It appends to
-`<REPO>/.prereview/suggestions.jsonl`; the running UI picks them up live (no restart).
+`<STORE>/suggestions.jsonl`; the running UI picks them up live (no restart).
 
 **Prompt entry point (#147).** The reviewer's file-header "Ask for suggestions" picker
 sends a prebuilt prompt as an ordinary `kind=file` comment whose body asks for
@@ -320,7 +340,7 @@ you receive is already re-anchored):
 
 ## CSV schema
 
-File: `<REPO>/.prereview/comments.csv`. RFC-4180 quoted; UTF-8. It's the on-disk source
+File: `<STORE>/comments.csv`. RFC-4180 quoted; UTF-8. It's the on-disk source
 of truth, but you rarely need to parse it — `prereview comments --json` returns the same
 shape as a snapshot.
 

@@ -77,7 +77,7 @@ func (a *liveApp) hitCount(path string) int {
 // startPrereviewExternal launches the binary in --external mode and returns the
 // UI URL once READY prints. Mirrors startPrereview but with proxy-mode flags
 // (no repo positional).
-func startPrereviewExternal(t *testing.T, binary, target, out string) (string, *exec.Cmd, *bytesBuf) {
+func startPrereviewExternal(t *testing.T, binary, target, out string) (string, string, *exec.Cmd, *bytesBuf) {
 	t.Helper()
 	cmd := exec.Command(binary,
 		"--external", target, "--out", out,
@@ -92,14 +92,24 @@ func startPrereviewExternal(t *testing.T, binary, target, out string) (string, *
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start binary: %v", err)
 	}
-	urlCh := make(chan string, 1)
+	type preamble struct{ url, store string }
+	readyCh := make(chan preamble, 1)
 	go func() {
 		sc := bufio.NewScanner(stdout)
+		var p preamble
 		for sc.Scan() {
 			line := sc.Text()
 			t.Logf("prereview stdout: %s", line)
-			if strings.HasPrefix(line, "READY ") {
-				urlCh <- strings.TrimPrefix(line, "READY ")
+			switch {
+			case strings.HasPrefix(line, "READY "):
+				p.url = strings.TrimPrefix(line, "READY ")
+			case strings.HasPrefix(line, "STORE "):
+				p.store = strings.TrimPrefix(line, "STORE ")
+			}
+			// STORE closes the preamble in external mode too (READY, ALT*, PROXY,
+			// REPO, STORE), so waiting for both keeps the one timeout covering them.
+			if p.url != "" && p.store != "" {
+				readyCh <- p
 				// Keep draining so later stdout lines don't fill the pipe.
 				go io.Copy(io.Discard, stdout)
 				return
@@ -107,25 +117,25 @@ func startPrereviewExternal(t *testing.T, binary, target, out string) (string, *
 		}
 	}()
 	select {
-	case url := <-urlCh:
-		return url, cmd, stderr
+	case p := <-readyCh:
+		return p.url, p.store, cmd, stderr
 	case <-time.After(10 * time.Second):
 		_ = cmd.Process.Kill()
-		t.Fatalf("prereview never printed READY\nstderr: %s", stderr.String())
+		t.Fatalf("prereview never printed READY + STORE\nstderr: %s", stderr.String())
 	}
-	return "", nil, nil
+	return "", "", nil, nil
 }
 
 // bootChromeExternal builds the binary, starts it against the live app in
 // external mode, and wires a headless chrome — the external-mode analogue of
-// bootChromeAgainstRepo. runningPrereview.repo is set to the --out dir so
-// readCSV() finds <out>/.prereview/comments.csv.
+// bootChromeAgainstRepo. runningPrereview.repo is set to the --out dir, and .store
+// to the printed STORE line, so readCSV() finds the annotations.
 func bootChromeExternal(t *testing.T, target string, viewportW, viewportH int) *runningPrereview {
 	t.Helper()
 	chromium := findChromium(t)
 	binary := prereviewBinary(t)
 	out := t.TempDir()
-	url, srv, stderr := startPrereviewExternal(t, binary, target, out)
+	url, store, srv, stderr := startPrereviewExternal(t, binary, target, out)
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(chromium),
@@ -146,7 +156,7 @@ func bootChromeExternal(t *testing.T, target string, viewportW, viewportH int) *
 		_ = srv.Process.Kill()
 		_, _ = srv.Process.Wait()
 	})
-	return &runningPrereview{t: t, url: url, repo: out, cmd: srv, stderr: stderr, ctx: ctx, cancel: cancel}
+	return &runningPrereview{t: t, url: url, repo: out, store: store, cmd: srv, stderr: stderr, ctx: ctx, cancel: cancel}
 }
 
 // TestE2E_ExternalRegionAnnotate drives the whole feature through a real

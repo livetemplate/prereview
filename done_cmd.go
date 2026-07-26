@@ -32,13 +32,13 @@ import (
 // of silently recording a garbage mark (the root cause of the corruption this
 // guards against).
 //
-// --out is the directory whose .prereview/ holds the review — the REPO path
+// --out is this review's store — the STORE path
 // prereview prints at launch — so the mark lands in the same store the server
-// watches (mirrors the skill's prereview_status <REPO> convention). Defaults to
+// watches (mirrors the skill's prereview_status <STORE> convention). Defaults to
 // the current directory.
 func runDone(args []string) error {
 	fs := flag.NewFlagSet("done", flag.ContinueOnError)
-	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
+	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	file := fs.String("file", "", "read comment ids from this file, or \"-\" for stdin (newline-delimited ids, a JSON array, or JSONL objects with an \"id\")")
 	allOpen := fs.Bool("all-open", false, "mark every comment in the current actionable set (the whole batch); cannot be combined with explicit ids or --file")
 	fs.Usage = func() {
@@ -46,7 +46,7 @@ func runDone(args []string) error {
 			"Usage: prereview done [--out <dir>] [--file <f>|-] [--all-open] <comment-id>...\n\n"+
 				"  Mark review comments as addressed so the live review UI badges them\n"+
 				"  \"worked on\". Run by the coding agent after it applies a comment; --out\n"+
-				"  must match the review's directory (the REPO line). Explicit ids are\n"+
+				"  must match the review's store (the STORE line). Explicit ids are\n"+
 				"  validated against comments.csv — unknown ids fail. Read ids from a stable\n"+
 				"  interface with `prereview comments --json`.\n")
 	}

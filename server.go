@@ -53,25 +53,41 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		}
 	}
 
-	// The .prereview/ store defaults to the review root; --out redirects it
-	// (e.g. to keep a read-only checkout pristine). storeRoot is what we print
-	// as REPO so the agent polls the right .prereview/.
+	// The store defaults to the review root; --out redirects it (e.g. to keep a
+	// read-only checkout pristine). storeRoot is what we print as REPO; the store
+	// resolved under it is printed as STORE, which is what the agent polls.
 	storeRoot, err := resolveStoreRoot(out, absRepo)
 	if err != nil {
 		return err
 	}
 
+	// A single-file review gets its OWN store, keyed by the target (#199): its
+	// storeRoot is the file's parent directory, so sibling files would otherwise
+	// share one store — and one server.pid lock, which made launching a review of
+	// a second file evict the first. The lock lives inside the store, so keying
+	// the directory keys the lock with it.
+	absTarget := ""
+	if tgt.SingleFile != "" {
+		absTarget = filepath.Join(absRepo, tgt.SingleFile)
+	}
+	store := storeDirFor(storeRoot, absTarget)
+
 	// Claim the per-store server lock BEFORE openStore: a non-replacing second
 	// launch must error out before openStore wipes a live server's events.jsonl.
-	release, err := claimServerLock(filepath.Join(storeRoot, ".prereview"), replace)
+	release, err := claimServerLock(store, replace)
 	if err != nil {
 		return err
 	}
 	defer release()
 
 	startedAt := time.Now()
-	csvPath, csvWriter, err := openStore(storeRoot)
+	csvPath, csvWriter, err := openStore(store)
 	if err != nil {
+		return err
+	}
+	// Carry over a previous, pre-#199 review's comments on this file: they were
+	// written to the shared parent-directory store this session no longer reads.
+	if err := seedFromLegacyStore(csvPath, storeRoot, tgt.SingleFile); err != nil {
 		return err
 	}
 	// Record this session's review scope in the store (#171) so the agent subcommands
@@ -230,7 +246,12 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	// is normalized to the file's parent). For a git repo this equals the
 	// path argument, so the existing contract is unchanged.
 	fmt.Printf("REPO %s\n", storeRoot)
-	slog.Info("prereview started", "url", url, "repo", absRepo, "store", storeRoot, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
+	// STORE is where the annotations actually live, and the value the agent
+	// subcommands take as --out. It is <REPO>/.prereview for a repo or directory
+	// review, and a per-target subdirectory for a single-file one (#199) — so it
+	// is printed unconditionally and REPO never has to mean two things.
+	fmt.Printf("STORE %s\n", store)
+	slog.Info("prereview started", "url", url, "repo", absRepo, "store", store, "base", base, "noGit", tgt.NoGit, "bindHost", bindHost)
 
 	// Emit the `ready` event AFTER the plaintext preamble so the agent's
 	// READY/REPO parse is never interleaved with JSON. No-op when not in agent mode.
@@ -349,19 +370,24 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		return err
 	}
 
+	// External mode annotates a live site, not files, so there is no single-file
+	// target to key on: the store is always <out>/.prereview (storeDirFor's
+	// no-target form).
+	store := storeDirFor(absOut, "")
+
 	// Claim the per-store server lock BEFORE openStore, same as repo mode: a
 	// non-replacing second launch must error out before openStore wipes a live
 	// server's events.jsonl.
-	release, err := claimServerLock(filepath.Join(absOut, ".prereview"), replace)
+	release, err := claimServerLock(store, replace)
 	if err != nil {
 		return err
 	}
 	defer release()
 
-	// Same .prereview/ store layout as repo mode (so the agent locates the
-	// store identically), just rooted at --out.
+	// Same store layout as repo mode (so the agent locates the store
+	// identically), just rooted at --out.
 	startedAt := time.Now()
-	csvPath, csvWriter, err := openStore(absOut)
+	csvPath, csvWriter, err := openStore(store)
 	if err != nil {
 		return err
 	}
@@ -447,9 +473,11 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		fmt.Printf("ALT %s\n", alt)
 	}
 	fmt.Printf("PROXY %s\n", proxyBaseURL)
-	// REPO points at the annotation store so the agent can locate <out>/.prereview/.
+	// REPO points at the annotation store root so the agent can locate <out>/.prereview/;
+	// STORE names the store itself — the --out for the subcommands, same as repo mode.
 	fmt.Printf("REPO %s\n", absOut)
-	slog.Info("prereview started (external)", "url", uiURL, "proxy", proxyBaseURL, "target", externalURL, "out", absOut, "bindHost", bindHost)
+	fmt.Printf("STORE %s\n", store)
+	slog.Info("prereview started (external)", "url", uiURL, "proxy", proxyBaseURL, "target", externalURL, "out", absOut, "store", store, "bindHost", bindHost)
 
 	emitReady(emitter, absOut, csvPath, skillUpdated)
 

@@ -127,14 +127,15 @@ prereview --external http://localhost:5173 --out ./review   # annotate a live lo
 
 The mode is auto-detected from the path: a git repo shows real `git diff` hunks
 against `--base`; a non-git directory or single file is shown whole (every line
-commentable), with no diff and no base picker.
+commentable), with no diff and no base picker. Each single file gets its own
+store, so reviews of two files in one directory run independently.
 
 | Flag | Default | Notes |
 |---|---|---|
 | `--base <ref>` | `HEAD` | Git ref to diff against (`HEAD~1`, `main`, a tag, a SHA). Git mode only. |
 | `--port <n>` | `0` | TCP port; `0` = a random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address. On a remote box with Tailscale, auto-binds the tailnet IP so a phone can reach it — never public. Avoid `0.0.0.0`. |
-| `--out <dir>` | the review path | Directory whose `.prereview/` holds the store. Required with `--external`. |
+| `--out <dir>` | the review path | Directory to create the store under (its `.prereview/`). Required with `--external`. The resolved store is printed as the `STORE` line. |
 | `--agent` | off | Run under a coding agent: stream the review queue as JSON events and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. (`--skill`/`--stream` are deprecated aliases.) |
 | `--replace` | off | Stop an already-running server for this store and take over. |
 | `--external <url>` | — | Annotate a live local site instead of files. Requires `--out`; ignores the path and `--base`. |
