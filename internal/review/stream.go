@@ -331,7 +331,7 @@ func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 }
 
 // EmitReady announces the session is live. Emitted once, after the
-// READY/REPO stdout preamble, so the preamble parse is never interleaved
+// READY/REPO/STORE stdout preamble, so the preamble parse is never interleaved
 // with JSON.
 func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool, ts time.Time) error {
 	return e.emit(StreamEvent{Event: "ready", Repo: repo, CSV: csvPath, Paused: paused, SkillUpdated: skillUpdated}, ts)

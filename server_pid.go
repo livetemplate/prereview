@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+// serverPIDFileName is the per-store lock file. Because it lives INSIDE the store,
+// keying the store directory by the reviewed target (storeDirFor) is what makes the
+// lock per-target rather than per-directory (#199).
+const serverPIDFileName = "server.pid"
+
 // claimServerLock records that THIS process owns the review server for the store
 // under prereviewDir (via prereviewDir/server.pid), refusing to start a second
 // server for the same store — two servers fighting over one .prereview/ corrupt
@@ -21,7 +26,7 @@ func claimServerLock(prereviewDir string, replace bool) (release func(), err err
 	if err := os.MkdirAll(prereviewDir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir %s: %w", prereviewDir, err)
 	}
-	pidPath := filepath.Join(prereviewDir, "server.pid")
+	pidPath := filepath.Join(prereviewDir, serverPIDFileName)
 
 	if data, rerr := os.ReadFile(pidPath); rerr == nil {
 		if pid, perr := strconv.Atoi(strings.TrimSpace(string(data))); perr == nil && processAlive(pid) {

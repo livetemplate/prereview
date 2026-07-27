@@ -2,9 +2,12 @@
 
 // End-to-end for #171. Two things, both seen through a real browser:
 //
-//  1. A single-file review's .prereview/ store lives in the file's PARENT directory, so
-//     it is shared with every other file reviewed from there. Reviewing b.md must NOT
-//     surface a.md's comments or suggestion cards — the reported bug.
+//  1. Reviewing b.md must NOT surface a.md's comments or suggestion cards — the
+//     reported bug. Since #199 a single-file review has its OWN store (keyed by the
+//     target), so this also covers the upgrade: the fixture seeds the pre-#199 shared
+//     store in the parent directory, and only the reviewed file's rows may cross into
+//     the new one. Annotations that land in this review's own store but name another
+//     file — the shape a carried-over store can still have — stay scoped out.
 //  2. An accepted-but-unapplied edit must be impossible to miss: an amber count in the
 //     Queue, and a warning on the End-session confirm. prereview never writes user files;
 //     if the agent's turn has ended, nothing else ever will.
@@ -26,8 +29,9 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// twoDocDir is the reported situation: one directory, two documents, one shared store —
-// and a.md carries a previous review's leftovers (a comment and a suggestion).
+// twoDocDir is the reported situation: one directory, two documents, one shared
+// pre-#199 store — and a.md carries a previous review's leftovers (a comment and a
+// suggestion).
 func twoDocDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -57,7 +61,8 @@ func twoDocDir(t *testing.T) string {
 func TestE2E_SingleFileScope(t *testing.T) {
 	dir := twoDocDir(t)
 
-	// Boot the review on ONE FILE. The store is in the parent dir, shared with a.md.
+	// Boot the review on ONE FILE. Its store is its own (#199), seeded from the shared
+	// one in the parent dir with b.md's rows.
 	p := bootChromeAgainstRepo(t, filepath.Join(dir, "b.md"), 1400, 1000, "--agent")
 	diag := func() string {
 		var html string
@@ -65,9 +70,10 @@ func TestE2E_SingleFileScope(t *testing.T) {
 		return "\n--- server ---\n" + p.stderr.String() + "\n--- html ---\n" + html
 	}
 
-	// a.md's suggestion from the earlier review — written straight into the shared store,
-	// exactly as the previous session left it. (--out is the REPO = the parent directory.)
-	submitSuggestions(t, p.binary, dir, `[
+	// a.md's suggestion from the earlier review — written straight into the store THIS
+	// review reads (--out is the STORE line), so scope is what has to exclude it, not
+	// the store split. That is the shape a carried-over store still has.
+	submitSuggestions(t, p.binary, p.store, `[
 	  {"id":"sa1","file":"a.md","from_line":3,"to_line":3,"original":"teh","proposed":"the"}
 	]`)
 
@@ -103,7 +109,7 @@ func TestE2E_SingleFileScope(t *testing.T) {
 
 	// The agent's own view of the queue must agree with the reviewer's, or the agent goes
 	// and edits a document nobody is reviewing.
-	out, err := exec.Command(p.binary, "comments", "--out", dir, "--json").Output()
+	out, err := exec.Command(p.binary, "comments", "--out", p.store, "--json").Output()
 	if err != nil {
 		t.Fatalf("prereview comments: %v", err)
 	}
@@ -124,15 +130,17 @@ func TestE2E_SingleFileScope(t *testing.T) {
 		t.Errorf("`prereview comments` = %d comments, want 1 (only b.md's)\n%s", len(listed), out)
 	}
 
-	// And the load-bearing safety property: scoping the VIEW must not have deleted the
-	// other file's rows from the shared store.
+	// And the load-bearing safety property: neither scoping the VIEW nor carrying rows
+	// into this review's own store may delete anything from the shared one.
 	csv, err := os.ReadFile(filepath.Join(dir, ".prereview", "comments.csv"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(csv), "ca1") {
-		t.Fatal("DATA LOSS: a.md's comment is gone from comments.csv — scope filters the reads, " +
-			"it must never reach the CSV rewrite")
+	for _, id := range []string{"ca1", "cb1"} {
+		if !strings.Contains(string(csv), id) {
+			t.Fatalf("DATA LOSS: %s is gone from the shared comments.csv — scope filters the "+
+				"reads and #199 COPIES rows out; neither may reach the CSV rewrite", id)
+		}
 	}
 }
 

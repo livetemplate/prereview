@@ -36,7 +36,7 @@ git repo's working tree against `HEAD`, in standalone (human-only) mode.
 |---|---|---|
 | a dir with `.git` (incl. worktrees/submodules) | **git** | real `git diff` hunks vs `--base`; base picker shown; file list is git/`.gitignore`-aware (tracked + untracked) |
 | a dir without `.git` | **no-git** | the dir walked recursively; **every file shown whole** (each line "new"/commentable), no diff, base picker hidden |
-| a single file | **no-git (single file)** | just that file, whole; `.prereview/` lives in the file's **parent** dir |
+| a single file | **no-git (single file)** | just that file, whole; its store lives under the file's **parent** dir, one per reviewed file |
 | *(selected by `--external <url>`, not the path)* | **external (proxy)** | reverse-proxies a live local site; drag a box on any page to annotate; needs `--out` |
 
 In no-git mode `--base` is ignored (there are no refs). The directory walk skips
@@ -69,7 +69,7 @@ websockets) working with **zero rewriting**, external mode boots **two servers**
 the normal prereview UI **plus** a reverse proxy on its own port — a separate
 origin the UI iframes. Both bind the same `--host`, so both are tailnet-reachable
 on a remote box. Stdout gains an extra `PROXY <url>` line (the proxy origin) after
-the `ALT` lines and before `REPO`; `READY` is still the UI url.
+the `ALT` lines and before `REPO`/`STORE`; `READY` is still the UI url.
 
 Annotations anchor to a **URL + region rectangle** rather than a file + line:
 they're stored as `kind=region` rows with the page in the `url` column and the
@@ -103,9 +103,9 @@ hand-written CSV parser:
   releases the whole batch at once. The Queue dropdown shows the counts (queued ·
   done · draft, plus "accepted, awaiting apply" and reviewer replies still
   awaiting the agent) and is the hub for Pause/Resume and End session.
-- **The event stream.** In agent mode, after the usual `READY`/`REPO` preamble
-  prereview emits one JSON object per line to **stdout** and mirrors it to
-  `.prereview/events.jsonl` (append-only, reset each launch). Three event types:
+- **The event stream.** In agent mode, after the usual `READY`/`REPO`/`STORE`
+  preamble prereview emits one JSON object per line to **stdout** and mirrors it to
+  `<STORE>/events.jsonl` (append-only, reset each launch). Three event types:
   - **`ready`** (seq 0) — once, after the preamble. Carries `repo`, `csv`, and
     optional `paused` / `skill_updated`.
   - **`snapshot`** — on every queue mutation (debounced). A **full snapshot** of
@@ -139,7 +139,7 @@ Full event-schema and comment-field docs: [skill/reference.md](../skill/referenc
 | `--port <n>` | `0` | TCP port; `0` = OS-assigned random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address — see [Binding](#binding--remote-access). |
 | `--external <url>` | — | Annotate a **live local site** instead of files: reverse-proxies `<url>` on a second origin and overlays region annotation. **Requires `--out`**; ignores `[path]` and `--base`. See [External mode](#external-mode---external). |
-| `--out <dir>` | the review path | Store root — the directory whose `.prereview/` holds `comments.csv` + the event log. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The `REPO` stdout line is the resolved store root, and the same value the [subcommands](#subcommands) take as `--out`. |
+| `--out <dir>` | the review path | Store root — the directory under which the store holding `comments.csv` + the event log is created. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The resolved store is printed as the `STORE` stdout line, which is what the [subcommands](#subcommands) take as `--out`. |
 | `--agent` | `false` | Run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`) and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. See [Agent mode](#agent-mode---agent). |
 | `--replace` | `false` | prereview refuses to start a second server for the same store (duplicate servers fight over it). `--replace` stops the running one and takes over. Comments auto-save, so nothing is lost. |
 | `--skill` / `--stream` | `false` | **Deprecated aliases of `--agent`** — still enable agent mode, print a deprecation warning. Use `--agent`. |
@@ -160,10 +160,11 @@ These do one thing and exit — they don't start the server:
 ## Subcommands
 
 Beyond launching a review, `prereview` has **bare-verb subcommands** the coding
-agent uses to read from and write to a running review's `.prereview/` store.
+agent uses to read from and write to a running review's store.
 They write into the same store the server watches, so their effect shows up live.
-You rarely run them by hand — the skill does. Each takes `--out <dir>` (the printed
-`REPO` directory; defaults to the current dir). Run any with `-h` for its own flags.
+You rarely run them by hand — the skill does. Each takes `--out <dir>` — the printed
+`STORE` directory (the reviewed file also works, and a directory still means its own
+`.prereview/`); defaults to the current dir. Run any with `-h` for its own flags.
 
 ```
 prereview watch     [--out <dir>] [--since <seq>]
@@ -259,12 +260,23 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 
 ## Output
 
-`<store-root>/.prereview/comments.csv` is the source of truth (RFC-4180, **17
-columns**, atomically written via tmp+fsync+rename). The store root is the review
-path by default; `--out` redirects it in any mode (and is required with
-`--external`). For a single-file review the `.prereview/` dir is the file's
-**parent** directory. The `REPO` line on stdout always points at the resolved
-store root.
+`<store>/comments.csv` is the source of truth (RFC-4180, **17 columns**, atomically
+written via tmp+fsync+rename). The store is `<store-root>/.prereview/`, where the
+store root is the review path by default and `--out` redirects it in any mode (and is
+required with `--external`).
+
+A **single-file** review gets its own store per reviewed file, at
+`<parent>/.prereview/files/<name>-<hash>/`. That is what lets two files in one
+directory be reviewed at the same time: they used to share a store *and* the "one
+server per store" lock, so launching a review of a second file evicted the first
+(#199). It also means a single-file review and a directory review of the same
+directory are separate reviews that do not see each other's comments. Upgrading from
+a prereview that predates #199 copies the reviewed file's rows — with their done
+markers and thread replies — out of the old shared `comments.csv`, which is itself
+left untouched.
+
+The `STORE` line on stdout always points at the resolved store — pass it to a
+subcommand's `--out` rather than assembling the path.
 
 The header (column order is the contract; columns are only ever appended, so older
 CSVs may have fewer trailing columns — index by position, default missing ones to

@@ -112,7 +112,7 @@ func TestE2E_ViewPrefsSurviveRelaunch(t *testing.T) {
 	}
 
 	// ---- Server #1: set non-default prefs, then reload (same process). ----
-	url1, srv1, stderr1 := startPrereview(t, binary, repo)
+	url1, _, srv1, stderr1 := startPrereview(t, binary, repo)
 	waitReady(url1)
 
 	if got := dataScheme(); got != "solarized" {
@@ -136,7 +136,7 @@ func TestE2E_ViewPrefsSurviveRelaunch(t *testing.T) {
 	_ = srv1.Process.Kill()
 	_, _ = srv1.Process.Wait()
 
-	url2, srv2, stderr2 := startPrereview(t, binary, repo)
+	url2, _, srv2, stderr2 := startPrereview(t, binary, repo)
 	defer func() { _ = srv2.Process.Kill(); _, _ = srv2.Process.Wait() }()
 	waitReady(url2)
 

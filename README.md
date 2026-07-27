@@ -237,12 +237,13 @@ prereview ./design-docs                  # a non-git directory — every file sh
 prereview --base origin/main ../service  # a different git repo vs a ref (flags BEFORE the path)
 prereview --external http://localhost:5173 --out ./review   # annotate a live local site (dev server)
 prereview --agent                        # agent mode: stream the queue for an LLM (path defaults to .)
-prereview --agent --replace              # take over an already-running session for this repo
+prereview --agent --replace              # take over an already-running session for this review
 ```
 
 A non-git directory or single file is auto-detected: it's shown whole
-(every line commentable), with no diff and no base picker. Flags must come
-**before** the path. Full reference — every flag, mode, and combination —
+(every line commentable), with no diff and no base picker. Each single file gets
+its own store, so two files in one directory can be reviewed at the same time.
+Flags must come **before** the path. Full reference — every flag, mode, and combination —
 in **[docs/cli.md](docs/cli.md)**.
 
 ### What you can review
@@ -409,7 +410,10 @@ from `--external`, anchored to a `url`); `area` carries the rectangle as
 `{x,y,w,h}` fractions. See [skill/reference.md](skill/reference.md) for the
 full column docs.
 
-Alongside the CSV, `.prereview/` holds a few sidecar files: the JSON event log
+For a single-file review the store is per file, under the parent directory's
+`.prereview/files/`; the launch prints its path as the `STORE` line.
+
+Alongside the CSV, the store holds a few sidecar files: the JSON event log
 the agent watches (`events.jsonl`); the agent's proposed edits
 (`suggestions.jsonl`) and your verdicts on them (`suggestion-decisions.jsonl`);
 the comments it marked done (`processed.jsonl`), suggestions it applied /

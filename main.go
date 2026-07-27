@@ -24,7 +24,7 @@ const topUsage = `Usage: prereview [flags] [path]
   path   git repo, non-git directory, or single file to review (default: current dir).
          Flags must come before the path, e.g. ` + "`prereview --agent ./docs`" + `.
 
-Subcommands (for the coding agent; each takes --out <REPO>):
+Subcommands (for the coding agent; each takes --out <STORE>):
   comments   list the review's comments (--json for the queue-snapshot shape; --all for resolved too)
   applied    ack that you applied an accepted suggestion's edit to disk (validated against suggestions)
   reverted   ack that you reverted an applied suggestion (restored its original text after a revert request)
@@ -214,7 +214,7 @@ func main() {
 	}
 	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit); ignored for a non-git dir or single file")
 	external := flag.String("external", "", "annotate a live local website instead of files: reverse-proxies this http(s):// URL and overlays the region-annotation UI. Requires --out. Ignores [path]/--base.")
-	out := flag.String("out", "", "directory whose .prereview/ holds the saved annotations (comments.csv). Defaults to the review path; required with --external (which has no review path).")
+	out := flag.String("out", "", "directory to create the annotation store under (its .prereview/ holds comments.csv). Defaults to the review path; required with --external (which has no review path). The resolved store is printed as the STORE line.")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
 	agent := flag.Bool("agent", false, "run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`); shows the Queue (Pause/Resume) + End session UI")
@@ -226,7 +226,7 @@ func main() {
 	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
 	doUninstall := flag.Bool("uninstall", false, "remove the prereview binary from disk, then exit (your review comments in each repo's .prereview/ are left untouched)")
 	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
-	replace := flag.Bool("replace", false, "if a prereview server is already running for this repo's store, stop it and take over (otherwise launch errors)")
+	replace := flag.Bool("replace", false, "if a prereview server is already running for THIS review's store, stop it and take over (otherwise launch errors). Reviews of different single files are different stores and never disturb each other.")
 	flag.Parse()
 
 	// --agent is the single agent-mode flag. --skill/--stream are kept as

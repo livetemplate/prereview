@@ -35,7 +35,7 @@ const eventsPollInterval = 250 * time.Millisecond
 // the last seq to pick up seamlessly.
 func runWatch(args []string) error {
 	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
-	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
+	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	since := fs.Int("since", -1, "print only events whose seq is greater than this cursor (-1 = from the start); resume by passing the seq of the last line you saw")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
@@ -45,7 +45,7 @@ func runWatch(args []string) error {
 				"  returns — exiting immediately on the terminating `end`. Each line\n"+
 				"  carries a `seq`; loop by re-running with the highest seq you saw (anything\n"+
 				"  that landed between rounds comes back instantly). Requires the review\n"+
-				"  server running with --agent; --out must match its REPO directory.\n")
+				"  server running with --agent; --out must match its STORE directory.\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err

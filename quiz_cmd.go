@@ -32,7 +32,7 @@ import (
 // the server, which is the side that holds the diff.)
 func runQuiz(args []string) error {
 	fs := flag.NewFlagSet("quiz", flag.ContinueOnError)
-	out := fs.String("out", "", "directory whose .prereview/ holds the review (the REPO printed at launch); defaults to the current directory")
+	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	file := fs.String("file", "", "read the JSON payload from this file, or \"-\" for stdin (the default when omitted)")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
@@ -56,7 +56,7 @@ func runQuiz(args []string) error {
 				"        }\n"+
 				"      ]\n"+
 				"    }\n\n"+
-				"  --out must match the review's directory (the REPO line).\n")
+				"  --out must match the review's store (the STORE line).\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err

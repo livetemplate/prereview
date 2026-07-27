@@ -143,11 +143,12 @@ func prefsIsolatedEnv(repo string) []string {
 	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+prefs)
 }
 
-// startPrereview launches the binary against repo and returns the READY URL,
-// the running cmd, and a captured stderr buffer. Caller must kill the cmd.
-// Pass extraArgs (e.g. --agent) to enable agent mode for tests asserting
+// startPrereview launches the binary against repo and returns the READY URL, the
+// STORE directory (where this review's annotations live — the --out for the
+// subcommands), the running cmd, and a captured stderr buffer. Caller must kill the
+// cmd. Pass extraArgs (e.g. --agent) to enable agent mode for tests asserting
 // agent-mode behavior.
-func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (string, *exec.Cmd, *bytesBuf) {
+func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (string, string, *exec.Cmd, *bytesBuf) {
 	t.Helper()
 	// --host 127.0.0.1 is explicit ON PURPOSE — do NOT delete as a
 	// "redundant default". It forces netaddr.ResolveBindHost's operator-override
@@ -173,16 +174,27 @@ func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (str
 		t.Fatalf("start binary: %v", err)
 	}
 
-	// Read READY <url> from first line of stdout.
-	urlCh := make(chan string, 1)
+	// Read the launch preamble: READY <url>, then ALT*/PROXY, then REPO, then
+	// STORE. STORE closes it, so waiting for both lines costs nothing (they are
+	// printed back-to-back, after the listener is up) and the one timeout covers
+	// the pair.
+	type preamble struct{ url, store string }
+	readyCh := make(chan preamble, 1)
 	errCh := make(chan error, 1)
 	go func() {
 		sc := bufio.NewScanner(stdout)
+		var p preamble
 		for sc.Scan() {
 			line := sc.Text()
 			t.Logf("prereview stdout: %s", line)
-			if strings.HasPrefix(line, "READY ") {
-				urlCh <- strings.TrimPrefix(line, "READY ")
+			switch {
+			case strings.HasPrefix(line, "READY "):
+				p.url = strings.TrimPrefix(line, "READY ")
+			case strings.HasPrefix(line, "STORE "):
+				p.store = strings.TrimPrefix(line, "STORE ")
+			}
+			if p.url != "" && p.store != "" {
+				readyCh <- p
 				// keep draining so the pipe doesn't fill.
 				go io.Copy(io.Discard, stdout)
 				return
@@ -194,15 +206,15 @@ func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (str
 	}()
 
 	select {
-	case url := <-urlCh:
-		return url, cmd, stderr
+	case p := <-readyCh:
+		return p.url, p.store, cmd, stderr
 	case err := <-errCh:
 		t.Fatalf("scan stdout: %v\nstderr: %s", err, stderr.String())
 	case <-time.After(10 * time.Second):
 		_ = cmd.Process.Kill()
-		t.Fatalf("prereview never printed READY\nstderr: %s", stderr.String())
+		t.Fatalf("prereview never printed READY + STORE\nstderr: %s", stderr.String())
 	}
-	return "", nil, nil
+	return "", "", nil, nil
 }
 
 // bytesBuf is an io.Writer collecting bytes with a mutex for safe concurrent
@@ -239,7 +251,7 @@ func TestE2E_FileListAndDiff(t *testing.T) {
 	binary := prereviewBinary(t)
 
 	repo := setupFixtureRepo(t)
-	url, srv, stderr := startPrereview(t, binary, repo)
+	url, _, srv, stderr := startPrereview(t, binary, repo)
 	defer func() {
 		_ = srv.Process.Kill()
 		_, _ = srv.Process.Wait()
@@ -361,6 +373,7 @@ type runningPrereview struct {
 	t      *testing.T
 	url    string
 	repo   string
+	store  string // the STORE line: this review's annotation store, the subcommands' --out
 	binary string // path to the built prereview binary (for `prereview processed …`)
 	cmd    *exec.Cmd
 	stderr *bytesBuf
@@ -386,7 +399,7 @@ func bootChromeAgainstRepo(t *testing.T, repo string, viewportW, viewportH int, 
 	t.Helper()
 	chromium := findChromium(t)
 	binary := prereviewBinary(t)
-	url, srv, stderr := startPrereview(t, binary, repo, extraArgs...)
+	url, store, srv, stderr := startPrereview(t, binary, repo, extraArgs...)
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(chromium),
@@ -406,7 +419,7 @@ func bootChromeAgainstRepo(t *testing.T, repo string, viewportW, viewportH int, 
 	})
 
 	return &runningPrereview{
-		t: t, url: url, repo: repo, binary: binary, cmd: srv, stderr: stderr,
+		t: t, url: url, repo: repo, store: store, binary: binary, cmd: srv, stderr: stderr,
 		ctx: ctx, cancel: cancel,
 	}
 }
@@ -559,10 +572,12 @@ func (p *runningPrereview) peekRow(line int) {
 	}
 }
 
-// readCSV returns the rows in the prereview CSV file (header included).
+// readCSV returns the rows in the prereview CSV file (header included). It reads the
+// STORE this review printed, which is <repo>/.prereview for a repo or directory review
+// and a per-target subdirectory for a single-file one (#199).
 func (p *runningPrereview) readCSV() [][]string {
 	p.t.Helper()
-	csvPath := filepath.Join(p.repo, ".prereview", "comments.csv")
+	csvPath := filepath.Join(p.store, "comments.csv")
 	data, err := os.ReadFile(csvPath)
 	if err != nil {
 		p.t.Fatalf("read %s: %v", csvPath, err)
@@ -3233,24 +3248,11 @@ func setupNoGitPlanDir(t *testing.T) string {
 // readCSVRowsAt reads <csvDir>/.prereview/comments.csv (header included).
 // Single-file review puts .prereview/ in the file's PARENT dir, so the
 // harness's p.readCSV (which joins p.repo) can't be used there.
-func readCSVRowsAt(t *testing.T, csvDir string) [][]string {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(csvDir, ".prereview", "comments.csv"))
-	if err != nil {
-		t.Fatalf("read csv in %s: %v", csvDir, err)
-	}
-	rows, err := stdcsv.NewReader(strings.NewReader(string(data))).ReadAll()
-	if err != nil {
-		t.Fatalf("parse csv: %v", err)
-	}
-	return rows
-}
-
 // TestE2E_NoGitSingleFile is the core "review a Claude plan" scenario:
 // the path arg points at a single Markdown file in a NON-git directory. It
 // asserts (1) the file is reviewable with the base picker hidden (no
-// refs exist), (2) Markdown renders, (3) a comment persists to
-// .prereview/ in the file's PARENT directory, and (4) the git-free
+// refs exist), (2) Markdown renders, (3) a comment persists to this
+// file's own store under the PARENT directory's .prereview/, and (4) the git-free
 // re-anchor engine still follows the sentence after the file is
 // rewritten (an LLM editing the plan before hand-off) — CSV self-heals
 // with anchor_status=moved. Captures console + server stderr + WS
@@ -3336,7 +3338,7 @@ func TestE2E_NoGitSingleFile(t *testing.T) {
 		t.Fatalf("add comment: %v%s", err, diag())
 	}
 
-	rows := readCSVRowsAt(t, dir) // .prereview is in the file's PARENT dir
+	rows := p.readCSV() // this file's own store, under the PARENT dir's .prereview/
 	if len(rows) != 2 {
 		t.Fatalf("want header + 1 row, got %d: %v%s", len(rows), rows, diag())
 	}
@@ -3371,7 +3373,7 @@ func TestE2E_NoGitSingleFile(t *testing.T) {
 	); err != nil {
 		t.Fatalf("reload after rewrite: %v%s", err, diag())
 	}
-	rows = readCSVRowsAt(t, dir)
+	rows = p.readCSV()
 	if len(rows) != 2 {
 		t.Fatalf("post-rewrite: want header + 1 row, got %d: %v%s", len(rows), rows, diag())
 	}

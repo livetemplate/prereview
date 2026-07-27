@@ -36,13 +36,20 @@ prereview --agent "$(pwd)" &
 # stdout:
 #   READY http://127.0.0.1:PORT        (canonical URL; Tailscale IP on a remote box)
 #   ALT   http://host.tailnet.ts.net:PORT   (0+ friendlier equivalents; only on a tailnet)
-#   REPO  /abs/dir/whose/.prereview/holds/everything
+#   REPO  /abs/dir/the/reviewed/files/are/under
+#   STORE /abs/path/to/this/review/s/store   (the --out for every subcommand)
 #   {"event":"ready","seq":0,...}       (events mirror to stdout too; consume with `prereview watch`)
 ```
 
-After `READY`, prereview prints `REPO <dir>` — the directory whose `.prereview/`
-holds the queue store and event log. **Always operate relative to `REPO`**, not the
-raw path argument: they're identical for a git repo, but differ for a single file.
+Two lines, two jobs — keep them straight:
+
+- **`REPO <dir>`** — the directory the reviewed files live under. **Resolve every
+  `file` you get from a comment against `REPO`**, not against the raw path argument:
+  they're identical for a git repo, but differ for a single file (`REPO` is its
+  parent directory).
+- **`STORE <dir>`** — this review's queue store and event log. **Pass it verbatim as
+  `--out` to every subcommand.** Don't construct it: for a single-file review each
+  file gets its own store, so it is not simply `<REPO>/.prereview`.
 
 `--base` defaults to `HEAD` (working tree vs last commit); pass `--base main` (before
 the path) for branch-vs-base review, `--base HEAD~3` for last-3-commits, etc.
@@ -53,12 +60,14 @@ diff — every line is "new" and commentable, the base picker is hidden, `--base
 ignored:
 
 ```bash
-prereview --agent ~/.claude/plans/some-plan.md &   # one file  → store lives in its PARENT dir
+prereview --agent ~/.claude/plans/some-plan.md &   # one file
 prereview --agent ~/.claude/plans &                # whole dir, recursively
 ```
 
-For a single file the `.prereview/` store lives in the file's **parent** directory —
-exactly what the printed `REPO` line points at. Re-anchoring works the same.
+For a single file, `REPO` is the file's **parent** directory (resolve the `file`
+column against it) and `STORE` is that one file's own store — so reviews of two
+files in one directory are independent and can run at the same time. Re-anchoring
+works the same.
 
 **Clean working tree → handled for you.** When you did *not* pass an explicit
 `--base` and the working tree is clean, prereview reviews the whole tree against the
@@ -66,9 +75,11 @@ empty base (every file appears added, any line is commentable) — so just
 `prereview --agent "$(pwd)" &`. An explicitly requested base (`--base main`,
 `HEAD~3`, a tag, …) is always honored as-is.
 
-**Already running for this repo? Take it over with `--replace`.** prereview refuses
-to start a second server for the same repo (duplicate servers fight over the same
-store). To relaunch, pass `--replace` to stop the old one and take over:
+**Already running for this review? Take it over with `--replace`.** prereview refuses
+to start a second server for the same store (duplicate servers fight over it). That's
+per REVIEW, not per directory: reviewing a different single file never disturbs a
+running one. To relaunch the same review, pass `--replace` to stop the old server and
+take over:
 
 ```bash
 prereview --agent --replace "$(pwd)" &
@@ -105,7 +116,7 @@ Track this as a checklist; run it until you see the `end` event.
 
    ```bash
    # n = the highest seq you've seen; start at -1 (from the beginning).
-   prereview watch --out "<REPO>" --since "$n"
+   prereview watch --out "<STORE>" --since "$n"
    ```
 
    It prints every event after `$n` (one JSON object per line), then — if none are
@@ -165,8 +176,8 @@ it can no longer hide your edits — but a short `working` note reassures mid-ba
 the `done` message becomes the version changelog:
 
 ```bash
-prereview status --out "<REPO>" working "Applying your review"   # starting a batch
-prereview status --out "<REPO>" done "Tightened the intro and removed a duplicate word"  # finished + changelog
+prereview status --out "<STORE>" working "Applying your review"   # starting a batch
+prereview status --out "<STORE>" done "Tightened the intro and removed a duplicate word"  # finished + changelog
 ```
 
 Keep the working message short and plain. **Do not put a comment count in it** — the
@@ -192,16 +203,16 @@ moving on.** Don't defer it, and don't skip it.
 
 ```bash
 # mark specific ids (validated against comments.csv — an unknown id fails non-zero):
-prereview done --out "<REPO>" <comment-id> [<comment-id>...]
+prereview done --out "<STORE>" <comment-id> [<comment-id>...]
 
 # or read ids from the stable JSON interface and pipe them (no CSV hand-parsing):
-prereview comments --out "<REPO>" --json | jq -r '.[].id' | prereview done --out "<REPO>" --file -
+prereview comments --out "<STORE>" --json | jq -r '.[].id' | prereview done --out "<STORE>" --file -
 
 # or, once you've addressed the WHOLE current batch, mark all of it at once:
-prereview done --out "<REPO>" --all-open
+prereview done --out "<STORE>" --all-open
 ```
 
-List ids any time with `prereview comments --out "<REPO>" --json` (the **same shape as
+List ids any time with `prereview comments --out "<STORE>" --json` (the **same shape as
 a snapshot**). `prereview done` validates each id against `comments.csv` and **fails
 loudly** (non-zero exit, naming the unknown ids) rather than recording garbage, so a
 typo can't corrupt anything. **Prefer per-id marking** (tie each mark to its edit) over
@@ -219,7 +230,7 @@ so they aren't left guessing. After addressing a comment, post a one-line reply
 alongside the `done` mark:
 
 ```bash
-prereview reply --out "<REPO>" <comment-or-suggestion-id> --body "Renamed to userToken and updated the 3 call sites."
+prereview reply --out "<STORE>" <comment-or-suggestion-id> --body "Renamed to userToken and updated the 3 call sites."
 ```
 
 The id is validated against `comments.csv` and suggestions (an unknown id fails
@@ -266,7 +277,7 @@ suggestion**. Answer with `prereview quiz`, never `prereview suggest`, and do no
 edit any files.
 
 ```bash
-prereview quiz --out "<REPO>" --file quiz.json    # or pipe JSON on stdin
+prereview quiz --out "<STORE>" --file quiz.json    # or pipe JSON on stdin
 ```
 
 Then `done` the request comment and `reply` a one-liner ("5 questions, 2 about
@@ -309,7 +320,7 @@ you answer with `prereview reply` — addressing the question by the composite i
 `"<quizID>:<questionID>"`, since a question id is only unique within its quiz:
 
 ```bash
-prereview reply --out "<REPO>" "z1:q3" --body "Fair - option 2 was ambiguous. Revised."
+prereview reply --out "<STORE>" "z1:q3" --body "Fair - option 2 was ambiguous. Revised."
 ```
 
 If the reviewer is right that a question is wrong, **fix it**: re-submit the quiz
@@ -320,7 +331,7 @@ Submit a JSON payload — a single object, a JSON array, or newline-delimited ob
 on stdin or via `--file`. The running UI picks them up live (no restart):
 
 ```bash
-prereview suggest --out "<REPO>" <<'JSON'
+prereview suggest --out "<STORE>" <<'JSON'
 [
   {"id":"s1","file":"docs/readme.md","from_line":12,"to_line":12,
    "original":"The API might returns an error.",
@@ -349,7 +360,7 @@ On each snapshot, `suggestions[]` is a full snapshot of every decided suggestion
   nets the suggestion back out of "applied" and returns the reviewer's card to undecided.
   Idempotent per `id`, same as `applied`.
 
-After processing, run `prereview status --out "<REPO>" done` and go read the next event.
+After processing, run `prereview status --out "<STORE>" done` and go read the next event.
 
 **Never finish while an `accept` is unapplied.** prereview does not write the user's
 files — you do. An accepted edit that you don't apply and ack leaves the document

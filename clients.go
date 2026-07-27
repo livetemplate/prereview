@@ -283,9 +283,12 @@ func aiderScript() string {
 #   ~/.config/prereview/aider/prereview-aider.sh <files-to-edit>
 #
 # Pass the files you commented on. Run from the repo root (where .prereview/ is).
+# A single-file review keeps its comments in its OWN store, so point PREREVIEW_CSV
+# at the STORE line prereview printed at launch: PREREVIEW_CSV=<STORE>/comments.csv
+CSV="${PREREVIEW_CSV:-.prereview/comments.csv}"
 exec aider \
-  --read .prereview/comments.csv \
-  --message "Apply every comment in .prereview/comments.csv where the resolved column is not true and the anchor_status column is not outdated. Read them all first, then make one coherent change. Use the file column plus from_line/to_line to locate each anchor and the body column for intent. kind=file is whole-file guidance; kind=area or kind=region point at an image or live-page region, not a file edit." \
+  --read "$CSV" \
+  --message "Apply every comment in $CSV where the resolved column is not true and the anchor_status column is not outdated. Read them all first, then make one coherent change. Use the file column plus from_line/to_line to locate each anchor and the body column for intent. kind=file is whole-file guidance; kind=area or kind=region point at an image or live-page region, not a file edit." \
   --yes --no-auto-commits "$@"
 `
 }

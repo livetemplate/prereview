@@ -334,6 +334,28 @@ func TestScope_EmittedSnapshotIsScoped(t *testing.T) {
 	}
 }
 
+// #199. The agent snapshot's quiz results were the one annotation surface that still
+// walked EVERY file in the store: the reporter, reviewing one plan, kept seeing a
+// sibling plan's quiz reported as their file's comprehension record.
+func TestScope_QuizResultsAreScopedToTheReviewedFile(t *testing.T) {
+	s := twoFileState()
+	s.Quizzes = []Quiz{
+		{ID: "za", File: "a.md", Questions: []Question{{ID: "q1", Answer: 0}}},
+		{ID: "zb", File: "b.md", Questions: []Question{{ID: "q1", Answer: 0}}},
+	}
+
+	got := s.QuizResults()
+	if len(got) != 1 || got[0].QuizID != "zb" {
+		t.Fatalf("QuizResults = %+v, want only b.md's quiz — a.md's is another review's", got)
+	}
+
+	// A directory review narrows nothing: both quizzes belong to it.
+	s.SingleFile = ""
+	if got := s.QuizResults(); len(got) != 2 {
+		t.Errorf("directory review reported %d quizzes, want both", len(got))
+	}
+}
+
 // A comment whose FILE IS GONE can never be re-anchored and the agent can never act on
 // it — but it used to ship in the actionable snapshot forever, because relocateAll skipped
 // anchorless comments and treated the missing-file load error as "no drift" (#171).
