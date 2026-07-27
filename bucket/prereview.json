@@ -1,12 +1,12 @@
 {
-    "version": "0.25.1",
+    "version": "0.26.0",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/livetemplate/prereview/releases/download/v0.25.1/prereview_0.25.1_windows_amd64.zip",
+            "url": "https://github.com/livetemplate/prereview/releases/download/v0.26.0/prereview_0.26.0_windows_amd64.zip",
             "bin": [
                 "prereview.exe"
             ],
-            "hash": "d6888ba893a8fa63a287a15072352e7f7c4eab3b1048f171ffb8947a35735813"
+            "hash": "48e5583e5a16bd0a12b6e2c6dbdf27db528b9e0195aa9f3f12d58bc24b0c61ae"
         }
     },
     "homepage": "https://github.com/livetemplate/prereview",
