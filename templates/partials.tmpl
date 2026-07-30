@@ -416,10 +416,13 @@
     </span>
   </header>
   {{- if .Note}}<div class="sg-note">{{.Note}}</div>{{end -}}
-  {{- /* before → after; the original is omitted for a pure insertion */ -}}
-  <div class="sg-diff">
+  {{- /* before → after; the original is omitted for a pure insertion, and the
+         proposal for a pure DELETION — an empty .ProposedText is a valid, common
+         suggestion (a simplify pass is mostly cuts), and rendering an empty
+         green after-pane for it read as a bug. */ -}}
+  <div class="sg-diff{{if not .ProposedText}} is-deletion{{end}}">
     {{- if .OriginalText}}<pre class="sg-old">{{- .OriginalText -}}</pre>{{end -}}
-    <pre class="sg-new">{{- .ProposedText -}}</pre>
+    {{- if .ProposedText}}<pre class="sg-new">{{- .ProposedText -}}</pre>{{else}}<p class="sg-del-note">delete — accepting removes {{.LineSpan}}</p>{{end}}
   </div>
   {{- if and .AnchorOutdated (not $applied) -}}
   <details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{- .OriginalText -}}</pre></details>

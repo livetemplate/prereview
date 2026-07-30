@@ -2526,6 +2526,15 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 .inline-suggestion .sg-old { background: var(--pr-del-bg); color: var(--pr-del); }
 .inline-suggestion .sg-new { background: var(--pr-add-bg); color: var(--pr-add); }
+/* Pure deletion — no after-pane at all. The before-pane carries the whole
+   proposal, so it gets a strike to say "this goes away" rather than "this is
+   replaced by nothing", and the caption stands in for the missing green box. */
+.inline-suggestion .sg-diff.is-deletion .sg-old { text-decoration: line-through; text-decoration-thickness: 1px; }
+.inline-suggestion .sg-del-note {
+  margin: 0; padding: 0.25rem 0.5rem;
+  font-size: 0.74rem; font-weight: 600; letter-spacing: 0.01em;
+  background: var(--pr-del-bg); color: var(--pr-del);
+}
 .inline-suggestion.is-outdated { border-left-color: var(--pr-del); opacity: 0.9; }
 /* Grouped alternatives (#117) — a stronger left rail + accent wash so the cards
    read as ONE set of choices, reinforced by the "alternative N of M" tag pill. */
