@@ -80,6 +80,24 @@ jobs:
           if ! command -v brew >/dev/null 2>&1; then
             eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           fi
+          # `brew update` on Linux is REQUIRED, not hygiene (v0.26.1 failure).
+          #
+          # The formula's one dependency is `git`. On macOS that's system-provided
+          # and nothing else is pulled; on Linux it expands to a ~30-bottle tree
+          # (git → curl → openssl@3 → ca-certificates, pcre2, brotli, libnghttp2…).
+          # GitHub's runner images ship a pinned Homebrew AND set
+          # HOMEBREW_NO_AUTO_UPDATE=1, so that stale Homebrew meets freshly-built
+          # bottles. v0.26.1 died on exactly that: pouring
+          # ca-certificates--2026-07-16.all.bottle hit "unknown install step: run"
+          # — a step type the pinned Homebrew could not parse — with the whole
+          # stack inside Homebrew's own install_steps.rb. Its error text says to
+          # run `brew update` and retry; this is that.
+          #
+          # Linux-only: macOS never builds the tree, and `brew update` there costs
+          # minutes for no benefit.
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            brew update
+          fi
           brew tap livetemplate/prereview https://github.com/livetemplate/prereview
           brew install livetemplate/prereview/prereview
           bin="$(brew --prefix)/bin/prereview"

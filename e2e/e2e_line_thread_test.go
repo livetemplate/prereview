@@ -15,6 +15,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,45 @@ import (
 
 	"github.com/chromedp/chromedp"
 )
+
+// selectUntilButton applies a programmatic selection and waits for the client's
+// floating select button, RE-APPLYING the selection until it appears.
+//
+// Why a retry and not a longer timeout. `selectionchange` fires on CHANGE. These
+// tests set a Range directly, so if the client's `lvt-fx:text-select` directive
+// attaches AFTER the range is already in place, no further event ever fires and
+// the button can never appear — waiting longer cannot help, which is why the
+// failure presented as a hard 20s deadline rather than an occasional slow pass.
+// Clearing and re-applying produces a fresh edge the (now-attached) listener sees.
+//
+// Locally hydration always wins that race; on a loaded 4-way-sharded CI runner it
+// did not, and TestE2E_BlockClickOpensThread failed ~50% of CI runs while passing
+// 3/3 locally.
+func selectUntilButton(ctx context.Context, selectJS string, out *string) error {
+	var lastErr error
+	for attempt := 0; attempt < 8; attempt++ {
+		if err := chromedp.Run(ctx,
+			chromedp.Evaluate(`window.getSelection().removeAllRanges()`, nil),
+			chromedp.Evaluate(selectJS, out),
+			// The client debounces selectionchange by 150ms.
+			chromedp.Sleep(300*time.Millisecond),
+		); err != nil {
+			return err
+		}
+		if *out != "ok" {
+			// A selector problem, not a timing one — retrying cannot fix it.
+			return fmt.Errorf("selection script returned %q", *out)
+		}
+		wctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		lastErr = chromedp.Run(wctx,
+			chromedp.WaitVisible(`[data-lvt-text-select-button]`, chromedp.ByQuery))
+		cancel()
+		if lastErr == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("select button never appeared after 8 attempts: %w", lastErr)
+}
 
 func TestE2E_LineClickOpensThread(t *testing.T) {
 	repo := setupFixtureTextSelectRepo(t)
@@ -111,14 +151,14 @@ func TestE2E_LineClickOpensThread(t *testing.T) {
 	})()`
 	var selResult, heading string
 	ctx, cancel := context.WithTimeout(p.ctx, 20*time.Second)
-	err := chromedp.Run(ctx,
-		chromedp.Evaluate(selectJS, &selResult),
-		chromedp.Sleep(400*time.Millisecond), // debounced selectionchange (150ms)
-		chromedp.WaitVisible(`[data-lvt-text-select-button]`, chromedp.ByQuery),
-		chromedp.Click(`[data-lvt-text-select-button]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.composer`, chromedp.ByQuery),
-		chromedp.Text(`.composer strong`, &heading, chromedp.ByQuery),
-	)
+	err := selectUntilButton(ctx, selectJS, &selResult)
+	if err == nil {
+		err = chromedp.Run(ctx,
+			chromedp.Click(`[data-lvt-text-select-button]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.composer`, chromedp.ByQuery),
+			chromedp.Text(`.composer strong`, &heading, chromedp.ByQuery),
+		)
+	}
 	cancel()
 	if err != nil || selResult != "ok" {
 		t.Fatalf("selecting a phrase on an ALREADY-COMMENTED line must still compose a NEW "+
@@ -245,13 +285,13 @@ func TestE2E_BlockClickOpensThread(t *testing.T) {
 	})()`
 	var selResult string
 	bctx, bcancel = context.WithTimeout(p.ctx, 20*time.Second)
-	err = chromedp.Run(bctx,
-		chromedp.Evaluate(selectJS, &selResult),
-		chromedp.Sleep(400*time.Millisecond), // debounced selectionchange (150ms)
-		chromedp.WaitVisible(`[data-lvt-text-select-button]`, chromedp.ByQuery),
-		chromedp.Click(`[data-lvt-text-select-button]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.composer`, chromedp.ByQuery),
-	)
+	err = selectUntilButton(bctx, selectJS, &selResult)
+	if err == nil {
+		err = chromedp.Run(bctx,
+			chromedp.Click(`[data-lvt-text-select-button]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.composer`, chromedp.ByQuery),
+		)
+	}
 	bcancel()
 	if err != nil || selResult != "ok" {
 		t.Fatalf("selecting a phrase inside an ALREADY-COMMENTED block must still compose a "+

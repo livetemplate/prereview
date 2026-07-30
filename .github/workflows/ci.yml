@@ -10,6 +10,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual only — runs the published-tap smoke (see `smoke-tap-install`), which
+  # is otherwise reachable ONLY by pushing a release tag.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -304,3 +307,55 @@ jobs:
             /tmp/prereview-e2e-*
           if-no-files-found: ignore
           retention-days: 7
+
+  # Manual-dispatch only. Installs the CURRENTLY PUBLISHED formula from the real
+  # tap — the same thing release.yml's `smoke-homebrew` does after a tag.
+  #
+  # Why this exists: that job runs ONLY on `push: tags`, so the sole way to
+  # debug it was to cut a release. v0.26.1's Linux smoke failed and the fix
+  # (`brew update`) could not be verified without burning another tag. This makes
+  # the published-install path reproducible on demand.
+  #
+  # Not on push/PR: it builds a ~30-bottle dependency tree on Linux and tests the
+  # last *published* release, which has nothing to do with the diff under review.
+  smoke-tap-install:
+    name: Smoke — published tap install (manual)
+    if: github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install published formula + gate check
+        shell: bash
+        env:
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: '1'
+        run: |
+          set -euo pipefail
+          if ! command -v brew >/dev/null 2>&1; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          echo "::group::brew + runner versions"
+          brew --version
+          echo "RUNNER_OS=$RUNNER_OS  HOMEBREW_NO_AUTO_UPDATE=${HOMEBREW_NO_AUTO_UPDATE:-unset}"
+          echo "::endgroup::"
+          # Keep in sync with release.yml `smoke-homebrew` — see the rationale there.
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            brew update
+          fi
+          brew tap livetemplate/prereview https://github.com/livetemplate/prereview
+          brew install livetemplate/prereview/prereview
+          bin="$(brew --prefix)/bin/prereview"
+          "$bin" --version
+          out="$("$bin" --uninstall)"
+          echo "$out"
+          echo "$out" | grep -q 'brew uninstall prereview' || {
+            echo "FAIL: expected Homebrew defer message"
+            exit 1
+          }
+          [ -e "$bin" ] || {
+            echo "FAIL: gate must NOT delete a brew-managed binary"
+            exit 1
+          }
+          brew uninstall livetemplate/prereview/prereview
