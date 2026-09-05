@@ -609,6 +609,7 @@ func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
 	if scope := SessionScope(csvPath); scope != "" {
 		comments = slices.DeleteFunc(comments, func(cm Comment) bool { return cm.File != scope })
 	}
+	applyProcessedMarks(comments, csvPath) // #203: the CLI read path must see done, too
 	if !all {
 		// Same actionable set the snapshot ships, incl. the #149 unread overlay, so
 		// `comments --json` and `watch` agree.
@@ -619,6 +620,56 @@ func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
 		out = append(out, toStreamComment(cm))
 	}
 	return out, nil
+}
+
+// OpenSet is the work `prereview done --all-open` should mark, plus what it left out.
+//
+// It is deliberately NOT the actionable set (#203). --all-open used to source its ids from
+// LoadComments(csvPath, false) — the same filter the agent's snapshot uses — which drops
+// outdated comments and ones whose thread ends with the agent. Those are precisely the
+// comments the agent has just finished working on: its own edit is what broke the anchor,
+// and its own reply is what ended the thread. So the verb silently skipped the work it was
+// called to mark, printed "marked N comment(s) as worked on", and exited 0. The skipped set
+// grew as the agent worked, which is why it only showed up on longer queues.
+//
+// What --all-open means is "everything the reviewer has handed me is done": every enqueued,
+// unresolved comment in scope. Drafts are excluded because they were never handed over, and
+// already-done ones because re-marking them appends a duplicate — and a comment counts as
+// done only while its processed marks outnumber its re-enqueue tombstones (see
+// applyProcessedMarks), so duplicates quietly make the reviewer's ↺ button need N clicks.
+type OpenSet struct {
+	IDs         []string
+	Drafts      int // held back by the reviewer — never handed to the agent
+	Resolved    int // already closed by the reviewer
+	AlreadyDone int // marked on an earlier round; re-marking would only add duplicates
+}
+
+// LoadOpenComments returns the OpenSet for the store whose CSV lives at csvPath, in the
+// session's file scope (#171).
+func LoadOpenComments(csvPath string) (OpenSet, error) {
+	rows, err := csv.Read(csvPath)
+	if err != nil {
+		return OpenSet{}, err
+	}
+	comments := commentsFromRows(rows)
+	if scope := SessionScope(csvPath); scope != "" {
+		comments = slices.DeleteFunc(comments, func(cm Comment) bool { return cm.File != scope })
+	}
+	applyProcessedMarks(comments, csvPath)
+	var set OpenSet
+	for _, cm := range comments {
+		switch {
+		case cm.Resolved:
+			set.Resolved++
+		case cm.Draft:
+			set.Drafts++
+		case cm.Processed:
+			set.AlreadyDone++
+		default:
+			set.IDs = append(set.IDs, cm.ID)
+		}
+	}
+	return set, nil
 }
 
 // fileInList reports whether path appears among entries.

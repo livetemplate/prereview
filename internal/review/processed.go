@@ -87,15 +87,23 @@ func loadMarkCounts(path string) map[string]int {
 // LLMStatusChanged fan-out (existing comments). Markers are append-only, so this
 // only ever turns the badge ON.
 func (c *PrereviewController) applyProcessed(state *PrereviewState) {
-	pc := loadMarkCounts(c.processedPath())
+	applyProcessedMarks(state.Comments, c.CSVPath)
+}
+
+// applyProcessedMarks is the shared implementation, keyed off a CSV path rather than a
+// controller so the CLI read path can use it too (#203). Before that, LoadComments never
+// read the sidecar, so `prereview comments --json` and `done --all-open` saw Processed
+// == false for every comment — which is why --all-open kept re-marking work already done.
+func applyProcessedMarks(comments []Comment, csvPath string) {
+	pc := loadMarkCounts(ProcessedPath(csvPath))
 	if len(pc) == 0 {
 		return
 	}
-	rc := loadMarkCounts(c.reenqueuedPath()) // re-enqueue tombstones (#119)
-	for i := range state.Comments {
-		id := state.Comments[i].ID
+	rc := loadMarkCounts(ReenqueuePath(csvPath)) // re-enqueue tombstones (#119)
+	for i := range comments {
+		id := comments[i].ID
 		// Done only while processed marks outnumber re-enqueue marks.
-		state.Comments[i].Processed = pc[id] > rc[id]
+		comments[i].Processed = pc[id] > rc[id]
 	}
 }
 

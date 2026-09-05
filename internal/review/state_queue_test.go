@@ -1,6 +1,9 @@
 package review
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestQueueDerivation(t *testing.T) {
 	mk := func(id string, set func(*Comment)) Comment {
@@ -21,7 +24,7 @@ func TestQueueDerivation(t *testing.T) {
 			mk("done1", func(c *Comment) { c.Processed = true }),            // done
 			mk("draft1", func(c *Comment) { c.Draft = true }),               // draft
 			mk("res", func(c *Comment) { c.Resolved = true }),               // excluded
-			mk("old", func(c *Comment) { c.AnchorStatus = anchorOutdated }), // excluded
+			mk("old", func(c *Comment) { c.AnchorStatus = anchorOutdated }), // blocked (#203)
 		},
 	}
 
@@ -41,20 +44,26 @@ func TestQueueDerivation(t *testing.T) {
 		t.Error("HasQueue should be true")
 	}
 
-	// QueueItems: queued first, then done, then drafts; resolved/outdated excluded.
-	items := s.QueueItems()
-	if len(items) != 4 {
-		t.Fatalf("QueueItems = %d, want 4 (excl. resolved+outdated)", len(items))
+	if got := s.BlockedCount(); got != 1 {
+		t.Errorf("BlockedCount = %d, want 1", got)
 	}
-	wantOrder := []string{queueQueued, queueQueued, queueDone, queueDraft}
+
+	// QueueItems: queued first, then blocked, then done, then drafts. Only a RESOLVE —
+	// an explicit human close — takes a row out of the queue; drift makes it blocked
+	// (#203), because a vanished row is indistinguishable from finished work.
+	items := s.QueueItems()
+	if len(items) != 5 {
+		t.Fatalf("QueueItems = %d, want 5 (excl. resolved only)", len(items))
+	}
+	wantOrder := []string{queueQueued, queueQueued, queueBlocked, queueDone, queueDraft}
 	for i, w := range wantOrder {
 		if items[i].State != w {
 			t.Errorf("item %d state = %q, want %q", i, items[i].State, w)
 		}
 	}
 	for _, it := range items {
-		if it.ID == "res" || it.ID == "old" {
-			t.Errorf("resolved/outdated comment %q leaked into the queue", it.ID)
+		if it.ID == "res" {
+			t.Errorf("resolved comment %q leaked into the queue", it.ID)
 		}
 	}
 
@@ -314,5 +323,142 @@ func TestSuggestionQueueProjection(t *testing.T) {
 	}
 	if items[1].Body != "Suggested edit" {
 		t.Errorf("item[1] body = %q, want the no-note fallback", items[1].Body)
+	}
+}
+
+// TestQueueDoneSurvivesAnchorDrift is the #203 regression: the agent's OWN edit is
+// what usually invalidates the anchor of the comment it just addressed, so keying the
+// queue lifecycle off drift makes Done fall back down every time the agent succeeds.
+// Small queues hid it — with 8 comments on one document the agent rewrites enough of
+// the file that most of the already-done anchors are gone by the end, and the reviewer
+// watches Done stall well short of the total.
+//
+// Drift is something that happens TO a comment, not a lifecycle transition: done is
+// done. suggestionQueueState has always known this ("checked FIRST, since an applied
+// suggestion is also anchor-outdated"); the comment path did not.
+func TestQueueDoneSurvivesAnchorDrift(t *testing.T) {
+	var comments []Comment
+	for i := range 8 {
+		c := Comment{ID: fmt.Sprintf("c%d", i), File: "a.go", ToLine: i + 1, Body: "b", Processed: true}
+		// The agent edited these five regions hard enough that re-anchoring gave up.
+		if i < 5 {
+			c.AnchorStatus = anchorOutdated
+		}
+		comments = append(comments, c)
+	}
+	s := PrereviewState{SelectedFile: "a.go", Comments: comments}
+
+	if got := s.DoneCount(); got != 8 {
+		t.Errorf("DoneCount = %d, want 8 — every comment was marked done; the agent's own "+
+			"edits breaking their anchors must not un-do them", got)
+	}
+	if got := s.QueuedCount(); got != 0 {
+		t.Errorf("QueuedCount = %d, want 0 — nothing is still waiting on the agent", got)
+	}
+}
+
+// TestQueueBlockedOnDrift: an enqueued comment the agent has NOT done, whose anchor is
+// gone, is not queued (the agent is never handed outdated work) and not done — but it
+// must not vanish either. It is blocked on the reviewer re-anchoring or resolving it.
+// Before #203 this row silently left both counts, so the queue's total shrank with no
+// badge, no legend entry and no log line.
+func TestQueueBlockedOnDrift(t *testing.T) {
+	s := PrereviewState{
+		SelectedFile: "a.go",
+		Comments: []Comment{
+			{ID: "q", File: "a.go", ToLine: 1, Body: "b"},
+			{ID: "drifted", File: "a.go", ToLine: 2, Body: "b", AnchorStatus: anchorOutdated},
+			{ID: "d", File: "a.go", ToLine: 3, Body: "b", Processed: true},
+		},
+	}
+
+	if got := s.Comments[1].QueueState(); got != queueBlocked {
+		t.Errorf("drifted QueueState = %q, want %q", got, queueBlocked)
+	}
+	if got := s.BlockedCount(); got != 1 {
+		t.Errorf("BlockedCount = %d, want 1", got)
+	}
+	if got := s.QueuedCount() + s.BlockedCount() + s.DoneCount(); got != 3 {
+		t.Errorf("queued+blocked+done = %d, want 3 — the buckets must conserve the "+
+			"enqueued total, or work is disappearing", got)
+	}
+	states := map[string]string{}
+	for _, it := range s.QueueItems() {
+		states[it.ID] = it.State
+	}
+	if states["drifted"] != queueBlocked {
+		t.Errorf("drifted row state = %q, want %q (the row must still render)", states["drifted"], queueBlocked)
+	}
+}
+
+// TestQueueHasQueueWithOnlyBlocked guards the trap in making drift visible: HasQueue
+// gates the whole panel body, so a file whose ONLY work is blocked would collapse to
+// the empty state and hide the very row this change exists to surface.
+func TestQueueHasQueueWithOnlyBlocked(t *testing.T) {
+	s := PrereviewState{
+		SelectedFile: "a.go",
+		Comments:     []Comment{{ID: "drifted", File: "a.go", ToLine: 1, Body: "b", AnchorStatus: anchorOutdated}},
+	}
+	if !s.HasQueue() {
+		t.Error("HasQueue = false with a blocked row — the panel would render its empty " +
+			"state and the blocked comment would be invisible")
+	}
+}
+
+// TestQueueBucketsConserveTotal is the invariant that makes "the Done count never reaches
+// the total" checkable at all: with the per-file default (#171), the buckets the reviewer
+// can see — queued + blocked + done + draft on this file, plus QueueHiddenCount for the
+// rest of the review — must account for EVERY unresolved comment. If the five together
+// come up short, work has gone somewhere the reviewer cannot look, which is exactly the
+// #203 failure.
+func TestQueueBucketsConserveTotal(t *testing.T) {
+	mk := func(id, file string, set func(*Comment)) Comment {
+		c := Comment{ID: id, File: file, ToLine: 1, Body: id}
+		if set != nil {
+			set(&c)
+		}
+		return c
+	}
+	outdated := func(c *Comment) { c.AnchorStatus = anchorOutdated }
+	processed := func(c *Comment) { c.Processed = true }
+	draft := func(c *Comment) { c.Draft = true }
+
+	s := PrereviewState{
+		SelectedFile: "a.go",
+		Comments: []Comment{
+			mk("a-queued", "a.go", nil),
+			mk("a-blocked", "a.go", outdated),
+			mk("a-done", "a.go", processed),
+			mk("a-draft", "a.go", draft),
+			mk("b-queued", "b.go", nil),
+			mk("b-blocked", "b.go", outdated),
+			mk("b-done", "b.go", processed),
+			mk("b-draft", "b.go", draft),
+			mk("a-resolved", "a.go", func(c *Comment) { c.Resolved = true }),
+		},
+	}
+
+	unresolved := 0
+	for _, c := range s.Comments {
+		if !c.Resolved {
+			unresolved++
+		}
+	}
+	got := s.QueuedCount() + s.BlockedCount() + s.DoneCount() + s.DraftCount() + s.QueueHiddenCount()
+	if got != unresolved {
+		t.Errorf("queued(%d)+blocked(%d)+done(%d)+draft(%d)+elsewhere(%d) = %d, want %d — the "+
+			"visible buckets must account for every unresolved comment, or work is vanishing",
+			s.QueuedCount(), s.BlockedCount(), s.DoneCount(), s.DraftCount(),
+			s.QueueHiddenCount(), got, unresolved)
+	}
+
+	// Flipping to All files moves the same work from "elsewhere" into the visible buckets;
+	// the total is unchanged.
+	s.QueueGlobal = true
+	if s.QueueHiddenCount() != 0 {
+		t.Errorf("QueueHiddenCount = %d with Global on, want 0", s.QueueHiddenCount())
+	}
+	if got := s.QueuedCount() + s.BlockedCount() + s.DoneCount() + s.DraftCount(); got != unresolved {
+		t.Errorf("global buckets = %d, want %d", got, unresolved)
 	}
 }

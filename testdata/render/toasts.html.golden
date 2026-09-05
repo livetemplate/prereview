@@ -333,7 +333,7 @@
       id="queue-trigger-0"
       class="contrast tb-dropdown-trigger queue-trigger is-working is-paused"
       aria-haspopup="menu"
-      title="Batching — comments held, not sent. Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"
+      title="Batching — comments held, not sent. Work queue: queued, blocked, worked-on, drafts; Pause/Resume + End session inside"
     ><span class="queue-paused-dot" aria-hidden="true">⏸</span><span class="tb-label">Queue</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
   d="M6 9l6 6 6-6"
   stroke="currentColor"
