@@ -287,16 +287,20 @@ func TestSuggestionQueueProjection(t *testing.T) {
 		Applied: map[string]bool{"app": true},
 	}
 
-	if got := s.suggestionQueueState("acc"); got != queueQueued {
+	byID := map[string]Suggestion{}
+	for _, sg := range s.Suggestions {
+		byID[sg.ID] = sg
+	}
+	if got := s.suggestionQueueState(byID["acc"]); got != queueQueued {
 		t.Errorf("accepted suggestion state = %q, want queued", got)
 	}
-	if got := s.suggestionQueueState("app"); got != queueDone {
+	if got := s.suggestionQueueState(byID["app"]); got != queueDone {
 		t.Errorf("applied suggestion state = %q, want done (Applied beats the accept decision)", got)
 	}
-	if got := s.suggestionQueueState("rej"); got != "" {
+	if got := s.suggestionQueueState(byID["rej"]); got != "" {
 		t.Errorf("rejected suggestion state = %q, want excluded", got)
 	}
-	if got := s.suggestionQueueState("und"); got != "" {
+	if got := s.suggestionQueueState(byID["und"]); got != "" {
 		t.Errorf("undecided suggestion state = %q, want excluded", got)
 	}
 
@@ -460,5 +464,39 @@ func TestQueueBucketsConserveTotal(t *testing.T) {
 	}
 	if got := s.QueuedCount() + s.BlockedCount() + s.DoneCount() + s.DraftCount(); got != unresolved {
 		t.Errorf("global buckets = %d, want %d", got, unresolved)
+	}
+}
+
+// TestSuggestionBlockedOnDrift: an ACCEPTED suggestion the agent has not applied yet, whose
+// OriginalText has since vanished from the file, cannot be applied — actionableDecisions
+// drops it, so the agent will never pick it up. Calling it "queued" promises a pickup that
+// never comes; it is blocked on the reviewer, exactly like a drifted comment (#203).
+//
+// AnchorStatus is re-derived from OriginalText on every load, so this is reachable
+// independently of Applied — the file only has to move under an unapplied accept.
+func TestSuggestionBlockedOnDrift(t *testing.T) {
+	s := PrereviewState{
+		SelectedFile: "a.go",
+		Suggestions: []Suggestion{
+			{ID: "acc", File: "a.go", ToLine: 3, Note: "fix grammar"},
+			{ID: "gone", File: "a.go", ToLine: 5, Note: "rewrite", AnchorStatus: anchorOutdated},
+		},
+		Decisions: []SuggestionDecision{
+			{SuggestionID: "acc", Verdict: verdictAccept},
+			{SuggestionID: "gone", Verdict: verdictAccept},
+		},
+	}
+	byID := map[string]Suggestion{}
+	for _, sg := range s.Suggestions {
+		byID[sg.ID] = sg
+	}
+	if got := s.suggestionQueueState(byID["gone"]); got != queueBlocked {
+		t.Errorf("accepted-but-drifted suggestion state = %q, want %q", got, queueBlocked)
+	}
+	if got := s.suggestionQueueState(byID["acc"]); got != queueQueued {
+		t.Errorf("accepted, placeable suggestion state = %q, want %q", got, queueQueued)
+	}
+	if s.QueuedCount() != 1 || s.BlockedCount() != 1 {
+		t.Errorf("counts: queued=%d blocked=%d, want 1/1", s.QueuedCount(), s.BlockedCount())
 	}
 }

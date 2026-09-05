@@ -32,7 +32,7 @@ flags must come **before** it.
 
 ```bash
 cd <repo>
-prereview --agent "$(pwd)" > /tmp/prereview.log 2>&1 &
+prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &
 # stdout:
 #   READY http://127.0.0.1:PORT        (canonical URL; Tailscale IP on a remote box)
 #   ALT   http://host.tailnet.ts.net:PORT   (0+ friendlier equivalents; only on a tailnet)
@@ -44,8 +44,9 @@ prereview --agent "$(pwd)" > /tmp/prereview.log 2>&1 &
 **Redirect stdout — don't leave it on a pipe nobody drains.** Snapshots stream to stdout
 for the whole session. If it is an undrained pipe, the OS buffer fills, the server's write
 blocks, and emission stops for good — the browser stays responsive while the queue quietly
-goes dead. A file (or `/dev/null`) can't fill. Read the log with `tail`; consume the queue
-with `prereview watch`, which reads `<STORE>/events.jsonl`, not stdout.
+goes dead. A file (or `/dev/null`) can't fill. `$$` keeps concurrent reviews on the same box out of
+each other's log. Read it with `tail`; consume the QUEUE with `prereview watch`, which
+reads `<STORE>/events.jsonl`, not stdout.
 
 Two lines, two jobs — keep them straight:
 
@@ -78,7 +79,7 @@ works the same.
 **Clean working tree → handled for you.** When you did *not* pass an explicit
 `--base` and the working tree is clean, prereview reviews the whole tree against the
 empty base (every file appears added, any line is commentable) — so just
-`prereview --agent "$(pwd)" > /tmp/prereview.log 2>&1 &`. An explicitly requested base (`--base main`,
+`prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &`. An explicitly requested base (`--base main`,
 `HEAD~3`, a tag, …) is always honored as-is.
 
 **Already running for this review? Take it over with `--replace`.** prereview refuses

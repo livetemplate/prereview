@@ -79,17 +79,19 @@ func reopenIfReplied(base, id string, awaiting map[string]bool) string {
 // "queued" (the agent still has to write it). Anything else — rejected, revised,
 // or undecided — has not entered the queue and returns "". A suggestion is never
 // a draft (there's no held-back state for an accept).
-func (s PrereviewState) suggestionQueueState(id string) string {
-	if s.Applied[id] {
+func (s PrereviewState) suggestionQueueState(sg Suggestion) string {
+	if s.Applied[sg.ID] {
 		return queueDone
 	}
 	for _, d := range s.Decisions {
-		if d.SuggestionID == id {
+		if d.SuggestionID == sg.ID {
 			if d.Verdict == verdictAccept {
-				// Drifted the same way a comment does (#203): actionableDecisions drops an
-				// outdated suggestion, so calling it "queued" would promise a pickup that
-				// never comes.
-				if s.suggestionOutdated(id) {
+				// Accepted, but the text it was written against is gone (#203). AnchorStatus
+				// is re-derived from OriginalText on every load, so this happens whenever the
+				// file moves on under an accept the agent has not applied yet — and
+				// actionableDecisions drops an outdated suggestion, so calling it "queued"
+				// would promise a pickup that never comes.
+				if sg.AnchorOutdated() {
 					return queueBlocked
 				}
 				return queueQueued
@@ -98,16 +100,6 @@ func (s PrereviewState) suggestionQueueState(id string) string {
 		}
 	}
 	return "" // undecided
-}
-
-// suggestionOutdated reports that the suggestion's anchor could no longer be placed.
-func (s PrereviewState) suggestionOutdated(id string) bool {
-	for _, sg := range s.Suggestions {
-		if sg.ID == id {
-			return sg.AnchorOutdated()
-		}
-	}
-	return false
 }
 
 // queueComments / queueSuggestions are what the QUEUE PANEL shows: by default the work
@@ -176,7 +168,7 @@ func (s PrereviewState) QueueHiddenCount() int {
 		}
 	}
 	for _, sg := range s.scopedSuggestions() {
-		if sg.File != s.SelectedFile && reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting) != "" {
+		if sg.File != s.SelectedFile && reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting) != "" {
 			n++
 		}
 	}
@@ -192,7 +184,7 @@ func (s PrereviewState) countQueue(state string) int {
 		}
 	}
 	for _, sg := range s.queueSuggestions() {
-		if reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting) == state {
+		if reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting) == state {
 			n++
 		}
 	}
@@ -345,7 +337,7 @@ func (s PrereviewState) QueueItems() []QueueItem {
 		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: reopenIfReplied(c.QueueState(), c.ID, awaiting)})
 	}
 	for _, sg := range s.queueSuggestions() {
-		st := reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting)
+		st := reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting)
 		if st == "" {
 			continue
 		}
