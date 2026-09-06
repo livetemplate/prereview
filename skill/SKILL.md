@@ -32,7 +32,7 @@ flags must come **before** it.
 
 ```bash
 cd <repo>
-prereview --agent "$(pwd)" &
+prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &
 # stdout:
 #   READY http://127.0.0.1:PORT        (canonical URL; Tailscale IP on a remote box)
 #   ALT   http://host.tailnet.ts.net:PORT   (0+ friendlier equivalents; only on a tailnet)
@@ -40,6 +40,13 @@ prereview --agent "$(pwd)" &
 #   STORE /abs/path/to/this/review/s/store   (the --out for every subcommand)
 #   {"event":"ready","seq":0,...}       (events mirror to stdout too; consume with `prereview watch`)
 ```
+
+**Redirect stdout — don't leave it on a pipe nobody drains.** Snapshots stream to stdout
+for the whole session. If it is an undrained pipe, the OS buffer fills, the server's write
+blocks, and emission stops for good — the browser stays responsive while the queue quietly
+goes dead. A file (or `/dev/null`) can't fill. `$$` keeps concurrent reviews on the same box out of
+each other's log. Read it with `tail`; consume the QUEUE with `prereview watch`, which
+reads `<STORE>/events.jsonl`, not stdout.
 
 Two lines, two jobs — keep them straight:
 
@@ -72,7 +79,7 @@ works the same.
 **Clean working tree → handled for you.** When you did *not* pass an explicit
 `--base` and the working tree is clean, prereview reviews the whole tree against the
 empty base (every file appears added, any line is commentable) — so just
-`prereview --agent "$(pwd)" &`. An explicitly requested base (`--base main`,
+`prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &`. An explicitly requested base (`--base main`,
 `HEAD~3`, a tag, …) is always honored as-is.
 
 **Already running for this review? Take it over with `--replace`.** prereview refuses
@@ -217,8 +224,15 @@ a snapshot**). `prereview done` validates each id against `comments.csv` and **f
 loudly** (non-zero exit, naming the unknown ids) rather than recording garbage, so a
 typo can't corrupt anything. **Prefer per-id marking** (tie each mark to its edit) over
 `--all-open`; reach for `--all-open` only when you genuinely handled the entire batch.
-Marking is a one-way signal that you acted; the human still **resolves** comments
-themselves, so keep acting only on unresolved rows.
+Marking **settles** the comment: a marked id leaves your snapshot and stays out until the
+reviewer speaks again — either by replying on its thread (which reopens it, see below) or
+by re-enqueueing it with the queue's ↺ button. So mark honestly and mark once; you will not
+be handed it a second time on your own. Marking is still only a signal that you *acted* —
+the human decides whether the note is **resolved**, so keep acting only on unresolved rows.
+
+`--all-open` marks every enqueued, unresolved comment in the review — including ones whose
+anchor your edits invalidated, which is the usual outcome of doing the work. It skips
+drafts, resolved rows and ids already marked, and prints what it skipped.
 
 ## Threads — say what you did, and respond when the reviewer steers
 

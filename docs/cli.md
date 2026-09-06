@@ -98,11 +98,19 @@ hand-off with a **continuous** model — no re-invocation between rounds, and no
 hand-written CSV parser:
 
 - **The queue.** Every comment (and every accepted suggestion) rides a
-  `draft → queued → done` lifecycle. Comments you save while **live** are sent to
-  the agent immediately; **Pause** holds them so you can batch, and **Resume**
-  releases the whole batch at once. The Queue dropdown shows the counts (queued ·
-  done · draft, plus "accepted, awaiting apply" and reviewer replies still
-  awaiting the agent) and is the hub for Pause/Resume and End session.
+  `draft → queued → done` lifecycle, with `blocked` as the one detour. Comments you
+  save while **live** are sent to the agent immediately; **Pause** holds them so you
+  can batch, and **Resume** releases the whole batch at once. The Queue dropdown
+  shows the counts (queued · blocked · done · draft, plus "accepted, awaiting apply"
+  and reviewer replies still awaiting the agent) and is the hub for Pause/Resume and
+  End session.
+
+  **`blocked`** is enqueued work whose anchor is gone — the commented text was
+  rewritten or deleted and prereview will not guess where it moved to. The agent is
+  never handed outdated work, so a blocked row cannot progress on its own: re-anchor
+  it (the card's **Re-anchor** button) or resolve it. Only a resolve takes a row out
+  of the queue; drift never does, because a row that silently disappeared is
+  indistinguishable from one the agent finished.
 - **The event stream.** In agent mode, after the usual `READY`/`REPO`/`STORE`
   preamble prereview emits one JSON object per line to **stdout** and mirrors it to
   `<STORE>/events.jsonl` (append-only, reset each launch). Three event types:
@@ -111,8 +119,10 @@ hand-written CSV parser:
   - **`snapshot`** — on every queue mutation (debounced). A **full snapshot** of
     the still-actionable queue: `{"event":"snapshot","seq":N,"comments":[…],
     "suggestions":[…]}` (both arrays always present, `[]` when empty). Pre-filtered
-    to what needs the agent — unresolved, non-outdated, non-draft comments, plus
-    any comment the reviewer just replied on. The consumer dedupes by `id`.
+    to what needs the agent — unresolved, non-outdated, non-draft, not-yet-`done`
+    comments, plus any comment the reviewer just replied on. The consumer dedupes by
+    `id`. `prereview comments --json` reports the same set, and both now honour
+    `processed.jsonl`, so a comment you marked `done` stops coming back.
   - **`end`** — once, on **End session**; the only terminator. The server shuts
     down right after.
   Every event carries a monotonic `seq`. The CSV stays the authoritative store;
@@ -301,7 +311,7 @@ Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
 | `events.jsonl` | server | the agent-mode event log (`ready`/`snapshot`/`end`); reset each launch |
 | `suggestions.jsonl` | **agent** (`prereview suggest`) | proposed edits, rendered as suggestion boxes (durable) |
 | `suggestion-decisions.jsonl` | server | your accept/reject/revert verdicts (durable) |
-| `processed.jsonl` | **agent** (`prereview done`) | comment ids marked done (reset each launch) |
+| `processed.jsonl` | **agent** (`prereview done`) | comment ids marked done (durable — NOT reset each launch, so "worked on" survives a relaunch) |
 | `applied.jsonl` | **agent** (`prereview applied`) | accepted-suggestion apply acks (durable) |
 | `reverted.jsonl` | **agent** (`prereview reverted`) | applied-suggestion revert acks (durable) |
 | `agent-replies.jsonl` | **agent** (`prereview reply`) | agent thread replies (durable) |

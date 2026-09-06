@@ -1185,6 +1185,10 @@ header.file-head .file-head-actions {
 .q-num { font-weight: 700; }
 .q-queued { color: var(--accent); }
 .q-done { color: var(--pr-add); }
+/* #203: enqueued, but the anchor is gone. The agent is never handed outdated work, so
+   this row cannot progress until the reviewer re-anchors or resolves it. Reads red, the
+   same --pr-del the card's outdated-badge uses — the two mean the same thing. */
+.q-blocked { color: var(--pr-del); }
 .q-draft { color: var(--pico-muted-color); }
 /* #171: accepted-but-not-yet-applied. Amber, the same --pr-open the #165 "accepted
    (pending apply)" line badge uses — the toolbar count and the badge on the line mean
@@ -1314,6 +1318,7 @@ header.file-head .file-head-actions {
 }
 .queue-badge-queued { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
 .queue-badge-done { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
+.queue-badge-blocked { background: color-mix(in srgb, var(--pr-del) 20%, transparent); color: var(--pr-del); }
 .queue-badge-draft { background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color); }
 /* Suggestion queue rows carry the same ✦ accent mark the inline suggestion box uses,
    so the queue reads "this row is a suggested edit, not a comment" at a glance. */

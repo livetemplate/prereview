@@ -213,7 +213,7 @@ Open the URL, comment, click **Quit**. Comments live in
 `.prereview/comments.csv`.
 
 ```bash
-prereview --agent "$(pwd)" &   # what an agent's skill/command runs for you
+prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &   # what an agent's skill/command runs for you
 ```
 
 In agent mode the toolbar shows a **Queue** (⏸ Pause / ▶ Resume) and an

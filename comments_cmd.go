@@ -17,14 +17,15 @@ import (
 // the read counterpart of `prereview done`: read ids here, mark them there.
 //
 // By default it prints only the actionable set (unresolved, non-outdated,
-// non-draft — what the agent should act on); --all includes every comment.
+// non-draft, not-yet-done — what the agent should act on); --all includes every
+// comment.
 // --json emits a JSON array in the SAME shape the --agent snapshot uses
 // (so an agent parses one contract everywhere); without it, a terse human table.
 func runComments(args []string) error {
 	fs := flag.NewFlagSet("comments", flag.ContinueOnError)
 	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	asJSON := fs.Bool("json", false, "print the comments as a JSON array (same shape as the --agent snapshot)")
-	all := fs.Bool("all", false, "include resolved / outdated / draft comments (default: only the actionable set)")
+	all := fs.Bool("all", false, "include resolved / outdated / draft / already-done comments (default: only the actionable set)")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview comments [--out <dir>] [--json] [--all]\n\n"+

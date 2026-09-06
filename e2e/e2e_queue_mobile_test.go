@@ -33,10 +33,11 @@ func TestE2E_QueuePanelFitsMobileViewport(t *testing.T) {
 	// exercise the bug. This is the deterministic trigger for the clip.
 	repo := setupFixtureRepo(t)
 	// The long-path file must actually EXIST in the repo. Since #171 a comment whose file is
-	// gone is swept to outdated and dropped from the queue (it can't be actionable work), and
-	// since #171's scope switch the queue shows the SELECTED file's work — so a comment on a
-	// phantom file produced no queue row at all, and the panel this test measures never
-	// opened. Give it a real file, long enough to carry line 27, and select it below.
+	// gone is swept to outdated, and since #171's scope switch the queue shows the SELECTED
+	// file's work — so a comment on a phantom file gave the panel nothing to measure. (Since
+	// #203 an outdated comment renders as a "blocked" row rather than vanishing, but its file
+	// still isn't selectable, so it would still never open.) Give it a real file, long enough
+	// to carry line 27, and select it below.
 	longPath := "notes/zany-mixing-metcalfe-configuration-details.md"
 	if err := os.MkdirAll(filepath.Join(repo, "notes"), 0o755); err != nil {
 		t.Fatal(err)

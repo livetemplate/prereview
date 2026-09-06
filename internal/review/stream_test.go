@@ -254,3 +254,69 @@ func TestActionableComments_FiltersResolvedAndOutdated(t *testing.T) {
 		t.Errorf("resolved/outdated leaked through: %+v", ids)
 	}
 }
+
+// TestActionableComments_DoneSettles is the #203 half of the stall: `prereview done` has
+// to be a terminator. Without Processed in the settled set, a done comment with no thread
+// reads as fresh-and-unsettled, so every later snapshot re-hands the agent work it has
+// already finished — and on a growing queue it re-chews the front of the backlog forever.
+// The #164 reply override must survive intact: a reviewer reply reopens a done item.
+func TestActionableComments_DoneSettles(t *testing.T) {
+	comments := []Comment{
+		{ID: "fresh", Kind: commentKindLine, FromLine: 1, ToLine: 1, Created: fixedTS},
+		{ID: "done", Kind: commentKindLine, FromLine: 2, ToLine: 2, Processed: true, Created: fixedTS},
+		{ID: "done-replied", Kind: commentKindLine, FromLine: 3, ToLine: 3, Processed: true, Created: fixedTS},
+		{ID: "done-answered", Kind: commentKindLine, FromLine: 4, ToLine: 4, Processed: true, Created: fixedTS},
+	}
+	threads := map[string][]ThreadEntry{
+		"done-replied": {{TargetID: "done-replied", Author: AuthorReviewer, Body: "not quite", At: 1}},
+		"done-answered": {
+			{TargetID: "done-answered", Author: AuthorReviewer, Body: "not quite", At: 1},
+			{TargetID: "done-answered", Author: AuthorAgent, Body: "fixed", At: 2},
+		},
+	}
+
+	ids := map[string]bool{}
+	for _, sc := range actionableComments(comments, threads) {
+		ids[sc.ID] = true
+	}
+	if !ids["fresh"] {
+		t.Error("a fresh comment must be actionable")
+	}
+	if ids["done"] {
+		t.Error("a done comment with no thread is still being handed to the agent — this is " +
+			"the treadmill: every snapshot re-presents work the agent already finished")
+	}
+	if !ids["done-replied"] {
+		t.Error("a reviewer reply must reopen a done comment (#164) — settling on Processed " +
+			"must not swallow the override")
+	}
+	if ids["done-answered"] {
+		t.Error("the agent replied last; it is waiting on the reviewer and must not re-act")
+	}
+}
+
+// TestActionableComments_ReenqueueReturnsWork guards the reviewer's escape hatch: ↺ appends
+// a re-enqueue tombstone, which must out-vote the processed mark and put the comment back
+// in front of the agent. Settling on Processed is only safe because this path exists.
+func TestActionableComments_ReenqueueReturnsWork(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, CommentsFileName)
+	write := func(name, id string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(`{"id":"`+id+`"}`+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(ProcessedFileName, "c1")
+
+	comments := []Comment{{ID: "c1", Kind: commentKindLine, FromLine: 1, ToLine: 1, Created: fixedTS}}
+	applyProcessedMarks(comments, csvPath)
+	if len(actionableComments(comments, nil)) != 0 {
+		t.Fatal("a marked-done comment should have left the snapshot")
+	}
+
+	write(ReenqueuedFileName, "c1")
+	applyProcessedMarks(comments, csvPath)
+	if len(actionableComments(comments, nil)) != 1 {
+		t.Error("a re-enqueued comment must come back to the agent — otherwise ↺ is a dead button")
+	}
+}

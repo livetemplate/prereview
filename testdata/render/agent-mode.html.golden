@@ -368,7 +368,7 @@
       id="queue-trigger-0"
       class="contrast tb-dropdown-trigger queue-trigger"
       aria-haspopup="menu"
-      title="Work queue: queued, worked-on, drafts; Pause/Resume + End session inside"
+      title="Work queue: queued, blocked, worked-on, drafts; Pause/Resume + End session inside"
     ><span class="tb-label">Queue</span><span class="queue-counts"><span class="q-num q-queued">1</span></span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
   d="M6 9l6 6 6-6"
   stroke="currentColor"

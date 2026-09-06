@@ -252,3 +252,56 @@ func TestDone_AllOpenRejectsExplicitIDs(t *testing.T) {
 		t.Errorf("--all-open with explicit ids should error")
 	}
 }
+
+// TestDone_AllOpenIncludesDrifted is the #203 regression for the verb. --all-open used to
+// source its ids from the AGENT'S actionable set, which drops outdated comments — and an
+// outdated comment is usually one the agent just fixed, because its own edit is what broke
+// the anchor. So the verb silently skipped exactly the work it was called to mark, printed
+// success, and exited 0. It now marks everything enqueued and unresolved, and says out loud
+// what it held back.
+func TestDone_AllOpenIncludesDrifted(t *testing.T) {
+	root := t.TempDir()
+	drifted := row("drifted-1")
+	drifted.FromLine, drifted.ToLine = 2, 2
+	drifted.AnchorStatus = "outdated"
+	draft := row("draft-1")
+	draft.FromLine, draft.ToLine = 3, 3
+	draft.Draft = true
+	resolved := row("resolved-1")
+	resolved.FromLine, resolved.ToLine = 4, 4
+	resolved.Resolved = true
+	seedStore(t, root, []csv.Row{row("open-1"), drifted, draft, resolved})
+
+	res := runBin(t, "", "done", "--out", root, "--all-open")
+	if res.exit != 0 {
+		t.Fatalf("--all-open should exit 0; got %d\nstderr: %s", res.exit, res.stderr)
+	}
+	got := strings.Join(processedIDs(t, root), " ")
+	if !strings.Contains(got, "open-1") {
+		t.Errorf("--all-open must mark the clean open comment; got: %s", got)
+	}
+	if !strings.Contains(got, "drifted-1") {
+		t.Errorf("--all-open must mark the DRIFTED comment — the agent's own edit is what "+
+			"broke its anchor, and skipping it is how the Done count stalled; got: %s", got)
+	}
+	if strings.Contains(got, "draft-1") || strings.Contains(got, "resolved-1") {
+		t.Errorf("a draft/resolved comment was never handed to the agent; got: %s", got)
+	}
+	if !strings.Contains(res.stdout, "skipped") {
+		t.Errorf("stdout must name what was held back, or a narrowed set is silent again; got: %q", res.stdout)
+	}
+
+	// Second round: everything is already marked. Re-marking would append duplicates, and a
+	// comment counts as done only while processed marks outnumber re-enqueue tombstones —
+	// so duplicates quietly make the reviewer's ↺ button need one click per duplicate.
+	res2 := runBin(t, "", "done", "--out", root, "--all-open")
+	if res2.exit != 0 {
+		t.Fatalf("second --all-open should exit 0; got %d\nstderr: %s", res2.exit, res2.stderr)
+	}
+	if n := len(processedIDs(t, root)); n != 2 {
+		t.Errorf("processed.jsonl has %d marks, want 2 — --all-open re-marked work already done", n)
+	}
+	if !strings.Contains(res2.stdout, "already marked") {
+		t.Errorf("stdout should report the already-marked comments; got: %q", res2.stdout)
+	}
+}

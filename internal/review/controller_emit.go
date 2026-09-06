@@ -66,6 +66,9 @@ func (c *PrereviewController) emitSnapshot() {
 	// previous file's work even though the UI no longer shows it.
 	st := &PrereviewState{Base: c.Base, SingleFile: c.SingleFile}
 	st.Comments = c.loadCommentsFromDisk()
+	// #203: without this, Processed is always false on the emit state and the settled
+	// check in actionableComments can never fire — the agent keeps its own finished work.
+	c.applyProcessed(st)
 	c.applySuggestions(st)
 	c.applyDecisions(st)
 	st.ThreadEntries = loadThreads(c.CSVPath) // #149: the conversation on each target

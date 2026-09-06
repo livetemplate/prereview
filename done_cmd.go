@@ -73,19 +73,20 @@ func runDone(args []string) error {
 	}
 	csvPath := filepath.Join(dir, review.CommentsFileName)
 
+	var note string // what --all-open deliberately left out; printed after the result
 	if *allOpen {
 		if len(ids) > 0 {
 			return fmt.Errorf("--all-open cannot be combined with explicit ids or --file")
 		}
-		open, err := review.LoadComments(csvPath, false)
+		set, err := review.LoadOpenComments(csvPath)
 		if err != nil {
 			return fmt.Errorf("read comments: %w", err)
 		}
-		for _, c := range open {
-			ids = append(ids, c.ID)
-		}
+		ids = set.IDs
+		note = skipNote(set)
 		if len(ids) == 0 {
 			fmt.Println("no open comments to mark")
+			printNote(note)
 			return nil
 		}
 	} else {
@@ -103,7 +104,15 @@ func runDone(args []string) error {
 		return err
 	}
 	fmt.Printf("marked %d comment(s) as worked on\n", len(ids))
+	printNote(note)
 	return nil
+}
+
+// printNote emits a non-empty skip note on its own line.
+func printNote(note string) {
+	if note != "" {
+		fmt.Println(note)
+	}
 }
 
 // appendMarks appends one `{"id","at"}` JSON line per id to <dir>/<fileName> —
@@ -253,6 +262,26 @@ func idFromJSON(e json.RawMessage) (string, error) {
 		return "", fmt.Errorf("parse array element: %w", err)
 	}
 	return o.ID, nil
+}
+
+// skipNote spells out what --all-open deliberately did not mark. Before #203 the verb
+// narrowed its own set silently and still reported success, so the agent had no way to
+// notice that the comments it had just finished were the ones being skipped.
+func skipNote(set review.OpenSet) string {
+	var parts []string
+	if set.Drafts > 0 {
+		parts = append(parts, fmt.Sprintf("%d still a draft", set.Drafts))
+	}
+	if set.Resolved > 0 {
+		parts = append(parts, fmt.Sprintf("%d already resolved", set.Resolved))
+	}
+	if set.AlreadyDone > 0 {
+		parts = append(parts, fmt.Sprintf("%d already marked", set.AlreadyDone))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "skipped " + strings.Join(parts, ", ")
 }
 
 // dedupe removes duplicate ids, preserving first-seen order, so a repeated id

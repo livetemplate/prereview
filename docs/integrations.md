@@ -287,7 +287,7 @@ may sit in a dead location.
 Any agent works if it can run `prereview comments --json` and edit files. The
 generic instruction is:
 
-> Run `prereview --agent "$(pwd)" &`. Tell the user the printed `READY <url>`
+> Run `prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &`. Tell the user the printed `READY <url>`
 > (as a clickable Markdown link) and to click **End session** when done; keep the
 > printed `STORE <dir>` line — it is `--out` for every subcommand. Whenever
 > they've commented (or on your next turn), run `prereview comments --out <STORE>

@@ -14,9 +14,10 @@ package review
 
 // Queue states, in lifecycle order. A comment/suggestion is in exactly one.
 const (
-	queueDraft  = "draft"  // held back — not yet enqueued for the agent
-	queueQueued = "queued" // enqueued, waiting/remaining (the agent hasn't marked it)
-	queueDone   = "done"   // the agent marked it worked-on (processed.jsonl / applied.jsonl)
+	queueDraft   = "draft"   // held back — not yet enqueued for the agent
+	queueQueued  = "queued"  // enqueued, waiting/remaining (the agent hasn't marked it)
+	queueBlocked = "blocked" // enqueued, but the anchor is gone — needs re-anchoring
+	queueDone    = "done"    // the agent marked it worked-on (processed.jsonl / applied.jsonl)
 )
 
 // Queue item kinds — a queue row is either a comment or an accepted suggestion.
@@ -25,19 +26,34 @@ const (
 	queueKindSuggestion = "suggestion"
 )
 
-// QueueState classifies a comment for the queue view. Resolved and outdated
-// comments have left the queue (the human closed them / the anchor vanished) and
-// return "" — the panel skips them. The #164 unread-reply reopen is layered ON TOP
-// of this by reopenIfReplied at the state level (this method has no thread access),
-// so a replied-on resolved/outdated/done comment counts as "queued" again.
+// QueueState classifies a comment for the queue view. A comment leaves the queue ("")
+// only when the HUMAN closes it — a resolve. Nothing else removes it.
+//
+// Case order is load-bearing (#203). Done is checked BEFORE drift, because the agent's
+// own edit is usually what invalidates the anchor of the comment it just addressed:
+// keying the lifecycle off drift made Done fall back down every time the agent
+// succeeded, so it never reached the total. suggestionQueueState below has always
+// ordered it this way ("checked FIRST, since an applied suggestion is also
+// anchor-outdated"); the comment path had it backwards.
+//
+// An enqueued, un-done comment whose anchor is gone is "blocked", not "": the agent is
+// never handed outdated work, so it will not progress on its own, but it must stay
+// visible so the reviewer can re-anchor or resolve it. Returning "" here silently
+// deleted the row from every count with no badge and no total to notice it against.
+//
+// The #164 unread-reply reopen is layered ON TOP of this by reopenIfReplied at the
+// state level (this method has no thread access), so a replied-on resolved / blocked /
+// done comment counts as "queued" again.
 func (c Comment) QueueState() string {
 	switch {
-	case c.Resolved || c.AnchorOutdated():
+	case c.Resolved:
 		return ""
 	case c.Draft:
 		return queueDraft
 	case c.Processed:
 		return queueDone
+	case c.AnchorOutdated():
+		return queueBlocked
 	default:
 		return queueQueued
 	}
@@ -63,13 +79,21 @@ func reopenIfReplied(base, id string, awaiting map[string]bool) string {
 // "queued" (the agent still has to write it). Anything else — rejected, revised,
 // or undecided — has not entered the queue and returns "". A suggestion is never
 // a draft (there's no held-back state for an accept).
-func (s PrereviewState) suggestionQueueState(id string) string {
-	if s.Applied[id] {
+func (s PrereviewState) suggestionQueueState(sg Suggestion) string {
+	if s.Applied[sg.ID] {
 		return queueDone
 	}
 	for _, d := range s.Decisions {
-		if d.SuggestionID == id {
+		if d.SuggestionID == sg.ID {
 			if d.Verdict == verdictAccept {
+				// Accepted, but the text it was written against is gone (#203). AnchorStatus
+				// is re-derived from OriginalText on every load, so this happens whenever the
+				// file moves on under an accept the agent has not applied yet — and
+				// actionableDecisions drops an outdated suggestion, so calling it "queued"
+				// would promise a pickup that never comes.
+				if sg.AnchorOutdated() {
+					return queueBlocked
+				}
 				return queueQueued
 			}
 			return "" // reject / revise: not queued
@@ -144,7 +168,7 @@ func (s PrereviewState) QueueHiddenCount() int {
 		}
 	}
 	for _, sg := range s.scopedSuggestions() {
-		if sg.File != s.SelectedFile && reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting) != "" {
+		if sg.File != s.SelectedFile && reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting) != "" {
 			n++
 		}
 	}
@@ -160,7 +184,7 @@ func (s PrereviewState) countQueue(state string) int {
 		}
 	}
 	for _, sg := range s.queueSuggestions() {
-		if reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting) == state {
+		if reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting) == state {
 			n++
 		}
 	}
@@ -174,6 +198,10 @@ func (s PrereviewState) QueuedCount() int { return s.countQueue(queueQueued) }
 // DoneCount is the number of comments the agent marked worked-on + suggestions it
 // applied.
 func (s PrereviewState) DoneCount() int { return s.countQueue(queueDone) }
+
+// BlockedCount is the number of enqueued comments the agent can no longer be handed
+// because their anchor is gone.
+func (s PrereviewState) BlockedCount() int { return s.countQueue(queueBlocked) }
 
 // DraftCount is the number of held (not-yet-enqueued) comments.
 func (s PrereviewState) DraftCount() int { return s.countQueue(queueDraft) }
@@ -239,7 +267,9 @@ func (s PrereviewState) AwaitingReplyCount() int {
 // draft/queued/done comment or accepted/applied suggestion). Gates the toolbar
 // indicator so it stays hidden on an empty review.
 func (s PrereviewState) HasQueue() bool {
-	return s.QueuedCount()+s.DoneCount()+s.DraftCount() > 0
+	// Blocked counts (#203): a file whose only work is drifted would otherwise render the
+	// panel's empty state and hide the very row that needs the reviewer.
+	return s.QueuedCount()+s.BlockedCount()+s.DoneCount()+s.DraftCount() > 0
 }
 
 // AgentWorking mirrors the llm-status echo: true while the agent is applying a
@@ -279,20 +309,23 @@ type QueueItem struct {
 	File  string
 	Line  int    // new-side line (0 for file/region/area comments)
 	Body  string // the comment text / suggestion note, shown truncated by CSS
-	State string // queueDraft | queueQueued | queueDone
+	State string // queueDraft | queueQueued | queueBlocked | queueDone
 }
 
-// QueueItems returns the queue rows ordered by lifecycle — queued (remaining)
-// first, then done, then drafts — so the panel leads with what still needs the
-// agent's attention. Resolved/outdated comments and un-queued suggestions are
-// excluded (QueueState "") — UNLESS the reviewer replied on one last (#164), which
-// reopens it as "queued" work via reopenIfReplied.
+// QueueItems returns the queue rows ordered by lifecycle — queued (remaining) first,
+// then blocked, then done, then drafts — so the panel leads with what still needs the
+// agent's attention, and puts what needs the REVIEWER'S attention immediately after it.
+// Resolved comments and un-queued suggestions are excluded (QueueState "") — UNLESS the
+// reviewer replied on one last (#164), which reopens it as "queued" work via
+// reopenIfReplied.
 func (s PrereviewState) QueueItems() []QueueItem {
-	var queued, done, drafts []QueueItem
+	var queued, blocked, done, drafts []QueueItem
 	add := func(item QueueItem) {
 		switch item.State {
 		case queueQueued:
 			queued = append(queued, item)
+		case queueBlocked:
+			blocked = append(blocked, item)
 		case queueDone:
 			done = append(done, item)
 		case queueDraft:
@@ -304,14 +337,15 @@ func (s PrereviewState) QueueItems() []QueueItem {
 		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: reopenIfReplied(c.QueueState(), c.ID, awaiting)})
 	}
 	for _, sg := range s.queueSuggestions() {
-		st := reopenIfReplied(s.suggestionQueueState(sg.ID), sg.ID, awaiting)
+		st := reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting)
 		if st == "" {
 			continue
 		}
 		add(QueueItem{ID: sg.ID, Kind: queueKindSuggestion, File: sg.File, Line: sg.ToLine, Body: suggestionQueueBody(sg), State: st})
 	}
-	out := make([]QueueItem, 0, len(queued)+len(done)+len(drafts))
+	out := make([]QueueItem, 0, len(queued)+len(blocked)+len(done)+len(drafts))
 	out = append(out, queued...)
+	out = append(out, blocked...)
 	out = append(out, done...)
 	out = append(out, drafts...)
 	return out

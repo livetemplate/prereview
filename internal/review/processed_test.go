@@ -3,6 +3,7 @@ package review
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -77,5 +78,39 @@ func TestAgentSignalFingerprint(t *testing.T) {
 
 	if before == after {
 		t.Fatalf("fingerprint unchanged after processed.jsonl write: %q", after)
+	}
+}
+
+// TestApplyProcessedMarks_DuplicatesOutvoteOneTombstone is why `done --all-open` must not
+// re-mark work it already marked. Done is `processed marks > re-enqueue tombstones`, so N
+// duplicate marks mean the reviewer's ↺ button needs N clicks before the comment comes back
+// — a silently degrading undo. The field store that prompted #203 carried 19 marks for 16
+// comments, one of them marked three times.
+func TestApplyProcessedMarks_DuplicatesOutvoteOneTombstone(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, CommentsFileName)
+	writeMarks := func(name string, n int) {
+		var b strings.Builder
+		for range n {
+			b.WriteString(`{"id":"c1"}` + "\n")
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeMarks(ProcessedFileName, 3)
+	writeMarks(ReenqueuedFileName, 1)
+
+	comments := []Comment{{ID: "c1"}}
+	applyProcessedMarks(comments, csvPath)
+	if !comments[0].Processed {
+		t.Fatal("3 marks vs 1 tombstone should still read done")
+	}
+
+	// One ↺ is not enough to undo three marks — the reviewer clicks and nothing happens.
+	writeMarks(ReenqueuedFileName, 3)
+	applyProcessedMarks(comments, csvPath)
+	if comments[0].Processed {
+		t.Error("3 tombstones should have cancelled 3 marks")
 	}
 }
