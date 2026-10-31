@@ -271,6 +271,13 @@ func relocateLineRange(lines []string, fromLine, toLine *int, status *string, an
 		// after-neighbor up, a restructure changes the before-neighbor — and avoids a
 		// far-off blank line coincidentally passing. A side with no recorded context
 		// can't disagree, but at least one side must exist to judge.
+		//
+		// A range no longer inside the file was deleted, not edited (#216); this
+		// also keeps the neighbour probes below in bounds.
+		if *fromLine < 1 || max(*fromLine, *toLine) > len(lines) {
+			*status = anchorOutdated
+			return *status != prevStatus
+		}
 		beforeOK := len(anchor.Before) == 0 ||
 			(*fromLine >= 2 && normLine(lines[*fromLine-2]) == anchor.Before[len(anchor.Before)-1])
 		afterOK := len(anchor.After) == 0 ||
