@@ -303,8 +303,11 @@ func actionableComments(comments []Comment, threadByID map[string][]ThreadEntry)
 
 // emit stamps ev with the next seq + the given timestamp and writes it as one
 // JSON line to both sinks. ts is passed in (not read from the clock) so tests
-// are deterministic. The live channel is written first — it's the channel the
-// LLM is actively polling — then the durable mirror is appended.
+// are deterministic. The durable mirror is appended FIRST (#215): it is what
+// `prereview watch` reads, so it must never depend on the live channel — a live
+// write that blocks or fails used to stop events.jsonl growing for good. In
+// production the live writer is a LossyWriter, which never blocks or errors; an
+// error from any other writer is returned, but only after the durable append.
 func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -319,9 +322,6 @@ func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 	}
 	b = append(b, '\n')
 
-	if _, err := e.out.Write(b); err != nil {
-		return fmt.Errorf("write %s event to stdout: %w", ev.Event, err)
-	}
 	if e.filePath != "" {
 		f, err := os.OpenFile(e.filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -334,6 +334,9 @@ func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 		if err := f.Close(); err != nil {
 			return fmt.Errorf("close events file: %w", err)
 		}
+	}
+	if _, err := e.out.Write(b); err != nil {
+		return fmt.Errorf("write %s event to stdout: %w", ev.Event, err)
 	}
 	return nil
 }

@@ -138,14 +138,37 @@ func handoffEvents(evs []review.StreamEvent) []review.StreamEvent {
 // waitStream polls the stdout capture until pred is satisfied or it times out.
 func waitStream(t *testing.T, buf *bytesBuf, pred func([]review.StreamEvent) bool, what string, diag func() string) {
 	t.Helper()
+	waitEvents(t, "stdout", buf.String, pred, what, diag)
+}
+
+// waitEvents polls src (a JSONL event source: captured stdout, or events.jsonl)
+// until pred holds over its parsed events, or fails with the source and diag.
+func waitEvents(t *testing.T, name string, src func() string, pred func([]review.StreamEvent) bool, what string, diag func() string) {
+	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		if pred(parseStreamEvents(buf.String())) {
+		if pred(parseStreamEvents(src())) {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatalf("timeout waiting for %s\n--- stdout ---\n%s%s", what, buf.String(), diag())
+	t.Fatalf("timeout waiting for %s\n--- %s ---\n%s%s", what, name, clipFrame(src(), 4000), diag())
+}
+
+// endSession clicks Queue ▾ → End session → confirm, as the reviewer would. End
+// session lives INSIDE the Queue dropdown (#119 toolbar move) and goes through a
+// confirm dialog (#58), so this fires the real endSession action.
+func endSession(t *testing.T, p *runningPrereview, diag func() string) {
+	t.Helper()
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.queue-dropdown .queue-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.queue-panel button[commandfor='confirm-end-session']`, chromedp.ByQuery),
+		chromedp.Click(`.queue-panel button[commandfor='confirm-end-session']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#confirm-end-session[open] button[name='endSession']`, chromedp.ByQuery),
+		chromedp.Click(`#confirm-end-session button[name='endSession']`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("confirm End session: %v%s", err, diag())
+	}
 }
 
 // addLineComment selects a line on the open file and saves a comment.
@@ -241,18 +264,7 @@ func TestE2E_StreamHandoff(t *testing.T) {
 		t.Errorf("events.jsonl has %d snapshot events, want >= 3", got)
 	}
 
-	// End session now lives INSIDE the Queue dropdown (#119 toolbar move) and goes
-	// through a confirm dialog (#58): open the dropdown, click End session to open
-	// the native <dialog>, then confirm to fire the real endSession.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.queue-dropdown .queue-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.queue-panel button[commandfor='confirm-end-session']`, chromedp.ByQuery),
-		chromedp.Click(`.queue-panel button[commandfor='confirm-end-session']`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#confirm-end-session[open] button[name='endSession']`, chromedp.ByQuery),
-		chromedp.Click(`#confirm-end-session button[name='endSession']`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("confirm End session: %v%s", err, diag())
-	}
+	endSession(t, p, diag)
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		return len(evs) > 0 && evs[len(evs)-1].Event == "end"
 	}, "end terminator", diag)

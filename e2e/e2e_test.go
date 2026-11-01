@@ -150,6 +150,19 @@ func prefsIsolatedEnv(repo string) []string {
 // agent-mode behavior.
 func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (string, string, *exec.Cmd, *bytesBuf) {
 	t.Helper()
+	return startPrereviewStdout(t, binary, repo, drainStdout, extraArgs...)
+}
+
+// drainStdout is the default post-preamble stdout handling: keep reading so the
+// pipe never fills.
+func drainStdout(r io.ReadCloser) { _, _ = io.Copy(io.Discard, r) }
+
+// startPrereviewStdout is startPrereview with the post-preamble stdout handling
+// injected. afterPreamble runs on its own goroutine once READY + STORE are read;
+// pass a func that stops reading (an undrained pipe) or closes the read end (a
+// dead reader) to reproduce what an agent that never consumes stdout does (#215).
+func startPrereviewStdout(t *testing.T, binary, repo string, afterPreamble func(io.ReadCloser), extraArgs ...string) (string, string, *exec.Cmd, *bytesBuf) {
+	t.Helper()
 	// --host 127.0.0.1 is explicit ON PURPOSE — do NOT delete as a
 	// "redundant default". It forces netaddr.ResolveBindHost's operator-override
 	// path so e2e stays hermetic: without it, on an SSH+tailnet machine
@@ -195,8 +208,7 @@ func startPrereview(t *testing.T, binary, repo string, extraArgs ...string) (str
 			}
 			if p.url != "" && p.store != "" {
 				readyCh <- p
-				// keep draining so the pipe doesn't fill.
-				go io.Copy(io.Discard, stdout)
+				go afterPreamble(stdout)
 				return
 			}
 		}
@@ -397,9 +409,16 @@ func bootChromeAgainstPrereview(t *testing.T, viewportW, viewportH int, extraArg
 // (no mutations) depending on what scenario the test exercises.
 func bootChromeAgainstRepo(t *testing.T, repo string, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
 	t.Helper()
+	return bootChromeAgainstRepoStdout(t, repo, viewportW, viewportH, drainStdout, extraArgs...)
+}
+
+// bootChromeAgainstRepoStdout is bootChromeAgainstRepo with the server's
+// post-preamble stdout handling injected (see startPrereviewStdout).
+func bootChromeAgainstRepoStdout(t *testing.T, repo string, viewportW, viewportH int, afterPreamble func(io.ReadCloser), extraArgs ...string) *runningPrereview {
+	t.Helper()
 	chromium := findChromium(t)
 	binary := prereviewBinary(t)
-	url, store, srv, stderr := startPrereview(t, binary, repo, extraArgs...)
+	url, store, srv, stderr := startPrereviewStdout(t, binary, repo, afterPreamble, extraArgs...)
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(chromium),
