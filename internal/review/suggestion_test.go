@@ -216,3 +216,19 @@ func TestSuggestionLineSpan(t *testing.T) {
 		t.Errorf("range span: want L42-L48, got %s", s.LineSpan())
 	}
 }
+
+// TestRelocateSuggestionsSelected_PastEOF pins #216 for the suggestion side of
+// the shared engine: a suggestion whose line lies beyond a shrunk file goes
+// outdated, never panics.
+func TestRelocateSuggestionsSelected_PastEOF(t *testing.T) {
+	c := ctrlWithSuggestions(t,
+		`{"id":"far","file":"a.md","from_line":19,"to_line":19,"original":"gone line","proposed":"X"}`,
+	)
+	st := PrereviewState{SelectedFile: "a.md"}
+	c.applySuggestions(&st)
+	st.CurrentDiff = fd("alpha", "beta", "gamma")
+	c.relocateSuggestionsSelected(&st)
+	if s := st.Suggestions[0]; !s.AnchorOutdated() || s.FromLine != 19 {
+		t.Errorf("want outdated@19, got %s@%d", s.AnchorStatus, s.FromLine)
+	}
+}

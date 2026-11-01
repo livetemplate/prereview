@@ -155,6 +155,24 @@ func TestRelocate_Table(t *testing.T) {
 			wantFrom: 2, wantTo: 2, wantStatus: anchorMoved, wantChanged: true,
 		},
 		{
+			// #216: the file shrank below the comment's recorded line. Probing the
+			// before-neighbour at lines[from-2] indexed past the end and panicked on
+			// every page load. The text is gone, so: outdated, ints untouched.
+			name: "recorded line past end of a shrunk file (outdated, no panic)",
+			orig: []string{"L1", "L2", "L3", "L4", "L5", "TARGET sentence", "L7"}, from: 6, to: 6,
+			modified: []string{"L1", "L2", "L3"},
+			wantFrom: 6, wantTo: 6, wantStatus: anchorOutdated, wantChanged: true,
+		},
+		{
+			// Deleting the commented LAST line leaves its before-neighbour in place
+			// and there is no after-context, which used to pass the in-place-edit
+			// test. A deletion is not an edit: the range no longer exists.
+			name: "commented last line deleted (outdated, not edited)",
+			orig: []string{"A", "B", "TARGET sentence"}, from: 3, to: 3,
+			modified: []string{"A", "B"},
+			wantFrom: 3, wantTo: 3, wantStatus: anchorOutdated, wantChanged: true,
+		},
+		{
 			name: "whitespace-only differences still match in place (ok)",
 			orig: []string{"the   quick  fox"}, from: 1, to: 1,
 			modified: []string{"  the quick fox  "},
