@@ -122,6 +122,10 @@ type PrereviewController struct {
 	// Mount and LLMStatusChanged.
 	reviewedGen atomic.Int64
 
+	// presence is the watcher's latest AgentPresence (#194): server-wide, computed
+	// once per tick, copied into each tab by applyAgentCursor.
+	presence atomic.Pointer[AgentPresence]
+
 	// Continuous emission (#119). A single debounced timer coalesces a burst of
 	// mutations into one snapshot emit (see controller_emit.go). emitMu guards the
 	// timer. inEmit is set while emitSnapshot runs so its own self-heal persist

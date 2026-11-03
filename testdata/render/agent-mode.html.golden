@@ -369,7 +369,7 @@
       class="contrast tb-dropdown-trigger queue-trigger"
       aria-haspopup="menu"
       title="Work queue: queued, blocked, worked-on, drafts; Pause/Resume + End session inside"
-    ><span class="tb-label">Queue</span><span class="queue-counts"><span class="q-num q-queued">1</span></span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+    ><span class="agent-dot is-idle" aria-hidden="true"></span><span class="tb-label">Queue</span><span class="queue-counts"><span class="q-num q-queued">1</span></span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
   d="M6 9l6 6 6-6"
   stroke="currentColor"
   stroke-width="2"
@@ -383,7 +383,7 @@
         <button type="submit" name="toggleAgentPause" class="queue-pause-btn">⏸ Pause — batch comments <kbd class="kbd-hint" aria-hidden="true">q</kbd></button>
       </form>
       <div class="queue-mode">Live: each comment is sent to the agent as you save it.</div>
-      
+      <div class="queue-agent is-idle"><span class="agent-dot is-idle" aria-hidden="true"></span>No agent has picked this queue up yet</div>
       
       
       <form method="POST" class="queue-scope-form">

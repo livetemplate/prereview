@@ -1172,6 +1172,7 @@ header.file-head .file-head-actions {
   border-radius: 6px; font-size: 0.85rem;
 }
 .paused-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
+.agent-stall-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
 /* Pause/resume toggle (#119): the paused state is visually distinct so it's
    obvious the agent is held. Used by the --external bar's inline Pause button
    (repo-mode's Pause moved into the Queue dropdown as .queue-pause-btn). */
@@ -1255,7 +1256,17 @@ header.file-head .file-head-actions {
 .queue-paused-dot { margin-right: 0.2rem; }
 .queue-trigger.is-paused { border-color: color-mix(in srgb, var(--pr-del) 55%, transparent); }
 .queue-empty { padding: 0.5rem; font-size: 0.8rem; color: var(--pico-muted-color); }
-.queue-working { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--accent); }
+/* #194: the observed queue consumer. One dot vocabulary on the trigger and the panel
+   line: green = a watch is attached, accent = picked up, red = silent with work
+   outstanding, hollow = nothing has read the queue. Static — no pulse, no clock. */
+.agent-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; background: var(--pico-muted-color); }
+.agent-dot.is-watching { background: var(--pr-add); }
+.agent-dot.is-working { background: var(--accent); }
+.agent-dot.is-stalled { background: var(--pr-del); }
+.agent-dot.is-idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pico-muted-color); }
+.queue-agent { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--pico-muted-color); }
+.queue-agent.is-watching, .queue-agent.is-working { color: var(--accent); }
+.queue-agent.is-stalled { color: var(--pr-del); }
 .queue-legend { padding: 0.25rem 0.5rem 0.4rem; font-size: 0.75rem; color: var(--pico-muted-color); border-bottom: 1px solid var(--pico-card-sectioning-background-color); margin-bottom: 0.2rem; }
 /* #171: the queue scope switch — "This file" (default) vs "All files". A segmented pair
    inside one button: the whole control is the toggle, the lit half says where you are. */

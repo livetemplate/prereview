@@ -55,7 +55,22 @@ func runWatch(args []string) error {
 		return err
 	}
 	path := filepath.Join(dir, review.EventsFileName)
-	return followEvents(path, *since, os.Stdout, eventsPollInterval)
+	return followEvents(path, *since, os.Stdout, eventsPollInterval, cursorStamper(dir))
+}
+
+// cursorStamper records this watch in the store's agent-cursor.json (#194), the
+// signal the review UI reads to show that the queue is actually being consumed.
+// The indicator is an enrichment and event delivery is the contract, so a failed
+// stamp is reported once on stderr and never fails the command.
+func cursorStamper(dir string) func(state string, seq int) {
+	warned := false
+	return func(state string, seq int) {
+		err := review.WriteAgentCursor(dir, review.AgentCursor{Mode: review.AgentCursorWatch, State: state, DeliveredSeq: seq})
+		if err != nil && !warned {
+			fmt.Fprintf(os.Stderr, "prereview watch: could not record the agent cursor (the review UI will not show this watch): %v\n", err)
+			warned = true
+		}
+	}
 }
 
 // followEvents delivers ONE batch of events from path to w and returns — the
@@ -75,12 +90,20 @@ func runWatch(args []string) error {
 // whole new run away — detected as "the log's highest seq is below the cursor"
 // (impossible in a monotonic same-session log) and handled by dropping the
 // cursor. poll is the block-for-next re-check interval.
-func followEvents(path string, since int, w io.Writer, poll time.Duration) error {
+//
+// stamp (nil = none) records the reader in agent-cursor.json: "waiting" with the
+// cursor once the log is open and every AgentCursorHeartbeat while blocked, then
+// "delivered" with the highest seq printed. Never before waitOpen succeeds — a
+// watch stuck on a missing log (a wrong --out) must not heartbeat as attached.
+func followEvents(path string, since int, w io.Writer, poll time.Duration, stamp func(state string, seq int)) error {
 	f, err := waitOpen(path, poll)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	if stamp == nil {
+		stamp = func(string, int) {}
+	}
 
 	r := bufio.NewReader(f)
 
@@ -97,40 +120,43 @@ func followEvents(path string, since int, w io.Writer, poll time.Duration) error
 		fmt.Fprintln(os.Stderr, "prereview watch: event log reset (new session) — resuming from seq 0")
 		since = -1
 	}
-	emitted, done, err := emitBatch(catchup, since, w)
-	if err != nil || done || emitted > 0 {
-		return err // delivered a batch (or hit end) — return so the agent acts
-	}
-
-	// Already caught up → block until the next event(s) land, then return.
+	// Deliver the catch-up batch; when already caught up, block — heartbeating
+	// "waiting" — until the next event(s) land, then deliver those and return.
+	lines := catchup
+	var beat time.Time
 	for {
-		time.Sleep(poll)
-		var lines [][]byte
-		lines, partial = readComplete(r, partial)
-		emitted, done, err = emitBatch(lines, since, w)
-		if err != nil || done || emitted > 0 {
+		last, done, err := emitBatch(lines, since, w)
+		if err == nil && last > since { // a failed print is no delivery; nor is a bare end past the cursor
+			stamp(review.AgentCursorDelivered, last)
+		}
+		if err != nil || done || last > since {
 			return err
 		}
+		if time.Since(beat) >= review.AgentCursorHeartbeat {
+			stamp(review.AgentCursorWaiting, since)
+			beat = time.Now()
+		}
+		time.Sleep(poll)
+		lines, partial = readComplete(r, partial)
 	}
 }
 
-// emitBatch writes each line whose seq exceeds the cursor, returning how many it
-// wrote and whether a `end` terminator was seen. Torn/malformed lines
-// are skipped.
-func emitBatch(lines [][]byte, since int, w io.Writer) (emitted int, done bool, err error) {
+// emitBatch writes each line whose seq exceeds the cursor, returning the highest
+// seq it wrote (since itself when it wrote none) and whether a `end` terminator
+// was seen. Torn/malformed lines are skipped.
+func emitBatch(lines [][]byte, since int, w io.Writer) (last int, done bool, err error) {
+	last = since
 	for _, ln := range lines {
-		wrote, term, err := emitEvent(ln, since, w)
+		seq, term, err := emitEvent(ln, since, w)
 		if err != nil {
-			return emitted, false, err
+			return last, false, err
 		}
-		if wrote {
-			emitted++
-		}
+		last = max(last, seq)
 		if term {
-			return emitted, true, nil
+			return last, true, nil
 		}
 	}
-	return emitted, false, nil
+	return last, false, nil
 }
 
 // readComplete drains r up to EOF, returning every newline-terminated line plus
@@ -153,23 +179,21 @@ func readComplete(r *bufio.Reader, carry []byte) (lines [][]byte, partial []byte
 	}
 }
 
-// emitEvent prints line when its seq exceeds the cursor (reporting wrote), and
+// emitEvent prints line when its seq exceeds the cursor (returning that seq, else
+// since-or-below), and
 // reports term when the line is a `end` — the stream's only terminator —
 // even if it was filtered out (a cursor already past it means the agent has seen
 // it), so we never block waiting for events that will never come. Torn/malformed
 // lines are silently skipped.
-func emitEvent(line []byte, since int, w io.Writer) (wrote, term bool, err error) {
+func emitEvent(line []byte, since int, w io.Writer) (seq int, term bool, err error) {
 	ev, ok := peekEvent(line)
-	if !ok {
-		return false, false, nil
+	if !ok || ev.Seq <= since {
+		return since, ok && ev.Event == "end", nil
 	}
-	if ev.Seq > since {
-		if _, err := w.Write(line); err != nil {
-			return false, false, fmt.Errorf("write event: %w", err)
-		}
-		wrote = true
+	if _, err := w.Write(line); err != nil {
+		return since, false, fmt.Errorf("write event: %w", err)
 	}
-	return wrote, ev.Event == "end", nil
+	return ev.Seq, ev.Event == "end", nil
 }
 
 // peekEvent decodes only the routing fields (event + seq) from a log line. ok is

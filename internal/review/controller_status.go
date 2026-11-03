@@ -2,6 +2,7 @@ package review
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -28,6 +29,11 @@ func (c *PrereviewController) statusPath() string {
 // thread replies, the applied/reverted acks, and the quiz file (#191). Any one
 // changing flips the key, so a single watcher covers them all without extra
 // goroutines — a new suggestion or quiz appears live with no server restart.
+//
+// agent-cursor.json is deliberately NOT one of them: a blocked watch rewrites it
+// every heartbeat, so its mtime would make this a PERIODIC re-render of every tab.
+// The watcher keys on AgentPresence instead, which changes only on a state
+// transition (#194).
 func (c *PrereviewController) agentSignalFingerprint() string {
 	return statusFingerprint(c.statusPath()) + "|" +
 		statusFingerprint(c.processedPath()) + "|" +
@@ -36,6 +42,62 @@ func (c *PrereviewController) agentSignalFingerprint() string {
 		statusFingerprint(AppliedPath(c.CSVPath)) + "|" +
 		statusFingerprint(RevertedPath(c.CSVPath)) + "|" +
 		statusFingerprint(c.quizPath())
+}
+
+// AgentPresence is what the server can OBSERVE about the queue's consumer
+// (#194), as opposed to what the agent volunteers. It is server-wide (the
+// watcher computes it once per tick and every tab copies it) and doubles as a
+// fan-out key, so every field changes only on a state transition or at minute
+// resolution — never per heartbeat.
+type AgentPresence struct {
+	Attached   bool   `json:"attached"`    // a blocking watch is on the stream right now
+	PickedUp   bool   `json:"picked_up"`   // the queue has been read at least once
+	Polled     bool   `json:"polled"`      // the last read was a one-shot `comments --json`
+	Behind     bool   `json:"behind"`      // events were emitted after the last delivery
+	PickupAt   string `json:"pickup_at"`   // when it was read, while not attached
+	Quiet      bool   `json:"quiet"`       // not attached, and no agent signal for AgentStallAfter
+	QuietSince string `json:"quiet_since"` // the last agent signal, while not attached
+}
+
+func (p AgentPresence) key() string { return fmt.Sprintf("%+v", p) }
+
+// agentPresence derives the presence from agent-cursor.json. lastSignal is the
+// watcher's record of the agent's last other signal (a sidecar or reviewed-file
+// change), so the stall clock never re-scans the disk. A missing cursor (no
+// reader yet, or an older agent binary) is simply "never picked up".
+func (c *PrereviewController) agentPresence(now, lastSignal time.Time) AgentPresence {
+	cur, mtime, err := readAgentCursor(AgentCursorPath(c.CSVPath))
+	if err != nil {
+		return AgentPresence{}
+	}
+	p := AgentPresence{PickedUp: cur.PickedUp(), Polled: cur.Mode == AgentCursorPoll}
+	if p.Attached = cur.Attached(mtime, now); p.Attached {
+		return p
+	}
+	p.Behind = !p.Polled && cur.DeliveredSeq < c.Emitter.LastSeq()
+	p.PickupAt = clockMinute(mtime)
+	last := mtime
+	if lastSignal.After(last) {
+		last = lastSignal
+	}
+	p.QuietSince = clockMinute(last)
+	p.Quiet = now.Sub(last) >= AgentStallAfter
+	return p
+}
+
+// clockMinute is the minute-resolution wall-clock label, in the thread
+// timestamps' layout — minute resolution also bounds how often it can change.
+func clockMinute(t time.Time) string { return t.Local().Format(clockLayout) }
+
+// applyAgentCursor copies the watcher's cached presence onto state for the
+// zero-arg phase methods (state_queue.go); it computes one only before the
+// watcher's first tick (or outside agent mode, where nothing ticks).
+func (c *PrereviewController) applyAgentCursor(state *PrereviewState) {
+	if p := c.presence.Load(); p != nil {
+		state.Agent = *p
+		return
+	}
+	state.Agent = c.agentPresence(time.Now(), time.Time{})
 }
 
 // reviewedFilesFingerprint is a cheap mtime+size key over the files under REVIEW
@@ -73,6 +135,9 @@ func (c *PrereviewController) applyLLMStatus(state *PrereviewState) {
 	default:
 		slog.Debug("llm-status: keeping previous value on unreadable file", "err", err)
 	}
+	// Every caller (Mount, OnConnect, the watcher's fan-out) wants the observed
+	// consumer state alongside the agent's own echo.
+	c.applyAgentCursor(state)
 }
 
 // OnConnect captures the connecting group's Session so the background llm-status
@@ -191,18 +256,30 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 	// working→done transition. openStore removes llm-status.json on launch, so a
 	// fresh session starts idle and the first real "done" is a genuine transition.
 	prevState := c.currentLLMState()
+	// #194: the agent's last signal, for the stall clock — stamped here, where every
+	// sidecar / reviewed-file change is already seen, instead of re-scanning mtimes.
+	var lastSignal time.Time
+	startPresence := c.agentPresence(time.Now(), lastSignal)
+	c.presence.Store(&startPresence)
+	lastPresence := startPresence.key()
 	for {
 		select {
 		case <-stop:
 			return
-		case <-ticker.C:
+		case now := <-ticker.C:
 			fp := c.agentSignalFingerprint()
 			reviewed := c.reviewedFilesFingerprint()
-			if fp == last && reviewed == lastReviewed {
+			if fp != last || reviewed != lastReviewed {
+				lastSignal = now
+			}
+			pres := c.agentPresence(now, lastSignal)
+			c.presence.Store(&pres)
+			presenceKey := pres.key()
+			if fp == last && reviewed == lastReviewed && presenceKey == lastPresence {
 				continue
 			}
 			reviewedChanged := reviewed != lastReviewed
-			last, lastReviewed = fp, reviewed
+			last, lastReviewed, lastPresence = fp, reviewed, presenceKey
 			if reviewedChanged {
 				// A reviewed file changed on disk — deterministic, no agent command.
 				// Bump the gen so open tabs surface it (the refresh nudge) in

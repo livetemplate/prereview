@@ -43,6 +43,18 @@ type EventStream struct {
 	filePath string    // append-only durable mirror
 }
 
+// LastSeq is the seq of the last event emitted, -1 before the first (or on a
+// nil stream). The UI compares it with the reader's cursor to tell whether the
+// agent has the reviewer's newest comment (#194).
+func (e *EventStream) LastSeq() int {
+	if e == nil {
+		return -1
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.seq - 1
+}
+
 // NewEventStream returns an emitter targeting out (live) and filePath (durable
 // mirror). filePath may be "" to disable the durable mirror (tests).
 func NewEventStream(out io.Writer, filePath string) *EventStream {

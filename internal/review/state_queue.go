@@ -359,3 +359,88 @@ func suggestionQueueBody(sg Suggestion) string {
 	}
 	return "Suggested edit"
 }
+
+// Agent phases (#194): what the reviewer can be told about the queue's consumer,
+// from what the server observes (agent-cursor.json), not what the agent says.
+const (
+	AgentPhaseIdle     = "idle"     // nothing has ever read the queue
+	AgentPhaseWatching = "watching" // a blocking `watch` is attached right now
+	AgentPhaseWorking  = "working"  // the queue was read; nothing attached now
+	AgentPhaseStalled  = "stalled"  // working, but silent too long with work outstanding
+	AgentPhasePaused   = "paused"   // batching: the reviewer is holding the queue
+)
+
+// AgentPhase is the consumer phase, "" outside --agent mode. Precedence: paused
+// (the reviewer's own choice explains any silence), watching, stalled, working,
+// idle.
+func (s PrereviewState) AgentPhase() string {
+	switch {
+	case !s.AgentMode:
+		return ""
+	case s.AgentPaused:
+		return AgentPhasePaused
+	case s.Agent.Attached:
+		return AgentPhaseWatching
+	case !s.Agent.PickedUp:
+		return AgentPhaseIdle
+	case s.Agent.Quiet && s.outstandingAgentWork() > 0:
+		return AgentPhaseStalled
+	default:
+		return AgentPhaseWorking
+	}
+}
+
+// AgentPhaseLabel is the Queue panel's status line (and the stall banner's). The
+// agent's own working message wins over the inferred lines (an authored message
+// beats inference) — except when stalled: a `working` echo the agent never closed
+// with `done` is exactly what a stall looks like, and repeating it would hide the
+// one prompt that helps (#203). Paused has none here because the panel's mode
+// line already says "Batching". The stall copy never asserts the agent is dead: a
+// reasoning turn writes nothing, so silence is ambiguous, and the line says what
+// to do if its turn ended.
+func (s PrereviewState) AgentPhaseLabel() string {
+	phase := s.AgentPhase()
+	if l := s.AgentWorkingLabel(); l != "" && phase != AgentPhaseStalled {
+		return l
+	}
+	switch phase {
+	case AgentPhaseWatching:
+		return "Agent connected — watching your queue"
+	case AgentPhaseIdle:
+		return "No agent has picked this queue up yet"
+	case AgentPhaseStalled:
+		return "No word from the agent since " + s.Agent.QuietSince + " — if its turn ended, ask it to run prereview watch"
+	case AgentPhaseWorking:
+		switch {
+		case s.Agent.Polled:
+			return "Agent last read your queue at " + s.Agent.PickupAt
+		case s.Agent.Behind:
+			return "Agent read your queue at " + s.Agent.PickupAt + " — newer comments reach it on its next prereview watch"
+		default:
+			return "Agent picked up your queue at " + s.Agent.PickupAt
+		}
+	}
+	return ""
+}
+
+// outstandingAgentWork counts queued + blocked items across the WHOLE review
+// (not the per-file queue filter, #171): the stall warning is about work the
+// agent has not finished anywhere, like AwaitingApplyCount.
+func (s PrereviewState) outstandingAgentWork() int {
+	awaiting := s.AwaitingAgent()
+	n := 0
+	for _, c := range s.scopedComments() {
+		if st := reopenIfReplied(c.QueueState(), c.ID, awaiting); st == queueQueued || st == queueBlocked {
+			n++
+		}
+	}
+	for _, sg := range s.scopedSuggestions() {
+		if st := reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting); st == queueQueued || st == queueBlocked {
+			n++
+		}
+	}
+	return n
+}
+
+// AgentStalled gates the stall prompt (banners.tmpl).
+func (s PrereviewState) AgentStalled() bool { return s.AgentPhase() == AgentPhaseStalled }

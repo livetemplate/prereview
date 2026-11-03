@@ -178,7 +178,12 @@ prereview watches the reviewed files: the moment you edit one, every open tab ge
 "refresh to see the changes" nudge — with NO command from you. So the reviewer already
 knows you acted; the deterministic signal is the file-watch, not this echo. `status` is
 an *enrichment* on top: a live "working…" pill with a human-readable message while you
-work, and a one-line changelog when you finish. Skipping it never breaks anything, and
+work, and a one-line changelog when you finish. The reviewer also sees, with no command
+from you, whether you are connected: `prereview watch` records itself, so the Queue says
+"Agent connected" while it blocks and "picked up at HH:MM" once it hands you a batch — and,
+if work then sits for minutes with nothing watching, suggests re-running `watch`. So keep
+the watch loop going; that, not `status`, is what tells the reviewer you're on it.
+Skipping `status` never breaks anything, and
 it can no longer hide your edits — but a short `working` note reassures mid-batch, and
 the `done` message becomes the version changelog:
 

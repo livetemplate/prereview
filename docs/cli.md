@@ -193,10 +193,14 @@ prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
   `--since <seq>` (default `-1` = from the start), **blocks** for the next when
   caught up, returns a batch so the agent can act, and exits `0` only on the `end`
   event. Loop by re-running with the highest `seq` seen. Reads the durable
-  `.prereview/events.jsonl`; writes nothing. Run it with a long timeout (e.g. 600s).
+  `.prereview/events.jsonl`, and records itself in `agent-cursor.json` (a
+  heartbeat while it blocks, the delivered `seq` when it returns) so the
+  **Queue** shows the reviewer that something is consuming it. Run it with a long
+  timeout (e.g. 600s).
 - **`prereview comments`** — list the review's comments from a stable interface
   (no CSV hand-parsing). Defaults to the actionable set; `--all` includes
-  resolved/outdated/draft. `--json` emits the **same shape as a `snapshot`**, so
+  resolved/outdated/draft. `--json` emits the **same shape as a `snapshot`**
+  (and records the read in `agent-cursor.json` as a pickup), so
   you can pipe ids: `prereview comments --json | jq -r '.[].id' | prereview done --file -`.
   This is the read path for agents that can't block on `watch`.
 - **`prereview done`** — mark comments **done** (a badge in the UI, so the reviewer
@@ -317,6 +321,7 @@ Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
 | `agent-replies.jsonl` | **agent** (`prereview reply`) | agent thread replies (durable) |
 | `reviewer-replies.jsonl` | server | reviewer thread replies (durable) |
 | `llm-status.json` | **agent** (`prereview status`) | the agent's live working/done status (reset each launch) |
+| `agent-cursor.json` | **agent** (`prereview watch`, `comments --json`) | who is reading the queue: a watch heartbeat or a one-shot read, plus the last `seq` delivered — drives the Queue's agent line (reset each launch) |
 | `versions/` | server | per-file version checkpoints + content blobs and their changelog (durable) |
 
 When an agent finishes a batch that edited files, prereview snapshots a new

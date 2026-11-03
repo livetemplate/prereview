@@ -119,6 +119,7 @@ Everything prereview writes lives under `<STORE>/`, the directory from the stdou
 ├── events.jsonl                ← agent mode only (--agent); append-only JSON event log, reset each launch
 ├── processed.jsonl             ← INBOUND: per-comment "done" markers (`prereview done`); append-only
 ├── llm-status.json             ← INBOUND: agent-status echo, watched by the server; reset each launch
+├── agent-cursor.json           ← INBOUND: written by `watch` / `comments --json` — who is reading the queue; reset each launch
 ├── suggestions.jsonl           ← INBOUND: the agent's proposed edits (`prereview suggest`); append-only, durable
 ├── suggestion-decisions.jsonl  ← reviewer's accept/reject verdicts; server-owned, rewritten atomically, durable
 ├── quiz.jsonl                  ← INBOUND: comprehension quizzes (`prereview quiz`); append-only, durable
@@ -130,7 +131,12 @@ The INBOUND files are written by the **agent** and read by the server (the rever
 and its verdicts ship back to the agent in each `snapshot`'s `suggestions` array (see
 [Agent mode](#agent-mode)). The agent writes `llm-status.json` via `prereview status <working|done> [message]`
 (atomically) — the file is `{"state":"working"|"done","message":"…","updated_at":"<RFC3339>"}`;
-the server polls it (~0.75s) and pushes the status to every open browser tab. Missing/blank `state` is idle. `events.jsonl`, `llm-status.json`, and
+the server polls it (~0.75s) and pushes the status to every open browser tab. Missing/blank `state` is idle. `agent-cursor.json`
+is written for you by `prereview watch` (a heartbeat every ~3s while it blocks, then the
+delivered `seq` when it returns) and by `prereview comments --json` (a one-shot read) —
+`{"mode":"watch"|"poll","state":"waiting"|"delivered","delivered_seq":N,…}`. The Queue
+derives from it whether an agent is connected, has picked the queue up, or has gone quiet
+with work outstanding; never write it by hand. `events.jsonl`, `llm-status.json`, `agent-cursor.json`, and
 `processed.jsonl` reset on each fresh launch; `suggestions.jsonl` /
 `suggestion-decisions.jsonl` are durable across launches.
 
