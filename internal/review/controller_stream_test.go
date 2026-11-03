@@ -1,7 +1,6 @@
 package review
 
 import (
-	"bytes"
 	"path/filepath"
 	"testing"
 	"time"
@@ -12,11 +11,11 @@ import (
 // newStreamController returns an agent-mode controller whose emitter writes to
 // an in-memory buffer (no file mirror), wired to a temp CSV store. External
 // mode keeps region comments diff-free so flushSnapshot's relocateAll is a no-op.
-func newStreamController(t *testing.T) (*PrereviewController, *bytes.Buffer, chan struct{}) {
+func newStreamController(t *testing.T) (*PrereviewController, *syncBuffer, chan struct{}) {
 	t.Helper()
 	dir := t.TempDir()
 	csvPath := filepath.Join(dir, "comments.csv")
-	buf := &bytes.Buffer{}
+	buf := &syncBuffer{} // the debounced emit writes it from a timer goroutine
 	shutdown := make(chan struct{}, 1)
 	c := &PrereviewController{
 		ExternalMode: true,

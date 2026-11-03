@@ -30,6 +30,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
 	}
+	catchSIGPIPE()
 	tgt, err := resolveTarget(absRepo)
 	if err != nil {
 		return err
@@ -97,7 +98,8 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	if err := review.WriteSessionScope(csvPath, tgt.SingleFile); err != nil {
 		return fmt.Errorf("record session scope: %w", err)
 	}
-	emitter := newStreamEmitter(agentMode, csvPath)
+	emitter, closeLive := newStreamEmitter(agentMode, csvPath)
+	defer closeLive()
 
 	// Load any existing comments from disk so a restart resumes the session.
 	existing, err := csv.Read(csvPath)
@@ -269,14 +271,37 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	return serveAndWait(srv, ln, nil, shutdownReq)
 }
 
+// liveQueueDepth bounds the stdout live channel's queue (#215): worst-case
+// memory is this many lines × the largest snapshot. Snapshots supersede each
+// other, so a deep queue buys nothing.
+const liveQueueDepth = 8
+
+// liveFlushTimeout bounds the shutdown flush of the live channel: ample for a
+// draining reader to receive the final `end`, and short so an undrained stdout
+// doesn't eat --replace's 3s takeover deadline (stopServer).
+const liveFlushTimeout = 500 * time.Millisecond
+
 // newStreamEmitter builds the agent-mode event emitter targeting
 // <store>/.prereview/events.jsonl (durable mirror) and stdout (live channel),
 // or returns nil outside agent mode so callers attach it unconditionally.
-func newStreamEmitter(agentMode bool, csvPath string) *review.EventStream {
+// Stdout goes through a LossyWriter so an undrained pipe can never block
+// emission (#215). The returned func flushes it; callers defer it so whatever
+// is queued — notably End session's `end` — reaches stdout on every exit path.
+func newStreamEmitter(agentMode bool, csvPath string) (*review.EventStream, func()) {
 	if !agentMode {
-		return nil
+		return nil, func() {}
 	}
-	return review.NewEventStream(os.Stdout, review.EventsPath(csvPath))
+	live := review.NewLossyWriter(os.Stdout, liveQueueDepth)
+	return review.NewEventStream(live, review.EventsPath(csvPath)), func() { live.Close(liveFlushTimeout) }
+}
+
+// catchSIGPIPE turns a write to a closed stdout/stderr into an EPIPE error
+// instead of process death (#215). By default the Go runtime re-raises SIGPIPE
+// for a broken fd 1/2, which kills the server with no log — the reviewer's tab
+// just goes dead. Notify (not signal.Ignore) because SIG_IGN is inherited across
+// exec, and the git children prereview runs should keep dying on a closed pipe.
+func catchSIGPIPE() {
+	signal.Notify(make(chan os.Signal, 1), syscall.SIGPIPE)
 }
 
 // emitReady emits the one-shot `ready` event in agent mode; a nil emitter
@@ -362,6 +387,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
 		return fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
 	}
+	catchSIGPIPE()
 	if outDir == "" {
 		return fmt.Errorf("--external requires --out <dir> (where annotations are saved)")
 	}
@@ -391,7 +417,8 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	if err != nil {
 		return err
 	}
-	emitter := newStreamEmitter(agentMode, csvPath)
+	emitter, closeLive := newStreamEmitter(agentMode, csvPath)
+	defer closeLive()
 	// Fail fast on a corrupt store; Mount reloads the rows on every connect.
 	if _, err := csv.Read(csvPath); err != nil {
 		return fmt.Errorf("read existing csv: %w", err)
