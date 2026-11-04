@@ -1436,6 +1436,11 @@ html body dialog#files-drawer {
      shrinks the mobile drawer. The desktop rule below is the only place the
      resizable var drives the width. */
   width: 85vw; max-width: 320px; min-width: 0; inset-inline-end: auto;
+  /* Pico gives every dialog min-height:100%, which beats the top/bottom
+     stretch: the drawer was a full viewport tall starting below the bar, so
+     its bottom --pr-bar-h hung off-screen and the last files couldn't be
+     scrolled into view (#222). */
+  min-height: 0;
   margin: 0; padding: 0; border: 0; border-right: 1px solid var(--pico-muted-border-color);
   background: var(--pico-card-background-color);
   transform: translateX(-100%); transition: transform 220ms ease;
