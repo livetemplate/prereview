@@ -88,13 +88,30 @@ func agentPhaseShown(p *runningPrereview) (phase, label string) {
 	return out[0], out[1]
 }
 
+// agentDotFilled reports whether the Queue trigger's dot paints a solid
+// background (vs. a hollow ring).
+func agentDotFilled(p *runningPrereview) bool {
+	var bg string
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+		const d = document.querySelector('.queue-trigger .agent-dot');
+		return d ? getComputedStyle(d).backgroundColor : '';
+	})()`, &bg))
+	return bg != "" && bg != "transparent" && bg != "rgba(0, 0, 0, 0)"
+}
+
 func waitPhase(t *testing.T, p *runningPrereview, want, labelHas string, within time.Duration, diag func() string) time.Duration {
 	t.Helper()
 	start := time.Now()
 	var phase, label string
 	for time.Since(start) < within {
 		if phase, label = agentPhaseShown(p); phase == want && strings.Contains(label, labelHas) {
-			return time.Since(start)
+			took := time.Since(start)
+			// Fill means connected: only a watching dot is solid, every other
+			// phase is a ring, so attachment never rests on hue alone.
+			if filled := agentDotFilled(p); filled != (want == "watching") {
+				t.Fatalf("phase %q: trigger dot filled=%v, want %v%s", want, filled, want == "watching", diag())
+			}
+			return took
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

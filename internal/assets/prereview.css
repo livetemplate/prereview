@@ -1259,11 +1259,13 @@ header.file-head .file-head-actions {
 /* #194: the observed queue consumer. One dot vocabulary on the trigger and the panel
    line: green = a watch is attached, accent = picked up, red = silent with work
    outstanding, hollow = nothing has read the queue. Static — no pulse, no clock. */
-.agent-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; background: var(--pico-muted-color); }
-.agent-dot.is-watching { background: var(--pr-add); }
-.agent-dot.is-working { background: var(--accent); }
-.agent-dot.is-stalled { background: var(--pr-del); }
-.agent-dot.is-idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pico-muted-color); }
+/* #194: fill = something is reading the queue right now (only watching); hue =
+   phase. A ring is "not connected", so the one distinction that matters — will a
+   new comment reach the agent? — never rests on green-vs-accent alone. */
+.agent-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; background: transparent; box-shadow: inset 0 0 0 1.5px var(--agent-dot, var(--pico-muted-color)); }
+.agent-dot.is-watching { background: var(--pr-add); box-shadow: none; }
+.agent-dot.is-working { --agent-dot: var(--accent); }
+.agent-dot.is-stalled { --agent-dot: var(--pr-del); }
 .queue-agent { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--pico-muted-color); }
 .queue-agent.is-watching, .queue-agent.is-working { color: var(--accent); }
 .queue-agent.is-stalled { color: var(--pr-del); }
