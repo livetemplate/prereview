@@ -53,15 +53,19 @@ func TestOpenStoreResetsStatusFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openStore: %v", err)
 	}
-	statusPath := review.LLMStatusPath(csvPath)
-	if err := os.WriteFile(statusPath, []byte(`{"state":"working"}`), 0o644); err != nil {
-		t.Fatal(err)
+	// #194: the reader's cursor too — a leftover would show last run's agent.
+	for _, path := range []string{review.LLMStatusPath(csvPath), review.AgentCursorPath(csvPath)} {
+		if err := os.WriteFile(path, []byte(`{"state":"working"}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if _, _, err := openStore(storeDirFor(root, "")); err != nil {
 		t.Fatalf("re-openStore: %v", err)
 	}
-	if _, err := os.Stat(statusPath); !os.IsNotExist(err) {
-		t.Errorf("stale llm-status.json not cleared (stat err = %v)", err)
+	for _, path := range []string{review.LLMStatusPath(csvPath), review.AgentCursorPath(csvPath)} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("stale %s not cleared (stat err = %v)", filepath.Base(path), err)
+		}
 	}
 }
 

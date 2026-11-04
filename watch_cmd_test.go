@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -66,7 +69,7 @@ func TestFollowEvents_SinceFilterAndSessionEnd(t *testing.T) {
 	}, "\n"))
 
 	var buf syncBuf
-	if err := followEvents(path, 1, &buf, testPoll); err != nil {
+	if err := followEvents(path, 1, &buf, testPoll, nil); err != nil {
 		t.Fatalf("followEvents: %v", err)
 	}
 	got := buf.String()
@@ -90,7 +93,7 @@ func TestFollowEvents_TornLineTolerance(t *testing.T) {
 	}, "\n"))
 
 	var buf syncBuf
-	if err := followEvents(path, -1, &buf, testPoll); err != nil {
+	if err := followEvents(path, -1, &buf, testPoll, nil); err != nil {
 		t.Fatalf("followEvents: %v", err)
 	}
 	if strings.Contains(buf.String(), "not valid json") {
@@ -120,7 +123,7 @@ func TestFollowEvents_RealEmitterContract(t *testing.T) {
 	}
 
 	var buf syncBuf
-	if err := followEvents(path, -1, &buf, testPoll); err != nil {
+	if err := followEvents(path, -1, &buf, testPoll, nil); err != nil {
 		t.Fatalf("followEvents: %v", err)
 	}
 	out := buf.String()
@@ -145,7 +148,7 @@ func TestFollowEvents_ReturnsAfterCatchupBatch(t *testing.T) {
 
 	var buf syncBuf
 	done := make(chan error, 1)
-	go func() { done <- followEvents(path, -1, &buf, testPoll) }()
+	go func() { done <- followEvents(path, -1, &buf, testPoll, nil) }()
 
 	select {
 	case err := <-done:
@@ -169,7 +172,7 @@ func TestFollowEvents_BlocksThenReturnsOnAppend(t *testing.T) {
 
 	var buf syncBuf
 	done := make(chan error, 1)
-	go func() { done <- followEvents(path, 0, &buf, testPoll) }() // since=0 ⇒ ready@0 filtered ⇒ block
+	go func() { done <- followEvents(path, 0, &buf, testPoll, nil) }() // since=0 ⇒ ready@0 filtered ⇒ block
 
 	time.Sleep(10 * testPoll)
 	if s := buf.String(); s != "" {
@@ -199,7 +202,7 @@ func TestFollowEvents_PartialTailWaitsForNewline(t *testing.T) {
 
 	var buf syncBuf
 	done := make(chan error, 1)
-	go func() { done <- followEvents(path, 0, &buf, testPoll) }() // caught up ⇒ block
+	go func() { done <- followEvents(path, 0, &buf, testPoll, nil) }() // caught up ⇒ block
 
 	time.Sleep(10 * testPoll)
 	appendLine(t, path, `{"event":"snapshot","seq":1}`) // no newline yet
@@ -234,7 +237,7 @@ func TestFollowEvents_ResetGuard(t *testing.T) {
 	}, "\n"))
 
 	var buf syncBuf
-	if err := followEvents(path, 5, &buf, testPoll); err != nil {
+	if err := followEvents(path, 5, &buf, testPoll, nil); err != nil {
 		t.Fatalf("followEvents: %v", err)
 	}
 	got := buf.String()
@@ -251,7 +254,7 @@ func TestFollowEvents_WaitsForLogThenReads(t *testing.T) {
 
 	var buf syncBuf
 	done := make(chan error, 1)
-	go func() { done <- followEvents(path, -1, &buf, testPoll) }()
+	go func() { done <- followEvents(path, -1, &buf, testPoll, nil) }()
 
 	time.Sleep(10 * testPoll) // reader is waiting for the file
 	writeFile(t, path, strings.Join([]string{
@@ -270,5 +273,108 @@ func TestFollowEvents_WaitsForLogThenReads(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), `"seq":0`) {
 		t.Errorf("expected events once the log appeared; got:\n%s", buf.String())
+	}
+}
+
+// stampLog records followEvents' cursor stamps for assertion.
+type stampLog struct {
+	mu sync.Mutex
+	s  []string
+}
+
+func (l *stampLog) stamp(state string, seq int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.s = append(l.s, state+"@"+strconv.Itoa(seq))
+}
+
+func (l *stampLog) get() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.s)
+}
+
+// TestFollowEvents_StampsCursor (#194): a blocked watch heartbeats "waiting" with
+// its cursor, then records "delivered" with the highest seq it printed.
+func TestFollowEvents_StampsCursor(t *testing.T) {
+	defer func(d time.Duration) { review.AgentCursorHeartbeat = d }(review.AgentCursorHeartbeat)
+	review.AgentCursorHeartbeat = 4 * testPoll
+
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	writeFile(t, path, `{"event":"ready","seq":0}`+"\n")
+	var buf syncBuf
+	var log stampLog
+	done := make(chan error, 1)
+	go func() { done <- followEvents(path, 0, &buf, testPoll, log.stamp) }()
+
+	time.Sleep(30 * testPoll)
+	appendLine(t, path, `{"event":"snapshot","seq":1}`+"\n"+`{"event":"snapshot","seq":2}`+"\n")
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("followEvents: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("followEvents did not return")
+	}
+	got := log.get()
+	waits := 0
+	for _, s := range got[:len(got)-1] {
+		if s != "waiting@0" {
+			t.Fatalf("stamps = %v; want only waiting@0 before the delivery", got)
+		}
+		waits++
+	}
+	if waits < 2 {
+		t.Errorf("stamps = %v; want the initial stamp plus ≥1 heartbeat while blocked", got)
+	}
+	if last := got[len(got)-1]; last != "delivered@2" {
+		t.Errorf("last stamp = %q, want delivered@2 (the highest seq printed)", last)
+	}
+}
+
+// TestFollowEvents_CatchupStampsDeliveredOnly: a batch already on disk is
+// delivered without ever claiming to wait.
+func TestFollowEvents_CatchupStampsDeliveredOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	writeFile(t, path, `{"event":"ready","seq":0}`+"\n"+`{"event":"snapshot","seq":1}`+"\n")
+	var buf syncBuf
+	var log stampLog
+	if err := followEvents(path, -1, &buf, testPoll, log.stamp); err != nil {
+		t.Fatal(err)
+	}
+	if got := log.get(); !slices.Equal(got, []string{"delivered@1"}) {
+		t.Errorf("stamps = %v, want [delivered@1]", got)
+	}
+}
+
+// TestFollowEvents_NoStampBeforeLogExists: a watch stuck waiting for a missing
+// event log (a wrong --out) must not look attached — the false-green trap.
+func TestFollowEvents_NoStampBeforeLogExists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	var buf syncBuf
+	var log stampLog
+	go func() { _ = followEvents(path, -1, &buf, testPoll, log.stamp) }()
+	time.Sleep(40 * testPoll)
+	if got := log.get(); len(got) != 0 {
+		t.Errorf("stamps = %v before the log existed; want none", got)
+	}
+	writeFile(t, path, `{"event":"end","seq":0}`+"\n") // let the goroutine exit
+}
+
+// TestCursorStamper_WritesSidecar: the real stamper writes a parseable sidecar.
+func TestCursorStamper_WritesSidecar(t *testing.T) {
+	dir := t.TempDir()
+	cursorStamper(dir)(review.AgentCursorDelivered, 7)
+	b, err := os.ReadFile(filepath.Join(dir, review.AgentCursorFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c review.AgentCursor
+	if err := json.Unmarshal(b, &c); err != nil {
+		t.Fatal(err)
+	}
+	if c.Mode != review.AgentCursorWatch || c.State != review.AgentCursorDelivered || c.DeliveredSeq != 7 || c.PID == 0 {
+		t.Errorf("sidecar = %+v", c)
 	}
 }

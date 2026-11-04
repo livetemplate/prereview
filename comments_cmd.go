@@ -48,6 +48,13 @@ func runComments(args []string) error {
 	}
 
 	if *asJSON {
+		// --json is the agent-facing read: record it as a pickup so a one-shot
+		// client's review doesn't sit at "nobody picked this up" (#194). The human
+		// table is someone eyeballing the store, not a pickup. Best-effort: the read
+		// is the contract, the indicator an enrichment.
+		if err := review.RecordPoll(dir); err != nil {
+			fmt.Fprintf(os.Stderr, "prereview comments: could not record the agent cursor: %v\n", err)
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(comments) // non-nil slice ⇒ `[]` when empty, never `null`

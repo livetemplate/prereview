@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+// clockLayout is the reviewer-facing wall-clock layout, shared by thread
+// timestamps and the Queue's agent line so the two never drift apart.
+const clockLayout = "3:04 PM"
+
 // thread.go is the #149 conversation substrate: a thread is an ordered list of
 // entries attached to a target (a comment ID or a suggestion ID — one shape for
 // both). Entries live in two append-only sidecars merged at Mount, mirroring the
@@ -54,7 +58,7 @@ func (e ThreadEntry) When() string {
 	if e.At == 0 {
 		return ""
 	}
-	return time.Unix(0, e.At).Format("3:04 PM")
+	return time.Unix(0, e.At).Format(clockLayout)
 }
 
 // AgentRepliesPath / ReviewerRepliesPath resolve the two sidecars for a store whose

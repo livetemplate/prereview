@@ -1,7 +1,6 @@
 package review
 
 import (
-	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,7 +58,9 @@ func TestSuggestionDrift_121_DropsFromSnapshotWhenTargetEditedAway(t *testing.T)
 	if err := os.MkdirAll(filepath.Dir(csvPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	buf := &bytes.Buffer{}
+	// syncBuffer, not bytes.Buffer: flushSnapshot also arms the debounced emit,
+	// whose timer goroutine writes here while the test reads.
+	buf := &syncBuffer{}
 	c := &PrereviewController{
 		RepoPath: repo, Base: "HEAD", CSVPath: csvPath,
 		CSVWriter: csv.NewWriter(csvPath), AgentMode: true,

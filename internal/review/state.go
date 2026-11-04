@@ -199,6 +199,10 @@ type PrereviewState struct {
 	LLMState   string `json:"llm_state"`
 	LLMMessage string `json:"llm_message"`
 
+	// Agent is the observed queue consumer (#194), copied from the watcher by
+	// applyAgentCursor. Drives AgentPhase.
+	Agent AgentPresence `json:"agent"`
+
 	// PendingRefresh is set when the agent's status transitions working→done:
 	// the agent just edited files, so this tab's diff is now stale. It drives a
 	// non-intrusive "Changes applied — Refresh diff" affordance the user clicks

@@ -348,7 +348,7 @@
         <button type="submit" name="toggleAgentPause" class="queue-pause-btn is-paused">▶ Resume — send batch <kbd class="kbd-hint" aria-hidden="true">q</kbd></button>
       </form>
       <div class="queue-mode is-batching">Batching: comments are held, not sent. Resume sends them together.</div>
-      <div class="queue-working">⚡ applying</div>
+      <div class="queue-agent is-paused"><span class="agent-dot is-paused" aria-hidden="true"></span>applying</div>
       
       
       <form method="POST" class="queue-scope-form">

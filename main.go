@@ -13,6 +13,7 @@ import (
 
 	"embed"
 
+	"github.com/livetemplate/prereview/internal/review"
 	"github.com/livetemplate/prereview/internal/update"
 )
 
@@ -99,6 +100,10 @@ func reviewPath(args []string) string {
 }
 
 func main() {
+	// Test hook (#194): the browser e2e shortens the agent-cursor timings for the
+	// server and for `watch`, both of which it runs as separate processes.
+	review.ApplyAgentTimingEnv()
+
 	// `prereview done [--out <dir>] <id>...` — the coding agent marks
 	// comments it has addressed so the live review UI badges them "worked on".
 	// A bare positional verb, so intercept it before flag parsing (which would

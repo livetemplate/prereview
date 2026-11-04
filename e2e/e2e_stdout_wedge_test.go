@@ -14,17 +14,13 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
 
-	cdpnetwork "github.com/chromedp/cdproto/network"
-	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 
 	"github.com/livetemplate/prereview/internal/review"
@@ -35,48 +31,13 @@ import (
 const wedgeBodyBytes = 256 << 10
 
 // wedgeHarness boots an --agent server whose stdout is handled by afterPreamble,
-// wiring console/WS capture and a diag dump (server log, console, WS, HTML).
+// with the captureDiag dump (server log, console, WS, HTML).
 func wedgeHarness(t *testing.T, afterPreamble func(io.ReadCloser)) (*runningPrereview, func() string) {
 	t.Helper()
 	dir := setupFixtureRepoReanchor(t)
 	p := bootChromeAgainstRepoStdout(t, dir, 1200, 800, afterPreamble, "--agent")
 
-	var mu sync.Mutex
-	var consoleLines, wsFrames []string
-	// Frames echo the 256 KiB body; Clone so a stored clip doesn't pin it.
-	clip := func(s string) string { return strings.Clone(clipFrame(s, 400)) }
-	chromedp.ListenTarget(p.ctx, func(ev any) {
-		mu.Lock()
-		defer mu.Unlock()
-		switch e := ev.(type) {
-		case *cdpruntime.EventConsoleAPICalled:
-			parts := []string{string(e.Type)}
-			for _, a := range e.Args {
-				if a.Value != nil {
-					parts = append(parts, string(a.Value))
-				}
-			}
-			consoleLines = append(consoleLines, strings.Join(parts, " "))
-		case *cdpnetwork.EventWebSocketFrameReceived:
-			wsFrames = append(wsFrames, "recv "+clip(e.Response.PayloadData))
-		case *cdpnetwork.EventWebSocketFrameSent:
-			wsFrames = append(wsFrames, "sent "+clip(e.Response.PayloadData))
-		}
-	})
-	if err := chromedp.Run(p.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return cdpnetwork.Enable().Do(ctx)
-	})); err != nil {
-		t.Fatalf("enable network domain: %v", err)
-	}
-	diag := func() string {
-		var html string
-		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
-		mu.Lock()
-		defer mu.Unlock()
-		return fmt.Sprintf("\n--- server ---\n%s\n--- console ---\n%s\n--- ws ---\n%s\n--- html ---\n%s",
-			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), clip(html))
-	}
-	return p, diag
+	return p, captureDiag(t, p)
 }
 
 // addHugeComment comments on the TARGET block with a wedgeBodyBytes body. The

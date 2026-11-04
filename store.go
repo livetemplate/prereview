@@ -38,6 +38,9 @@ func openStore(dir string) (csvPath string, w *csv.Writer, err error) {
 	// a "working"/"done" left over from the previous run. It's the agent's to
 	// recreate.
 	_ = os.Remove(filepath.Join(dir, review.LLMStatusFileName))
+	// ...and the reader's cursor (#194), so a fresh launch can't show the previous
+	// run's agent as attached or as having picked this queue up.
+	_ = os.Remove(filepath.Join(dir, review.AgentCursorFileName))
 	// Clear any stale paused marker so a fresh session starts unpaused — a
 	// rollback-induced pause from a previous run shouldn't carry over (#90).
 	// The versions/ dir itself is deliberately NOT reset: it's the uncommitted

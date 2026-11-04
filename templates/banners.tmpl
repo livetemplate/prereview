@@ -46,6 +46,14 @@
   </form>
 </div>
 {{end}}
+{{- if .AgentStalled}}
+{{/* #194: work is outstanding, nothing is attached to the stream, and the agent has
+     been silent for AgentStallAfter. Worded as a possibility, never a verdict — a
+     reasoning turn writes nothing, so silence alone can't tell thinking from gone. */}}
+<div class="reanchor-prompt agent-stall-prompt" role="status">
+  <span>{{.AgentPhaseLabel}}</span>
+</div>
+{{end}}
 {{- end -}}
 {{define "statusBanners" -}}
 {{if .Quitting}}

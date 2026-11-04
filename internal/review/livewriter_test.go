@@ -34,6 +34,12 @@ func (s *syncBuffer) Write(p []byte) (int, error) {
 
 func (s *syncBuffer) String() string { return string(s.Bytes()) }
 
+func (s *syncBuffer) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.b.Reset()
+}
+
 // Bytes returns a copy, so a reader never aliases memory a writer is appending to.
 func (s *syncBuffer) Bytes() []byte {
 	s.mu.Lock()
