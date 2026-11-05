@@ -111,15 +111,12 @@ func TestE2E_SearchPalette(t *testing.T) {
 	}
 
 	// --- Open via the toolbar button; the input should autofocus. ---
+	// Wait for the focus itself: autofocus lands after the morph that makes the
+	// input visible, so a single sample right after WaitVisible raced it (CI flake).
 	openViaButton()
-	var focused bool
-	if err := chromedp.Run(p.ctx, chromedp.Evaluate(
-		`document.activeElement === document.querySelector('.search-modal input[name="q"]')`, &focused)); err != nil {
-		t.Fatal(err)
-	}
-	if !focused {
-		t.Error("palette input should autofocus on open")
-	}
+	waitJSTrue(t, p.ctx,
+		`document.activeElement === document.querySelector('.search-modal input[name="q"]')`,
+		3*time.Second, "palette input should autofocus on open")
 
 	// --- Content hit in a FOLDED region → reveal full file, land is-cursor. ---
 	typeQuery("UNCHANGEDNEEDLE")
