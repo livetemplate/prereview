@@ -218,6 +218,12 @@ type PrereviewState struct {
 	// persisted; Mount resets it.
 	SeenReviewedGen int64 `json:"-"`
 
+	// EditsSettling is true while the watcher has seen reviewed-file edits that
+	// have not settled yet and the agent isn't "working" (its pill already says
+	// so). It replaces the Refresh bar with a notice that has no button, so the
+	// reviewer isn't invited to refresh into a half-applied state (#198).
+	EditsSettling bool `json:"edits_settling"`
+
 	// Mobile drawer visibility. Persisted so a reconnect mid-drawer doesn't
 	// surprise the user with a closed drawer. The desktop CSS ignores this
 	// field (sidebar is always visible above 900px).

@@ -141,12 +141,7 @@ func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp
 	if err != nil {
 		return Checkpoint{}, false, err
 	}
-	prev := map[string]string{}
-	if n := len(cps); n > 0 {
-		for _, fv := range cps[n-1].Files {
-			prev[fv.Path] = fv.SHA
-		}
-	}
+	prev := latestSHAs(cps)
 
 	files := make([]FileVersion, 0, len(refs))
 	changed := false
@@ -175,19 +170,64 @@ func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp
 	return cp, true, nil
 }
 
+// MatchesLatest reports whether refs are exactly the newest checkpoint: the same
+// paths with the same content. It writes nothing. Stricter than Checkpoint's skip
+// rule on purpose: a file that left the scope records no version, but the
+// reviewer's diff is still stale. False when there is no checkpoint yet or a
+// file can't be read (callers treat "unknown" as changed).
+func (s *VersionStore) MatchesLatest(refs []FileRef) bool {
+	s.mu.Lock()
+	cps, err := s.checkpointsLocked()
+	s.mu.Unlock()
+	if err != nil || len(cps) == 0 {
+		return false
+	}
+	prev := latestSHAs(cps)
+	if len(prev) != len(refs) {
+		return false
+	}
+	for _, ref := range refs {
+		_, sha, err := readContent(ref.AbsPath)
+		if want, ok := prev[ref.Path]; err != nil || !ok || sha != want {
+			return false
+		}
+	}
+	return true
+}
+
+// latestSHAs maps each path in the newest checkpoint to its blob sha.
+func latestSHAs(cps []Checkpoint) map[string]string {
+	prev := map[string]string{}
+	if n := len(cps); n > 0 {
+		for _, fv := range cps[n-1].Files {
+			prev[fv.Path] = fv.SHA
+		}
+	}
+	return prev
+}
+
+// readContent reads absPath and returns its bytes and content address. A missing
+// file yields (nil, "", nil) — a tombstone, not an error.
+func readContent(absPath string) ([]byte, string, error) {
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, "", nil
+		}
+		return nil, "", fmt.Errorf("read %s: %w", absPath, err)
+	}
+	sum := sha256.Sum256(data)
+	return data, hex.EncodeToString(sum[:]), nil
+}
+
 // writeBlob reads absPath, stores its content-addressed blob (deduped), and
 // returns the sha. A missing file yields ("", nil) — a tombstone, not an error —
 // so a checkpoint taken after the LLM deletes a file still records that state.
 func (s *VersionStore) writeBlob(absPath string) (string, error) {
-	data, err := os.ReadFile(absPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", nil
-		}
-		return "", fmt.Errorf("read %s: %w", absPath, err)
+	data, sha, err := readContent(absPath)
+	if err != nil || sha == "" {
+		return "", err
 	}
-	sum := sha256.Sum256(data)
-	sha := hex.EncodeToString(sum[:])
 	blob := s.blobPath(sha)
 	if _, err := os.Stat(blob); err == nil {
 		return sha, nil // dedup: identical content already stored

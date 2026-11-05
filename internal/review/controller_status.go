@@ -35,7 +35,13 @@ func (c *PrereviewController) statusPath() string {
 // The watcher keys on AgentPresence instead, which changes only on a state
 // transition (#194).
 func (c *PrereviewController) agentSignalFingerprint() string {
-	return statusFingerprint(c.statusPath()) + "|" +
+	return signalFingerprint(statusFingerprint(c.statusPath()), c)
+}
+
+// signalFingerprint joins the status file's fingerprint (computed by the caller,
+// which the watcher also needs on its own) with every other agent sidecar's.
+func signalFingerprint(statusFP string, c *PrereviewController) string {
+	return statusFP + "|" +
 		statusFingerprint(c.processedPath()) + "|" +
 		statusFingerprint(c.suggestionsPath()) + "|" +
 		statusFingerprint(AgentRepliesPath(c.CSVPath)) + "|" +
@@ -135,6 +141,7 @@ func (c *PrereviewController) applyLLMStatus(state *PrereviewState) {
 	default:
 		slog.Debug("llm-status: keeping previous value on unreadable file", "err", err)
 	}
+	state.EditsSettling = c.editsSettling.Load() && state.LLMState != LLMStateWorking
 	// Every caller (Mount, OnConnect, the watcher's fan-out) wants the observed
 	// consumer state alongside the agent's own echo.
 	c.applyAgentCursor(state)
@@ -213,12 +220,14 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 		// the working pill and the refresh bar mutually exclusive.
 		state.PendingRefresh = false
 	}
-	// A reviewed file was edited on disk since this tab last rebuilt its diff
-	// (deterministic, no agent command). Offer the same non-intrusive refresh the
-	// working→done path does — the view stays frozen (scroll/drafts survive) until
-	// the reviewer refreshes, which rebuilds and re-anchors. Placed after the
-	// switch so a raw edit surfaces even when the agent never wrote a status.
-	if c.reviewedGen.Load() != state.SeenReviewedGen {
+	// A reviewed-file edit SETTLED since this tab last rebuilt its diff (the
+	// watcher bumps the gen once per settled run, #198). Offer the same
+	// non-intrusive refresh the working→done path does — the view stays frozen
+	// (scroll/drafts survive) until the reviewer refreshes, which rebuilds and
+	// re-anchors. Placed after the switch so a raw edit surfaces even when the
+	// agent never wrote a status — but never while working, so the suppression
+	// above holds (the done that ends the batch re-arms it).
+	if c.reviewedGen.Load() != state.SeenReviewedGen && state.LLMState != LLMStateWorking {
 		state.PendingRefresh = true
 	}
 	return state, nil
@@ -262,54 +271,73 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 	startPresence := c.agentPresence(time.Now(), lastSignal)
 	c.presence.Store(&startPresence)
 	lastPresence := startPresence.key()
+	// #198: reviewed-file edits are held as PENDING until they settle, so a burst
+	// of writes is one version and one refresh nudge, not one per write.
+	var editsPending bool
+	var lastEditAt time.Time
+	lastStatusFP := statusFingerprint(c.statusPath())
 	for {
 		select {
 		case <-stop:
 			return
 		case now := <-ticker.C:
-			fp := c.agentSignalFingerprint()
+			// The status file's own fingerprint too: "done arrived" must mean a status
+			// WRITE, not another sidecar (processed.jsonl…) moving under an old done.
+			statusFP := statusFingerprint(c.statusPath())
+			fp := signalFingerprint(statusFP, c)
 			reviewed := c.reviewedFilesFingerprint()
-			if fp != last || reviewed != lastReviewed {
+			signalChanged, reviewedChanged := fp != last, reviewed != lastReviewed
+			if signalChanged || reviewedChanged {
 				lastSignal = now
 			}
 			pres := c.agentPresence(now, lastSignal)
 			c.presence.Store(&pres)
 			presenceKey := pres.key()
-			if fp == last && reviewed == lastReviewed && presenceKey == lastPresence {
+			last, lastReviewed = fp, reviewed
+
+			// Read the FULL status (not just state) so the agent's done-message rides
+			// into the checkpoint as the version's changelog (#155). Only on a change:
+			// otherwise the state is what the previous tick saw. A torn/missing read
+			// yields an empty status (State "") — same as idle.
+			statusWritten := statusFP != lastStatusFP
+			lastStatusFP = statusFP
+			cur := LLMStatus{State: prevState}
+			if statusWritten {
+				cur, _ = readLLMStatus(c.statusPath())
+			}
+
+			// A reviewed file changed on disk — deterministic, no agent command. Open
+			// (or extend) the pending window, unless the content already matches the
+			// newest version: an mtime-only touch, or the reviewer's own rollback
+			// (RestoreVersion checkpoints before the watcher sees its write).
+			if reviewedChanged && (editsPending || c.Versions == nil || !c.Versions.MatchesLatest(c.versionScope())) {
+				editsPending, lastEditAt = true, now
+			}
+
+			// Close the window — ONE checkpoint (which bumps the nudge gen only if it
+			// recorded new content) — on whichever comes first: a "done" write (the
+			// agent says the batch is finished; no prior "working" required), or
+			// EditSettle of quiet while the agent isn't "working" (a human edit, or an
+			// agent that writes no status). While working, only the done closes it.
+			// The working→done boundary with nothing pending (out-of-scope edits)
+			// still records its version, as before. This runs in the single
+			// per-server goroutine, BEFORE the session guard below, so a version is
+			// recorded exactly once even with no tab open.
+			switch {
+			case statusWritten && cur.State == LLMStateDone && (editsPending || prevState == LLMStateWorking):
+				c.checkpointVersions(VersionTriggerLLMDone, cur.Message)
+				editsPending = false
+			case editsPending && cur.State != LLMStateWorking && now.Sub(lastEditAt) >= EditSettle:
+				c.checkpointVersions(VersionTriggerFileEdit, "")
+				editsPending = false
+			}
+			settlingChanged := c.editsSettling.Swap(editsPending) != editsPending
+			prevState = cur.State
+
+			if !signalChanged && !reviewedChanged && !settlingChanged && presenceKey == lastPresence {
 				continue
 			}
-			reviewedChanged := reviewed != lastReviewed
-			last, lastReviewed, lastPresence = fp, reviewed, presenceKey
-			if reviewedChanged {
-				// A reviewed file changed on disk — deterministic, no agent command.
-				// Bump the gen so open tabs surface it (the refresh nudge) in
-				// LLMStatusChanged. The re-anchor/rebuild happens on refresh, like the
-				// working→done path, so the view stays frozen until the reviewer acts.
-				c.reviewedGen.Add(1)
-			}
-			// Checkpoint an artifact version when the agent finishes a batch
-			// (working→done): its edits are now on disk, so this is the natural
-			// "one version per work-cycle" boundary. Done in this single per-server
-			// goroutine, BEFORE the session/fan-out guard below, so a version is
-			// recorded exactly once even if no tab is open — unlike the per-tab
-			// LLMStatusChanged handler, which would checkpoint once per open tab.
-			// Read the FULL status (not just state) so the agent's done-message rides
-			// into the checkpoint as the version's changelog (#155). A torn/missing
-			// read yields an empty status (State "") — same as idle.
-			cur, _ := readLLMStatus(c.statusPath())
-			if prevState == LLMStateWorking && cur.State == LLMStateDone {
-				c.checkpointVersions(VersionTriggerLLMDone, cur.Message)
-			}
-			// A reviewed file was edited outside a status batch — the agent never
-			// went "working", or wrote no status at all. Checkpoint a version so the
-			// reviewer still gets the diff of what changed, deterministically. Ordered
-			// AFTER the llm-done checkpoint so an edit+done in the same tick keeps the
-			// richer done-changelog version (this becomes a SHA no-op). Suppressed
-			// while working: the pending done will checkpoint it with its message.
-			if reviewedChanged && cur.State != LLMStateWorking {
-				c.checkpointVersions(VersionTriggerFileEdit, "")
-			}
-			prevState = cur.State
+			lastPresence = presenceKey
 			c.sessionMu.Lock()
 			session := c.session
 			c.sessionMu.Unlock()

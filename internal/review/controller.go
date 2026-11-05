@@ -115,12 +115,16 @@ type PrereviewController struct {
 	// clearing.
 	session livetemplate.Session
 
-	// reviewedGen is bumped by WatchLLMStatus whenever a reviewed file changes on
-	// disk — the deterministic "the reviewed file was edited" signal, no agent
-	// command required. A tab whose SeenReviewedGen lags this gets a
-	// PendingRefresh nudge. Atomic: written by the watcher goroutine, read in
-	// Mount and LLMStatusChanged.
+	// reviewedGen is bumped by checkpointVersions whenever a new non-baseline
+	// version lands — a settled run of reviewed-file edits (#198: quiet for
+	// EditSettle, or the agent wrote "done"), or a rollback. Never per write: a
+	// burst is one bump. A tab whose SeenReviewedGen lags this gets a
+	// PendingRefresh nudge. Atomic: written by the watcher goroutine and
+	// RestoreVersion, read in Mount and LLMStatusChanged.
 	reviewedGen atomic.Int64
+	// editsSettling is true while reviewed-file edits are pending (seen, not yet
+	// settled). Drives the non-actionable "editing" notice. Written by the watcher.
+	editsSettling atomic.Bool
 
 	// presence is the watcher's latest AgentPresence (#194): server-wide, computed
 	// once per tick, copied into each tab by applyAgentCursor.
