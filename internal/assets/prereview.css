@@ -2912,6 +2912,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   color: var(--accent); border-color: var(--accent);
 }
+/* #198 "edits settling" notice: the refresh slot's look, muted (dashed, no
+   button) — a status line, not something to act on yet. */
+.edits-settling-prompt {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  color: var(--accent); border: 1px dashed var(--accent);
+}
 .refresh-btn {
   margin: 0; padding: 0.2rem 0.6rem; flex: none;
   background: transparent; color: var(--accent);

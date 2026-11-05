@@ -1266,7 +1266,12 @@
   </form>
 </div>
 {{end}}
-{{if .PendingRefresh}}
+{{if .EditsSettling}}
+
+<div class="reanchor-prompt edits-settling-prompt" role="status">
+  <span>Files under review are changing on disk — you'll be offered a refresh once the edits settle.</span>
+</div>
+{{else}}{{if .PendingRefresh}}
 
 <div class="reanchor-prompt refresh-prompt" role="status">
   <span>The agent edited files on disk. This view still shows the earlier version — refresh to see the changes.</span>
@@ -1274,7 +1279,7 @@
     <button type="submit" name="refreshDiff" class="refresh-btn">Refresh diff</button>
   </form>
 </div>
-{{end}}
+{{end}}{{end}}
 {{if .AgentPaused}}
 
 <div class="reanchor-prompt paused-prompt" role="status">

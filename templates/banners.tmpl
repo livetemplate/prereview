@@ -21,7 +21,15 @@
   </form>
 </div>
 {{end}}
-{{if .PendingRefresh}}
+{{if .EditsSettling}}
+{{/* #198: reviewed files are changing and haven't settled. No button — a
+     refresh now would show a half-applied state, and one nudge comes once the
+     edits settle (quiet for EditSettle, or the agent writes done). Takes the
+     slot over a nudge left from an earlier change; that nudge returns after. */}}
+<div class="reanchor-prompt edits-settling-prompt" role="status">
+  <span>Files under review are changing on disk — you'll be offered a refresh once the edits settle.</span>
+</div>
+{{else if .PendingRefresh}}
 {{/* Frozen-view nudge (#119): the agent edited files ON DISK; this view is
      deliberately still showing the pre-edit version so scroll/drafts survive.
      Say that plainly — the old "✓ Changes applied" read as "already in your

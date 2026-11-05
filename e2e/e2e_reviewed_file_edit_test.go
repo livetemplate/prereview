@@ -22,6 +22,8 @@ import (
 )
 
 func TestE2E_ReviewedFileEditNudge(t *testing.T) {
+	// #198: the nudge waits for the edits to settle; shrink the window from 45s.
+	t.Setenv("PREREVIEW_EDIT_SETTLE", "2s")
 	// A NoGit dir review of a single plan (muster reviews the plan file the same
 	// way; a dir with one file scopes identically and is simplest to boot).
 	repo := t.TempDir()
@@ -48,7 +50,7 @@ func TestE2E_ReviewedFileEditNudge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The nudge appears within a couple of watcher ticks, deterministically.
+	// The nudge appears once the edit settles (EditSettle of quiet), deterministically.
 	ctx, cancel := context.WithTimeout(p.ctx, 15*time.Second)
 	defer cancel()
 	if err := chromedp.Run(ctx,

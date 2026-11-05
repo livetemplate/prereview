@@ -43,17 +43,24 @@ var (
 	// outstanding and nothing attached, before the UI says so. Generous: a
 	// reasoning turn writes nothing at all.
 	AgentStallAfter = 3 * time.Minute
+	// EditSettle is how long the reviewed files must stay quiet, with the agent
+	// not "working", before a run of edits counts as one finished change and the
+	// reviewer is offered a refresh (#198). Long, because the measured gaps inside
+	// one agent burst reached 34s; a "done" write closes the window at once.
+	EditSettle = 45 * time.Second
 )
 
 // ApplyAgentTimingEnv overrides the timing knobs from PREREVIEW_AGENT_HEARTBEAT,
-// PREREVIEW_AGENT_STALE and PREREVIEW_AGENT_STALL_AFTER (Go durations). A test
-// hook, like PREREVIEW_PROMPTS_DIR: the browser e2e cannot otherwise reach the
-// stale or stalled phases. Malformed values are ignored.
+// PREREVIEW_AGENT_STALE, PREREVIEW_AGENT_STALL_AFTER and PREREVIEW_EDIT_SETTLE
+// (Go durations). A test hook, like PREREVIEW_PROMPTS_DIR: the browser e2e cannot
+// otherwise reach the stale or stalled phases, or settle edits in seconds.
+// Malformed values are ignored.
 func ApplyAgentTimingEnv() {
 	for env, knob := range map[string]*time.Duration{
 		"PREREVIEW_AGENT_HEARTBEAT":   &AgentCursorHeartbeat,
 		"PREREVIEW_AGENT_STALE":       &AgentCursorStale,
 		"PREREVIEW_AGENT_STALL_AFTER": &AgentStallAfter,
+		"PREREVIEW_EDIT_SETTLE":       &EditSettle,
 	} {
 		if d, err := time.ParseDuration(os.Getenv(env)); err == nil && d > 0 {
 			*knob = d

@@ -148,12 +148,20 @@ func (c *PrereviewController) CheckpointBaseline() {
 // checkpointVersions snapshots the current scope under trigger. It is a safety
 // net, never on the critical path: a failure is logged and swallowed so a
 // versioning hiccup never breaks a review. No-op when the store is absent.
+//
+// A NEW non-baseline version is what makes open tabs' diffs stale, so it bumps
+// reviewedGen here — the one nudge rule for settled edits, done and rollback alike
+// (#198). An unchanged scope records nothing and nudges nothing.
 func (c *PrereviewController) checkpointVersions(trigger, changelog string) {
 	if c.Versions == nil {
 		return
 	}
-	if _, _, err := c.Versions.Checkpoint(c.versionScope(), trigger, changelog); err != nil {
+	_, created, err := c.Versions.Checkpoint(c.versionScope(), trigger, changelog)
+	if err != nil {
 		slog.Warn("version checkpoint failed", "trigger", trigger, "err", err)
+	}
+	if created && trigger != VersionTriggerBaseline {
+		c.reviewedGen.Add(1)
 	}
 }
 
