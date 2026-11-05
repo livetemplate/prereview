@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -56,6 +57,11 @@ func TestE2E_DarkNoLowContrast(t *testing.T) {
 		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('header.bar button[name="cycleTheme"]').click()`, nil))
 		time.Sleep(400 * time.Millisecond)
 	}
+	// Measure the settled dark palette, not a frame mid-switch: wait for the
+	// server's data-mode render AND for the 100–140ms color transitions to end.
+	// A fixed sleep alone flaked on a loaded CI runner, which measured dark text
+	// over a still-light button (ratio 1.01).
+	waitThemeSettled(t, p, `.theme-root[data-mode="dark"]`)
 
 	walk := `(() => {
 	  const lum = (c) => {
@@ -97,6 +103,27 @@ func TestE2E_DarkNoLowContrast(t *testing.T) {
 		if report != "[]" {
 			t.Errorf("[scheme=%s dark] low-contrast text (ratio<3.0): %s", scheme(), report)
 		}
-		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('header.bar button[name="cycleScheme"]').click()`, nil), chromedp.Sleep(400*time.Millisecond))
+		prev := scheme()
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('header.bar button[name="cycleScheme"]').click()`, nil))
+		if i < 2 {
+			waitThemeSettled(t, p, `.theme-root[data-mode="dark"]:not([data-scheme="`+prev+`"])`)
+		}
+	}
+}
+
+// waitThemeSettled waits until sel matches (the server rendered the new theme
+// attributes) and no CSS transition is still running, so computed colors are
+// final. Only CSSTransitions count: an infinite CSS animation elsewhere on the
+// page would otherwise never let it settle.
+func waitThemeSettled(t *testing.T, p *runningPrereview, sel string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(p.ctx, 10*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx,
+		chromedp.WaitReady(sel, chromedp.ByQuery),
+		chromedp.Poll(`!document.getAnimations().some(a => a instanceof CSSTransition && a.playState === 'running')`,
+			nil, chromedp.WithPollingInterval(50*time.Millisecond)),
+	); err != nil {
+		t.Fatalf("theme never settled on %s: %v", sel, err)
 	}
 }
