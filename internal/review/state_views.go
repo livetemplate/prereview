@@ -356,10 +356,15 @@ const (
 // Keyed like the badge: "<line>-<side>" in the diff, "MB-<start>-<end>" in the md-view.
 func (s PrereviewState) rowState(key string) string {
 	open := false
-	if strings.HasPrefix(key, "MB-") {
+	switch {
+	case key == FileHeadRowKey:
+		// The file head has no line, so AnnotationOpenLines never carries it; ask
+		// the head group directly (its badge colour comes from the same call).
+		open = s.FileHeadHasOpen() || s.fileHeadQuizShowing()
+	case strings.HasPrefix(key, "MB-"):
 		open = s.BlockAnnotations()[key].Open
-	} else {
-		open = s.AnnotationOpenLines()[key]
+	default:
+		open = s.AnnotationOpenLines()[key] || s.quizShowingLines()[key]
 	}
 	if open {
 		return rowStateOpen

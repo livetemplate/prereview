@@ -807,7 +807,7 @@
     </form>
   </footer></article></dialog>
 === quizCard ===
-<div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
+<div class="quiz-card{{if .Answered}} is-answered{{end}}{{if .Settled}} is-settled{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
   
   <div class="quiz-card-head">
     <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}

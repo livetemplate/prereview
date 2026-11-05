@@ -852,7 +852,7 @@
                 title="Show/hide this line's annotations">
           <span class="line-mark is-done" aria-hidden="true">1</span>
         </button>
-      </span><div class="quiz-card is-answered" data-key="quiz-q1" id="qc-q1">
+      </span><div class="quiz-card is-answered is-settled" data-key="quiz-q1" id="qc-q1">
   
   <div class="quiz-card-head">
     <span class="quiz-probe quiz-probe-consequence">consequence</span>

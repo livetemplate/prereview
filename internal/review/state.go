@@ -352,6 +352,16 @@ type PrereviewState struct {
 	// possible to put away while reading the diff.
 	QuizNavDismissed bool `json:"quiz_nav_dismissed"`
 
+	// QuizJustAnswered holds the answer keys (answerKey) of questions answered in
+	// THIS visit. An answered question is collapsed by default (#212), but the one
+	// you just answered must stay open so its explanation is in front of you —
+	// that reveal is the point of the quiz. Deliberately NOT persisted (like
+	// ScrollToCommentID): a reload or reconnect drops it, and the quiz reopens
+	// folded. A set, not one ID, so answering Q2 doesn't fold Q1's explanation
+	// away mid-quiz. Not ToggledRows: that is row-granular (it would hide an open
+	// question on the same row) and persisted (it would re-create #212).
+	QuizJustAnswered map[string]bool `json:"quiz_just_answered"`
+
 	// QuizRequestedFile is the file a "Quiz me" request was just sent for, so the
 	// control can show "Quiz requested…" instead of inviting a second tap. Cleared
 	// as soon as a quiz for that file arrives (applyQuiz).

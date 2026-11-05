@@ -1989,6 +1989,12 @@ header.file-head .file-head-comment button svg { display: block; }
 .md-view .inline-suggestion.sg-accept,
 .md-view .inline-suggestion.sg-reject,
 .md-view .inline-suggestion.is-applied { display: none; }
+/* #212: an answered quiz question (answered before this visit — `is-settled`) is done
+   work, so it folds behind the row's green badge like a resolved comment. The server
+   already said so (QuizOpenLines → collapsed, badge is-done); this is the half that was
+   missing, so every taken quiz reopened fully expanded. A question answered THIS visit is
+   not settled and stays open with its explanation (QuizJustAnswered). */
+.quiz-card.is-settled { display: none; }
 /* #174: a TOGGLED row flips its cards away from the default above. On a row whose work is
    done that REVEALS the collapsed cards (what clicking the green badge always did). On a row
    with OPEN work it COLLAPSES them — the behaviour the yellow badge was missing: set an
@@ -1996,13 +2002,16 @@ header.file-head .file-head-comment button svg { display: block; }
    `.row-toggled` is emitted by the SERVER (state.ToggledRows). It used to be a client-only
    class, which meant the next re-render morphed it away and silently re-collapsed a card the
    reviewer had just opened (#173). */
-.line-row.row-toggled .quiz-card,
-.md-block.row-toggled .quiz-card,
-.file-head-marks.row-toggled .file-head-cards > .quiz-card,
+.line-row.row-toggled .quiz-card:not(.is-settled),
+.md-block.row-toggled .quiz-card:not(.is-settled),
+.file-head-marks.row-toggled .file-head-cards > .quiz-card:not(.is-settled),
 .line-row.row-toggled .inline-comment:not(.is-resolved),
 .line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
 .md-block.row-toggled .inline-comment:not(.is-resolved),
 .md-block.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied) { display: none; }
+.line-row.row-toggled .quiz-card.is-settled,
+.file-head-marks.row-toggled .file-head-cards > .quiz-card.is-settled,
+.layout.show-resolved .quiz-card.is-settled,
 .line-row.row-toggled .inline-comment.is-resolved,
 .line-row.row-toggled .inline-suggestion.sg-accept,
 .line-row.row-toggled .inline-suggestion.sg-reject,
@@ -3487,6 +3496,7 @@ main.viewer > article[lvt-spy] {
    rules above (higher specificity via :target). */
 .line-row.row-toggled .quiz-card:target,
 .md-block.row-toggled .quiz-card:target,
-.file-head-marks.row-toggled .file-head-cards > .quiz-card:target { display: block; }
+.file-head-marks.row-toggled .file-head-cards > .quiz-card:target,
+.quiz-card.is-settled:target { display: block; }
 /* And give the peeked card a moment of emphasis so the eye lands on it. */
 .quiz-card:target { outline: 2px solid var(--accent); outline-offset: 2px; }

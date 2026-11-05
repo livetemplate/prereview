@@ -198,6 +198,11 @@ func (c *PrereviewController) AnswerQuestion(state PrereviewState, ctx *livetemp
 	if err := saveQuizAnswers(c.quizAnswersPath(), state.QuizAnswers); err != nil {
 		return state, fmt.Errorf("persist quiz answer: %w", err)
 	}
+	// Keep this card open with its explanation for the rest of the visit (#212).
+	if state.QuizJustAnswered == nil {
+		state.QuizJustAnswered = map[string]bool{}
+	}
+	state.QuizJustAnswered[answerKey(quizID, questionID)] = true
 	return state, nil
 }
 
@@ -211,6 +216,7 @@ func (c *PrereviewController) RetakeQuiz(state PrereviewState, ctx *livetemplate
 	}
 	for _, qu := range q.Questions {
 		delete(state.QuizAnswers, answerKey(q.ID, qu.ID))
+		delete(state.QuizJustAnswered, answerKey(q.ID, qu.ID))
 	}
 	if err := saveQuizAnswers(c.quizAnswersPath(), state.QuizAnswers); err != nil {
 		return state, fmt.Errorf("persist quiz retake: %w", err)
