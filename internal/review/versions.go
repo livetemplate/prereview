@@ -170,9 +170,11 @@ func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp
 	return cp, true, nil
 }
 
-// MatchesLatest reports whether a Checkpoint of refs now would be skipped: every
-// ref's content equals the newest checkpoint's (the same rule Checkpoint uses).
-// It writes nothing. False when there is no checkpoint yet or a file can't be read.
+// MatchesLatest reports whether refs are exactly the newest checkpoint: the same
+// paths with the same content. It writes nothing. Stricter than Checkpoint's skip
+// rule on purpose: a file that left the scope records no version, but the
+// reviewer's diff is still stale. False when there is no checkpoint yet or a
+// file can't be read (callers treat "unknown" as changed).
 func (s *VersionStore) MatchesLatest(refs []FileRef) bool {
 	s.mu.Lock()
 	cps, err := s.checkpointsLocked()
@@ -181,9 +183,12 @@ func (s *VersionStore) MatchesLatest(refs []FileRef) bool {
 		return false
 	}
 	prev := latestSHAs(cps)
+	if len(prev) != len(refs) {
+		return false
+	}
 	for _, ref := range refs {
 		_, sha, err := readContent(ref.AbsPath)
-		if err != nil || sha != prev[ref.Path] {
+		if want, ok := prev[ref.Path]; err != nil || !ok || sha != want {
 			return false
 		}
 	}

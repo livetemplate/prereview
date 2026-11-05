@@ -21,8 +21,9 @@ type settleHarness struct {
 }
 
 // newSettleHarness boots a watcher on a one-file NoGit review with a baseline
-// version, EditSettle shrunk to settle, and a session that never blocks.
-func newSettleHarness(t *testing.T, settle time.Duration) *settleHarness {
+// version, EditSettle shrunk to settle, and a session that never blocks. extra
+// files turn it into a whole-dir review (doc.md plus each extra, content "x").
+func newSettleHarness(t *testing.T, settle time.Duration, extra ...string) *settleHarness {
 	t.Helper()
 	old := EditSettle
 	EditSettle = settle
@@ -33,11 +34,18 @@ func newSettleHarness(t *testing.T, settle time.Duration) *settleHarness {
 	if err := os.WriteFile(doc, []byte("v0"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	single := "doc.md"
+	for _, name := range extra {
+		single = ""
+		if err := os.WriteFile(filepath.Join(repo, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	vs, err := NewVersionStore(filepath.Join(repo, ".prereview", "versions"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &PrereviewController{RepoPath: repo, NoGit: true, SingleFile: "doc.md", Versions: vs,
+	c := &PrereviewController{RepoPath: repo, NoGit: true, SingleFile: single, Versions: vs,
 		CSVPath: filepath.Join(repo, ".prereview", "comments.csv")}
 	c.CheckpointBaseline()
 
@@ -197,4 +205,17 @@ func TestCheckpointNewVersionBumpsGen(t *testing.T) {
 	if g := h.c.reviewedGen.Load(); g != 1 {
 		t.Fatalf("a rollback version: gen=%d, want 1", g)
 	}
+}
+
+// Fail toward nudging: a file leaving the scope records no version (Checkpoint
+// compares only the refs it's given) but still makes the diff stale.
+func TestScopeShrinkStillNudges(t *testing.T) {
+	h := newSettleHarness(t, 100*time.Millisecond, "notes.md")
+	if n := len(h.versions()[0].Files); n != 2 {
+		t.Fatalf("baseline scope has %d files, want 2", n)
+	}
+	if err := os.Remove(filepath.Join(h.c.RepoPath, "notes.md")); err != nil {
+		t.Fatal(err)
+	}
+	h.waitFor("the removal to nudge", 2*time.Second, func() bool { return h.c.reviewedGen.Load() == 1 })
 }
