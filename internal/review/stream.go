@@ -95,7 +95,21 @@ type StreamEvent struct {
 	// the agent's loaded skill is now stale. The agent should re-read the skill
 	// from its install path before continuing and tell the user to reload it.
 	SkillUpdated bool `json:"skill_updated,omitempty"` // ready
+
+	// files_changed (#213): reviewed files that changed on disk under the agent,
+	// the new version's seq (absent when none was recorded), and the attribution —
+	// see checkpointVersions.
+	Files         []string `json:"files,omitempty"`          // files_changed
+	Version       int      `json:"version,omitempty"`        // files_changed
+	Cause         string   `json:"cause,omitempty"`          // files_changed: FilesChangedEdit | FilesChangedRollback
+	AgentWatching bool     `json:"agent_watching,omitempty"` // files_changed
 }
+
+// files_changed causes (#213).
+const (
+	FilesChangedEdit     = "edit"     // a settled on-disk edit the agent's own `done` didn't close
+	FilesChangedRollback = "rollback" // the reviewer restored a version
+)
 
 // CommentList returns the event's comment snapshot, or nil for events that
 // carry none (ready / end).
@@ -370,6 +384,13 @@ func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion,
 	csnap := actionableComments(comments, threadByID)
 	dsnap := actionableDecisions(suggestions, decided, threadByID, applied)
 	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Quizzes: quizzes, Paused: paused}, ts)
+}
+
+// EmitFilesChanged tells the agent that reviewed files changed under it (#213),
+// so it re-reads them before its next edit. Not queue work: it carries no
+// comments and is emitted even while the queue is paused.
+func (e *EventStream) EmitFilesChanged(files []string, version int, cause string, agentWatching bool, ts time.Time) error {
+	return e.emit(StreamEvent{Event: "files_changed", Files: files, Version: version, Cause: cause, AgentWatching: agentWatching}, ts)
 }
 
 // EmitEnd emits the single terminator — the only event the consumer

@@ -6,6 +6,7 @@ package review
 // state (gen, versions, the settling flag) rather than counting fan-outs.
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,12 +42,16 @@ func newSettleHarness(t *testing.T, settle time.Duration, extra ...string) *sett
 			t.Fatal(err)
 		}
 	}
+	if err := os.MkdirAll(filepath.Join(repo, ".prereview"), 0o755); err != nil { // the store dir openStore makes
+		t.Fatal(err)
+	}
 	vs, err := NewVersionStore(filepath.Join(repo, ".prereview", "versions"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	csv := filepath.Join(repo, ".prereview", "comments.csv")
 	c := &PrereviewController{RepoPath: repo, NoGit: true, SingleFile: single, Versions: vs,
-		CSVPath: filepath.Join(repo, ".prereview", "comments.csv")}
+		CSVPath: csv, Emitter: NewEventStream(io.Discard, EventsPath(csv))}
 	c.CheckpointBaseline()
 
 	fs := &fakeSession{actions: make(chan string, 1)}
@@ -61,8 +66,11 @@ func newSettleHarness(t *testing.T, settle time.Duration, extra ...string) *sett
 		}
 	}()
 	c.session = fs
-	go c.WatchLLMStatus(stop, 10*time.Millisecond)
-	t.Cleanup(func() { close(stop) })
+	exited := make(chan struct{})
+	go func() { c.WatchLLMStatus(stop, 10*time.Millisecond); close(exited) }()
+	// Wait for the watcher to return: cleanups run LIFO, so the EditSettle restore
+	// above runs next and would race a watcher still mid-tick.
+	t.Cleanup(func() { close(stop); <-exited })
 	time.Sleep(40 * time.Millisecond) // let the watcher take its baseline fingerprints
 	return &settleHarness{t: t, c: c, vs: vs, doc: doc, stat: c.statusPath()}
 }
@@ -100,10 +108,11 @@ func TestEditBurstSettlesOnce(t *testing.T) {
 		}
 	}
 	h.waitFor("settling flag during the burst", time.Second, h.c.editsSettling.Load)
-	h.waitFor("the burst to settle", 2*time.Second, func() bool { return h.c.reviewedGen.Load() == 1 })
-	if h.c.editsSettling.Load() {
-		t.Fatal("still settling after the boundary closed")
-	}
+	// The gen bump and the settling flag flip in the same tick, but not atomically
+	// (the version and its files_changed land in between) — wait for both.
+	h.waitFor("the burst to settle", 2*time.Second, func() bool {
+		return h.c.reviewedGen.Load() == 1 && !h.c.editsSettling.Load()
+	})
 	cps := h.versions()
 	if len(cps) != 2 || cps[1].Trigger != VersionTriggerFileEdit {
 		t.Fatalf("want baseline + one file-edit version, got %+v", cps)
@@ -194,14 +203,14 @@ func TestCheckpointNewVersionBumpsGen(t *testing.T) {
 	if g := h.c.reviewedGen.Load(); g != 0 {
 		t.Fatalf("baseline bumped the gen: %d", g)
 	}
-	h.c.checkpointVersions(VersionTriggerRollback, "") // unchanged scope
+	h.c.checkpointVersions(VersionTriggerRollback, "", true) // unchanged scope
 	if g := h.c.reviewedGen.Load(); g != 0 {
 		t.Fatalf("an unchanged-scope checkpoint bumped the gen: %d", g)
 	}
 	if err := os.WriteFile(h.doc, []byte("restored"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.c.checkpointVersions(VersionTriggerRollback, "")
+	h.c.checkpointVersions(VersionTriggerRollback, "", true)
 	if g := h.c.reviewedGen.Load(); g != 1 {
 		t.Fatalf("a rollback version: gen=%d, want 1", g)
 	}

@@ -33,7 +33,8 @@ Re-run `prereview comments --json` for more (the reviewer can keep commenting);
 dedupe by `id`. Stop when the reviewer clicks End session. If your harness can
 block on a stream, `prereview watch --out <STORE> --since <seq>` delivers each new
 batch and exits on the terminating `end` event — otherwise just re-read
-`prereview comments --json`.
+`prereview comments --json`. A `files_changed` event in that stream means the
+reviewer edited or restored the listed files on disk: re-read them before editing.
 
 If a comment asks for a comprehension quiz (the reviewer clicked "Quiz me"), do
 not edit files and do not suggest edits - reply with a quiz instead:
