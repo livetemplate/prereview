@@ -651,6 +651,36 @@ func TestE2E_MobileDrawer(t *testing.T) {
 		t.Fatalf("tap hamburger: %v\nstderr: %s", err, p.stderr.String())
 	}
 
+	// #222: the open drawer must end at the screen's bottom edge, so the
+	// last file can be scrolled into view. Pico's dialog `min-height: 100%`
+	// once made it a full viewport tall starting below the bar, so its
+	// bottom --pr-bar-h hung off-screen where no scroll could reach.
+	// Waits out the 220ms slide-in so rects are measured at rest.
+	var fit struct {
+		Inner, DrawerBottom, LastBottom float64
+		LastName                        string
+	}
+	if err := chromedp.Run(p.ctx,
+		chromedp.Sleep(400*time.Millisecond),
+		chromedp.Evaluate(`(() => {
+			const d = document.querySelector('#files-drawer');
+			const b = d.querySelector('.drawer-body');
+			b.scrollTop = b.scrollHeight;
+			const btns = b.querySelectorAll('button.file-btn');
+			const last = btns[btns.length - 1];
+			return {Inner: innerHeight, DrawerBottom: d.getBoundingClientRect().bottom,
+				LastBottom: last.getBoundingClientRect().bottom, LastName: last.textContent.trim()};
+		})()`, &fit),
+	); err != nil {
+		t.Fatalf("measure drawer: %v", err)
+	}
+	if fit.DrawerBottom > fit.Inner+0.5 {
+		t.Errorf("open drawer ends at %.1fpx, below the %.0fpx viewport: its bottom is unreachable (#222)", fit.DrawerBottom, fit.Inner)
+	}
+	if fit.LastBottom > fit.Inner+0.5 {
+		t.Errorf("last file %q ends at %.1fpx after scrolling the drawer to the end, below the %.0fpx viewport (#222)", fit.LastName, fit.LastBottom, fit.Inner)
+	}
+
 	// Tap a file → drawer closes, diff renders. Use a JS click (not
 	// chromedp.Click's coordinate dispatch) so the action fires reliably
 	// even if the drawer's stacking context shifts the file-btn's hit

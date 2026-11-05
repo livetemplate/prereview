@@ -86,8 +86,25 @@ func waitPreviewBridgeReady(t *testing.T, p *runningPrereview) {
 // background dominates the area, so a strong majority being green proves the
 // page's CSS applied. The opaque iframe's contentDocument is unreadable, so the
 // rendered pixels are the only origin-agnostic signal.
+//
+// It samples repeatedly until the preview is majority green or 8s pass, and
+// returns the last sample. One shot raced: after a file switch the previous
+// iframe already has a height, so waitPreviewBridgeReady returns before the
+// new page (and any linked stylesheet) has painted. Under full-suite load the
+// subdir-stylesheet case sampled 0/36 green and passed in isolation.
 func previewFractionGreen(t *testing.T, p *runningPrereview) (float64, string) {
 	t.Helper()
+	deadline := time.Now().Add(8 * time.Second)
+	for {
+		frac, info := samplePreviewGreen(p)
+		if frac >= 0.5 || time.Now().After(deadline) {
+			return frac, info
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+func samplePreviewGreen(p *runningPrereview) (float64, string) {
 	var buf []byte
 	ctx, cancel := context.WithTimeout(p.ctx, 8*time.Second)
 	defer cancel()
