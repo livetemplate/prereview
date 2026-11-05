@@ -113,7 +113,7 @@ hand-written CSV parser:
   indistinguishable from one the agent finished.
 - **The event stream.** In agent mode, after the usual `READY`/`REPO`/`STORE`
   preamble prereview emits one JSON object per line to **stdout** and mirrors it to
-  `<STORE>/events.jsonl` (append-only, reset each launch). Three event types:
+  `<STORE>/events.jsonl` (append-only, reset each launch). Four event types:
   - **`ready`** (seq 0) — once, after the preamble. Carries `repo`, `csv`, and
     optional `paused` / `skill_updated`.
   - **`snapshot`** — on every queue mutation (debounced). A **full snapshot** of
@@ -123,6 +123,11 @@ hand-written CSV parser:
     comments, plus any comment the reviewer just replied on. The consumer dedupes by
     `id`. `prereview comments --json` reports the same set, and both now honour
     `processed.jsonl`, so a comment you marked `done` stops coming back.
+  - **`files_changed`** — reviewed files changed on disk under the agent (a
+    settled run of edits, or a version restore): `{"event":"files_changed",
+    "seq":N,"files":[…],"version":V,"cause":"edit"|"rollback"}`, plus
+    `"agent_watching":true` when a blocking `watch` was attached for every edit
+    (so none were the agent's own). The agent re-reads the listed files.
   - **`end`** — once, on **End session**; the only terminator. The server shuts
     down right after.
   Every event carries a monotonic `seq`. The CSV stays the authoritative store;
@@ -312,7 +317,7 @@ Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
 | File | Written by | Purpose |
 |---|---|---|
 | `comments.csv` | server | the comments (source of truth) |
-| `events.jsonl` | server | the agent-mode event log (`ready`/`snapshot`/`end`); reset each launch |
+| `events.jsonl` | server | the agent-mode event log (`ready`/`snapshot`/`files_changed`/`end`); reset each launch |
 | `suggestions.jsonl` | **agent** (`prereview suggest`) | proposed edits, rendered as suggestion boxes (durable) |
 | `suggestion-decisions.jsonl` | server | your accept/reject/revert verdicts (durable) |
 | `processed.jsonl` | **agent** (`prereview done`) | comment ids marked done (durable — NOT reset each launch, so "worked on" survives a relaunch) |

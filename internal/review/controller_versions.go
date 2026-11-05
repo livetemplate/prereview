@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/gitdiff"
@@ -142,7 +143,7 @@ func (c *PrereviewController) versionScope() []FileRef {
 // anything. Idempotent-ish: a second call with an unchanged scope is skipped by
 // the store, so it never duplicates the baseline.
 func (c *PrereviewController) CheckpointBaseline() {
-	c.checkpointVersions(VersionTriggerBaseline, "")
+	c.checkpointVersions(VersionTriggerBaseline, "", false)
 }
 
 // checkpointVersions snapshots the current scope under trigger. It is a safety
@@ -154,17 +155,49 @@ func (c *PrereviewController) CheckpointBaseline() {
 // It fails toward nudging: a new version, a failed checkpoint, or a scope whose
 // membership moved (a file left it, which records no version) all bump. Only a
 // scope that provably matches the newest version nudges nothing.
-func (c *PrereviewController) checkpointVersions(trigger, changelog string) {
+//
+// The agent is told here too (#213), keyed by trigger: a settled file edit or a
+// rollback emits files_changed naming what moved — including a file that left the
+// scope. The llm-done close is the agent's own batch, which it just announced, and
+// the baseline precedes any agent; neither emits. agentWatching is the edit's
+// attribution (a rollback is the server's own write, always true).
+func (c *PrereviewController) checkpointVersions(trigger, changelog string, agentWatching bool) {
 	if c.Versions == nil {
 		return
 	}
 	scope := c.versionScope()
-	_, created, err := c.Versions.Checkpoint(scope, trigger, changelog)
+	cp, created, err := c.Versions.Checkpoint(scope, trigger, changelog)
 	if err != nil {
 		slog.Warn("version checkpoint failed", "trigger", trigger, "err", err)
 	}
 	if trigger != VersionTriggerBaseline && (created || err != nil || !c.Versions.MatchesLatest(scope)) {
 		c.reviewedGen.Add(1)
+	}
+	if cause := filesChangedCause[trigger]; cause != "" && err == nil && len(cp.Changed) > 0 {
+		version := 0 // omitted on the wire: no version was recorded (a file only left the scope)
+		if created {
+			version = cp.Seq
+		}
+		c.notifyFilesChanged(cp.Changed, version, cause, agentWatching || trigger == VersionTriggerRollback)
+	}
+}
+
+// filesChangedCause maps the version triggers that tell the agent to the cause
+// they report; the rest (baseline, llm-done) map to "".
+var filesChangedCause = map[string]string{
+	VersionTriggerFileEdit: FilesChangedEdit,
+	VersionTriggerRollback: FilesChangedRollback,
+}
+
+// notifyFilesChanged emits files_changed. Agent mode only, and never after end —
+// the consumer's only stop signal — since the watcher goroutine outlives
+// EndSession. A failure is logged: the version is recorded either way.
+func (c *PrereviewController) notifyFilesChanged(files []string, version int, cause string, agentWatching bool) {
+	if c.Emitter == nil || c.emitDisabled.Load() {
+		return
+	}
+	if err := c.Emitter.EmitFilesChanged(files, version, cause, agentWatching, time.Now()); err != nil {
+		slog.Warn("emit files_changed", "cause", cause, "err", err)
 	}
 }
 
@@ -323,8 +356,9 @@ func (c *PrereviewController) RestoreVersion(state PrereviewState, ctx *livetemp
 	// Rollback is decoupled from the send-mode (#119): restoring a file does NOT
 	// flip Live/Batching — that's the reviewer's own choice, not something undoing
 	// a file should override. We deliberately do NOT scheduleEmit here either: the
-	// comments are unchanged, so a rollback pings the agent with nothing, and the
-	// next mutation's emit re-anchors against the restored disk. (In Live mode a
+	// comments are unchanged, so a snapshot would carry nothing new — the agent
+	// learns of the restore from files_changed (step 2), and the next mutation's
+	// emit re-anchors against the restored disk. (In Live mode a
 	// still-open comment on the restored region can be re-addressed on that next
 	// emit — resolve/delete it as part of rolling back if you don't want it redone.)
 
@@ -338,8 +372,10 @@ func (c *PrereviewController) RestoreVersion(state PrereviewState, ctx *livetemp
 		return state, fmt.Errorf("write restored file: %w", werr)
 	}
 
-	// (2) Record the rollback as a new, append-only version.
-	c.checkpointVersions(VersionTriggerRollback, "")
+	// (2) Record the rollback as a new, append-only version, and tell the agent
+	// (#213): the file moved under it even though no comment did. The server made
+	// this write itself, so it is never the agent's own edit.
+	c.checkpointVersions(VersionTriggerRollback, "", true)
 
 	// (3) Back to the live diff (now showing the restored content) + refresh nudge.
 	c.reloadLiveDiff(&state)

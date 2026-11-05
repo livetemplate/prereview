@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 )
@@ -83,6 +84,10 @@ type Checkpoint struct {
 	// no message; the panel falls back to a +add/−del stat then. Non-derived input, so
 	// it IS stored (unlike the diff stat). JSON tag stays "summary" (no migration).
 	Changelog string `json:"summary,omitempty"`
+	// Changed is set by Checkpoint only, never persisted: the sorted paths whose
+	// content differs from the previous version, including files that left the
+	// scope (#213 — what the agent must re-read).
+	Changed []string `json:"-"`
 }
 
 // FileHistoryEntry is one point in a single file's timeline: the checkpoint at
@@ -144,6 +149,7 @@ func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp
 	prev := latestSHAs(cps)
 
 	files := make([]FileVersion, 0, len(refs))
+	var changedPaths []string
 	changed := false
 	for _, ref := range refs {
 		sha, werr := s.writeBlob(ref.AbsPath)
@@ -152,12 +158,22 @@ func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp
 		}
 		if sha != prev[ref.Path] {
 			changed = true
+			changedPaths = append(changedPaths, ref.Path)
 		}
+		delete(prev, ref.Path)
 		files = append(files, FileVersion{Path: ref.Path, SHA: sha})
 	}
+	// What's left in prev left the scope. That records no version (the skip rule
+	// compares only refs), but its content did change on disk.
+	for p := range prev {
+		changedPaths = append(changedPaths, p)
+	}
+	sort.Strings(changedPaths)
 
 	if !changed && len(cps) > 0 {
-		return cps[len(cps)-1], false, nil
+		cp = cps[len(cps)-1]
+		cp.Changed = changedPaths
+		return cp, false, nil
 	}
 
 	// changelog is bound HERE, on the create path only — so a no-op done (unchanged
@@ -167,6 +183,7 @@ func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp
 	if err := s.appendCheckpointLocked(cp); err != nil {
 		return Checkpoint{}, false, err
 	}
+	cp.Changed = changedPaths
 	return cp, true, nil
 }
 

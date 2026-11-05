@@ -10,7 +10,7 @@ this file is the lookup for **what every value means**.
 - [stdout protocol](#stdout-protocol)
 - [Exit codes](#exit-codes)
 - [Filesystem layout](#filesystem-layout)
-- [Agent mode](#agent-mode) — the event stream (`ready` / `snapshot` / `end`)
+- [Agent mode](#agent-mode) — the event stream (`ready` / `snapshot` / `files_changed` / `end`)
 - [Threads](#threads) — the two-way reviewer↔agent conversation (`prereview reply`)
 - [Suggested edits](#suggested-edits)
 - [Comment data](#comment-data) — kinds, resolved, re-anchoring
@@ -163,7 +163,7 @@ event log — to stdout (live) and
 with **`prereview watch --since <seq>`** (the one reader; do not hand-roll `tail`/`head`,
 which drops events whenever the tail isn't running). Consume it until the `end` event.
 
-Three event types:
+Four event types:
 
 - **`ready`** (seq 0) — emitted once, after the stdout preamble. Fields:
   `event, seq, ts, repo, csv`, plus optional `paused` and `skill_updated`.
@@ -183,6 +183,18 @@ Three event types:
   replied on last drops out until the reviewer speaks again. While the reviewer has the
   queue **paused** (batching), no snapshot is emitted — mutations still persist, but
   `watch` blocks — and **resume** emits ONE coalesced snapshot of everything queued.
+- **`files_changed`** — reviewed files changed on disk under you: the reviewer (or
+  another tool) edited them, or the reviewer **restored a version**. One event per
+  settled run of edits, not per write. Fields: `event, seq, ts, files[], version,
+  cause`, plus `agent_watching` when true. `files` are the paths whose content moved
+  (including a file that dropped out of the review); `version` is the new version's
+  seq, absent when no version was recorded; `cause` is `edit` or `rollback`. **Re-read every listed file before your next edit
+  to it** — line numbers and any copy you loaded are stale. `agent_watching:true`
+  means your `watch` was blocked for every edit in the run, so none of them were
+  yours; without it the run may include your own edits — if the listed files are
+  only ones you just changed yourself, carry on. Not queue work: it carries no
+  comments and arrives even while the queue is paused. A run you close with
+  `status done` is treated as your own batch and sends nothing.
 - **`end`** — emitted once on **End session**. The **only** terminator: stop consuming.
   The server shuts down right after (so a backgrounded launch's job completes too).
 
@@ -211,7 +223,8 @@ how to interpret them.
    "verdict":"accept","original":"The API might returns an error.",
    "proposed":"The API may return an error.","anchor_status":"ok"}
 ]}
-{"event":"end","seq":2,"ts":"…"}
+{"event":"files_changed","seq":2,"ts":"…","files":["docs/readme.md"],"version":3,"cause":"edit","agent_watching":true}
+{"event":"end","seq":3,"ts":"…"}
 ```
 
 `events.jsonl` is append-only and reset on each fresh launch. The CSV stays the

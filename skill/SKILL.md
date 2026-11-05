@@ -136,6 +136,11 @@ Track this as a checklist; run it until you see the `end` event.
    your `watch` simply blocks — and **resume** delivers ONE coalesced snapshot of
    everything queued; act on it as a single set. (`ready.paused` tells you only
    whether the session *started* paused.)
+   A **`files_changed`** event means reviewed files changed on disk under you — the
+   reviewer edited them, or restored a version. **Re-read each listed file before
+   you edit it again**; any copy or line numbers you hold are stale. With
+   `agent_watching:true` none of the edits were yours; without it, skip the event if
+   the files are only ones you just changed yourself.
 4. **Advance the cursor.** Set `n` to the highest `seq` in the batch and re-run
    `watch --since "$n"`. Because the log is durable and `--since` resumes from the
    cursor, anything that lands between rounds comes back instantly — no missed events.

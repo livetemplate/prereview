@@ -78,6 +78,10 @@ In agent mode prereview emits one JSON object per line to stdout and to
   filtered as above); `suggestions` is the reviewer's decisions on edits *you*
   proposed (see [Suggesting edits](#suggesting-edits)). Both arrays are always
   present (`[]` when empty); dedupe by `id`.
+- `{"event":"files_changed","seq":N,"files":[…],"version":V,"cause":"edit"|"rollback"}`
+  — reviewed files changed on disk under you (the reviewer edited them, or restored
+  a version); re-read them before editing. `agent_watching:true` means none of the
+  edits were yours.
 - `{"event":"end","seq":N}` — the reviewer clicked **End session**; the server
   exits. The **only** terminator.
 

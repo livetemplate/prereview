@@ -275,6 +275,9 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 	// of writes is one version and one refresh nudge, not one per write.
 	var editsPending bool
 	var lastEditAt time.Time
+	// #213: whether a blocking `watch` was attached for EVERY edit in the pending
+	// window — then none of them can be the agent's own (files_changed attribution).
+	var watchingAll bool
 	lastStatusFP := statusFingerprint(c.statusPath())
 	for {
 		select {
@@ -311,6 +314,10 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 			// newest version: an mtime-only touch, or the reviewer's own rollback
 			// (RestoreVersion checkpoints before the watcher sees its write).
 			if reviewedChanged && (editsPending || c.Versions == nil || !c.Versions.MatchesLatest(c.versionScope())) {
+				if !editsPending {
+					watchingAll = true // a new window
+				}
+				watchingAll = watchingAll && pres.Attached
 				editsPending, lastEditAt = true, now
 			}
 
@@ -325,10 +332,10 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 			// recorded exactly once even with no tab open.
 			switch {
 			case statusWritten && cur.State == LLMStateDone && (editsPending || prevState == LLMStateWorking):
-				c.checkpointVersions(VersionTriggerLLMDone, cur.Message)
+				c.checkpointVersions(VersionTriggerLLMDone, cur.Message, false)
 				editsPending = false
 			case editsPending && cur.State != LLMStateWorking && now.Sub(lastEditAt) >= EditSettle:
-				c.checkpointVersions(VersionTriggerFileEdit, "")
+				c.checkpointVersions(VersionTriggerFileEdit, "", watchingAll)
 				editsPending = false
 			}
 			settlingChanged := c.editsSettling.Swap(editsPending) != editsPending
