@@ -33,6 +33,9 @@ type QuizItem struct {
 	Answered   bool
 	Choice     int // the option the reviewer picked; meaningless unless Answered
 	Correct    bool
+	// Settled: answered, but not in this visit — collapsed by default behind the
+	// row's green badge, exactly like a resolved comment (#212).
+	Settled bool
 }
 
 // CurrentQuiz returns the quiz for the selected file, or nil. The agent can
@@ -75,6 +78,7 @@ func (s PrereviewState) QuizItems() []QuizItem {
 			item.Answered = true
 			item.Choice = a.Choice
 			item.Correct = a.Choice == qu.Answer
+			item.Settled = !s.QuizJustAnswered[answerKey(q.ID, qu.ID)]
 		}
 		out = append(out, item)
 	}
@@ -262,8 +266,20 @@ func (s PrereviewState) FileQuizItems() []QuizItem {
 // ShowQuizNav gates the navigator: it appears whenever the open file has a quiz,
 // unless dismissed or the overview is already showing (where it would duplicate
 // the list it sits above).
+//
+// A finished quiz reopens without its navigator (#212) — but answering the last
+// question doesn't yank the bar away mid-visit, so it stays while anything was
+// answered this visit.
 func (s PrereviewState) ShowQuizNav() bool {
-	return s.HasQuiz() && !s.QuizNavDismissed && !s.ShowQuiz
+	if !s.HasQuiz() || s.QuizNavDismissed || s.ShowQuiz {
+		return false
+	}
+	for _, it := range s.QuizItems() {
+		if !it.Settled { // unanswered, or answered this visit — in THIS file's quiz
+			return true
+		}
+	}
+	return false
 }
 
 // QuizNavLabel summarises the navigator's state, e.g. "2/5 answered · 1 right".
@@ -313,10 +329,24 @@ func (s PrereviewState) QuizCountLines() map[string]int {
 // QuizOpenLines marks rows carrying an UNANSWERED question — open work, so the
 // badge reads open (yellow) rather than done, matching an unresolved comment.
 func (s PrereviewState) QuizOpenLines() map[string]bool {
+	return s.quizLinesWhere(func(it QuizItem) bool { return !it.Answered })
+}
+
+// quizShowingLines marks rows with a quiz card showing by default: unanswered, or
+// answered THIS visit (#212). That is what rowState means by "open" — a badge click
+// there records "hide", and after a reload (when the row's default becomes
+// collapsed) the toggle expires instead of flipping into a reveal. The badge
+// COLOUR uses QuizOpenLines instead: an answered question is done.
+func (s PrereviewState) quizShowingLines() map[string]bool {
+	return s.quizLinesWhere(func(it QuizItem) bool { return !it.Settled })
+}
+
+// quizLinesWhere keys every inline question matching pred to its row(s).
+func (s PrereviewState) quizLinesWhere(pred func(QuizItem) bool) map[string]bool {
 	out := map[string]bool{}
 	for end, items := range s.QuizByEndLine() {
 		for _, it := range items {
-			if !it.Answered {
+			if pred(it) {
 				for _, k := range rowKeysFor(end, it.Side) {
 					out[k] = true
 				}
@@ -327,6 +357,17 @@ func (s PrereviewState) QuizOpenLines() map[string]bool {
 		return nil
 	}
 	return out
+}
+
+// fileHeadQuizShowing: a file-head question card is showing by default (see
+// quizShowingLines) — so for rowState the head group is open.
+func (s PrereviewState) fileHeadQuizShowing() bool {
+	for _, it := range s.FileQuizItems() {
+		if !it.Settled {
+			return true
+		}
+	}
+	return false
 }
 
 // FileHeadAnnotationCount is how many annotations sit at the file head — the

@@ -573,7 +573,7 @@
 <span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>
 {{- end -}}
 {{- end}}
-{{define "quizCard"}}<div class="quiz-card{{if .Answered}} is-answered{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
+{{define "quizCard"}}<div class="quiz-card{{if .Answered}} is-answered{{end}}{{if .Settled}} is-settled{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
   {{/* The scroll target is the HEAD, not the card: the client centres whatever it
        scrolls to, and a card with four options is taller than a phone screen — so
        centring the card put the question itself off the top of the viewport. */}}
