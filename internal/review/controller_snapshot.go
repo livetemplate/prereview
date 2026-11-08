@@ -6,7 +6,8 @@ import (
 	"time"
 )
 
-// flushSnapshot re-anchors every commented file, persists the CSV, and (in agent
+// flushSnapshot re-anchors every commented file, persists the CSV (state.Comments is
+// this tab's write-back buffer, so the whole list is written either way), and (in agent
 // mode) emits a snapshot event carrying the full actionable snapshot. Shared by
 // the emit path and EndSession. The CSV only becomes a contract at handoff, so
 // re-anchoring here gives the consumer accurate line numbers (and an explicit

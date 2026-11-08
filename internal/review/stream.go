@@ -41,6 +41,7 @@ type EventStream struct {
 	seq      int
 	out      io.Writer // live channel (os.Stdout in production)
 	filePath string    // append-only durable mirror
+	ended    bool      // `end` was emitted: nothing may follow it (#228)
 }
 
 // LastSeq is the seq of the last event emitted, -1 before the first (or on a
@@ -343,6 +344,15 @@ func commentActionable(c Comment, thread []ThreadEntry) bool {
 func (e *EventStream) emit(ev StreamEvent, ts time.Time) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// `end` is the consumer's only stop signal, so it must be the last line. Checked here,
+	// under the writer's own lock, because an emit already in flight when the session ends
+	// passed every caller-side gate before `end` was written (#228).
+	if e.ended {
+		return nil
+	}
+	if ev.Event == "end" {
+		e.ended = true
+	}
 
 	ev.Seq = e.seq
 	e.seq++
