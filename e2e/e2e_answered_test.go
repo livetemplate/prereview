@@ -122,10 +122,8 @@ func TestE2E_ReenqueueAfterReply(t *testing.T) {
 	p.clickFile("edited.go")
 	addLineComment(t, p, 3, 3, "rename this")
 	id := p.readCSV()[1][0]
-	// Let the comment's own snapshot land first. A save during an in-flight emit arms
-	// no new one (#203 D1, planned separately), and done/reply emit nothing, so a ↺
-	// racing this emit would never reach the stream.
-	waitDurable(t, p, func(evs []review.StreamEvent) bool { return len(handoffEvents(evs)) > 0 }, "the comment's first snapshot", diag)
+	// No wait for the comment's own snapshot: the ↺ below may land while that emit is in
+	// flight, and must still reach the stream (#228).
 
 	// The normal finish: done, then a reply saying what changed.
 	for _, args := range [][]string{

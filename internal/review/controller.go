@@ -132,14 +132,20 @@ type PrereviewController struct {
 
 	// Continuous emission (#119). A single debounced timer coalesces a burst of
 	// mutations into one snapshot emit (see controller_emit.go). emitMu guards the
-	// timer. inEmit is set while emitSnapshot runs so its own self-heal persist
-	// can't reschedule (avoiding a feedback loop). emitDisabled is set at session
-	// end so no snapshot fires after end (which the skill treats as
-	// terminal).
+	// timer, inEmit and emitPending together — they must move as one or a wakeup is
+	// lost (#228). inEmit keeps emits serialized: a mutation during an emit sets
+	// emitPending instead of arming, and the emit re-arms on its way out.
+	// emitDisabled is set at session end so no snapshot fires after end (which the
+	// skill treats as terminal).
 	emitMu       sync.Mutex
 	emitTimer    *time.Timer
-	inEmit       atomic.Bool
+	inEmit       bool
+	emitPending  bool
 	emitDisabled atomic.Bool
+
+	// persistMu serializes every comments.csv rewrite, so persistAnchors' read-merge-
+	// write can't interleave with a persist (#228).
+	persistMu sync.Mutex
 }
 
 type cachedDiff struct {
@@ -213,12 +219,15 @@ func (c *PrereviewController) relocateSelected(state *PrereviewState) {
 	}
 }
 
-// relocateAll re-anchors every commented file (loading each diff via
-// the per-file cache) and self-heals the CSV once if anything changed.
-// Used where the CSV / all-comments overview must be accurate even for
-// files the user never opened this session: the skill handoff and
-// opening the all-comments view.
-func (c *PrereviewController) relocateAll(state *PrereviewState) {
+// relocateAll re-anchors every commented file in state.Comments, in memory, and
+// reports whether anything changed. Used where the CSV / all-comments overview must
+// be accurate even for files the user never opened this session: the snapshot emit,
+// the end-of-session flush, and opening the all-comments view.
+//
+// It does not persist: the caller owns that decision (#228). Two callers hold a
+// write-back buffer and persist it; the emit holds a list it read from disk, which a
+// save may have outdated by now, so it merges with persistAnchors instead.
+func (c *PrereviewController) relocateAll(state *PrereviewState) bool {
 	base := c.effectiveBase(state)
 	seen := map[string]bool{}
 	anyChanged := false
@@ -260,11 +269,7 @@ func (c *PrereviewController) relocateAll(state *PrereviewState) {
 			anyChanged = true
 		}
 	}
-	if anyChanged {
-		if err := c.persist(state.Comments); err != nil {
-			slog.Warn("self-heal persist (all files)", "err", err)
-		}
-	}
+	return anyChanged
 }
 
 // SweepGoneFiles flags every comment whose file no longer exists as outdated, ONCE at
@@ -276,7 +281,9 @@ func (c *PrereviewController) relocateAll(state *PrereviewState) {
 // no longer exist while the UI had already stopped showing it. Doing the sweep at launch
 // means the store is TRUE from the first moment and every reader agrees.
 //
-// Cheap: one os.Stat per commented file, no git.
+// Cheap: one os.Stat per commented file, no git. It rewrites the CSV from the list it
+// read, which is safe only because it runs before the server accepts a save; anywhere
+// later it must merge with persistAnchors instead (#228).
 func (c *PrereviewController) SweepGoneFiles() {
 	comments := c.loadCommentsFromDisk()
 	seen := map[string]bool{}
@@ -533,34 +540,105 @@ func (c *PrereviewController) persist(comments []Comment) error {
 	}
 	rows := make([]csv.Row, 0, len(comments))
 	for _, cm := range comments {
-		rows = append(rows, csv.Row{
-			ID:           cm.ID,
-			File:         cm.File,
-			FromLine:     cm.FromLine,
-			ToLine:       cm.ToLine,
-			Side:         cm.Side,
-			Body:         cm.Body,
-			CreatedAt:    cm.Created,
-			Resolved:     cm.Resolved,
-			Anchor:       cm.Anchor.JSON(),
-			AnchorStatus: cm.AnchorStatus,
-			Kind:         cm.Kind,
-			Area:         cm.Area.JSON(),
-			URL:          cm.URL,
-			FromCol:      cm.FromCol,
-			ToCol:        cm.ToCol,
-			Hidden:       cm.Hidden,
-			Draft:        cm.Draft,
-		})
+		rows = append(rows, commentRow(cm))
 	}
-	if err := c.CSVWriter.Write(rows); err != nil {
+	c.persistMu.Lock()
+	err := c.CSVWriter.Write(rows)
+	c.persistMu.Unlock()
+	if err != nil {
 		return err
 	}
 	// Continuous enqueue (#119): a persisted comment change (re)arms the debounced
-	// snapshot emit. inEmit-guarded, so the self-heal persist inside emitSnapshot
-	// doesn't re-arm and spin; no-op in non-stream mode.
+	// snapshot emit; no-op in non-stream mode.
 	c.scheduleEmit()
 	return nil
+}
+
+// commentRow is a Comment's comments.csv row.
+func commentRow(cm Comment) csv.Row {
+	return csv.Row{
+		ID:           cm.ID,
+		File:         cm.File,
+		FromLine:     cm.FromLine,
+		ToLine:       cm.ToLine,
+		Side:         cm.Side,
+		Body:         cm.Body,
+		CreatedAt:    cm.Created,
+		Resolved:     cm.Resolved,
+		Anchor:       cm.Anchor.JSON(),
+		AnchorStatus: cm.AnchorStatus,
+		Kind:         cm.Kind,
+		Area:         cm.Area.JSON(),
+		URL:          cm.URL,
+		FromCol:      cm.FromCol,
+		ToCol:        cm.ToCol,
+		Hidden:       cm.Hidden,
+		Draft:        cm.Draft,
+	}
+}
+
+// anchorFields is the part of a comment that relocation writes (relocate,
+// relocateTextColumns, markFileOutdated). A field relocation starts writing must be added
+// here too, or persistAnchors silently drops it.
+type anchorFields struct {
+	from, to, fromCol, toCol int
+	status, anchor           string
+}
+
+func commentAnchor(cm Comment) anchorFields {
+	return anchorFields{cm.FromLine, cm.ToLine, cm.FromCol, cm.ToCol, cm.AnchorStatus, cm.Anchor.JSON()}
+}
+
+func rowAnchor(r csv.Row) anchorFields {
+	return anchorFields{r.FromLine, r.ToLine, r.FromCol, r.ToCol, r.AnchorStatus, r.Anchor}
+}
+
+func setRowAnchor(r *csv.Row, a anchorFields) {
+	r.FromLine, r.ToLine, r.FromCol, r.ToCol, r.AnchorStatus, r.Anchor = a.from, a.to, a.fromCol, a.toCol, a.status, a.anchor
+}
+
+// persistAnchors writes the re-anchoring of `relocated` (which started as `loaded`, a
+// copy read from disk earlier) WITHOUT rewriting comments.csv from that old list (#228).
+// It re-reads the CSV and, by id, overlays only the relocated fields, and only onto a row
+// whose anchor fields still match what was loaded. So a comment saved, deleted or
+// re-anchored since the read is left exactly as it is now; rewriting from the old list
+// would delete any comment saved during the emit's `git diff`s.
+//
+// loaded and relocated pair up by index: relocation edits the slice in place and never
+// reorders or filters it.
+//
+// It does not schedule an emit: it runs inside one, and the result it writes is the one
+// that emit is about to ship.
+func (c *PrereviewController) persistAnchors(loaded, relocated []Comment) error {
+	if c.CSVWriter == nil {
+		return fmt.Errorf("csv writer not configured")
+	}
+	type change struct{ was, now anchorFields }
+	changes := map[string]change{}
+	for i := range relocated {
+		was, now := commentAnchor(loaded[i]), commentAnchor(relocated[i])
+		if was != now {
+			changes[relocated[i].ID] = change{was, now}
+		}
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+
+	c.persistMu.Lock()
+	defer c.persistMu.Unlock()
+	rows, err := csv.Read(c.CSVPath)
+	if err != nil {
+		return err
+	}
+	for i := range rows {
+		ch, ok := changes[rows[i].ID]
+		if !ok || rowAnchor(rows[i]) != ch.was {
+			continue
+		}
+		setRowAnchor(&rows[i], ch.now)
+	}
+	return c.CSVWriter.Write(rows)
 }
 
 // loadCommentsFromDisk reads the CSV and converts to []Comment. Errors

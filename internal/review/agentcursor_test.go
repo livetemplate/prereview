@@ -90,7 +90,7 @@ func TestAgentPresence(t *testing.T) {
 		t.Fatalf("no cursor: %+v, want zero (never picked up)", p)
 	}
 	for range 3 {
-		_ = es.EmitEnd(fixedTS) // seqs 0..2
+		_ = es.EmitFilesChanged(nil, 0, "", false, fixedTS) // seqs 0..2 (not `end`: nothing follows that)
 	}
 	if err := WriteAgentCursor(dir, AgentCursor{Mode: AgentCursorWatch, State: AgentCursorDelivered, DeliveredSeq: 2}); err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestAgentPresence(t *testing.T) {
 	if p.Quiet || p.Attached || !p.PickedUp || p.Behind || p.PickupAt == "" {
 		t.Fatalf("just delivered the latest: %+v", p)
 	}
-	_ = es.EmitEnd(fixedTS) // seq 3, not delivered
+	_ = es.EmitFilesChanged(nil, 0, "", false, fixedTS) // seq 3, not delivered
 	if p := c.agentPresence(now, time.Time{}); !p.Behind {
 		t.Fatalf("an undelivered emit: %+v, want behind", p)
 	}
@@ -122,10 +122,15 @@ func TestEventStream_LastSeq(t *testing.T) {
 	if got := es.LastSeq(); got != -1 {
 		t.Errorf("fresh stream LastSeq = %d, want -1", got)
 	}
-	_ = es.EmitEnd(fixedTS)
+	_ = es.EmitFilesChanged(nil, 0, "", false, fixedTS)
 	_ = es.EmitEnd(fixedTS)
 	if got := es.LastSeq(); got != 1 {
 		t.Errorf("after seq 0,1 LastSeq = %d, want 1", got)
+	}
+	// #228: nothing follows `end`, so a later emit takes no seq.
+	_ = es.EmitFilesChanged(nil, 0, "", false, fixedTS)
+	if got := es.LastSeq(); got != 1 {
+		t.Errorf("an emit after end took a seq: LastSeq = %d, want 1", got)
 	}
 }
 

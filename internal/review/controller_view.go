@@ -3,6 +3,7 @@ package review
 import (
 	"fmt"
 	"github.com/livetemplate/livetemplate"
+	"log/slog"
 	"slices"
 )
 
@@ -15,7 +16,11 @@ func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livet
 	// Opening the overview must show accurate badges/snippets for every
 	// commented file, including ones never opened this session.
 	if state.ShowAllComments {
-		c.relocateAll(&state)
+		if c.relocateAll(&state) {
+			if err := c.persist(state.Comments); err != nil {
+				slog.Warn("self-heal persist (all comments)", "err", err)
+			}
+		}
 	}
 	return state, nil
 }
