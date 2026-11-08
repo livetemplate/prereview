@@ -94,6 +94,10 @@ type Comment struct {
 	// applyProcessed from the agent-written .prereview/processed.jsonl markers on
 	// every Mount and on each markers-file change (see processed.go).
 	Processed bool `json:"processed"`
+	// Answered marks that the agent settled this comment with a reply and no edit
+	// (#205, `prereview reply --answered`). Derived like Processed, from
+	// .prereview/answered.jsonl (see AnsweredFileName for why it is a plain set).
+	Answered bool `json:"-"`
 	// Draft is the not-yet-enqueued flag (#119): a reviewer's in-progress note
 	// that is kept OUT of the agent's actionable snapshot until they enqueue it.
 	// The default (false) means enqueued/active — "save auto-enqueues" — so the

@@ -49,7 +49,7 @@ flags, or `prereview help` for the top-level list.
 | `prereview status <working\|done> [message]` | Echo the agent's status to the review UI (a live pill across every open tab): `working` while applying a batch, `done` when finished. Writes `llm-status.json` atomically. |
 | `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](#suggested-edits). |
 | `prereview quiz [--file <f>\|-]` | Submit a **comprehension quiz** about a file's diff for the reviewer to answer (append to `quiz.jsonl`). Each question needs >= 2 `options`, a 0-based `answer`, a `why`, and `from_line`/`to_line`/`side`; `probe` is one of change-type / localization / consequence / rationale / decision. **Validated before anything is written** — an out-of-range answer, a missing explanation, or a non-`decision` question without a line anchor fails with a non-zero exit naming the question. The server additionally flags a question whose cited line is not in the diff. |
-| `prereview reply <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment, suggestion **or quiz question** (the latter addressed as `<quizID>:<questionID>`), so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. See [Threads](#threads). |
+| `prereview reply [--answered] <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment, suggestion **or quiz question** (the latter addressed as `<quizID>:<questionID>`), so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. `--answered` also settles a **comment** with no edit (it reads "answered" instead of "done"); it fails on a suggestion or quiz id. See [Threads](#threads). |
 | `prereview applied <suggestion-id>...` | Ack that you applied an **accepted** suggestion's edit to the file, so the UI marks it "applied" and drops it from the snapshot. Ids come from a snapshot's `suggestions[]` (`verdict=accept`); validated against suggestions. Idempotent. |
 | `prereview reverted <suggestion-id>...` | Ack that you **reverted** an applied suggestion — restored its `original` text after the reviewer asked to undo the accept (delivered as `verdict=revert`). Nets the suggestion back out of "applied" → the card returns to undecided. Validated against suggestions. Idempotent. |
 
@@ -118,6 +118,7 @@ Everything prereview writes lives under `<STORE>/`, the directory from the stdou
 ├── comments.csv                ← source of truth, rewritten atomically on every change
 ├── events.jsonl                ← agent mode only (--agent); append-only JSON event log, reset each launch
 ├── processed.jsonl             ← INBOUND: per-comment "done" markers (`prereview done`); append-only
+├── answered.jsonl              ← INBOUND: comments settled by a reply with no edit (`prereview reply --answered`); append-only
 ├── llm-status.json             ← INBOUND: agent-status echo, watched by the server; reset each launch
 ├── agent-cursor.json           ← INBOUND: written by `watch` / `comments --json` — who is reading the queue; reset each launch
 ├── suggestions.jsonl           ← INBOUND: the agent's proposed edits (`prereview suggest`); append-only, durable
@@ -239,7 +240,9 @@ entry is `{ "author": "agent" | "reviewer", "body": "…", "at": "<RFC3339>" }`.
 - **You → reviewer:** `prereview reply --out "<STORE>" <id> --body "…"` appends an
   `agent` entry the reviewer sees under the card. Post one after addressing a comment to
   say what you changed (alongside the `done` mark). Validated against comments +
-  suggestions, like `done`.
+  suggestions, like `done`. If you changed **nothing** (an answer, or a question back),
+  use `reply --answered` instead of `done`: the comment reads **answered** until the
+  reviewer resolves it or replies to push back.
 - **Reviewer → you:** the reviewer replies under the card; that `reviewer` entry re-arms
   the snapshot. When an item's **last thread entry is `reviewer`**, they're steering you
   — respond to it, then `reply`.

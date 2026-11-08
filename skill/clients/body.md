@@ -29,6 +29,11 @@ against the review — an unknown id fails):
 
     prereview done --out <STORE> <id>
 
+If the right response is an answer and you change nothing, settle it with the reply
+instead of `done`, so it reads "answered" rather than "edited":
+
+    prereview reply --out <STORE> --answered <id> --body "..."
+
 Re-run `prereview comments --json` for more (the reviewer can keep commenting);
 dedupe by `id`. Stop when the reviewer clicks End session. If your harness can
 block on a stream, `prereview watch --out <STORE> --since <seq>` delivers each new

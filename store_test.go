@@ -136,6 +136,8 @@ func TestSeedFromLegacyStore(t *testing.T) {
 	// without them would re-queue work the agent already finished.
 	mustWriteFile(t, filepath.Join(root, ".prereview", "processed.jsonl"),
 		[]byte("{\"id\":\"ca1\",\"at\":\"2026-07-01T13:00:00Z\"}\n{\"id\":\"cb1\"}\n"))
+	mustWriteFile(t, filepath.Join(root, ".prereview", "answered.jsonl"), // #205
+		[]byte("{\"id\":\"ca1\"}\n{\"id\":\"cb1\"}\n"))
 	mustWriteFile(t, filepath.Join(root, ".prereview", "agent-replies.jsonl"),
 		[]byte("{\"target_id\":\"ca1\",\"author\":\"agent\",\"body\":\"renamed it\",\"at\":1}\n"+
 			"{\"target_id\":\"cb1\",\"author\":\"agent\",\"body\":\"other file\",\"at\":2}\n"))
@@ -156,11 +158,11 @@ func TestSeedFromLegacyStore(t *testing.T) {
 		t.Errorf("legacy store mutated: %+v (err %v) — seeding must never delete rows", legacyRows, err)
 	}
 
-
 	// The done marker and the thread came along — filtered to this file's ids.
 	store := filepath.Dir(target)
 	for _, tc := range []struct{ name, want, exclude string }{
 		{"processed.jsonl", "ca1", "cb1"},
+		{"answered.jsonl", "ca1", "cb1"},
 		{"agent-replies.jsonl", "renamed it", "other file"},
 	} {
 		b, err := os.ReadFile(filepath.Join(store, tc.name))

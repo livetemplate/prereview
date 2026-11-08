@@ -242,7 +242,22 @@ the human decides whether the note is **resolved**, so keep acting only on unres
 
 `--all-open` marks every enqueued, unresolved comment in the review — including ones whose
 anchor your edits invalidated, which is the usual outcome of doing the work. It skips
-drafts, resolved rows and ids already marked, and prints what it skipped.
+drafts, resolved rows, ids already marked and comments you answered, and prints what it
+skipped.
+
+**Answered with no edit? Use `reply --answered`, not `done`.** Sometimes the right response
+is an answer — why it is the way it is — or a question back, and you change nothing.
+`done` would tell the reviewer an edit was made; a plain `reply` leaves the comment reading
+"queued" forever. Settle it with the reply itself:
+
+```bash
+prereview reply --out "<STORE>" --answered <comment-id> --body "Kept the map: lookups dominate and order never matters."
+```
+
+The card and the queue then read **answered**, and it is the reviewer's turn: they resolve
+it, or reply to push back — which hands it to you again like any reply. Comments only (a
+suggestion or quiz question takes a plain `reply`). When you *did* edit, run `done` first
+and then `reply`, so the card never reads "answered" in between.
 
 ## Threads — say what you did, and respond when the reviewer steers
 

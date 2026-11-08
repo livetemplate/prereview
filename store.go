@@ -115,7 +115,7 @@ func seedFromLegacyStore(csvPath, storeRoot, singleFile string) error {
 	}
 	storeDir := filepath.Dir(csvPath)
 	for _, name := range []string{
-		review.ProcessedFileName, review.ReenqueuedFileName,
+		review.ProcessedFileName, review.ReenqueuedFileName, review.AnsweredFileName,
 		review.AgentRepliesFileName, review.ReviewerRepliesFileName,
 	} {
 		if err := seedMarksFile(filepath.Join(legacyDir, name), filepath.Join(storeDir, name), ids); err != nil {

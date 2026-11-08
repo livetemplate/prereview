@@ -1191,6 +1191,8 @@ header.file-head .file-head-actions {
    same --pr-del the card's outdated-badge uses — the two mean the same thing. */
 .q-blocked { color: var(--pr-del); }
 .q-draft { color: var(--pico-muted-color); }
+/* #205: answered with no edit — the reviewer's turn to read (see .queue-badge-answered). */
+.q-answered { color: var(--accent); text-decoration: underline dotted; }
 /* #171: accepted-but-not-yet-applied. Amber, the same --pr-open the #165 "accepted
    (pending apply)" line badge uses — the toolbar count and the badge on the line mean
    the same thing, so they read the same. */
@@ -1332,6 +1334,12 @@ header.file-head .file-head-actions {
 .queue-badge-queued { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
 .queue-badge-done { background: color-mix(in srgb, var(--pr-add) 20%, transparent); color: var(--pr-add); }
 .queue-badge-blocked { background: color-mix(in srgb, var(--pr-del) 20%, transparent); color: var(--pr-del); }
+/* #205 "answered" is OUTLINED, not filled — told apart from "worked on" by shape, and
+   reusing --accent keeps every scheme × mode legible with no per-scheme token. One rule
+   for the queue row and the card badge. */
+.queue-badge-answered, .inline-comment .answered-badge, .all-comments .answered-badge {
+  background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent);
+}
 .queue-badge-draft { background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color); }
 /* Suggestion queue rows carry the same ✦ accent mark the inline suggestion box uses,
    so the queue reads "this row is a suggested edit, not a comment" at a glance. */
@@ -2868,6 +2876,11 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    distinct, positive state next to resolved (green) / moved / outdated (red). */
 .inline-comment .processed-badge, .all-comments .processed-badge {
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+}
+/* "answered" (#205): pill geometry here; its outline is with .queue-badge-answered. */
+.inline-comment .answered-badge, .all-comments .answered-badge {
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
 }

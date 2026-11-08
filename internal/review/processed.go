@@ -34,6 +34,15 @@ const ProcessedFileName = "processed.jsonl"
 // processed.jsonl.
 const ReenqueuedFileName = "reenqueued.jsonl"
 
+// AnsweredFileName is the agent-written, append-only log of comments the agent
+// settled by replying with no edit (#205, `prereview reply --answered`). It is a
+// PLAIN SET — any mark means answered — and deliberately has no tombstone file:
+// reenqueued.jsonl's count is netted against processed.jsonl alone, and a second
+// counter netted against the same tombstones would leave the next `done` a no-op
+// (pc == rc). The reviewer un-answers by replying, which the thread overlay
+// (reopenIfReplied / threadActionable) already turns back into queued work.
+const AnsweredFileName = "answered.jsonl"
+
 // ProcessedMark is one line of an agent-owned marks file (processed.jsonl for
 // done'd comments, applied.jsonl for applied suggestions): the target ID the
 // agent acted on plus an informational timestamp (the server only uses ID).
@@ -48,6 +57,11 @@ type ProcessedMark struct {
 // location, including single-file reviews where the store dir is the file's parent.
 func ProcessedPath(csvPath string) string {
 	return filepath.Join(filepath.Dir(csvPath), ProcessedFileName)
+}
+
+// AnsweredPath is the answered-with-no-change marks file alongside processed.jsonl.
+func AnsweredPath(csvPath string) string {
+	return filepath.Join(filepath.Dir(csvPath), AnsweredFileName)
 }
 
 // ReenqueuePath is the re-enqueue tombstone file alongside processed.jsonl.
@@ -96,7 +110,8 @@ func (c *PrereviewController) applyProcessed(state *PrereviewState) {
 // == false for every comment — which is why --all-open kept re-marking work already done.
 func applyProcessedMarks(comments []Comment, csvPath string) {
 	pc := loadMarkCounts(ProcessedPath(csvPath))
-	if len(pc) == 0 {
+	ac := loadMarkCounts(AnsweredPath(csvPath)) // #205: a plain set, never netted
+	if len(pc) == 0 && len(ac) == 0 {
 		return
 	}
 	rc := loadMarkCounts(ReenqueuePath(csvPath)) // re-enqueue tombstones (#119)
@@ -104,6 +119,7 @@ func applyProcessedMarks(comments []Comment, csvPath string) {
 		id := comments[i].ID
 		// Done only while processed marks outnumber re-enqueue marks.
 		comments[i].Processed = pc[id] > rc[id]
+		comments[i].Answered = ac[id] > 0
 	}
 }
 

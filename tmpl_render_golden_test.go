@@ -423,6 +423,16 @@ func renderFixtures() []renderFixture {
 		{ID: "c1", File: "app.go", Body: "rename", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
 	}
 
+	// #205: an answered comment (agent replied, no edit) beside a queued one — the
+	// queue's answered row/count/legend and the outlined card badge.
+	answered := goBase()
+	answered.AgentMode = true
+	answered.Comments = []review.Comment{
+		{ID: "c1", File: "app.go", Body: "rename", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
+		{ID: "c2", File: "app.go", Body: "why a map here?", Kind: "line", FromLine: 2, ToLine: 2, Side: "new", Answered: true},
+	}
+	answered.ThreadEntries = []review.ThreadEntry{{TargetID: "c2", Author: review.AuthorAgent, Body: "Lookups dominate; order never matters.", At: 1}}
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -448,6 +458,7 @@ func renderFixtures() []renderFixture {
 		{"external", external},
 		{"version-view", version},
 		{"agent-mode", agent},
+		{"agent-answered", answered},
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},

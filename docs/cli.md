@@ -98,10 +98,10 @@ hand-off with a **continuous** model — no re-invocation between rounds, and no
 hand-written CSV parser:
 
 - **The queue.** Every comment (and every accepted suggestion) rides a
-  `draft → queued → done` lifecycle, with `blocked` as the one detour. Comments you
+  `draft → queued → done` lifecycle, with `blocked` and `answered` as the detours. Comments you
   save while **live** are sent to the agent immediately; **Pause** holds them so you
   can batch, and **Resume** releases the whole batch at once. The Queue dropdown
-  shows the counts (queued · blocked · done · draft, plus "accepted, awaiting apply"
+  shows the counts (queued · blocked · answered · done · draft, plus "accepted, awaiting apply"
   and reviewer replies still awaiting the agent) and is the hub for Pause/Resume and
   End session.
 
@@ -111,6 +111,11 @@ hand-written CSV parser:
   it (the card's **Re-anchor** button) or resolve it. Only a resolve takes a row out
   of the queue; drift never does, because a row that silently disappeared is
   indistinguishable from one the agent finished.
+
+  **`answered`** is a comment the agent settled with a reply and no edit
+  (`prereview reply --answered`) — an explanation, or a question back. It is your
+  turn: read the reply, then resolve it, or reply to push back (which hands it to the
+  agent again). It has no ↺; replying is how you send it back.
 - **The event stream.** In agent mode, after the usual `READY`/`REPO`/`STORE`
   preamble prereview emits one JSON object per line to **stdout** and mirrors it to
   `<STORE>/events.jsonl` (append-only, reset each launch). Four event types:
@@ -189,7 +194,7 @@ prereview status    [--out <dir>] <working|done> [message]
 prereview suggest   [--out <dir>] [--file <payload.json>]
 - `prereview quiz` - submit a comprehension quiz about a file's diff for the
   reviewer to answer; writes `.prereview/quiz.jsonl`.
-prereview reply     [--out <dir>] (--body "…" | --file <f>|-) <id>
+prereview reply     [--out <dir>] [--answered] (--body "…" | --file <f>|-) <id>
 prereview applied   [--out <dir>] [--file <f>|-] <suggestion-id>...
 prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
 ```
@@ -228,7 +233,9 @@ prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
 - **`prereview reply`** — post a **thread reply** on a comment **or** suggestion,
   so the reviewer sees what you changed (and can reply back to steer you). The id
   is validated against comments + suggestions. Appends to
-  `.prereview/agent-replies.jsonl`. See [Threads](../skill/reference.md#threads).
+  `.prereview/agent-replies.jsonl`. `--answered` also settles a **comment** with no
+  edit (appends to `.prereview/answered.jsonl`), so it reads "answered" rather than
+  "done". See [Threads](../skill/reference.md#threads).
 - **`prereview applied`** — ack that you **applied** an accepted suggestion's edit
   to the file, so the UI flips the card from "accepted" to "applied" and drops it
   from the snapshot. Ids come from a snapshot's `suggestions[]` (`verdict=accept`);
@@ -321,6 +328,7 @@ Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
 | `suggestions.jsonl` | **agent** (`prereview suggest`) | proposed edits, rendered as suggestion boxes (durable) |
 | `suggestion-decisions.jsonl` | server | your accept/reject/revert verdicts (durable) |
 | `processed.jsonl` | **agent** (`prereview done`) | comment ids marked done (durable — NOT reset each launch, so "worked on" survives a relaunch) |
+| `answered.jsonl` | **agent** (`prereview reply --answered`) | comment ids settled by a reply with no edit (durable) |
 | `applied.jsonl` | **agent** (`prereview applied`) | accepted-suggestion apply acks (durable) |
 | `reverted.jsonl` | **agent** (`prereview reverted`) | applied-suggestion revert acks (durable) |
 | `agent-replies.jsonl` | **agent** (`prereview reply`) | agent thread replies (durable) |

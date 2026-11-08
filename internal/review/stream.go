@@ -297,27 +297,8 @@ func toStreamComment(c Comment) StreamComment {
 func actionableComments(comments []Comment, threadByID map[string][]ThreadEntry) []StreamComment {
 	out := make([]StreamComment, 0, len(comments))
 	for _, c := range comments {
-		// Drafts (#119) are the reviewer's not-yet-enqueued notes — kept out of the
-		// actionable snapshot until enqueued. A draft was never handed to the agent, so
-		// it can't carry a thread; the reply override below never re-admits one.
-		if c.Draft {
-			continue
-		}
 		thread := threadByID[c.ID]
-		// #149/#164 unread model, via threadActionable: a comment is actionable when it is
-		// fresh-and-not-settled, or its thread ends with the reviewer. A reviewer reply
-		// overrides every settled state — so a follow-up on a comment the agent edited
-		// (→ outdated) or already marked done reaches the agent instead of being stranded
-		// on disk, while an agent-last (or untouched-settled) comment drops.
-		//
-		// Processed is part of "settled" (#203). Without it, `prereview done` was not a
-		// terminator: a done comment with no thread reads as fresh-and-unsettled, so every
-		// later snapshot re-handed the agent work it had already finished. On a growing
-		// queue the agent re-chewed the front of the backlog and never reached the tail —
-		// which is what "prereview stops making progress" looked like from the outside.
-		// SKILL.md has always documented the opposite ("the snapshot only carries items
-		// that need you"); the term was simply missing from the expression.
-		if !threadActionable(c.Resolved || c.AnchorOutdated() || c.Processed, thread) {
+		if !commentActionable(c, thread) {
 			continue
 		}
 		sc := toStreamComment(c)
@@ -325,6 +306,31 @@ func actionableComments(comments []Comment, threadByID map[string][]ThreadEntry)
 		out = append(out, sc)
 	}
 	return out
+}
+
+// commentActionable is THE rule for whether the snapshot hands a comment to the agent
+// — shared with the stall count (outstandingAgentWork), so the two can't drift (#205).
+func commentActionable(c Comment, thread []ThreadEntry) bool {
+	// Drafts (#119) are the reviewer's not-yet-enqueued notes — kept out of the
+	// actionable snapshot until enqueued. A draft was never handed to the agent, so
+	// it can't carry a thread; the reply override below never re-admits one.
+	if c.Draft {
+		return false
+	}
+	// #149/#164 unread model, via threadActionable: a comment is actionable when it is
+	// fresh-and-not-settled, or its thread ends with the reviewer. A reviewer reply
+	// overrides every settled state — so a follow-up on a comment the agent edited
+	// (→ outdated) or already marked done reaches the agent instead of being stranded
+	// on disk, while an agent-last (or untouched-settled) comment drops.
+	//
+	// Processed is part of "settled" (#203). Without it, `prereview done` was not a
+	// terminator: a done comment with no thread reads as fresh-and-unsettled, so every
+	// later snapshot re-handed the agent work it had already finished. On a growing
+	// queue the agent re-chewed the front of the backlog and never reached the tail —
+	// which is what "prereview stops making progress" looked like from the outside.
+	// SKILL.md has always documented the opposite ("the snapshot only carries items
+	// that need you"); the term was simply missing from the expression.
+	return threadActionable(c.Resolved || c.AnchorOutdated() || c.Processed, thread)
 }
 
 // emit stamps ev with the next seq + the given timestamp and writes it as one

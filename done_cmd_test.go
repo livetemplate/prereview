@@ -305,3 +305,39 @@ func TestDone_AllOpenIncludesDrifted(t *testing.T) {
 		t.Errorf("stdout should report the already-marked comments; got: %q", res2.stdout)
 	}
 }
+
+// TestDone_AllOpenSkipsAnswered (#205): a comment the agent settled with a reply and
+// no edit must not be swept into done — that would tell the reviewer an edit was made.
+func TestDone_AllOpenSkipsAnswered(t *testing.T) {
+	root := t.TempDir()
+	answered := row("ans-1")
+	answered.FromLine, answered.ToLine = 2, 2
+	seedStore(t, root, []csv.Row{row("open-1"), answered})
+	if err := runReply([]string{"--out", root, "--answered", "--body", "no change needed", "ans-1"}); err != nil {
+		t.Fatal(err)
+	}
+	res := runBin(t, "", "done", "--out", root, "--all-open")
+	if res.exit != 0 {
+		t.Fatalf("--all-open should exit 0; got %d\nstderr: %s", res.exit, res.stderr)
+	}
+	got := strings.Join(processedIDs(t, root), " ")
+	if !strings.Contains(got, "open-1") || strings.Contains(got, "ans-1") {
+		t.Errorf("want open-1 marked and ans-1 skipped; processed.jsonl: %s", got)
+	}
+	if !strings.Contains(res.stdout, "1 answered with no change") {
+		t.Errorf("stdout must name the answered skip; got %q", res.stdout)
+	}
+
+	// The reviewer pushes back by replying → it is work again, so the agent's next
+	// --all-open (after it edits, before it replies) must mark it.
+	line := `{"target_id":"ans-1","author":"reviewer","body":"please change it","at":` + fmt.Sprint(time.Now().UnixNano()) + "}\n"
+	if err := os.WriteFile(filepath.Join(root, ".prereview", review.ReviewerRepliesFileName), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if res := runBin(t, "", "done", "--out", root, "--all-open"); res.exit != 0 {
+		t.Fatalf("second --all-open: exit %d\nstderr: %s", res.exit, res.stderr)
+	}
+	if got := strings.Join(processedIDs(t, root), " "); !strings.Contains(got, "ans-1") {
+		t.Errorf("a pushed-back answered comment must be marked by --all-open; processed.jsonl: %s", got)
+	}
+}

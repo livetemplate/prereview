@@ -43,6 +43,7 @@ func (c *PrereviewController) agentSignalFingerprint() string {
 func signalFingerprint(statusFP string, c *PrereviewController) string {
 	return statusFP + "|" +
 		statusFingerprint(c.processedPath()) + "|" +
+		statusFingerprint(AnsweredPath(c.CSVPath)) + "|" +
 		statusFingerprint(c.suggestionsPath()) + "|" +
 		statusFingerprint(AgentRepliesPath(c.CSVPath)) + "|" +
 		statusFingerprint(AppliedPath(c.CSVPath)) + "|" +

@@ -116,9 +116,10 @@ func printNote(note string) {
 }
 
 // appendMarks appends one `{"id","at"}` JSON line per id to <dir>/<fileName> —
-// the append-only, agent-owned marks format that loadMarkCounts reads. Both
-// `done` (processed.jsonl) and `applied` (applied.jsonl) write it; keeping the
-// write in one place means the two verbs can't drift on the on-disk shape.
+// the append-only, agent-owned marks format that loadMarkCounts reads. `done`
+// (processed.jsonl), `applied` (applied.jsonl) and `reply --answered`
+// (answered.jsonl) all write it; keeping the write in one place means the verbs
+// can't drift on the on-disk shape.
 // json.Encoder writes one object + newline per call → JSONL.
 func appendMarks(dir, fileName string, ids []string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -277,6 +278,9 @@ func skipNote(set review.OpenSet) string {
 	}
 	if set.AlreadyDone > 0 {
 		parts = append(parts, fmt.Sprintf("%d already marked", set.AlreadyDone))
+	}
+	if set.Answered > 0 {
+		parts = append(parts, fmt.Sprintf("%d answered with no change", set.Answered))
 	}
 	if len(parts) == 0 {
 		return ""
