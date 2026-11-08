@@ -148,3 +148,87 @@ func TestReply_BodyFromStdin(t *testing.T) {
 		t.Errorf("expected stdin body trimmed; got: %+v", got)
 	}
 }
+
+// answeredIDs reads the answered.jsonl marks under <root>/.prereview (#205).
+func answeredIDs(t *testing.T, root string) []string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(root, ".prereview", review.AnsweredFileName))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		var m review.ProcessedMark
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			t.Fatalf("parse mark %q: %v", line, err)
+		}
+		out = append(out, m.ID)
+	}
+	return out
+}
+
+// TestRunReply_Answered (#205): --answered posts the reply AND marks the comment
+// answered — the reply first, so a failed mark degrades to a plain reply.
+func TestRunReply_Answered(t *testing.T) {
+	dir := t.TempDir()
+	seedStore(t, dir, []csv.Row{row("c1")})
+	if err := runReply([]string{"--out", dir, "--answered", "--body", "kept on purpose: callers rely on order", "c1"}); err != nil {
+		t.Fatalf("runReply --answered: %v", err)
+	}
+	if e := agentReplies(t, dir); len(e) != 1 || e[0].TargetID != "c1" {
+		t.Fatalf("want the reply recorded, got %+v", e)
+	}
+	if got := answeredIDs(t, dir); len(got) != 1 || got[0] != "c1" {
+		t.Fatalf("want c1 marked answered, got %v", got)
+	}
+
+	// A plain reply never marks.
+	seedStore(t, dir, []csv.Row{row("c1"), row("c2")})
+	if err := runReply([]string{"--out", dir, "--body", "fyi", "c2"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := answeredIDs(t, dir); len(got) != 1 {
+		t.Errorf("a plain reply must not mark answered, got %v", got)
+	}
+}
+
+// TestRunReply_AnsweredRejectsNonComment (#205): a suggestion's outcome is the
+// reviewer's verdict and a quiz question has no queue state, so --answered on
+// either fails loudly — and records nothing at all.
+func TestRunReply_AnsweredRejectsNonComment(t *testing.T) {
+	dir := t.TempDir()
+	seedStore(t, dir, []csv.Row{row("c1")})
+	seedSuggestion(t, dir, "s1")
+	err := runReply([]string{"--out", dir, "--answered", "--body", "x", "s1"})
+	if err == nil || !strings.Contains(err.Error(), "--answered settles a comment") {
+		t.Fatalf("want a --answered rejection for a suggestion id, got %v", err)
+	}
+	if e := agentReplies(t, dir); len(e) != 0 {
+		t.Errorf("a rejected --answered must not post the reply either, got %+v", e)
+	}
+	if got := answeredIDs(t, dir); len(got) != 0 {
+		t.Errorf("nothing may be marked, got %v", got)
+	}
+}
+
+func TestRunReply_AnsweredRejectsQuizQuestion(t *testing.T) {
+	dir := t.TempDir()
+	seedStore(t, dir, []csv.Row{row("c1")})
+	if err := runQuizWith(t, dir, quizPayload); err != nil {
+		t.Fatal(err)
+	}
+	q := quizLines(t, dir)[0]
+	id := q.ID + ":" + q.Questions[0].ID
+	if err := runReply([]string{"--out", dir, "--body", "x", id}); err != nil {
+		t.Fatalf("a plain reply on a quiz question must still work: %v", err)
+	}
+	if err := runReply([]string{"--out", dir, "--answered", "--body", "x", id}); err == nil {
+		t.Fatal("--answered on a quiz question must fail")
+	}
+	if got := answeredIDs(t, dir); len(got) != 0 {
+		t.Errorf("nothing may be marked, got %v", got)
+	}
+}

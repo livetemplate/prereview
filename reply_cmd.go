@@ -13,10 +13,10 @@ import (
 	"github.com/livetemplate/prereview/internal/review"
 )
 
-// runReply implements `prereview reply [--out <dir>] (--body "…" | --file <f>|-)
-// <id>`: the coding agent posts a thread entry — its brief "what I did" note, or a
-// follow-up reply — on a comment or suggestion, so the reviewer sees it under the
-// card (issue #149). It APPENDS one JSON line to <store>/.prereview/
+// runReply implements `prereview reply [--out <dir>] [--answered] (--body "…" |
+// --file <f>|-) <id>`: the coding agent posts a thread entry — its brief "what I
+// did" note, or a follow-up reply — on a comment or suggestion, so the reviewer
+// sees it under the card (issue #149). It APPENDS one JSON line to <store>/.prereview/
 // agent-replies.jsonl — an append-only, agent-owned log the server reads every
 // Mount. Kept a pure append (never rewrites) so it never races the server's writes,
 // exactly like the done and suggest subcommands.
@@ -25,19 +25,26 @@ import (
 // comment OR a suggestion — so a typo'd id fails loudly with a non-zero exit instead
 // of recording a reply that renders nowhere. --out is the directory whose .prereview/
 // holds the review (the STORE path prereview prints at launch); defaults to cwd.
+//
+// --answered (#205) also settles a COMMENT with no edit: after the reply is written
+// it appends the id to answered.jsonl, so the card and queue read "answered" instead
+// of "queued" forever (or "done", which would claim an edit was made). The reply goes
+// first, so a failed mark leaves an ordinary reply — exactly what plain reply does.
 func runReply(args []string) error {
 	fs := flag.NewFlagSet("reply", flag.ContinueOnError)
 	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	body := fs.String("body", "", "the reply text — a brief note on what you did")
 	file := fs.String("file", "", "read the reply body from this file, or \"-\" for stdin (instead of --body)")
+	answered := fs.Bool("answered", false, "this reply settles the comment with no edit (an answer, or a question back) — the reviewer sees it as \"answered\"; comments only")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
-			"Usage: prereview reply [--out <dir>] (--body \"…\" | --file <f>|-) <comment-or-suggestion-id>\n\n"+
+			"Usage: prereview reply [--out <dir>] [--answered] (--body \"…\" | --file <f>|-) <comment-or-suggestion-id>\n\n"+
 				"  Post a thread reply on a comment or suggestion so the reviewer sees what\n"+
 				"  you did (or your follow-up). Run by the coding agent after addressing a\n"+
 				"  comment; --out must match the review's store (the STORE line). The id is\n"+
 				"  validated against comments.csv and suggestions — list ids with\n"+
-				"  `prereview comments --json`.\n")
+				"  `prereview comments --json`.\n\n"+
+				"  --answered settles a comment with no edit (instead of `prereview done`).\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -69,8 +76,12 @@ func runReply(args []string) error {
 		return err
 	}
 	csvPath := filepath.Join(dir, review.CommentsFileName)
-	if err := validateReplyTarget(csvPath, id); err != nil {
+	isComment, err := validateReplyTarget(csvPath, id)
+	if err != nil {
 		return err
+	}
+	if *answered && !isComment {
+		return fmt.Errorf("--answered settles a comment, and %q is a suggestion or quiz question — reply without --answered", id)
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -94,15 +105,23 @@ func runReply(args []string) error {
 	if err := json.NewEncoder(f).Encode(entry); err != nil {
 		return fmt.Errorf("append reply: %w", err)
 	}
-	fmt.Printf("posted reply on %s\n", id)
+	msg := "posted reply on " + id
+	if *answered {
+		if err := appendMarks(dir, review.AnsweredFileName, []string{id}); err != nil {
+			return fmt.Errorf("reply posted, but marking %s answered failed: %w", id, err)
+		}
+		msg += " and marked it answered (no change)"
+	}
+	fmt.Println(msg)
 	return nil
 }
 
 // validateReplyTarget rejects an id that is neither a comment (comments.csv) nor a
-// suggestion (suggestions.jsonl) — mirrors done's validateIDs. If the id is unknown
+// suggestion (suggestions.jsonl) — mirrors done's validateIDs. isComment reports
+// whether it is a comment, the only target `--answered` can settle (#205). If the id is unknown
 // AND there is nothing to validate against, it is almost always a wrong --out, so
 // that is a distinct, actionable error rather than a bare "unknown id".
-func validateReplyTarget(csvPath, id string) error {
+func validateReplyTarget(csvPath, id string) (isComment bool, err error) {
 	known := false
 	// cerr is intentionally SOFT: a reply targets a comment OR a suggestion, so an
 	// unreadable/missing comments.csv is only fatal when there are also no
@@ -110,7 +129,7 @@ func validateReplyTarget(csvPath, id string) error {
 	rows, cerr := csv.Read(csvPath)
 	for _, r := range rows {
 		if r.ID == id {
-			known = true
+			return true, nil
 		}
 	}
 	sugs := review.LoadSuggestions(csvPath)
@@ -135,11 +154,11 @@ func validateReplyTarget(csvPath, id string) error {
 		}
 	}
 	if known {
-		return nil
+		return false, nil
 	}
 	if (cerr != nil || len(rows) == 0) && len(sugs) == 0 && len(quizzes) == 0 {
-		return fmt.Errorf("no comments, suggestions or quizzes found at %s — is --out the review's directory?", filepath.Dir(csvPath))
+		return false, fmt.Errorf("no comments, suggestions or quizzes found at %s — is --out the review's directory?", filepath.Dir(csvPath))
 	}
-	return fmt.Errorf("unknown id %q — not a comment, suggestion, or quiz question "+
+	return false, fmt.Errorf("unknown id %q — not a comment, suggestion, or quiz question "+
 		"(a question is addressed as \"<quizID>:<questionID>\"; use `prereview comments --json` to list comment ids)", id)
 }

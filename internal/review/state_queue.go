@@ -14,10 +14,11 @@ package review
 
 // Queue states, in lifecycle order. A comment/suggestion is in exactly one.
 const (
-	queueDraft   = "draft"   // held back — not yet enqueued for the agent
-	queueQueued  = "queued"  // enqueued, waiting/remaining (the agent hasn't marked it)
-	queueBlocked = "blocked" // enqueued, but the anchor is gone — needs re-anchoring
-	queueDone    = "done"    // the agent marked it worked-on (processed.jsonl / applied.jsonl)
+	queueDraft    = "draft"    // held back — not yet enqueued for the agent
+	queueQueued   = "queued"   // enqueued, waiting/remaining (the agent hasn't marked it)
+	queueBlocked  = "blocked"  // enqueued, but the anchor is gone — needs re-anchoring
+	queueAnswered = "answered" // the agent replied with no edit (#205): the reviewer's move
+	queueDone     = "done"     // the agent marked it worked-on (processed.jsonl / applied.jsonl)
 )
 
 // Queue item kinds — a queue row is either a comment or an accepted suggestion.
@@ -52,6 +53,10 @@ func (c Comment) QueueState() string {
 		return queueDraft
 	case c.Processed:
 		return queueDone
+	// After done (an edit that was made is the stronger fact), before blocked (the
+	// agent has responded, so the next move is the reviewer's either way) (#205).
+	case c.Answered:
+		return queueAnswered
 	case c.AnchorOutdated():
 		return queueBlocked
 	default:
@@ -71,6 +76,18 @@ func reopenIfReplied(base, id string, awaiting map[string]bool) string {
 		return queueQueued
 	}
 	return base
+}
+
+// CommentQueueStates maps each comment id to the state its queue row shows — QueueState
+// under the reply-reopen overlay — so a card badge says what the queue panel says (#205:
+// a pushed-back answered comment reads queued, not answered). Zero-arg for the framework.
+func (s PrereviewState) CommentQueueStates() map[string]string {
+	awaiting := s.AwaitingAgent()
+	out := make(map[string]string, len(s.Comments))
+	for _, c := range s.Comments {
+		out[c.ID] = reopenIfReplied(c.QueueState(), c.ID, awaiting)
+	}
+	return out
 }
 
 // suggestionQueueState classifies a suggestion for the queue view (#159). An
@@ -199,6 +216,10 @@ func (s PrereviewState) QueuedCount() int { return s.countQueue(queueQueued) }
 // applied.
 func (s PrereviewState) DoneCount() int { return s.countQueue(queueDone) }
 
+// AnsweredCount is the number of comments the agent settled with a reply and no
+// edit (#205).
+func (s PrereviewState) AnsweredCount() int { return s.countQueue(queueAnswered) }
+
 // BlockedCount is the number of enqueued comments the agent can no longer be handed
 // because their anchor is gone.
 func (s PrereviewState) BlockedCount() int { return s.countQueue(queueBlocked) }
@@ -263,13 +284,12 @@ func (s PrereviewState) AwaitingReplyCount() int {
 	return n
 }
 
-// HasQueue reports whether there's anything to show in the queue panel (any
-// draft/queued/done comment or accepted/applied suggestion). Gates the toolbar
-// indicator so it stays hidden on an empty review.
+// HasQueue reports whether there's anything to show in the queue panel — any row in
+// any lifecycle state, so a file whose only work is blocked (#203) or answered (#205)
+// never renders the panel's empty state over the rows that need the reviewer. Gates
+// the toolbar indicator so it stays hidden on an empty review.
 func (s PrereviewState) HasQueue() bool {
-	// Blocked counts (#203): a file whose only work is drifted would otherwise render the
-	// panel's empty state and hide the very row that needs the reviewer.
-	return s.QueuedCount()+s.BlockedCount()+s.DoneCount()+s.DraftCount() > 0
+	return len(s.QueueItems()) > 0
 }
 
 // AgentWorking mirrors the llm-status echo: true while the agent is applying a
@@ -309,29 +329,21 @@ type QueueItem struct {
 	File  string
 	Line  int    // new-side line (0 for file/region/area comments)
 	Body  string // the comment text / suggestion note, shown truncated by CSS
-	State string // queueDraft | queueQueued | queueBlocked | queueDone
+	State string // queueDraft | queueQueued | queueBlocked | queueAnswered | queueDone
 }
 
-// QueueItems returns the queue rows ordered by lifecycle — queued (remaining) first,
-// then blocked, then done, then drafts — so the panel leads with what still needs the
-// agent's attention, and puts what needs the REVIEWER'S attention immediately after it.
+// queueOrder is the panel's row order: what still needs the agent first, then what
+// needs the REVIEWER (a lost anchor, an answer to read), then the finished and the
+// held-back.
+var queueOrder = []string{queueQueued, queueBlocked, queueAnswered, queueDone, queueDraft}
+
+// QueueItems returns the queue rows grouped in queueOrder.
 // Resolved comments and un-queued suggestions are excluded (QueueState "") — UNLESS the
 // reviewer replied on one last (#164), which reopens it as "queued" work via
 // reopenIfReplied.
 func (s PrereviewState) QueueItems() []QueueItem {
-	var queued, blocked, done, drafts []QueueItem
-	add := func(item QueueItem) {
-		switch item.State {
-		case queueQueued:
-			queued = append(queued, item)
-		case queueBlocked:
-			blocked = append(blocked, item)
-		case queueDone:
-			done = append(done, item)
-		case queueDraft:
-			drafts = append(drafts, item)
-		}
-	}
+	buckets := map[string][]QueueItem{}
+	add := func(item QueueItem) { buckets[item.State] = append(buckets[item.State], item) }
 	awaiting := s.AwaitingAgent()
 	for _, c := range s.queueComments() {
 		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: reopenIfReplied(c.QueueState(), c.ID, awaiting)})
@@ -343,11 +355,10 @@ func (s PrereviewState) QueueItems() []QueueItem {
 		}
 		add(QueueItem{ID: sg.ID, Kind: queueKindSuggestion, File: sg.File, Line: sg.ToLine, Body: suggestionQueueBody(sg), State: st})
 	}
-	out := make([]QueueItem, 0, len(queued)+len(blocked)+len(done)+len(drafts))
-	out = append(out, queued...)
-	out = append(out, blocked...)
-	out = append(out, done...)
-	out = append(out, drafts...)
+	var out []QueueItem
+	for _, st := range queueOrder { // a "" state (resolved, un-queued) has no bucket here
+		out = append(out, buckets[st]...)
+	}
 	return out
 }
 
@@ -426,11 +437,17 @@ func (s PrereviewState) AgentPhaseLabel() string {
 // outstandingAgentWork counts queued + blocked items across the WHOLE review
 // (not the per-file queue filter, #171): the stall warning is about work the
 // agent has not finished anywhere, like AwaitingApplyCount.
+//
+// A comment counts exactly when the snapshot hands it over (commentActionable) or it is
+// blocked (#205): a comment whose thread ends with the agent — `answered`, or a plain
+// reply-only answer from a skill that predates `--answered` (#208) — gives the agent
+// nothing to do, so its silence is not a stall.
 func (s PrereviewState) outstandingAgentWork() int {
 	awaiting := s.AwaitingAgent()
+	threads := s.Threads()
 	n := 0
 	for _, c := range s.scopedComments() {
-		if st := reopenIfReplied(c.QueueState(), c.ID, awaiting); st == queueQueued || st == queueBlocked {
+		if commentActionable(c, threads[c.ID]) || (c.QueueState() == queueBlocked && !agentRepliedLast(threads[c.ID])) {
 			n++
 		}
 	}

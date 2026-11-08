@@ -664,6 +664,17 @@ func (c *PrereviewController) enqueueForAgent(state PrereviewState, id string) (
 	//    on a never-processed comment would make its NEXT `prereview processed`
 	//    mark a no-op (pc==rc), silently losing the "worked on" badge forever.
 	if processed {
+		// A done comment usually also carries the agent's reply, and once a thread
+		// exists threadActionable ignores "settled" — so the tombstone alone left it out
+		// of the snapshot for good (#205). A reviewer entry is the existing reopen path
+		// and tells the agent why it came back; with no thread the tombstone suffices.
+		// Written BEFORE the tombstone, whose scheduleEmit must see it.
+		if agentRepliedLast(groupThreads(loadThreads(c.CSVPath))[id]) {
+			if err := appendReviewerReply(c.CSVPath, id, reenqueueNote, time.Now().UnixNano()); err != nil {
+				return state, err
+			}
+			state.ThreadEntries = loadThreads(c.CSVPath)
+		}
 		if err := c.reenqueueComment(&state, id); err != nil {
 			return state, err
 		}
@@ -672,6 +683,10 @@ func (c *PrereviewController) enqueueForAgent(state PrereviewState, id string) (
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
 }
+
+// reenqueueNote is the reviewer thread entry a ↺ posts on a comment whose thread
+// ended with the agent, so the comment re-enters the snapshot with the reason.
+const reenqueueNote = "Re-enqueued — please redo this."
 
 // noteEnqueue bumps the monotonic tick that drives the Queue button's one-shot
 // "just queued" pulse (#129). Call it ONLY where a comment genuinely enters the

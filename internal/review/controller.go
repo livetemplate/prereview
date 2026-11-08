@@ -650,6 +650,11 @@ type OpenSet struct {
 	Drafts      int // held back by the reviewer — never handed to the agent
 	Resolved    int // already closed by the reviewer
 	AlreadyDone int // marked on an earlier round; re-marking would only add duplicates
+	// Answered were settled by a reply with no edit (#205) and are still the reviewer's
+	// move. Sweeping them into done would tell the reviewer an edit was made — the exact
+	// misreport #205 exists to end. Once the reviewer replies to push back, the comment is
+	// work again, so it is no longer counted here and --all-open marks it.
+	Answered int
 }
 
 // LoadOpenComments returns the OpenSet for the store whose CSV lives at csvPath, in the
@@ -664,6 +669,7 @@ func LoadOpenComments(csvPath string) (OpenSet, error) {
 		comments = slices.DeleteFunc(comments, func(cm Comment) bool { return cm.File != scope })
 	}
 	applyProcessedMarks(comments, csvPath)
+	threads := groupThreads(loadThreads(csvPath))
 	var set OpenSet
 	for _, cm := range comments {
 		switch {
@@ -673,6 +679,8 @@ func LoadOpenComments(csvPath string) (OpenSet, error) {
 			set.Drafts++
 		case cm.Processed:
 			set.AlreadyDone++
+		case cm.Answered && !hasUnreadReviewerReply(threads[cm.ID]):
+			set.Answered++
 		default:
 			set.IDs = append(set.IDs, cm.ID)
 		}

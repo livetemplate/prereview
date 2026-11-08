@@ -121,6 +121,13 @@ func hasUnreadReviewerReply(thread []ThreadEntry) bool {
 	return len(thread) > 0 && thread[len(thread)-1].Author == AuthorReviewer
 }
 
+// agentRepliedLast reports whether a target's thread ends with the AGENT — it has
+// answered and is waiting on the reviewer, so the snapshot does not hand the target
+// over (threadActionable's thread branch). Empty thread → false.
+func agentRepliedLast(thread []ThreadEntry) bool {
+	return len(thread) > 0 && !hasUnreadReviewerReply(thread)
+}
+
 // trailingReviewerReplies counts the run of REVIEWER entries at the END of a thread — the
 // replies the reviewer has posted since the agent last spoke, i.e. the messages still
 // awaiting an agent response. Zero when the thread is empty or ends with the agent. Unlike
