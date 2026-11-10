@@ -48,6 +48,20 @@ type FileDiff struct {
 	Headings []Heading
 }
 
+// LastLine is the file's last line number on side: "old" is the base, anything else
+// the working tree. 0 for a side with no lines (an added or deleted file).
+func (fd *FileDiff) LastLine(side string) int {
+	last := 0
+	for _, l := range fd.Lines {
+		n := l.NewNum
+		if side == "old" {
+			n = l.OldNum
+		}
+		last = max(last, n)
+	}
+	return last
+}
+
 // IsMarkdownPath reports whether path is a Markdown file by extension.
 func IsMarkdownPath(path string) bool {
 	p := strings.ToLower(path)

@@ -37,22 +37,109 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 	}
 	out := make(map[int][]Comment)
 	for _, c := range s.Comments {
-		if c.File != s.SelectedFile {
-			continue
+		if s.inlineComment(c) {
+			out[c.ToLine] = append(out[c.ToLine], c)
 		}
-		if c.IsFileLevel() || c.IsAreaLevel() {
-			continue
-		}
-		// #165: RESOLVED comments stay in the inline diff — they collapse to a green
-		// count badge (CSS), not vanish. Only an individually re-hidden comment (Hidden,
-		// meaningful just on resolved ones) is dropped entirely. Other views keep the
-		// shared commentHiddenFromView rule; only this inline-diff path renders resolved.
-		if c.Hidden {
-			continue
-		}
-		out[c.ToLine] = append(out[c.ToLine], c)
 	}
 	return out
+}
+
+// inlineComment is the set of comments that render as cards in the file body (file-level
+// and area comments render in the head; resolved ones stay and collapse, #165).
+// CommentsByEndLine and the end-of-file block split exactly this set by whether a row exists.
+func (s PrereviewState) inlineComment(c Comment) bool {
+	return c.File == s.SelectedFile && !c.IsFileLevel() && !c.IsAreaLevel() && !c.Hidden
+}
+
+// inlineSuggestions is the suggestion counterpart: the selected file's visible
+// suggestions, split the same way by SuggestionsByEndLine and the end-of-file block.
+func (s PrereviewState) inlineSuggestions() []Suggestion {
+	if s.SelectedFile == "" || s.HideSuggestions {
+		return nil
+	}
+	var out []Suggestion
+	for _, sg := range s.visibleSuggestions() {
+		if sg.File == s.SelectedFile {
+			out = append(out, sg)
+		}
+	}
+	return out
+}
+
+// pastEndSet is every inline annotation whose line no longer exists because the file
+// shrank below it (#218). Cards hang on their ToLine, so a range that merely ENDS past
+// the last line counts too. Items keep their recorded lines: clamping would re-point
+// them at unrelated content. Nil for a file with no lines to place on (binary, none).
+func (s PrereviewState) pastEndSet() ([]Comment, []Suggestion) {
+	if s.SelectedFile == "" || s.CurrentDiff == nil || s.CurrentDiff.IsBinary {
+		return nil, nil
+	}
+	lastNew, lastOld := s.CurrentDiff.LastLine("new"), s.CurrentDiff.LastLine("old")
+	past := func(side string, toLine int) bool {
+		if side == "old" {
+			return toLine > lastOld
+		}
+		return toLine > lastNew // "new", "both" and "" anchor against the working tree
+	}
+	var cs []Comment
+	for _, c := range s.Comments {
+		if s.inlineComment(c) && past(c.Side, c.ToLine) {
+			cs = append(cs, c)
+		}
+	}
+	var sgs []Suggestion
+	for _, sg := range s.inlineSuggestions() {
+		if past(sg.Side, sg.ToLine) {
+			sgs = append(sgs, sg)
+		}
+	}
+	return cs, sgs
+}
+
+// PastEndComments / PastEndSuggestions are the end-of-file block's cards.
+func (s PrereviewState) PastEndComments() []Comment {
+	cs, _ := s.pastEndSet()
+	return cs
+}
+
+func (s PrereviewState) PastEndSuggestions() []Suggestion {
+	_, sgs := s.pastEndSet()
+	return sgs
+}
+
+// PastEndCount is the end-of-file block's badge number.
+func (s PrereviewState) PastEndCount() int {
+	cs, sgs := s.pastEndSet()
+	return len(cs) + len(sgs)
+}
+
+// PastEndHasOpen reports open work in the end-of-file block (unresolved comment or
+// undecided suggestion), which colours its badge and sets its default fold (rowState).
+func (s PrereviewState) PastEndHasOpen() bool {
+	cs, sgs := s.pastEndSet()
+	for _, c := range cs {
+		if !c.Resolved {
+			return true
+		}
+	}
+	for _, sg := range sgs {
+		if s.suggestionUndecided(sg.ID) {
+			return true
+		}
+	}
+	return false
+}
+
+// PastEndHasAccepted reports an accepted-but-unapplied suggestion in the block: the
+// badge's middle state, as on a line row (AnnotationAcceptedLines).
+func (s PrereviewState) PastEndHasAccepted() bool {
+	_, sgs := s.pastEndSet()
+	for _, sg := range sgs {
+		if s.suggestionAcceptedPending(sg.ID) {
+			return true
+		}
+	}
+	return false
 }
 
 // SelectedFileBase / SelectedFileDir split the selected file's path for the
@@ -87,12 +174,7 @@ func (s PrereviewState) ReadPercent() int {
 	if mark == 0 {
 		return 0
 	}
-	total := 0
-	for _, ln := range s.CurrentDiff.Lines {
-		if ln.NewNum > total {
-			total = ln.NewNum
-		}
-	}
+	total := s.CurrentDiff.LastLine("new")
 	if total == 0 {
 		return 0
 	}
@@ -230,14 +312,8 @@ func countByLine(byLine map[int][]Suggestion) map[string]int {
 // an applied suggestion collapses to a green count badge via CSS, not by exclusion
 // here (so the reviewer can still peek it open for the M4 status/revert controls).
 func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
-	if s.SelectedFile == "" || s.HideSuggestions {
-		return nil
-	}
 	out := map[int][]Suggestion{}
-	for _, sg := range s.visibleSuggestions() {
-		if sg.File != s.SelectedFile {
-			continue
-		}
+	for _, sg := range s.inlineSuggestions() {
 		out[sg.ToLine] = append(out[sg.ToLine], sg)
 	}
 	if len(out) == 0 {
@@ -348,6 +424,10 @@ const (
 	// growing a second collapse mechanism beside the one that already works.
 	FileHeadRowKey = "file"
 
+	// PastEndRowKey is the row key for the end-of-file block (#218): annotations whose
+	// line no longer exists because the file shrank below it. Same reuse as the head.
+	PastEndRowKey = "eof"
+
 	rowStateOpen      = "open"
 	rowStateCollapsed = "collapsed"
 )
@@ -357,6 +437,8 @@ const (
 func (s PrereviewState) rowState(key string) string {
 	open := false
 	switch {
+	case key == PastEndRowKey:
+		open = s.PastEndHasOpen()
 	case key == FileHeadRowKey:
 		// The file head has no line, so AnnotationOpenLines never carries it; ask
 		// the head group directly (its badge colour comes from the same call).

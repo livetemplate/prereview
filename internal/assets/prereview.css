@@ -1996,7 +1996,11 @@ header.file-head .file-head-comment button svg { display: block; }
 .md-view .inline-comment.is-resolved,
 .md-view .inline-suggestion.sg-accept,
 .md-view .inline-suggestion.sg-reject,
-.md-view .inline-suggestion.is-applied { display: none; }
+.md-view .inline-suggestion.is-applied,
+.past-eof .inline-comment.is-resolved,
+.past-eof .inline-suggestion.sg-accept,
+.past-eof .inline-suggestion.sg-reject,
+.past-eof .inline-suggestion.is-applied { display: none; }
 /* #212: an answered quiz question (answered before this visit — `is-settled`) is done
    work, so it folds behind the row's green badge like a resolved comment. The server
    already said so (QuizOpenLines → collapsed, badge is-done); this is the half that was
@@ -2016,7 +2020,9 @@ header.file-head .file-head-comment button svg { display: block; }
 .line-row.row-toggled .inline-comment:not(.is-resolved),
 .line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
 .md-block.row-toggled .inline-comment:not(.is-resolved),
-.md-block.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied) { display: none; }
+.md-block.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
+.past-eof.row-toggled .inline-comment:not(.is-resolved),
+.past-eof.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied) { display: none; }
 .line-row.row-toggled .quiz-card.is-settled,
 .file-head-marks.row-toggled .file-head-cards > .quiz-card.is-settled,
 .layout.show-resolved .quiz-card.is-settled,
@@ -2028,6 +2034,14 @@ header.file-head .file-head-comment button svg { display: block; }
 .md-block.row-toggled .inline-suggestion.sg-accept,
 .md-block.row-toggled .inline-suggestion.sg-reject,
 .md-block.row-toggled .inline-suggestion.is-applied,
+.past-eof.row-toggled .inline-comment.is-resolved,
+.past-eof.row-toggled .inline-suggestion.sg-accept,
+.past-eof.row-toggled .inline-suggestion.sg-reject,
+.past-eof.row-toggled .inline-suggestion.is-applied,
+.layout.show-resolved .past-eof .inline-comment.is-resolved,
+.layout.show-resolved .past-eof .inline-suggestion.sg-accept,
+.layout.show-resolved .past-eof .inline-suggestion.sg-reject,
+.layout.show-resolved .past-eof .inline-suggestion.is-applied,
 .layout.show-resolved .code .inline-comment.is-resolved,
 .layout.show-resolved .code .inline-suggestion.sg-accept,
 .layout.show-resolved .code .inline-suggestion.sg-reject,
@@ -2036,6 +2050,15 @@ header.file-head .file-head-comment button svg { display: block; }
 .layout.show-resolved .md-view .inline-suggestion.sg-accept,
 .layout.show-resolved .md-view .inline-suggestion.sg-reject,
 .layout.show-resolved .md-view .inline-suggestion.is-applied { display: block; }
+/* #218: annotations past the end of a shrunk file. A separated block after the last
+   line; its head row carries the shared fold badge, right-aligned like the file head. */
+.past-eof {
+  margin: 1rem 0 0; padding: 0.6rem 0 0;
+  border-top: 1px dashed var(--border);
+}
+.past-eof-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; padding: 0 0.4rem; }
+.past-eof-title { font-weight: 600; font-size: 0.85rem; }
+.past-eof-note { color: var(--text-muted); flex: 1 1 auto; }
 /* #165: the md-view has no gutter, so each block carries its state badge at the top-
    right corner (the .line-mark chips reuse the diff-view colours). */
 .md-block { position: relative; }
