@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	cdpnetwork "github.com/chromedp/cdproto/network"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
@@ -105,8 +106,27 @@ func TestE2E_AnchorPastEOF(t *testing.T) {
 	if rows[1][9] != "outdated" {
 		t.Errorf("anchor_status = %q, want outdated (a deletion is not an in-place edit)%s", rows[1][9], diag())
 	}
-	// Its line no longer exists, so there is no inline row to hang the card on;
-	// the All-comments view (`a`) is where a past-EOF comment surfaces.
+	// #218: its line no longer exists, so there is no row to hang the card on. It
+	// must still be visible in the file view itself, in the end-of-file block, with
+	// no extra navigation.
+	var inBlock, blockBadge bool
+	blockCtx, cancelBlock := within(p, 15*time.Second)
+	defer cancelBlock()
+	if err := chromedp.Run(blockCtx,
+		chromedp.WaitVisible(`section.past-eof .inline-comment`, chromedp.ByQuery),
+		chromedp.Evaluate(`(()=>{const c=[...document.querySelectorAll('section.past-eof .inline-comment')].find(x=>x.textContent.includes('drop this line')); return !!c && !!c.querySelector('.outdated-badge');})()`, &inBlock),
+		chromedp.Evaluate(`(document.querySelector('section.past-eof .line-mark.is-open')||{}).textContent==='1'`, &blockBadge),
+	); err != nil || !inBlock || !blockBadge {
+		t.Fatalf("expected the past-EOF comment in the file view's end-of-file block with an outdated badge and an open count of 1 (err=%v card=%v badge=%v)%s", err, inBlock, blockBadge, diag())
+	}
+	// It appears exactly once: no inline row also carries it.
+	var cards int
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('.inline-comment')].filter(x=>x.textContent.includes('drop this line')).length`, &cards))
+	if cards != 1 {
+		t.Errorf("the past-EOF comment renders %d times in the file view, want 1%s", cards, diag())
+	}
+
+	// The All-comments view (`a`) lists it too.
 	var badge bool
 	if err := chromedp.Run(p.ctx,
 		chromedp.KeyEvent("a"),
@@ -115,6 +135,17 @@ func TestE2E_AnchorPastEOF(t *testing.T) {
 	); err != nil || !badge {
 		t.Errorf("expected the comment listed in All comments with an outdated badge (err=%v)%s", err, diag())
 	}
+	// Back in the file view, the block's Re-anchor starts re-anchoring that comment.
+	reCtx, cancelRe := within(p, 15*time.Second)
+	defer cancelRe()
+	if err := chromedp.Run(reCtx,
+		chromedp.KeyEvent("a"),
+		chromedp.WaitNotPresent(`section.all-comments`, chromedp.ByQuery),
+		chromedp.Click(`section.past-eof button[name='reanchorComment']`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.reanchor-prompt`, chromedp.ByQuery),
+	); err != nil {
+		t.Errorf("Re-anchor from the end-of-file block: %v%s", err, diag())
+	}
 	mu.Lock()
 	for _, l := range consoleLines {
 		if strings.HasPrefix(l, "error") {
@@ -122,4 +153,52 @@ func TestE2E_AnchorPastEOF(t *testing.T) {
 		}
 	}
 	mu.Unlock()
+}
+
+// TestE2E_SuggestionPastEOF (#218): a suggestion on a line the file later loses is
+// shown in the end-of-file block, in both the rendered-Markdown and the Raw view.
+func TestE2E_SuggestionPastEOF(t *testing.T) {
+	dir := setupFixtureRepoReanchor(t) // 6 lines; TARGET on line 5
+	p := bootChromeAgainstRepo(t, dir, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("docs.md")
+	submitSuggestions(t, p.binary, p.repo, `[{"id":"eof1","file":"docs.md","from_line":6,"to_line":6,"original":"Trailing sentence after the target.","proposed":"A tighter trailing sentence.","note":"tighten"}]`)
+
+	// Shrink the file to 3 lines: line 6 no longer exists.
+	if err := os.WriteFile(filepath.Join(dir, "docs.md"),
+		[]byte("# Reanchor Fixture\n\nFirst context sentence stays put.\n"), 0o644); err != nil {
+		t.Fatalf("shrink doc: %v", err)
+	}
+	p.waitReady()
+	p.clickFile("docs.md")
+
+	count := func() int {
+		var n int
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('.inline-suggestion')].filter(x=>x.textContent.includes('A tighter trailing sentence.')).length`, &n))
+		return n
+	}
+	ctx, cancel := within(p, 15*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
+		chromedp.WaitVisible(`section.past-eof .inline-suggestion`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("rendered view: no suggestion in the end-of-file block: %v%s", err, diag())
+	}
+	if n := count(); n != 1 {
+		t.Errorf("rendered view: the past-EOF suggestion renders %d times, want 1%s", n, diag())
+	}
+
+	// Raw view: the same block, still exactly once.
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
+		chromedp.WaitVisible(`section.past-eof .inline-suggestion`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("raw view: no suggestion in the end-of-file block: %v%s", err, diag())
+	}
+	if n := count(); n != 1 {
+		t.Errorf("raw view: the past-EOF suggestion renders %d times, want 1%s", n, diag())
+	}
 }

@@ -433,6 +433,16 @@ func renderFixtures() []renderFixture {
 	}
 	answered.ThreadEntries = []review.ThreadEntry{{TargetID: "c2", Author: review.AuthorAgent, Body: "Lookups dominate; order never matters.", At: 1}}
 
+	// #218: a comment and a suggestion whose lines the shrunk file no longer has render
+	// in the end-of-file block (an outdated comment and an undecided suggestion).
+	pastEOF := goBase()
+	pastEOF.Comments = []review.Comment{
+		{ID: "c1", File: "app.go", Body: "drop this line", Kind: "line", FromLine: 40, ToLine: 40, Side: "new", AnchorStatus: "outdated"},
+	}
+	pastEOF.Suggestions = []review.Suggestion{
+		{ID: "s1", File: "app.go", FromLine: 41, ToLine: 41, Side: "new", OriginalText: "old", ProposedText: "new"},
+	}
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -459,6 +469,7 @@ func renderFixtures() []renderFixture {
 		{"version-view", version},
 		{"agent-mode", agent},
 		{"agent-answered", answered},
+		{"past-eof", pastEOF},
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},

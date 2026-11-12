@@ -219,7 +219,7 @@
 {{template "diffView" $}}
   {{else}}
   <p class="empty"><small>No diff content.</small></p>
-  {{end}}
+  {{end}}{{template "pastEndAnnotations" $}}
 </article>
 {{else}}
   {{if .Files}}

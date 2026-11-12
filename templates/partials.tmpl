@@ -8,6 +8,26 @@
 {{- end}}
 {{- end}}
 
+{{/* pastEndAnnotations (#218) — annotations whose line the shrunk file no longer has,
+     shown after the last line; folds under row key "eof" like the file-head group. */}}
+{{define "pastEndAnnotations"}}{{if gt $.PastEndCount 0}}
+<section class="past-eof{{if index $.RowToggled "eof"}} row-toggled{{end}}" data-key="past-eof" aria-label="Annotations past the end of the file">
+  <div class="past-eof-head">
+    <span class="past-eof-title">Past the end of the file</span>
+    <small class="past-eof-note">Their lines no longer exist in this file.</small>
+    <button type="button" class="line-marks"
+            lvt-on:click="toggleRow"
+            data-row="eof"
+            lvt-el:toggleClass:on:click="row-toggled"
+            data-lvt-target="closest:.past-eof"
+            aria-label="Show or hide the annotations past the end of the file"
+            title="Show/hide the annotations past the end of the file"><span class="line-mark{{if $.PastEndHasOpen}} is-open{{else if $.PastEndHasAccepted}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{$.PastEndCount}}</span></button>
+  </div>
+  {{range $.PastEndComments}}{{template "commentCardFull" .}}{{end}}
+  {{range $.PastEndSuggestions}}{{template "suggestionCard" .}}{{end}}
+</section>
+{{end}}{{end}}
+
 {{/* blockSuggestions — the suggestion parallel of blockComments for the rendered
      Markdown / HTML block views (#98). Same shape: `.` is the block (StartLine/
      EndLine), `$` stays the root state, so it inlines each of $.FileSuggestions
