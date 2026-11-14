@@ -812,6 +812,14 @@
               data-side="new"
               class="line ctx"
               data-key="L1-1"><span class="gutter"><span class="gutter-mark">&nbsp; </span>1</span><span class="content chroma" data-line-text>package main</span></div></div>
+<div class="line-row" data-key="row-L2-0"><div tabindex="0"
+              lvt-on:click="selectLine"
+              lvt-on:keydown="selectLine"
+              lvt-key="Enter"
+              data-line="2"
+              data-side="old"
+              class="line del"
+              data-key="L2-0"><span class="gutter"><span class="gutter-mark">- </span>2</span><span class="content chroma" data-line-text>var x = 1</span></div></div>
 <div class="line-row" data-key="row-L0-2"><div tabindex="0"
               lvt-on:click="selectLine"
               lvt-on:keydown="selectLine"

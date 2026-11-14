@@ -167,8 +167,8 @@ func TestE2E_Suggestions(t *testing.T) {
 
 	// Folded line: folded.go has a change on line 1 only, so diff view collapses
 	// its tail — but a suggestion on the (folded) line 11 must still render, because
-	// the LLM emits arbitrary line numbers. The fold-reveal path shows the full file
-	// whenever it carries visible suggestions.
+	// the LLM emits arbitrary line numbers. A row carrying a card is kept out of
+	// the fold (#231).
 	p.clickFile("folded.go")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.inline-suggestion`, chromedp.ByQuery),
@@ -181,7 +181,7 @@ func TestE2E_Suggestions(t *testing.T) {
 		t.Fatalf("eval folded suggestion row: %v", err)
 	}
 	if !onKeptLine {
-		t.Error("folded-line suggestion should render on the revealed line 11 row")
+		t.Error("folded-line suggestion should render on the kept line 11 row")
 	}
 
 	// Durable: a full reload re-derives suggestions from suggestions.jsonl on Mount.

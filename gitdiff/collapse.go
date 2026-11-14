@@ -5,8 +5,11 @@ import "strconv"
 // CollapseToHunks turns a full-file line list (every line tagged
 // add/del/ctx, as LoadDiff produces with -U999999) into a true diff
 // view: only changed lines plus `ctx` unchanged lines on each side of
-// a change. Each maximal run of dropped unchanged lines is replaced by
-// a single synthetic fold line:
+// a change. A line for which keep reports true is treated like a change
+// (kept, with the same context) so a caller can hold an unchanged line
+// out of the folds, e.g. one carrying an annotation card; keep may be
+// nil. Each maximal run of dropped unchanged lines is replaced by a
+// single synthetic fold line:
 //
 //	Kind == "fold", Content == "<N>"  (N = number of skipped lines)
 //
@@ -18,7 +21,7 @@ import "strconv"
 // the all-files scope toggle or the clean-tree fallback) there is no
 // diff to collapse, so the input is returned unchanged. Callers treat
 // that as "show the whole file".
-func CollapseToHunks(lines []DiffLine, ctx int) []DiffLine {
+func CollapseToHunks(lines []DiffLine, ctx int, keep func(DiffLine) bool) []DiffLine {
 	ctx = max(ctx, 0)
 	changed := false
 	for i := range lines {
@@ -31,28 +34,29 @@ func CollapseToHunks(lines []DiffLine, ctx int) []DiffLine {
 		return lines
 	}
 
-	keep := make([]bool, len(lines))
+	kept := make([]bool, len(lines))
 	for i := range lines {
-		if lines[i].Kind != "add" && lines[i].Kind != "del" {
+		changed := lines[i].Kind == "add" || lines[i].Kind == "del"
+		if !changed && (keep == nil || !keep(lines[i])) {
 			continue
 		}
 		lo := max(i-ctx, 0)
 		hi := min(i+ctx, len(lines)-1)
 		for j := lo; j <= hi; j++ {
-			keep[j] = true
+			kept[j] = true
 		}
 	}
 
 	out := make([]DiffLine, 0, len(lines))
 	for i := 0; i < len(lines); {
-		if keep[i] {
+		if kept[i] {
 			out = append(out, lines[i])
 			i++
 			continue
 		}
 		// Maximal run of dropped lines -> one fold marker.
 		start := i
-		for i < len(lines) && !keep[i] {
+		for i < len(lines) && !kept[i] {
 			i++
 		}
 		out = append(out, DiffLine{

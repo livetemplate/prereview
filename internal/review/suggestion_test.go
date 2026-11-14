@@ -186,9 +186,8 @@ func hasLine(lines []gitdiff.DiffLine, newNum int) bool {
 
 func TestVisibleLines_SuggestionRevealsFoldedLine(t *testing.T) {
 	// A suggestion on an unchanged line far from the change would be folded away in
-	// diff view (hiding the box). With a visible suggestion on the file, the whole
-	// file renders so the target line — and its box — is present. Toggling
-	// suggestions off restores folding.
+	// diff view (hiding the box). Its row is kept out of the fold (#231), so the box
+	// renders. Toggling suggestions off folds the line again.
 	st := PrereviewState{SelectedFile: "a.md", CurrentDiff: fdWithChange(12)}
 
 	// Baseline: no suggestions → line 8 is folded (far from the line-1 change).
@@ -198,10 +197,10 @@ func TestVisibleLines_SuggestionRevealsFoldedLine(t *testing.T) {
 
 	st.Suggestions = []Suggestion{{ID: "s1", File: "a.md", FromLine: 8, ToLine: 8}}
 	if !hasLine(st.VisibleLines(), 8) {
-		t.Error("a visible suggestion on line 8 must force the full file so the box renders")
+		t.Error("a visible suggestion on line 8 must keep its row out of the fold so the box renders")
 	}
 
-	// Hidden suggestions must NOT force full file (nothing to reveal).
+	// Hidden suggestions have no box, so they keep no row.
 	st.HideSuggestions = true
 	if hasLine(st.VisibleLines(), 8) {
 		t.Error("with suggestions hidden, line 8 should fold again")
