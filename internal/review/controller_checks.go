@@ -23,10 +23,23 @@ import (
 // arrives and ChecksUpdated re-applies.
 type FileChecks struct {
 	Results []checks.Result `json:"results"`
-	// ValeNotice is set when the repo has a Vale config that isn't being applied
-	// (vale isn't installed).
+	// ValeNotice is set when the repo has a Vale config that isn't being applied:
+	// you haven't trusted it yet (ValeTrust offers the button), or vale isn't
+	// installed.
 	ValeNotice string `json:"vale_notice,omitempty"`
+	ValeTrust  bool   `json:"vale_trust,omitempty"`
 }
+
+// Vale modes for a repo with a Vale config. A config can make vale start other
+// tools (an XML Transform runs xsltproc on a stylesheet from the repo), so it
+// runs only after you trust the repo: opening a review never runs what the repo
+// configured on its own.
+const (
+	valeOff       = ""          // no config
+	valeUntrusted = "untrusted" // config, not trusted: a notice with the trust button
+	valeNoBinary  = "nobin"     // trusted, vale not installed: a notice
+	valeRun       = "run"       // trusted and installed
+)
 
 // ChecksPollInterval is how often the rule folder is polled for edits.
 const ChecksPollInterval = time.Second
@@ -168,7 +181,17 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 			rules = append(rules, rule)
 		}
 	}
-	if len(rules) == 0 && !valeCfg {
+	mode := valeOff
+	switch {
+	case !valeCfg:
+	case !slices.Contains(state.TrustedVale, c.RepoPath):
+		mode = valeUntrusted
+	case valeBin == "":
+		mode = valeNoBinary
+	default:
+		mode = valeRun
+	}
+	if len(rules) == 0 && mode == valeOff {
 		return
 	}
 	lines := sideContent(d, "new")
@@ -184,21 +207,22 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 		r.keys[d] = key
 		r.mu.Unlock()
 	}
+	key += "\x00vale=" + mode // trusting a repo's Vale config is a different result
 	r.mu.Lock()
 	e := r.cache[key]
 	r.mu.Unlock()
 	if e == nil {
-		e = c.startChecks(key, d.Path, lines, rules, valeCfg, valeBin)
+		e = c.startChecks(key, d.Path, lines, rules, mode, valeBin)
 	}
 	r.mu.Lock()
-	state.Checks = &FileChecks{Results: slices.Clone(e.results), ValeNotice: e.valeNotice}
+	state.Checks = &FileChecks{Results: slices.Clone(e.results), ValeNotice: e.valeNotice, ValeTrust: mode == valeUntrusted}
 	r.mu.Unlock()
 }
 
 // startChecks computes the inline results, records running placeholders for the
 // async ones, caches the entry, and starts the background runs — cancelling the
 // path's previous run, whose content is now stale.
-func (c *PrereviewController) startChecks(key, path string, lines []string, rules []*checks.Rule, valeCfg bool, valeBin string) *checkEntry {
+func (c *PrereviewController) startChecks(key, path string, lines []string, rules []*checks.Rule, mode, valeBin string) *checkEntry {
 	e := &checkEntry{}
 	type job struct {
 		idx  int
@@ -214,14 +238,18 @@ func (c *PrereviewController) startChecks(key, path string, lines []string, rule
 		}
 		e.results = append(e.results, checks.RunInline(rule, doc))
 	}
-	if valeCfg {
-		if valeBin == "" {
-			e.valeNotice = "This repo has a Vale config, but vale isn't installed, so its rules aren't applied."
-		} else {
-			placeholder := checks.ValeSummary(c.RepoPath)
-			placeholder.Status = checks.StatusRunning
-			e.results = append(e.results, placeholder)
-		}
+	switch mode {
+	case valeUntrusted:
+		e.valeNotice = "This repo has a Vale config. Running it can start tools the config names, so it stays off until you trust this repo."
+	case valeNoBinary:
+		e.valeNotice = "This repo has a Vale config, but vale isn't installed, so its rules aren't applied."
+	case valeRun:
+		placeholder := checks.ValeSummary(c.RepoPath)
+		placeholder.Status = checks.StatusRunning
+		e.results = append(e.results, placeholder)
+	}
+	if mode != valeRun {
+		valeBin = ""
 	}
 
 	r := c.runner()
@@ -322,6 +350,18 @@ func (c *PrereviewController) SelectCheck(state PrereviewState, ctx *livetemplat
 		id = ""
 	}
 	state.SelectedCheck = id
+	return state, nil
+}
+
+// TrustVale lets this repo's Vale config run, for this user (ui-prefs.json,
+// keyed by the repo's absolute path). It's the only way vale ever runs.
+func (c *PrereviewController) TrustVale(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if c.RepoPath == "" || slices.Contains(state.TrustedVale, c.RepoPath) {
+		return state, nil
+	}
+	state.TrustedVale = append(slices.Clone(state.TrustedVale), c.RepoPath)
+	c.savePrefs(state)
+	c.applyChecks(&state)
 	return state, nil
 }
 

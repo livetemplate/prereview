@@ -462,7 +462,8 @@ func renderFixtures() []renderFixture {
 	checksOpen.Editor = review.EditorVSCode
 	checksOpen.EditorSSHHost = "devbox"
 	checksOpen.Checks = &review.FileChecks{
-		ValeNotice: "This repo has a Vale config, but vale isn't installed, so its rules aren't applied.",
+		ValeNotice: "This repo has a Vale config. Running it can start tools the config names, so it stays off until you trust this repo.",
+		ValeTrust:  true,
 		Results: []checks.Result{
 			{ID: "filler-intensifiers", Name: "Filler intensifiers", Type: "existence", Level: "suggestion", Source: "builtin", Status: "fail",
 				Findings: []checks.Finding{{Line: 1, EndLine: 1, FromCol: 8, ToCol: 12, Message: "'very' adds emphasis, not meaning; try cutting it.", Severity: "suggestion", Match: "very"}}},

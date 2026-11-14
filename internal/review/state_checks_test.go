@@ -356,3 +356,60 @@ func TestSelectCheck_RevealsWithoutTouchingPrefs(t *testing.T) {
 		t.Error("deselecting should return to the rendered view")
 	}
 }
+
+// A repo's Vale config can make vale start other tools (an XML Transform runs
+// xsltproc on a repo stylesheet), so it never runs until the user trusts the repo.
+func TestVale_RunsOnlyWhenTrusted(t *testing.T) {
+	bin := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "vale-ran")
+	fake := "#!/bin/sh\n: > '" + marker + "'\nprintf '%s' '{\"doc.md\":[{\"Check\":\"Demo.Weasel\",\"Message\":\"Avoid very.\",\"Severity\":\"warning\",\"Match\":\"very\",\"Line\":25,\"Span\":[9,12]}]}'\n"
+	if err := os.WriteFile(filepath.Join(bin, "vale"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	c := checksController(t)
+	os.WriteFile(filepath.Join(c.RepoPath, ".vale.ini"), []byte("StylesPath = styles\n"), 0o644)
+
+	var s PrereviewState
+	c.showDiff(&s, mdDiff())
+	if !s.Checks.ValeTrust || !strings.Contains(s.Checks.ValeNotice, "trust") {
+		t.Fatalf("untrusted config must offer trust: %+v", s.Checks)
+	}
+	if _, ok := s.checkResult(checks.ValeRuleID); ok {
+		t.Error("vale has a row before the repo is trusted")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("vale ran for an untrusted repo")
+	}
+
+	s, _ = c.TrustVale(s, checksCtx("trustVale", nil))
+	if p := loadUIPrefs(c.UIPrefsPath); len(p.TrustedVale) != 1 || p.TrustedVale[0] != c.RepoPath {
+		t.Fatalf("trust not saved: %+v", p.TrustedVale)
+	}
+	if s.Checks.ValeTrust || s.Checks.ValeNotice != "" {
+		t.Errorf("trusted repo still shows the notice: %+v", s.Checks)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s, _ = c.ChecksUpdated(s, nil)
+		if r, ok := s.checkResult(checks.ValeRuleID + ":Demo.Weasel"); ok {
+			if r.Findings[0].Line != 25 || r.Findings[0].FromCol != 8 {
+				t.Errorf("vale finding %+v", r.Findings[0])
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("trusted vale never reported: %+v", s.Checks.Results)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// Trusted but not installed: the not-installed notice, no button.
+	t.Setenv("PATH", t.TempDir())
+	c.reloadChecksIfChanged()
+	s, _ = c.ChecksUpdated(s, nil)
+	if s.Checks.ValeTrust || !strings.Contains(s.Checks.ValeNotice, "isn't installed") {
+		t.Errorf("no vale binary: %+v", s.Checks)
+	}
+}

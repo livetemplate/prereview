@@ -123,10 +123,11 @@ func Stamp(dir string) string {
 }
 
 // RunAll runs every rule that applies to rel (a path relative to repo) and, when
-// the repo has a Vale config and vale is installed, vale too — synchronously, for
+// runVale (the user trusts this repo's Vale config), the repo has one and vale is
+// installed, vale too — synchronously, for
 // the CLI. lines is the file's text. The server splits this instead: data rules
 // inline, commands and vale in the background.
-func (lib *Library) RunAll(ctx context.Context, repo, rel string, lines []string) []Result {
+func (lib *Library) RunAll(ctx context.Context, repo, rel string, lines []string, runVale bool) []Result {
 	var out []Result
 	abs := filepath.Join(repo, rel)
 	content := []byte(strings.Join(lines, "\n") + "\n")
@@ -140,7 +141,7 @@ func (lib *Library) RunAll(ctx context.Context, repo, rel string, lines []string
 			out = append(out, RunInline(r, doc))
 		}
 	}
-	if ValeConfig(repo) != "" {
+	if runVale && ValeConfig(repo) != "" {
 		if bin := ValeBinary(); bin != "" {
 			out = append(out, RunVale(ctx, bin, repo, rel)...)
 		}

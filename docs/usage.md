@@ -140,8 +140,12 @@ argument and the text on stdin, and prints a JSON array of
 character columns). Command rules only run from your own checks folder, never
 from a reviewed repo.
 
-If a repo has a `.vale.ini` and [vale](https://vale.sh) is installed, its rules
-run too; without vale the panel says the repo's config isn't applied.
+If a repo has a `.vale.ini`, the panel offers **Trust this repo's Vale config**.
+A Vale config can make vale start other tools (an XML transform runs
+`xsltproc`), so it never runs just because you opened the review. Once you trust
+the repo (remembered per repo, for you), its rules run through
+[vale](https://vale.sh) when it's installed; without vale the panel says the
+config isn't applied.
 
 **Open in editor** on a rule's row opens the file in VS Code, Cursor, Zed, or a
 custom URL (`{path}`, `{line}`, `{host}`); pick one at the bottom of the panel.

@@ -39,7 +39,7 @@ func runCheck(args []string, stdout io.Writer) error {
 			"Usage: prereview check [--json] <file>...\n\n"+
 				"  Run the review's checks on each file: the built-in prose rules, the rules in\n"+
 				"  your checks folder ("+userChecksDir()+"), and the repo's Vale\n"+
-				"  config when vale is installed. Prints each finding as path:line:col; exits 1\n"+
+				"  config when you've trusted it in the panel and vale is installed. Prints each finding as path:line:col; exits 1\n"+
 				"  when any check fails or errors. Checks disabled in the panel are skipped.\n")
 	}
 	if err := fs.Parse(args); err != nil {
@@ -54,7 +54,7 @@ func runCheck(args []string, stdout io.Writer) error {
 		return err
 	}
 	lib := checks.Load(checks.Dir{Path: userChecksDir(), Source: checks.SourceUser})
-	disabled := review.DisabledCheckIDs(uiPrefsPath())
+	disabled, trustVale := review.CheckPrefs(uiPrefsPath(), repo)
 
 	var reports []checkFileReport
 	failed := false
@@ -73,7 +73,7 @@ func runCheck(args []string, stdout io.Writer) error {
 		}
 		rel = filepath.ToSlash(rel)
 		var kept []checks.Result
-		for _, r := range lib.RunAll(context.Background(), repo, rel, lines) {
+		for _, r := range lib.RunAll(context.Background(), repo, rel, lines, trustVale) {
 			if slices.Contains(disabled, r.ID) {
 				continue
 			}

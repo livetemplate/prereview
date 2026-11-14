@@ -286,3 +286,46 @@ func TestE2E_ChecksFindingsBounded(t *testing.T) {
 		t.Errorf("the selected noisy check's rows should all be unfolded; %d fold rows left%s", n, diag())
 	}
 }
+
+// A repo's Vale config never runs until the reviewer trusts the repo (a config
+// can make vale start other tools). The panel offers the trust button; after it,
+// vale's findings show as rows.
+func TestE2E_ChecksValeTrust(t *testing.T) {
+	bin := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "vale-ran")
+	fake := "#!/bin/sh\n: > '" + marker + "'\nprintf '%s' '{\"notes.md\":[{\"Check\":\"Demo.Weasel\",\"Message\":\"Avoid very.\",\"Severity\":\"warning\",\"Match\":\"very\",\"Line\":40,\"Span\":[9,12]}]}'\n"
+	if err := os.WriteFile(filepath.Join(bin, "vale"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	repo := setupFixtureRepoChecks(t, "notes.md")
+	mustWrite(t, repo, ".vale.ini", "StylesPath = styles\n")
+	runCmd(t, repo, "git", "add", ".vale.ini")
+	runCmd(t, repo, "git", "commit", "-q", "-m", "vale config") // committed, so notes.md stays the changed file
+	p := bootChromeAgainstRepo(t, repo, 1200, 800)
+	diag := captureDiag(t, p)
+	p.waitReady()
+	ctx, cancel := within(p, 20*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.checks-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.checks-notice button[name="trustVale"]`, chromedp.ByQuery),
+	); err != nil {
+		var panel string
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(document.querySelector('.checks-panel')||document.querySelector('.file-head')||{}).outerHTML||'none'`, &panel))
+		t.Fatalf("the untrusted Vale config must offer trust: %v\npanel: %.1500s%s", err, panel, diag())
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatalf("vale ran before the repo was trusted%s", diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.checks-notice button[name="trustVale"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(checkRow("vale:Demo.Weasel")+`.is-fail`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.checks-notice`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("trusting didn't run vale: %v%s", err, diag())
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("vale never ran after trust%s", diag())
+	}
+}

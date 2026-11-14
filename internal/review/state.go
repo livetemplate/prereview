@@ -61,6 +61,7 @@ type PrereviewState struct {
 	Editor         string      `json:"editor"`
 	EditorTemplate string      `json:"editor_template"`
 	EditorSSHHost  string      `json:"editor_ssh_host"`
+	TrustedVale    []string    `json:"trusted_vale"`
 
 	// Artifact versioning (#90). Versions is the selected file's version
 	// timeline (newest first), populated from the version store each Mount /

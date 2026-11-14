@@ -3588,6 +3588,8 @@ header.file-head .file-head-checks { margin: 0; }
   margin: 0 0 0.45rem; padding: 0.35rem 0.5rem; border-radius: var(--radius-sm);
   background: var(--mark-wash); color: var(--pico-color); font-size: 0.8rem;
 }
+.checks-trust { display: inline; margin: 0 0 0 0.4rem; }
+.checks-trust button { margin: 0.25rem 0 0; padding: 0.1rem 0.55rem; min-height: 0; width: auto; font-size: 0.75rem; }
 .checks-list { list-style: none; margin: 0; padding: 0; }
 .checks-list > li { list-style: none; margin: 0; padding: 0.3rem 0; border-top: 1px solid var(--pico-muted-border-color); }
 .checks-list > li:first-child { border-top: 0; }

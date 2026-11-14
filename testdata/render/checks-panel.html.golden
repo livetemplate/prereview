@@ -671,7 +671,7 @@
       <span class="checks-panel-count">1/4 passed · 1 running</span>
       <form method="POST" class="checks-panel-close"><button type="submit" name="toggleChecksPanel" class="outline" aria-label="Close checks">×</button></form>
     </header>
-    <p class="checks-notice" role="note">This repo has a Vale config, but vale isn&#39;t installed, so its rules aren&#39;t applied.</p>
+    <div class="checks-notice" role="note">This repo has a Vale config. Running it can start tools the config names, so it stays off until you trust this repo. <form method="POST" class="checks-trust"><button type="submit" name="trustVale" class="outline">Trust this repo's Vale config</button></form></div>
     <ul class="checks-list">
       
       <li class="check-row is-fail is-selected" data-key="check-filler-intensifiers">

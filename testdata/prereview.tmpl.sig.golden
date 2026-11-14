@@ -95,7 +95,7 @@
       <span class="checks-panel-count">{{.Passed}}/{{.Total}} passed{{if .Running}} · {{.Running}} running{{end}}</span>
       <form method="POST" class="checks-panel-close"><button type="submit" name="toggleChecksPanel" class="outline" aria-label="Close checks">×</button></form>
     </header>
-    {{with $.Checks.ValeNotice}}<p class="checks-notice" role="note">{{.}}</p>{{end}}
+    {{with $.Checks.ValeNotice}}<div class="checks-notice" role="note">{{.}}{{if $.Checks.ValeTrust}} <form method="POST" class="checks-trust"><button type="submit" name="trustVale" class="outline">Trust this repo's Vale config</button></form>{{end}}</div>{{end}}
     <ul class="checks-list">
       {{range $.CheckRows}}
       <li class="check-row is-{{.Status}}{{if .Disabled}} is-disabled{{end}}{{if .Selected}} is-selected{{end}}" data-key="check-{{.ID}}">

@@ -58,14 +58,15 @@ func ValeSummary(repo string) Result {
 		Level: LevelWarning, Source: SourceVale, Path: ValeConfig(repo)}
 }
 
-// RunVale runs `vale --output=JSON <rel>` in repo, using the repo's own config. It
+// RunVale runs `vale --output=JSON -- <rel>` in repo, using the repo's own config —
+// which can start other tools, so callers run it only for a repo the user trusts. It
 // returns one result per Vale check that raised an alert, plus a "vale" summary
 // row that passes when nothing was raised (Vale's JSON names only failing checks).
 func RunVale(ctx context.Context, bin, repo, rel string) []Result {
 	summary := ValeSummary(repo)
 	ctx, cancel := context.WithTimeout(ctx, ValeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "--output=JSON", "--no-exit", rel)
+	cmd := exec.CommandContext(ctx, bin, "--output=JSON", "--no-exit", "--", rel) // "--": a file name is never a flag
 	cmd.Dir = repo
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

@@ -47,3 +47,37 @@ func TestRunCheck(t *testing.T) {
 		t.Errorf("no file: %v", err)
 	}
 }
+
+// `prereview check` honours the panel's Vale trust: an untrusted repo's config
+// never runs vale.
+func TestRunCheck_ValeNeedsTrust(t *testing.T) {
+	dir := t.TempDir()
+	bin := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "vale-ran")
+	os.WriteFile(filepath.Join(bin, "vale"), []byte("#!/bin/sh\n: > '"+marker+"'\necho '{}'\n"), 0o755)
+	t.Setenv("PATH", bin)
+	t.Setenv("PREREVIEW_CHECKS_DIR", filepath.Join(dir, "checks"))
+	prefs := filepath.Join(dir, "prefs.json")
+	t.Setenv("PREREVIEW_UI_PREFS_PATH", prefs)
+	repo := filepath.Join(dir, "repo")
+	os.MkdirAll(repo, 0o755)
+	t.Chdir(repo)
+	os.WriteFile(".vale.ini", []byte("StylesPath = s\n"), 0o644)
+	os.WriteFile("good.md", []byte("Fine.\n"), 0o644)
+
+	var out bytes.Buffer
+	if err := runCheck([]string{"good.md"}, &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("vale ran for an untrusted repo")
+	}
+	cwd, _ := os.Getwd()
+	os.WriteFile(prefs, []byte(`{"trusted_vale":["`+cwd+`"]}`), 0o644)
+	if err := runCheck([]string{"good.md"}, &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Error("vale didn't run for a trusted repo")
+	}
+}

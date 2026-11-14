@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 )
 
@@ -51,6 +52,8 @@ type UIPrefs struct {
 	Editor         string   `json:"editor,omitempty"`
 	EditorTemplate string   `json:"editor_template,omitempty"`
 	EditorSSHHost  string   `json:"editor_ssh_host,omitempty"`
+	// TrustedVale lists repos (absolute paths) whose Vale config you let run.
+	TrustedVale []string `json:"trusted_vale,omitempty"`
 }
 
 // uiPrefsMu serialises writes to the prefs file — multiple tabs (sharing one
@@ -138,6 +141,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.Editor = p.Editor
 	state.EditorTemplate = p.EditorTemplate
 	state.EditorSSHHost = p.EditorSSHHost
+	state.TrustedVale = p.TrustedVale
 }
 
 // savePrefs persists the current view-style preferences to the per-user prefs
@@ -161,13 +165,15 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		Editor:         state.Editor,
 		EditorTemplate: state.EditorTemplate,
 		EditorSSHHost:  state.EditorSSHHost,
+		TrustedVale:    state.TrustedVale,
 	}); err != nil {
 		slog.Warn("savePrefs", "err", err)
 	}
 }
 
-// DisabledCheckIDs is the user's disabled checks, for `prereview check`, which
-// honours the same choice the panel makes.
-func DisabledCheckIDs(prefsPath string) []string {
-	return loadUIPrefs(prefsPath).DisabledChecks
+// CheckPrefs is the user's disabled checks and whether repo's Vale config is
+// trusted, for `prereview check`, which honours the same choices the panel makes.
+func CheckPrefs(prefsPath, repo string) (disabled []string, trustVale bool) {
+	p := loadUIPrefs(prefsPath)
+	return p.DisabledChecks, slices.Contains(p.TrustedVale, repo)
 }
