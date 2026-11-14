@@ -130,7 +130,7 @@
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
-  {{end}}
+  {{end}}{{if and $.ChecksOpen $.ShowChecks}}{{template "checksPanel" $}}{{end}}
   {{/* File-level comments + composer. Lives above the body branch so
        it's visible for every preview mode (line view, markdown blocks,
        HTML blocks, binary preview, "no diff content" placeholder).

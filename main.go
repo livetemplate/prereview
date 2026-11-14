@@ -26,6 +26,7 @@ const topUsage = `Usage: prereview [flags] [path]
          Flags must come before the path, e.g. ` + "`prereview --agent ./docs`" + `.
 
 Subcommands (for the coding agent; each takes --out <STORE>):
+  check      run the review's checks on files and print the findings (--json); exits 1 on a failure
   comments   list the review's comments (--json for the queue-snapshot shape; --all for resolved too)
   applied    ack that you applied an accepted suggestion's edit to disk (validated against suggestions)
   reverted   ack that you reverted an applied suggestion (restored its original text after a revert request)
@@ -62,7 +63,7 @@ var templateOrder = []string{
 	// one file per UI component (define-only; parse order among them is irrelevant)
 	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
 	"toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl",
-	"filedrawer.tmpl", "allcomments.tmpl", "quiz.tmpl",
+	"filedrawer.tmpl", "allcomments.tmpl", "quiz.tmpl", "checks.tmpl",
 	// the {{with .CurrentDiff}} file-view sub-views
 	"fileheader.tmpl", "binaryview.tmpl", "htmlview.tmpl", "markdownview.tmpl", "diffview.tmpl",
 	// shared comment/region partials + SVG icons
@@ -178,6 +179,19 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "watch" {
 		if err := runWatch(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview watch:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `prereview check [--json] <file>...` — run the review's checks from the CLI
+	// (the agent's self-check before `done`). Exit 1 when any check fails; the
+	// printed findings are the message, so a failure adds no error line.
+	if len(os.Args) > 1 && os.Args[1] == "check" {
+		if err := runCheck(os.Args[2:], os.Stdout); err != nil {
+			if !errors.Is(err, errChecksFailed) {
+				fmt.Fprintln(os.Stderr, "prereview check:", err)
+			}
 			os.Exit(1)
 		}
 		return

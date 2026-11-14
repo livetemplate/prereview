@@ -197,6 +197,7 @@ prereview suggest   [--out <dir>] [--file <payload.json>]
 prereview reply     [--out <dir>] [--answered] (--body "…" | --file <f>|-) <id>
 prereview applied   [--out <dir>] [--file <f>|-] <suggestion-id>...
 prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
+prereview check     [--json] <file>...
 ```
 
 - **`prereview watch`** — the **one** queue reader. Prints every event after
@@ -246,6 +247,15 @@ prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
   the reviewer's card returns to undecided. Validated against suggestions.
   Idempotent. Appends to `.prereview/reverted.jsonl`.
 
+- **`prereview check`** — run the review's [checks](usage.md#checks) on files
+  from the terminal: the built-in prose rules, your `~/.config/prereview/checks/`
+  rules, and the repo's Vale config when you've trusted it in the panel and
+  `vale` is installed (run it from the repo root). Prints each finding as `path:line:col: severity: message (check)`
+  and exits `1` when any check fails or errors, so an agent can self-check prose
+  before `prereview done`. `--json` prints every check's result per file. Checks
+  you disabled in the panel are skipped. Takes no `--out`: it reads files, not a
+  review's store.
+
 ## Composing flags
 
 Flags compose freely; just keep the path last.
@@ -283,6 +293,7 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 | Var | Effect |
 |---|---|
 | `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: skip the on-run update check. |
+| `PREREVIEW_CHECKS_DIR` | Override the checks rule folder (default `~/.config/prereview/checks`). |
 
 ## Output
 

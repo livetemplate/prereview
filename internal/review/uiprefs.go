@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 )
 
@@ -44,6 +45,15 @@ type UIPrefs struct {
 	// backlog. A view preference like the rest, so it belongs here and not in the
 	// session store.
 	QueueGlobal bool `json:"queue_global"`
+	// DisabledChecks are check IDs turned off in the checks panel — a per-user view
+	// choice that holds in every repo. Editor / EditorTemplate / EditorSSHHost drive
+	// the "Open in editor" links (see editorlink.go).
+	DisabledChecks []string `json:"disabled_checks,omitempty"`
+	Editor         string   `json:"editor,omitempty"`
+	EditorTemplate string   `json:"editor_template,omitempty"`
+	EditorSSHHost  string   `json:"editor_ssh_host,omitempty"`
+	// TrustedVale lists repos (absolute paths) whose Vale config you let run.
+	TrustedVale []string `json:"trusted_vale,omitempty"`
 }
 
 // uiPrefsMu serialises writes to the prefs file — multiple tabs (sharing one
@@ -127,6 +137,11 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.RawMarkdown = p.RawMarkdown
 	state.RawHTML = p.RawHTML
 	state.QueueGlobal = p.QueueGlobal
+	state.DisabledChecks = p.DisabledChecks
+	state.Editor = p.Editor
+	state.EditorTemplate = p.EditorTemplate
+	state.EditorSSHHost = p.EditorSSHHost
+	state.TrustedVale = p.TrustedVale
 }
 
 // savePrefs persists the current view-style preferences to the per-user prefs
@@ -145,7 +160,20 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		RawMarkdown:  state.RawMarkdown,
 		RawHTML:      state.RawHTML,
 		QueueGlobal:  state.QueueGlobal,
+
+		DisabledChecks: state.DisabledChecks,
+		Editor:         state.Editor,
+		EditorTemplate: state.EditorTemplate,
+		EditorSSHHost:  state.EditorSSHHost,
+		TrustedVale:    state.TrustedVale,
 	}); err != nil {
 		slog.Warn("savePrefs", "err", err)
 	}
+}
+
+// CheckPrefs is the user's disabled checks and whether repo's Vale config is
+// trusted, for `prereview check`, which honours the same choices the panel makes.
+func CheckPrefs(prefsPath, repo string) (disabled []string, trustVale bool) {
+	p := loadUIPrefs(prefsPath)
+	return p.DisabledChecks, slices.Contains(p.TrustedVale, repo)
 }

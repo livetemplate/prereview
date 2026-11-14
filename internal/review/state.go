@@ -50,6 +50,19 @@ type PrereviewState struct {
 	// review's all-comments view is SUPPOSED to span every file. See inScope.
 	SingleFile string `json:"single_file"`
 
+	// Checks (checks M1): the displayed file's checker results, attached by
+	// applyChecks whenever the live view's diff changes (showDiff) — never on the
+	// shared cached FileDiff. ChecksOpen / SelectedCheck are per-session view state;
+	// DisabledChecks and the editor choice are durable per-user prefs (ui-prefs.json).
+	Checks         *FileChecks `json:"checks"`
+	ChecksOpen     bool        `json:"checks_open"    lvt:"persist"`
+	SelectedCheck  string      `json:"selected_check" lvt:"persist"`
+	DisabledChecks []string    `json:"disabled_checks"`
+	Editor         string      `json:"editor"`
+	EditorTemplate string      `json:"editor_template"`
+	EditorSSHHost  string      `json:"editor_ssh_host"`
+	TrustedVale    []string    `json:"trusted_vale"`
+
 	// Artifact versioning (#90). Versions is the selected file's version
 	// timeline (newest first), populated from the version store each Mount /
 	// version action for the Versions panel. When ViewingVersion is true the
@@ -833,8 +846,11 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
 	cards := s.AnnotationCountLines()
+	// The selected check's findings stay visible too — only that one check, so a
+	// rule with hundreds of hits can't unfold the file until you pick it.
+	found := s.findingLines()
 	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, func(l gitdiff.DiffLine) bool {
-		return cards[rowKey(l)] > 0
+		return cards[rowKey(l)] > 0 || (l.Kind != "del" && found[l.NewNum])
 	})
 }
 
@@ -901,8 +917,10 @@ func (s PrereviewState) ShowRenderedMarkdown() bool {
 	// A version DIFF also forces the line view — a diff must show add/del rows,
 	// not the rendered Markdown of one side (#90). A plain version VIEW keeps the
 	// rendered preview (seeing the old doc rendered is useful).
+	// A selected check with findings shows the source too: findings are drawn on
+	// lines, and rendered blocks have none (checkShowsSource).
 	return s.IsMarkdown() && !s.RawMarkdown && !s.Revealing() && !s.diffingVersion() &&
-		len(s.CurrentDiff.MarkdownBlocks) > 0
+		len(s.CurrentDiff.MarkdownBlocks) > 0 && !s.checkShowsSource()
 }
 
 // diffingVersion reports whether the pane is showing a version-vs-current diff
@@ -920,7 +938,7 @@ func (s PrereviewState) ShowRenderedHTML() bool {
 	// Revealing() forces the raw line view so a search-jump lands on the exact
 	// source line (the preview iframe has no L<old>-<new> rows to scroll to).
 	return s.IsHTML() && !s.RawHTML && !s.Revealing() && !s.diffingVersion() &&
-		s.CurrentDiff != nil && len(s.CurrentDiff.HTMLBlocks) > 0
+		s.CurrentDiff != nil && len(s.CurrentDiff.HTMLBlocks) > 0 && !s.checkShowsSource()
 }
 
 // Revealing reports whether the currently-selected file is being shown as its

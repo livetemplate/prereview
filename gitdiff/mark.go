@@ -14,9 +14,14 @@ import (
 // offsets in (guaranteed equal to the line's .content textContent by
 // TestHighlightLines_TextContentEqualsRaw). Used to wrap the commented span in
 // a <mark> when rendering the line.
+//
+// Class is the <mark>'s class: "" means markSpanClass (a text comment). Ranges of
+// different classes may overlap; the overlap renders as one <mark> carrying both
+// classes (e.g. a check finding inside a commented phrase).
 type ColRange struct {
-	From int
-	To   int
+	From  int
+	To    int
+	Class string
 }
 
 // markSpanClass is the class on every injected <mark>; styled per scheme in
@@ -95,7 +100,7 @@ func splitTextNode(data string, start int, rs []ColRange) []*html.Node {
 				Type:     html.ElementNode,
 				Data:     "mark",
 				DataAtom: atom.Mark,
-				Attr:     []html.Attribute{{Key: "class", Val: markSpanClass}},
+				Attr:     []html.Attribute{{Key: "class", Val: r.Class}},
 			}
 			mark.AppendChild(&html.Node{Type: html.TextNode, Data: string(runes[i:j])})
 			out = append(out, mark)
@@ -126,24 +131,87 @@ func rangeAt(rs []ColRange, pos int) (ColRange, bool) {
 	return ColRange{}, false
 }
 
-// normalizeRanges drops empty/invalid ranges, sorts by start, and merges
-// overlapping or touching ones so the mark walk sees clean, disjoint intervals.
+// normalizeRanges drops empty/invalid ranges, merges overlapping or touching
+// ranges of the same class, and splits overlaps between classes into segments
+// carrying every covering class, so the mark walk sees clean, disjoint intervals
+// with their final class attribute.
 func normalizeRanges(ranges []ColRange) []ColRange {
-	cleaned := make([]ColRange, 0, len(ranges))
+	byClass := map[string][]ColRange{}
+	var classes []string
 	for _, r := range ranges {
 		if r.From < 0 {
 			r.From = 0
 		}
-		if r.To > r.From {
-			cleaned = append(cleaned, r)
+		if r.To <= r.From {
+			continue
+		}
+		if r.Class == "" {
+			r.Class = markSpanClass
+		}
+		if _, ok := byClass[r.Class]; !ok {
+			classes = append(classes, r.Class)
+		}
+		byClass[r.Class] = append(byClass[r.Class], r)
+	}
+	// The comment class first, the rest by name: a stable class attribute.
+	sort.SliceStable(classes, func(i, j int) bool {
+		if (classes[i] == markSpanClass) != (classes[j] == markSpanClass) {
+			return classes[i] == markSpanClass
+		}
+		return classes[i] < classes[j]
+	})
+	for _, c := range classes {
+		byClass[c] = mergeRanges(byClass[c])
+	}
+	if len(classes) <= 1 {
+		if len(classes) == 0 {
+			return nil
+		}
+		return byClass[classes[0]]
+	}
+	var cuts []int
+	for _, c := range classes {
+		for _, r := range byClass[c] {
+			cuts = append(cuts, r.From, r.To)
 		}
 	}
-	if len(cleaned) <= 1 {
-		return cleaned
+	sort.Ints(cuts)
+	var out []ColRange
+	for i := 0; i+1 < len(cuts); i++ {
+		a, b := cuts[i], cuts[i+1]
+		if a == b {
+			continue
+		}
+		var cover []string
+		for _, c := range classes {
+			for _, r := range byClass[c] {
+				if r.From <= a && b <= r.To {
+					cover = append(cover, c)
+					break
+				}
+			}
+		}
+		if len(cover) == 0 {
+			continue
+		}
+		cls := strings.Join(cover, " ")
+		if n := len(out); n > 0 && out[n-1].To == a && out[n-1].Class == cls {
+			out[n-1].To = b
+			continue
+		}
+		out = append(out, ColRange{From: a, To: b, Class: cls})
 	}
-	sort.Slice(cleaned, func(i, j int) bool { return cleaned[i].From < cleaned[j].From })
-	merged := cleaned[:1]
-	for _, r := range cleaned[1:] {
+	return out
+}
+
+// mergeRanges sorts one class's ranges and merges overlapping or touching ones.
+func mergeRanges(rs []ColRange) []ColRange {
+	if len(rs) <= 1 {
+		return rs
+	}
+	sort.Slice(rs, func(i, j int) bool { return rs[i].From < rs[j].From })
+	merged := rs[:1]
+	for _, r := range rs[1:] {
 		last := &merged[len(merged)-1]
 		if r.From <= last.To {
 			if r.To > last.To {

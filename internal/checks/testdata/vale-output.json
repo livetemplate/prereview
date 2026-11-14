@@ -1,0 +1,21 @@
+{
+  "doc.md": [
+    {
+      "Action": {
+        "Name": "",
+        "Params": null
+      },
+      "Span": [
+        11,
+        14
+      ],
+      "Check": "Demo.Weasel",
+      "Description": "",
+      "Link": "",
+      "Message": "Avoid very.",
+      "Severity": "warning",
+      "Match": "very",
+      "Line": 3
+    }
+  ]
+}

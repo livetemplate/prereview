@@ -1,0 +1,16 @@
+# Words that claim certainty or vagueness without evidence. Copy this file to
+# your checks folder (same name) to change it; your copy replaces this one.
+extends: existence
+name: Weasel words
+description: Claims of certainty or vagueness the text doesn't back up.
+message: "'%s' asserts without evidence; say what makes it so, or cut it."
+level: warning
+ignorecase: true
+tokens:
+  - arguably
+  - clearly
+  - obviously
+  - of course
+  - needless to say
+  - it is known that
+  - it goes without saying

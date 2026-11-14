@@ -40,16 +40,16 @@ func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Co
 	// pick from the new file list.
 	if state.SelectedFile != "" && !fileInList(state.Files, state.SelectedFile) {
 		state.SelectedFile = ""
-		state.CurrentDiff = nil
+		c.showDiff(&state, nil)
 		state.FileDrawerOpen = true
 	} else if state.SelectedFile != "" {
 		// Same file is still in the diff — reload it against the new base.
 		diff, err := c.loadDiffCached(state.Base, state.SelectedFile)
 		if err != nil {
 			slog.Warn("reload diff after SetBase", "path", state.SelectedFile, "err", err)
-			state.CurrentDiff = nil
+			c.showDiff(&state, nil)
 		} else {
-			state.CurrentDiff = diff
+			c.showDiff(&state, diff)
 		}
 	}
 	return state, nil
@@ -72,7 +72,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 		return state, fmt.Errorf("load diff %s: %w", path, err)
 	}
 	state.SelectedFile = path
-	state.CurrentDiff = diff
+	c.showDiff(&state, diff)
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
@@ -151,7 +151,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 		return state, fmt.Errorf("load diff %s: %w", path, err)
 	}
 	state.SelectedFile = path
-	state.CurrentDiff = diff
+	c.showDiff(&state, diff)
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
@@ -211,7 +211,7 @@ func (c *PrereviewController) stepComment(state PrereviewState, delta int) (Prer
 			return state, fmt.Errorf("load diff %s: %w", target.File, err)
 		}
 		state.SelectedFile = target.File
-		state.CurrentDiff = diff
+		c.showDiff(&state, diff)
 		c.applyVersionList(&state) // per-file version timeline (#90)
 	}
 	state.ShowAllComments = false

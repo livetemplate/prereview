@@ -90,7 +90,7 @@
         {{end}}
       </div>
     </div>
-    {{end}}
+    {{end}}{{if $.ShowChecks}}{{template "checksButton" $}}{{end}}
     {{/* Versions panel (#90): the selected file's version timeline with view +
          rollback. Reuses the View-dropdown client primitive (lvt-el toggle +
          click-away, no server state, no custom JS). A compact chip (history icon

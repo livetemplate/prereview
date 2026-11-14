@@ -1859,6 +1859,7 @@ header.file-head .file-head-comment button svg { display: block; }
 .file-head-comment-label { display: none; }
 .versions-trigger-label { display: none; }
 .prompts-trigger-label, .quiz-trigger-label { display: none; }
+.checks-trigger-label { display: none; }
 
 /* Diff viewer container — was <pre> but that preserves whitespace which
    made every template-loop newline a visible blank line. Now a <div>
@@ -3242,6 +3243,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   .file-head-comment-label { display: inline; }
   .versions-trigger-label { display: inline; }
   .prompts-trigger-label, .quiz-trigger-label { display: inline; }
+  .checks-trigger-label { display: inline; }
   /* The filename already headlines the diff (.file-head) and the
      all-comments view (.ac-head). Showing it again in the top bar is
      pure duplication on desktop — drop just the filename, keep the
@@ -3547,3 +3549,116 @@ main.viewer > article[lvt-spy] {
 .quiz-card.is-settled:target { display: block; }
 /* And give the peeked card a moment of emphasis so the eye lands on it. */
 .quiz-card:target { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Checks (checks M1). The header chip matches the Versions chip; its count pill
+   is green when every enabled check passed, the mark colour when one failed.
+   Every colour is a semantic token, so all schemes × modes follow. */
+header.file-head .file-head-checks { margin: 0; }
+.checks-trigger {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin: 0; padding: 0.2rem 0.55rem; min-height: 0;
+  font-size: 0.8rem; font-weight: 500; white-space: nowrap;
+  background: var(--soft-bg); color: var(--pico-h1-color);
+  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
+}
+.checks-trigger:hover, .checks-trigger:focus-visible, .checks-trigger.is-open {
+  background: var(--soft-bg-hover); border-color: var(--accent);
+}
+.checks-trigger svg { display: block; color: var(--pico-muted-color); }
+.checks-count {
+  font-size: 0.72rem; font-weight: 700; padding: 0.02rem 0.32rem; border-radius: 999px;
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-h1-color);
+}
+.checks-trigger.is-passing .checks-count { background: color-mix(in srgb, var(--pr-add) 18%, transparent); color: var(--pr-add); }
+.checks-trigger.is-failing .checks-count { background: var(--mark-wash); color: var(--mark); }
+
+.checks-panel {
+  margin: 0.5rem 0.75rem; padding: 0.6rem 0.75rem;
+  background: var(--pr-comment-bg); border: 1px solid var(--pr-comment-bd);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+  font-family: var(--sans); font-size: 0.85rem;
+}
+.checks-panel-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+.checks-panel-head strong { color: var(--pico-h1-color); }
+.checks-panel-count { color: var(--pico-muted-color); font-size: 0.8rem; }
+.checks-panel-close { margin: 0 0 0 auto; }
+.checks-panel-close button { margin: 0; padding: 0.05rem 0.5rem; min-height: 0; font-size: 1rem; line-height: 1.2; }
+.checks-notice {
+  margin: 0 0 0.45rem; padding: 0.35rem 0.5rem; border-radius: var(--radius-sm);
+  background: var(--mark-wash); color: var(--pico-color); font-size: 0.8rem;
+}
+.checks-trust { display: inline; margin: 0 0 0 0.4rem; }
+.checks-trust button { margin: 0.25rem 0 0; padding: 0.1rem 0.55rem; min-height: 0; width: auto; font-size: 0.75rem; }
+.checks-list { list-style: none; margin: 0; padding: 0; }
+.checks-list > li { list-style: none; margin: 0; padding: 0.3rem 0; border-top: 1px solid var(--pico-muted-border-color); }
+.checks-list > li:first-child { border-top: 0; }
+.check-main { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.check-main form { margin: 0; }
+.check-status { width: 1rem; text-align: center; font-weight: 700; color: var(--pico-muted-color); }
+.check-row.is-pass .check-status { color: var(--pr-add); }
+.check-row.is-fail .check-status, .check-row.is-error .check-status { color: var(--mark); }
+.check-name {
+  margin: 0; padding: 0.1rem 0.35rem; min-height: 0; border: 1px solid transparent;
+  background: none; color: var(--pico-h1-color); font-weight: 600; font-size: 0.85rem;
+  border-radius: var(--radius-sm); cursor: pointer; text-align: left;
+}
+.check-name:hover:not([disabled]), .check-name:focus-visible { border-color: var(--accent); }
+.check-name[disabled] { cursor: default; opacity: 1; }
+.check-row.is-selected .check-name { background: var(--pr-sel-bg); border-color: var(--accent); }
+.check-row.is-disabled .check-name, .check-row.is-disabled .check-count { color: var(--pico-muted-color); text-decoration: line-through; }
+.check-count { color: var(--pico-muted-color); font-size: 0.78rem; }
+.check-actions { display: inline-flex; gap: 0.3rem; margin-left: auto; align-items: center; }
+.check-edit, .check-toggle {
+  margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.75rem; font-weight: 500;
+  background: var(--soft-bg); color: var(--pico-h1-color); text-decoration: none;
+  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm); cursor: pointer;
+}
+.check-edit:hover, .check-toggle:hover { border-color: var(--accent); }
+.check-error { margin: 0.25rem 0 0 1.45rem; color: var(--mark); font-size: 0.78rem; overflow-wrap: anywhere; }
+input.check-path {
+  margin: 0.25rem 0 0 1.45rem; width: calc(100% - 1.45rem); padding: 0.15rem 0.4rem; height: auto;
+  font-family: var(--jbm); font-size: 0.75rem;
+}
+.check-findings { margin: 0.3rem 0 0 1.45rem; padding: 0; list-style: none; }
+.check-findings li { display: flex; gap: 0.45rem; align-items: baseline; padding: 0.1rem 0; list-style: none; }
+.check-findings form { margin: 0; flex-shrink: 0; }
+.finding-jump {
+  margin: 0; padding: 0 0.3rem; min-height: 0; font-family: var(--jbm); font-size: 0.75rem;
+  background: none; color: var(--accent); border: 0; cursor: pointer; text-decoration: underline;
+}
+.checks-editor {
+  display: flex; flex-wrap: wrap; gap: 0.4rem 0.75rem; align-items: center;
+  margin: 0.5rem 0 0; padding-top: 0.45rem; border-top: 1px solid var(--pico-muted-border-color);
+  font-size: 0.78rem; color: var(--pico-muted-color);
+}
+.checks-editor label { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0; font-size: 0.78rem; }
+.checks-editor select, .checks-editor input {
+  margin: 0; padding: 0.1rem 0.4rem; height: auto; width: auto; min-width: 0; font-size: 0.78rem;
+}
+.checks-editor select { padding-right: 1.8rem; background-position: right 0.4rem center; }
+.checks-editor input { width: 12rem; max-width: 100%; }
+.checks-editor button { margin: 0; padding: 0.15rem 0.6rem; min-height: 0; width: auto; font-size: 0.78rem; }
+
+/* A selected check's span: a dotted mark-colour underline, distinct from a text
+   comment's tinted span. Inside a commented span both classes apply. */
+.code .content mark.check-finding {
+  background: none; color: inherit; border-radius: 0;
+  text-decoration: underline wavy var(--mark); text-underline-offset: 3px;
+}
+.code .content mark.comment-span.check-finding { background: var(--pr-sel-bg); }
+.finding-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem;
+  margin: 0.35rem 0.4rem; padding: 0.4rem 0.7rem;
+  background: var(--pr-comment-bg); border: 1px dashed var(--pr-comment-bd);
+  border-left: 3px solid var(--mark); border-radius: var(--radius-md);
+  font-family: var(--sans); font-size: 0.8rem; line-height: 1.45;
+}
+.finding-check { font-weight: 700; color: var(--mark); }
+.finding-msg { color: var(--pico-color); flex: 1 1 12rem; }
+.finding-queue { margin: 0; }
+.finding-queue button { margin: 0; padding: 0.1rem 0.55rem; min-height: 0; font-size: 0.75rem; }
+@media (max-width: 640px) {
+  .checks-panel { margin: 0.4rem; }
+  .check-actions { margin-left: 1.45rem; }
+}

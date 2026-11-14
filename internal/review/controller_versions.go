@@ -258,16 +258,16 @@ func (c *PrereviewController) reloadLiveDiff(state *PrereviewState) {
 	state.VersionViewSeq = 0
 	state.VersionViewDiff = false
 	if state.SelectedFile == "" {
-		state.CurrentDiff = nil
+		c.showDiff(state, nil)
 		c.applyVersionList(state)
 		return
 	}
 	diff, err := c.loadDiffCached(state.Base, state.SelectedFile)
 	if err != nil {
 		slog.Warn("reload live diff", "file", state.SelectedFile, "err", err)
-		state.CurrentDiff = nil
+		c.showDiff(state, nil)
 	} else {
-		state.CurrentDiff = diff
+		c.showDiff(state, diff)
 		c.relocateSelected(state)
 	}
 	c.applyVersionList(state)
@@ -287,11 +287,11 @@ func (c *PrereviewController) ViewVersion(state PrereviewState, ctx *livetemplat
 	data, err := c.Versions.Restore(state.SelectedFile, seq)
 	switch {
 	case errors.Is(err, ErrVersionTombstone):
-		state.CurrentDiff = &gitdiff.FileDiff{Path: state.SelectedFile, Note: "file did not exist at this version"}
+		c.showHistoricalDiff(&state, &gitdiff.FileDiff{Path: state.SelectedFile, Note: "file did not exist at this version"})
 	case err != nil:
 		return state, fmt.Errorf("view version %d: %w", seq, err)
 	default:
-		state.CurrentDiff = gitdiff.RenderBytesAsFile(state.SelectedFile, data)
+		c.showHistoricalDiff(&state, gitdiff.RenderBytesAsFile(state.SelectedFile, data))
 	}
 	state.ViewingVersion = true
 	state.VersionViewDiff = false
@@ -318,7 +318,7 @@ func (c *PrereviewController) DiffVersion(state PrereviewState, ctx *livetemplat
 	}
 	// Tombstone ⇒ oldData nil ⇒ everything in current reads as an addition.
 	curData, _ := os.ReadFile(filepath.Join(c.RepoPath, state.SelectedFile))
-	state.CurrentDiff = gitdiff.DiffContents(state.SelectedFile, oldData, curData)
+	c.showHistoricalDiff(&state, gitdiff.DiffContents(state.SelectedFile, oldData, curData))
 	state.ViewingVersion = true
 	state.VersionViewDiff = true
 	state.VersionViewSeq = seq
