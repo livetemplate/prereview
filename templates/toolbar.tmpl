@@ -160,7 +160,7 @@
       class="contrast"
     ><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
   </form>
-  {{end}}
+  {{end}}{{template "libraryButton" $}}
   {{/* Work queue (#119) — the hub for a continuous-enqueue session: what's queued
        / worked-on / held as drafts, PLUS Pause/Resume and End session. A direct
        child of the bar (reachable on mobile) placed AFTER the flex:1 .title so it

@@ -52,16 +52,30 @@ type PrereviewState struct {
 
 	// Checks (checks M1): the displayed file's checker results, attached by
 	// applyChecks whenever the live view's diff changes (showDiff) — never on the
-	// shared cached FileDiff. ChecksOpen / SelectedCheck are per-session view state;
-	// DisabledChecks and the editor choice are durable per-user prefs (ui-prefs.json).
-	Checks         *FileChecks `json:"checks"`
-	ChecksOpen     bool        `json:"checks_open"    lvt:"persist"`
-	SelectedCheck  string      `json:"selected_check" lvt:"persist"`
-	DisabledChecks []string    `json:"disabled_checks"`
-	Editor         string      `json:"editor"`
-	EditorTemplate string      `json:"editor_template"`
-	EditorSSHHost  string      `json:"editor_ssh_host"`
-	TrustedVale    []string    `json:"trusted_vale"`
+	// shared cached FileDiff. ReviewChecks is every changed file's results for the
+	// Checks page (applyReviewChecks). SelectedCheck (the one check drawn inline)
+	// and FindingCursor are per-session view state; DisabledChecks and the editor
+	// choice are durable per-user prefs (ui-prefs.json).
+	Checks        *FileChecks   `json:"checks"`
+	ReviewChecks  *ReviewChecks `json:"review_checks"`
+	SelectedCheck string        `json:"selected_check" lvt:"persist"`
+	FindingCursor int           `json:"finding_cursor"`
+	// The Checks page (the Library frame, Checks tab): open state and its filters.
+	// Session view state, never ui-prefs: a filter carried into the next review
+	// would hide its failures.
+	ShowLibrary       bool     `json:"show_library"`
+	ChecksQuery       string   `json:"checks_query"`
+	ChecksStatus      string   `json:"checks_status"`   // "" (all) | fail | error | pass | off
+	ChecksSource      string   `json:"checks_source"`   // "" (all) | builtin | user | vale
+	ChecksCategory    string   `json:"checks_category"` // "" (all) or a category label
+	ChecksFile        string   `json:"checks_file"`     // "" (every file) or one path
+	ExpandedCheck     string   `json:"expanded_check"`
+	ShowPassingGroups bool     `json:"show_passing_groups"`
+	DisabledChecks    []string `json:"disabled_checks"`
+	Editor            string   `json:"editor"`
+	EditorTemplate    string   `json:"editor_template"`
+	EditorSSHHost     string   `json:"editor_ssh_host"`
+	TrustedVale       []string `json:"trusted_vale"`
 
 	// Artifact versioning (#90). Versions is the selected file's version
 	// timeline (newest first), populated from the version store each Mount /
@@ -701,11 +715,17 @@ func (s PrereviewState) OutdatedCount() int {
 // drawer (via FilteredFiles), Mount auto-select, and Next/PrevFile so
 // navigation stays consistent with what the drawer shows.
 func (s PrereviewState) scopedFiles() []gitdiff.FileEntry {
-	if s.ShowAllFiles || gitdiff.ChangedCount(s.Files) == 0 {
-		return s.Files
+	return scopeFiles(s.Files, s.ShowAllFiles)
+}
+
+// scopeFiles is the review's file scope: the changed files, or every file when
+// all is set or nothing changed. The drawer and the Checks page share it.
+func scopeFiles(files []gitdiff.FileEntry, all bool) []gitdiff.FileEntry {
+	if all || gitdiff.ChangedCount(files) == 0 {
+		return files
 	}
-	out := make([]gitdiff.FileEntry, 0, len(s.Files))
-	for _, f := range s.Files {
+	out := make([]gitdiff.FileEntry, 0, len(files))
+	for _, f := range files {
 		if f.Status != "" {
 			out = append(out, f)
 		}

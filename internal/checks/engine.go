@@ -36,6 +36,7 @@ type Result struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
+	Category    string    `json:"category,omitempty"`
 	Type        string    `json:"type"`
 	Level       string    `json:"level"`
 	Source      string    `json:"source"`
@@ -47,7 +48,7 @@ type Result struct {
 
 // newResult starts a Result carrying the rule's identity.
 func newResult(r *Rule) Result {
-	return Result{ID: r.ID, Name: r.Name, Description: r.Description, Type: r.Type,
+	return Result{ID: r.ID, Name: r.Name, Description: r.Description, Category: r.Category, Type: r.Type,
 		Level: r.Level, Source: r.Source, Path: r.Path}
 }
 

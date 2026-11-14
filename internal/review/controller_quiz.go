@@ -273,7 +273,7 @@ func (c *PrereviewController) DismissQuizNav(state PrereviewState, ctx *livetemp
 // result is visible immediately, and is not persisted — reopening the browser
 // starts back in the diff.
 func (c *PrereviewController) ToggleQuiz(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.ShowQuiz = !state.ShowQuiz
+	toggleFullView(&state, &state.ShowQuiz)
 	state.MoreMenuOpen = false
 	if state.ShowQuiz {
 		// Re-ground on open: the agent may have edited the file since the quiz was

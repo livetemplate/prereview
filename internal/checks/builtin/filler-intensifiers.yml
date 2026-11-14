@@ -4,6 +4,7 @@ name: Filler intensifiers
 description: Emphasis words that rarely change what a sentence says.
 message: "'%s' adds emphasis, not meaning; try cutting it."
 level: suggestion
+category: Concision
 ignorecase: true
 tokens:
   - very

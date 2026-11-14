@@ -54,7 +54,7 @@ const ValeRuleID = "vale"
 // ValeSummary is the "vale" row: the whole repo config as one check. Its Status is
 // unset; RunVale finishes it, and the server shows it as running meanwhile.
 func ValeSummary(repo string) Result {
-	return Result{ID: ValeRuleID, Name: "Vale (repo config)", Type: SourceVale,
+	return Result{ID: ValeRuleID, Name: "Vale (repo config)", Category: valeCategory, Type: SourceVale,
 		Level: LevelWarning, Source: SourceVale, Path: ValeConfig(repo)}
 }
 
@@ -119,7 +119,7 @@ func ParseValeJSON(data []byte) ([]Result, error) {
 			}
 			res := byCheck[a.Check]
 			if res == nil {
-				res = &Result{ID: ValeRuleID + ":" + a.Check, Name: a.Check, Type: SourceVale,
+				res = &Result{ID: ValeRuleID + ":" + a.Check, Name: a.Check, Category: ValeCategory(a.Check), Type: SourceVale,
 					Level: a.Severity, Source: SourceVale}
 				byCheck[a.Check] = res
 			}

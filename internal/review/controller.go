@@ -535,6 +535,9 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// historical view and lands back on current.
 	c.applyVersionList(&state)
 	c.applyPaused(&state)
+	// The Checks page covers every changed file; Mount (and RefreshDiff, through
+	// it) is when the file list is rebuilt, so it's when that pass reruns.
+	c.applyReviewChecks(&state)
 	return state, nil
 }
 

@@ -1,7 +1,6 @@
 package review
 
 import (
-	"html/template"
 	"slices"
 
 	"github.com/livetemplate/prereview/gitdiff"
@@ -21,31 +20,22 @@ type CheckSummary struct {
 	Failing bool // any enabled check failed or errored
 }
 
-// FindingView is one finding as the panel and the inline card render it.
+// checkStatusOff is the Checks page's status for a check you turned off.
+const checkStatusOff = "off"
+
+// maxPageFindings caps the findings an expanded row lists; the rest are counted.
+const maxPageFindings = 100
+
+// FindingView is one finding as the Checks page and the inline card render it.
 type FindingView struct {
+	Path      string // the finding's file
 	CheckID   string
 	CheckName string
-	Index     int // position in the check's findings (QueueFinding's index)
+	Index     int // position in the check's findings for this file (QueueFinding's index)
 	Line      int
 	Label     string // "L12", "L12:4-9" or "L12-14"
 	Message   string
 	Severity  string
-}
-
-// CheckRow is one check in the panel.
-type CheckRow struct {
-	ID          string
-	Name        string
-	Description string
-	Source      string
-	Status      string
-	Err         string
-	Count       int
-	Disabled    bool
-	Selected    bool
-	RulePath    string       // the rule file on disk ("" for a built-in or Vale's own rules)
-	EditorURL   template.URL // "Open in editor" for RulePath; "" when no editor is set
-	Findings    []FindingView
 }
 
 // ShowChecks gates the file-header button: the file has checks to report.
@@ -62,7 +52,12 @@ func (s PrereviewState) checkResult(id string) (checks.Result, bool) {
 	if s.Checks == nil {
 		return checks.Result{}, false
 	}
-	for _, r := range s.Checks.Results {
+	return resultFor(s.Checks.Results, id)
+}
+
+// resultFor finds a check's result among one file's results.
+func resultFor(results []checks.Result, id string) (checks.Result, bool) {
+	for _, r := range results {
 		if r.ID == id {
 			return r, true
 		}
@@ -93,40 +88,8 @@ func (s PrereviewState) CheckSummary() CheckSummary {
 	return cs
 }
 
-// CheckRows lists every check on the displayed file for the panel, the selected
-// one carrying its findings.
-func (s PrereviewState) CheckRows() []CheckRow {
-	if s.Checks == nil {
-		return nil
-	}
-	out := make([]CheckRow, 0, len(s.Checks.Results))
-	for _, r := range s.Checks.Results {
-		row := CheckRow{ID: r.ID, Name: r.Name, Description: r.Description,
-			Source: r.Source, Status: r.Status, Err: r.Err, Count: len(r.Findings),
-			Disabled: s.checkDisabled(r.ID), RulePath: r.Path}
-		if row.RulePath != "" {
-			row.EditorURL = editorURL(s.Editor, s.EditorTemplate, s.EditorSSHHost, row.RulePath, 1)
-		}
-		if r.ID == s.SelectedCheck && !row.Disabled {
-			row.Selected = true
-			row.Findings = findingViews(r)
-		}
-		out = append(out, row)
-	}
-	return out
-}
-
-func findingViews(r checks.Result) []FindingView {
-	out := make([]FindingView, len(r.Findings))
-	for i, f := range r.Findings {
-		out[i] = FindingView{CheckID: r.ID, CheckName: r.Name, Index: i, Line: f.EndLine,
-			Label: findingLabel(f), Message: f.Message, Severity: f.Severity}
-	}
-	return out
-}
-
 // findingLabel formats a finding's span as a text comment's badge does, so the
-// panel row and the comment it queues read the same.
+// page row and the comment it queues read the same.
 func findingLabel(f checks.Finding) string {
 	return Comment{Kind: commentKindText, FromLine: f.Line, ToLine: f.EndLine, FromCol: f.FromCol, ToCol: f.ToCol}.LineSpan()
 }
@@ -134,6 +97,23 @@ func findingLabel(f checks.Finding) string {
 // finding looks up one finding of a check on the displayed file.
 func (s PrereviewState) finding(id string, idx int) (checks.Result, checks.Finding, bool) {
 	r, ok := s.checkResult(id)
+	return findingAt(r, ok, idx)
+}
+
+// findingIn looks up one finding of a check in any checked file, from the same
+// results the Checks page lists (pageFiles: the open file's displayed text, the
+// others from disk), so an index always means the finding on screen.
+func (s PrereviewState) findingIn(path, id string, idx int) (checks.Result, checks.Finding, bool) {
+	for _, pc := range s.pageFiles() {
+		if pc.Path == path {
+			r, ok := resultFor(pc.Results, id)
+			return findingAt(r, ok, idx)
+		}
+	}
+	return checks.Result{}, checks.Finding{}, false
+}
+
+func findingAt(r checks.Result, ok bool, idx int) (checks.Result, checks.Finding, bool) {
 	if !ok || idx < 0 || idx >= len(r.Findings) {
 		return checks.Result{}, checks.Finding{}, false
 	}
@@ -166,7 +146,8 @@ func (s PrereviewState) FindingsByRow() map[string][]FindingView {
 		return nil
 	}
 	out := map[string][]FindingView{}
-	for _, fv := range findingViews(r) {
+	for i := range r.Findings {
+		fv := findingView(s.SelectedFile, r, i)
 		k := rowKeysFor(fv.Line, "new")[0]
 		out[k] = append(out[k], fv)
 	}

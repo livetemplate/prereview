@@ -1,0 +1,123 @@
+{{/* The Library (checks M1b): a full-page view like All comments, opened from the
+     toolbar's Library button or a file's Checks button. M1b builds the frame with
+     only the Checks tab live; Learnings / Skills / Benchmarks arrive in M3–M5.
+     Everything is server state (CheckPage, a zero-arg method) — no custom JS. */}}
+{{define "library"}}{{with $.CheckPage}}
+<section class="library" data-key="library" aria-label="Library">
+  <header class="lib-head">
+    <strong class="lib-title">{{template "iconLibrary"}} Library</strong>
+    <span class="lib-src">the checks every review on this machine uses · edits to rule files show up live</span>
+    <details class="lib-editor">
+      <summary>Open rule files in: {{range $.EditorOptions}}{{if .Selected}}{{.Label}}{{end}}{{end}}</summary>
+      <form method="POST" class="checks-editor">
+        <label>Editor
+          <select name="editor">
+            {{range $.EditorOptions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+          </select>
+        </label>
+        <label>SSH host <input type="text" name="ssh_host" value="{{$.EditorSSHHost}}" placeholder="blank = this machine" autocomplete="off"></label>
+        <label>Custom URL <input type="text" name="template" value="{{$.EditorTemplate}}" placeholder="myeditor://open?file={path}&amp;line={line}" autocomplete="off"></label>
+        <button type="submit" name="setEditor" class="outline">Save</button>
+      </form>
+    </details>
+    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form>
+  </header>
+  <div class="lib-tabs" role="tablist">
+    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Learnings</button>
+    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
+    <button type="button" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button>
+    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
+  </div>
+  <div class="ckp-bar">
+    <form method="POST" lvt-form:preserve class="ckp-search-form">
+      <input type="search" name="q" class="ckp-search" value="{{.Query}}" placeholder="Search checks and findings"
+             aria-label="Search checks and findings"
+             lvt-on:input="setChecksQuery" lvt-mod:debounce="200"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    </form>
+    <div class="ckp-chips">
+      {{range .Chips}}<form method="POST"><input type="hidden" name="field" value="status"><input type="hidden" name="value" value="{{.Value}}"><button type="submit" name="setChecksFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
+      {{end}}{{if .File}}<form method="POST"><input type="hidden" name="field" value="file"><input type="hidden" name="value" value=""><button type="submit" name="setChecksFilter" class="lib-chip ckp-file-chip is-on" title="Showing findings in this file only; clear to see every file">in <code>{{.File}}</code> ×</button></form>
+      {{end}}<form method="POST" class="ckp-source-form">
+        <select name="source" aria-label="Source" lvt-on:change="setChecksSource">
+          <option value=""{{if eq .Source ""}} selected{{end}}>All sources</option>
+          <option value="builtin"{{if eq .Source "builtin"}} selected{{end}}>Built-in</option>
+          <option value="user"{{if eq .Source "user"}} selected{{end}}>Yours</option>
+          <option value="vale"{{if eq .Source "vale"}} selected{{end}}>This repo (Vale)</option>
+        </select>
+      </form>
+    </div>
+    <span class="ckp-scope">{{.Files}} file{{if ne .Files 1}}s{{end}} checked{{if .Skipped}} ({{.Skipped}} more not checked){{end}} · {{.Checks}} check{{if ne .Checks 1}}s{{end}} · updates live</span>
+  </div>
+  <div class="ckp">
+    <nav class="ckp-cats" aria-label="Categories">
+      {{range .Categories}}<form method="POST"><input type="hidden" name="field" value="category"><input type="hidden" name="value" value="{{.Name}}"><button type="submit" name="setChecksFilter" class="ckp-cat{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}"><span class="ckp-cat-name">{{if .Name}}{{.Name}}{{else}}All{{end}}</span>{{with .Note}}<span class="ckp-cat-note">{{.}}</span>{{end}}{{if .Failing}}<span class="ckp-cat-fail" title="{{.Failing}} failing">{{.Failing}}</span>{{end}}<span class="ckp-cat-n">{{.Count}}</span></button></form>
+      {{end}}
+    </nav>
+    <div class="ckp-main">
+      {{if .Query}}<p class="ckp-hits">{{.Matches}} check{{if ne .Matches 1}}s{{end}} match “{{.Query}}”: names, descriptions, categories, and the words a finding flagged.</p>{{end}}
+      {{range .Groups}}
+      <section class="ckp-group" data-key="ckp-group-{{.Name}}">
+        <h3>{{.Name}} <small>{{len .Rows}} check{{if ne (len .Rows) 1}}s{{end}}{{if .Failing}} · {{.Failing}} failing{{end}}{{if .Errors}} · {{.Errors}} error{{if ne .Errors 1}}s{{end}}{{end}}</small></h3>
+        <ul class="ckp-list">
+          {{range .Rows}}{{template "checkRow" .}}{{end}}
+        </ul>
+      </section>
+      {{end}}
+      {{if .ShowVale}}
+      <section class="ckp-group" data-key="ckp-group-vale-notice">
+        <h3>Vale <small>this repo’s <code>.vale.ini</code></small></h3>
+        <div class="ckp-trust" role="note"><p>{{.ValeNotice}}</p>{{if .ValeTrust}}<form method="POST"><button type="submit" name="trustVale" class="outline">Trust this repo’s Vale config</button></form>{{end}}</div>
+      </section>
+      {{end}}
+      {{if .Folded}}<div class="ckp-more">{{range $i, $g := .Folded}}{{if $i}}, {{end}}{{$g.Name}} ({{len $g.Rows}}){{end}} all pass · <form method="POST" class="ckp-inline"><button type="submit" name="togglePassingGroups" class="ck-link">show passing groups</button></form></div>
+      {{else if and .ShowPassing .CanFold}}<div class="ckp-more"><form method="POST" class="ckp-inline"><button type="submit" name="togglePassingGroups" class="ck-link">hide passing groups</button></form></div>
+      {{end}}
+      {{if and (not .Groups) (not .Folded) (not .ShowVale)}}<p class="ckp-empty">{{if .Query}}No check matches “{{.Query}}”.{{else}}No checks match these filters.{{end}}</p>{{end}}
+    </div>
+  </div>
+</section>
+{{end}}{{end}}
+
+{{define "checkRow"}}
+          <li class="ckp-row is-{{.Status}}{{if .Expanded}} is-open{{end}}" data-key="ckp-row-{{.ID}}">
+            <form method="POST" class="ckp-row-form"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="expandCheck" class="ckp-row-head" aria-expanded="{{if .Expanded}}true{{else}}false{{end}}">
+              <span class="ck-pill ck-{{.Status}}">{{.Status}}</span>
+              <span class="ckp-title"><span class="ckp-name">{{.Name}}</span>{{with .Description}}<span class="ckp-desc">{{.}}</span>{{end}}</span>
+              <span class="ckp-sum">{{if .MatchNote}}{{.MatchNote}}{{else}}{{.Summary}}{{end}}</span>
+              <span class="ckp-src">{{.SourceLabel}}</span>
+              <span class="ckp-chev" aria-hidden="true">{{if .Expanded}}▾{{else}}▸{{end}}</span>
+            </button></form>
+            {{if .Expanded}}
+            <div class="ckp-detail">
+              {{range .Errors}}<p class="ckp-err"><code>{{.Path}}</code>: {{.Err}}</p>
+              {{end}}
+              {{range .ByFile}}
+              <div class="ckp-file" data-key="ckp-file-{{.Path}}">
+                <header><code>{{.Path}}</code>{{if .Open}} <span class="ck-pill ck-open">open</span>{{end}}<span class="ckp-file-n">{{.Count}}</span>
+                  {{with index .Findings 0}}<form method="POST" class="ckp-show"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>{{end}}
+                </header>
+                <ol>
+                  {{range .Findings}}<li data-key="ckp-f-{{.Path}}-{{.CheckID}}-{{.Index}}">
+                    <form method="POST" class="ckp-at-form"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="ckp-at">{{.Label}}</button></form>
+                    <span class="ckp-msg">{{.Message}}</span>
+                    <form method="POST" class="ckp-q"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="queueFinding" class="outline">Queue</button></form>
+                  </li>
+                  {{end}}
+                </ol>
+              </div>
+              {{end}}
+              {{if .More}}<p class="ckp-more">{{.More}} more finding{{if ne .More 1}}s{{end}} not listed; turn the check off, or narrow it with a search.</p>{{end}}
+              <div class="ckp-rule">
+                <span>{{.Detail}} · category <b>{{.Category}}</b>{{with .RulePath}} · <code>{{.}}</code>{{end}}</span>
+                <span class="ckp-rule-actions">
+                  {{if .EditorURL}}<a role="button" class="outline" href="{{.EditorURL}}" title="{{.RulePath}}">Open in editor</a>
+                  {{else if eq .Source "builtin"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="copyCheckToUserFolder" class="outline" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>{{end}}
+                  {{if ne .Source "vale"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleCheckEnabled" class="outline">{{if eq .Status "off"}}Turn on{{else}}Turn off{{end}}</button></form>{{end}}
+                </span>
+                {{if and .RulePath (not .EditorURL)}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
+              </div>
+            </div>
+            {{end}}
+          </li>
+{{end}}

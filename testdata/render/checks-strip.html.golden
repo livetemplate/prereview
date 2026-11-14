@@ -317,6 +317,18 @@
 /></svg></button>
   </form>
   
+  <form method="POST" class="library-form">
+    <button
+      type="submit"
+      name="toggleLibrary"
+      class="contrast library-trigger"
+      aria-pressed="false"
+      title="Library: the checks every review on this machine uses"
+    ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tb-label">Library</span></button>
+  </form>
+
   
   
   <form method="POST" class="tb-action">
@@ -650,10 +662,9 @@
     <form method="POST" class="file-head-checks">
       <button
         type="submit"
-        name="toggleChecksPanel"
-        class="checks-trigger is-failing is-open"
-        aria-expanded="true"
-        title="Checks on this file: 1 of 4 passed, 1 running"
+        name="openChecks"
+        class="checks-trigger is-failing"
+        title="Checks on this file: 1 of 4 passed, 1 running. Opens the Checks page."
       ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
     d="M4 6.5l1.8 1.8L9 5M4 13.5l1.8 1.8L9 12M4 20l1.8-1.5M12 7h8M12 14h8M12 20h8"
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"
@@ -665,148 +676,18 @@
     </span>
   </header>
   
-  <section class="checks-panel" data-key="checks-panel" aria-label="Checks">
-    <header class="checks-panel-head">
-      <strong>Checks</strong>
-      <span class="checks-panel-count">1/4 passed · 1 running</span>
-      <form method="POST" class="checks-panel-close"><button type="submit" name="toggleChecksPanel" class="outline" aria-label="Close checks">×</button></form>
-    </header>
-    <div class="checks-notice" role="note">This repo has a Vale config. Running it can start tools the config names, so it stays off until you trust this repo. <form method="POST" class="checks-trust"><button type="submit" name="trustVale" class="outline">Trust this repo's Vale config</button></form></div>
-    <ul class="checks-list">
-      
-      <li class="check-row is-fail is-selected" data-key="check-filler-intensifiers">
-        <div class="check-main">
-          <span class="check-status" aria-hidden="true">✗</span>
-          <form method="POST" class="check-select"><input type="hidden" name="id" value="filler-intensifiers"><button
-            type="submit"
-            name="selectCheck"
-            class="check-name"
-            aria-pressed="true"
-            
-            title="Filler intensifiers"
-          >Filler intensifiers</button></form>
-          <span class="check-count">1 finding</span>
-          <span class="check-actions">
-            <form method="POST"><input type="hidden" name="id" value="filler-intensifiers"><button type="submit" name="copyCheckToUserFolder" class="check-edit" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>
-            <form method="POST"><input type="hidden" name="id" value="filler-intensifiers"><button type="submit" name="toggleCheckEnabled" class="check-toggle">Disable</button></form>
-          </span>
-        </div>
-        
-        
-        
-        <ol class="check-findings">
-          
-          <li data-key="cf-filler-intensifiers-0">
-            <form method="POST"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="finding-jump">L1:8-12</button></form>
-            <span class="finding-msg">&#39;very&#39; adds emphasis, not meaning; try cutting it.</span>
-          </li>
-          
-        </ol>
-        
-      </li>
-      
-      <li class="check-row is-running" data-key="check-house-style">
-        <div class="check-main">
-          <span class="check-status" aria-hidden="true">…</span>
-          <form method="POST" class="check-select"><input type="hidden" name="id" value="house-style"><button
-            type="submit"
-            name="selectCheck"
-            class="check-name"
-            aria-pressed="false"
-            disabled
-            title="House style"
-          >House style</button></form>
-          <span class="check-count">running</span>
-          <span class="check-actions">
-            <a class="check-edit" href="vscode://vscode-remote/ssh-remote&#43;devbox/home/u/.config/prereview/checks/house-style.yml:1" title="/home/u/.config/prereview/checks/house-style.yml">Open in editor</a>
-            
-            <form method="POST"><input type="hidden" name="id" value="house-style"><button type="submit" name="toggleCheckEnabled" class="check-toggle">Disable</button></form>
-          </span>
-        </div>
-        
-        
-        
-      </li>
-      
-      <li class="check-row is-error" data-key="check-broken">
-        <div class="check-main">
-          <span class="check-status" aria-hidden="true">!</span>
-          <form method="POST" class="check-select"><input type="hidden" name="id" value="broken"><button
-            type="submit"
-            name="selectCheck"
-            class="check-name"
-            aria-pressed="false"
-            disabled
-            title="broken"
-          >broken</button></form>
-          <span class="check-count">error</span>
-          <span class="check-actions">
-            <a class="check-edit" href="vscode://vscode-remote/ssh-remote&#43;devbox/home/u/.config/prereview/checks/broken.yml:1" title="/home/u/.config/prereview/checks/broken.yml">Open in editor</a>
-            
-            <form method="POST"><input type="hidden" name="id" value="broken"><button type="submit" name="toggleCheckEnabled" class="check-toggle">Disable</button></form>
-          </span>
-        </div>
-        <p class="check-error">invalid YAML: yaml: line 1: did not find expected node content</p>
-        
-        
-      </li>
-      
-      <li class="check-row is-pass" data-key="check-weasel-words">
-        <div class="check-main">
-          <span class="check-status" aria-hidden="true">✓</span>
-          <form method="POST" class="check-select"><input type="hidden" name="id" value="weasel-words"><button
-            type="submit"
-            name="selectCheck"
-            class="check-name"
-            aria-pressed="false"
-            disabled
-            title="Weasel words"
-          >Weasel words</button></form>
-          <span class="check-count">passed</span>
-          <span class="check-actions">
-            <form method="POST"><input type="hidden" name="id" value="weasel-words"><button type="submit" name="copyCheckToUserFolder" class="check-edit" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>
-            <form method="POST"><input type="hidden" name="id" value="weasel-words"><button type="submit" name="toggleCheckEnabled" class="check-toggle">Disable</button></form>
-          </span>
-        </div>
-        
-        
-        
-      </li>
-      
-      <li class="check-row is-pass is-disabled" data-key="check-off">
-        <div class="check-main">
-          <span class="check-status" aria-hidden="true">–</span>
-          <form method="POST" class="check-select"><input type="hidden" name="id" value="off"><button
-            type="submit"
-            name="selectCheck"
-            class="check-name"
-            aria-pressed="false"
-            disabled
-            title="Disabled one"
-          >Disabled one</button></form>
-          <span class="check-count">off</span>
-          <span class="check-actions">
-            <form method="POST"><input type="hidden" name="id" value="off"><button type="submit" name="copyCheckToUserFolder" class="check-edit" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>
-            <form method="POST"><input type="hidden" name="id" value="off"><button type="submit" name="toggleCheckEnabled" class="check-toggle">Enable</button></form>
-          </span>
-        </div>
-        
-        
-        
-      </li>
-      
-    </ul>
-    <form method="POST" class="checks-editor">
-      <label>Open rule files in
-        <select name="editor">
-          <option value="">None (show path)</option><option value="vscode" selected>VS Code</option><option value="cursor">Cursor</option><option value="zed">Zed</option><option value="custom">Custom URL…</option>
-        </select>
-      </label>
-      <label>SSH host <input type="text" name="ssh_host" value="devbox" placeholder="blank = this machine" autocomplete="off"></label>
-      <label>Custom URL <input type="text" name="template" value="" placeholder="myeditor://open?file={path}&amp;line={line}" autocomplete="off"></label>
-      <button type="submit" name="setEditor" class="outline">Save</button>
-    </form>
-  </section>
+  <div class="ck-strip" data-key="checks-strip" role="status" aria-label="Showing one check">
+    
+    <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name">Filler intensifiers</b>
+    <span class="ck-strip-pos">finding 1 of 1 in this file</span>
+    <span class="ck-strip-nav">
+      <form method="POST"><input type="hidden" name="dir" value="-1"><button type="submit" name="stepFinding" class="outline" aria-label="Previous finding">‹</button></form>
+      <form method="POST"><input type="hidden" name="dir" value="1"><button type="submit" name="stepFinding" class="outline" aria-label="Next finding">›</button></form>
+    </span>
+    <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
+    <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="filler-intensifiers"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this check">×</button></form>
+    
+  </div>
 
   
   

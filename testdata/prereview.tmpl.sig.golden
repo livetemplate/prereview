@@ -81,60 +81,73 @@
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === blockSuggestions ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}
+=== checkRow ===
+
+          <li class="ckp-row is-{{.Status}}{{if .Expanded}} is-open{{end}}" data-key="ckp-row-{{.ID}}">
+            <form method="POST" class="ckp-row-form"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="expandCheck" class="ckp-row-head" aria-expanded="{{if .Expanded}}true{{else}}false{{end}}">
+              <span class="ck-pill ck-{{.Status}}">{{.Status}}</span>
+              <span class="ckp-title"><span class="ckp-name">{{.Name}}</span>{{with .Description}}<span class="ckp-desc">{{.}}</span>{{end}}</span>
+              <span class="ckp-sum">{{if .MatchNote}}{{.MatchNote}}{{else}}{{.Summary}}{{end}}</span>
+              <span class="ckp-src">{{.SourceLabel}}</span>
+              <span class="ckp-chev" aria-hidden="true">{{if .Expanded}}▾{{else}}▸{{end}}</span>
+            </button></form>
+            {{if .Expanded}}
+            <div class="ckp-detail">
+              {{range .Errors}}<p class="ckp-err"><code>{{.Path}}</code>: {{.Err}}</p>
+              {{end}}
+              {{range .ByFile}}
+              <div class="ckp-file" data-key="ckp-file-{{.Path}}">
+                <header><code>{{.Path}}</code>{{if .Open}} <span class="ck-pill ck-open">open</span>{{end}}<span class="ckp-file-n">{{.Count}}</span>
+                  {{with index .Findings 0}}<form method="POST" class="ckp-show"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>{{end}}
+                </header>
+                <ol>
+                  {{range .Findings}}<li data-key="ckp-f-{{.Path}}-{{.CheckID}}-{{.Index}}">
+                    <form method="POST" class="ckp-at-form"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="ckp-at">{{.Label}}</button></form>
+                    <span class="ckp-msg">{{.Message}}</span>
+                    <form method="POST" class="ckp-q"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="queueFinding" class="outline">Queue</button></form>
+                  </li>
+                  {{end}}
+                </ol>
+              </div>
+              {{end}}
+              {{if .More}}<p class="ckp-more">{{.More}} more finding{{if ne .More 1}}s{{end}} not listed; turn the check off, or narrow it with a search.</p>{{end}}
+              <div class="ckp-rule">
+                <span>{{.Detail}} · category <b>{{.Category}}</b>{{with .RulePath}} · <code>{{.}}</code>{{end}}</span>
+                <span class="ckp-rule-actions">
+                  {{if .EditorURL}}<a role="button" class="outline" href="{{.EditorURL}}" title="{{.RulePath}}">Open in editor</a>
+                  {{else}}{{if eq .Source "builtin"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="copyCheckToUserFolder" class="outline" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>{{end}}{{end}}
+                  {{if ne .Source "vale"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleCheckEnabled" class="outline">{{if eq .Status "off"}}Turn on{{else}}Turn off{{end}}</button></form>{{end}}
+                </span>
+                {{if and .RulePath (not .EditorURL)}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
+              </div>
+            </div>
+            {{end}}
+          </li>
+
 === checksButton ===
 {{with $.CheckSummary}}
     <form method="POST" class="file-head-checks">
-      <button type="submit" name="toggleChecksPanel" class="checks-trigger{{if .Failing}} is-failing{{else}}{{if .Running}} is-running{{else}} is-passing{{end}}{{end}}{{if $.ChecksOpen}} is-open{{end}}" aria-expanded="{{if $.ChecksOpen}}true{{else}}false{{end}}" title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}">{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
+      <button type="submit" name="openChecks" class="checks-trigger{{if .Failing}} is-failing{{else}}{{if .Running}} is-running{{else}} is-passing{{end}}{{end}}" title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}. Opens the Checks page.">{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
     </form>
 {{end}}
-=== checksPanel ===
-{{with $.CheckSummary}}
-  <section class="checks-panel" data-key="checks-panel" aria-label="Checks">
-    <header class="checks-panel-head">
-      <strong>Checks</strong>
-      <span class="checks-panel-count">{{.Passed}}/{{.Total}} passed{{if .Running}} · {{.Running}} running{{end}}</span>
-      <form method="POST" class="checks-panel-close"><button type="submit" name="toggleChecksPanel" class="outline" aria-label="Close checks">×</button></form>
-    </header>
-    {{with $.Checks.ValeNotice}}<div class="checks-notice" role="note">{{.}}{{if $.Checks.ValeTrust}} <form method="POST" class="checks-trust"><button type="submit" name="trustVale" class="outline">Trust this repo's Vale config</button></form>{{end}}</div>{{end}}
-    <ul class="checks-list">
-      {{range $.CheckRows}}
-      <li class="check-row is-{{.Status}}{{if .Disabled}} is-disabled{{end}}{{if .Selected}} is-selected{{end}}" data-key="check-{{.ID}}">
-        <div class="check-main">
-          <span class="check-status" aria-hidden="true">{{if .Disabled}}–{{else}}{{if eq .Status "pass"}}✓{{else}}{{if eq .Status "fail"}}✗{{else}}{{if eq .Status "running"}}…{{else}}!{{end}}{{end}}{{end}}{{end}}</span>
-          <form method="POST" class="check-select"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="check-name" aria-pressed="{{if .Selected}}true{{else}}false{{end}}" {{if or .Disabled (eq .Count 0)}}disabled{{end}} title="{{if .Description}}{{.Description}}{{else}}{{.Name}}{{end}}">{{.Name}}</button></form>
-          <span class="check-count">{{if .Disabled}}off{{else}}{{if eq .Status "fail"}}{{.Count}} finding{{if ne .Count 1}}s{{end}}{{else}}{{if eq .Status "running"}}running{{else}}{{if eq .Status "error"}}error{{else}}passed{{end}}{{end}}{{end}}{{end}}</span>
-          <span class="check-actions">
-            {{if .EditorURL}}<a class="check-edit" href="{{.EditorURL}}" title="{{.RulePath}}">Open in editor</a>
-            {{else}}{{if eq .Source "builtin"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="copyCheckToUserFolder" class="check-edit" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>{{end}}{{end}}
-            {{if ne .Source "vale"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleCheckEnabled" class="check-toggle">{{if .Disabled}}Enable{{else}}Disable{{end}}</button></form>{{end}}
-          </span>
-        </div>
-        {{if .Err}}<p class="check-error">{{.Err}}</p>{{end}}
-        {{if and .RulePath (not .EditorURL)}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
-        {{if .Selected}}
-        <ol class="check-findings">
-          {{range .Findings}}
-          <li data-key="cf-{{.CheckID}}-{{.Index}}">
-            <form method="POST"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="finding-jump">{{.Label}}</button></form>
-            <span class="finding-msg">{{.Message}}</span>
-          </li>
-          {{end}}
-        </ol>
-        {{end}}
-      </li>
-      {{end}}
-    </ul>
-    <form method="POST" class="checks-editor">
-      <label>Open rule files in
-        <select name="editor">
-          {{range $.EditorOptions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
-        </select>
-      </label>
-      <label>SSH host <input type="text" name="ssh_host" value="{{$.EditorSSHHost}}" placeholder="blank = this machine" autocomplete="off"></label>
-      <label>Custom URL <input type="text" name="template" value="{{$.EditorTemplate}}" placeholder="myeditor://open?file={path}&amp;line={line}" autocomplete="off"></label>
-      <button type="submit" name="setEditor" class="outline">Save</button>
-    </form>
-  </section>
+=== checksStrip ===
+{{with $.CheckStrip}}
+  <div class="ck-strip{{if not .Selected}} is-idle{{end}}" data-key="checks-strip" role="{{if .Selected}}status{{else}}group{{end}}" aria-label="{{if .Selected}}Showing one check{{else}}Failing checks on this file{{end}}">
+    {{if .Selected}}
+    <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name">{{.Name}}</b>
+    <span class="ck-strip-pos">finding {{.Pos}} of {{.Count}} in this file</span>
+    <span class="ck-strip-nav">
+      <form method="POST"><input type="hidden" name="dir" value="-1"><button type="submit" name="stepFinding" class="outline" aria-label="Previous finding">‹</button></form>
+      <form method="POST"><input type="hidden" name="dir" value="1"><button type="submit" name="stepFinding" class="outline" aria-label="Next finding">›</button></form>
+    </span>
+    <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
+    <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this check">×</button></form>
+    {{else}}
+    <span class="ck-strip-pos">Failing:</span>
+    {{range .Failing}}<form method="POST" class="ck-strip-pick"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline">{{.Name}} <span class="ck-strip-n">{{.Count}}</span></button></form>
+    {{end}}<form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
+    {{end}}
+  </div>
 {{end}}
 === commentCardFull ===
 <div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} · <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}{{if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}<form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
@@ -437,6 +450,8 @@
 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
 === iconHistory14 ===
 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
+=== iconLibrary ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
 === iconPalette ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round" /><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg>
 === iconQuiz ===
@@ -483,6 +498,86 @@
   
   <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
 </div>
+=== library ===
+{{with $.CheckPage}}
+<section class="library" data-key="library" aria-label="Library">
+  <header class="lib-head">
+    <strong class="lib-title">{{template "iconLibrary"}} Library</strong>
+    <span class="lib-src">the checks every review on this machine uses · edits to rule files show up live</span>
+    <details class="lib-editor">
+      <summary>Open rule files in: {{range $.EditorOptions}}{{if .Selected}}{{.Label}}{{end}}{{end}}</summary>
+      <form method="POST" class="checks-editor">
+        <label>Editor
+          <select name="editor">
+            {{range $.EditorOptions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+          </select>
+        </label>
+        <label>SSH host <input type="text" name="ssh_host" value="{{$.EditorSSHHost}}" placeholder="blank = this machine" autocomplete="off"></label>
+        <label>Custom URL <input type="text" name="template" value="{{$.EditorTemplate}}" placeholder="myeditor://open?file={path}&amp;line={line}" autocomplete="off"></label>
+        <button type="submit" name="setEditor" class="outline">Save</button>
+      </form>
+    </details>
+    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form>
+  </header>
+  <div class="lib-tabs" role="tablist">
+    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Learnings</button>
+    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
+    <button type="button" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button>
+    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
+  </div>
+  <div class="ckp-bar">
+    <form method="POST" lvt-form:preserve class="ckp-search-form">
+      <input type="search" name="q" class="ckp-search" value="{{.Query}}" placeholder="Search checks and findings" aria-label="Search checks and findings" lvt-on:input="setChecksQuery" lvt-mod:debounce="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    </form>
+    <div class="ckp-chips">
+      {{range .Chips}}<form method="POST"><input type="hidden" name="field" value="status"><input type="hidden" name="value" value="{{.Value}}"><button type="submit" name="setChecksFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
+      {{end}}{{if .File}}<form method="POST"><input type="hidden" name="field" value="file"><input type="hidden" name="value" value=""><button type="submit" name="setChecksFilter" class="lib-chip ckp-file-chip is-on" title="Showing findings in this file only; clear to see every file">in <code>{{.File}}</code> ×</button></form>
+      {{end}}<form method="POST" class="ckp-source-form">
+        <select name="source" aria-label="Source" lvt-on:change="setChecksSource">
+          <option value=""{{if eq .Source ""}} selected{{end}}>All sources</option>
+          <option value="builtin"{{if eq .Source "builtin"}} selected{{end}}>Built-in</option>
+          <option value="user"{{if eq .Source "user"}} selected{{end}}>Yours</option>
+          <option value="vale"{{if eq .Source "vale"}} selected{{end}}>This repo (Vale)</option>
+        </select>
+      </form>
+    </div>
+    <span class="ckp-scope">{{.Files}} file{{if ne .Files 1}}s{{end}} checked{{if .Skipped}} ({{.Skipped}} more not checked){{end}} · {{.Checks}} check{{if ne .Checks 1}}s{{end}} · updates live</span>
+  </div>
+  <div class="ckp">
+    <nav class="ckp-cats" aria-label="Categories">
+      {{range .Categories}}<form method="POST"><input type="hidden" name="field" value="category"><input type="hidden" name="value" value="{{.Name}}"><button type="submit" name="setChecksFilter" class="ckp-cat{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}"><span class="ckp-cat-name">{{if .Name}}{{.Name}}{{else}}All{{end}}</span>{{with .Note}}<span class="ckp-cat-note">{{.}}</span>{{end}}{{if .Failing}}<span class="ckp-cat-fail" title="{{.Failing}} failing">{{.Failing}}</span>{{end}}<span class="ckp-cat-n">{{.Count}}</span></button></form>
+      {{end}}
+    </nav>
+    <div class="ckp-main">
+      {{if .Query}}<p class="ckp-hits">{{.Matches}} check{{if ne .Matches 1}}s{{end}} match “{{.Query}}”: names, descriptions, categories, and the words a finding flagged.</p>{{end}}
+      {{range .Groups}}
+      <section class="ckp-group" data-key="ckp-group-{{.Name}}">
+        <h3>{{.Name}} <small>{{len .Rows}} check{{if ne (len .Rows) 1}}s{{end}}{{if .Failing}} · {{.Failing}} failing{{end}}{{if .Errors}} · {{.Errors}} error{{if ne .Errors 1}}s{{end}}{{end}}</small></h3>
+        <ul class="ckp-list">
+          {{range .Rows}}{{template "checkRow" .}}{{end}}
+        </ul>
+      </section>
+      {{end}}
+      {{if .ShowVale}}
+      <section class="ckp-group" data-key="ckp-group-vale-notice">
+        <h3>Vale <small>this repo’s <code>.vale.ini</code></small></h3>
+        <div class="ckp-trust" role="note"><p>{{.ValeNotice}}</p>{{if .ValeTrust}}<form method="POST"><button type="submit" name="trustVale" class="outline">Trust this repo’s Vale config</button></form>{{end}}</div>
+      </section>
+      {{end}}
+      {{if .Folded}}<div class="ckp-more">{{range $i, $g := .Folded}}{{if $i}}, {{end}}{{$g.Name}} ({{len $g.Rows}}){{end}} all pass · <form method="POST" class="ckp-inline"><button type="submit" name="togglePassingGroups" class="ck-link">show passing groups</button></form></div>
+      {{else}}{{if and .ShowPassing .CanFold}}<div class="ckp-more"><form method="POST" class="ckp-inline"><button type="submit" name="togglePassingGroups" class="ck-link">hide passing groups</button></form></div>
+      {{end}}{{end}}
+      {{if and (not .Groups) (not .Folded) (not .ShowVale)}}<p class="ckp-empty">{{if .Query}}No check matches “{{.Query}}”.{{else}}No checks match these filters.{{end}}</p>{{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+=== libraryButton ===
+
+  <form method="POST" class="library-form">
+    <button type="submit" name="toggleLibrary" class="contrast library-trigger{{if $.ShowLibrary}} is-on{{end}}" aria-pressed="{{if $.ShowLibrary}}true{{else}}false{{end}}" title="Library: the checks every review on this machine uses">{{template "iconLibrary"}}<span class="tb-label">Library</span></button>
+  </form>
+
 === markdownView ===
 {{with $.CurrentDiff}}  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.md-block" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
         <span class="line-mark{{if $ba.Open}} is-open{{else}}{{if $ba.Accepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$ba.Total}}</span>
@@ -724,6 +819,7 @@
 {{template "quizView" $}}
 {{else}}{{if .ShowAllComments}}
 {{template "allComments" $}}
+{{else}}{{if .ShowLibrary}}{{template "library" $}}
 {{else}}
 {{with .CurrentDiff}}
 
@@ -735,7 +831,7 @@
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
-  {{end}}{{if and $.ChecksOpen $.ShowChecks}}{{template "checksPanel" $}}{{end}}
+  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}
   
   
   {{if $.ShowQuizNav}}
@@ -803,7 +899,7 @@
   </div>
   {{end}}
 {{end}}
-{{end}}{{end}}
+{{end}}{{end}}{{end}}
 
 {{template "viewerPrompts" $}}
 </main>
@@ -834,6 +930,12 @@
 <script defer src="/mermaid-init.js"></script>
 </body>
 </html>
+
+
+
+
+
+
 
 
 
@@ -1184,7 +1286,7 @@
   <form method="POST" class="nav-next">
     <button type="submit" name="nextFile" title="Next file" aria-label="Next file" class="contrast"><span class="nav-label">Next{{with index $.KeyHint "nextFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>{{template "iconChevronRight"}}</button>
   </form>
-  {{end}}
+  {{end}}{{template "libraryButton" $}}
   
   {{if .AgentMode}}
 {{template "workQueue" $}}

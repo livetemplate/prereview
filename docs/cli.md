@@ -249,11 +249,11 @@ prereview check     [--json] <file>...
 
 - **`prereview check`** — run the review's [checks](usage.md#checks) on files
   from the terminal: the built-in prose rules, your `~/.config/prereview/checks/`
-  rules, and the repo's Vale config when you've trusted it in the panel and
+  rules, and the repo's Vale config when you've trusted it on the Checks page and
   `vale` is installed (run it from the repo root). Prints each finding as `path:line:col: severity: message (check)`
   and exits `1` when any check fails or errors, so an agent can self-check prose
   before `prereview done`. `--json` prints every check's result per file. Checks
-  you disabled in the panel are skipped. Takes no `--out`: it reads files, not a
+  you turned off on the Checks page are skipped. Takes no `--out`: it reads files, not a
   review's store.
 
 ## Composing flags

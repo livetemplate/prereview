@@ -11,7 +11,7 @@ import (
 // overview pane. Bound to the "N comments" entry in the overflow menu.
 // Closes the menu so the user sees the result immediately.
 func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.ShowAllComments = !state.ShowAllComments
+	toggleFullView(&state, &state.ShowAllComments)
 	state.MoreMenuOpen = false
 	// Opening the overview must show accurate badges/snippets for every
 	// commented file, including ones never opened this session.
@@ -291,8 +291,7 @@ func (c *PrereviewController) NavigateToHeading(state PrereviewState, ctx *livet
 		return state, fmt.Errorf("navigateToHeading: missing id")
 	}
 	state.TOCOpen = false
-	state.ShowAllComments = false
-	state.ShowQuiz = false
+	closeFullViews(&state)
 	state.ScrollToHeadingID = id
 	// Heading scroll and comment scroll/focus are mutually exclusive intents —
 	// clear any pending comment target so it doesn't steal the scroll/focus
@@ -341,7 +340,7 @@ func (c *PrereviewController) JumpToSuggestion(state PrereviewState, ctx *livete
 }
 
 // selectFileForJump switches the view to file (loading its diff if it changed)
-// and closes the all-comments overview, preserving unsaved composer text (#105).
+// and closes the full-page views (all comments, quiz, Library), preserving unsaved composer text (#105).
 // Shared by JumpToComment/JumpToSuggestion; each sets its own scroll target after
 // (or none). Clears both one-render scroll nudges so a caller that sets neither
 // leaves no stale target behind.
@@ -352,12 +351,26 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 		if err != nil {
 			return state, fmt.Errorf("load diff: %w", err)
 		}
-		state.SelectedFile = file
-		c.showDiff(&state, diff)
+		c.enterFile(&state, file, diff)
 	}
-	state.ShowAllComments = false
-	state.ShowQuiz = false
+	closeFullViews(&state)
 	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
 	return state, nil
+}
+
+// closeFullViews returns to the file view from any full-page view: the
+// all-comments overview, the quiz, and the Library. Every jump into a file calls it.
+func closeFullViews(state *PrereviewState) {
+	state.ShowAllComments = false
+	state.ShowQuiz = false
+	state.ShowLibrary = false
+}
+
+// toggleFullView opens one full-page view (closing the others) or closes it.
+// view points at one of state's Show* flags.
+func toggleFullView(state *PrereviewState, view *bool) {
+	open := !*view
+	closeFullViews(state)
+	*view = open
 }

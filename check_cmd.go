@@ -20,16 +20,10 @@ import (
 // findings already printed are the message.
 var errChecksFailed = errors.New("checks failed")
 
-// checkFileReport is one file's results in `prereview check --json`.
-type checkFileReport struct {
-	Path    string          `json:"path"`
-	Results []checks.Result `json:"results"`
-}
-
 // runCheck implements `prereview check [--json] <file>...`: the same checks the
-// review panel shows (built-ins, your checks folder, the repo's Vale config when
+// Checks page shows (built-ins, your checks folder, the repo's Vale config when
 // vale is installed), run once from the CLI so an agent can self-check before it
-// marks work done. Checks you disabled in the panel are skipped here too. Exits 1
+// marks work done. Checks you turned off on the Checks page are skipped here too. Exits 1
 // when any check fails or errors.
 func runCheck(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("check", flag.ContinueOnError)
@@ -39,8 +33,8 @@ func runCheck(args []string, stdout io.Writer) error {
 			"Usage: prereview check [--json] <file>...\n\n"+
 				"  Run the review's checks on each file: the built-in prose rules, the rules in\n"+
 				"  your checks folder ("+userChecksDir()+"), and the repo's Vale\n"+
-				"  config when you've trusted it in the panel and vale is installed. Prints each finding as path:line:col; exits 1\n"+
-				"  when any check fails or errors. Checks disabled in the panel are skipped.\n")
+				"  config when you've trusted it on the Checks page and vale is installed. Prints each finding as path:line:col; exits 1\n"+
+				"  when any check fails or errors. Checks turned off on the Checks page are skipped.\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -56,14 +50,14 @@ func runCheck(args []string, stdout io.Writer) error {
 	lib := checks.Load(checks.Dir{Path: userChecksDir(), Source: checks.SourceUser})
 	disabled, trustVale := review.CheckPrefs(uiPrefsPath(), repo)
 
-	var reports []checkFileReport
+	var reports []review.PathChecks // the same shape the Checks page reads
 	failed := false
 	for _, arg := range fs.Args() {
 		abs, err := filepath.Abs(arg)
 		if err != nil {
 			return err
 		}
-		lines, err := readLines(abs)
+		lines, err := checks.ReadLines(abs)
 		if err != nil {
 			return err
 		}
@@ -82,7 +76,7 @@ func runCheck(args []string, stdout io.Writer) error {
 			}
 			kept = append(kept, r)
 		}
-		reports = append(reports, checkFileReport{Path: arg, Results: kept})
+		reports = append(reports, review.PathChecks{Path: arg, Results: kept})
 	}
 
 	if *asJSON {
@@ -100,7 +94,7 @@ func runCheck(args []string, stdout io.Writer) error {
 	return nil
 }
 
-func printCheckReports(w io.Writer, reports []checkFileReport) {
+func printCheckReports(w io.Writer, reports []review.PathChecks) {
 	for _, rep := range reports {
 		passed := 0
 		for _, r := range rep.Results {
@@ -117,14 +111,4 @@ func printCheckReports(w io.Writer, reports []checkFileReport) {
 		}
 		fmt.Fprintf(w, "%s: %d/%d checks passed\n", rep.Path, passed, len(rep.Results))
 	}
-}
-
-// readLines reads a file as the diff view's lines: split on "\n" after dropping
-// the final newline (gitdiff's split), so findings land on the same columns.
-func readLines(path string) ([]string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n"), nil
 }

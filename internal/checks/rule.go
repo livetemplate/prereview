@@ -68,16 +68,18 @@ type ruleFile struct {
 	Accept      []string          `yaml:"accept"`
 	Reject      []string          `yaml:"reject"`
 	Files       []string          `yaml:"files"`
+	Category    string            `yaml:"category"`
 	Command     []string          `yaml:"command"`
 	Timeout     string            `yaml:"timeout"`
 }
 
 // Rule is one loaded check. A rule that failed to parse or compile still exists,
-// with Err set, so the panel can show it as errored instead of silently dropping it.
+// with Err set, so the Checks page can show it as errored instead of silently dropping it.
 type Rule struct {
 	ID          string // file name without extension; a user file replaces a built-in with the same ID
 	Name        string
 	Description string
+	Category    string // the rule's `category:`, else DefaultCategory(Source)
 	Type        string
 	Message     string
 	Level       string
@@ -138,16 +140,49 @@ func (r *Rule) Applies(rel string) bool {
 // ParseRule parses one rule file. It never returns nil: a bad file yields a Rule
 // with Err set (and the ID, so it still lists).
 func ParseRule(id, source, filePath string, data []byte) *Rule {
-	r := &Rule{ID: id, Name: id, Source: source, Path: filePath, Level: LevelWarning}
+	r := &Rule{ID: id, Name: id, Source: source, Path: filePath, Level: LevelWarning, Category: DefaultCategory(source)}
 	var f ruleFile
 	if err := yaml.Unmarshal(data, &f); err != nil {
 		r.Err = "invalid YAML: " + err.Error()
 		return r
 	}
+	if c := strings.TrimSpace(f.Category); c != "" {
+		r.Category = c
+	}
 	if err := r.build(f); err != nil {
 		r.Err = err.Error()
 	}
 	return r
+}
+
+// DefaultCategory groups a rule that names no `category:` by where it lives.
+func DefaultCategory(source string) string {
+	switch source {
+	case SourceBuiltin:
+		return "Built-in"
+	case SourceUser:
+		return "Yours"
+	case SourceRepo:
+		return "This repo"
+	default:
+		return valeCategory
+	}
+}
+
+const valeCategory = "Vale"
+
+// ValeCategory groups a Vale check by its style, the part of its name before the
+// dot ("Microsoft.Passive" → "Vale · Microsoft").
+func ValeCategory(check string) string {
+	if style, _, ok := strings.Cut(check, "."); ok && style != "" {
+		return valeCategory + " · " + style
+	}
+	return valeCategory
+}
+
+// IsValeCategory reports a category ValeCategory (or the Vale summary) produces.
+func IsValeCategory(c string) bool {
+	return c == valeCategory || strings.HasPrefix(c, valeCategory+" · ")
 }
 
 func (r *Rule) build(f ruleFile) error {

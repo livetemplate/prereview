@@ -13,6 +13,14 @@ import (
 // SaveDraft updates DraftBody as the user types. Bound to the textarea's
 // change event so the draft survives reconnect (state has lvt:"persist").
 func (c *PrereviewController) SaveDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	// The input is debounced, so its last saveDraft can land AFTER the Save that
+	// closed the composer (type, then click Save within the debounce). Applying it
+	// then would resurrect the saved text in the next composer you open, so a
+	// draft only lands while a composer is open: a line/text selection, or a file,
+	// area or region comment.
+	if state.SelectionAnchor == 0 && state.CommentMode == "" {
+		return state, nil
+	}
 	state.DraftBody = ctx.GetString("body")
 	return state, nil
 }
@@ -526,8 +534,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	// The composer only renders in the diff branch; when Edit is invoked
 	// from the all-comments view this drops back into the file so the
 	// edit composer is actually visible (no-op when already in the diff).
-	state.ShowAllComments = false
-	state.ShowQuiz = false
+	closeFullViews(&state)
 	return state, nil
 }
 
@@ -561,8 +568,7 @@ func (c *PrereviewController) ReanchorComment(state PrereviewState, ctx *livetem
 	state.ReanchorCommentID = cm.ID
 	state.EditingCommentID = ""
 	state.LastDeletedComment = nil
-	state.ShowAllComments = false
-	state.ShowQuiz = false
+	closeFullViews(&state)
 	return state, nil
 }
 

@@ -102,15 +102,32 @@ suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
 
 Prose files (`.md`, `.markdown`, `.txt`, `.rst`, `.adoc`) get **checks**: rules
 that flag wording, run every time the file loads. The file header shows
-**Checks n/m**, how many of the enabled checks passed. Tap it to open the panel.
+**Checks n/m**, how many of the enabled checks passed.
 
-- **Select a check** to see its findings in the file: each flagged span gets a
-  wavy underline and a card under its line. Only one check shows at a time, so a
-  rule with many hits doesn't unfold the whole file. In the rendered Markdown or
-  HTML view, selecting a check shows the source until you move to another file.
+**In a file**, a bar above the text lists the checks that fail on it
+("Failing: Filler intensifiers 2 · All checks"):
+
+- **Tap a check** to see its findings: each flagged span gets a wavy underline and
+  a card under its line. Only one check shows at a time, so a rule with many hits
+  doesn't unfold the whole file. In the rendered Markdown or HTML view, picking a
+  check shows the source while it's picked.
+- The bar becomes **finding 1 of n** with **‹ ›** to step through the findings in
+  this file (it wraps; it never changes file), and **×** to go back to the list.
 - **Queue as comment** on a card turns the finding into an ordinary comment on
   that span, so your agent fixes it from the queue like any other.
-- **Disable** turns a check off for you, in every repo.
+
+**The Checks page** (the toolbar's **Library** button, or **Checks n/m** /
+**All checks** for the open file) lists every check across every changed file:
+
+- **Search** check names, descriptions, categories and the words a finding
+  flagged. The status chips (**Failing**, **Errors**, **Passing**, **Off**), the
+  source picker and the **category** list narrow it further; categories where
+  every check passes fold into one line until you ask to see them.
+- **Tap a check** to see its findings grouped by file, with **Show in file** and
+  **Queue** on each, and its rule actions: **Edit a copy** (built-ins), **Open in
+  editor** (your rules) and **Turn off** (for you, in every repo).
+- A rule's category is its `category:` key; without one it groups as Built-in,
+  Yours, or its Vale style (`Microsoft.Passive` → Vale · Microsoft).
 
 prereview ships three built-in rules: weasel words, filler intensifiers, and
 sentence length. Your own rules live in `~/.config/prereview/checks/` as YAML
@@ -118,7 +135,7 @@ files in [Vale's](https://vale.sh/docs/topics/styles/) rule format. prereview ru
 the `existence`, `substitution` and `occurrence` types itself, plus a `vocab` list
 (`accept:` terms flag the wrong case, `reject:` terms flag any use). A file named
 like a built-in (`weasel-words.yml`) replaces it; **Edit a copy** on a built-in's
-row puts one there for you. Edits to these files show up in the open panel without
+row puts one there for you. Edits to these files show up on the open page without
 a reload, and a rule that doesn't parse shows its error on its row.
 
 ```yaml
@@ -128,6 +145,7 @@ name: House terms
 message: "Use '%s' instead of '%s'."
 ignorecase: true
 files: ["*.md", "docs/*.txt"]   # optional; defaults to the prose types above
+category: Terminology            # optional; groups it on the Checks page
 swap:
   e-mail: email
   utilize: use
@@ -140,15 +158,17 @@ argument and the text on stdin, and prints a JSON array of
 character columns). Command rules only run from your own checks folder, never
 from a reviewed repo.
 
-If a repo has a `.vale.ini`, the panel offers **Trust this repo's Vale config**.
+If a repo has a `.vale.ini`, the Checks page offers **Trust this repo's Vale
+config** in its Vale category.
 A Vale config can make vale start other tools (an XML transform runs
 `xsltproc`), so it never runs just because you opened the review. Once you trust
 the repo (remembered per repo, for you), its rules run through
-[vale](https://vale.sh) when it's installed; without vale the panel says the
+[vale](https://vale.sh) when it's installed; without vale the page says the
 config isn't applied.
 
 **Open in editor** on a rule's row opens the file in VS Code, Cursor, Zed, or a
-custom URL (`{path}`, `{line}`, `{host}`); pick one at the bottom of the panel.
+custom URL (`{path}`, `{line}`, `{host}`); pick one under **Open rule files in**
+at the top of the page.
 Set **SSH host** when your browser is on another device than the review, so the
 link opens the file over the editor's remote-SSH support. With no editor chosen,
 the row shows the file's path to copy.

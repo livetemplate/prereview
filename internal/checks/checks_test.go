@@ -316,3 +316,43 @@ func TestParseValeJSON(t *testing.T) {
 		t.Error("bad JSON accepted")
 	}
 }
+
+func TestRuleCategory(t *testing.T) {
+	explicit := ParseRule("x", SourceUser, "", []byte("extends: existence\ncategory: Tone\ntokens: [a]\n"))
+	if explicit.Category != "Tone" {
+		t.Errorf("explicit %q", explicit.Category)
+	}
+	for src, want := range map[string]string{SourceBuiltin: "Built-in", SourceUser: "Yours", SourceRepo: "This repo"} {
+		if r := ParseRule("x", src, "", []byte("extends: existence\ntokens: [a]\n")); r.Category != want {
+			t.Errorf("%s default %q, want %q", src, r.Category, want)
+		}
+	}
+	if r := ParseRule("x", SourceUser, "", []byte(":::")); r.Category != "Yours" {
+		t.Errorf("a broken rule still groups by source: %q", r.Category)
+	}
+	if got := ValeCategory("Microsoft.Passive"); got != "Vale · Microsoft" {
+		t.Errorf("vale %q", got)
+	}
+	if got := ValeCategory("Spelling"); got != "Vale" {
+		t.Errorf("vale no style %q", got)
+	}
+	lib := Load()
+	for _, r := range lib.Rules {
+		if r.Category == "Built-in" {
+			t.Errorf("built-in %s ships without a category", r.ID)
+		}
+	}
+	res, _ := ParseValeJSON(mustRead(t, "testdata/vale-output.json"))
+	if len(res) == 0 || res[0].Category != "Vale · Demo" {
+		t.Errorf("vale result category %+v", res)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}

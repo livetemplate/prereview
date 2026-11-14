@@ -52,6 +52,7 @@ func (c *PrereviewController) SetBase(state PrereviewState, ctx *livetemplate.Co
 			c.showDiff(&state, diff)
 		}
 	}
+	c.applyReviewChecks(&state) // a new base is a new set of changed files
 	return state, nil
 }
 
@@ -71,8 +72,22 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
 	}
+	c.enterFile(&state, path, diff)
+	// #128: re-open at the last read location — stamp a one-shot scroll on the
+	// line the reviewer last had at the top of the viewport for this file.
+	state.ScrollToReadKey = state.LastReadTopKey[path]
+	return state, nil
+}
+
+// enterFile makes path (with its loaded diff) the open file and drops what
+// belonged to the previous one: the selection, any open composer, the cursor,
+// a search reveal, the full-page views. It re-anchors the file's comments and
+// refreshes its Versions panel (#183: a switch that skipped this showed the
+// previous file's versions). SelectFile and the jumps (comments, suggestions,
+// check findings) all switch through it; each sets its own scroll target after.
+func (c *PrereviewController) enterFile(state *PrereviewState, path string, diff *gitdiff.FileDiff) {
 	state.SelectedFile = path
-	c.showDiff(&state, diff)
+	c.showDiff(state, diff)
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
@@ -81,21 +96,14 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 	state.CommentMode = ""          // any file-level / area composer from the prior file is cancelled
 	state.URLHashScrollAnchor = ""  // anchor target was for the previous file; let the new file pick its own
 	state.CursorKey = ""            // line cursor was for the previous file's lines
-	// #128: re-open at the last read location — stamp a one-shot scroll on the
-	// line the reviewer last had at the top of the viewport for this file.
-	state.ScrollToReadKey = state.LastReadTopKey[path]
-	state.RevealFile = "" // a search-jump's full-file reveal was for the previous file
+	state.RevealFile = ""           // a search-jump's full-file reveal was for the previous file
 	state.FileDrawerOpen = false
-	// Picking a file from the drawer while the all-comments view is
-	// open implies "leave this overview, go look at that file" — same
-	// intent as the Back button on the all-comments view. Without this
-	// the user would land on the all-comments view with a freshly-
-	// selected (but invisible) file behind it.
-	state.ShowAllComments = false
-	state.ShowQuiz = false
-	c.relocateSelected(&state)
-	c.applyVersionList(&state) // per-file version timeline (#90) — refresh for the new file
-	return state, nil
+	// Going to a file from a full-page view (all comments, quiz, Library) means
+	// "leave this overview, look at that file"; otherwise the file would load
+	// invisibly behind it.
+	closeFullViews(state)
+	c.relocateSelected(state)
+	c.applyVersionList(state) // per-file version timeline (#90) — refresh for the new file
 }
 
 // ToggleFiles flips the mobile file-drawer's open state. Bound to the
@@ -214,8 +222,7 @@ func (c *PrereviewController) stepComment(state PrereviewState, delta int) (Prer
 		c.showDiff(&state, diff)
 		c.applyVersionList(&state) // per-file version timeline (#90)
 	}
-	state.ShowAllComments = false
-	state.ShowQuiz = false
+	closeFullViews(&state)
 	state.ScrollToCommentID = target.ID
 	state.ScrollToHeadingID = ""
 	return state, nil

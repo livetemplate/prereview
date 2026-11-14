@@ -1,10 +1,12 @@
 package checks
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -147,4 +149,22 @@ func (lib *Library) RunAll(ctx context.Context, repo, rel string, lines []string
 		}
 	}
 	return out
+}
+
+// ErrBinary is ReadLines' answer for a file that isn't text.
+var ErrBinary = errors.New("binary file")
+
+// ReadLines reads a file as the diff view's new-side lines: split on "\n" after
+// dropping the final newline (gitdiff's split), so a finding's columns land where
+// the view draws them. The CLI and the Checks page both read through it. A file
+// with a NUL byte is binary (gitdiff's rule) and returns ErrBinary.
+func ReadLines(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return nil, ErrBinary
+	}
+	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n"), nil
 }

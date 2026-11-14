@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/livetemplate/prereview/internal/review"
 )
 
 func TestRunCheck(t *testing.T) {
@@ -31,7 +33,7 @@ func TestRunCheck(t *testing.T) {
 	if err := runCheck([]string{"--json", "good.md"}, &out); err != nil {
 		t.Fatalf("good.md: %v\n%s", err, out.String())
 	}
-	var reps []checkFileReport
+	var reps []review.PathChecks
 	if err := json.Unmarshal(out.Bytes(), &reps); err != nil || len(reps) != 1 || len(reps[0].Results) == 0 {
 		t.Fatalf("json %v: %s", err, out.String())
 	}

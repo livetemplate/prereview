@@ -4,6 +4,7 @@ name: Sentence length
 description: Sentences over 35 words.
 message: "This sentence is over 35 words; consider splitting it."
 level: suggestion
+category: Readability
 scope: sentence
 max: 35
 token: '\b[\p{L}\p{N}''’-]+\b'

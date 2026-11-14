@@ -5,6 +5,7 @@ name: Weasel words
 description: Claims of certainty or vagueness the text doesn't back up.
 message: "'%s' asserts without evidence; say what makes it so, or cut it."
 level: warning
+category: Clarity
 ignorecase: true
 tokens:
   - arguably
