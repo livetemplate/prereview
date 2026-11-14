@@ -44,6 +44,13 @@ type UIPrefs struct {
 	// backlog. A view preference like the rest, so it belongs here and not in the
 	// session store.
 	QueueGlobal bool `json:"queue_global"`
+	// DisabledChecks are check IDs turned off in the checks panel — a per-user view
+	// choice that holds in every repo. Editor / EditorTemplate / EditorSSHHost drive
+	// the "Open in editor" links (see editorlink.go).
+	DisabledChecks []string `json:"disabled_checks,omitempty"`
+	Editor         string   `json:"editor,omitempty"`
+	EditorTemplate string   `json:"editor_template,omitempty"`
+	EditorSSHHost  string   `json:"editor_ssh_host,omitempty"`
 }
 
 // uiPrefsMu serialises writes to the prefs file — multiple tabs (sharing one
@@ -127,6 +134,10 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.RawMarkdown = p.RawMarkdown
 	state.RawHTML = p.RawHTML
 	state.QueueGlobal = p.QueueGlobal
+	state.DisabledChecks = p.DisabledChecks
+	state.Editor = p.Editor
+	state.EditorTemplate = p.EditorTemplate
+	state.EditorSSHHost = p.EditorSSHHost
 }
 
 // savePrefs persists the current view-style preferences to the per-user prefs
@@ -145,7 +156,18 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		RawMarkdown:  state.RawMarkdown,
 		RawHTML:      state.RawHTML,
 		QueueGlobal:  state.QueueGlobal,
+
+		DisabledChecks: state.DisabledChecks,
+		Editor:         state.Editor,
+		EditorTemplate: state.EditorTemplate,
+		EditorSSHHost:  state.EditorSSHHost,
 	}); err != nil {
 		slog.Warn("savePrefs", "err", err)
 	}
+}
+
+// DisabledCheckIDs is the user's disabled checks, for `prereview check`, which
+// honours the same choice the panel makes.
+func DisabledCheckIDs(prefsPath string) []string {
+	return loadUIPrefs(prefsPath).DisabledChecks
 }

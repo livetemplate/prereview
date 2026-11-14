@@ -1,0 +1,15 @@
+# Intensifiers that add emphasis but no meaning.
+extends: existence
+name: Filler intensifiers
+description: Emphasis words that rarely change what a sentence says.
+message: "'%s' adds emphasis, not meaning; try cutting it."
+level: suggestion
+ignorecase: true
+tokens:
+  - very
+  - really
+  - extremely
+  - basically
+  - literally
+  - totally
+  - incredibly

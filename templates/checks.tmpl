@@ -1,0 +1,79 @@
+{{/* Checks (checks M1): deterministic checkers over the displayed file. The header
+     button shows "passed/total" for enabled checks; the panel lists each check, and
+     selecting one draws ITS findings inline (only one at a time, so a noisy rule
+     can't unfold the file). All server state — no custom JS. */}}
+{{define "checksButton"}}{{with $.CheckSummary}}
+    <form method="POST" class="file-head-checks">
+      <button
+        type="submit"
+        name="toggleChecksPanel"
+        class="checks-trigger{{if .Failing}} is-failing{{else if .Running}} is-running{{else}} is-passing{{end}}{{if $.ChecksOpen}} is-open{{end}}"
+        aria-expanded="{{if $.ChecksOpen}}true{{else}}false{{end}}"
+        title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}"
+      >{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
+    </form>
+{{end}}{{end}}
+
+{{define "checksPanel"}}{{with $.CheckSummary}}
+  <section class="checks-panel" data-key="checks-panel" aria-label="Checks">
+    <header class="checks-panel-head">
+      <strong>Checks</strong>
+      <span class="checks-panel-count">{{.Passed}}/{{.Total}} passed{{if .Running}} · {{.Running}} running{{end}}</span>
+      <form method="POST" class="checks-panel-close"><button type="submit" name="toggleChecksPanel" class="outline" aria-label="Close checks">×</button></form>
+    </header>
+    {{with $.Checks.ValeNotice}}<p class="checks-notice" role="note">{{.}}</p>{{end}}
+    <ul class="checks-list">
+      {{range $.CheckRows}}
+      <li class="check-row is-{{.Status}}{{if .Disabled}} is-disabled{{end}}{{if .Selected}} is-selected{{end}}" data-key="check-{{.ID}}">
+        <div class="check-main">
+          <span class="check-status" aria-hidden="true">{{if .Disabled}}–{{else if eq .Status "pass"}}✓{{else if eq .Status "fail"}}✗{{else if eq .Status "running"}}…{{else}}!{{end}}</span>
+          <form method="POST" class="check-select"><input type="hidden" name="id" value="{{.ID}}"><button
+            type="submit"
+            name="selectCheck"
+            class="check-name"
+            aria-pressed="{{if .Selected}}true{{else}}false{{end}}"
+            {{if or .Disabled (eq .Count 0)}}disabled{{end}}
+            title="{{if .Description}}{{.Description}}{{else}}{{.Name}}{{end}}"
+          >{{.Name}}</button></form>
+          <span class="check-count">{{if .Disabled}}off{{else if eq .Status "fail"}}{{.Count}} finding{{if ne .Count 1}}s{{end}}{{else if eq .Status "running"}}running{{else if eq .Status "error"}}error{{else}}passed{{end}}</span>
+          <span class="check-actions">
+            {{if .EditorURL}}<a class="check-edit" href="{{.EditorURL}}" title="{{.RulePath}}">Open in editor</a>
+            {{else if eq .Source "builtin"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="copyCheckToUserFolder" class="check-edit" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>{{end}}
+            {{if ne .Source "vale"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleCheckEnabled" class="check-toggle">{{if .Disabled}}Enable{{else}}Disable{{end}}</button></form>{{end}}
+          </span>
+        </div>
+        {{if .Err}}<p class="check-error">{{.Err}}</p>{{end}}
+        {{if and .RulePath (not .EditorURL)}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
+        {{if .Selected}}
+        <ol class="check-findings">
+          {{range .Findings}}
+          <li data-key="cf-{{.CheckID}}-{{.Index}}">
+            <form method="POST"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="finding-jump">{{.Label}}</button></form>
+            <span class="finding-msg">{{.Message}}</span>
+          </li>
+          {{end}}
+        </ol>
+        {{end}}
+      </li>
+      {{end}}
+    </ul>
+    <form method="POST" class="checks-editor">
+      <label>Open rule files in
+        <select name="editor">
+          {{range $.EditorOptions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+        </select>
+      </label>
+      <label>SSH host <input type="text" name="ssh_host" value="{{$.EditorSSHHost}}" placeholder="blank = this machine" autocomplete="off"></label>
+      <label>Custom URL <input type="text" name="template" value="{{$.EditorTemplate}}" placeholder="myeditor://open?file={path}&amp;line={line}" autocomplete="off"></label>
+      <button type="submit" name="setEditor" class="outline">Save</button>
+    </form>
+  </section>
+{{end}}{{end}}
+
+{{define "findingCard"}}
+      <div class="finding-card sev-{{.Severity}}" data-key="finding-{{.CheckID}}-{{.Index}}" role="note">
+        <span class="finding-check">{{.CheckName}}</span>
+        <span class="finding-msg">{{.Message}}</span>
+        <form method="POST" class="finding-queue"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="queueFinding" class="outline">Queue as comment</button></form>
+      </div>
+{{end}}

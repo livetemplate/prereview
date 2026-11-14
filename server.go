@@ -159,6 +159,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		UIPrefsPath: uiPrefsPath(),
 		PromptsDir:  userPromptsDir(),
 		QuizzesDir:  userQuizzesDir(),
+		ChecksDir:   userChecksDir(),
 		Version:     version,
 		CSVWriter:   csvWriter,
 		AgentMode:   agentMode,
@@ -267,6 +268,11 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		defer close(stopWatch)
 		go controller.WatchLLMStatus(stopWatch, review.LLMStatusPollInterval)
 	}
+	// Watch the checks rule folder in every mode, so editing a rule in your editor
+	// re-runs the checks in the open tabs.
+	stopChecks := make(chan struct{})
+	defer close(stopChecks)
+	go controller.WatchChecks(stopChecks, review.ChecksPollInterval)
 
 	return serveAndWait(srv, ln, nil, shutdownReq)
 }

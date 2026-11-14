@@ -353,7 +353,7 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 			return state, fmt.Errorf("load diff: %w", err)
 		}
 		state.SelectedFile = file
-		state.CurrentDiff = diff
+		c.showDiff(&state, diff)
 	}
 	state.ShowAllComments = false
 	state.ShowQuiz = false

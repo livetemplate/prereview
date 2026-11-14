@@ -1,0 +1,9 @@
+# Long sentences are harder to follow. Counts words per sentence.
+extends: occurrence
+name: Sentence length
+description: Sentences over 35 words.
+message: "This sentence is over 35 words; consider splitting it."
+level: suggestion
+scope: sentence
+max: 35
+token: '\b[\p{L}\p{N}''’-]+\b'

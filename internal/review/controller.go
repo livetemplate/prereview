@@ -146,6 +146,12 @@ type PrereviewController struct {
 	// persistMu serializes every comments.csv rewrite, so persistAnchors' read-merge-
 	// write can't interleave with a persist (#228).
 	persistMu sync.Mutex
+
+	// ChecksDir is the user's rule folder (~/.config/prereview/checks); "" =
+	// built-ins only. checks is the rule library + result cache, built on first use.
+	ChecksDir  string
+	checksOnce sync.Once
+	checks     *checkRunner
 }
 
 type cachedDiff struct {
@@ -486,7 +492,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// a still-existing file instead of trying to load a stale path.
 	if state.SelectedFile != "" && !fileInList(state.Files, state.SelectedFile) {
 		state.SelectedFile = ""
-		state.CurrentDiff = nil
+		c.showDiff(&state, nil)
 	}
 
 	// Auto-select the first file when nothing is selected — happens on
@@ -506,9 +512,9 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 		diff, err := c.loadDiffCached(state.Base, state.SelectedFile)
 		if err != nil {
 			slog.Warn("load diff in mount", "path", state.SelectedFile, "err", err)
-			state.CurrentDiff = nil
+			c.showDiff(&state, nil)
 		} else {
-			state.CurrentDiff = diff
+			c.showDiff(&state, diff)
 		}
 	}
 	// Re-anchor the selected file's comments against the just-loaded

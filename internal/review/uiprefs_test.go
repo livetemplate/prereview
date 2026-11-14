@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func TestUIPrefsRoundTrip(t *testing.T) {
 	path := filepath.Join(dir, "sub", "ui-prefs.json") // sub/ tests MkdirAll
 
 	// Missing file → defaults.
-	if got := loadUIPrefs(path); got != (UIPrefs{}) {
+	if got := loadUIPrefs(path); !reflect.DeepEqual(got, UIPrefs{}) {
 		t.Fatalf("missing file: want zero UIPrefs, got %+v", got)
 	}
 
@@ -27,11 +28,16 @@ func TestUIPrefsRoundTrip(t *testing.T) {
 		FileView:     true,
 		RawMarkdown:  true,
 		RawHTML:      true,
+
+		DisabledChecks: []string{"weasel-words"},
+		Editor:         EditorCustom,
+		EditorTemplate: "myed://{path}?l={line}",
+		EditorSSHHost:  "devbox",
 	}
 	if err := saveUIPrefs(path, want); err != nil {
 		t.Fatalf("saveUIPrefs: %v", err)
 	}
-	if got := loadUIPrefs(path); got != want {
+	if got := loadUIPrefs(path); !reflect.DeepEqual(got, want) {
 		t.Fatalf("round-trip mismatch:\n want %+v\n got  %+v", want, got)
 	}
 
@@ -39,12 +45,12 @@ func TestUIPrefsRoundTrip(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := loadUIPrefs(path); got != (UIPrefs{}) {
+	if got := loadUIPrefs(path); !reflect.DeepEqual(got, UIPrefs{}) {
 		t.Fatalf("corrupt file: want zero UIPrefs, got %+v", got)
 	}
 
 	// Empty path disables durable prefs without error.
-	if got := loadUIPrefs(""); got != (UIPrefs{}) {
+	if got := loadUIPrefs(""); !reflect.DeepEqual(got, UIPrefs{}) {
 		t.Fatalf(`loadUIPrefs(""): want zero, got %+v`, got)
 	}
 	if err := saveUIPrefs("", want); err != nil {

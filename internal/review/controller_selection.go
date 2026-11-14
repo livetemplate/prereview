@@ -374,7 +374,7 @@ func (c *PrereviewController) SetURLHash(state PrereviewState, ctx *livetemplate
 			return state, nil
 		}
 		state.SelectedFile = parsed.Path
-		state.CurrentDiff = diff
+		c.showDiff(&state, diff)
 		state.SelectionArea = Area{}
 		state.RegionSelectArmed = false
 		state.CommentMode = ""

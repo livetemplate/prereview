@@ -11,6 +11,7 @@ import (
 
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/gitdiff"
+	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -443,6 +444,35 @@ func renderFixtures() []renderFixture {
 		{ID: "s1", File: "app.go", FromLine: 41, ToLine: 41, Side: "new", OriginalText: "old", ProposedText: "new"},
 	}
 
+	// checks M1: the open checks panel with one check selected (its finding is
+	// marked and carded inline), a running command, an errored rule, a passing
+	// built-in, a disabled check, the Vale notice and an editor link.
+	checksOpen := repoBase()
+	checksOpen.SelectedFile = "notes.txt"
+	checksOpen.CurrentDiff = &gitdiff.FileDiff{
+		Path: "notes.txt",
+		Lines: []gitdiff.DiffLine{
+			{Kind: "add", NewNum: 1, Content: "This is very good."},
+			{Kind: "add", NewNum: 2, Content: "Plain line."},
+		},
+	}
+	checksOpen.ChecksOpen = true
+	checksOpen.SelectedCheck = "filler-intensifiers"
+	checksOpen.DisabledChecks = []string{"off"}
+	checksOpen.Editor = review.EditorVSCode
+	checksOpen.EditorSSHHost = "devbox"
+	checksOpen.Checks = &review.FileChecks{
+		ValeNotice: "This repo has a Vale config, but vale isn't installed, so its rules aren't applied.",
+		Results: []checks.Result{
+			{ID: "filler-intensifiers", Name: "Filler intensifiers", Type: "existence", Level: "suggestion", Source: "builtin", Status: "fail",
+				Findings: []checks.Finding{{Line: 1, EndLine: 1, FromCol: 8, ToCol: 12, Message: "'very' adds emphasis, not meaning; try cutting it.", Severity: "suggestion", Match: "very"}}},
+			{ID: "house-style", Name: "House style", Type: "command", Level: "warning", Source: "user", Path: "/home/u/.config/prereview/checks/house-style.yml", Status: "running"},
+			{ID: "broken", Name: "broken", Source: "user", Path: "/home/u/.config/prereview/checks/broken.yml", Status: "error", Err: "invalid YAML: yaml: line 1: did not find expected node content"},
+			{ID: "weasel-words", Name: "Weasel words", Type: "existence", Level: "warning", Source: "builtin", Status: "pass"},
+			{ID: "off", Name: "Disabled one", Type: "existence", Level: "warning", Source: "builtin", Status: "pass"},
+		},
+	}
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -470,6 +500,7 @@ func renderFixtures() []renderFixture {
 		{"agent-mode", agent},
 		{"agent-answered", answered},
 		{"past-eof", pastEOF},
+		{"checks-panel", checksOpen},
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},

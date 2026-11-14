@@ -98,6 +98,60 @@ hand-off step. prereview never edits your files itself; the agent does, so an
 accepted edit shows up as a normal diff you can commit. Use **Show / hide
 suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
 
+## Checks
+
+Prose files (`.md`, `.markdown`, `.txt`, `.rst`, `.adoc`) get **checks**: rules
+that flag wording, run every time the file loads. The file header shows
+**Checks n/m**, how many of the enabled checks passed. Tap it to open the panel.
+
+- **Select a check** to see its findings in the file: each flagged span gets a
+  wavy underline and a card under its line. Only one check shows at a time, so a
+  rule with many hits doesn't unfold the whole file. In the rendered Markdown or
+  HTML view, selecting a check shows the source until you move to another file.
+- **Queue as comment** on a card turns the finding into an ordinary comment on
+  that span, so your agent fixes it from the queue like any other.
+- **Disable** turns a check off for you, in every repo.
+
+prereview ships three built-in rules: weasel words, filler intensifiers, and
+sentence length. Your own rules live in `~/.config/prereview/checks/` as YAML
+files in [Vale's](https://vale.sh/docs/topics/styles/) rule format. prereview runs
+the `existence`, `substitution` and `occurrence` types itself, plus a `vocab` list
+(`accept:` terms flag the wrong case, `reject:` terms flag any use). A file named
+like a built-in (`weasel-words.yml`) replaces it; **Edit a copy** on a built-in's
+row puts one there for you. Edits to these files show up in the open panel without
+a reload, and a rule that doesn't parse shows its error on its row.
+
+```yaml
+# ~/.config/prereview/checks/house-terms.yml
+extends: substitution
+name: House terms
+message: "Use '%s' instead of '%s'."
+ignorecase: true
+files: ["*.md", "docs/*.txt"]   # optional; defaults to the prose types above
+swap:
+  e-mail: email
+  utilize: use
+```
+
+A rule can also run a program: `extends: command` with `command: [argv…]` (and
+an optional `timeout:`, default `5s`). It gets the file's path as its last
+argument and the text on stdin, and prints a JSON array of
+`{"line", "from_col", "to_col", "message", "severity"}` (1-based lines, 0-based
+character columns). Command rules only run from your own checks folder, never
+from a reviewed repo.
+
+If a repo has a `.vale.ini` and [vale](https://vale.sh) is installed, its rules
+run too; without vale the panel says the repo's config isn't applied.
+
+**Open in editor** on a rule's row opens the file in VS Code, Cursor, Zed, or a
+custom URL (`{path}`, `{line}`, `{host}`); pick one at the bottom of the panel.
+Set **SSH host** when your browser is on another device than the review, so the
+link opens the file over the editor's remote-SSH support. With no editor chosen,
+the row shows the file's path to copy.
+
+`prereview check <file>…` runs the same checks from the terminal and exits 1 when
+any fails.
+
 ## Themes & modes
 
 The toolbar's palette button cycles the **color scheme** (Solarized, Gruvbox,
