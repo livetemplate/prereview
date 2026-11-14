@@ -1886,11 +1886,16 @@ header.file-head .file-head-comment button svg { display: block; }
    unrendered rows so the scrollbar doesn't jitter as content-
    visibility kicks in.
 
-   IMPORTANT: rows that hold the composer or an inline comment are
-   excluded — content-visibility: auto skips rendering their contents
-   when off-screen, which makes the composer's textarea and comment
-   action buttons unfocusable until scrolled in. Plain diff rows have
-   no interactive sub-elements, so visibility-skip is safe there.
+   IMPORTANT: rows that hold the composer or ANY annotation (comment,
+   suggestion, quiz question — `.has-line-marks`) are excluded.
+   content-visibility: auto skips rendering their contents when
+   off-screen, which makes the composer's textarea and the cards' action
+   buttons unfocusable until scrolled in; and its paint containment clips
+   the row's count badge, which is taller than a collapsed row and
+   overhangs it, so a collapsed card's badge was cut off and hard to tap
+   back open (#231, TestE2E_CollapsedSuggestionBadgeNotClipped). Plain
+   diff rows have no interactive sub-elements, so visibility-skip is
+   safe there.
 
    Previously this rule also set `contain: layout style` on every
    .line-row for an extra isolation guard, and removing it was believed
@@ -2097,7 +2102,7 @@ header.file-head .file-head-comment button svg { display: block; }
   font-size: 0.7rem; color: var(--pico-muted-color);
   font-family: var(--jbm); letter-spacing: 0.04em;
 }
-.code .line-row:not(:has(.composer)):not(:has(.inline-comment)) {
+.code .line-row:not(:has(.composer)):not(.has-line-marks) {
   content-visibility: auto;
   contain-intrinsic-size: auto 16px;
 }
@@ -3223,7 +3228,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      as the content-visibility rule so composer / inline-comment rows keep
      their auto width (max-content on a row holding a textarea would size to
      the unwrapped draft text). Guarded by TestE2E_LongLineDesktopScrolls. */
-  .code .line-row:not(:has(.composer)):not(:has(.inline-comment)) { width: max-content; min-width: 100%; }
+  .code .line-row:not(:has(.composer)):not(.has-line-marks) { width: max-content; min-width: 100%; }
   /* The rendered-Markdown reading surface is the primary desktop view
      (proposal docs). Keep it at the 16px desktop base (1rem): the earlier
      1.25rem (20px) bump read as too big on wide monitors — users were

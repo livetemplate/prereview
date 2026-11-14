@@ -10,6 +10,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -80,5 +81,44 @@ func TestE2E_OldSideCommentSurvivesSuggestion(t *testing.T) {
 	}
 	if n := countSel(t, p, `.code .fold-row`); n < 1 {
 		t.Errorf("Diff view must still fold with a suggestion on the file; got %d fold rows%s", n, diag())
+	}
+}
+
+// A row's count badge is taller than a collapsed row and overhangs it. Rows that
+// carry annotations must not get content-visibility:auto, whose paint containment
+// clips that overhang — for drawing AND for taps — so a collapsed suggestion's
+// badge was cut off and its card hard or impossible to bring back.
+func TestE2E_CollapsedSuggestionBadgeNotClipped(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoBigDiff(t), 390, 844, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReadyAt(390, 844)
+	p.clickFile("big.go")
+	submitSuggestions(t, p.binary, p.repo, `[{"id":"far1","file":"big.go","from_line":35,"to_line":35,"original":"line 35","proposed":"line thirty-five","note":"spell it"}]`)
+
+	row := `.code .line-row:has(.inline-suggestion)`
+	ctx, cancel := within(p, 15*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible(row+` .inline-suggestion`, chromedp.ByQuery),
+		chromedp.Click(row+` .line-marks`, chromedp.ByQuery),
+		chromedp.WaitNotVisible(row+` .inline-suggestion`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("collapse the suggestion row: %v%s", err, diag())
+	}
+	// Hit-test just inside the badge's bottom edge, the part that overhangs the
+	// collapsed row. A clipped badge isn't hit there.
+	var hit string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const b=document.querySelector(`+"`"+row+` .line-marks`+"`"+`);const r=b.getBoundingClientRect();const rowBox=b.closest('.line-row').getBoundingClientRect();const y=r.bottom-2;const e=document.elementFromPoint(r.left+r.width/2,y);return (e&&b.contains(e)?'badge':'other:'+(e?e.className:'none'))+' badgeBottom='+Math.round(r.bottom)+' rowBottom='+Math.round(rowBox.bottom)})()`, &hit)); err != nil {
+		t.Fatalf("hit-test badge: %v%s", err, diag())
+	}
+	if !strings.HasPrefix(hit, "badge") {
+		t.Fatalf("the collapsed suggestion's badge is clipped at its bottom edge (%s)%s", hit, diag())
+	}
+	// And it still brings the card back.
+	if err := chromedp.Run(ctx,
+		chromedp.Click(row+` .line-marks`, chromedp.ByQuery),
+		chromedp.WaitVisible(row+` .inline-suggestion`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("re-open the suggestion from its badge: %v%s", err, diag())
 	}
 }
