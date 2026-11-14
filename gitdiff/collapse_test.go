@@ -26,7 +26,7 @@ func kinds(lines []DiffLine) string {
 
 func TestCollapse_NoChange_ReturnsInput(t *testing.T) {
 	in := []DiffLine{ctxLine(1), ctxLine(2), ctxLine(3)}
-	out := CollapseToHunks(in, 3)
+	out := CollapseToHunks(in, 3, nil)
 	if len(out) != 3 {
 		t.Fatalf("no-change file should be returned unchanged, got %d lines", len(out))
 	}
@@ -47,7 +47,7 @@ func TestCollapse_MiddleGapFolded(t *testing.T) {
 			in = append(in, ctxLine(i))
 		}
 	}
-	out := CollapseToHunks(in, 3)
+	out := CollapseToHunks(in, 3, nil)
 	// Expect: fold(lines 1..6) , ctx7 ctx8 ctx9 add10 ctx11 ctx12 ctx13 , fold(14..20)
 	got := kinds(out)
 	want := "f6 ctx ctx ctx add ctx ctx ctx f7 "
@@ -77,7 +77,7 @@ func TestCollapse_AdjacentHunksNoFoldBetween(t *testing.T) {
 			in = append(in, ctxLine(i))
 		}
 	}
-	out := CollapseToHunks(in, 3)
+	out := CollapseToHunks(in, 3, nil)
 	// ctx windows of line4 (1..7) and line7 (4..10) cover everything → no fold.
 	for _, l := range out {
 		if l.Kind == "fold" {
@@ -98,7 +98,7 @@ func TestCollapse_LeadingAndTrailingFolds(t *testing.T) {
 			in = append(in, ctxLine(i))
 		}
 	}
-	out := CollapseToHunks(in, 2)
+	out := CollapseToHunks(in, 2, nil)
 	// fold(1..3)=3, ctx4 ctx5 del6 ctx7 ctx8, fold(9..12)=4
 	if out[0].Kind != "fold" || out[0].Content != "3" {
 		t.Errorf("leading fold = %+v, want count 3", out[0])
@@ -114,7 +114,7 @@ func TestCollapse_AllAdd_NoFold(t *testing.T) {
 	for i := 1; i <= 8; i++ {
 		in = append(in, addLine(i))
 	}
-	out := CollapseToHunks(in, 3)
+	out := CollapseToHunks(in, 3, nil)
 	if len(out) != 8 {
 		t.Fatalf("all-add file: expected 8 lines, got %d (%q)", len(out), kinds(out))
 	}
@@ -122,5 +122,53 @@ func TestCollapse_AllAdd_NoFold(t *testing.T) {
 		if l.Kind == "fold" {
 			t.Fatal("all-add file should have no folds")
 		}
+	}
+}
+
+// pinnedFile is a change on line 1 followed by unchanged lines 2..n.
+func pinnedFile(n int) []DiffLine {
+	in := []DiffLine{addLine(1)}
+	for i := 2; i <= n; i++ {
+		in = append(in, ctxLine(i))
+	}
+	return in
+}
+
+func pinNew(nums ...int) func(DiffLine) bool {
+	return func(l DiffLine) bool {
+		for _, n := range nums {
+			if l.NewNum == n {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// #231: a kept (pinned) unchanged line stays out of the folds with the same
+// context as a change, so a card hung on it has a row.
+func TestCollapse_PinnedLineKeptWithContext(t *testing.T) {
+	out := CollapseToHunks(pinnedFile(20), 2, pinNew(15))
+	want := "add ctx ctx f9 ctx ctx ctx ctx ctx f3 "
+	if got := kinds(out); got != want {
+		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+	if out[4].NewNum != 13 || out[8].NewNum != 17 {
+		t.Errorf("pinned run should be lines 13..17, got %d..%d", out[4].NewNum, out[8].NewNum)
+	}
+}
+
+func TestCollapse_NearbyPinsMerge(t *testing.T) {
+	// Pins on 10 and 13 with ctx 1 overlap into one run 9..14.
+	got := kinds(CollapseToHunks(pinnedFile(20), 1, pinNew(10, 13)))
+	if want := "add ctx f6 ctx ctx ctx ctx ctx ctx f6 "; got != want {
+		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+}
+
+func TestCollapse_PinOnUnchangedFile_ReturnsInput(t *testing.T) {
+	in := []DiffLine{ctxLine(1), ctxLine(2), ctxLine(3)}
+	if got := kinds(CollapseToHunks(in, 0, pinNew(2))); got != "ctx ctx ctx " {
+		t.Fatalf("an unchanged file is shown whole regardless of pins, got %q", got)
 	}
 }

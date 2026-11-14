@@ -805,8 +805,9 @@ func schemeLabel(name string) string {
 //     diff, no folds.
 //   - Diff view  (FileView == false): a real diff — only changed
 //     lines plus 3 lines of context, long unchanged gaps replaced by
-//     fold markers (see gitdiff.CollapseToHunks). An unchanged file
-//     has no diff, so CollapseToHunks returns it whole.
+//     fold markers (see gitdiff.CollapseToHunks). A row carrying an
+//     annotation card is kept like a change (#231). An
+//     unchanged file has no diff, so CollapseToHunks returns it whole.
 //
 // Zero-arg so the framework pre-computes it once per render and the
 // template ranges `$.VisibleLines`. Line numbers are identical across
@@ -815,15 +816,9 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	if s.CurrentDiff == nil {
 		return nil
 	}
-	// FileView (durable pref) OR Revealing() (a transient search-jump reveal) OR
-	// a file carrying visible LLM suggestions shows the whole file so an arbitrary
-	// target line is present; otherwise diff view collapses unchanged runs into
-	// folds. The suggestion case is load-bearing (#98): the LLM emits arbitrary
-	// line numbers, so a suggestion can land on an unchanged line that diff-view
-	// would fold away — hiding the box with no hint. Revealing the full file keeps
-	// every suggestion visible (no effect when suggestions are toggled off —
-	// FileSuggestions returns nil then).
-	if s.FileView || s.Revealing() || len(s.FileSuggestions()) > 0 {
+	// FileView (durable pref) OR Revealing() (a transient search-jump reveal)
+	// shows the whole file so an arbitrary target line is present.
+	if s.FileView || s.Revealing() {
 		out := make([]gitdiff.DiffLine, 0, len(s.CurrentDiff.Lines))
 		for _, l := range s.CurrentDiff.Lines {
 			if l.NewNum > 0 { // exists in the working-tree file
@@ -832,7 +827,26 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 		}
 		return out
 	}
-	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines)
+	// An annotation can sit on an unchanged line far from any change (the LLM
+	// emits arbitrary line numbers for suggestions, #98; a comment made in File
+	// view or rendered Markdown; an anchor that drifted). Its card hangs on that
+	// row, so the row must survive folding (#231). This used to reveal the whole
+	// file for suggestions, which also dropped every del row.
+	cards := s.AnnotationCountLines()
+	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, func(l gitdiff.DiffLine) bool {
+		return cards[rowKey(l)] > 0
+	})
+}
+
+// rowKey is a diff row's "<line>-<side>" key — the template's $rowkey, built
+// from $ln (NewNum, falling back to OldNum for a del row) and $lside — so
+// AnnotationCountLines answers "does this row show a card?" exactly as the
+// row's badge does.
+func rowKey(l gitdiff.DiffLine) string {
+	if l.Kind == "del" {
+		return fmt.Sprintf("%d-old", l.OldNum)
+	}
+	return fmt.Sprintf("%d-new", l.NewNum)
 }
 
 // diffContextLines is how many unchanged lines flank each change in
