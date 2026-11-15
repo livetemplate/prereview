@@ -29,6 +29,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/livetemplate/prereview/internal/flock"
 )
 
 // Version triggers recorded on each Checkpoint. Baseline is the v0 snapshot of
@@ -103,7 +105,10 @@ type FileHistoryEntry struct {
 
 // VersionStore is the append-only content-snapshot store rooted at a versions
 // directory. Safe for concurrent use: the mutex serialises the read-modify-append
-// of the timeline (the watcher goroutine, Mount, and RestoreVersion all call in).
+// of the timeline (the watcher goroutine, Mount, and RestoreVersion all call in),
+// and a file lock does the same across processes — several servers can share a
+// store (every review watches the per-user library's), and two checkpointing one
+// edit must not both read N versions and append seq N.
 type VersionStore struct {
 	root string
 	now  func() time.Time
@@ -141,6 +146,11 @@ func (s *VersionStore) blobPath(sha string) string { return filepath.Join(s.root
 func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp Checkpoint, created bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	unlock, err := flock.Lock(filepath.Join(s.root, ".lock"))
+	if err != nil {
+		return Checkpoint{}, false, err
+	}
+	defer unlock()
 
 	cps, err := s.checkpointsLocked()
 	if err != nil {

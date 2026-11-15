@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -254,7 +255,7 @@ func userQuizzesDir() string {
 // working unchanged.
 const (
 	storeDirName   = ".prereview"
-	targetsDirName = "files"
+	targetsDirName = library.TargetsDir
 )
 
 // storeDirFor resolves the store directory for a review: <storeRoot>/.prereview

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/livetemplate/prereview/csv"
 )
@@ -24,6 +26,10 @@ type StoreInfo struct {
 // Signals is how many reviewer signals the store holds (comments + suggestions):
 // what an extraction reads.
 func (s StoreInfo) Signals() int { return s.Comments + s.Suggestions }
+
+// TargetsDir is where a directory's per-target (single-file review) stores live
+// inside its .prereview (kept in step with the main package's targetsDirName).
+const TargetsDir = "files"
 
 // ScanMaxDepth bounds the first-launch walk of $HOME.
 const ScanMaxDepth = 6
@@ -68,11 +74,11 @@ func Scan(home string, maxDepth int) []StoreInfo {
 			info.Label = label
 			out = append(out, info)
 		}
-		// Per-target stores (#199) live one level down.
-		if entries, err := os.ReadDir(p); err == nil {
+		// Per-target stores (#199): .prereview/files/<target slug>.
+		if entries, err := os.ReadDir(filepath.Join(p, TargetsDir)); err == nil {
 			for _, e := range entries {
 				if e.IsDir() {
-					if info, ok := inspect(filepath.Join(p, e.Name()), root); ok {
+					if info, ok := inspect(filepath.Join(p, TargetsDir, e.Name()), root); ok {
 						info.Label = label + " · " + e.Name()
 						out = append(out, info)
 					}
@@ -91,10 +97,14 @@ func Scan(home string, maxDepth int) []StoreInfo {
 }
 
 // safePath reports a path that can go verbatim into the extraction request: no
-// control characters (a newline would start a new prompt line) and no backticks
-// (which would close its code span). A store under any other name is skipped.
+// control characters (C0/C1 — a newline would start a new prompt line), no line
+// or paragraph separators, no format characters (bidi overrides that make the
+// text read differently than it is) and no backticks (which would close its code
+// span). A store under any other name is skipped.
 func safePath(p string) bool {
-	return !strings.ContainsFunc(p, func(r rune) bool { return r < 0x20 || r == 0x7f || r == '`' })
+	return utf8.ValidString(p) && !strings.ContainsFunc(p, func(r rune) bool {
+		return r == '`' || unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf)
+	})
 }
 
 // inspect counts a store's records; ok is false when it holds no reviewer signal
