@@ -171,12 +171,16 @@ func (s PrereviewState) FindingsByRow() map[string][]FindingView {
 func (s PrereviewState) queuedFindings() map[string]bool {
 	out := map[string]bool{}
 	for _, c := range s.Comments {
-		if c.Check != "" && !c.Resolved {
+		if c.queuedFromCheck() {
 			out[findingKey(c.File, checks.Finding{Line: c.FromLine, EndLine: c.ToLine, FromCol: c.FromCol, ToCol: c.ToCol}, c.Check)] = true
 		}
 	}
 	return out
 }
+
+// queuedFromCheck reports whether c is an open comment queued from a check's
+// finding or a judge's critique: its card shows Queued instead of offering it.
+func (c Comment) queuedFromCheck() bool { return c.Check != "" && !c.Resolved }
 
 // findingKey identifies a finding by file, span and check ID.
 func findingKey(path string, f checks.Finding, check string) string {
