@@ -152,11 +152,12 @@
               <div class="ckp-rule">
                 <span>{{.Detail}} · category <b>{{.Category}}</b>{{with .Agreement}} · {{.}}{{end}}{{with .RulePath}} · <code>{{.}}</code>{{end}}</span>
                 <span class="ckp-rule-actions">
-                  {{if .EditorURL}}<a role="button" class="outline" href="{{.EditorURL}}" title="{{.RulePath}}">Open in editor</a>
-                  {{else}}{{if eq .Source "builtin"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="copyCheckToUserFolder" class="outline" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>{{end}}{{end}}
+                  {{if eq .Source "learned"}}<span class="ck-src">from a learning: change it on the Learnings tab</span>
+                  {{else}}{{if .EditorURL}}<a role="button" class="outline" href="{{.EditorURL}}" title="{{.RulePath}}">Open in editor</a>
+                  {{else}}{{if eq .Source "builtin"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="copyCheckToUserFolder" class="outline" title="Copy this built-in to your checks folder to change it">Edit a copy</button></form>{{end}}{{end}}{{end}}
                   {{if ne .Source "vale"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleCheckEnabled" class="outline">{{if eq .Status "off"}}Turn on{{else}}Turn off{{end}}</button></form>{{end}}
                 </span>
-                {{if and .RulePath (not .EditorURL)}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
+                {{if and .RulePath (not .EditorURL) (ne .Source "learned")}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
               </div>
               {{with .History}}{{template "libHistory" .}}{{end}}
             </div>
@@ -664,6 +665,7 @@
           <option value=""{{if eq .Source ""}} selected{{end}}>All sources</option>
           <option value="builtin"{{if eq .Source "builtin"}} selected{{end}}>Built-in</option>
           <option value="user"{{if eq .Source "user"}} selected{{end}}>Yours</option>
+          <option value="learned"{{if eq .Source "learned"}} selected{{end}}>Learned</option>
           <option value="vale"{{if eq .Source "vale"}} selected{{end}}>This repo (Vale)</option>
         </select>
       </form>
@@ -1305,6 +1307,7 @@
       {{if .Edited}}<div class="lc-conflict"><b>You edited this skill</b>, so prereview stopped regenerating it from your learnings; its installs follow your edit.</div>{{end}}
       {{with .History}}{{template "libHistory" .}}{{end}}
       <div class="lc-actions">
+        {{if .Versions}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="expandSkill" class="outline" aria-expanded="{{if .History}}true{{else}}false{{end}}">{{if .History}}Hide history{{else}}History ({{.Versions}}){{end}}</button></form>{{end}}
         {{if .EditorURL}}<a role="button" class="outline" href="{{.EditorURL}}" title="{{.Source}}">Open SKILL.md in editor</a>{{end}}
         {{if .Edited}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="regenerateSkill" class="outline">Regenerate from learnings</button></form>{{end}}
       </div>
@@ -1313,7 +1316,7 @@
     {{end}}{{range .Imported}}<li class="lib-card" data-key="skill-imported-{{.Name}}">
       <header><span class="ck-pill ck-advisory">imported · by reference</span><span><code>{{.PathRel}}</code> · {{if .Changed}}changed since you imported it{{else}}unchanged since import{{end}}</span></header>
       <p class="lc-text">{{.Name}}</p>
-      <div class="lc-row"><span>prereview never edits this folder</span>{{with .Checks}}<span><b>{{len .}}</b> check{{if ne (len .) 1}}s{{end}} read from its <code>evals/</code></span>{{end}}</div>
+      <div class="lc-row"><span>prereview never edits this folder</span>{{with .Checks}}<span><b>{{.}}</b> check{{if ne . 1}}s{{end}} read from its <code>evals/</code></span>{{end}}</div>
       {{with .Skipped}}<details class="lc-drafted"><summary>{{len .}} grader{{if ne (len .) 1}}s{{end}} not used</summary><ul class="lc-evidence">{{range .}}<li>{{.}}</li>{{end}}</ul></details>{{end}}
       {{if .Overlay}}<div class="lc-conflict"><b>{{.Overlay}} learning{{if ne .Overlay 1}}s{{end}} attached as an overlay</b> (their scope is “{{.Name}}”).{{if .Changed}} The skill changed since you imported it, so check where the patch lands.{{end}} Export them as a patch to apply to the skill yourself.</div>{{end}}
       <div class="lc-actions">
@@ -1325,7 +1328,7 @@
     {{end}}{{if .Found}}<li class="lib-card" data-key="skill-found">
       <header><span class="ck-pill ck-muted">found on this machine</span></header>
       <p class="lc-text">Import a skill</p>
-      {{range .Found}}<div class="lc-row" data-key="skill-found-{{.Hash}}"><span><code>{{.Where}}</code>{{if gt .Copies 1}} (and {{.Copies}} copies){{end}} · {{if .HasEvals}}instructions + <code>evals/</code>{{else}}instructions only{{end}}</span>
+      {{range .Found}}<div class="lc-row" data-key="skill-found-{{.Hash}}"><span><code>{{.Where}}</code>{{if gt .Copies 1}} ({{.Copies}} copies){{end}} · {{if .HasEvals}}instructions + <code>evals/</code>{{else}}instructions only{{end}}</span>
         <form method="POST" class="ckp-inline"><input type="hidden" name="hash" value="{{.Hash}}"><button type="submit" name="importSkill" class="outline">Import {{.Name}}</button></form></div>
       {{end}}
     </li>

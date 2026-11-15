@@ -10,7 +10,9 @@ import (
 	"strings"
 
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // runJudge implements `prereview judge --out <store> --file F --judge ID
@@ -64,7 +66,7 @@ func runJudge(args []string) error {
 		return err
 	}
 
-	lib := checks.Load(checks.Dir{Path: userChecksDir(), Source: checks.SourceUser})
+	lib := checks.Load(checks.UserDirs(userChecksDir(), skills.LearnedChecksDir(library.Dir()))...)
 	var rule *checks.Rule
 	for _, r := range lib.Rules {
 		if r.ID == *judge {

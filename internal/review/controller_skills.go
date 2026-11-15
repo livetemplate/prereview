@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
-	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/livetemplate/livetemplate"
 
@@ -17,43 +15,44 @@ import (
 
 // Generated skills (checks M4): accepted learnings become prereview-owned
 // skills, installed where each agent loads skills, and the checkers and judges
-// they carry land in your checks folder. skills.Sync is idempotent, so every
-// server runs it after any library change (its own, or another's seen by the
-// watcher).
+// they carry land in the library's learned-checks folder. skills.Sync is
+// idempotent, so every server runs it after any library change (its own, or
+// another's seen by the watcher).
 
 // skillEnv is where generated skills are read and written; ok is false with no
-// library.
+// library or no agent home (both injected at launch).
 func (c *PrereviewController) skillEnv() (skills.Env, bool) {
-	if c.LibraryDir == "" {
+	if c.LibraryDir == "" || c.AgentHome == "" {
 		return skills.Env{}, false
 	}
-	home, err := library.AgentHome()
-	if err != nil {
-		return skills.Env{}, false
-	}
-	return skills.Env{LibDir: c.LibraryDir, ChecksDir: c.ChecksDir, Home: home}, true
+	return skills.Env{LibDir: c.LibraryDir, Home: c.AgentHome}, true
 }
 
-// syncSkills brings the generated skills and derived checks in line with the
-// accepted learnings. When it changed anything it records a library version
-// (changelog names the learning, when this server's action caused it) and
-// reloads the checks, so a new checker runs in every open tab.
+// learnedDir is the learned-checks folder the checks runner loads ("" with no library).
+func (c *PrereviewController) learnedDir() string { return skills.LearnedChecksDir(c.LibraryDir) }
+
+// syncSkills brings the generated skills and learned checks in line with the
+// accepted learnings, records a library version when anything moved (changelog
+// names the learning, when this server's action caused it; Checkpoint itself is
+// the no-op check, so a restored skill source is versioned too) and reloads the
+// checks, so a new checker runs in every open tab. syncMu serialises this
+// server's syncs; the report is swapped under reportMu, so a render never waits
+// on another server's lock.
 func (c *PrereviewController) syncSkills(changelog string) {
 	env, ok := c.skillEnv()
 	if !ok {
 		return
 	}
-	c.skillMu.Lock()
-	defer c.skillMu.Unlock()
+	c.syncMu.Lock()
+	defer c.syncMu.Unlock()
 	rep, err := skills.Sync(env, c.learnings())
 	if err != nil {
 		slog.Warn("skills sync", "err", err)
 		return
 	}
+	c.reportMu.Lock()
 	c.skillReport = rep
-	if len(rep.Changed) == 0 {
-		return
-	}
+	c.reportMu.Unlock()
 	checksChanged := c.reloadChecksIfChanged()
 	c.checkpointLibrary(VersionTriggerLearning, changelog)
 	if checksChanged {
@@ -63,8 +62,8 @@ func (c *PrereviewController) syncSkills(changelog string) {
 
 // lastSkillReport is the latest sync's report, for the Skills tab.
 func (c *PrereviewController) lastSkillReport() skills.Report {
-	c.skillMu.Lock()
-	defer c.skillMu.Unlock()
+	c.reportMu.Lock()
+	defer c.reportMu.Unlock()
 	return c.skillReport
 }
 
@@ -75,7 +74,7 @@ const libTabSkills = "skills"
 // worth a skill of their own, and (M4b) the skills you already have.
 type SkillsTab struct {
 	Cards     []SkillCard
-	Proposals []SkillProposal
+	Proposals []skills.Proposal
 	Imported  []ImportedCard
 	Found     []FoundSkill
 	Empty     string
@@ -85,9 +84,9 @@ type SkillsTab struct {
 type ImportedCard struct {
 	Name, PathRel, Path string
 	EditorURL           template.URL
-	Changed             bool // its SKILL.md differs from when you imported it
-	Overlay             int  // accepted learnings attached to it (scope = its name)
-	Checks              []string // checks read from its evals/ (names)
+	Changed             bool     // its SKILL.md differs from when you imported it
+	Overlay             int      // accepted learnings attached to it (scope = its name)
+	Checks              int      // checks read from its evals/
 	Skipped             []string // its graders that grade an agent run, with why
 }
 
@@ -107,7 +106,8 @@ type SkillCard struct {
 	Checkers, Judges  int
 	Edited            bool // you edited SKILL.md: prereview stopped regenerating it
 	Installs          []SkillInstall
-	History           *HistoryView
+	Versions          int          // its versions in the library
+	History           *HistoryView // only while expanded
 }
 
 // SkillInstall is one agent's copy of a skill.
@@ -116,22 +116,18 @@ type SkillInstall struct {
 	OK           bool
 }
 
-// SkillProposal is a scope with enough accepted learnings for its own skill.
-type SkillProposal struct {
-	Scope string
-	Count int
-}
-
-// applySkillsTab builds the Skills tab while it's open (nil otherwise).
+// applySkillsTab builds the Skills tab while it's open (nil otherwise), from the
+// latest sync's report; only the expanded skill carries its history.
 func (c *PrereviewController) applySkillsTab(state *PrereviewState) {
 	state.SkillsTab = nil
-	if !state.ShowLibrary || state.libraryTab() != libTabSkills || c.LibraryDir == "" {
+	env, ok := c.skillEnv()
+	if !state.ShowLibrary || state.libraryTab() != libTabSkills || !ok {
 		return
 	}
 	tab := &SkillsTab{}
-	home, _ := library.AgentHome()
-	for _, s := range c.lastSkillReport().Skills {
-		card := SkillCard{ID: s.ID, Name: s.Name, Scope: s.Scope, Source: s.Source, SourceRel: tildePath(home, s.Source),
+	rep := c.lastSkillReport()
+	for _, s := range rep.Skills {
+		card := SkillCard{ID: s.ID, Name: s.Name, Scope: s.Scope, Source: s.Source, SourceRel: library.HomeLabel(env.Home, s.Source),
 			EditorURL: editorURL(state.Editor, state.EditorTemplate, state.EditorSSHHost, s.Source, 1),
 			Lines:     len(s.Lines), Edited: s.Edited}
 		for _, ch := range s.Checks {
@@ -145,54 +141,45 @@ func (c *PrereviewController) applySkillsTab(state *PrereviewState) {
 			card.Installs = append(card.Installs, SkillInstall{Label: in.Target.Label, State: in.State, OK: in.State == skills.Installed})
 		}
 		if key := c.libraryKey(s.Source); key != "" {
-			if h := c.ruleHistory(key); len(h) > 0 {
+			h := c.ruleHistory(key)
+			card.Versions = len(h)
+			if state.ExpandedSkill == s.ID && len(h) > 0 {
 				card.History = &HistoryView{ID: s.ID, Action: "restoreSkillVersion", Versions: h}
 			}
 		}
 		tab.Cards = append(tab.Cards, card)
 	}
-	env, _ := c.skillEnv()
-	imports := skills.Imports(c.LibraryDir)
-	imported := map[string]bool{}
-	for _, imp := range imports {
-		imported[imp.Name] = true
-		card := ImportedCard{Name: imp.Name, Path: imp.Path, PathRel: tildePath(home, imp.Path),
-			EditorURL: editorURL(state.Editor, state.EditorTemplate, state.EditorSSHHost, imp.Path, 1),
-			Changed:   imp.Changed(), Overlay: len(skills.Overlay(c.learnings(), imp.Name))}
-		ics, skipped := skills.ImportedChecks(env, imp)
-		for _, ic := range ics {
-			card.Checks = append(card.Checks, ic.Name)
-		}
-		for _, sk := range skipped {
-			card.Skipped = append(card.Skipped, filepath.Base(filepath.Dir(filepath.Dir(sk.Source)))+"/"+filepath.Base(sk.Source)+": "+sk.Reason)
+	ls := c.learnings()
+	for _, ir := range rep.Imports {
+		card := ImportedCard{Name: ir.Name, Path: ir.Path, PathRel: library.HomeLabel(env.Home, ir.Path),
+			EditorURL: editorURL(state.Editor, state.EditorTemplate, state.EditorSSHHost, ir.Path, 1),
+			Changed:   ir.Changed, Overlay: len(skills.Overlay(ls, ir.Name)), Checks: len(ir.Checks)}
+		for _, sk := range ir.Skipped {
+			card.Skipped = append(card.Skipped, sk.Label+": "+sk.Reason)
 		}
 		tab.Imported = append(tab.Imported, card)
 	}
 	for _, f := range skills.Discover(env) {
-		if !imported[f.Name] {
-			tab.Found = append(tab.Found, FoundSkill{Name: f.Name, Hash: f.Hash, Where: tildePath(home, f.Paths[0]), Copies: len(f.Paths), HasEvals: f.HasEvals})
+		if !slices.ContainsFunc(rep.Imports, func(ir skills.ImportReport) bool { return ir.Name == f.Name }) {
+			tab.Found = append(tab.Found, FoundSkill{Name: f.Name, Hash: f.Hash, Where: library.HomeLabel(env.Home, f.Paths[0]), Copies: len(f.Paths), HasEvals: f.HasEvals})
 		}
 	}
-	defs, dismissed := skills.Defs(c.LibraryDir)
-	for name := range imported {
-		dismissed = append(dismissed, name) // an imported skill's scope is its overlay, not a proposal
-	}
-	for scope, n := range skills.Proposals(c.learnings(), defs, dismissed) {
-		tab.Proposals = append(tab.Proposals, SkillProposal{Scope: scope, Count: n})
-	}
-	slices.SortFunc(tab.Proposals, func(a, b SkillProposal) int { return strings.Compare(a.Scope, b.Scope) })
+	tab.Proposals = skills.Proposals(c.LibraryDir, ls)
 	if len(tab.Cards)+len(tab.Proposals)+len(tab.Imported)+len(tab.Found) == 0 {
 		tab.Empty = "No skills yet. Accept a learning and it becomes a line in your Writing skill, installed for every agent set up on this machine."
 	}
 	state.SkillsTab = tab
 }
 
-// tildePath shows p under home as ~/….
-func tildePath(home, p string) string {
-	if rel, err := filepath.Rel(home, p); err == nil && !strings.HasPrefix(rel, "..") {
-		return "~/" + filepath.ToSlash(rel)
+// ExpandSkill shows (again hides) one skill's version history.
+func (c *PrereviewController) ExpandSkill(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if state.ExpandedSkill == id {
+		id = ""
 	}
-	return p
+	state.ExpandedSkill = id
+	c.applySkillsTab(&state)
+	return state, nil
 }
 
 // CreateSkill gives a proposed scope its own skill.

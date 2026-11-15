@@ -685,6 +685,7 @@
           <option value="" selected>All sources</option>
           <option value="builtin">Built-in</option>
           <option value="user">Yours</option>
+          <option value="learned">Learned</option>
           <option value="vale">This repo (Vale)</option>
         </select>
       </form>

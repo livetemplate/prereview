@@ -11,11 +11,20 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/livetemplate/prereview/internal/library"
 )
+
+// AgentHome is the root prereview writes agent integrations under — its own
+// skill (--install-skill, the startup sync) and generated skills: $PREREVIEW_HOME,
+// else $HOME. Tests set it so no run ever rewrites the real agent folders.
+func AgentHome() (string, error) {
+	if d := os.Getenv("PREREVIEW_HOME"); d != "" {
+		return d, nil
+	}
+	return os.UserHomeDir()
+}
 
 // OwnedFile records, per absolute path, the hash of the bytes prereview last
 // wrote there. A file whose content still has that hash is prereview's to
@@ -35,7 +44,6 @@ var (
 
 // Owner is the ownership record, read and written under the library lock.
 type Owner struct {
-	libDir string
 	hashes map[string]string
 	dirty  bool
 }
@@ -44,44 +52,19 @@ type Owner struct {
 // it after: every write and its hash land together, so another server can never
 // read a file before its new hash is recorded (and mistake it for a hand edit).
 func Own(libDir string, fn func(*Owner) error) error {
-	unlock, err := library.Lock(libDir)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	o := &Owner{libDir: libDir, hashes: map[string]string{}}
-	if b, err := os.ReadFile(o.path()); err == nil {
-		_ = json.Unmarshal(b, &o.hashes)
-	}
-	ferr := fn(o)
-	if o.dirty {
-		if err := o.save(); err != nil && ferr == nil {
-			ferr = err
+	return editJSON(libDir, OwnedFile, func(h *map[string]string) (bool, error) {
+		if *h == nil {
+			*h = map[string]string{}
 		}
-	}
-	return ferr
+		o := &Owner{hashes: *h}
+		err := fn(o)
+		return o.dirty, err
+	})
 }
 
-func (o *Owner) path() string { return filepath.Join(o.libDir, "skills", OwnedFile) }
-
-func (o *Owner) save() error {
-	if err := os.MkdirAll(filepath.Dir(o.path()), 0o755); err != nil {
-		return err
-	}
-	b, err := json.MarshalIndent(o.hashes, "", "  ")
-	if err != nil {
-		return err
-	}
-	return atomicWrite(o.path(), append(b, '\n'), 0o644)
-}
-
-// Status reports a path's ownership without changing it: nil when it's
-// prereview's (or absent), else ErrForeign / ErrEdited.
-func (o *Owner) Status(path string) error {
-	cur, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
+// status is a path's ownership given its current bytes: nil when it's
+// prereview's, else ErrForeign / ErrEdited.
+func (o *Owner) status(path string, cur []byte) error {
 	want, ok := o.hashes[path]
 	switch {
 	case !ok:
@@ -104,13 +87,13 @@ func (o *Owner) Write(root, path string, data []byte) (bool, error) {
 }
 
 // WriteIn is Write for prereview's own folders (the library's skill sources,
-// your checks folder): base may be created, but path must stay inside it.
+// the learned checks): base may be created, but path must stay inside it.
 func (o *Owner) WriteIn(base, path string, data []byte) (bool, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || !within(base, path) {
 		return false, errors.New("refusing a path outside " + base + ": " + path)
 	}
 	if cur, err := os.ReadFile(path); err == nil {
-		if err := o.Status(path); err != nil {
+		if err := o.status(path, cur); err != nil {
 			return false, err
 		}
 		if string(cur) == string(data) {
@@ -120,7 +103,7 @@ func (o *Owner) WriteIn(base, path string, data []byte) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return false, err
 	}
-	if err := atomicWrite(path, data, 0o644); err != nil {
+	if err := library.WriteFileAtomic(path, data, 0o644); err != nil {
 		return false, err
 	}
 	o.hashes[path], o.dirty = hash(data), true
@@ -133,8 +116,10 @@ func (o *Owner) Remove(path string) (bool, error) {
 	if _, ok := o.hashes[path]; !ok {
 		return false, nil
 	}
-	if err := o.Status(path); err != nil {
-		return false, err
+	if cur, err := os.ReadFile(path); err == nil {
+		if err := o.status(path, cur); err != nil {
+			return false, err
+		}
 	}
 	err := os.Remove(path)
 	if err != nil && !os.IsNotExist(err) {
@@ -146,27 +131,14 @@ func (o *Owner) Remove(path string) (bool, error) {
 	return err == nil, nil
 }
 
-// Paths lists every path prereview owns, sorted.
-func (o *Owner) Paths() []string {
-	out := make([]string, 0, len(o.hashes))
-	for p := range o.hashes {
-		out = append(out, p)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// Owns reports whether prereview recorded writing path.
-func (o *Owner) Owns(path string) bool { _, ok := o.hashes[path]; return ok }
-
 // Reclaim overwrites a file prereview wrote that has been edited since — only
 // when you chose to discard the edit and regenerate. A file prereview never
 // wrote is still refused.
 func (o *Owner) Reclaim(path string, data []byte) error {
-	if !o.Owns(path) {
+	if _, ok := o.hashes[path]; !ok {
 		return ErrForeign
 	}
-	if err := atomicWrite(path, data, 0o644); err != nil {
+	if err := library.WriteFileAtomic(path, data, 0o644); err != nil {
 		return err
 	}
 	o.hashes[path], o.dirty = hash(data), true
@@ -178,29 +150,43 @@ func hash(b []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-// atomicWrite replaces path via a temp file + rename beside it.
-func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
-}
-
 // within reports whether path is inside dir.
 func within(dir, path string) bool {
 	rel, err := filepath.Rel(dir, path)
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, "../") && !filepath.IsAbs(rel)
+}
+
+// readJSON reads one of the library's skills/*.json records (zero when absent).
+func readJSON[T any](lib, name string) T {
+	var v T
+	if b, err := os.ReadFile(filepath.Join(lib, "skills", name)); err == nil {
+		_ = json.Unmarshal(b, &v)
+	}
+	return v
+}
+
+// editJSON is a skills/*.json read-modify-write under the library lock; fn
+// reports whether it changed the record (an unchanged one isn't rewritten).
+func editJSON[T any](lib, name string, fn func(*T) (bool, error)) error {
+	unlock, err := library.Lock(lib)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	v := readJSON[T](lib, name)
+	changed, ferr := fn(&v)
+	if !changed {
+		return ferr
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(lib, "skills"), 0o755); err != nil {
+		return err
+	}
+	if err := library.WriteFileAtomic(filepath.Join(lib, "skills", name), append(b, '\n'), 0o644); err != nil {
+		return err
+	}
+	return ferr
 }

@@ -13,7 +13,9 @@ import (
 	"strings"
 
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // errChecksFailed makes `prereview check` exit 1 without an extra error line: the
@@ -47,7 +49,7 @@ func runCheck(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	lib := checks.Load(checks.Dir{Path: userChecksDir(), Source: checks.SourceUser})
+	lib := checks.Load(checks.UserDirs(userChecksDir(), skills.LearnedChecksDir(library.Dir()))...)
 	disabled, trustVale := review.CheckPrefs(uiPrefsPath(), repo)
 
 	var reports []review.PathChecks // the same shape the Checks page reads

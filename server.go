@@ -24,6 +24,7 @@ import (
 	"github.com/livetemplate/prereview/internal/netaddr"
 	"github.com/livetemplate/prereview/internal/proxy"
 	"github.com/livetemplate/prereview/internal/review"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 func run(repo, base, host string, explicitHost, explicitBase bool, port int, agentMode, skillUpdated bool, out string, replace bool) error {
@@ -162,6 +163,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		QuizzesDir:  userQuizzesDir(),
 		ChecksDir:   userChecksDir(),
 		LibraryDir:  library.Dir(),
+		AgentHome:   agentHome(),
 		Version:     version,
 		CSVWriter:   csvWriter,
 		AgentMode:   agentMode,
@@ -652,4 +654,14 @@ func hasDotComponent(cleaned string) bool {
 		}
 	}
 	return false
+}
+
+// agentHome is where generated skills are installed ("" disables them).
+func agentHome() string {
+	h, err := skills.AgentHome()
+	if err != nil {
+		slog.Warn("no home folder for agent skills; generated skills are off", "err", err)
+		return ""
+	}
+	return h
 }

@@ -43,7 +43,7 @@ func (r *Rule) IsJudge() bool { return r.Type == TypeJudge }
 func ParseJudge(id, source, filePath string, data []byte) *Rule {
 	r := &Rule{ID: id, Name: id, Source: source, Path: filePath, Type: TypeJudge,
 		Level: LevelSuggestion, Category: DefaultCategory(source)}
-	front, body, ok := splitFrontmatter(data)
+	front, body, ok := SplitFrontmatter(data)
 	if !ok {
 		r.Err = "a judge needs YAML frontmatter between --- lines (kind: judge, name, …) before its rubric"
 		return r
@@ -83,8 +83,8 @@ func ParseJudge(id, source, filePath string, data []byte) *Rule {
 	return r
 }
 
-// splitFrontmatter splits "---\n<yaml>\n---\n<body>".
-func splitFrontmatter(data []byte) (front, body []byte, ok bool) {
+// SplitFrontmatter splits "---\n<yaml>\n---\n<body>".
+func SplitFrontmatter(data []byte) (front, body []byte, ok bool) {
 	s := bytes.TrimLeft(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")), " \t\r\n")
 	if !bytes.HasPrefix(s, []byte("---")) {
 		return nil, nil, false

@@ -100,7 +100,8 @@ type PrereviewState struct {
 	LearnScope  string             `json:"learn_scope"`  // "" = every scope
 	LearnEdit   string             `json:"learn_edit"`   // the card being edited
 	// SkillsTab is the Library's Skills tab (checks M4), built while it's open.
-	SkillsTab *SkillsTab `json:"skills_tab"`
+	SkillsTab     *SkillsTab `json:"skills_tab"`
+	ExpandedSkill string     `json:"expanded_skill"` // the skill whose history shows
 	// First launch (M3): the past reviews the scan found (carried only while the
 	// card can show), the ones you unticked, whether the offer was answered on
 	// this machine, and whether the Learnings tab's "Read past reviews" reopened it.

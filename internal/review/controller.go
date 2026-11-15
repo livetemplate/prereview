@@ -189,8 +189,13 @@ type PrereviewController struct {
 	libHistMu sync.Mutex
 	libHistFP string
 	libHist   map[string][]RuleVersion
-	// The latest generated-skills sync (syncSkills), for the Skills tab.
-	skillMu     sync.Mutex
+	// AgentHome is where generated skills are installed (skills.AgentHome,
+	// resolved once at launch); "" disables them.
+	AgentHome string
+	// syncMu serialises this server's skill syncs; reportMu guards the latest
+	// report (syncSkills), read by the Skills tab.
+	syncMu      sync.Mutex
+	reportMu    sync.Mutex
 	skillReport skills.Report
 }
 

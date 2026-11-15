@@ -25,7 +25,7 @@ func TestDiscover_DedupesAndSkipsOurs(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := Discover(env)
-	if len(found) != 1 || found[0].Name != "house-style" || found[0].Description != "Our style" || len(found[0].Paths) != 2 || !found[0].HasEvals {
+	if len(found) != 1 || found[0].Name != "house-style" || len(found[0].Paths) != 2 || !found[0].HasEvals {
 		t.Fatalf("found = %+v", found)
 	}
 }
@@ -83,7 +83,7 @@ func TestOverlay_PatchAppliesAndFolderUntouched(t *testing.T) {
 
 func TestImportedChecks_MapsDocumentGraders(t *testing.T) {
 	home := t.TempDir()
-	env := Env{LibDir: t.TempDir(), ChecksDir: filepath.Join(t.TempDir(), "checks"), Home: home}
+	env := Env{LibDir: t.TempDir(), Home: home}
 	dir := filepath.Join(home, ".claude/skills/house-style")
 	g := func(c, name, body string) {
 		mustMkdir(t, filepath.Join(dir, "evals", c, "graders"))
@@ -99,7 +99,7 @@ func TestImportedChecks_MapsDocumentGraders(t *testing.T) {
 	if err := ImportSkill(env.LibDir, f); err != nil {
 		t.Fatal(err)
 	}
-	ics, skipped := ImportedChecks(env, Imports(env.LibDir)[0])
+	ics, skipped := ImportedChecks(Imports(env.LibDir)[0])
 	if len(ics) != 2 || !ics[0].Judge && !ics[1].Judge {
 		t.Fatalf("mapped %+v", ics)
 	}
@@ -110,7 +110,7 @@ func TestImportedChecks_MapsDocumentGraders(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, ic := range ics {
-		if read(t, filepath.Join(env.ChecksDir, ic.File())) != ic.Body {
+		if read(t, filepath.Join(env.LearnedDir(), ic.File())) != ic.Body {
 			t.Fatalf("%s wasn't written to the checks folder", ic.File())
 		}
 	}
@@ -121,7 +121,7 @@ func TestImportedChecks_MapsDocumentGraders(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, ic := range ics {
-		if _, err := os.Stat(filepath.Join(env.ChecksDir, ic.File())); !os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(env.LearnedDir(), ic.File())); !os.IsNotExist(err) {
 			t.Fatalf("%s outlived the import", ic.File())
 		}
 	}

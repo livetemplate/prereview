@@ -75,7 +75,7 @@ func Propose(dir string, p Proposal) (Learning, error) {
 	}
 	l := Learning{ID: NewID(), Text: text, Scope: scope, Globs: p.Globs, Evidence: ev,
 		Produces: p.Produces, Replaces: p.Replaces, Status: StatusProposed,
-		Checker: strings.TrimSpace(p.Checker) + nl(p.Checker), Judge: strings.TrimSpace(p.Judge) + nl(p.Judge)}
+		Checker: trimFile(p.Checker), Judge: trimFile(p.Judge)}
 	err := update(dir, func(have map[string]Learning) ([]Learning, error) {
 		if p.Replaces != "" {
 			if old, ok := have[p.Replaces]; !ok || old.Status == StatusDeleted {
@@ -184,10 +184,10 @@ func update(dir string, fn func(map[string]Learning) ([]Learning, error)) error 
 	return nil
 }
 
-// nl ends a non-empty drafted file with one newline.
-func nl(s string) string {
-	if strings.TrimSpace(s) == "" {
+// trimFile trims a drafted file and ends it with one newline ("" stays "").
+func trimFile(s string) string {
+	if s = strings.TrimSpace(s); s == "" {
 		return ""
 	}
-	return "\n"
+	return s + "\n"
 }

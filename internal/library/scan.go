@@ -55,7 +55,7 @@ func Scan(home string, maxDepth int) []StoreInfo {
 		if d.Name() != StoreDir {
 			return nil
 		}
-		label := labelFor(home, filepath.Dir(p))
+		label := HomeLabel(home, filepath.Dir(p))
 		if info, ok := inspect(p); ok {
 			info.Label = label
 			out = append(out, info)
@@ -101,7 +101,7 @@ func PastReviews(dir, home string, maxDepth int) []StoreInfo {
 		}
 		seen[sess.Store] = true
 		if info, ok := inspect(sess.Store); ok {
-			info.Label = labelFor(filepath.Clean(home), sess.Repo)
+			info.Label = HomeLabel(filepath.Clean(home), sess.Repo)
 			out = append(out, info)
 		}
 	}
@@ -109,8 +109,8 @@ func PastReviews(dir, home string, maxDepth int) []StoreInfo {
 	return out
 }
 
-// labelFor shows a reviewed directory relative to home ("~/code/app").
-func labelFor(home, root string) string {
+// HomeLabel shows a path relative to home ("~/code/app"); a path outside home as is.
+func HomeLabel(home, root string) string {
 	rel, err := filepath.Rel(home, root)
 	switch {
 	case err != nil || strings.HasPrefix(rel, ".."):

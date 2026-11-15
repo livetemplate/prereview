@@ -15,6 +15,7 @@ import (
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // This is the neutrality oracle for the page.tmpl decomposition (#122).
@@ -582,17 +583,17 @@ func renderFixtures() []renderFixture {
 	skillsTab := repoBase()
 	skillsTab.ShowLibrary, skillsTab.LibraryTab = true, "skills"
 	skillsTab.SkillsTab = &review.SkillsTab{
-		Proposals: []review.SkillProposal{{Scope: "Technical docs", Count: 5}},
+		Proposals: []skills.Proposal{{Scope: "Technical docs", Count: 5}},
 		Cards: []review.SkillCard{{ID: "learned-writing", Name: "Writing", Scope: "Writing (all documents)",
 			Source: "/home/u/.config/prereview/skills/learned-writing/SKILL.md", SourceRel: "~/.config/prereview/skills/learned-writing/SKILL.md",
-			Lines: 9, Checkers: 2, Judges: 1, Edited: true,
+			Lines: 9, Checkers: 2, Judges: 1, Edited: true, Versions: 2,
 			Installs: []review.SkillInstall{{Label: "Claude Code", State: "installed", OK: true}, {Label: "Cursor", State: "not set up here"}},
 			History: &review.HistoryView{ID: "learned-writing", Action: "restoreSkillVersion", Versions: []review.RuleVersion{
 				{Seq: 4, When: "15 Nov 2026 10:41", Current: true, Stat: "+1 −0", Note: "Accepted “Cut filler words.”",
 					Diff: []review.RuleDiffRow{{Kind: "add", Text: "- Cut filler words. <!-- learning l1 -->"}}},
 				{Seq: 1, When: "9 Nov 2026 09:00"}}}}},
 		Imported: []review.ImportedCard{{Name: "house-style", Path: "/home/u/.claude/skills/house-style/SKILL.md", PathRel: "~/.claude/skills/house-style/SKILL.md",
-			Changed: true, Overlay: 2, Checks: []string{"house-style: reader-first", "house-style: no-utilize"},
+			Changed: true, Overlay: 2, Checks: 2,
 			Skipped: []string{"notes/ran-tests.md: a tool_used grader grades an agent run, not a document"}}},
 		Found: []review.FoundSkill{{Name: "blog-voice", Hash: "abc123", Where: "~/.claude/skills/blog-voice/SKILL.md", Copies: 2, HasEvals: true}},
 	}

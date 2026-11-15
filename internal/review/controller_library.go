@@ -8,6 +8,7 @@ import (
 	"github.com/livetemplate/livetemplate"
 
 	"github.com/livetemplate/prereview/internal/library"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // Library tabs. "" is Learnings, the first tab.
@@ -58,11 +59,23 @@ func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 	}
 }
 
-// libraryFingerprint is what the watcher compares: the learnings log and the
-// first-launch marker (answering the offer in one review hides it in the others).
+// libraryFingerprint is what the watcher compares: the learnings log, the
+// first-launch marker (answering the offer in one review hides it in the
+// others) and the skills' inputs (so another server's Create skill or Import,
+// or your edit to a skill, syncs here too).
 func (c *PrereviewController) libraryFingerprint() string {
-	return statusFingerprint(filepath.Join(c.LibraryDir, library.LearningsFile)) + "|" +
+	fp := statusFingerprint(filepath.Join(c.LibraryDir, library.LearningsFile)) + "|" +
 		statusFingerprint(filepath.Join(c.LibraryDir, library.BootstrapFile))
+	// Every other input of a skills sync: created skills, imports, and the skill
+	// sources you might edit in your editor.
+	inputs, _ := filepath.Glob(filepath.Join(c.LibraryDir, "skills", "*.json"))
+	srcs, _ := filepath.Glob(skills.Env{LibDir: c.LibraryDir}.SourcePath("*"))
+	for _, p := range append(inputs, srcs...) {
+		if filepath.Base(p) != skills.OwnedFile { // written by every sync: not an input
+			fp += "|" + p + statusFingerprint(p)
+		}
+	}
+	return fp
 }
 
 // ScanPastReviews looks for review stores on this machine (the first-launch

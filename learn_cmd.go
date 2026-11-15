@@ -87,7 +87,7 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 		if f.from == "" {
 			continue
 		}
-		b, err := readArgFile(f.from)
+		b, err := readIDSource(f.from)
 		if err != nil {
 			return err
 		}
@@ -133,12 +133,4 @@ func learnMain(args []string) {
 		}
 		os.Exit(1)
 	}
-}
-
-// readArgFile reads a flag's file, or stdin for "-".
-func readArgFile(path string) ([]byte, error) {
-	if path == "-" {
-		return io.ReadAll(os.Stdin)
-	}
-	return os.ReadFile(path)
 }

@@ -30,10 +30,9 @@ func TestE2E_LearningProducesSkillAndCheck(t *testing.T) {
 	}
 	past := seedReviewStore(t, filepath.Join(t.TempDir(), "notes"),
 		csv.Row{ID: "c1", File: "plan.md", FromLine: 2, ToLine: 2, Body: "Don't call it plain, say what it is.", CreatedAt: time.Now()})
-	checker := filepath.Join(t.TempDir(), "plain.yml")
-	if err := os.WriteFile(checker, []byte("extends: existence\nname: Plain talk\nmessage: \"Say what it is instead of '%s'.\"\ntokens: [Plain]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	drafts := t.TempDir()
+	mustWrite(t, drafts, "plain.yml", "extends: existence\nname: Plain talk\nmessage: \"Say what it is instead of '%s'.\"\ntokens: [Plain]\n")
+	checker := filepath.Join(drafts, "plain.yml")
 	p := bootChromeAgainstRepo(t, repo, w, h)
 	diag := captureDiag(t, p)
 	p.waitReadyAt(w, h)
@@ -72,9 +71,9 @@ func TestE2E_LearningProducesSkillAndCheck(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".agents")); !os.IsNotExist(err) {
 		t.Errorf("installed for an agent that isn't set up (~/.agents)")
 	}
-	rule := filepath.Join(checksDirFor(repo), "learned-"+id+".yml")
+	rule := filepath.Join(learnedChecksDirFor(repo), "learned-"+id+".yml")
 	if b, err := os.ReadFile(rule); err != nil || !strings.Contains(string(b), "Plain talk") {
-		t.Fatalf("the checker isn't in your checks folder (%v): %s", err, b)
+		t.Fatalf("the checker isn't in the learned checks (%v): %s", err, b)
 	}
 
 	if err := chromedp.Run(ctx,
@@ -158,7 +157,7 @@ func TestE2E_ImportSkill(t *testing.T) {
 	if got := textOf(t, p, card+` .lc-drafted`); !strings.Contains(got, "1 grader not used") {
 		t.Errorf("the tool_used grader isn't reported as unused: %q%s", got, diag())
 	}
-	rules, _ := filepath.Glob(filepath.Join(checksDirFor(repo), "learned-imported-house-style-*"))
+	rules, _ := filepath.Glob(filepath.Join(learnedChecksDirFor(repo), "learned-imported-house-style-*"))
 	if len(rules) != 2 {
 		t.Fatalf("checks written from its evals: %v", rules)
 	}
@@ -196,4 +195,10 @@ func TestE2E_ImportSkill(t *testing.T) {
 	if n != len(files)+4 { // the files plus dir, evals/, evals/notes/, graders/
 		t.Errorf("the imported skill's folder gained or lost files (%d entries)", n)
 	}
+}
+
+// learnedChecksDirFor is where a test server's learnings write their checks
+// (skills.LearnedChecksDir of its library).
+func learnedChecksDirFor(repo string) string {
+	return filepath.Join(libraryDirFor(repo), "skills", "checks")
 }

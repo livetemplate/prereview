@@ -615,6 +615,7 @@
                 </ol>
               </details>
       <div class="lc-actions">
+        <form method="POST"><input type="hidden" name="id" value="learned-writing"><button type="submit" name="expandSkill" class="outline" aria-expanded="true">Hide history</button></form>
         
         <form method="POST"><input type="hidden" name="id" value="learned-writing"><button type="submit" name="regenerateSkill" class="outline">Regenerate from learnings</button></form>
       </div>
@@ -635,7 +636,7 @@
     <li class="lib-card" data-key="skill-found">
       <header><span class="ck-pill ck-muted">found on this machine</span></header>
       <p class="lc-text">Import a skill</p>
-      <div class="lc-row" data-key="skill-found-abc123"><span><code>~/.claude/skills/blog-voice/SKILL.md</code> (and 2 copies) · instructions + <code>evals/</code></span>
+      <div class="lc-row" data-key="skill-found-abc123"><span><code>~/.claude/skills/blog-voice/SKILL.md</code> (2 copies) · instructions + <code>evals/</code></span>
         <form method="POST" class="ckp-inline"><input type="hidden" name="hash" value="abc123"><button type="submit" name="importSkill" class="outline">Import blog-voice</button></form></div>
       
     </li>

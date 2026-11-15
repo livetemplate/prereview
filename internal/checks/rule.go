@@ -41,6 +41,10 @@ const (
 	SourceUser    = "user"
 	SourceRepo    = "repo"
 	SourceVale    = "vale"
+	// SourceLearned is the checkers and judges your accepted learnings produce
+	// (checks M4), in a folder prereview owns. Like a repo's rules they can never
+	// run a command: whatever wrote the learning, it can't make prereview execute.
+	SourceLearned = "learned"
 )
 
 // DefaultFiles are the globs a rule applies to when it sets no `files:`. Prose
@@ -166,6 +170,8 @@ func DefaultCategory(source string) string {
 		return "Yours"
 	case SourceRepo:
 		return "This repo"
+	case SourceLearned:
+		return "Learned"
 	default:
 		return valeCategory
 	}

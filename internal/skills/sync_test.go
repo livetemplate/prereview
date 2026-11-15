@@ -11,7 +11,7 @@ import (
 
 func TestSync_Lifecycle(t *testing.T) {
 	home := t.TempDir()
-	env := Env{LibDir: t.TempDir(), ChecksDir: filepath.Join(t.TempDir(), "checks"), Home: home}
+	env := Env{LibDir: t.TempDir(), Home: home}
 	mustMkdir(t, filepath.Join(home, ".claude", "skills")) // Claude is set up; nothing else is
 	l := acc("l1", "Cut filler words.", library.DefaultScope, "2026-11-01T00:00:00Z")
 	l.Checker = "extends: existence\nname: Filler\ntokens: [basically]\n"
@@ -22,7 +22,7 @@ func TestSync_Lifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	claude := filepath.Join(home, ".claude", "skills", WritingID, "SKILL.md")
-	check := filepath.Join(env.ChecksDir, "learned-l1.yml")
+	check := filepath.Join(env.LearnedDir(), "learned-l1.yml")
 	if !strings.Contains(read(t, claude), "Cut filler words.") || read(t, check) != l.Checker || read(t, env.SourcePath(WritingID)) != read(t, claude) {
 		t.Fatalf("first sync didn't install the skill and its checker: %+v", rep)
 	}
@@ -96,12 +96,31 @@ func TestSync_ForeignSkillNameAndCursor(t *testing.T) {
 		t.Fatal("overwrote a skill prereview didn't write")
 	}
 	mdc := read(t, filepath.Join(home, ".cursor", "rules", WritingID+".mdc"))
-	if !strings.HasPrefix(mdc, "---\ndescription: ") || !strings.Contains(mdc, "globs: docs/**\n") || strings.Contains(mdc, "name: learned-writing") || !strings.Contains(mdc, "- Number the steps.") {
+	if !strings.HasPrefix(mdc, "---\ndescription: ") || strings.Contains(mdc, "globs:") || strings.Contains(mdc, "name: learned-writing") || !strings.Contains(mdc, "- Number the steps. (in docs/**)") {
 		t.Fatalf("cursor rule:\n%s", mdc)
 	}
 	for _, in := range rep.Skills[0].Installs {
 		if in.Target.ID == "agents" && in.State != Foreign {
 			t.Fatalf("agents install state = %q", in.State)
 		}
+	}
+}
+
+// The sweep only removes what a sync generates: another owned file (say, a
+// future owner of prereview's own skill) is never touched.
+func TestSync_SweepOnlyGenerated(t *testing.T) {
+	home := t.TempDir()
+	env := Env{LibDir: t.TempDir(), Home: home}
+	root := filepath.Join(home, ".claude", "skills")
+	other := filepath.Join(root, "prereview", "SKILL.md")
+	mustMkdir(t, root)
+	if err := Own(env.LibDir, func(o *Owner) error { _, err := o.Write(root, other, []byte("prereview's own")); return err }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(env, nil); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, other) != "prereview's own" {
+		t.Fatal("a learnings sync removed a file it doesn't generate")
 	}
 }

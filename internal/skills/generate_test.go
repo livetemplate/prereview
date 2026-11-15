@@ -103,8 +103,8 @@ func TestGenerate_ScopeSkillsChecksAndProposals(t *testing.T) {
 	if md := tech.SkillMD(); !strings.Contains(md, "extend the `learned-writing` skill") || !strings.Contains(md, "prereview check") {
 		t.Errorf("narrow skill:\n%s", md)
 	}
-	if r := tech.CursorRule(); !strings.Contains(r, "globs: docs/**/*.md\n") || !strings.Contains(r, "alwaysApply: false") {
-		t.Errorf("cursor rule:\n%s", r)
+	if r := tech.CursorRule(); strings.Contains(r, "globs:") || !strings.Contains(r, "alwaysApply: false") {
+		t.Errorf("cursor rule (a learning's globs stay on its line, not the rule):\n%s", r)
 	}
 	for _, s := range sk {
 		for _, c := range s.Checks {
@@ -118,13 +118,17 @@ func TestGenerate_ScopeSkillsChecksAndProposals(t *testing.T) {
 	for i := 0; i < ProposeAt; i++ {
 		many = append(many, acc(string(rune('a'+i)), "x", "Email", "2026-11-01T00:00:00Z"))
 	}
-	if p := Proposals(many, nil, nil); p["Email"] != ProposeAt {
+	lib := t.TempDir()
+	if p := Proposals(lib, many); len(p) != 1 || p[0] != (Proposal{"Email", ProposeAt}) {
 		t.Fatalf("proposals = %v", p)
 	}
-	if p := Proposals(many[:ProposeAt-1], nil, nil); len(p) != 0 {
+	if p := Proposals(lib, many[:ProposeAt-1]); len(p) != 0 {
 		t.Fatalf("proposed with too few: %v", p)
 	}
-	if p := Proposals(many, nil, []string{"Email"}); len(p) != 0 {
+	if err := DismissScope(lib, "Email"); err != nil {
+		t.Fatal(err)
+	}
+	if p := Proposals(lib, many); len(p) != 0 {
 		t.Fatalf("proposed a dismissed scope: %v", p)
 	}
 }

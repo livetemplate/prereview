@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/livetemplate/prereview/internal/checks"
@@ -26,7 +25,6 @@ type Skill struct {
 	Extends         string // a narrower skill extends Writing instead of copying it
 	Lines           []Line
 	Checks          []Check
-	Globs           []string
 }
 
 // Line is one instruction, traced back to its learning.
@@ -72,30 +70,17 @@ func Generate(ls []library.Learning, defs []Def) []Skill {
 		byScope[d.Scope] = s
 		out = append(out, s)
 	}
-	var accepted []library.Learning
-	for _, l := range ls {
-		if l.Status == library.StatusAccepted {
-			accepted = append(accepted, l)
-		}
-	}
-	sort.SliceStable(accepted, func(i, j int) bool {
-		if accepted[i].CreatedAt != accepted[j].CreatedAt {
-			return accepted[i].CreatedAt < accepted[j].CreatedAt
-		}
-		return accepted[i].ID < accepted[j].ID
-	})
-	for _, l := range accepted {
+	for _, l := range accepted(ls) {
 		s := byScope[l.Scope]
 		if s == nil {
 			s = writing
 		}
 		if producesInstruction(l) {
-			s.Lines = append(s.Lines, Line{LearningID: l.ID, Text: oneLine(l.Text)})
-		}
-		for _, g := range l.Globs {
-			if !slices.Contains(s.Globs, g) {
-				s.Globs = append(s.Globs, g)
+			text := oneLine(l.Text)
+			if len(l.Globs) > 0 { // where it applies stays on its own line, not the whole skill
+				text += " (in " + strings.Join(l.Globs, ", ") + ")"
 			}
+			s.Lines = append(s.Lines, Line{LearningID: l.ID, Text: text})
 		}
 		if c, ok := drafted(l, false); ok {
 			s.Checks = append(s.Checks, c)
@@ -114,15 +99,26 @@ func Generate(ls []library.Learning, defs []Def) []Skill {
 	return res
 }
 
-// Proposals are scopes worth a skill of their own: ProposeAt or more accepted
-// learnings, no created skill, not dismissed. Sorted by scope.
-func Proposals(ls []library.Learning, defs []Def, dismissed []string) map[string]int {
+// Proposal is a scope with enough accepted learnings for a skill of its own.
+type Proposal struct {
+	Scope string
+	Count int
+}
+
+// Proposals are the scopes worth a skill of their own: ProposeAt or more
+// accepted learnings, no created skill, not dismissed, not an imported skill's
+// overlay. Sorted by scope.
+func Proposals(lib string, ls []library.Learning) []Proposal {
+	d := readJSON[defs](lib, defsFile)
 	has := map[string]bool{library.DefaultScope: true}
-	for _, d := range defs {
-		has[d.Scope] = true
+	for _, s := range d.Skills {
+		has[s.Scope] = true
 	}
-	for _, s := range dismissed {
+	for _, s := range d.Dismissed {
 		has[s] = true
+	}
+	for _, imp := range Imports(lib) {
+		has[imp.Name] = true
 	}
 	n := map[string]int{}
 	for _, l := range ls {
@@ -130,12 +126,14 @@ func Proposals(ls []library.Learning, defs []Def, dismissed []string) map[string
 			n[l.Scope]++
 		}
 	}
-	for s, c := range n {
-		if c < ProposeAt {
-			delete(n, s)
+	var out []Proposal
+	for scope, c := range n {
+		if c >= ProposeAt {
+			out = append(out, Proposal{scope, c})
 		}
 	}
-	return n
+	slices.SortFunc(out, func(a, b Proposal) int { return strings.Compare(a.Scope, b.Scope) })
+	return out
 }
 
 // producesInstruction: a learning becomes a skill line unless it only asked for
@@ -151,7 +149,7 @@ func drafted(l library.Learning, judge bool) (Check, bool) {
 	if judge {
 		body = l.Judge
 	}
-	if strings.TrimSpace(body) == "" || checks.ValidateDrafted([]byte(body), judge) != nil {
+	if strings.TrimSpace(body) == "" || checks.ValidateDrafted([]byte(body), judge) != nil { // gates every way a learning arrives
 		return Check{}, false
 	}
 	c := Check{LearningID: l.ID, ID: IDPrefix + l.ID, Judge: judge, Body: body}
@@ -217,23 +215,19 @@ func (s Skill) Body() string {
 // SkillMD is the skill's SKILL.md: the Agent Skills format Claude, Codex,
 // Gemini and opencode all read.
 func (s Skill) SkillMD() string {
-	return fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s", s.ID, quote(s.Description()), s.Body())
+	return fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s", s.ID, YAMLQuote(s.Description()), s.Body())
 }
 
-// CursorRule is the skill as a Cursor rule (.mdc): applied when relevant, or to
-// the learnings' globs.
-func (s Skill) CursorRule() string {
-	var fm strings.Builder
-	fmt.Fprintf(&fm, "---\ndescription: %s\n", quote(s.Description()))
-	if len(s.Globs) > 0 {
-		fmt.Fprintf(&fm, "globs: %s\n", strings.Join(s.Globs, ","))
-	}
-	fm.WriteString("alwaysApply: false\n---\n\n")
-	return fm.String() + s.Body()
+// CursorRule is the skill as a Cursor rule (.mdc), applied when relevant.
+func (s Skill) CursorRule() string { return s.cursorFrontmatter() + s.Body() }
+
+func (s Skill) cursorFrontmatter() string {
+	return fmt.Sprintf("---\ndescription: %s\nalwaysApply: false\n---\n\n", YAMLQuote(s.Description()))
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-func quote(s string) string {
+// YAMLQuote renders s as a double-quoted YAML string (frontmatter values).
+func YAMLQuote(s string) string {
 	return `"` + strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`) + `"`
 }

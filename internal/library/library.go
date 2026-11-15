@@ -284,20 +284,33 @@ func Compact(dir string) error {
 	if err := writeLearnings(&buf, byID); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, LearningsFile+".*")
+	return WriteFileAtomic(filepath.Join(dir, LearningsFile), buf.Bytes(), 0o644)
+}
+
+// WriteFileAtomic replaces path's content via a temp file + rename beside it, so
+// a reader never sees it half-written. A file that already exists keeps its mode;
+// a new one gets mode.
+func WriteFileAtomic(path string, data []byte, mode os.FileMode) error {
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
 		return err
 	}
-	if _, err := tmp.Write(buf.Bytes()); err != nil {
+	defer os.Remove(tmp.Name()) // a no-op after the rename
+	if err := tmp.Chmod(mode); err != nil {
 		tmp.Close()
-		os.Remove(tmp.Name())
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, LearningsFile))
+	return os.Rename(tmp.Name(), path)
 }
 
 // compactSlack is how many superseded lines the log may carry before Compact
@@ -306,11 +319,11 @@ const compactSlack = 200
 
 // Import merges another machine's export (a learnings log) into dir: each
 // record that is newer than what dir holds for its id is appended (its
-// updated_at and machine kept, so every machine folds the same way). Importing
-// the same file twice appends nothing the second time. A learning that would
-// take effect here — accepted, and new or different from the one held — arrives
-// *proposed*: an imported file never installs a skill line or a check without
-// your accept on this machine. Returns how many records were taken, and how
+// updated_at and machine kept, so importing the same file twice appends nothing
+// the second time). A learning that would take effect here — accepted, and new
+// or different from the one held — arrives *proposed*: an imported file never
+// installs a skill line or a check without your accept on this machine. So the
+// same record can fold to accepted there and proposed here until you accept it. Returns how many records were taken, and how
 // many of those wait for that accept.
 func Import(dir string, from io.Reader) (taken, toAccept int, err error) {
 	theirs, _ := foldLearnings(from)

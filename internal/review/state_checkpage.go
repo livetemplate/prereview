@@ -120,6 +120,8 @@ func (r CheckRow) SourceLabel() string {
 		return "built-in"
 	case checks.SourceUser:
 		return "yours"
+	case checks.SourceLearned:
+		return "learned"
 	case checks.SourceVale, checks.SourceRepo:
 		return "this repo"
 	}
