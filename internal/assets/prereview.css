@@ -3679,6 +3679,16 @@ button.lib-tab .ck-pill { margin-left: 0.3rem; }
 .lc-edit label { display: flex; gap: 0.4rem; align-items: center; margin: 0; font-size: 0.78rem; color: var(--text-muted); }
 .lc-edit input { margin: 0; padding: 0.15rem 0.45rem; height: auto; font-size: 0.82rem; }
 .lib-boot-form { margin: 0; }
+.lib-auto-form { margin: 0 0 0 auto !important; }
+.lib-auto-form + .lib-scope-form { margin-left: 0 !important; }
+button.lib-auto {
+  display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; padding: 0.15rem 0.35rem; min-height: 28px; width: auto;
+  background: none; border: 0; color: var(--text-muted); font-size: 0.76rem;
+}
+.ck-switch { width: 28px; height: 16px; border-radius: 999px; position: relative; flex: none; background: var(--accent); display: inline-block; }
+.ck-switch::after { content: ""; position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); }
+.ck-switch.off { background: var(--border-strong); }
+.ck-switch.off::after { right: auto; left: 2px; }
 .lib-boot-form .ck-link { font-size: 0.78rem; }
 
 /* First launch (M3): learn from past reviews. */
@@ -3717,7 +3727,7 @@ button.boot-item[aria-checked="true"] .boot-box { background: var(--accent); bor
 @media (max-width: 640px) {
   .boot { margin: 0.5rem 0.25rem; }
   .boot-list .bc { display: none; }
-  .lib-scope-form { margin-left: 0 !important; width: 100%; }
+  .lib-scope-form, .lib-auto-form { margin-left: 0 !important; width: 100%; }
   .lib-filters select { width: 100%; }
 }
 .checks-editor {

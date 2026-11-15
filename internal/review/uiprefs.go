@@ -54,6 +54,9 @@ type UIPrefs struct {
 	EditorSSHHost  string   `json:"editor_ssh_host,omitempty"`
 	// TrustedVale lists repos (absolute paths) whose Vale config you let run.
 	TrustedVale []string `json:"trusted_vale,omitempty"`
+	// AutoLearnOff turns off "Learn after each review" (checks M3): asking the agent
+	// to read this review once it goes idle with enough new signals. On by default.
+	AutoLearnOff bool `json:"auto_learn_off,omitempty"`
 }
 
 // uiPrefsMu serialises writes to the prefs file — multiple tabs (sharing one
@@ -142,6 +145,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.EditorTemplate = p.EditorTemplate
 	state.EditorSSHHost = p.EditorSSHHost
 	state.TrustedVale = p.TrustedVale
+	state.AutoLearnOff = p.AutoLearnOff
 }
 
 // savePrefs persists the current view-style preferences to the per-user prefs
@@ -166,6 +170,7 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		EditorTemplate: state.EditorTemplate,
 		EditorSSHHost:  state.EditorSSHHost,
 		TrustedVale:    state.TrustedVale,
+		AutoLearnOff:   state.AutoLearnOff,
 	}); err != nil {
 		slog.Warn("savePrefs", "err", err)
 	}

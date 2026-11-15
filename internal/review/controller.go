@@ -174,6 +174,10 @@ type PrereviewController struct {
 	bootMu      sync.Mutex
 	bootScanned bool
 	bootStores  []library.StoreInfo
+	// autoLearn is this review's store when the idle agent should be asked to
+	// learn from it (maybeAutoLearn); the first tab that can queue the request
+	// claims it (AutoLearn), so it's queued once however many tabs are open.
+	autoLearn atomic.Pointer[string]
 }
 
 type cachedDiff struct {

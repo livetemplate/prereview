@@ -90,8 +90,19 @@ func Scan(home string, maxDepth int) []StoreInfo {
 	return out
 }
 
-// inspect counts a store's records; ok is false when it holds no reviewer signal.
+// safePath reports a path that can go verbatim into the extraction request: no
+// control characters (a newline would start a new prompt line) and no backticks
+// (which would close its code span). A store under any other name is skipped.
+func safePath(p string) bool {
+	return !strings.ContainsFunc(p, func(r rune) bool { return r < 0x20 || r == 0x7f || r == '`' })
+}
+
+// inspect counts a store's records; ok is false when it holds no reviewer signal
+// (or its path isn't safe to name in a request).
 func inspect(store, root string) (StoreInfo, bool) {
+	if !safePath(store) {
+		return StoreInfo{}, false
+	}
 	info := StoreInfo{Store: store, Root: root}
 	if rows, err := csv.Read(filepath.Join(store, commentsFile)); err == nil {
 		info.Comments = len(rows)

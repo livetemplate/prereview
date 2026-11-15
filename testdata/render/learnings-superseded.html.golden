@@ -591,6 +591,7 @@
     <form method="POST"><input type="hidden" name="status" value="accepted"><button type="submit" name="setLearnFilter" class="lib-chip" aria-pressed="false">Accepted 1</button></form>
     <form method="POST"><input type="hidden" name="status" value="superseded"><button type="submit" name="setLearnFilter" class="lib-chip is-on" aria-pressed="true">Superseded 1</button></form>
     <form method="POST"><input type="hidden" name="status" value="rejected"><button type="submit" name="setLearnFilter" class="lib-chip" aria-pressed="false">Rejected 0</button></form>
+    <form method="POST" class="lib-auto-form"><button type="submit" name="toggleAutoLearn" class="lib-auto" role="switch" aria-checked="true" title="When your agent goes idle and a review has 5 or more new comments, replies or decisions, ask it to learn from them"><span class="ck-switch" aria-hidden="true"></span>Learn after each review</button></form>
     <form method="POST" class="lib-scope-form">
       <select name="scope" aria-label="Scope" lvt-on:change="setLearnFilter">
         <option value="" selected>All scopes</option>

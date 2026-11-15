@@ -105,6 +105,7 @@ type PrereviewState struct {
 	BootSkip     []string            `json:"boot_skip"`
 	Bootstrapped bool                `json:"bootstrapped"`
 	BootOpen     bool                `json:"boot_open"`
+	AutoLearnOff bool                `json:"auto_learn_off"` // ui-prefs: "Learn after each review" off
 
 	// Artifact versioning (#90). Versions is the selected file's version
 	// timeline (newest first), populated from the version store each Mount /

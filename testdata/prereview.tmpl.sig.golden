@@ -585,7 +585,8 @@
 {{with $.LibraryBootCard}}{{template "bootCard" .}}{{end}}{{with $.LearnPage}}
   <div class="lib-filters">
     {{range .Chips}}<form method="POST"><input type="hidden" name="status" value="{{.Status}}"><button type="submit" name="setLearnFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
-    {{end}}{{if .Scopes}}<form method="POST" class="lib-scope-form">
+    {{end}}<form method="POST" class="lib-auto-form"><button type="submit" name="toggleAutoLearn" class="lib-auto" role="switch" aria-checked="{{if $.AutoLearnOff}}false{{else}}true{{end}}" title="When your agent goes idle and a review has 5 or more new comments, replies or decisions, ask it to learn from them"><span class="ck-switch{{if $.AutoLearnOff}} off{{end}}" aria-hidden="true"></span>Learn after each review</button></form>
+    {{if .Scopes}}<form method="POST" class="lib-scope-form">
       <select name="scope" aria-label="Scope" lvt-on:change="setLearnFilter">
         <option value=""{{if eq .Scope ""}} selected{{end}}>All scopes</option>
         {{range .Scopes}}<option value="{{.Name}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}

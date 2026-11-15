@@ -234,3 +234,55 @@ func (c *PrereviewController) libraryWritten(state PrereviewState) PrereviewStat
 	go c.broadcast("LibraryUpdated")
 	return state
 }
+
+// AutoLearnMinSignals is how many new reviewer signals (comments, replies,
+// decisions) since the last extraction make an idle agent worth asking.
+const AutoLearnMinSignals = 5
+
+// maybeAutoLearn runs when the agent goes idle (attached and not working): with
+// "Learn after each review" on and enough new reviewer signals in this review
+// since the last extraction, it asks the open tabs to queue one extraction
+// request. The watcher never writes comments.csv itself — a tab's next persist
+// would erase a row it didn't know about (persist rewrites from state.Comments).
+func (c *PrereviewController) maybeAutoLearn() {
+	if c.LibraryDir == "" || c.CSVPath == "" || loadUIPrefs(c.UIPrefsPath).AutoLearnOff {
+		return
+	}
+	store := filepath.Dir(c.CSVPath)
+	if library.ReviewerSignals(store)-library.LastExtractions(c.LibraryDir)[store].Signals < AutoLearnMinSignals {
+		return
+	}
+	c.autoLearn.Store(&store)
+	c.broadcast("AutoLearn")
+}
+
+// AutoLearn queues the extraction request maybeAutoLearn asked for, in the first
+// tab that can: one with a file open and no comment being written (queueing
+// resets the composer). Recording the extraction resets the signal count, so the
+// request isn't asked for again until there are AutoLearnMinSignals more.
+func (c *PrereviewController) AutoLearn(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	p := c.autoLearn.Load()
+	if p == nil || !state.AgentMode || state.SelectedFile == "" || state.CommentMode != "" || state.DraftBody != "" ||
+		state.extractionOpen() || !c.autoLearn.CompareAndSwap(p, nil) {
+		return state, nil
+	}
+	store := *p
+	n := library.ReviewerSignals(store)
+	ls, _ := c.learnings()
+	state, err := c.queueFileComment(state, library.ExtractionPrompt([]string{store}, ls))
+	if err != nil {
+		return state, err
+	}
+	if err := library.RecordExtraction(c.LibraryDir, store, n); err != nil {
+		return state, err
+	}
+	state.Flash = "Asked your agent to learn from this review"
+	return state, nil
+}
+
+// ToggleAutoLearn turns "Learn after each review" on or off (a per-user pref).
+func (c *PrereviewController) ToggleAutoLearn(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.AutoLearnOff = !state.AutoLearnOff
+	c.savePrefs(state)
+	return state, nil
+}
