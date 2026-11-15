@@ -495,6 +495,41 @@ func renderFixtures() []renderFixture {
 		},
 	}
 
+	// checks M2: judges — the page filtered to judges with one expanded (a fail
+	// whose quote was found, a stale verdict, a not-run file, your Agree), the file
+	// bar with that judge picked (its critique card), and the idle bar offering
+	// Run judges.
+	judgeRes := func(status, critique string, findings []checks.Finding) checks.Result {
+		at := "2026-11-15T10:00:00Z"
+		if status == "notrun" {
+			at = ""
+		}
+		return checks.Result{ID: "reader-first", Name: "Written for the reader", Category: "Reader-first", Type: "judge",
+			Level: "suggestion", Source: "user", Path: "/home/u/.config/prereview/checks/reader-first.md", Status: status,
+			Critique: critique, Model: "claude-opus-5-5", JudgedAt: at, Findings: findings}
+	}
+	failJudge := judgeRes("fail", "Explains storage before saying what to do.",
+		[]checks.Finding{{Line: 1, EndLine: 1, FromCol: 0, ToCol: 4, Message: "Explains storage before saying what to do.", Severity: "suggestion", Match: "This"}})
+	judgesFile := &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), failJudge)}
+	judgePage := checksPage
+	judgePage.Checks = judgesFile
+	judgePage.ExpandedCheck = "reader-first"
+	judgePage.ChecksKind = "judge"
+	judgePage.JudgeLabels = map[string]string{"notes.txt\x00reader-first\x002026-11-15T10:00:00Z": "agree"}
+	judgePage.ReviewChecks = &review.ReviewChecks{Total: 3, Files: []review.PathChecks{
+		{Path: "notes.txt", Results: judgesFile.Results},
+		{Path: "docs/guide.md", Results: []checks.Result{judgeRes("stale", "Leads with the diagram.", nil)}},
+		{Path: "docs/faq.md", Results: []checks.Result{judgeRes("notrun", "", nil)}},
+	}}
+	judgeCard := checksStrip
+	judgeCard.Checks = judgesFile
+	judgeCard.SelectedCheck = "reader-first"
+	judgeCard.AgentMode = true
+	judgeRun := checksStrip
+	judgeRun.SelectedCheck = ""
+	judgeRun.AgentMode = true
+	judgeRun.Checks = &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), judgeRes("notrun", "", nil))}
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -524,6 +559,9 @@ func renderFixtures() []renderFixture {
 		{"past-eof", pastEOF},
 		{"checks-strip", checksStrip},
 		{"checks-page", checksPage},
+		{"checks-page-judge", judgePage},
+		{"checks-judge-card", judgeCard},
+		{"checks-judge-run", judgeRun},
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},

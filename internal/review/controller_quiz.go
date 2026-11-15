@@ -124,9 +124,7 @@ func (c *PrereviewController) RequestQuiz(state PrereviewState, ctx *livetemplat
 	if body == "" {
 		return state, nil // no prompts, or a stale slug from an old render
 	}
-	resetToFileComment(&state)
-	state.DraftBody = ""
-	state, err := c.addFileLevelComment(state, body)
+	state, err := c.queueFileComment(state, body)
 	if err != nil {
 		return state, err
 	}

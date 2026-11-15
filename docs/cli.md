@@ -247,6 +247,12 @@ prereview check     [--json] <file>...
   the reviewer's card returns to undecided. Validated against suggestions.
   Idempotent. Appends to `.prereview/reverted.jsonl`.
 
+- **`prereview judge`** — the coding agent's answer to a "Run judges" request:
+  `prereview judge --out <STORE> --file <f> --judge <id> --content-hash <h>
+  --rubric-hash <h> --verdict pass|fail --critique "…" [--quote "…"] [--model <id>]`,
+  one call per judge, copied from the request. Appends the verdict (with the
+  request's file and rubric hashes, so the review can tell when it's out of date) to
+  the store's `judgments.jsonl`. Validated before anything is written.
 - **`prereview check`** — run the review's [checks](usage.md#checks) on files
   from the terminal: the built-in prose rules, your `~/.config/prereview/checks/`
   rules, and the repo's Vale config when you've trusted it on the Checks page and

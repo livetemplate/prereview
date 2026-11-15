@@ -48,7 +48,8 @@ func signalFingerprint(statusFP string, c *PrereviewController) string {
 		statusFingerprint(AgentRepliesPath(c.CSVPath)) + "|" +
 		statusFingerprint(AppliedPath(c.CSVPath)) + "|" +
 		statusFingerprint(RevertedPath(c.CSVPath)) + "|" +
-		statusFingerprint(c.quizPath())
+		statusFingerprint(c.quizPath()) + "|" +
+		statusFingerprint(JudgmentsPath(c.CSVPath))
 }
 
 // AgentPresence is what the server can OBSERVE about the queue's consumer
@@ -199,6 +200,14 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// ...and on a quiz.jsonl change (#191): reload the quizzes and re-ground them
 	// against the live diff, so a freshly generated quiz appears with no reload.
 	c.applyQuiz(&state)
+	// ...and on a judgments.jsonl change (M2): re-apply checks so a fresh judge
+	// verdict replaces "not run" / the waiting state with no reload. Gated on that
+	// file's fingerprint: the watcher fans out for every agent signal, and most
+	// ticks don't touch verdicts.
+	if fp := statusFingerprint(JudgmentsPath(c.CSVPath)); fp != state.JudgmentsSeen {
+		state.JudgmentsSeen = fp
+		c.reapplyChecks(&state)
+	}
 	// #116: if the agent submitted a brand-new suggestion while the inline boxes
 	// were toggled off, reveal them — a hidden toggle must never silently swallow
 	// fresh proposals. Gated on a genuinely-new ID (a revision re-appends the same

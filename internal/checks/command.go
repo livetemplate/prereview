@@ -69,7 +69,7 @@ func RunCommand(ctx context.Context, r *Rule, absPath string, content []byte) Re
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return ErrorResult(r, "output is not a JSON array of findings: "+err.Error())
 	}
-	res := newResult(r)
+	res := NewResult(r)
 	for _, f := range raw {
 		if f.Line <= 0 {
 			continue

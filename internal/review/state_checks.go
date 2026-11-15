@@ -11,8 +11,11 @@ import (
 // finding inside a commented phrase carries both classes (gitdiff.MarkRanges).
 const findingMarkClass = "check-finding"
 
-// CheckSummary is the file header's "n/m passed": enabled checks only. A running
-// check counts toward Total but not Passed until it lands.
+// CheckSummary is the file header's "n/m passed": ONE count over the enabled
+// checkers and judges. A running check counts toward Total but not Passed until it
+// lands; a judge counts only with a current verdict (not run or stale counts in
+// neither number), and a failing judge marks the button failing — judges stay
+// advisory, nothing gates on it.
 type CheckSummary struct {
 	Passed  int
 	Total   int
@@ -72,7 +75,7 @@ func (s PrereviewState) CheckSummary() CheckSummary {
 		return cs
 	}
 	for _, r := range s.Checks.Results {
-		if s.checkDisabled(r.ID) {
+		if s.checkDisabled(r.ID) || r.Status == checks.StatusNotRun || r.Status == checks.StatusStale {
 			continue
 		}
 		cs.Total++
@@ -142,8 +145,8 @@ func (s PrereviewState) selectedFindings() (checks.Result, bool) {
 // under ("<end line>-new", the diff view's $rowkey). Findings are on the new side.
 func (s PrereviewState) FindingsByRow() map[string][]FindingView {
 	r, ok := s.selectedFindings()
-	if !ok {
-		return nil
+	if !ok || r.Type == checks.TypeJudge {
+		return nil // a judge's critique is on its card above the file; its quote is only marked
 	}
 	out := map[string][]FindingView{}
 	for i := range r.Findings {

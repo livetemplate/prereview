@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/livetemplate/prereview/internal/checks"
 )
@@ -20,9 +21,13 @@ import (
 type CheckPage struct {
 	Query, Status, Source, Category, File string
 
-	Chips      []CheckChip     // status chips, counted under every other filter
-	Categories []CheckCategory // the sidebar, counted under every other filter
-	Groups     []CheckGroup    // what's listed
+	Chips []CheckChip // status chips, counted under every other filter
+	// Kind chips (Checkers & judges / Checkers / Judges): shown only when the
+	// library has a judge. Counted under every filter but the kind itself.
+	Kind             string
+	Checkers, Judges int
+	Categories       []CheckCategory // the sidebar, counted under every other filter
+	Groups           []CheckGroup    // what's listed
 	// Folded is the passing groups shown as one line ("Clarity (2) and … all
 	// pass"); ShowPassing is whether that line is offered as "hide" instead.
 	Folded      []CheckGroup
@@ -76,10 +81,13 @@ type CheckRow struct {
 	RulePath                                string
 	EditorURL                               template.URL
 	Detail                                  string // "built-in · existence · files *.md"
+	IsJudge                                 bool
+	Agreement                               string // a judge's "agrees with you 5 of 7"
 	// Expanded rows only:
-	ByFile []CheckFileFindings
-	Errors []CheckFileError
-	More   int // findings past maxPageFindings
+	Verdicts []JudgeVerdictView // a judge's verdict per file
+	ByFile   []CheckFileFindings
+	Errors   []CheckFileError
+	More     int // findings past maxPageFindings
 }
 
 // CheckFileFindings is one file's findings under an expanded row.
@@ -88,6 +96,17 @@ type CheckFileFindings struct {
 	Open     bool // the file on screen
 	Count    int
 	Findings []FindingView
+}
+
+// JudgeVerdictView is one file's verdict under an expanded judge row.
+type JudgeVerdictView struct {
+	Path, CheckID   string
+	Open            bool   // the file on screen
+	Status          string // pass | fail | stale | notrun | error
+	Critique, Model string
+	At              string // the verdict's time (labels key on it)
+	Label           string // your answer: agree | disagree | ""
+	CanShow         bool   // its quote was found: Show in file / Queue work
 }
 
 // CheckFileError is one file a check errored on.
@@ -116,17 +135,23 @@ type checkAgg struct {
 	errs     []CheckFileError
 	disabled bool
 	nameHit  bool // the search matches the check itself, so every finding counts
+	isJudge  bool
+	judged   map[string]int // a judge's file count per status
+	verdicts []JudgeVerdictView
 }
 
 // statusRank orders a check's worst status across files.
-var statusRank = map[string]int{checks.StatusPass: 0, checks.StatusRunning: 1, checks.StatusFail: 2, checks.StatusError: 3}
+// A judge with no verdict (not run) or an outdated one ranks below a pass, so a
+// judge that passed one file and wasn't run on another reads "passed".
+var statusRank = map[string]int{checks.StatusNotRun: -2, checks.StatusStale: -1, checks.StatusPass: 0,
+	checks.StatusRunning: 1, checks.StatusFail: 2, checks.StatusError: 3}
 
 // CheckPage builds the Checks page, or nil when it's closed.
 func (s PrereviewState) CheckPage() *CheckPage {
 	if !s.ShowLibrary {
 		return nil
 	}
-	p := &CheckPage{Query: s.ChecksQuery, Status: s.ChecksStatus, Source: s.ChecksSource,
+	p := &CheckPage{Query: s.ChecksQuery, Status: s.ChecksStatus, Source: s.ChecksSource, Kind: s.ChecksKind,
 		Category: s.ChecksCategory, File: s.ChecksFile, ShowPassing: s.ShowPassingGroups}
 	files := s.pageFiles()
 	if s.ReviewChecks != nil {
@@ -147,8 +172,8 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		for _, r := range pc.Results {
 			a := aggs[r.ID]
 			if a == nil {
-				a = &checkAgg{first: r, status: checks.StatusPass, disabled: s.checkDisabled(r.ID),
-					nameHit: q == "" || checkNameMatches(r, q)}
+				a = &checkAgg{first: r, status: r.Status, disabled: s.checkDisabled(r.ID),
+					nameHit: q == "" || checkNameMatches(r, q), isJudge: r.Type == checks.TypeJudge}
 				aggs[r.ID] = a
 				order = append(order, r.ID)
 			}
@@ -157,6 +182,10 @@ func (s PrereviewState) CheckPage() *CheckPage {
 			}
 			if r.Err != "" {
 				a.errs = append(a.errs, CheckFileError{Path: pc.Path, Err: r.Err})
+			}
+			if a.isJudge {
+				s.aggJudge(a, pc.Path, r, q)
+				continue
 			}
 			a.total += len(r.Findings)
 			// Only the expanded row lists findings; the rest only count them.
@@ -187,6 +216,14 @@ func (s PrereviewState) CheckPage() *CheckPage {
 			continue
 		}
 		if !a.nameHit && a.count == 0 {
+			continue
+		}
+		if a.isJudge {
+			p.Judges++
+		} else {
+			p.Checkers++
+		}
+		if p.Kind != "" && (p.Kind == checks.TypeJudge) != a.isJudge {
 			continue
 		}
 		base = append(base, a)
@@ -246,6 +283,10 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		p.Categories = append(p.Categories, cc)
 	}
 
+	var tallies map[string][2]int
+	if p.Judges > 0 {
+		tallies = s.agreementTallies()
+	}
 	// Groups, in sidebar order.
 	byCat := map[string]*CheckGroup{}
 	for _, a := range base {
@@ -264,7 +305,7 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		case checks.StatusError:
 			g.Errors++
 		}
-		g.Rows = append(g.Rows, s.checkRow(a, st))
+		g.Rows = append(g.Rows, s.checkRow(a, st, tallies))
 		p.Matches++
 	}
 	// Passing groups fold only on the unfiltered page: a search, chip, category
@@ -328,11 +369,15 @@ func findingView(path string, r checks.Result, i int) FindingView {
 
 // checkRow renders one aggregated check; an expanded row carries its findings
 // (capped) and errors.
-func (s PrereviewState) checkRow(a *checkAgg, status string) CheckRow {
+func (s PrereviewState) checkRow(a *checkAgg, status string, tallies map[string][2]int) CheckRow {
 	r := a.first
 	row := CheckRow{ID: r.ID, Name: r.Name, Description: r.Description, Category: r.Category,
 		Source: r.Source, Status: status, Count: a.count, Expanded: s.ExpandedCheck == r.ID,
 		RulePath: r.Path}
+	if a.isJudge {
+		s.judgeRow(&row, a, tallies[row.ID])
+		return row
+	}
 	switch status {
 	case checkStatusOff:
 		row.Summary = "off"
@@ -412,39 +457,186 @@ func (s PrereviewState) pageFiles() []PathChecks {
 }
 
 // CheckStrip is the file view's one-line bar while the open file has failing
-// checks: with none selected it lists them to pick one; with one selected it's
-// that check's finding stepper.
+// checks or judges to run: with none selected it lists the failing ones to pick
+// (judges tagged) and offers Run judges; with a checker selected it's that
+// check's finding stepper; with a judge selected it names it and Judge carries
+// the critique card.
 type CheckStrip struct {
 	Selected bool
 	ID, Name string
 	Pos      int // 1-based finding under the cursor
 	Count    int
 	Failing  []CheckPick
+	Judge    *JudgeVerdictView // the selected check is a judge: its card
+
+	// Judges on this file (idle bar).
+	JudgesRun     int  // enabled judges that apply: "Run judges (n)"
+	JudgesStale   int  // of those, verdicts from an older file/rubric: "Re-run judges (n stale)"
+	JudgeWaiting  int  // asked for and not answered yet
+	JudgeTimedOut bool // asked over judgeWaitTimeout ago and still unanswered
+	NeedsAgent    bool // judges exist but no agent is attached to answer
 }
 
 // CheckPick is one failing check offered on the bar.
 type CheckPick struct {
 	ID, Name string
 	Count    int
+	Judge    bool
 }
+
+// openJudgeRequest is when the open file's newest still-open "Run judges"
+// request was queued (zero if none). Derived from the request comment — shared
+// by every tab and surviving a reload — so the waiting state is the queue's own:
+// it ends when verdicts land or the agent marks the request done.
+func (s PrereviewState) openJudgeRequest() time.Time {
+	var asked time.Time
+	for _, c := range s.Comments {
+		if c.File == s.SelectedFile && c.Kind == commentKindFile && !c.Resolved && !c.Processed &&
+			checks.IsJudgeRequest(c.Body, s.SelectedFile) && c.Created.After(asked) {
+			asked = c.Created
+		}
+	}
+	return asked
+}
+
+// judgeWaitTimeout is how long "Asked your agent" waits for a judge's verdict
+// before it reads "no answer yet — run again".
+const judgeWaitTimeout = 10 * time.Minute
 
 // CheckStrip builds the bar, or nil when there's nothing to show.
 func (s PrereviewState) CheckStrip() *CheckStrip {
 	if s.Checks == nil {
 		return nil
 	}
+	if r, ok := s.checkResult(s.SelectedCheck); ok && r.Type == checks.TypeJudge && !s.checkDisabled(r.ID) &&
+		(r.Status == checks.StatusPass || r.Status == checks.StatusFail || r.Status == checks.StatusStale) {
+		v := s.verdictView(s.SelectedFile, r)
+		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: len(r.Findings), Pos: 1, Judge: &v}
+	}
 	if r, ok := s.selectedFindings(); ok {
 		n := len(r.Findings)
 		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: n, Pos: min(max(s.FindingCursor, 0), n-1) + 1}
 	}
-	st := &CheckStrip{}
+	st := &CheckStrip{NeedsAgent: !s.AgentMode}
+	asked := s.openJudgeRequest()
+	unanswered := 0
 	for _, r := range s.Checks.Results {
-		if r.Status == checks.StatusFail && len(r.Findings) > 0 && !s.checkDisabled(r.ID) {
-			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Count: len(r.Findings)})
+		if s.checkDisabled(r.ID) {
+			continue
+		}
+		if r.Type != checks.TypeJudge {
+			if r.Status == checks.StatusFail && len(r.Findings) > 0 {
+				st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Count: len(r.Findings)})
+			}
+			continue
+		}
+		if r.Err != "" {
+			continue
+		}
+		st.JudgesRun++
+		switch r.Status {
+		case checks.StatusFail:
+			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Judge: true})
+		case checks.StatusStale:
+			st.JudgesStale++
+		}
+		if !asked.IsZero() {
+			if at, err := time.Parse(time.RFC3339Nano, r.JudgedAt); err != nil || at.Before(asked) {
+				unanswered++
+			}
 		}
 	}
-	if len(st.Failing) == 0 {
+	if unanswered > 0 {
+		if time.Since(asked) < judgeWaitTimeout {
+			st.JudgeWaiting = unanswered
+		} else {
+			st.JudgeTimedOut = true
+		}
+	}
+	if len(st.Failing) == 0 && st.JudgesRun == 0 {
 		return nil
 	}
 	return st
+}
+
+// aggJudge folds one file's judge result into its row: counts per status, the
+// critique as searchable text, and (for the expanded row) the verdict view.
+func (s PrereviewState) aggJudge(a *checkAgg, path string, r checks.Result, q string) {
+	if a.judged == nil {
+		a.judged = map[string]int{}
+	}
+	a.judged[r.Status]++
+	if a.nameHit || (r.Critique != "" && strings.Contains(strings.ToLower(r.Critique), q)) {
+		a.count++
+	}
+	if r.ID != s.ExpandedCheck {
+		return
+	}
+	a.verdicts = append(a.verdicts, s.verdictView(path, r))
+}
+
+// verdictView is one judge result as the page row and the file's card show it.
+func (s PrereviewState) verdictView(path string, r checks.Result) JudgeVerdictView {
+	return JudgeVerdictView{Path: path, CheckID: r.ID, Open: path == s.SelectedFile,
+		Status: r.Status, Critique: r.Critique, Model: r.Model, At: r.JudgedAt,
+		Label: s.JudgeLabels[labelKey(path, r.ID, r.JudgedAt)], CanShow: len(r.Findings) > 0}
+}
+
+// judgeRow fills a judge's summary, detail and agreement.
+func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg, tally [2]int) {
+	row.IsJudge = true
+	n := func(st string) int { return a.judged[st] }
+	files := n(checks.StatusPass) + n(checks.StatusFail) + n(checks.StatusStale) + n(checks.StatusNotRun)
+	switch row.Status {
+	case checkStatusOff:
+		row.Summary = "off"
+	case checks.StatusError:
+		row.Summary = "error"
+	case checks.StatusFail:
+		row.Summary = fmt.Sprintf("fails %d of %d file%s", n(checks.StatusFail), files, plural(files))
+	case checks.StatusPass:
+		row.Summary = fmt.Sprintf("passed in %d file%s", n(checks.StatusPass), plural(n(checks.StatusPass)))
+		if k := n(checks.StatusNotRun) + n(checks.StatusStale); k > 0 {
+			row.Summary += fmt.Sprintf(" · %d not run", k)
+		}
+	case checks.StatusStale:
+		row.Summary = "out of date"
+	default:
+		row.Summary = "not run"
+	}
+	row.Detail = "judge · advisory · " + row.SourceLabel()
+	row.Agreement = agreementText(tally)
+	if row.RulePath != "" {
+		row.EditorURL = editorURL(s.Editor, s.EditorTemplate, s.EditorSSHHost, row.RulePath, 1)
+	}
+	row.Errors = a.errs
+	row.Verdicts = a.verdicts
+}
+
+// agreementTallies counts your answers per judge — [agree, total] — once per
+// page build (labels are keyed file\x00judge\x00at).
+func (s PrereviewState) agreementTallies() map[string][2]int {
+	out := map[string][2]int{}
+	for k, label := range s.JudgeLabels {
+		parts := strings.SplitN(k, "\x00", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		t := out[parts[1]]
+		if label == LabelAgree {
+			t[0]++
+		}
+		t[1]++
+		out[parts[1]] = t
+	}
+	return out
+}
+
+// agreementText is how often you agreed with a judge's verdicts so far — its
+// calibration (M5 scores it; M2 shows it).
+func agreementText(t [2]int) string {
+	if t[1] == 0 {
+		return "no answers from you yet"
+	}
+	return fmt.Sprintf("agrees with you %d of %d", t[0], t[1])
 }

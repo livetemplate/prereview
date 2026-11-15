@@ -231,6 +231,15 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 // every line-range / anchor concern. Edits to an existing file-level
 // comment update in place when EditingCommentID is set — same rule as
 // the line-comment path.
+// queueFileComment queues body as a file-level comment on the open file for the
+// agent to pick up — a request (quiz, judges) or a critique — leaving whatever
+// composer was open: Quiz me, Run judges and Queue as comment all go through it.
+func (c *PrereviewController) queueFileComment(state PrereviewState, body string) (PrereviewState, error) {
+	resetToFileComment(&state)
+	state.DraftBody = ""
+	return c.addFileLevelComment(state, body)
+}
+
 func (c *PrereviewController) addFileLevelComment(state PrereviewState, body string) (PrereviewState, error) {
 	var rollback func()
 	if state.EditingCommentID != "" {

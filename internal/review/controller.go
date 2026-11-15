@@ -152,6 +152,13 @@ type PrereviewController struct {
 	ChecksDir  string
 	checksOnce sync.Once
 	checks     *checkRunner
+	// judges: the agent's verdicts and the reviewer's labels, cached by each
+	// file's (mtime, size) fingerprint and shared read-only by every tab.
+	judgeMu    sync.Mutex
+	judgeFP    string
+	judgeCache map[string]Judgment
+	labelFP    string
+	labelCache map[string]string
 }
 
 type cachedDiff struct {
