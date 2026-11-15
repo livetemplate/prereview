@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -36,15 +37,10 @@ type libraryReview struct {
 // interface this request arrived on — and redirects to it, so comments and
 // suggestions on your library files go to your agent like any review's.
 //
-// A GET that starts a process must not be triggerable from another site: only a
-// same-origin navigation (the Library's link) or one the user typed is honoured.
+// It starts a process, so it's registered behind guardLibraryRoute.
 func libraryReviewHandler(libraryDir string) http.HandlerFunc {
 	var mu sync.Mutex
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !sameOriginNavigation(r) {
-			http.Error(w, "open the library review from the Library's link", http.StatusForbidden)
-			return
-		}
 		mu.Lock()
 		defer mu.Unlock()
 		port, err := ensureLibraryReview(r, libraryDir)
@@ -54,12 +50,36 @@ func libraryReviewHandler(libraryDir string) http.HandlerFunc {
 			fmt.Fprintf(w, "<!doctype html><meta name=viewport content='width=device-width'><p>Couldn't open a review of the library: %s</p>", html.EscapeString(err.Error()))
 			return
 		}
-		host := r.Host
-		if h, _, err := net.SplitHostPort(r.Host); err == nil {
-			host = h
-		}
-		http.Redirect(w, r, (&url.URL{Scheme: "http", Host: net.JoinHostPort(host, strconv.Itoa(port)), Path: "/"}).String(), http.StatusSeeOther)
+		http.Redirect(w, r, (&url.URL{Scheme: "http", Host: net.JoinHostPort(hostOnly(r.Host), strconv.Itoa(port)), Path: "/"}).String(), http.StatusSeeOther)
 	}
+}
+
+// guardLibraryRoute wraps every library route (they start a process, hand out
+// the learnings or write them): a cross-site page or a DNS-rebinding one gets 403.
+func guardLibraryRoute(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !sameOriginNavigation(r) {
+			http.Error(w, "use the Library's own links", http.StatusForbidden)
+			return
+		}
+		h(w, r)
+	}
+}
+
+// hostOnly strips the port from a host[:port].
+func hostOnly(hostport string) string {
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		return h
+	}
+	return hostport
+}
+
+// localIP is the address the request arrived on ("" when unknown).
+func localIP(r *http.Request) string {
+	if a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
+		return hostOnly(a.String())
+	}
+	return ""
 }
 
 // sameOriginNavigation accepts a navigation from this origin (Sec-Fetch-Site
@@ -85,11 +105,7 @@ func sameOriginNavigation(r *http.Request) bool {
 // (loopback, or the address the request arrived on) or a Tailscale MagicDNS name
 // — never an arbitrary domain that merely resolves here.
 func trustedHost(r *http.Request) bool {
-	host := r.Host
-	if h, _, err := net.SplitHostPort(r.Host); err == nil {
-		host = h
-	}
-	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	host := strings.TrimSuffix(strings.ToLower(hostOnly(r.Host)), ".")
 	if host == "localhost" || strings.HasSuffix(host, ".ts.net") {
 		return true
 	}
@@ -97,15 +113,7 @@ func trustedHost(r *http.Request) bool {
 	if ip == nil {
 		return false
 	}
-	if ip.IsLoopback() {
-		return true
-	}
-	if a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
-		if h, _, err := net.SplitHostPort(a.String()); err == nil {
-			return net.ParseIP(h).Equal(ip)
-		}
-	}
-	return false
+	return ip.IsLoopback() || net.ParseIP(localIP(r)).Equal(ip)
 }
 
 // ensureLibraryReview returns the port of the library review server, starting one
@@ -117,18 +125,16 @@ func ensureLibraryReview(r *http.Request, libraryDir string) (int, error) {
 	// the store's server.pid (a recycled pid, or a stale record, doesn't).
 	var cur libraryReview
 	if b, err := os.ReadFile(rec); err == nil && json.Unmarshal(b, &cur) == nil && cur.Port > 0 && processAlive(cur.PID) {
-		if owner, err := os.ReadFile(filepath.Join(store, serverPIDFileName)); err == nil && strings.TrimSpace(string(owner)) == strconv.Itoa(cur.PID) {
+		if owner, ok := readServerPID(filepath.Join(store, serverPIDFileName)); ok && owner == cur.PID {
 			return cur.Port, nil
 		}
 	}
 	if err := os.MkdirAll(store, 0o755); err != nil {
 		return 0, err
 	}
-	bind := "127.0.0.1"
-	if a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
-		if h, _, err := net.SplitHostPort(a.String()); err == nil {
-			bind = h
-		}
+	bind := localIP(r)
+	if bind == "" {
+		bind = "127.0.0.1"
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -201,25 +207,12 @@ func ensureLibraryReview(r *http.Request, libraryDir string) (int, error) {
 // machine and import there.
 func libraryExportHandler(libraryDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !sameOriginNavigation(r) {
-			http.Error(w, "export from the Library's link", http.StatusForbidden)
-			return
-		}
-		tmp, err := os.CreateTemp("", "prereview-export-*.jsonl")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer os.Remove(tmp.Name())
-		tmp.Close()
-		if err := library.Export(libraryDir, tmp.Name()); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 		name := fmt.Sprintf("prereview-learnings-%s-%s.jsonl", slugBase(library.Machine()), time.Now().Format("2006-01-02"))
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
-		http.ServeFile(w, r, tmp.Name())
+		if err := library.Export(libraryDir, w); err != nil {
+			slog.Warn("library export", "err", err) // headers are out; the download is short
+		}
 	}
 }
 
@@ -231,7 +224,7 @@ const maxImportBytes = 16 << 20
 // twice is a no-op). A plain form post (the page reloads), never a cross-site one.
 func libraryImportHandler(libraryDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !sameOriginNavigation(r) {
+		if r.Method != http.MethodPost {
 			http.Error(w, "import from the Library's form", http.StatusForbidden)
 			return
 		}
@@ -242,24 +235,12 @@ func libraryImportHandler(libraryDir string) http.HandlerFunc {
 			return
 		}
 		defer f.Close()
-		tmp, err := os.CreateTemp("", "prereview-import-*.jsonl")
+		n, err := library.Import(libraryDir, f)
 		if err != nil {
 			importResult(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		defer os.Remove(tmp.Name())
-		_, err = io.Copy(tmp, f)
-		tmp.Close()
-		if err != nil {
-			importResult(w, http.StatusBadRequest, "Couldn't read the file: "+err.Error())
-			return
-		}
-		n, err := library.Import(libraryDir, tmp.Name())
-		if err != nil {
-			importResult(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		msg := fmt.Sprintf("Imported %d learning%s.", n, map[bool]string{true: "", false: "s"}[n == 1])
+		msg := fmt.Sprintf("Imported %d learning%s.", n, map[bool]string{true: "", false: "s"}[n == 1]) // a one-off; no plural helper in main
 		if n == 0 {
 			msg = "Nothing new: this library already has everything in that file."
 		}

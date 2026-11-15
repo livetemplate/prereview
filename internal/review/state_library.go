@@ -11,23 +11,21 @@ import (
 	"github.com/livetemplate/prereview/internal/library"
 )
 
+type learnStatus struct{ status, label string }
+
 // learnStatuses are the Learnings tab's status chips, in order.
-var learnStatuses = []string{library.StatusProposed, library.StatusAccepted, library.StatusSuperseded, library.StatusRejected}
+var learnStatuses = []learnStatus{
+	{library.StatusProposed, "Proposed"}, {library.StatusAccepted, "Accepted"},
+	{library.StatusSuperseded, "Superseded"}, {library.StatusRejected, "Rejected"},
+}
 
 // LearnPage is the Library's Learnings tab.
 type LearnPage struct {
-	Chips  []LearnChip
+	Chips  []CheckChip // the status filter
 	Scopes []LearnScope
 	Scope  string
 	Cards  []LearnCard
 	Empty  string // shown when no card matches
-}
-
-// LearnChip is one status filter.
-type LearnChip struct {
-	Status, Label string
-	Count         int
-	On            bool
 }
 
 // LearnScope is one option of the scope picker.
@@ -45,9 +43,22 @@ type LearnCard struct {
 	Produces                string // "instruction · checker", as proposed (acts in M4)
 	Conflict                string // the learning a proposal would supersede
 	Editing                 bool
-	CanAccept, CanReject    bool
-	CanEdit, CanRestore     bool
+	Actions                 []LearnAction // the card's buttons, in order
 }
+
+// LearnAction is one of a card's buttons: the action it submits (Name) and, for
+// learningAction, which (Act).
+type LearnAction struct {
+	Name, Act, Label, Class string
+}
+
+var (
+	actAccept  = LearnAction{"learningAction", library.ActAccept, "Accept", "accept"}
+	actEdit    = LearnAction{"editLearning", "", "Edit", "outline"}
+	actReject  = LearnAction{"learningAction", library.ActReject, "Reject", "outline reject"}
+	actRestore = LearnAction{"learningAction", library.ActRestore, "Restore", "outline"}
+	actDelete  = LearnAction{"learningAction", library.ActDelete, "Delete", "outline secondary"}
+)
 
 // LearnEvidence is one cited record on a card.
 type LearnEvidence struct {
@@ -85,7 +96,7 @@ func (s PrereviewState) LearnPage() *LearnPage {
 		byID[l.ID] = l
 	}
 	for _, st := range learnStatuses {
-		p.Chips = append(p.Chips, LearnChip{Status: st, Label: titleCase(st), Count: counts[st], On: st == status})
+		p.Chips = append(p.Chips, CheckChip{Value: st.status, Label: st.label, Count: counts[st.status], On: st.status == status})
 	}
 	names := make([]string, 0, len(scopes))
 	for n := range scopes {
@@ -118,19 +129,19 @@ func (s PrereviewState) learnCard(l library.Learning, byID map[string]library.Le
 	c := LearnCard{ID: l.ID, Text: l.Text, Scope: l.Scope, Status: l.Status, Editing: s.LearnEdit == l.ID}
 	switch l.Status {
 	case library.StatusProposed:
-		c.Pill, c.CanAccept, c.CanReject, c.CanEdit = "new", true, true, true
+		c.Pill, c.Actions = "new", []LearnAction{actAccept, actEdit, actReject, actDelete}
 		c.Meta = fmt.Sprintf("%d piece%s of evidence", len(l.Evidence), plural(len(l.Evidence)))
 		if n := l.NewestEvidence(); n != "" {
 			c.Meta += " · newest " + shortDate(n)
 		}
 	case library.StatusAccepted:
-		c.Pill, c.CanEdit = "pass", true
+		c.Pill, c.Actions = "pass", []LearnAction{actEdit, actDelete}
 		c.Meta = "accepted " + shortDate(l.UpdatedAt)
 	case library.StatusRejected:
-		c.Pill, c.CanAccept = "muted", true
+		c.Pill, c.Actions = "muted", []LearnAction{actAccept, actDelete}
 		c.Meta = "rejected " + shortDate(l.UpdatedAt)
 	case library.StatusSuperseded:
-		c.Pill, c.CanRestore = "muted", true
+		c.Pill, c.Actions = "muted", []LearnAction{actRestore, actDelete}
 		c.Meta = "superseded " + shortDate(l.UpdatedAt)
 		if by, ok := byID[l.SupersededBy]; ok {
 			c.Meta = "by “" + clip(by.Text, 48) + "” · " + shortDate(l.UpdatedAt)
@@ -139,12 +150,7 @@ func (s PrereviewState) learnCard(l library.Learning, byID map[string]library.Le
 	if old, ok := byID[l.Replaces]; ok && l.Status == library.StatusProposed {
 		c.Conflict = "“" + clip(old.Text, 80) + "” (" + old.Status + " " + shortDate(old.UpdatedAt) + ")"
 	}
-	for i, k := range l.Produces {
-		if i > 0 {
-			c.Produces += " · "
-		}
-		c.Produces += k
-	}
+	c.Produces = strings.Join(l.Produces, " · ")
 	for _, e := range l.Evidence {
 		c.Evidence = append(c.Evidence, LearnEvidence{Where: s.evidenceWhere(e), Quote: e.Quote})
 	}
@@ -179,7 +185,7 @@ func (s PrereviewState) evidenceWhere(e library.Evidence) string {
 // (plus the per-target subfolder, if any).
 func storeLabel(store string) string {
 	dir, base := filepath.Split(filepath.Clean(store))
-	if base == ".prereview" {
+	if base == library.StoreDir {
 		return filepath.Base(filepath.Clean(dir))
 	}
 	parent := filepath.Dir(filepath.Clean(dir))
@@ -202,13 +208,6 @@ func clip(s string, n int) string {
 		return s
 	}
 	return string(r[:n-1]) + "…"
-}
-
-func titleCase(s string) string {
-	if s == "" {
-		return s
-	}
-	return string(s[0]-'a'+'A') + s[1:]
 }
 
 // BootCard is the first-launch offer to learn from past reviews, or the

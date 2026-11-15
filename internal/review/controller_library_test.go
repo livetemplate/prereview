@@ -11,8 +11,8 @@ import (
 )
 
 // TestAutoLearn: an idle agent is asked to learn from this review only once it
-// holds AutoLearnMinSignals new reviewer signals, only one tab queues the request,
-// never a tab with a comment being written, and queueing resets the count.
+// holds AutoLearnMinSignals new reviewer signals, only one tab queues the request
+// (a half-typed draft in it survives), and queueing resets the count.
 func TestAutoLearn(t *testing.T) {
 	c := checksController(t)
 	c.LibraryDir = t.TempDir()
@@ -27,24 +27,27 @@ func TestAutoLearn(t *testing.T) {
 		}
 	}
 	seed(AutoLearnMinSignals - 1)
-	if c.maybeAutoLearn(); c.autoLearn.Load() != nil {
+	if c.maybeAutoLearn(); c.autoLearn.Load() != 0 {
 		t.Fatal("asked with too few signals")
 	}
 	seed(AutoLearnMinSignals)
 	c.maybeAutoLearn()
-	if p := c.autoLearn.Load(); p == nil || *p != store {
-		t.Fatalf("not asked with %d signals", AutoLearnMinSignals)
+	if n := c.autoLearn.Load(); n != AutoLearnMinSignals {
+		t.Fatalf("asked with %d signals, want %d", n, AutoLearnMinSignals)
 	}
 
 	base := PrereviewState{AgentMode: true, SelectedFile: "doc.md", Comments: c.loadCommentsFromDisk()}
-	composing := base
-	composing.DraftBody = "half a thought"
-	if got, _ := c.AutoLearn(composing, checksCtx("AutoLearn", nil)); got.extractionOpen() || c.autoLearn.Load() == nil {
-		t.Fatal("a tab with a comment being written claimed the request (queueing resets its composer)")
+	if got, _ := c.AutoLearn(PrereviewState{SelectedFile: "doc.md"}, checksCtx("AutoLearn", nil)); got.extractionOpen() || c.autoLearn.Load() == 0 {
+		t.Fatal("a tab with no agent claimed the request")
 	}
-	first, err := c.AutoLearn(base, checksCtx("AutoLearn", nil))
+	composing := base
+	composing.CommentMode, composing.DraftBody = "line", "half a thought"
+	first, err := c.AutoLearn(composing, checksCtx("AutoLearn", nil))
 	if err != nil || !first.extractionOpen() {
 		t.Fatalf("the first idle tab didn't queue the request: %v", err)
+	}
+	if first.DraftBody != "half a thought" || first.CommentMode != "line" {
+		t.Fatalf("queueing the request touched the composer: %q %q", first.CommentMode, first.DraftBody)
 	}
 	if second, _ := c.AutoLearn(base, checksCtx("AutoLearn", nil)); second.extractionOpen() {
 		t.Fatal("a second tab queued it again")
@@ -52,13 +55,13 @@ func TestAutoLearn(t *testing.T) {
 	if e := library.LastExtractions(c.LibraryDir)[store]; e.Signals != AutoLearnMinSignals {
 		t.Fatalf("extraction recorded %d signals, want %d (the request itself isn't one)", e.Signals, AutoLearnMinSignals)
 	}
-	if c.maybeAutoLearn(); c.autoLearn.Load() != nil {
+	if c.maybeAutoLearn(); c.autoLearn.Load() != 0 {
 		t.Fatal("asked again with no new signals")
 	}
 
 	seed(2 * AutoLearnMinSignals)
 	saveUIPrefs(c.UIPrefsPath, UIPrefs{AutoLearnOff: true})
-	if c.maybeAutoLearn(); c.autoLearn.Load() != nil {
+	if c.maybeAutoLearn(); c.autoLearn.Load() != 0 {
 		t.Fatal("asked with Learn after each review off")
 	}
 }

@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/livetemplate/prereview/internal/flock"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // Version triggers recorded on each Checkpoint. Baseline is the v0 snapshot of
@@ -131,10 +132,10 @@ func NewVersionStore(root string) (*VersionStore, error) {
 // on one location, including single-file reviews where the store dir is the
 // file's parent.
 func VersionsDir(csvPath string) string {
-	return filepath.Join(filepath.Dir(csvPath), "versions")
+	return filepath.Join(filepath.Dir(csvPath), library.VersionsDirName)
 }
 
-func (s *VersionStore) timelinePath() string       { return filepath.Join(s.root, "timeline.jsonl") }
+func (s *VersionStore) timelinePath() string       { return filepath.Join(s.root, library.TimelineFileName) }
 func (s *VersionStore) blobPath(sha string) string { return filepath.Join(s.root, "blobs", sha) }
 
 // Checkpoint snapshots every ref and appends a timeline entry. Each file is
@@ -387,6 +388,9 @@ func writeFileAtomicVersions(path string, data []byte) error {
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op after a successful rename
+	if fi, err := os.Stat(path); err == nil {
+		_ = tmp.Chmod(fi.Mode().Perm()) // replacing a file keeps its mode (CreateTemp makes 0600)
+	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return fmt.Errorf("write temp blob: %w", err)

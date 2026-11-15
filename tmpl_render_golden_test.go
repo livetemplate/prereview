@@ -579,8 +579,8 @@ func renderFixtures() []renderFixture {
 	boot.AgentMode = true
 	boot.BootScanned = true
 	boot.BootStores = []library.StoreInfo{
-		{Store: "/home/u/notes/.prereview", Root: "/home/u/notes", Label: "~/notes", Comments: 16, Suggestions: 6, Versions: 3},
-		{Store: "/home/u/code/app/.prereview", Root: "/home/u/code/app", Label: "~/code/app", Comments: 1},
+		{Store: "/home/u/notes/.prereview", Label: "~/notes", Comments: 16, Suggestions: 6, Versions: 3, Signals: 16},
+		{Store: "/home/u/code/app/.prereview", Label: "~/code/app", Comments: 1, Signals: 1},
 	}
 	boot.BootSkip = []string{"/home/u/code/app/.prereview"}
 	bootReading := goBase()

@@ -210,9 +210,9 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	mux.Handle("/", staticFallback(absRepo, tmpl.Handle(controller, livetemplate.AsState(initial))))
 	registerAssetRoutes(mux)
 	if controller.LibraryDir != "" {
-		mux.HandleFunc("/_library-review", libraryReviewHandler(controller.LibraryDir))
-		mux.HandleFunc("/_library-export", libraryExportHandler(controller.LibraryDir))
-		mux.HandleFunc("/_library-import", libraryImportHandler(controller.LibraryDir))
+		mux.HandleFunc("/_library-review", guardLibraryRoute(libraryReviewHandler(controller.LibraryDir)))
+		mux.HandleFunc("/_library-export", guardLibraryRoute(libraryExportHandler(controller.LibraryDir)))
+		mux.HandleFunc("/_library-import", guardLibraryRoute(libraryImportHandler(controller.LibraryDir)))
 	}
 
 	// Decide what to actually bind to. On a remote (SSH) box with no
@@ -290,6 +290,11 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		if !library.Bootstrapped(lib) {
 			go controller.ScanPastReviews()
 		}
+		go func() { // drop superseded log lines once there are enough of them
+			if err := library.Compact(lib); err != nil {
+				slog.Warn("library: compacting learnings failed", "err", err)
+			}
+		}()
 	}
 
 	return serveAndWait(srv, ln, nil, shutdownReq)

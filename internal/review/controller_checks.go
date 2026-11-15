@@ -802,17 +802,30 @@ func (c *PrereviewController) queueFinding(state PrereviewState, path, id string
 	if res.Type == checks.TypeJudge {
 		kind = "judge"
 	}
-	cm := newTextComment(path, f.Line, f.EndLine, f.FromCol, f.ToCol, "new",
-		fmt.Sprintf("%s (%s: %s)", f.Message, kind, res.Name), anchor)
+	return c.appendQueued(state, newTextComment(path, f.Line, f.EndLine, f.FromCol, f.ToCol, "new",
+		fmt.Sprintf("%s (%s: %s)", f.Message, kind, res.Name), anchor))
+}
+
+// appendQueued adds a comment the server built (a finding, a request to the
+// agent) to the queue and persists it, leaving the composer — and any half-typed
+// draft or comment being edited — exactly as it was.
+func (c *PrereviewController) appendQueued(state PrereviewState, cm Comment) (PrereviewState, error) {
 	state.Comments = append(state.Comments, cm)
 	if err := c.persist(state.Comments); err != nil {
 		state.Comments = state.Comments[:len(state.Comments)-1]
-		return state, fmt.Errorf("persist finding comment: %w", err)
+		return state, fmt.Errorf("persist queued comment: %w", err)
 	}
 	noteEnqueue(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
+}
+
+// queueRequest queues body as a file-level request to the agent on the open file
+// (an extraction), without touching the composer.
+func (c *PrereviewController) queueRequest(state PrereviewState, body string) (PrereviewState, error) {
+	return c.appendQueued(state, Comment{ID: newCommentID(), File: state.SelectedFile, Body: body,
+		Created: time.Now().UTC(), Kind: commentKindFile})
 }
 
 // findingSnippet is the text a finding covers, joined across lines.

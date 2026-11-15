@@ -611,11 +611,9 @@
       
       
       <div class="lc-actions">
-        
-        
-        
         <form method="POST"><input type="hidden" name="id" value="l4"><input type="hidden" name="act" value="restore"><button type="submit" name="learningAction" class="outline">Restore</button></form>
         <form method="POST"><input type="hidden" name="id" value="l4"><input type="hidden" name="act" value="delete"><button type="submit" name="learningAction" class="outline secondary">Delete</button></form>
+        
       </div>
     </li>
 

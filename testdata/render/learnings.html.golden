@@ -617,8 +617,8 @@
         <form method="POST"><input type="hidden" name="id" value="l1"><input type="hidden" name="act" value="accept"><button type="submit" name="learningAction" class="accept">Accept</button></form>
         <form method="POST"><input type="hidden" name="id" value="l1"><button type="submit" name="editLearning" class="outline">Edit</button></form>
         <form method="POST"><input type="hidden" name="id" value="l1"><input type="hidden" name="act" value="reject"><button type="submit" name="learningAction" class="outline reject">Reject</button></form>
-        
         <form method="POST"><input type="hidden" name="id" value="l1"><input type="hidden" name="act" value="delete"><button type="submit" name="learningAction" class="outline secondary">Delete</button></form>
+        
       </div>
     </li>
 

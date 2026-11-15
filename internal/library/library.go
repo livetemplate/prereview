@@ -9,9 +9,11 @@ package library
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -144,7 +146,12 @@ func eachLine(path string, fn func([]byte)) {
 		return
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
+	eachLineIn(f, fn)
+}
+
+// eachLineIn calls fn for every non-empty line read from r.
+func eachLineIn(r io.Reader, fn func([]byte)) {
+	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	for sc.Scan() {
 		if b := sc.Bytes(); len(b) > 0 {
@@ -162,12 +169,13 @@ func newer(aUpdated, aMachine, bUpdated, bMachine string) bool {
 	return aMachine > bMachine
 }
 
-// foldLearnings reads a learnings log into the latest record per id, deleted
-// ones included (a tombstone must survive compaction, or an older import would
-// resurrect it). Torn lines are skipped.
-func foldLearnings(path string) map[string]Learning {
-	byID := map[string]Learning{}
-	eachLine(path, func(b []byte) {
+// foldLearnings folds a learnings log into the latest record per id, deleted
+// ones included (a tombstone must survive compaction and export, or an older
+// import would resurrect it). Torn lines are skipped; n is the lines read.
+func foldLearnings(r io.Reader) (byID map[string]Learning, n int) {
+	byID = map[string]Learning{}
+	eachLineIn(r, func(b []byte) {
+		n++
 		var l Learning
 		if json.Unmarshal(b, &l) != nil || l.ID == "" {
 			return
@@ -177,30 +185,52 @@ func foldLearnings(path string) map[string]Learning {
 		}
 		byID[l.ID] = l
 	})
-	return byID
+	return byID, n
+}
+
+// foldFile is foldLearnings over dir's log (a missing log is empty).
+func foldFile(dir string) (map[string]Learning, int) {
+	f, err := os.Open(filepath.Join(dir, LearningsFile))
+	if err != nil {
+		return map[string]Learning{}, 0
+	}
+	defer f.Close()
+	return foldLearnings(f)
 }
 
 // LoadLearnings folds learnings.jsonl in dir: the latest record per id, deleted
 // ones dropped, newest first.
 func LoadLearnings(dir string) []Learning {
-	byID := foldLearnings(filepath.Join(dir, LearningsFile))
+	byID, _ := foldFile(dir)
+	return sortedLearnings(byID, false)
+}
+
+// sortedLearnings lists a fold newest first (tombstones only when keepDeleted).
+func sortedLearnings(byID map[string]Learning, keepDeleted bool) []Learning {
 	out := make([]Learning, 0, len(byID))
 	for _, l := range byID {
-		if l.Status != StatusDeleted {
+		if keepDeleted || l.Status != StatusDeleted {
 			out = append(out, l)
 		}
 	}
-	sortLearnings(out)
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CreatedAt != out[j].CreatedAt {
+			return out[i].CreatedAt > out[j].CreatedAt
+		}
+		return out[i].ID < out[j].ID
+	})
 	return out
 }
 
-func sortLearnings(ls []Learning) {
-	sort.Slice(ls, func(i, j int) bool {
-		if ls[i].CreatedAt != ls[j].CreatedAt {
-			return ls[i].CreatedAt > ls[j].CreatedAt
+// writeLearnings writes a fold as a log: one line per learning, tombstones kept.
+func writeLearnings(w io.Writer, byID map[string]Learning) error {
+	enc := json.NewEncoder(w)
+	for _, l := range sortedLearnings(byID, true) {
+		if err := enc.Encode(l); err != nil {
+			return err
 		}
-		return ls[i].ID < ls[j].ID
-	})
+	}
+	return nil
 }
 
 // lockPath guards every library log write: appends hold it too, so a
@@ -221,34 +251,28 @@ func appendLocked(dir, name string, v any) error {
 }
 
 // Compact rewrites learnings.jsonl as one line per learning (its folded state,
-// tombstones kept), via temp + rename under the library lock. The fold is
-// unchanged; only superseded lines go.
+// tombstones kept), via temp + rename under the library lock — only when the log
+// holds more than compactSlack superseded lines, so it's cheap to call on every
+// launch. The fold is unchanged.
 func Compact(dir string) error {
 	unlock, err := lockLibrary(dir)
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	path := filepath.Join(dir, LearningsFile)
-	byID := foldLearnings(path)
-	ls := make([]Learning, 0, len(byID))
-	for _, l := range byID {
-		ls = append(ls, l)
+	byID, lines := foldFile(dir)
+	if lines-len(byID) <= compactSlack {
+		return nil
 	}
-	sortLearnings(ls)
-	var buf []byte
-	for _, l := range ls {
-		line, err := json.Marshal(l)
-		if err != nil {
-			return err
-		}
-		buf = append(append(buf, line...), '\n')
+	var buf bytes.Buffer
+	if err := writeLearnings(&buf, byID); err != nil {
+		return err
 	}
 	tmp, err := os.CreateTemp(dir, LearningsFile+".*")
 	if err != nil {
 		return err
 	}
-	if _, err := tmp.Write(buf); err != nil {
+	if _, err := tmp.Write(buf.Bytes()); err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
 		return err
@@ -257,75 +281,45 @@ func Compact(dir string) error {
 		os.Remove(tmp.Name())
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	return os.Rename(tmp.Name(), filepath.Join(dir, LearningsFile))
 }
+
+// compactSlack is how many superseded lines the log may carry before Compact
+// rewrites it.
+const compactSlack = 200
 
 // Import merges another machine's export (a learnings log) into dir: each
 // record that is newer than what dir holds for its id is appended as is (its
 // updated_at and machine kept, so every machine folds the same way). Importing
 // the same file twice appends nothing the second time. Returns how many
 // records were taken.
-func Import(dir, from string) (int, error) {
-	if _, err := os.Stat(from); err != nil {
-		return 0, err
-	}
+func Import(dir string, from io.Reader) (int, error) {
+	theirs, _ := foldLearnings(from)
 	unlock, err := lockLibrary(dir)
 	if err != nil {
 		return 0, err
 	}
 	defer unlock()
+	have, _ := foldFile(dir)
 	path := filepath.Join(dir, LearningsFile)
-	have := foldLearnings(path)
 	var n int
-	var werr error
-	for _, l := range foldLearnings(from) {
+	for _, l := range theirs {
 		if cur, ok := have[l.ID]; ok && !newer(l.UpdatedAt, l.Machine, cur.UpdatedAt, cur.Machine) {
 			continue
 		}
-		if werr = Append(path, l); werr != nil {
-			break
+		if err := Append(path, l); err != nil {
+			return n, err
 		}
 		n++
 	}
-	return n, werr
+	return n, nil
 }
 
-// Export writes dir's folded learnings (tombstones included, so a delete
-// travels) to a single log file at to.
-func Export(dir, to string) error {
-	byID := foldLearnings(filepath.Join(dir, LearningsFile))
-	ls := make([]Learning, 0, len(byID))
-	for _, l := range byID {
-		ls = append(ls, l)
-	}
-	sortLearnings(ls)
-	f, err := os.Create(to)
-	if err != nil {
-		return err
-	}
-	enc := json.NewEncoder(f)
-	for _, l := range ls {
-		if err := enc.Encode(l); err != nil {
-			f.Close()
-			return err
-		}
-	}
-	return f.Close()
-}
-
-// PutLearning appends a learning's new state, stamping updated_at and machine.
-func PutLearning(dir string, l Learning) error {
-	return update(dir, func(map[string]Learning) ([]Learning, error) { return []Learning{l}, nil })
-}
-
-// Find returns the learning with id from a folded list.
-func Find(ls []Learning, id string) (Learning, bool) {
-	for _, l := range ls {
-		if l.ID == id {
-			return l, true
-		}
-	}
-	return Learning{}, false
+// Export writes dir's folded learnings to w as a log (tombstones included, so a
+// delete travels).
+func Export(dir string, w io.Writer) error {
+	byID, _ := foldFile(dir)
+	return writeLearnings(w, byID)
 }
 
 // LoadSessions reads sessions.jsonl in dir, latest launch per store, newest

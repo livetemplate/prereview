@@ -33,7 +33,7 @@ func TestLibraryReview_SameOriginOnly(t *testing.T) {
 		}
 		w := httptest.NewRecorder()
 		if !c.ok {
-			libraryReviewHandler(t.TempDir())(w, r)
+			guardLibraryRoute(libraryReviewHandler(t.TempDir()))(w, r)
 			if w.Code != 403 {
 				t.Errorf("Sec-Fetch-Site %q: status %d, want 403", c.site, w.Code)
 			}

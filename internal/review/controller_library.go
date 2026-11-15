@@ -19,9 +19,9 @@ const (
 // learnings is the folded learnings log, re-read only when the file changes
 // (its size/mtime fingerprint). Shared read-only by every tab; another server's
 // append shows up on the next watcher tick.
-func (c *PrereviewController) learnings() ([]library.Learning, string) {
+func (c *PrereviewController) learnings() []library.Learning {
 	if c.LibraryDir == "" {
-		return nil, ""
+		return nil
 	}
 	fp := statusFingerprint(filepath.Join(c.LibraryDir, library.LearningsFile))
 	c.learnMu.Lock()
@@ -29,14 +29,14 @@ func (c *PrereviewController) learnings() ([]library.Learning, string) {
 	if fp != c.learnFP || c.learnCache == nil {
 		c.learnCache, c.learnFP = library.LoadLearnings(c.LibraryDir), fp
 	}
-	return c.learnCache, c.learnFP
+	return c.learnCache
 }
 
 // applyLibrary refreshes what the Library shows: the toolbar badge (always) and,
 // while the Learnings tab is open, the learnings themselves (a closed Library
 // carries none, so every action's state clone stays small).
 func (c *PrereviewController) applyLibrary(state *PrereviewState) {
-	ls, _ := c.learnings()
+	ls := c.learnings()
 	state.LearnNew = 0
 	for _, l := range ls {
 		if l.Status == library.StatusProposed {
@@ -68,7 +68,11 @@ func (c *PrereviewController) libraryFingerprint() string {
 // offer) and tells every tab when it's done. Read-only; run in the background —
 // a walk of a real home takes a while.
 func (c *PrereviewController) ScanPastReviews() {
-	stores := library.Scan(library.ScanRoot(), library.ScanMaxDepth)
+	if !c.bootScanning.CompareAndSwap(false, true) {
+		return // one walk at a time; its result reaches every tab
+	}
+	defer c.bootScanning.Store(false)
+	stores := library.PastReviews(c.LibraryDir, library.ScanRoot(), library.ScanMaxDepth)
 	c.bootMu.Lock()
 	c.bootStores, c.bootScanned = stores, true
 	c.bootMu.Unlock()
@@ -114,8 +118,8 @@ func (c *PrereviewController) ReadPastReviews(state PrereviewState, ctx *livetem
 	if len(picked) == 0 {
 		return state, fmt.Errorf("read past reviews: no review ticked")
 	}
-	ls, _ := c.learnings()
-	state, err := c.queueFileComment(state, library.ExtractionPrompt(picked, ls))
+	ls := c.learnings()
+	state, err := c.queueRequest(state, library.ExtractionPrompt(picked, ls))
 	if err != nil {
 		return state, err
 	}
@@ -186,7 +190,7 @@ func (c *PrereviewController) SetLearnFilter(state PrereviewState, ctx *livetemp
 		return state, nil
 	}
 	v := ctx.GetString("status")
-	if !slices.Contains(learnStatuses, v) {
+	if !slices.ContainsFunc(learnStatuses, func(s learnStatus) bool { return s.status == v }) {
 		return state, fmt.Errorf("learnings filter: unknown status %q", v)
 	}
 	state.LearnStatus = v
@@ -249,31 +253,33 @@ func (c *PrereviewController) maybeAutoLearn() {
 		return
 	}
 	store := filepath.Dir(c.CSVPath)
-	if library.ReviewerSignals(store)-library.LastExtractions(c.LibraryDir)[store].Signals < AutoLearnMinSignals {
+	n := library.ReviewerSignals(store)
+	if n-library.LastExtractions(c.LibraryDir)[store].Signals < AutoLearnMinSignals {
 		return
 	}
-	c.autoLearn.Store(&store)
+	c.autoLearn.Store(int64(n))
 	c.broadcast("AutoLearn")
 }
 
-// AutoLearn queues the extraction request maybeAutoLearn asked for, in the first
-// tab that can: one with a file open and no comment being written (queueing
-// resets the composer). Recording the extraction resets the signal count, so the
-// request isn't asked for again until there are AutoLearnMinSignals more.
+// AutoLearn queues the extraction request maybeAutoLearn asked for, in the
+// first tab that can (an agent attached and a file open: the request is queued
+// on it). autoLearn holds the signal count it was asked at; swapping it to 0
+// claims it, so it's queued once however many tabs are open, and recording that
+// count resets the gate until AutoLearnMinSignals more arrive.
 func (c *PrereviewController) AutoLearn(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	p := c.autoLearn.Load()
-	if p == nil || !state.AgentMode || state.SelectedFile == "" || state.CommentMode != "" || state.DraftBody != "" ||
-		state.extractionOpen() || !c.autoLearn.CompareAndSwap(p, nil) {
+	if !state.AgentMode || state.SelectedFile == "" || state.extractionOpen() {
 		return state, nil
 	}
-	store := *p
-	n := library.ReviewerSignals(store)
-	ls, _ := c.learnings()
-	state, err := c.queueFileComment(state, library.ExtractionPrompt([]string{store}, ls))
+	n := c.autoLearn.Swap(0)
+	if n == 0 {
+		return state, nil
+	}
+	store := filepath.Dir(c.CSVPath)
+	state, err := c.queueRequest(state, library.ExtractionPrompt([]string{store}, c.learnings()))
 	if err != nil {
 		return state, err
 	}
-	if err := library.RecordExtraction(c.LibraryDir, store, n); err != nil {
+	if err := library.RecordExtraction(c.LibraryDir, store, int(n)); err != nil {
 		return state, err
 	}
 	state.Flash = "Asked your agent to learn from this review"

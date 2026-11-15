@@ -32,13 +32,21 @@ type Evidence struct {
 	At    string `json:"at,omitempty"`    // when it was made (RFC 3339)
 }
 
-// Store sidecar names (kept in step with internal/review, which owns them).
+// Store layout: the review store's directory and sidecar names. The library
+// owns them (it can't import internal/review); review and main alias them, so a
+// rename can't leave Resolve, Scan and the signal count reading nothing.
 const (
-	commentsFile     = "comments.csv"
-	suggestionsFile  = "suggestions.jsonl"
-	agentRepliesFile = "agent-replies.jsonl"
-	reviewerReplies  = "reviewer-replies.jsonl"
-	decisionsFile    = "suggestion-decisions.jsonl"
+	StoreDir            = ".prereview"
+	CommentsFile        = "comments.csv"
+	SuggestionsFile     = "suggestions.jsonl"
+	DecisionsFile       = "suggestion-decisions.jsonl"
+	AgentRepliesFile    = "agent-replies.jsonl"
+	ReviewerRepliesFile = "reviewer-replies.jsonl"
+	VersionsDirName     = "versions"
+	TimelineFileName    = "timeline.jsonl"
+	// TargetsDir is where a directory's per-target (single-file review) stores
+	// live inside its .prereview (#199).
+	TargetsDir = "files"
 )
 
 // ParseRef splits "store:id". The store is everything before the LAST colon, so
@@ -65,7 +73,7 @@ func Resolve(ref string) (Evidence, error) {
 	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
 		return Evidence{}, fmt.Errorf("evidence %q: no store at %s", ref, abs)
 	}
-	if rows, err := csv.Read(filepath.Join(abs, commentsFile)); err == nil {
+	if rows, err := csv.Read(filepath.Join(abs, CommentsFile)); err == nil {
 		for _, r := range rows {
 			if r.ID == id {
 				if isRequest(r.Body) {
@@ -77,7 +85,7 @@ func Resolve(ref string) (Evidence, error) {
 		}
 	}
 	var found *Evidence
-	eachLine(filepath.Join(abs, suggestionsFile), func(b []byte) {
+	eachLine(filepath.Join(abs, SuggestionsFile), func(b []byte) {
 		var s struct {
 			ID       string `json:"id"`
 			File     string `json:"file"`
@@ -97,7 +105,7 @@ func Resolve(ref string) (Evidence, error) {
 		return *found, nil
 	}
 	if target, at, ok := strings.Cut(id, "@"); ok {
-		for _, name := range []string{reviewerReplies, agentRepliesFile} {
+		for _, name := range []string{ReviewerRepliesFile, AgentRepliesFile} {
 			eachLine(filepath.Join(abs, name), func(b []byte) {
 				var r struct {
 					TargetID string `json:"target_id"`

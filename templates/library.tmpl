@@ -90,7 +90,7 @@
 
 {{define "learnings"}}{{with $.LibraryBootCard}}{{template "bootCard" .}}{{end}}{{with $.LearnPage}}
   <div class="lib-filters">
-    {{range .Chips}}<form method="POST"><input type="hidden" name="status" value="{{.Status}}"><button type="submit" name="setLearnFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
+    {{range .Chips}}<form method="POST"><input type="hidden" name="status" value="{{.Value}}"><button type="submit" name="setLearnFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
     {{end}}<form method="POST" class="lib-auto-form"><button type="submit" name="toggleAutoLearn" class="lib-auto" role="switch" aria-checked="{{if $.AutoLearnOff}}false{{else}}true{{end}}" title="When your agent goes idle and a review has 5 or more new comments, replies or decisions, ask it to learn from them"><span class="ck-switch{{if $.AutoLearnOff}} off{{end}}" aria-hidden="true"></span>Learn after each review</button></form>
     {{if .Scopes}}<form method="POST" class="lib-scope-form">
       <select name="scope" aria-label="Scope" lvt-on:change="setLearnFilter">
@@ -128,11 +128,8 @@
         {{end}}</ul></details>{{end}}
       {{with .Produces}}<div class="lc-row"><span>would become: <b>{{.}}</b></span></div>{{end}}
       {{if not .Editing}}<div class="lc-actions">
-        {{if .CanAccept}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="act" value="accept"><button type="submit" name="learningAction" class="accept">Accept</button></form>{{end}}
-        {{if .CanEdit}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editLearning" class="outline">Edit</button></form>{{end}}
-        {{if .CanReject}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="act" value="reject"><button type="submit" name="learningAction" class="outline reject">Reject</button></form>{{end}}
-        {{if .CanRestore}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="act" value="restore"><button type="submit" name="learningAction" class="outline">Restore</button></form>{{end}}
-        <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="act" value="delete"><button type="submit" name="learningAction" class="outline secondary">Delete</button></form>
+        {{$id := .ID}}{{range .Actions}}<form method="POST"><input type="hidden" name="id" value="{{$id}}">{{with .Act}}<input type="hidden" name="act" value="{{.}}">{{end}}<button type="submit" name="{{.Name}}" class="{{.Class}}">{{.Label}}</button></form>
+        {{end}}
       </div>{{end}}
     </li>
 {{end}}

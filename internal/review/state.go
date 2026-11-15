@@ -64,16 +64,16 @@ type PrereviewState struct {
 	// The Checks page (the Library frame, Checks tab): open state and its filters.
 	// Session view state, never ui-prefs: a filter carried into the next review
 	// would hide its failures.
-	ShowLibrary       bool   `json:"show_library"`
-	ChecksQuery       string `json:"checks_query"`
-	ChecksStatus      string `json:"checks_status"`   // "" (all) | fail | error | pass | off
-	ChecksSource      string `json:"checks_source"`   // "" (all) | builtin | user | vale
-	ChecksCategory    string `json:"checks_category"` // "" (all) or a category label
-	ChecksFile        string `json:"checks_file"`     // "" (every file) or one path
-	ExpandedCheck     string `json:"expanded_check"`
+	ShowLibrary    bool   `json:"show_library"`
+	ChecksQuery    string `json:"checks_query"`
+	ChecksStatus   string `json:"checks_status"`   // "" (all) | fail | error | pass | off
+	ChecksSource   string `json:"checks_source"`   // "" (all) | builtin | user | vale
+	ChecksCategory string `json:"checks_category"` // "" (all) or a category label
+	ChecksFile     string `json:"checks_file"`     // "" (every file) or one path
+	ExpandedCheck  string `json:"expanded_check"`
 	// CheckHistory is the expanded rule file's versions (M3), newest first.
-	CheckHistory []RuleVersion `json:"check_history"`
-	ShowPassingGroups bool   `json:"show_passing_groups"`
+	CheckHistory      []RuleVersion `json:"check_history"`
+	ShowPassingGroups bool          `json:"show_passing_groups"`
 	// Judges (M2): ChecksKind filters the page to checkers or judges ("" both);
 	// JudgeLabels are the reviewer's Agree/Disagree answers (judge-labels.jsonl,
 	// keyed labelKey); JudgmentsSeen is the judgments.jsonl fingerprint this tab

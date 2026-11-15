@@ -28,14 +28,12 @@ func claimServerLock(prereviewDir string, replace bool) (release func(), err err
 	}
 	pidPath := filepath.Join(prereviewDir, serverPIDFileName)
 
-	if data, rerr := os.ReadFile(pidPath); rerr == nil {
-		if pid, perr := strconv.Atoi(strings.TrimSpace(string(data))); perr == nil && processAlive(pid) {
-			if !replace {
-				return nil, fmt.Errorf("prereview is already running for this store (pid %d); pass --replace to take over", pid)
-			}
-			if err := stopServer(pid); err != nil {
-				return nil, err
-			}
+	if pid, ok := readServerPID(pidPath); ok && processAlive(pid) {
+		if !replace {
+			return nil, fmt.Errorf("prereview is already running for this store (pid %d); pass --replace to take over", pid)
+		}
+		if err := stopServer(pid); err != nil {
+			return nil, err
 		}
 	}
 
@@ -47,11 +45,7 @@ func claimServerLock(prereviewDir string, replace bool) (release func(), err err
 		// Only remove the lock if it's still ours. A server that replaced us
 		// (after we exited) now owns server.pid; deleting it would strip its
 		// lock and let a third server start alongside it.
-		data, rerr := os.ReadFile(pidPath)
-		if rerr != nil {
-			return
-		}
-		if pid, perr := strconv.Atoi(strings.TrimSpace(string(data))); perr == nil && pid == os.Getpid() {
+		if pid, ok := readServerPID(pidPath); ok && pid == os.Getpid() {
 			_ = os.Remove(pidPath)
 		}
 	}, nil
@@ -116,4 +110,14 @@ func processAlive(pid int) bool {
 		return false
 	}
 	return p.Signal(syscall.Signal(0)) == nil
+}
+
+// readServerPID reads a server.pid file's pid.
+func readServerPID(path string) (int, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	return pid, err == nil
 }

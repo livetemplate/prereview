@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // Store-layout filenames under .prereview/ that the CLI subcommands resolve.
@@ -16,7 +18,7 @@ import (
 const (
 	// CommentsFileName is the CSV the review server writes (the on-disk source of
 	// truth) and the `prereview comments` reader parses.
-	CommentsFileName = "comments.csv"
+	CommentsFileName = library.CommentsFile
 	// EventsFileName is the durable, append-only event log written only in
 	// --agent mode and reset per launch (openStore); each line is a seq-stamped
 	// StreamEvent consumed by `prereview events`.

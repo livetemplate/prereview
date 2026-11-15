@@ -142,7 +142,8 @@ func update(dir string, fn func(map[string]Learning) ([]Learning, error)) error 
 	}
 	defer unlock()
 	path := filepath.Join(dir, LearningsFile)
-	out, err := fn(foldLearnings(path))
+	have, _ := foldFile(dir)
+	out, err := fn(have)
 	if err != nil {
 		return err
 	}

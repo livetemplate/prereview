@@ -1,6 +1,7 @@
 package review
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestLearnPage_FiltersAndEmpty(t *testing.T) {
 	}
 	s.LearnStatus, s.LearnScope = library.StatusAccepted, "Docs"
 	p := s.LearnPage()
-	if len(p.Cards) != 1 || p.Cards[0].ID != "a" || !p.Cards[0].CanEdit || p.Cards[0].CanAccept {
+	if len(p.Cards) != 1 || p.Cards[0].ID != "a" || !slices.Contains(p.Cards[0].Actions, actEdit) || slices.Contains(p.Cards[0].Actions, actAccept) {
 		t.Fatalf("accepted in Docs: %+v", p.Cards)
 	}
 	if len(p.Scopes) != 2 || !p.Scopes[0].Selected {

@@ -174,13 +174,20 @@ type PrereviewController struct {
 	bootMu      sync.Mutex
 	bootScanned bool
 	bootStores  []library.StoreInfo
-	// autoLearn is this review's store when the idle agent should be asked to
-	// learn from it (maybeAutoLearn); the first tab that can queue the request
-	// claims it (AutoLearn), so it's queued once however many tabs are open.
-	autoLearn atomic.Pointer[string]
+	// autoLearn is this review's reviewer-signal count when the idle agent should
+	// be asked to learn from it (maybeAutoLearn), 0 otherwise; the first tab that
+	// can queue the request claims it (AutoLearn).
+	autoLearn atomic.Int64
+	// bootScanning: a past-review scan is running (ScanPastReviews).
+	bootScanning atomic.Bool
 	// The library's version store (rule-file history), opened on first use.
 	libVersionsOnce sync.Once
 	libVersions     *VersionStore
+	// libHist caches each rule file's built history until the library timeline
+	// changes (libHistFP).
+	libHistMu sync.Mutex
+	libHistFP string
+	libHist   map[string][]RuleVersion
 }
 
 type cachedDiff struct {

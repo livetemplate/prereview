@@ -38,7 +38,7 @@ func seedReviewStore(t *testing.T, root string, rows ...csv.Row) string {
 func learnPropose(t *testing.T, p *runningPrereview, args ...string) string {
 	t.Helper()
 	cmd := exec.Command(p.binary, append([]string{"learn", "propose"}, args...)...)
-	cmd.Env = append(os.Environ(), "PREREVIEW_LIBRARY_DIR="+libraryDirFor(p.repo))
+	cmd.Env = prefsIsolatedEnv(p.repo) // the same library (and checks, scan home) as the server
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("prereview learn propose: %v: %s", err, out)
@@ -86,7 +86,7 @@ func TestE2E_LibraryLearnings(t *testing.T) {
 
 	// Ungrounded evidence writes nothing.
 	bad := exec.Command(p.binary, "learn", "propose", "--text", "x", "--evidence", past+":ghost")
-	bad.Env = append(os.Environ(), "PREREVIEW_LIBRARY_DIR="+libraryDirFor(p.repo))
+	bad.Env = prefsIsolatedEnv(p.repo)
 	if out, err := bad.CombinedOutput(); err == nil || !strings.Contains(string(out), "ghost") {
 		t.Fatalf("a proposal citing a missing record was accepted: %v %s", err, out)
 	}
@@ -442,10 +442,8 @@ func TestE2E_LibraryExportImport(t *testing.T) {
 	importOnce := func() string {
 		t.Helper()
 		var res string
+		p.waitReadyAt(w, h)
 		if err := chromedp.Run(ctx,
-			chromedp.Navigate(p.url),
-			chromedp.WaitVisible(`.library-trigger`, chromedp.ByQuery),
-			chromedp.Sleep(time.Second), // the socket (clicks before it are lost)
 			chromedp.Click(`.library-trigger`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.lib-import input[type="file"]`, chromedp.ByQuery),
 			chromedp.SetUploadFiles(`.lib-import input[type="file"]`, []string{theirs}, chromedp.ByQuery),

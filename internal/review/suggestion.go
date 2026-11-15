@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // suggestion.go wires the LLM's INBOUND "here's an edit I propose" signal into
@@ -33,7 +34,7 @@ import (
 
 // SuggestionFileName is the fixed name of the agent-written, append-only
 // suggestions file under .prereview/. Durable across launches.
-const SuggestionFileName = "suggestions.jsonl"
+const SuggestionFileName = library.SuggestionsFile
 
 // Suggestion is one proposed edit: replace the OriginalText currently at
 // [FromLine,ToLine] (new side) with ProposedText. It is rendered inline as a

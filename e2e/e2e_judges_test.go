@@ -37,7 +37,7 @@ func playJudge(t *testing.T, p *runningPrereview, repo, request string, args ...
 	}
 	args = append([]string{"judge", "--out", p.store, "--content-hash", m[1], "--rubric-hash", m[2]}, args...)
 	cmd := exec.Command(p.binary, args...)
-	cmd.Env = append(os.Environ(), "PREREVIEW_CHECKS_DIR="+checksDirFor(repo), "PREREVIEW_LIBRARY_DIR="+libraryDirFor(repo))
+	cmd.Env = prefsIsolatedEnv(repo)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("prereview judge: %v: %s", err, out)
 	}

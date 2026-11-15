@@ -4,14 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/livetemplate/livetemplate"
 
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // Library versions (checks M3): every edit to a rule file in your checks folder
@@ -22,7 +23,7 @@ import (
 // store's cross-process lock and SHA dedupe make that one version per edit.
 
 // LibraryStoreDir is the library's review store.
-func LibraryStoreDir(libraryDir string) string { return filepath.Join(libraryDir, ".prereview") }
+func LibraryStoreDir(libraryDir string) string { return filepath.Join(libraryDir, library.StoreDir) }
 
 // libVersionStore opens the library's version store once; nil when there's no
 // library or it can't be opened (versions are a safety net, never a blocker).
@@ -42,17 +43,17 @@ func (c *PrereviewController) libVersionStore() *VersionStore {
 }
 
 // libraryKey is a rule file's timeline key: its path in the library folder
-// ("checks/filler.yml"), so the library review sees the same file. "" for a file
-// outside the checks folder (a built-in has no file).
+// ("checks/filler.yml"), the same key the library review uses for it. "" for a
+// built-in (no file) or a checks folder moved outside the library.
 func (c *PrereviewController) libraryKey(rulePath string) string {
-	if rulePath == "" || c.ChecksDir == "" {
+	if rulePath == "" || c.LibraryDir == "" {
 		return ""
 	}
-	rel, err := filepath.Rel(c.ChecksDir, rulePath)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	rel, err := filepath.Rel(c.LibraryDir, rulePath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, "../") || filepath.IsAbs(rel) {
 		return ""
 	}
-	return "checks/" + filepath.ToSlash(rel)
+	return filepath.ToSlash(rel)
 }
 
 // checkpointLibrary records the checks folder's rule files as they are now (a
@@ -97,56 +98,91 @@ type RuleDiffRow struct {
 	Kind, Text string // add | del
 }
 
-// maxRuleDiffRows bounds a version's listed lines.
-const maxRuleDiffRows = 30
+// maxRuleDiffRows bounds a version's listed lines; maxRuleVersions the versions
+// listed (newest first).
+const (
+	maxRuleDiffRows = 30
+	maxRuleVersions = 20
+)
 
 // applyRuleHistory loads the expanded rule's history while the Checks tab shows
-// it (newest first).
+// it (newest first). The versions are built once per timeline change and shared
+// by every tab (ruleHistory); reapplying checks reruns this on every broadcast.
 func (c *PrereviewController) applyRuleHistory(state *PrereviewState) {
 	state.CheckHistory = nil
 	if !state.ShowLibrary || !state.LibraryOnChecks() || state.ExpandedCheck == "" {
 		return
 	}
+	if key := c.libraryKey(c.rulePath(state.ExpandedCheck)); key != "" {
+		state.CheckHistory = c.ruleHistory(key)
+	}
+}
+
+// ruleHistory is key's versions, cached by the library timeline's fingerprint.
+func (c *PrereviewController) ruleHistory(key string) []RuleVersion {
 	vs := c.libVersionStore()
-	key := c.libraryKey(c.rulePath(state.ExpandedCheck))
-	if vs == nil || key == "" {
-		return
+	if vs == nil {
+		return nil
+	}
+	fp := statusFingerprint(vs.timelinePath())
+	c.libHistMu.Lock()
+	defer c.libHistMu.Unlock()
+	if c.libHistFP != fp {
+		c.libHist, c.libHistFP = map[string][]RuleVersion{}, fp
+	}
+	if h, ok := c.libHist[key]; ok {
+		return h
 	}
 	hist, err := vs.FileHistory(key)
-	if err != nil || len(hist) == 0 {
-		return
+	if err != nil {
+		return nil
 	}
+	first := max(0, len(hist)-maxRuleVersions-1) // one older version to diff the oldest listed against
 	var prev []byte
-	out := make([]RuleVersion, 0, len(hist))
-	for i, h := range hist {
-		cur, _ := vs.Blob(h.SHA)
-		v := RuleVersion{Seq: h.Seq, When: h.TS.Local().Format("2 Jan 2006 15:04"), Current: i == len(hist)-1}
-		if i > 0 {
-			var add, del int
-			for _, l := range gitdiff.DiffContents(key, prev, cur).Lines {
-				if l.Kind != "add" && l.Kind != "del" {
-					continue
-				}
-				if l.Kind == "add" {
-					add++
-				} else {
-					del++
-				}
-				if len(v.Diff) < maxRuleDiffRows {
-					v.Diff = append(v.Diff, RuleDiffRow{Kind: l.Kind, Text: l.Content})
-				} else {
-					v.More++
+	var out []RuleVersion
+	for i := first; i < len(hist); i++ {
+		h := hist[i]
+		var cur []byte
+		if h.SHA != "" { // "" is a tombstone: the file was deleted then
+			cur, _ = vs.Blob(h.SHA)
+		}
+		if i > first || first == 0 {
+			v := RuleVersion{Seq: h.Seq, When: h.TS.Local().Format("2 Jan 2006 15:04"), Current: i == len(hist)-1}
+			if i > 0 {
+				v.Stat, v.Diff, v.More = ruleDiff(key, prev, cur)
+				if h.SHA == "" {
+					v.Stat = "deleted"
 				}
 			}
-			v.Stat = fmt.Sprintf("+%d −%d", add, del)
+			out = append(out, v)
 		}
-		out = append(out, v)
 		prev = cur
 	}
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
+	slices.Reverse(out)
+	c.libHist[key] = out
+	return out
+}
+
+// ruleDiff is one version's change: "+a −d", its changed lines (bounded) and how
+// many weren't listed.
+func ruleDiff(key string, prev, cur []byte) (stat string, rows []RuleDiffRow, more int) {
+	var add, del int
+	for _, l := range gitdiff.DiffContentsNoHighlight(key, prev, cur).Lines {
+		switch l.Kind {
+		case "add":
+			add++
+		case "del":
+			del++
+		default:
+			continue
+		}
+		if len(rows) < maxRuleDiffRows {
+			rows = append(rows, RuleDiffRow{Kind: l.Kind, Text: l.Content})
+		} else {
+			more++
+		}
 	}
-	state.CheckHistory = out
+	return fmt.Sprintf("+%d −%d", add, del), rows, more
 }
 
 // rulePath is a loaded rule's file ("" for a built-in or an unknown id).
@@ -175,7 +211,7 @@ func (c *PrereviewController) RestoreRuleVersion(state PrereviewState, ctx *live
 	if err != nil {
 		return state, fmt.Errorf("restore: %w", err)
 	}
-	if err := writeFileAtomic(path, data); err != nil {
+	if err := writeFileAtomicVersions(path, data); err != nil {
 		return state, fmt.Errorf("restore: %w", err)
 	}
 	if c.reloadChecksIfChanged() {
@@ -185,25 +221,4 @@ func (c *PrereviewController) RestoreRuleVersion(state PrereviewState, ctx *live
 	c.reapplyChecks(&state)
 	state.Flash = "Restored " + filepath.Base(path)
 	return state, nil
-}
-
-// writeFileAtomic replaces path's content via a temp file + rename beside it.
-func writeFileAtomic(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	if fi, err := os.Stat(path); err == nil {
-		_ = tmp.Chmod(fi.Mode().Perm()) // keep the file's mode (CreateTemp makes it 0600)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
 }
