@@ -21,6 +21,11 @@ type settleHarness struct {
 	stat string
 }
 
+// burstSettle is the quiet window for a test whose edits must land as ONE burst:
+// ~10× the 30–70ms gaps those tests leave between edits, so a stalled CI runner
+// can't split the burst into two settles.
+const burstSettle = 400 * time.Millisecond
+
 // newSettleHarness boots a watcher on a one-file NoGit review with a baseline
 // version, EditSettle shrunk to settle, and a session that never blocks. extra
 // files turn it into a whole-dir review (doc.md plus each extra, content "x").
@@ -99,7 +104,7 @@ func (h *settleHarness) waitFor(what string, within time.Duration, ok func() boo
 }
 
 func TestEditBurstSettlesOnce(t *testing.T) {
-	h := newSettleHarness(t, 200*time.Millisecond)
+	h := newSettleHarness(t, burstSettle)
 	for i := range 5 {
 		h.edit("v1 step " + string(rune('a'+i)))
 		time.Sleep(40 * time.Millisecond)
