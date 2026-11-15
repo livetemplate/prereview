@@ -145,8 +145,8 @@ func (s PrereviewState) selectedFindings() (checks.Result, bool) {
 // under ("<end line>-new", the diff view's $rowkey). Findings are on the new side.
 func (s PrereviewState) FindingsByRow() map[string][]FindingView {
 	r, ok := s.selectedFindings()
-	if !ok {
-		return nil
+	if !ok || r.Type == checks.TypeJudge {
+		return nil // a judge's critique is on its card above the file; its quote is only marked
 	}
 	out := map[string][]FindingView{}
 	for i := range r.Findings {

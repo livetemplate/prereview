@@ -766,13 +766,7 @@
               data-line="1"
               data-side="new"
               class="line add"
-              data-key="L0-1"><span class="gutter"><span class="gutter-mark">+ </span>1</span><span class="content chroma" data-line-text><mark class="check-finding">This</mark> is very good.</span></div>
-      <div class="finding-card sev-suggestion" data-key="finding-reader-first-0" role="note">
-        <span class="finding-check">Written for the reader</span>
-        <span class="finding-msg">Explains storage before saying what to do.</span>
-        <form method="POST" class="finding-queue"><input type="hidden" name="id" value="reader-first"><input type="hidden" name="index" value="0"><button type="submit" name="queueFinding" class="outline">Queue as comment</button></form>
-      </div>
-</div>
+              data-key="L0-1"><span class="gutter"><span class="gutter-mark">+ </span>1</span><span class="content chroma" data-line-text><mark class="check-finding">This</mark> is very good.</span></div></div>
 <div class="line-row" data-key="row-L0-2"><div tabindex="0"
               lvt-on:click="selectLine"
               lvt-on:keydown="selectLine"

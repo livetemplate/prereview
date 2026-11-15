@@ -120,8 +120,12 @@ func TestE2E_Judges(t *testing.T) {
 				5*time.Second, "Show in file moves the cursor to the quoted line")
 			noHorizontalScroll(t, p, diag)
 
-			// Agree persists across a reload.
+			// Agree persists across a reload. Back at the top first: Show in file
+			// scrolled to the quote, and the card sits above the file (under the
+			// sticky bars when scrolled into view from below).
 			if err := chromedp.Run(ctx,
+				chromedp.Evaluate(`(() => { const v = document.querySelector('main.viewer') || document.scrollingElement; v.scrollTop = 0; window.scrollTo(0, 0); })()`, nil),
+				chromedp.Sleep(150*time.Millisecond),
 				chromedp.Click(`.jv-card button[name="labelJudgment"][aria-pressed="false"]`, chromedp.ByQuery),
 				chromedp.WaitVisible(`.jv-card button[name="labelJudgment"][aria-pressed="true"]`, chromedp.ByQuery),
 				chromedp.Reload(),

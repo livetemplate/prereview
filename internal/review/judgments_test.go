@@ -174,6 +174,9 @@ func TestCheckStrip_Judges(t *testing.T) {
 	if s.CursorKey != "L25-25" {
 		t.Errorf("picking a judge moves to its quote (line 25): %q", s.CursorKey)
 	}
+	if len(s.FindingsByRow()) != 0 || len(s.findingMarksByLine()[25]) != 1 {
+		t.Errorf("a judge's quote is marked, not carded (its card is above the file)")
+	}
 }
 
 func TestLabelJudgment(t *testing.T) {
