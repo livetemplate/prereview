@@ -117,8 +117,8 @@ func TestE2E_ImportSkill(t *testing.T) {
 	home := agentHomeFor(repo)
 	dir := filepath.Join(home, ".claude", "skills", "house-style")
 	files := map[string]string{
-		"SKILL.md": "---\nname: house-style\ndescription: \"Our house style\"\n---\n\nBe brief.\n",
-		"evals/notes/prompt.md":              "Write release notes.\n",
+		"SKILL.md":                            "---\nname: house-style\ndescription: \"Our house style\"\n---\n\nBe brief.\n",
+		"evals/notes/prompt.md":               "Write release notes.\n",
 		"evals/notes/graders/reader-first.md": "---\ntype: llm\n---\n\nPASS if it leads with what changed for the reader.\n",
 		"evals/notes/graders/no-utilize.md":   "---\ntype: regex\npattern: utilize\nflags: i\nmatch: not_contains\n---\n",
 		"evals/notes/graders/ran-tests.md":    "---\ntype: tool_used\ntool: Bash\n---\n",

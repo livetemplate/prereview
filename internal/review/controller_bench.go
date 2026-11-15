@@ -35,16 +35,16 @@ type BenchTab struct {
 
 // BenchCard is one benchmark.
 type BenchCard struct {
-	ID, Name                 string
-	Cases, Checkers, Judges  int
-	Weighted                 bool   // not every weight is 1
-	Score, Spread            string // "0.83" and "± 0.06 over 3 runs"
-	Headers                  []string
-	Rows                     []BenchRow
-	Runs                     []BenchRunRow
-	Asking                   bool // its judges were asked for and not all answered
-	DefPath                  string
-	EditorURL                template.URL
+	ID, Name                string
+	Cases, Checkers, Judges int
+	Weighted                bool   // not every weight is 1
+	Score, Spread           string // "0.83" and "± 0.06 over 3 runs"
+	Headers                 []string
+	Rows                    []BenchRow
+	Runs                    []BenchRunRow
+	Asking                  bool // its judges were asked for and not all answered
+	DefPath                 string
+	EditorURL               template.URL
 }
 
 // BenchRow is one case of the latest run.

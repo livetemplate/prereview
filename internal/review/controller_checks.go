@@ -166,11 +166,11 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		return
 	}
 	c.runner()
-	c.calibrationChanged()                          // the baseline: only later answers fan out
+	c.calibrationChanged() // the baseline: only later answers fan out
 	c.benchChanged()
 	c.checkpointLibrary(VersionTriggerFileEdit, "") // edits made while no server ran
-	c.syncSkills("")                                   // bring generated skills in line after an upgrade
-	c.learningsChanged()                        // the baseline: only later writes fan out
+	c.syncSkills("")                                // bring generated skills in line after an upgrade
+	c.learningsChanged()                            // the baseline: only later writes fan out
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
