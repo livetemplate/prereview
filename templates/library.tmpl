@@ -1,12 +1,12 @@
-{{/* The Library (checks M1b): a full-page view like All comments, opened from the
-     toolbar's Library button or a file's Checks button. M1b builds the frame with
-     only the Checks tab live; Learnings / Skills / Benchmarks arrive in M3–M5.
-     Everything is server state (CheckPage, a zero-arg method) — no custom JS. */}}
-{{define "library"}}{{with $.CheckPage}}
+{{/* The Library (checks M1b, M3): a full-page view like All comments, opened from
+     the toolbar's Library button or a file's Checks button. Learnings (M3) and
+     Checks are live; Skills / Benchmarks arrive in M4–M5. Everything is server
+     state (LearnPage / CheckPage, zero-arg methods) — no custom JS. */}}
+{{define "library"}}{{if $.ShowLibrary}}
 <section class="library" data-key="library" aria-label="Library">
   <header class="lib-head">
     <strong class="lib-title">{{template "iconLibrary"}} Library</strong>
-    <span class="lib-src">the checks every review on this machine uses · edits to rule files show up live</span>
+    <span class="lib-src">shared by every review on this machine · changes show up live</span>
     <details class="lib-editor">
       <summary>Open rule files in: {{range $.EditorOptions}}{{if .Selected}}{{.Label}}{{end}}{{end}}</summary>
       <form method="POST" class="checks-editor">
@@ -23,11 +23,13 @@
     <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form>
   </header>
   <div class="lib-tabs" role="tablist">
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Learnings</button>
+    <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnLearnings}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnLearnings}}true{{else}}false{{end}}">Learnings{{if $.LearnNew}}<span class="ck-pill ck-new">{{$.LearnNew}} new</span>{{end}}</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
-    <button type="button" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button>
+    <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnChecks}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnChecks}}true{{else}}false{{end}}">Checks</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
   </div>
+  {{template "learnings" $}}
+  {{with $.CheckPage}}
   <div class="ckp-bar">
     <form method="POST" lvt-form:preserve class="ckp-search-form">
       <input type="search" name="q" class="ckp-search" value="{{.Query}}" placeholder="Search checks and findings"
@@ -81,8 +83,48 @@
       {{if and (not .Groups) (not .Folded) (not .ShowVale)}}<p class="ckp-empty">{{if .Query}}No check matches “{{.Query}}”.{{else}}No checks match these filters.{{end}}</p>{{end}}
     </div>
   </div>
+  {{end}}
 </section>
 {{end}}{{end}}
+
+{{define "learnings"}}{{with $.LearnPage}}
+  <div class="lib-filters">
+    {{range .Chips}}<form method="POST"><input type="hidden" name="status" value="{{.Status}}"><button type="submit" name="setLearnFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
+    {{end}}{{if .Scopes}}<form method="POST" class="lib-scope-form">
+      <select name="scope" aria-label="Scope" lvt-on:change="setLearnFilter">
+        <option value=""{{if eq .Scope ""}} selected{{end}}>All scopes</option>
+        {{range .Scopes}}<option value="{{.Name}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </form>{{end}}
+  </div>
+  {{with .Empty}}<p class="ckp-empty">{{.}}</p>{{end}}
+  <ul class="lib-list">
+    {{range .Cards}}{{template "learnCard" .}}{{end}}
+  </ul>
+{{end}}{{end}}
+
+{{define "learnCard"}}
+    <li class="lib-card is-{{.Status}}" data-key="learn-{{.ID}}">
+      <header><span class="ck-pill ck-{{.Pill}}">{{.Status}}</span><span>scope: <b>{{.Scope}}</b></span><span>{{.Meta}}</span></header>
+      {{if .Editing}}<form method="POST" class="lc-edit"><input type="hidden" name="id" value="{{.ID}}">
+        <textarea name="text" rows="2" aria-label="Learning">{{.Text}}</textarea>
+        <label>Scope <input type="text" name="scope" value="{{.Scope}}" autocomplete="off"></label>
+        <div class="lc-actions"><button type="submit" name="saveLearning">Save</button><button type="submit" name="editLearning" class="outline secondary">Cancel</button></div>
+      </form>{{else}}<p class="lc-text">{{.Text}}</p>{{end}}
+      {{with .Conflict}}<div class="lc-conflict"><b>Replaces an older learning</b>: {{.}}. Newer wins: accepting this keeps the old one as superseded, so you can restore it.</div>{{end}}
+      {{if .Evidence}}<details{{if eq .Status "proposed"}} open{{end}}><summary>Evidence ({{len .Evidence}})</summary><ul class="lc-evidence">
+        {{range .Evidence}}<li><span class="ev-where">{{.Where}}</span>{{with .Quote}}<br><q>{{.}}</q>{{end}}</li>
+        {{end}}</ul></details>{{end}}
+      {{with .Produces}}<div class="lc-row"><span>would become: <b>{{.}}</b></span></div>{{end}}
+      {{if not .Editing}}<div class="lc-actions">
+        {{if .CanAccept}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="act" value="accept"><button type="submit" name="learningAction" class="accept">Accept</button></form>{{end}}
+        {{if .CanEdit}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="editLearning" class="outline">Edit</button></form>{{end}}
+        {{if .CanReject}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="act" value="reject"><button type="submit" name="learningAction" class="outline reject">Reject</button></form>{{end}}
+        {{if .CanRestore}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="act" value="restore"><button type="submit" name="learningAction" class="outline">Restore</button></form>{{end}}
+        <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="act" value="delete"><button type="submit" name="learningAction" class="outline secondary">Delete</button></form>
+      </div>{{end}}
+    </li>
+{{end}}
 
 {{define "checkRow"}}
           <li class="ckp-row is-{{.Status}}{{if .Expanded}} is-open{{end}}" data-key="ckp-row-{{.ID}}">

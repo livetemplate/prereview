@@ -22,8 +22,8 @@
       name="toggleLibrary"
       class="contrast library-trigger{{if $.ShowLibrary}} is-on{{end}}"
       aria-pressed="{{if $.ShowLibrary}}true{{else}}false{{end}}"
-      title="Library: the checks every review on this machine uses"
-    >{{template "iconLibrary"}}<span class="tb-label">Library</span></button>
+      title="Library: the learnings and checks every review on this machine uses"
+    >{{template "iconLibrary"}}<span class="tb-label">Library</span>{{if $.LearnNew}}<span class="lib-badge" title="{{$.LearnNew}} new learning{{if ne $.LearnNew 1}}s{{end}} proposed">{{$.LearnNew}}</span>{{end}}</button>
   </form>
 {{end}}
 

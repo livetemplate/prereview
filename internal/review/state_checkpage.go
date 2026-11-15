@@ -148,7 +148,7 @@ var statusRank = map[string]int{checks.StatusNotRun: -2, checks.StatusStale: -1,
 
 // CheckPage builds the Checks page, or nil when it's closed.
 func (s PrereviewState) CheckPage() *CheckPage {
-	if !s.ShowLibrary {
+	if !s.ShowLibrary || !s.LibraryOnChecks() {
 		return nil
 	}
 	p := &CheckPage{Query: s.ChecksQuery, Status: s.ChecksStatus, Source: s.ChecksSource, Kind: s.ChecksKind,

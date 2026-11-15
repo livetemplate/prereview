@@ -3573,9 +3573,14 @@ header.file-head .file-head-checks { margin: 0; }
 .checks-trigger.is-passing .checks-count { background: color-mix(in srgb, var(--pr-add) 18%, transparent); color: var(--pr-add); }
 .checks-trigger.is-failing .checks-count { background: var(--mark-wash); color: var(--mark); }
 
-/* The toolbar's Library button (shown when the review has checks). */
+/* The toolbar's Library button; the badge counts proposed learnings (M3). */
 .library-form { margin: 0; }
 .library-trigger { display: inline-flex; align-items: center; gap: 0.35rem; }
+.library-trigger .lib-badge {
+  min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--pico-primary-inverse); font-size: 0.68rem; font-weight: 700;
+}
 .library-trigger.is-on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .library-trigger svg { display: block; }
 /* Icon-only below 1400px: with the agent's Queue beside it, the labelled button
@@ -3592,7 +3597,8 @@ header.file-head .file-head-checks { margin: 0; }
 .ck-fail { color: var(--pr-del); background: var(--pr-del-bg); }
 .ck-error { color: var(--mark); background: var(--mark-wash); }
 .ck-running, .ck-off { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
-.ck-open { color: var(--accent); background: var(--accent-weak); }
+.ck-open, .ck-new { color: var(--accent); background: var(--accent-weak); }
+.ck-muted { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
 .ck-notrun, .ck-stale { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
 .ck-advisory { color: var(--text-muted); border-color: var(--border-strong); background: transparent; font-weight: 500; }
 .ck-judge-tag {
@@ -3629,6 +3635,53 @@ button.lib-chip {
   border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
 }
 button.lib-chip.is-on { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); font-weight: 600; }
+.lib-tabs form { margin: 0; }
+button.lib-tab .ck-pill { margin-left: 0.3rem; }
+
+/* The Learnings tab (M3): status chips, a scope picker, one card per learning. */
+.lib-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; padding: 0.6rem 0.25rem 0.3rem; }
+.lib-filters form { margin: 0; }
+.lib-scope-form { margin-left: auto !important; }
+.lib-filters select { margin: 0; width: auto; padding: 0.15rem 1.8rem 0.15rem 0.5rem; min-height: 28px; height: auto; font-size: 0.78rem; }
+.lib-list { list-style: none; margin: 0; padding: 0.3rem 0.25rem 1rem; display: flex; flex-direction: column; gap: 0.55rem; }
+.lib-list > li, .lc-evidence > li { list-style: none; }
+.lib-list > li::marker, .lc-evidence > li::marker { content: none; }
+.lib-card {
+  margin: 0; padding: 0.6rem 0.75rem; background: var(--surface-card);
+  border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+  font-size: 0.84rem; line-height: 1.5;
+}
+.lib-card.is-proposed { border-left: 3px solid var(--accent); }
+.lib-card.is-superseded { opacity: 0.75; border-style: dashed; }
+.lib-card > header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; color: var(--text-muted); font-size: 0.76rem; }
+.lib-card .lc-text { margin: 0.3rem 0 0.4rem; font-size: 0.95rem; font-weight: 600; color: var(--text-strong); overflow-wrap: anywhere; }
+.lib-card.is-superseded .lc-text { text-decoration: line-through; text-decoration-thickness: 1px; }
+.lib-card details { margin: 0.25rem 0; }
+.lib-card summary { font-size: 0.78rem; color: var(--text-muted); cursor: pointer; }
+.lc-evidence { margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.lc-evidence li { margin: 0; padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); background: var(--surface-muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+.lc-evidence .ev-where { color: var(--text-faint); font-size: 0.72rem; }
+.lc-evidence q { color: var(--text); }
+.lc-conflict {
+  margin: 0.35rem 0; padding: 0.35rem 0.55rem; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  font-size: 0.78rem; color: var(--text);
+}
+.lc-row { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; color: var(--text-muted); font-size: 0.78rem; margin: 0.15rem 0; }
+.lc-row b { color: var(--text); font-weight: 600; }
+.lc-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+.lc-actions form { margin: 0; }
+.lc-actions button { margin: 0; padding: 0.2rem 0.65rem; min-height: 28px; width: auto; font-size: 0.78rem; }
+.lc-actions .accept { background: var(--pr-add); border-color: var(--pr-add); color: var(--surface); }
+.lc-actions .reject { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 50%, var(--border)); }
+.lc-edit { margin: 0.3rem 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.lc-edit textarea { margin: 0; font-size: 0.9rem; min-height: 3.2rem; }
+.lc-edit label { display: flex; gap: 0.4rem; align-items: center; margin: 0; font-size: 0.78rem; color: var(--text-muted); }
+.lc-edit input { margin: 0; padding: 0.15rem 0.45rem; height: auto; font-size: 0.82rem; }
+@media (max-width: 640px) {
+  .lib-scope-form { margin-left: 0 !important; width: 100%; }
+  .lib-filters select { width: 100%; }
+}
 .checks-editor {
   display: flex; flex-wrap: wrap; gap: 0.4rem 0.75rem; align-items: center;
   font-size: 0.78rem; color: var(--text-muted);

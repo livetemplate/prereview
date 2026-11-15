@@ -20,6 +20,7 @@ import (
 	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/assets"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/netaddr"
 	"github.com/livetemplate/prereview/internal/proxy"
 	"github.com/livetemplate/prereview/internal/review"
@@ -160,6 +161,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		PromptsDir:  userPromptsDir(),
 		QuizzesDir:  userQuizzesDir(),
 		ChecksDir:   userChecksDir(),
+		LibraryDir:  library.Dir(),
 		Version:     version,
 		CSVWriter:   csvWriter,
 		AgentMode:   agentMode,

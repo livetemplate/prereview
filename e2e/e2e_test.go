@@ -143,12 +143,19 @@ func mustWrite(t *testing.T, dir, path, content string) {
 // rules never come from — or get copied into — the developer's real folder.
 func prefsIsolatedEnv(repo string) []string {
 	prefs := filepath.Join(filepath.Dir(repo), "prereview-ui-prefs.json")
-	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+prefs, "PREREVIEW_CHECKS_DIR="+checksDirFor(repo))
+	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+prefs, "PREREVIEW_CHECKS_DIR="+checksDirFor(repo),
+		"PREREVIEW_LIBRARY_DIR="+libraryDirFor(repo))
 }
 
 // checksDirFor is the isolated checks rule folder a test server for repo reads.
 func checksDirFor(repo string) string {
 	return filepath.Join(filepath.Dir(repo), "prereview-checks")
+}
+
+// libraryDirFor is the isolated per-user library (learnings, sessions) a test
+// server for repo uses, so no test reads or writes the developer's real one.
+func libraryDirFor(repo string) string {
+	return filepath.Join(filepath.Dir(repo), "prereview-library")
 }
 
 // startPrereview launches the binary against repo and returns the READY URL, the

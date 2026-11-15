@@ -336,7 +336,7 @@
       name="toggleLibrary"
       class="contrast library-trigger"
       aria-pressed="false"
-      title="Library: the checks every review on this machine uses"
+      title="Library: the learnings and checks every review on this machine uses"
     ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tb-label">Library</span></button>

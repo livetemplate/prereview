@@ -165,6 +165,7 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		return
 	}
 	c.runner()
+	c.learningsChanged() // the baseline: only later writes fan out
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
@@ -174,6 +175,9 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		case <-ticker.C:
 			if c.reloadChecksIfChanged() {
 				c.broadcast("ChecksUpdated")
+			}
+			if c.learningsChanged() { // any server's write to the shared library
+				c.broadcast("LibraryUpdated")
 			}
 		}
 	}
@@ -394,7 +398,7 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 // page and the inline marks agree, and its two runs can't cancel each other.
 func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 	state.ReviewChecks = nil
-	if !state.ShowLibrary || c.ExternalMode || c.RepoPath == "" {
+	if !state.ShowLibrary || !state.LibraryOnChecks() || c.ExternalMode || c.RepoPath == "" {
 		return
 	}
 	cs := c.checkSetup(state.TrustedVale)
@@ -612,7 +616,8 @@ func (c *PrereviewController) ToggleLibrary(state PrereviewState, ctx *livetempl
 	if state.ShowLibrary {
 		state.ChecksFile = ""
 	}
-	c.applyReviewChecks(&state) // runs while open; clears on close
+	c.applyLibrary(&state)
+	c.applyReviewChecks(&state) // runs while open on the Checks tab; clears otherwise
 	return state, nil
 }
 
@@ -620,8 +625,9 @@ func (c *PrereviewController) ToggleLibrary(state PrereviewState, ctx *livetempl
 // Checks button and the bar's "All checks".
 func (c *PrereviewController) OpenChecks(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	closeFullViews(&state)
-	state.ShowLibrary = true
+	state.ShowLibrary, state.LibraryTab = true, libTabChecks
 	state.ChecksFile = state.SelectedFile
+	c.applyLibrary(&state)
 	c.applyReviewChecks(&state)
 	return state, nil
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // PrereviewState is the per-session state cloned by livetemplate. Fields
@@ -83,6 +84,19 @@ type PrereviewState struct {
 	EditorTemplate string            `json:"editor_template"`
 	EditorSSHHost  string            `json:"editor_ssh_host"`
 	TrustedVale    []string          `json:"trusted_vale"`
+
+	// The Library's Learnings tab (checks M3). LibraryTab is "" (Learnings, the
+	// first tab) or "checks". Learnings is the folded log, carried only while that
+	// tab is open; LearnNew is how many are proposed (the toolbar badge, on every
+	// tab); LearnStore is this review's store, so its evidence reads "this review".
+	// The filters are session view state, like the Checks page's.
+	LibraryTab  string             `json:"library_tab"`
+	Learnings   []library.Learning `json:"learnings"`
+	LearnNew    int                `json:"learn_new"`
+	LearnStore  string             `json:"learn_store"`
+	LearnStatus string             `json:"learn_status"` // "" = proposed
+	LearnScope  string             `json:"learn_scope"`  // "" = every scope
+	LearnEdit   string             `json:"learn_edit"`   // the card being edited
 
 	// Artifact versioning (#90). Versions is the selected file's version
 	// timeline (newest first), populated from the version store each Mount /

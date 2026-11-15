@@ -27,7 +27,7 @@ func writeRepoFile(t *testing.T, c *PrereviewController, rel, body string) {
 // reviewState is a state with the Checks page open whose file list holds the
 // given changed paths plus one unchanged file the page must skip.
 func reviewState(paths ...string) PrereviewState {
-	s := PrereviewState{ShowLibrary: true}
+	s := PrereviewState{ShowLibrary: true, LibraryTab: libTabChecks}
 	for _, p := range paths {
 		s.Files = append(s.Files, gitdiff.FileEntry{Path: p, Status: "M", Added: 1})
 	}
@@ -68,7 +68,7 @@ func TestReviewChecks_AllChangedFiles(t *testing.T) {
 		t.Fatalf("checked %v; want the two changed text files (not unchanged.md, not the binary)", paths)
 	}
 
-	s.ShowLibrary = true
+	s.ShowLibrary, s.LibraryTab = true, libTabChecks
 	s.ExpandedCheck = "filler-intensifiers"
 	p := s.CheckPage()
 	row := pageRow(t, p, "filler-intensifiers")
@@ -95,7 +95,7 @@ func TestReviewChecks_NothingChangedChecksEveryFile(t *testing.T) {
 	c := checksController(t)
 	writeRepoFile(t, c, "a.md", "Very.\n")
 	writeRepoFile(t, c, "blob.md", "Very\x00binary.\n") // git didn't flag it; ReadLines does
-	s := PrereviewState{ShowLibrary: true}
+	s := PrereviewState{ShowLibrary: true, LibraryTab: libTabChecks}
 	s.Files = []gitdiff.FileEntry{{Path: "a.md"}, {Path: "blob.md"}}
 	c.applyReviewChecks(&s)
 	if s.ReviewChecks == nil || len(s.ReviewChecks.Files) != 1 {
@@ -136,7 +136,7 @@ func TestReviewChecks_AsyncLandsPerFile(t *testing.T) {
 	if time.Since(start) > 150*time.Millisecond {
 		t.Errorf("the review-wide pass blocked on commands for %s", time.Since(start))
 	}
-	s.ShowLibrary = true
+	s.ShowLibrary, s.LibraryTab = true, libTabChecks
 	if r := pageRow(t, s.CheckPage(), "slow"); r.Status != checks.StatusRunning {
 		t.Fatalf("slow row %+v", r)
 	}
@@ -158,7 +158,7 @@ func TestReviewChecks_AsyncLandsPerFile(t *testing.T) {
 
 // pageState is a page over two files with hand-made results, for the view model.
 func pageState() PrereviewState {
-	s := PrereviewState{ShowLibrary: true, SelectedFile: "a.md"}
+	s := PrereviewState{ShowLibrary: true, LibraryTab: libTabChecks, SelectedFile: "a.md"}
 	filler := func(msgs ...string) checks.Result {
 		r := checks.Result{ID: "filler", Name: "Filler words", Description: "basically, simply", Category: "Concision", Source: checks.SourceBuiltin, Status: checks.StatusFail}
 		for i, m := range msgs {
@@ -286,7 +286,7 @@ func TestCheckPage_SearchAndFilters(t *testing.T) {
 }
 
 func TestCheckPage_ExpandedRowCapsFindings(t *testing.T) {
-	s := PrereviewState{ShowLibrary: true, ExpandedCheck: "noisy"}
+	s := PrereviewState{ShowLibrary: true, LibraryTab: libTabChecks, ExpandedCheck: "noisy"}
 	r := checks.Result{ID: "noisy", Name: "Noisy", Category: "X", Status: checks.StatusFail}
 	for i := range maxPageFindings + 30 {
 		r.Findings = append(r.Findings, checks.Finding{Line: i + 1, EndLine: i + 1, Message: "m"})
