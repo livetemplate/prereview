@@ -170,3 +170,29 @@ func shellQuote(s string) string {
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
+
+// ValidateDrafted checks a checker (rule YAML) or judge (rubric Markdown) that an
+// agent drafted for a learning, before prereview writes it to your checks
+// folder: it must parse, and a checker may not be a command check — that runs a
+// program on your files, so command checks stay hand-written. judge selects the
+// rubric form.
+func ValidateDrafted(data []byte, judge bool) error {
+	if judge {
+		if j := ParseJudge("drafted", SourceUser, "", data); j.Err != "" {
+			return fmt.Errorf("judge: %s", j.Err)
+		}
+		return nil
+	}
+	var head struct {
+		Extends string `yaml:"extends"`
+	}
+	_ = yaml.Unmarshal(data, &head) // a malformed file is reported by ParseRule below
+	r := ParseRule("drafted", SourceUser, "", data)
+	switch {
+	case head.Extends == TypeCommand || r.Type == TypeCommand:
+		return fmt.Errorf("checker: a drafted checker can't be a command check (it would run a program); use existence, substitution, occurrence or vocab")
+	case r.Err != "":
+		return fmt.Errorf("checker: %s", r.Err)
+	}
+	return nil
+}

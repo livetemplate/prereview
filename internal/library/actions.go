@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/livetemplate/prereview/internal/checks"
 )
 
 // Produces values a learning may ask for (they act in M4).
@@ -19,6 +21,8 @@ type Proposal struct {
 	Evidence []string // "<store>:<id>" refs, each resolved before anything is written
 	Replaces string
 	Produces []string
+	Checker  string // a rule YAML the learning produces (checks.ValidateDrafted)
+	Judge    string // a rubric Markdown the learning produces
 }
 
 // Propose validates p, resolves every evidence ref and appends a proposed
@@ -37,6 +41,21 @@ func Propose(dir string, p Proposal) (Learning, error) {
 			return Learning{}, fmt.Errorf("learn propose: --produces %q: want one of %s", k, strings.Join(ProducesKinds, ", "))
 		}
 	}
+	for _, d := range []struct {
+		body  string
+		judge bool
+		kind  string
+	}{{p.Checker, false, "checker"}, {p.Judge, true, "judge"}} {
+		if strings.TrimSpace(d.body) == "" {
+			continue
+		}
+		if err := checks.ValidateDrafted([]byte(d.body), d.judge); err != nil {
+			return Learning{}, fmt.Errorf("learn propose: %w", err)
+		}
+		if !slices.Contains(p.Produces, d.kind) {
+			p.Produces = append(p.Produces, d.kind)
+		}
+	}
 	ev := make([]Evidence, 0, len(p.Evidence))
 	for _, ref := range p.Evidence {
 		e, err := Resolve(ref)
@@ -50,7 +69,8 @@ func Propose(dir string, p Proposal) (Learning, error) {
 		scope = DefaultScope
 	}
 	l := Learning{ID: NewID(), Text: text, Scope: scope, Globs: p.Globs, Evidence: ev,
-		Produces: p.Produces, Replaces: p.Replaces, Status: StatusProposed}
+		Produces: p.Produces, Replaces: p.Replaces, Status: StatusProposed,
+		Checker: strings.TrimSpace(p.Checker) + nl(p.Checker), Judge: strings.TrimSpace(p.Judge) + nl(p.Judge)}
 	err := update(dir, func(have map[string]Learning) ([]Learning, error) {
 		if p.Replaces != "" {
 			if old, ok := have[p.Replaces]; !ok || old.Status == StatusDeleted {
@@ -157,4 +177,12 @@ func update(dir string, fn func(map[string]Learning) ([]Learning, error)) error 
 		}
 	}
 	return nil
+}
+
+// nl ends a non-empty drafted file with one newline.
+func nl(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return ""
+	}
+	return "\n"
 }

@@ -423,3 +423,29 @@ func TestPastReviews_AddsSessionStoresOutsideHome(t *testing.T) {
 		t.Fatalf("past reviews = %v", got)
 	}
 }
+
+func TestPropose_DraftedCheckerAndJudge(t *testing.T) {
+	dir, store := t.TempDir(), seedStore(t, t.TempDir())
+	ev := []string{store + ":c1"}
+	for _, bad := range []Proposal{
+		{Text: "x", Evidence: ev, Checker: "extends: command\nname: Rm\ncommand: [rm, -rf, /]\n"},
+		{Text: "x", Evidence: ev, Checker: "extends: existence\nname: X\ntokens: ['(unclosed']\n"},
+		{Text: "x", Evidence: ev, Judge: "no frontmatter"},
+	} {
+		if _, err := Propose(dir, bad); err == nil {
+			t.Errorf("accepted an invalid draft: %+v", bad)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, LearningsFile)); !os.IsNotExist(err) {
+		t.Fatal("a refused proposal wrote to the log")
+	}
+	l, err := Propose(dir, Proposal{Text: "Cut filler", Evidence: ev,
+		Checker: "extends: existence\nname: Filler\ntokens: [basically]",
+		Judge:   "---\nkind: judge\nname: Concise\n---\nIs every sentence needed?"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(l.Checker, "basically]\n") || !strings.HasPrefix(l.Judge, "---") || fmt.Sprint(l.Produces) != "[checker judge]" {
+		t.Fatalf("stored %+v", l)
+	}
+}

@@ -56,18 +56,22 @@ const DefaultScope = "Writing (all documents)"
 
 // Learning is one lesson drawn from your reviews.
 type Learning struct {
-	ID           string     `json:"id"`
-	Text         string     `json:"text"`
-	Scope        string     `json:"scope"`
-	Globs        []string   `json:"globs,omitempty"`
-	Evidence     []Evidence `json:"evidence"`
-	Produces     []string   `json:"produces,omitempty"` // instruction | checker | judge (acted on in M4)
-	Replaces     string     `json:"replaces,omitempty"` // the older learning this one would supersede
-	Status       string     `json:"status"`
-	SupersededBy string     `json:"superseded_by,omitempty"`
-	CreatedAt    string     `json:"created_at"`
-	UpdatedAt    string     `json:"updated_at"`
-	Machine      string     `json:"machine"`
+	ID       string     `json:"id"`
+	Text     string     `json:"text"`
+	Scope    string     `json:"scope"`
+	Globs    []string   `json:"globs,omitempty"`
+	Evidence []Evidence `json:"evidence"`
+	Produces []string   `json:"produces,omitempty"` // instruction | checker | judge
+	// Checker / Judge are the agent-drafted rule YAML and rubric Markdown a learning
+	// produces (checks.ValidateDrafted at propose time and again before writing).
+	Checker      string `json:"checker,omitempty"`
+	Judge        string `json:"judge,omitempty"`
+	Replaces     string `json:"replaces,omitempty"` // the older learning this one would supersede
+	Status       string `json:"status"`
+	SupersededBy string `json:"superseded_by,omitempty"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	Machine      string `json:"machine"`
 }
 
 // NewestEvidence is the newest evidence timestamp — the order conflicts follow
@@ -239,6 +243,10 @@ func lockPath(dir string) string { return filepath.Join(dir, ".lock") }
 
 // lockLibrary takes the library lock.
 func lockLibrary(dir string) (func(), error) { return flock.Lock(lockPath(dir)) }
+
+// Lock takes the library lock for a read-modify-write outside this package
+// (generated skills record what they wrote under it).
+func Lock(dir string) (func(), error) { return lockLibrary(dir) }
 
 // appendLocked appends v to the named log under the library lock.
 func appendLocked(dir, name string, v any) error {
