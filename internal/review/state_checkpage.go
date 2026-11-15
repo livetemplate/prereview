@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
 )
@@ -503,8 +504,8 @@ type CheckPick struct {
 func (s PrereviewState) openJudgeRequest() time.Time {
 	var asked time.Time
 	for _, c := range s.Comments {
-		if c.File == s.SelectedFile && c.Kind == commentKindFile && !c.Resolved && !c.Processed &&
-			checks.IsJudgeRequest(c.Body, s.SelectedFile) && c.Created.After(asked) {
+		if c.Request == csv.RequestJudge && c.File == s.SelectedFile && !c.Resolved && !c.Processed &&
+			c.Created.After(asked) {
 			asked = c.Created
 		}
 	}

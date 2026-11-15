@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/livetemplate/prereview/csv"
 )
 
 // validQuestion is a minimal question that passes ValidateQuiz, so each test can
@@ -376,5 +378,20 @@ func TestBuiltinQuizPrompt_StaysShortEnoughForTheQueue(t *testing.T) {
 		if !strings.Contains(body, must) {
 			t.Errorf("the body must still mention %q, or the agent can't tell what to do", must)
 		}
+	}
+}
+
+// TestRequestQuiz_MarksTheRequest: "Quiz me" queues its prompt marked as a quiz
+// request on disk, so learnings never read it as the reviewer's feedback.
+func TestRequestQuiz_MarksTheRequest(t *testing.T) {
+	c := judgeController(t)
+	s := judgedState(t, c, "", "", nil)
+	s.QuizPrompts = []Prompt{{Slug: "basics", Title: "Basics", Body: "Quiz me on this file."}}
+	if _, err := c.RequestQuiz(s, checksCtx("requestQuiz", map[string]interface{}{"slug": "basics"})); err != nil {
+		t.Fatal(err)
+	}
+	disk := c.loadCommentsFromDisk()
+	if last := disk[len(disk)-1]; last.Body != "Quiz me on this file." || last.Request != csv.RequestQuiz {
+		t.Fatalf("the quiz request isn't marked on disk: %+v", last)
 	}
 }

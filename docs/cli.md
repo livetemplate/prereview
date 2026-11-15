@@ -321,7 +321,7 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 
 ## Output
 
-`<store>/comments.csv` is the source of truth (RFC-4180, **17 columns**, atomically
+`<store>/comments.csv` is the source of truth (RFC-4180, **18 columns**, atomically
 written via tmp+fsync+rename). The store is `<store-root>/.prereview/`, where the
 store root is the review path by default and `--out` redirects it in any mode (and is
 required with `--external`).
@@ -344,13 +344,15 @@ CSVs may have fewer trailing columns — index by position, default missing ones
 empty):
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request
 ```
 
 `kind` is `line` (default), `text` (a character range within a line, via
 `from_col`/`to_col` rune offsets), `file`, `area` (an image rectangle, `area`
 holds `{x,y,w,h}` fractions), or `region` (a live-site rectangle from `--external`,
-anchored to `url`). `hidden` and `enqueued` are reviewer/queue view flags. See
+anchored to `url`). `hidden` and `enqueued` are reviewer/queue view flags; `request`
+marks a row prereview queued as a request to the agent (`extraction`, `judge`,
+`benchmark`, `quiz`), empty for the reviewer's own comments. See
 [skill/reference.md](../skill/reference.md#csv-schema) for the full column docs.
 
 Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the

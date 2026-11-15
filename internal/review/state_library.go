@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/library"
 )
 
@@ -292,7 +293,7 @@ func (s PrereviewState) pickedBootStores() []string {
 // extractionOpen reports an extraction request the agent hasn't finished.
 func (s PrereviewState) extractionOpen() bool {
 	for _, c := range s.Comments {
-		if c.Kind == commentKindFile && !c.Resolved && !c.Processed && library.IsExtractionRequest(c.Body) {
+		if c.Request == csv.RequestExtraction && !c.Resolved && !c.Processed {
 			return true
 		}
 	}

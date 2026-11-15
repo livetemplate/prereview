@@ -340,11 +340,17 @@ func TestReviewerSignals_SkipRequestsAndAgentSuggestions(t *testing.T) {
 	}
 	writeComments(t, store,
 		csv.Row{ID: "c1", File: "README.md", FromLine: 3, ToLine: 3, Body: "Drop 'basically'", CreatedAt: time.Now()},
-		csv.Row{ID: "r1", File: "README.md", Kind: "file", Body: ExtractionPrompt([]string{store}, nil), CreatedAt: time.Now()},
-		csv.Row{ID: "j1", File: "README.md", Kind: "file", Body: "Judge `README.md` against 1 rubric(s).", CreatedAt: time.Now()})
+		csv.Row{ID: "r1", File: "README.md", Kind: "file", Body: ExtractionPrompt([]string{store}, nil), CreatedAt: time.Now(), Request: csv.RequestExtraction},
+		csv.Row{ID: "j1", File: "README.md", Kind: "file", Body: "Judge `README.md` against 1 rubric(s).", CreatedAt: time.Now(), Request: csv.RequestJudge},
+		csv.Row{ID: "q1", File: "README.md", Kind: "file", Body: "Quiz me on this file.", CreatedAt: time.Now(), Request: csv.RequestQuiz},
+		// The reviewer's own words, though they read like a request: the column decides, not the text.
+		csv.Row{ID: "c2", File: "README.md", Kind: "file", Body: "Judge `README.md` against the style guide yourself.", CreatedAt: time.Now()})
 	write(t, filepath.Join(store, DecisionsFile), `{"id":"s1","decision":"reject"}`+"\n")
-	if n := ReviewerSignals(store); n != 3 {
-		t.Fatalf("signals = %d, want 3 (comment + reply + decision; requests excluded)", n)
+	if n := ReviewerSignals(store); n != 4 {
+		t.Fatalf("signals = %d, want 4 (2 comments + reply + decision; marked requests excluded)", n)
+	}
+	if _, err := Resolve(store + ":c2"); err != nil {
+		t.Fatalf("an unmarked reviewer comment must resolve as evidence: %v", err)
 	}
 	if _, err := Resolve(store + ":r1"); err == nil || !strings.Contains(err.Error(), "request") {
 		t.Fatalf("a request comment resolved as evidence: %v", err)
@@ -356,11 +362,8 @@ func TestExtractionPrompt(t *testing.T) {
 		{ID: "l1", Text: "Keep it short.", Scope: "Email", Status: StatusAccepted},
 		{ID: "l2", Text: "rejected one", Status: StatusRejected},
 	})
-	if !IsExtractionRequest(p) {
-		t.Fatal("the prompt isn't recognised as a request")
-	}
 	for _, want := range []string{"from 2 review stores", "`/a/.prereview`", "`/b/.prereview`", "`l1` [accepted · Email] Keep it short.",
-		"<target_id>@<at>", "prereview learn propose", "--replaces <id>"} {
+		"<target_id>@<at>", "prereview learn propose", "--replaces <id>", "`request` column"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q:\n%s", want, p)
 		}

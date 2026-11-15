@@ -3,11 +3,14 @@
 package e2e
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
+
+	"github.com/livetemplate/prereview/csv"
 )
 
 // TestE2E_UnsavedBecomesADraft pins the draft model (#105/#119): composer text
@@ -42,8 +45,9 @@ func TestE2E_UnsavedBecomesADraft(t *testing.T) {
 	if !strings.Contains(row[5], "unsaved thought") {
 		t.Errorf("draft body = %q, missing the typed text", row[5])
 	}
-	// enqueued is the last (17th) column; a draft persists it as "false".
-	if enq := row[len(row)-1]; enq != "false" {
+	// A draft persists the `enqueued` column as "false" (found by header name:
+	// columns are only ever appended, so it isn't the last one).
+	if enq := row[slices.Index(rows[0], csv.ColEnqueued)]; enq != "false" {
 		t.Errorf("unsaved-then-abandoned comment should be a draft (enqueued=false), got %q", enq)
 	}
 

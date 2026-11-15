@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
 )
@@ -152,6 +153,16 @@ func TestCheckStrip_Judges(t *testing.T) {
 	}
 	if st := s.CheckStrip(); st.JudgeWaiting != 1 {
 		t.Errorf("after Run judges the bar waits: %+v", st)
+	}
+	if last.Request != csv.RequestJudge {
+		t.Errorf("Run judges marks its comment a judge request: %q", last.Request)
+	}
+	// The marker decides, not the text: the reviewer's own comment with the same
+	// words is not a request, so it never makes the bar wait.
+	said := last
+	said.Request = ""
+	if st := (PrereviewState{SelectedFile: s.SelectedFile, Comments: []Comment{said}, Checks: s.Checks, AgentMode: true}).CheckStrip(); st.JudgeWaiting != 0 {
+		t.Errorf("an unmarked comment that reads like a judge request made the bar wait: %+v", st)
 	}
 	// Waiting is the queue's own: the open request comment, so another tab (or a
 	// reload) sees it too.

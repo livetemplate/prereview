@@ -129,6 +129,11 @@ type Comment struct {
 	// origin since the proxy port is random per run) a kind=region
 	// comment is anchored to. Empty for every file-based kind.
 	URL string `json:"url"`
+	// Request marks a comment prereview queued as a request to the agent (an
+	// extraction, a judge or benchmark run, a quiz) rather than something the
+	// reviewer said: a csv.Request* value, "" for reviewer comments. Set once
+	// at creation (queueRequest); the CSV `request` column.
+	Request string `json:"request,omitempty"`
 }
 
 // IsFileLevel reports whether this comment applies to the whole file

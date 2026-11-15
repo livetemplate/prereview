@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
@@ -619,7 +620,7 @@ func renderFixtures() []renderFixture {
 	bootReading := goBase()
 	bootReading.Bootstrapped = true
 	bootReading.LearnNew = 3
-	bootReading.Comments = append(bootReading.Comments, review.Comment{ID: "x1", File: bootReading.SelectedFile, Kind: "file",
+	bootReading.Comments = append(bootReading.Comments, review.Comment{ID: "x1", File: bootReading.SelectedFile, Kind: "file", Request: csv.RequestExtraction,
 		Body: library.ExtractionPrompt([]string{"/home/u/notes/.prereview"}, nil), Created: time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)})
 
 	// checks M5: the Benchmarks tab — a benchmark with its score over 3 runs, the

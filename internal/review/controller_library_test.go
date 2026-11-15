@@ -49,6 +49,9 @@ func TestAutoLearn(t *testing.T) {
 	if first.DraftBody != "half a thought" || first.CommentMode != "line" {
 		t.Fatalf("queueing the request touched the composer: %q %q", first.CommentMode, first.DraftBody)
 	}
+	if disk := c.loadCommentsFromDisk(); disk[len(disk)-1].Request != csv.RequestExtraction {
+		t.Fatalf("the extraction request isn't marked on disk: %+v", disk[len(disk)-1])
+	}
 	if second, _ := c.AutoLearn(base, checksCtx("AutoLearn", nil)); second.extractionOpen() {
 		t.Fatal("a second tab queued it again")
 	}

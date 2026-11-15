@@ -230,6 +230,14 @@ func TestToStreamComment_OmitsAnchorNestsArea(t *testing.T) {
 	if !strings.Contains(string(lb), `"area":null`) {
 		t.Errorf("line comment area should be null, got %s", lb)
 	}
+	// `request` is only on what prereview queued: a reviewer comment omits it.
+	if strings.Contains(string(lb), `"request"`) {
+		t.Errorf("a reviewer comment carries request: %s", lb)
+	}
+	asked := Comment{ID: "01REQ", Kind: commentKindFile, Body: "Judge `a.md` against 1 rubric(s).", Request: "judge", Created: fixedTS}
+	if ab, _ := json.Marshal(toStreamComment(asked)); !strings.Contains(string(ab), `"request":"judge"`) {
+		t.Errorf("a request's snapshot doesn't say so: %s", ab)
+	}
 }
 
 func TestActionableComments_FiltersResolvedAndOutdated(t *testing.T) {

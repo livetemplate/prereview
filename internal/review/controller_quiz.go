@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 )
 
@@ -124,7 +125,7 @@ func (c *PrereviewController) RequestQuiz(state PrereviewState, ctx *livetemplat
 	if body == "" {
 		return state, nil // no prompts, or a stale slug from an old render
 	}
-	state, err := c.queueFileComment(state, body)
+	state, err := c.queueFileComment(state, csv.RequestQuiz, body)
 	if err != nil {
 		return state, err
 	}

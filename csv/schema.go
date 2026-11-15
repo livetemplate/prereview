@@ -66,6 +66,19 @@ const (
 	// active and must never silently become drafts. Persisted inverted from the
 	// in-memory Draft flag (enqueued == !Draft) so the zero value is "enqueued".
 	ColEnqueued = "enqueued"
+	// `request` marks a row prereview queued as a request to the agent rather
+	// than something the reviewer said: one of the Request* values below, empty
+	// for every reviewer comment. Set once at creation, never edited. ABSENT
+	// (short legacy rows) reads as "". Learnings never count or cite a request.
+	ColRequest = "request"
+)
+
+// The `request` column's values: what prereview asked the agent to do.
+const (
+	RequestExtraction = "extraction" // read past reviews and propose learnings
+	RequestJudge      = "judge"      // run a file's judges
+	RequestBenchmark  = "benchmark"  // run a benchmark's judges
+	RequestQuiz       = "quiz"       // write a comprehension quiz ("Quiz me")
 )
 
 // Header is the row written before any data. Position-stable: only ever
@@ -73,5 +86,5 @@ const (
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
 	ColAnchor, ColAnchorStatus, ColKind, ColArea, ColURL, ColFromCol, ColToCol, ColHidden,
-	ColEnqueued,
+	ColEnqueued, ColRequest,
 }

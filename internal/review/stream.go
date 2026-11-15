@@ -228,6 +228,10 @@ type StreamComment struct {
 	// agent has the full exchange — and can tell a fresh comment (no thread) from a
 	// reviewer reply it must respond to (the last entry's author is "reviewer").
 	Thread []StreamReply `json:"thread,omitempty"`
+	// Request is set when prereview, not the reviewer, queued this comment: a
+	// request to the agent ("extraction" | "judge" | "benchmark" | "quiz") whose
+	// body says exactly what to do. Absent on reviewer comments.
+	Request string `json:"request,omitempty"`
 }
 
 // StreamQuiz is one quiz's outcome as the agent sees it. Taken is false when the
@@ -282,6 +286,7 @@ func toStreamComment(c Comment) StreamComment {
 		URL:          c.URL,
 		CreatedAt:    c.Created.UTC().Format(time.RFC3339),
 		AnchorStatus: c.AnchorStatus,
+		Request:      c.Request,
 	}
 	if !c.Area.Empty() {
 		a := c.Area

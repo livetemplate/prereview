@@ -190,9 +190,9 @@ func TestRead_EnqueuedColumn(t *testing.T) {
 	path := filepath.Join(dir, "comments.csv")
 	content := strings.Join([]string{
 		"id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued",
-		`legacy,a.go,1,1,new,legacy,2026-05-14T10:00:00Z,false,,,,,,0,0,false`,       // 16 cols — absent ⇒ enqueued
-		`queued,a.go,2,2,new,queued,2026-05-14T10:00:00Z,false,,,,,,0,0,false,true`,  // enqueued=true  ⇒ not draft
-		`draft,a.go,3,3,new,draft,2026-05-14T10:00:00Z,false,,,,,,0,0,false,false`,   // enqueued=false ⇒ draft
+		`legacy,a.go,1,1,new,legacy,2026-05-14T10:00:00Z,false,,,,,,0,0,false`,      // 16 cols — absent ⇒ enqueued
+		`queued,a.go,2,2,new,queued,2026-05-14T10:00:00Z,false,,,,,,0,0,false,true`, // enqueued=true  ⇒ not draft
+		`draft,a.go,3,3,new,draft,2026-05-14T10:00:00Z,false,,,,,,0,0,false,false`,  // enqueued=false ⇒ draft
 	}, "\n") + "\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -212,6 +212,36 @@ func TestRead_EnqueuedColumn(t *testing.T) {
 	}
 	if !got[2].Draft {
 		t.Errorf("enqueued=false row must be a draft, got Draft=false")
+	}
+}
+
+// TestRead_RequestColumn pins the `request` column: a 17-col row (written before
+// it existed) reads as a reviewer comment, an 18-col one keeps its kind, and the
+// Writer→Read round trip carries it.
+func TestRead_RequestColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "comments.csv")
+	content := strings.Join([]string{
+		"id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request",
+		`legacy,a.go,0,0,,Judge me,2026-05-14T10:00:00Z,false,,,file,,,0,0,false,true`,      // 17 cols — absent ⇒ ""
+		`asked,a.go,0,0,,Judge me,2026-05-14T10:00:00Z,false,,,file,,,0,0,false,true,judge`, // 18 cols
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := Read(path)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("read: %v, %d rows", err, len(got))
+	}
+	if got[0].Request != "" || got[1].Request != RequestJudge {
+		t.Fatalf("request = %q, %q; want \"\", %q", got[0].Request, got[1].Request, RequestJudge)
+	}
+	w := NewWriter(path)
+	if err := w.Write(got); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	again, err := Read(path)
+	if err != nil || len(again) != 2 || again[0].Request != "" || again[1].Request != RequestJudge {
+		t.Fatalf("round trip lost the request column: %+v (%v)", again, err)
 	}
 }
 

@@ -27,7 +27,7 @@ func benchRequest(t *testing.T, p *runningPrereview, after int) string {
 		rows, _ := csv.Read(filepath.Join(p.store, "comments.csv"))
 		var found []string
 		for _, r := range rows {
-			if library.IsBenchRequest(r.Body) {
+			if r.Request == csv.RequestBenchmark {
 				found = append(found, r.Body)
 			}
 		}

@@ -76,7 +76,7 @@ func Resolve(ref string) (Evidence, error) {
 	if rows, err := csv.Read(filepath.Join(abs, CommentsFile)); err == nil {
 		for _, r := range rows {
 			if r.ID == id {
-				if isRequest(r.Body) {
+				if r.IsRequest() {
 					return Evidence{}, fmt.Errorf("evidence %q: that comment is a request to the agent, not a reviewer signal", ref)
 				}
 				return Evidence{Store: abs, ID: id, Kind: EvidenceComment, File: r.File, Line: r.FromLine,
