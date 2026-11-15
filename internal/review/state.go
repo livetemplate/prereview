@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // PrereviewState is the per-session state cloned by livetemplate. Fields
@@ -63,14 +64,16 @@ type PrereviewState struct {
 	// The Checks page (the Library frame, Checks tab): open state and its filters.
 	// Session view state, never ui-prefs: a filter carried into the next review
 	// would hide its failures.
-	ShowLibrary       bool   `json:"show_library"`
-	ChecksQuery       string `json:"checks_query"`
-	ChecksStatus      string `json:"checks_status"`   // "" (all) | fail | error | pass | off
-	ChecksSource      string `json:"checks_source"`   // "" (all) | builtin | user | vale
-	ChecksCategory    string `json:"checks_category"` // "" (all) or a category label
-	ChecksFile        string `json:"checks_file"`     // "" (every file) or one path
-	ExpandedCheck     string `json:"expanded_check"`
-	ShowPassingGroups bool   `json:"show_passing_groups"`
+	ShowLibrary    bool   `json:"show_library"`
+	ChecksQuery    string `json:"checks_query"`
+	ChecksStatus   string `json:"checks_status"`   // "" (all) | fail | error | pass | off
+	ChecksSource   string `json:"checks_source"`   // "" (all) | builtin | user | vale
+	ChecksCategory string `json:"checks_category"` // "" (all) or a category label
+	ChecksFile     string `json:"checks_file"`     // "" (every file) or one path
+	ExpandedCheck  string `json:"expanded_check"`
+	// CheckHistory is the expanded rule file's versions (M3), newest first.
+	CheckHistory      []RuleVersion `json:"check_history"`
+	ShowPassingGroups bool          `json:"show_passing_groups"`
 	// Judges (M2): ChecksKind filters the page to checkers or judges ("" both);
 	// JudgeLabels are the reviewer's Agree/Disagree answers (judge-labels.jsonl,
 	// keyed labelKey); JudgmentsSeen is the judgments.jsonl fingerprint this tab
@@ -83,6 +86,28 @@ type PrereviewState struct {
 	EditorTemplate string            `json:"editor_template"`
 	EditorSSHHost  string            `json:"editor_ssh_host"`
 	TrustedVale    []string          `json:"trusted_vale"`
+
+	// The Library's Learnings tab (checks M3). LibraryTab is "" (Learnings, the
+	// first tab) or "checks". Learnings is the folded log, carried only while that
+	// tab is open; LearnNew is how many are proposed (the toolbar badge, on every
+	// tab); LearnStore is this review's store, so its evidence reads "this review".
+	// The filters are session view state, like the Checks page's.
+	LibraryTab  string             `json:"library_tab"`
+	Learnings   []library.Learning `json:"learnings"`
+	LearnNew    int                `json:"learn_new"`
+	LearnStore  string             `json:"learn_store"`
+	LearnStatus string             `json:"learn_status"` // "" = proposed
+	LearnScope  string             `json:"learn_scope"`  // "" = every scope
+	LearnEdit   string             `json:"learn_edit"`   // the card being edited
+	// First launch (M3): the past reviews the scan found (carried only while the
+	// card can show), the ones you unticked, whether the offer was answered on
+	// this machine, and whether the Learnings tab's "Read past reviews" reopened it.
+	BootStores   []library.StoreInfo `json:"boot_stores"`
+	BootScanned  bool                `json:"boot_scanned"`
+	BootSkip     []string            `json:"boot_skip"`
+	Bootstrapped bool                `json:"bootstrapped"`
+	BootOpen     bool                `json:"boot_open"`
+	AutoLearnOff bool                `json:"auto_learn_off"` // ui-prefs: "Learn after each review" off
 
 	// Artifact versioning (#90). Versions is the selected file's version
 	// timeline (newest first), populated from the version store each Mount /

@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -223,11 +224,10 @@ func userChecksDir() string {
 	if p := os.Getenv("PREREVIEW_CHECKS_DIR"); p != "" {
 		return p
 	}
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return ""
+	if dir := library.Dir(); dir != "" {
+		return filepath.Join(dir, "checks") // inside the library, so rule history keys match its review
 	}
-	return filepath.Join(dir, "prereview", "checks")
+	return ""
 }
 
 // userQuizzesDir is the comprehension-quiz prompt overlay directory (#191):
@@ -253,8 +253,8 @@ func userQuizzesDir() string {
 // nesting the per-target stores keeps that — and the repo's .gitignore entry —
 // working unchanged.
 const (
-	storeDirName   = ".prereview"
-	targetsDirName = "files"
+	storeDirName   = library.StoreDir
+	targetsDirName = library.TargetsDir
 )
 
 // storeDirFor resolves the store directory for a review: <storeRoot>/.prereview

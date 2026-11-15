@@ -14,6 +14,7 @@ import (
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // PrereviewController holds singleton dependencies. State is cloned per
@@ -159,6 +160,34 @@ type PrereviewController struct {
 	judgeCache map[string]Judgment
 	labelFP    string
 	labelCache map[string]string
+
+	// LibraryDir is the per-user library (~/.config/prereview): learnings,
+	// sessions, extractions. "" disables the Learnings tab. The folded learnings
+	// are cached by the log's fingerprint; learnWatchFP is what the watcher last
+	// fanned out.
+	LibraryDir   string
+	learnMu      sync.Mutex
+	learnFP      string
+	learnWatchFP string
+	learnCache   []library.Learning
+	// The first-launch scan's result (ScanPastReviews), shared by every tab.
+	bootMu      sync.Mutex
+	bootScanned bool
+	bootStores  []library.StoreInfo
+	// autoLearn is this review's reviewer-signal count when the idle agent should
+	// be asked to learn from it (maybeAutoLearn), 0 otherwise; the first tab that
+	// can queue the request claims it (AutoLearn).
+	autoLearn atomic.Int64
+	// bootScanning: a past-review scan is running (ScanPastReviews).
+	bootScanning atomic.Bool
+	// The library's version store (rule-file history), opened on first use.
+	libVersionsOnce sync.Once
+	libVersions     *VersionStore
+	// libHist caches each rule file's built history until the library timeline
+	// changes (libHistFP).
+	libHistMu sync.Mutex
+	libHistFP string
+	libHist   map[string][]RuleVersion
 }
 
 type cachedDiff struct {
@@ -545,6 +574,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// The Checks page covers every changed file; Mount (and RefreshDiff, through
 	// it) is when the file list is rebuilt, so it's when that pass reruns.
 	c.applyReviewChecks(&state)
+	c.applyLibrary(&state)
 	return state, nil
 }
 

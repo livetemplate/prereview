@@ -20,6 +20,7 @@ import (
 	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/assets"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/netaddr"
 	"github.com/livetemplate/prereview/internal/proxy"
 	"github.com/livetemplate/prereview/internal/review"
@@ -160,6 +161,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		PromptsDir:  userPromptsDir(),
 		QuizzesDir:  userQuizzesDir(),
 		ChecksDir:   userChecksDir(),
+		LibraryDir:  library.Dir(),
 		Version:     version,
 		CSVWriter:   csvWriter,
 		AgentMode:   agentMode,
@@ -207,6 +209,11 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	// falls through to the LiveHandler unchanged.
 	mux.Handle("/", staticFallback(absRepo, tmpl.Handle(controller, livetemplate.AsState(initial))))
 	registerAssetRoutes(mux)
+	if controller.LibraryDir != "" {
+		mux.HandleFunc("/_library-review", guardLibraryRoute(libraryReviewHandler(controller.LibraryDir)))
+		mux.HandleFunc("/_library-export", guardLibraryRoute(libraryExportHandler(controller.LibraryDir)))
+		mux.HandleFunc("/_library-import", guardLibraryRoute(libraryImportHandler(controller.LibraryDir)))
+	}
 
 	// Decide what to actually bind to. On a remote (SSH) box with no
 	// explicit --host, prefer this host's Tailscale IP: reachable from
@@ -273,6 +280,22 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	stopChecks := make(chan struct{})
 	defer close(stopChecks)
 	go controller.WatchChecks(stopChecks, review.ChecksPollInterval)
+	// The per-user library (checks M3): note this review so extraction can find
+	// it later, and on a machine that hasn't answered the first-launch offer, look
+	// for past reviews in the background (a home-directory walk takes a while).
+	if lib := controller.LibraryDir; lib != "" {
+		if err := library.RecordSession(lib, library.Session{Store: filepath.Dir(csvPath), Repo: absRepo, Target: tgt.SingleFile}); err != nil {
+			slog.Warn("library: recording the session failed", "err", err)
+		}
+		if !library.Bootstrapped(lib) {
+			go controller.ScanPastReviews()
+		}
+		go func() { // drop superseded log lines once there are enough of them
+			if err := library.Compact(lib); err != nil {
+				slog.Warn("library: compacting learnings failed", "err", err)
+			}
+		}()
+	}
 
 	return serveAndWait(srv, ln, nil, shutdownReq)
 }

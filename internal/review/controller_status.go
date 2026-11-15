@@ -289,6 +289,7 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 	// window — then none of them can be the agent's own (files_changed attribution).
 	var watchingAll bool
 	lastStatusFP := statusFingerprint(c.statusPath())
+	wasIdle := false
 	for {
 		select {
 		case <-stop:
@@ -349,6 +350,13 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 				editsPending = false
 			}
 			settlingChanged := c.editsSettling.Swap(editsPending) != editsPending
+			// Checks M3: the agent going idle (watching, not working) is when it can
+			// be asked to learn from this review without competing with your work.
+			idle := pres.Attached && cur.State != LLMStateWorking
+			if idle && !wasIdle {
+				c.maybeAutoLearn()
+			}
+			wasIdle = idle
 			prevState = cur.State
 
 			if !signalChanged && !reviewedChanged && !settlingChanged && presenceKey == lastPresence {

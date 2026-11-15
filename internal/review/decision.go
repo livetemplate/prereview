@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"slices"
 	"time"
+
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // decision.go records the reviewer's verdict on each LLM suggestion (issue #98
@@ -32,7 +34,7 @@ import (
 
 // SuggestionDecisionFileName is the fixed name of the server-owned decisions file
 // under .prereview/. Durable across launches (openStore does NOT reset it).
-const SuggestionDecisionFileName = "suggestion-decisions.jsonl"
+const SuggestionDecisionFileName = library.DecisionsFile
 
 // Decision verdicts. accept/reject are STORED on a decision; "revert" is
 // wire-output only (#159 M4.2) — a revert-pending accept is emitted to the agent

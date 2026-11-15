@@ -165,6 +165,8 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		return
 	}
 	c.runner()
+	c.checkpointLibrary(VersionTriggerFileEdit) // edits made while no server ran
+	c.learningsChanged()                        // the baseline: only later writes fan out
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
@@ -173,7 +175,11 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 			return
 		case <-ticker.C:
 			if c.reloadChecksIfChanged() {
+				c.checkpointLibrary(VersionTriggerFileEdit)
 				c.broadcast("ChecksUpdated")
+			}
+			if c.learningsChanged() { // any server's write to the shared library
+				c.broadcast("LibraryUpdated")
 			}
 		}
 	}
@@ -393,8 +399,9 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 // The open file is skipped: the page takes its displayed text (pageFiles), so the
 // page and the inline marks agree, and its two runs can't cancel each other.
 func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
+	defer c.applyRuleHistory(state) // the expanded rule's versions, on every path out
 	state.ReviewChecks = nil
-	if !state.ShowLibrary || c.ExternalMode || c.RepoPath == "" {
+	if !state.ShowLibrary || !state.LibraryOnChecks() || c.ExternalMode || c.RepoPath == "" {
 		return
 	}
 	cs := c.checkSetup(state.TrustedVale)
@@ -612,7 +619,8 @@ func (c *PrereviewController) ToggleLibrary(state PrereviewState, ctx *livetempl
 	if state.ShowLibrary {
 		state.ChecksFile = ""
 	}
-	c.applyReviewChecks(&state) // runs while open; clears on close
+	c.applyLibrary(&state)
+	c.applyReviewChecks(&state) // runs while open on the Checks tab; clears otherwise
 	return state, nil
 }
 
@@ -620,8 +628,9 @@ func (c *PrereviewController) ToggleLibrary(state PrereviewState, ctx *livetempl
 // Checks button and the bar's "All checks".
 func (c *PrereviewController) OpenChecks(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	closeFullViews(&state)
-	state.ShowLibrary = true
+	state.ShowLibrary, state.LibraryTab = true, libTabChecks
 	state.ChecksFile = state.SelectedFile
+	c.applyLibrary(&state)
 	c.applyReviewChecks(&state)
 	return state, nil
 }
@@ -673,6 +682,7 @@ func (c *PrereviewController) ExpandCheck(state PrereviewState, ctx *livetemplat
 		id = ""
 	}
 	state.ExpandedCheck = id
+	c.applyRuleHistory(&state)
 	return state, nil
 }
 
@@ -792,17 +802,30 @@ func (c *PrereviewController) queueFinding(state PrereviewState, path, id string
 	if res.Type == checks.TypeJudge {
 		kind = "judge"
 	}
-	cm := newTextComment(path, f.Line, f.EndLine, f.FromCol, f.ToCol, "new",
-		fmt.Sprintf("%s (%s: %s)", f.Message, kind, res.Name), anchor)
+	return c.appendQueued(state, newTextComment(path, f.Line, f.EndLine, f.FromCol, f.ToCol, "new",
+		fmt.Sprintf("%s (%s: %s)", f.Message, kind, res.Name), anchor))
+}
+
+// appendQueued adds a comment the server built (a finding, a request to the
+// agent) to the queue and persists it, leaving the composer — and any half-typed
+// draft or comment being edited — exactly as it was.
+func (c *PrereviewController) appendQueued(state PrereviewState, cm Comment) (PrereviewState, error) {
 	state.Comments = append(state.Comments, cm)
 	if err := c.persist(state.Comments); err != nil {
 		state.Comments = state.Comments[:len(state.Comments)-1]
-		return state, fmt.Errorf("persist finding comment: %w", err)
+		return state, fmt.Errorf("persist queued comment: %w", err)
 	}
 	noteEnqueue(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
+}
+
+// queueRequest queues body as a file-level request to the agent on the open file
+// (an extraction), without touching the composer.
+func (c *PrereviewController) queueRequest(state PrereviewState, body string) (PrereviewState, error) {
+	return c.appendQueued(state, Comment{ID: newCommentID(), File: state.SelectedFile, Body: body,
+		Created: time.Now().UTC(), Kind: commentKindFile})
 }
 
 // findingSnippet is the text a finding covers, joined across lines.

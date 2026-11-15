@@ -8,10 +8,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -478,6 +480,7 @@ func renderFixtures() []renderFixture {
 	checksPage := checksStrip
 	checksPage.SelectedCheck = ""
 	checksPage.ShowLibrary = true
+	checksPage.LibraryTab = "checks"
 	checksPage.ExpandedCheck = "filler-intensifiers"
 	checksPage.Editor = review.EditorVSCode
 	checksPage.EditorSSHHost = "devbox"
@@ -493,6 +496,15 @@ func renderFixtures() []renderFixture {
 				{ID: "weasel-words", Name: "Weasel words", Category: "Clarity", Type: "existence", Level: "warning", Source: "builtin", Status: "pass"},
 			}},
 		},
+	}
+
+	// checks M3: the expanded rule's file history (library versions) with a diff
+	// and Restore on the older version.
+	checksHistory := checksPage
+	checksHistory.CheckHistory = []review.RuleVersion{
+		{Seq: 3, When: "15 Nov 2026 10:02", Current: true, Stat: "+1 −1",
+			Diff: []review.RuleDiffRow{{Kind: "del", Text: "tokens: [very]"}, {Kind: "add", Text: "tokens: [very, really]"}}},
+		{Seq: 0, When: "14 Nov 2026 09:00"},
 	}
 
 	// checks M2: judges — the page filtered to judges with one expanded (a fail
@@ -530,6 +542,53 @@ func renderFixtures() []renderFixture {
 	judgeRun.AgentMode = true
 	judgeRun.Checks = &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), judgeRes("notrun", "", nil))}
 
+	// checks M3: the Library's Learnings tab — two proposals (one grounded in
+	// this review and another store, one replacing an accepted learning, being
+	// edited), the badge, and the superseded filter with Restore.
+	ev := func(store, kind, file string, line int, quote, at string) library.Evidence {
+		return library.Evidence{Store: store, ID: "c1", Kind: kind, File: file, Line: line, Quote: quote, At: at}
+	}
+	learns := []library.Learning{
+		{ID: "l1", Text: "Cut filler words such as “basically”, “simply” and “very”.", Scope: library.DefaultScope, Status: "proposed",
+			Produces: []string{"instruction", "checker"}, CreatedAt: "2026-11-15T09:00:00Z", UpdatedAt: "2026-11-15T09:00:00Z",
+			Evidence: []library.Evidence{
+				ev("/repo/.prereview", "comment", "release-notes.md", 5, "Drop “basically” — it adds nothing.", "2026-11-15T08:00:00Z"),
+				ev("/home/u/notes/.prereview", "reply", "", 0, "no “very” please", "2026-10-28T12:00:00Z"),
+			}},
+		{ID: "l2", Text: "Use numbered lists for steps.", Scope: "Technical docs", Status: "proposed", Replaces: "l3",
+			CreatedAt: "2026-11-14T09:00:00Z", UpdatedAt: "2026-11-14T09:00:00Z",
+			Evidence: []library.Evidence{ev("/repo/.prereview", "suggestion", "docs/a.md", 7, "too wordy", "")}},
+		{ID: "l3", Text: "Prefer prose over bullet lists.", Scope: "Technical docs", Status: "accepted",
+			CreatedAt: "2026-08-02T09:00:00Z", UpdatedAt: "2026-08-02T09:00:00Z"},
+		{ID: "l4", Text: "Lead with what changed for the user.", Scope: "Release notes", Status: "superseded", SupersededBy: "l3",
+			CreatedAt: "2026-07-01T09:00:00Z", UpdatedAt: "2026-11-09T09:00:00Z"},
+	}
+	learnings := repoBase()
+	learnings.ShowLibrary = true
+	learnings.Learnings = learns
+	learnings.LearnNew = 2
+	learnings.LearnStore = "/repo/.prereview"
+	learnings.LearnEdit = "l2"
+	superseded := learnings
+	superseded.LearnStatus = "superseded"
+	superseded.LearnEdit = ""
+
+	// checks M3: first launch — the offer above the file (two past reviews, one
+	// unticked, an agent attached) and the progress once the agent is reading.
+	boot := goBase()
+	boot.AgentMode = true
+	boot.BootScanned = true
+	boot.BootStores = []library.StoreInfo{
+		{Store: "/home/u/notes/.prereview", Label: "~/notes", Comments: 16, Suggestions: 6, Versions: 3, Signals: 16},
+		{Store: "/home/u/code/app/.prereview", Label: "~/code/app", Comments: 1, Signals: 1},
+	}
+	boot.BootSkip = []string{"/home/u/code/app/.prereview"}
+	bootReading := goBase()
+	bootReading.Bootstrapped = true
+	bootReading.LearnNew = 3
+	bootReading.Comments = append(bootReading.Comments, review.Comment{ID: "x1", File: bootReading.SelectedFile, Kind: "file",
+		Body: library.ExtractionPrompt([]string{"/home/u/notes/.prereview"}, nil), Created: time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)})
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -560,8 +619,13 @@ func renderFixtures() []renderFixture {
 		{"checks-strip", checksStrip},
 		{"checks-page", checksPage},
 		{"checks-page-judge", judgePage},
+		{"checks-page-history", checksHistory},
 		{"checks-judge-card", judgeCard},
 		{"checks-judge-run", judgeRun},
+		{"learnings", learnings},
+		{"learnings-superseded", superseded},
+		{"boot-offer", boot},
+		{"boot-reading", bootReading},
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},

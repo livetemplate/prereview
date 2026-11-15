@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // clockLayout is the reviewer-facing wall-clock layout, shared by thread
@@ -30,10 +32,10 @@ const clockLayout = "3:04 PM"
 const (
 	// AgentRepliesFileName is the agent-written, append-only thread log. Durable
 	// across relaunch (openStore does not reset it), like processed.jsonl.
-	AgentRepliesFileName = "agent-replies.jsonl"
+	AgentRepliesFileName = library.AgentRepliesFile
 	// ReviewerRepliesFileName is the server-written thread log (reviewer-reply
 	// phase). Forward-declared so the merge below is complete from the start.
-	ReviewerRepliesFileName = "reviewer-replies.jsonl"
+	ReviewerRepliesFileName = library.ReviewerRepliesFile
 )
 
 // Thread entry authors.

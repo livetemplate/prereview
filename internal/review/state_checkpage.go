@@ -87,7 +87,8 @@ type CheckRow struct {
 	Verdicts []JudgeVerdictView // a judge's verdict per file
 	ByFile   []CheckFileFindings
 	Errors   []CheckFileError
-	More     int // findings past maxPageFindings
+	More     int           // findings past maxPageFindings
+	History  []RuleVersion // the rule file's versions (yours only), newest first
 }
 
 // CheckFileFindings is one file's findings under an expanded row.
@@ -148,7 +149,7 @@ var statusRank = map[string]int{checks.StatusNotRun: -2, checks.StatusStale: -1,
 
 // CheckPage builds the Checks page, or nil when it's closed.
 func (s PrereviewState) CheckPage() *CheckPage {
-	if !s.ShowLibrary {
+	if !s.ShowLibrary || !s.LibraryOnChecks() {
 		return nil
 	}
 	p := &CheckPage{Query: s.ChecksQuery, Status: s.ChecksStatus, Source: s.ChecksSource, Kind: s.ChecksKind,
@@ -407,6 +408,7 @@ func (s PrereviewState) checkRow(a *checkAgg, status string, tallies map[string]
 		return row
 	}
 	row.Errors = a.errs
+	row.History = s.CheckHistory
 	shown := 0
 	for _, ff := range a.files {
 		if shown >= maxPageFindings {

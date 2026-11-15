@@ -3573,9 +3573,14 @@ header.file-head .file-head-checks { margin: 0; }
 .checks-trigger.is-passing .checks-count { background: color-mix(in srgb, var(--pr-add) 18%, transparent); color: var(--pr-add); }
 .checks-trigger.is-failing .checks-count { background: var(--mark-wash); color: var(--mark); }
 
-/* The toolbar's Library button (shown when the review has checks). */
+/* The toolbar's Library button; the badge counts proposed learnings (M3). */
 .library-form { margin: 0; }
 .library-trigger { display: inline-flex; align-items: center; gap: 0.35rem; }
+.library-trigger .lib-badge {
+  min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--pico-primary-inverse); font-size: 0.68rem; font-weight: 700;
+}
 .library-trigger.is-on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .library-trigger svg { display: block; }
 /* Icon-only below 1400px: with the agent's Queue beside it, the labelled button
@@ -3592,7 +3597,8 @@ header.file-head .file-head-checks { margin: 0; }
 .ck-fail { color: var(--pr-del); background: var(--pr-del-bg); }
 .ck-error { color: var(--mark); background: var(--mark-wash); }
 .ck-running, .ck-off { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
-.ck-open { color: var(--accent); background: var(--accent-weak); }
+.ck-open, .ck-new { color: var(--accent); background: var(--accent-weak); }
+.ck-muted { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
 .ck-notrun, .ck-stale { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
 .ck-advisory { color: var(--text-muted); border-color: var(--border-strong); background: transparent; font-weight: 500; }
 .ck-judge-tag {
@@ -3617,6 +3623,9 @@ button.ck-link {
 .lib-editor > summary { cursor: pointer; }
 .lib-editor[open] > summary { margin-bottom: 0.4rem; }
 .lib-back button { margin: 0; padding: 0.25rem 0.7rem; min-height: 0; width: auto; font-size: 0.8rem; }
+.lib-head-actions { display: inline-flex; gap: 0.4rem; align-items: center; margin-left: auto; }
+.lib-head-actions form { margin: 0; }
+.lib-head-actions a[role="button"] { margin: 0; padding: 0.25rem 0.7rem; font-size: 0.8rem; min-height: 0; display: inline-flex; align-items: center; }
 .lib-tabs { display: flex; gap: 0.15rem; overflow-x: auto; padding-top: 0.4rem; border-bottom: 1px solid var(--border); }
 button.lib-tab {
   margin: 0 0 -1px; padding: 0.4rem 0.75rem; min-height: 0; width: auto; border: 0; border-bottom: 2px solid transparent;
@@ -3629,6 +3638,119 @@ button.lib-chip {
   border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
 }
 button.lib-chip.is-on { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); font-weight: 600; }
+.lib-tabs form { margin: 0; }
+button.lib-tab .ck-pill { margin-left: 0.3rem; }
+
+/* The Learnings tab (M3): status chips, a scope picker, one card per learning. */
+.lib-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; padding: 0.6rem 0.25rem 0.3rem; }
+.lib-filters form { margin: 0; }
+.lib-scope-form { margin-left: auto !important; }
+.lib-filters select { margin: 0; width: auto; padding: 0.15rem 1.8rem 0.15rem 0.5rem; min-height: 28px; height: auto; font-size: 0.78rem; }
+.lib-list { list-style: none; margin: 0; padding: 0.3rem 0.25rem 1rem; display: flex; flex-direction: column; gap: 0.55rem; }
+.lib-list > li, .lc-evidence > li { list-style: none; }
+.lib-list > li::marker, .lc-evidence > li::marker { content: none; }
+.lib-card {
+  margin: 0; padding: 0.6rem 0.75rem; background: var(--surface-card);
+  border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+  font-size: 0.84rem; line-height: 1.5;
+}
+.lib-card.is-proposed { border-left: 3px solid var(--accent); }
+.lib-card.is-superseded { opacity: 0.75; border-style: dashed; }
+.lib-card > header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; color: var(--text-muted); font-size: 0.76rem; }
+.lib-card .lc-text { margin: 0.3rem 0 0.4rem; font-size: 0.95rem; font-weight: 600; color: var(--text-strong); overflow-wrap: anywhere; }
+.lib-card.is-superseded .lc-text { text-decoration: line-through; text-decoration-thickness: 1px; }
+.lib-card details { margin: 0.25rem 0; }
+.lib-card summary { font-size: 0.78rem; color: var(--text-muted); cursor: pointer; }
+.lc-evidence { margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.lc-evidence li { margin: 0; padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); background: var(--surface-muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+.lc-evidence .ev-where { color: var(--text-faint); font-size: 0.72rem; }
+.lc-evidence q { color: var(--text); }
+.lc-conflict {
+  margin: 0.35rem 0; padding: 0.35rem 0.55rem; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  font-size: 0.78rem; color: var(--text);
+}
+.lc-row { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; color: var(--text-muted); font-size: 0.78rem; margin: 0.15rem 0; }
+.lc-row b { color: var(--text); font-weight: 600; }
+.lc-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+.lc-actions form { margin: 0; }
+.lc-actions button { margin: 0; padding: 0.2rem 0.65rem; min-height: 28px; width: auto; font-size: 0.78rem; }
+.lc-actions .accept { background: var(--pr-add); border-color: var(--pr-add); color: var(--surface); }
+.lc-actions .reject { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 50%, var(--border)); }
+.lc-edit { margin: 0.3rem 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.lc-edit textarea { margin: 0; font-size: 0.9rem; min-height: 3.2rem; }
+.lc-edit label { display: flex; gap: 0.4rem; align-items: center; margin: 0; font-size: 0.78rem; color: var(--text-muted); }
+.lc-edit input { margin: 0; padding: 0.15rem 0.45rem; height: auto; font-size: 0.82rem; }
+.lib-boot-form { margin: 0; }
+.lib-io { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.4rem 0.25rem 1rem; color: var(--text-faint); font-size: 0.76rem; }
+.lib-io a[role="button"], .lib-io button { margin: 0; padding: 0.2rem 0.65rem; min-height: 28px; width: auto; font-size: 0.78rem; display: inline-flex; align-items: center; }
+.lib-import { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0; }
+.lib-import input[type="file"] { margin: 0; padding: 0.1rem; font-size: 0.74rem; width: auto; max-width: 14rem; height: auto; }
+
+/* A rule file's history on the Checks tab (M3 library versions). */
+.ckp-history { margin: 0.5rem 0 0; font-size: 0.78rem; }
+.ckp-history > summary { color: var(--text-muted); cursor: pointer; }
+.ckp-history ol { list-style: none; margin: 0.35rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.ckp-history li { list-style: none; margin: 0; }
+.ckp-history li::marker { content: none; }
+.ckp-hv-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; color: var(--text-muted); }
+.ckp-hv-head b { color: var(--text); }
+.ckp-hv-head button { margin: 0; padding: 0.1rem 0.5rem; min-height: 24px; width: auto; font-size: 0.74rem; }
+.lc-diff { display: flex; flex-direction: column; gap: 1px; margin: 0.25rem 0 0; border-radius: var(--radius-sm); overflow: hidden; }
+.lc-diff pre { margin: 0; padding: 0.15rem 0.45rem; font-family: var(--jbm); font-size: 0.74rem; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-muted); }
+.lc-diff .sg-old { background: var(--pr-del-bg); color: var(--pr-del); }
+.lc-diff .sg-new { background: var(--pr-add-bg); color: var(--pr-add); }
+.lib-auto-form { margin: 0 0 0 auto !important; }
+.lib-auto-form + .lib-scope-form { margin-left: 0 !important; }
+button.lib-auto {
+  display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; padding: 0.15rem 0.35rem; min-height: 28px; width: auto;
+  background: none; border: 0; color: var(--text-muted); font-size: 0.76rem;
+}
+.ck-switch { width: 28px; height: 16px; border-radius: 999px; position: relative; flex: none; background: var(--accent); display: inline-block; }
+.ck-switch::after { content: ""; position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); }
+.ck-switch.off { background: var(--border-strong); }
+.ck-switch.off::after { right: auto; left: 2px; }
+.lib-boot-form .ck-link { font-size: 0.78rem; }
+
+/* First launch (M3): learn from past reviews. */
+.boot {
+  margin: 0.6rem 0.5rem; padding: 0.8rem 0.95rem; background: var(--surface-card);
+  border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm); font-size: 0.85rem;
+}
+.boot h2 { font-size: 1.05rem; margin: 0 0 0.35rem; color: var(--text-strong); }
+.boot p { margin: 0 0 0.6rem; color: var(--text-muted); }
+.boot-list { list-style: none; margin: 0.4rem 0 0.6rem; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.boot-list > li { list-style: none; margin: 0; }
+.boot-list > li::marker { content: none; }
+.boot-list form { margin: 0; }
+button.boot-item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.5rem; align-items: center;
+  width: 100%; margin: 0; padding: 0.3rem 0.45rem; min-height: 32px; text-align: left;
+  background: none; border: 0; border-radius: var(--radius-sm); color: var(--text);
+}
+button.boot-item:hover { background: var(--soft-bg); }
+.boot-box {
+  display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem;
+  border: 1.5px solid var(--border-strong); border-radius: 3px; font-size: 0.7rem; font-weight: 700; color: var(--pico-primary-inverse);
+}
+button.boot-item[aria-checked="true"] .boot-box { background: var(--accent); border-color: var(--accent); }
+.boot-list .bp { font-family: var(--jbm); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-list .bc { color: var(--text-faint); font-size: 0.74rem; white-space: nowrap; }
+.boot-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+.boot-actions form { margin: 0; }
+.boot-actions button { margin: 0; padding: 0.35rem 0.9rem; min-height: 32px; width: auto; font-size: 0.84rem; }
+.boot-note { color: var(--text-faint); font-size: 0.74rem; }
+.boot-progress { height: 6px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; margin: 0.4rem 0 0.6rem; }
+.boot-progress > span { display: block; height: 100%; width: 35%; background: var(--accent); animation: boot-slide 1.6s ease-in-out infinite; }
+@keyframes boot-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .boot-progress > span { animation: none; width: 100%; opacity: 0.5; } }
+@media (max-width: 640px) {
+  .boot { margin: 0.5rem 0.25rem; }
+  .boot-list .bc { display: none; }
+  .lib-scope-form, .lib-auto-form { margin-left: 0 !important; width: 100%; }
+  .lib-filters select { width: 100%; }
+}
 .checks-editor {
   display: flex; flex-wrap: wrap; gap: 0.4rem 0.75rem; align-items: center;
   font-size: 0.78rem; color: var(--text-muted);

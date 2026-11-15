@@ -253,6 +253,15 @@ prereview check     [--json] <file>...
   one call per judge, copied from the request. Appends the verdict (with the
   request's file and rubric hashes, so the review can tell when it's out of date) to
   the store's `judgments.jsonl`. Validated before anything is written.
+- **`prereview learn propose`** — the coding agent's answer to a "Read past reviews"
+  request (or a "Learn after each review" one): `prereview learn propose --text "…"
+  --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <pattern>]…
+  [--replaces <id>] [--produces instruction,checker,judge]`, one call per lesson.
+  Every `--evidence` must name a real record in that store (a comment id, a
+  suggestion id, or a thread reply as `<target_id>@<at>`), or nothing is written. The
+  lesson is appended to `~/.config/prereview/learnings.jsonl` as *proposed*; the
+  reviewer accepts it in Library → Learnings. **`prereview learn list [--status s]
+  [--json]`** prints the library.
 - **`prereview check`** — run the review's [checks](usage.md#checks) on files
   from the terminal: the built-in prose rules, your `~/.config/prereview/checks/`
   rules, and the repo's Vale config when you've trusted it on the Checks page and
@@ -300,6 +309,8 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 |---|---|
 | `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: skip the on-run update check. |
 | `PREREVIEW_CHECKS_DIR` | Override the checks rule folder (default `~/.config/prereview/checks`). |
+| `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer (default `~/.config/prereview`). |
+| `PREREVIEW_SCAN_HOME` | Where the first-launch scan looks for past reviews (default your home folder). |
 
 ## Output
 

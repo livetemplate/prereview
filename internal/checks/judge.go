@@ -137,7 +137,7 @@ func rubricTitle(s string) string {
 // judged (the CLI never has to resolve or re-read the file).
 func JudgePrompt(file, store, contentHash string, judges []*Rule) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, judgeRequestLead+"%s` against %d rubric(s). For each one, read the whole file, decide pass or fail, and record the verdict with the exact command below — one call per judge. Do **not** edit the file and do **not** propose suggestions for this request; then mark this comment done.\n\n", file, len(judges))
+	fmt.Fprintf(&b, JudgeRequestLead+"%s` against %d rubric(s). For each one, read the whole file, decide pass or fail, and record the verdict with the exact command below — one call per judge. Do **not** edit the file and do **not** propose suggestions for this request; then mark this comment done.\n\n", file, len(judges))
 	b.WriteString("A verdict is binary: pass only if the file clearly meets the rubric. The critique says why in one or two sentences; when it is about a specific passage, add `--quote` with that exact text from the file so the reviewer can jump to it.\n")
 	for _, j := range judges {
 		fmt.Fprintf(&b, "\n### %s\n\n%s\n\n```\nprereview judge --out %s --file %s --judge %s --content-hash %s --rubric-hash %s --verdict pass|fail --critique \"…\" [--quote \"exact text\"] [--model <your model id>]\n```\n",
@@ -146,12 +146,19 @@ func JudgePrompt(file, store, contentHash string, judges []*Rule) string {
 	return b.String()
 }
 
-// judgeRequestLead opens every judge request; IsJudgeRequest recognises one.
-const judgeRequestLead = "Judge `"
+// JudgeRequestLead opens every judge request; IsJudgeRequest recognises one.
+const JudgeRequestLead = "Judge `"
 
 // IsJudgeRequest reports a comment body that is a "Run judges" request for file.
 func IsJudgeRequest(body, file string) bool {
-	return strings.HasPrefix(body, judgeRequestLead+file+"` against ")
+	return strings.HasPrefix(body, JudgeRequestLead+file+"` against ")
+}
+
+// IsAnyJudgeRequest reports a "Run judges" request for any file: a request to
+// the agent, not a reviewer signal (learnings never count or cite one).
+func IsAnyJudgeRequest(body string) bool {
+	rest, ok := strings.CutPrefix(body, JudgeRequestLead)
+	return ok && strings.Contains(rest, "` against ")
 }
 
 // shellQuote single-quotes s when it holds anything a shell would split on.

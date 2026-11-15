@@ -190,7 +190,7 @@ func TestLabelJudgment(t *testing.T) {
 	if s.JudgeLabels[labelKey(s.SelectedFile, "reader-first", r.JudgedAt)] != LabelAgree {
 		t.Fatalf("labels %+v", s.JudgeLabels)
 	}
-	s.ShowLibrary = true
+	s.ShowLibrary, s.LibraryTab = true, libTabChecks
 	s.ExpandedCheck = "reader-first"
 	p := s.CheckPage()
 	var row CheckRow
@@ -214,7 +214,7 @@ func TestLabelJudgment(t *testing.T) {
 func TestCheckPage_KindChips(t *testing.T) {
 	c := judgeController(t)
 	s := judgedState(t, c, "", "", nil)
-	s.ShowLibrary = true
+	s.ShowLibrary, s.LibraryTab = true, libTabChecks
 	s.ShowPassingGroups = true
 	p := s.CheckPage()
 	if p.Judges != 1 || p.Checkers != 3 {

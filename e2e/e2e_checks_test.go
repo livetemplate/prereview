@@ -271,6 +271,7 @@ func TestE2E_ChecksSearchFilter(t *testing.T) {
 	defer cancel()
 	if err := chromedp.Run(ctx,
 		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.Click(checksTab, chromedp.ByQuery),
 		chromedp.WaitVisible(pageRow("filler-intensifiers")+`.is-fail`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("open the Library from the toolbar: %v%s", err, diag())
@@ -361,6 +362,7 @@ func TestE2E_ChecksShowInFile(t *testing.T) {
 	defer cancel()
 	if err := chromedp.Run(ctx,
 		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.Click(checksTab, chromedp.ByQuery),
 		chromedp.WaitVisible(pageRow("filler-intensifiers"), chromedp.ByQuery),
 		chromedp.Click(pageRow("filler-intensifiers")+` .ckp-row-head`, chromedp.ByQuery),
 		chromedp.WaitVisible(pageRow("filler-intensifiers")+` .ckp-file[data-key="ckp-file-other.md"]`, chromedp.ByQuery),
@@ -592,3 +594,7 @@ func TestE2E_ChecksValeTrust(t *testing.T) {
 		t.Errorf("vale never ran after trust%s", diag())
 	}
 }
+
+// checksTab is the Library's Checks tab: the toolbar opens the Library on
+// Learnings (checks M3), a file's Checks button on Checks.
+const checksTab = `.lib-tabs form:has(input[name="tab"][value="checks"]) button`

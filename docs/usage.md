@@ -205,6 +205,45 @@ Pass when the first paragraph says what changes for the reader.
   offers **Re-run judges**. Judges are advisory: they count in **Checks n/m** once
   they have a current verdict, but nothing is blocked on them.
 
+**Rule history.** Every edit to a rule file in your checks folder is kept as a
+version. Expand one of your checks on the Checks page to see its history, newest
+first, with the lines each version changed and **Restore** on the older ones (a
+restore is itself a new version, so you can undo it the same way).
+
+## Learnings
+
+The **Library** opens on **Learnings**: lessons your coding agent drew from your
+reviews, waiting for you to accept. prereview never calls a model; the agent
+proposes, and nothing takes effect until you accept. The toolbar's Library button
+shows how many are waiting.
+
+- Each card says where the lesson applies (its **scope**, e.g. "Technical docs")
+  and cites the **evidence**: the comments, replies and accept/reject decisions it
+  rests on, quoted, with where they were made. A lesson can't be proposed without
+  evidence that exists.
+- **Accept**, **Edit** (the text and scope), **Reject** or **Delete**. A
+  proposal that contradicts an accepted lesson says so ("Replaces an older
+  learning"); newer wins, so accepting it marks the old one **superseded**, which
+  you can **Restore**. The status chips and the scope picker filter the list.
+- **Learn after each review** (on by default): when your agent goes idle and the
+  review holds five or more new comments, replies or decisions since it last read
+  it, prereview asks the agent to read them and propose lessons. Turn it off on the
+  Learnings tab.
+- **Read past reviews**: the first time you run this version, prereview looks for
+  past reviews under your home folder (skipping dependency, VCS and cache folders)
+  and lists the ones with comments, ticked. **Read with my agent** asks your agent
+  to read exactly the ticked ones; untick any you'd rather keep out. **Not now**
+  hides the offer on this machine; the Learnings tab's **Read past reviews** brings
+  it back. Reading needs an agent (`prereview --agent`).
+- **Several reviews at once** share one library: accept a lesson in one and every
+  other open review shows it within a second.
+- **Another machine**: **Export learnings** downloads them as a file; **Import** on
+  the other machine merges it. Newer changes win, and importing the same file twice
+  adds nothing.
+- **Review in prereview** (the Library header) opens a review of the library folder
+  itself (`~/.config/prereview`) in a new tab, so you can comment on your rule files
+  and have your agent change them, with the same version history.
+
 ## Themes & modes
 
 The toolbar's palette button cycles the **color scheme** (Solarized, Gruvbox,

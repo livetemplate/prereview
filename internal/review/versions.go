@@ -29,6 +29,9 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/livetemplate/prereview/internal/flock"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // Version triggers recorded on each Checkpoint. Baseline is the v0 snapshot of
@@ -103,7 +106,10 @@ type FileHistoryEntry struct {
 
 // VersionStore is the append-only content-snapshot store rooted at a versions
 // directory. Safe for concurrent use: the mutex serialises the read-modify-append
-// of the timeline (the watcher goroutine, Mount, and RestoreVersion all call in).
+// of the timeline (the watcher goroutine, Mount, and RestoreVersion all call in),
+// and a file lock does the same across processes — several servers can share a
+// store (every review watches the per-user library's), and two checkpointing one
+// edit must not both read N versions and append seq N.
 type VersionStore struct {
 	root string
 	now  func() time.Time
@@ -126,10 +132,10 @@ func NewVersionStore(root string) (*VersionStore, error) {
 // on one location, including single-file reviews where the store dir is the
 // file's parent.
 func VersionsDir(csvPath string) string {
-	return filepath.Join(filepath.Dir(csvPath), "versions")
+	return filepath.Join(filepath.Dir(csvPath), library.VersionsDirName)
 }
 
-func (s *VersionStore) timelinePath() string       { return filepath.Join(s.root, "timeline.jsonl") }
+func (s *VersionStore) timelinePath() string       { return filepath.Join(s.root, library.TimelineFileName) }
 func (s *VersionStore) blobPath(sha string) string { return filepath.Join(s.root, "blobs", sha) }
 
 // Checkpoint snapshots every ref and appends a timeline entry. Each file is
@@ -141,6 +147,11 @@ func (s *VersionStore) blobPath(sha string) string { return filepath.Join(s.root
 func (s *VersionStore) Checkpoint(refs []FileRef, trigger, changelog string) (cp Checkpoint, created bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	unlock, err := flock.Lock(filepath.Join(s.root, ".lock"))
+	if err != nil {
+		return Checkpoint{}, false, err
+	}
+	defer unlock()
 
 	cps, err := s.checkpointsLocked()
 	if err != nil {
@@ -377,6 +388,9 @@ func writeFileAtomicVersions(path string, data []byte) error {
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op after a successful rename
+	if fi, err := os.Stat(path); err == nil {
+		_ = tmp.Chmod(fi.Mode().Perm()) // replacing a file keeps its mode (CreateTemp makes 0600)
+	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return fmt.Errorf("write temp blob: %w", err)

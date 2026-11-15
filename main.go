@@ -144,6 +144,14 @@ func main() {
 		return
 	}
 
+	// `prereview learn propose|list` — the coding agent proposes learnings drawn
+	// from your reviews (checks M3), each grounded in real records; the reviewer
+	// accepts them in the Library.
+	if len(os.Args) > 1 && os.Args[1] == "learn" {
+		learnMain(os.Args[2:])
+		return
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "quiz" {
 		if err := runQuiz(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview quiz:", err)

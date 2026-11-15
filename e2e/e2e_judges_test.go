@@ -37,7 +37,7 @@ func playJudge(t *testing.T, p *runningPrereview, repo, request string, args ...
 	}
 	args = append([]string{"judge", "--out", p.store, "--content-hash", m[1], "--rubric-hash", m[2]}, args...)
 	cmd := exec.Command(p.binary, args...)
-	cmd.Env = append(os.Environ(), "PREREVIEW_CHECKS_DIR="+checksDirFor(repo))
+	cmd.Env = prefsIsolatedEnv(repo)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("prereview judge: %v: %s", err, out)
 	}
@@ -147,6 +147,7 @@ func TestE2E_Judges(t *testing.T) {
 				act  chromedp.Action
 			}{
 				{"open the Library", chromedp.Click(`.library-trigger`, chromedp.ByQuery)},
+				{"the Checks tab", chromedp.Click(checksTab, chromedp.ByQuery)},
 				{"kind chips", chromedp.WaitVisible(`button[name="setChecksKind"]`, chromedp.ByQuery)},
 				{"Judges chip", chromedp.Evaluate(`[...document.querySelectorAll('button[name="setChecksKind"]')].find(b => b.textContent.startsWith('Judges')).click()`, nil)},
 				{"checkers leave", chromedp.WaitNotPresent(pageRow("filler-intensifiers"), chromedp.ByQuery)},

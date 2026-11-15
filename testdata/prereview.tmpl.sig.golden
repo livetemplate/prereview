@@ -81,6 +81,34 @@
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === blockSuggestions ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}
+=== bootCard ===
+
+  <section class="boot" data-key="boot" aria-label="{{if .Reading}}Reading past reviews{{else}}Learn from your past reviews{{end}}">
+    {{if .Reading}}
+    <h2>Reading past reviews…</h2>
+    <div class="boot-progress" aria-hidden="true"><span></span></div>
+    <p>Your agent is reading them{{if .Waiting}} · {{.Waiting}} learning{{if ne .Waiting 1}}s{{end}} waiting in Library → Learnings{{end}}. You can keep reviewing; new learnings appear there as they're proposed.</p>
+    {{else}}{{if .Scanning}}
+    <h2>Looking for past reviews…</h2>
+    <div class="boot-progress" aria-hidden="true"><span></span></div>
+    {{else}}{{if not .Stores}}
+    <h2>No past reviews found</h2>
+    <p>No review on this machine has comments yet. Learnings come from what you say in reviews.</p>
+    {{else}}
+    <h2>Learn from your past reviews</h2>
+    <p>prereview found {{len .Stores}} review{{if ne (len .Stores) 1}}s{{end}} with comments on this machine. Your agent can read the comments, replies and accept/reject decisions in the ones you tick and propose learnings for you to accept. Nothing is read until you ask, and nothing takes effect until you accept.</p>
+    <ul class="boot-list">
+      {{range .Stores}}<li data-key="boot-{{.Store}}"><form method="POST"><input type="hidden" name="store" value="{{.Store}}"><button type="submit" name="toggleBootStore" class="boot-item" role="checkbox" aria-checked="{{if .Picked}}true{{else}}false{{end}}" title="{{.Store}}"><span class="boot-box" aria-hidden="true">{{if .Picked}}✓{{end}}</span><span class="bp">{{.Label}}</span><span class="bc">{{.Counts}}</span></button></form></li>
+      {{end}}
+    </ul>
+    <div class="boot-actions">
+      <form method="POST"><button type="submit" name="readPastReviews"{{if or (not .CanRead) (not .Picked)}} disabled{{end}}>Read {{.Picked}} with my agent</button></form>
+      <form method="POST"><button type="submit" name="dismissPastReviews" class="outline secondary">Not now</button></form>
+      <span class="boot-note">{{if .CanRead}}Later: Library → Learnings → Read past reviews{{else}}Reading needs an agent: start prereview with <code>--agent</code>.{{end}}</span>
+    </div>
+    {{end}}{{end}}{{end}}
+  </section>
+
 === checkRow ===
 
           <li class="ckp-row is-{{.Status}}{{if .Expanded}} is-open{{end}}" data-key="ckp-row-{{.ID}}">
@@ -130,6 +158,15 @@
                 </span>
                 {{if and .RulePath (not .EditorURL)}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
               </div>
+              {{if .History}}{{$rule := .ID}}<details class="ckp-history"{{if gt (len .History) 1}} open{{end}}><summary>History ({{len .History}} version{{if ne (len .History) 1}}s{{end}})</summary>
+                <ol>
+                  {{range .History}}<li data-key="ckp-v{{.Seq}}">
+                    <span class="ckp-hv-head"><b>{{if .Current}}Current{{else}}Version {{.Seq}}{{end}}</b> · {{.When}}{{with .Stat}} · {{.}}{{end}}{{if not .Current}} <form method="POST" class="ckp-inline"><input type="hidden" name="id" value="{{$rule}}"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreRuleVersion" class="outline">Restore</button></form>{{end}}</span>
+                    {{if .Diff}}<div class="lc-diff">{{range .Diff}}<pre class="{{if eq .Kind "add"}}sg-new{{else}}sg-old{{end}}">{{if eq .Kind "add"}}+{{else}}−{{end}} {{.Text}}</pre>{{end}}{{if .More}}<pre class="sg-more">… {{.More}} more changed line{{if ne .More 1}}s{{end}}</pre>{{end}}</div>{{end}}
+                  </li>
+                  {{end}}
+                </ol>
+              </details>{{end}}
             </div>
             {{end}}
           </li>
@@ -530,12 +567,58 @@
   
   <p class="kbd-help-usage"><a href="/_usage" target="_blank" rel="noopener">Open the usage guide ↗</a></p>
 </div>
+=== learnCard ===
+
+    <li class="lib-card is-{{.Status}}" data-key="learn-{{.ID}}">
+      <header><span class="ck-pill ck-{{.Pill}}">{{.Status}}</span><span>scope: <b>{{.Scope}}</b></span><span>{{.Meta}}</span></header>
+      {{if .Editing}}<form method="POST" class="lc-edit"><input type="hidden" name="id" value="{{.ID}}">
+        <textarea name="text" rows="2" aria-label="Learning">{{.Text}}</textarea>
+        <label>Scope <input type="text" name="scope" value="{{.Scope}}" autocomplete="off"></label>
+        <div class="lc-actions"><button type="submit" name="saveLearning">Save</button><button type="submit" name="editLearning" class="outline secondary">Cancel</button></div>
+      </form>{{else}}<p class="lc-text">{{.Text}}</p>{{end}}
+      {{with .Conflict}}<div class="lc-conflict"><b>Replaces an older learning</b>: {{.}}. Newer wins: accepting this keeps the old one as superseded, so you can restore it.</div>{{end}}
+      {{if .Evidence}}<details{{if eq .Status "proposed"}} open{{end}}><summary>Evidence ({{len .Evidence}})</summary><ul class="lc-evidence">
+        {{range .Evidence}}<li><span class="ev-where">{{.Where}}</span>{{with .Quote}}<br><q>{{.}}</q>{{end}}</li>
+        {{end}}</ul></details>{{end}}
+      {{with .Produces}}<div class="lc-row"><span>would become: <b>{{.}}</b></span></div>{{end}}
+      {{if not .Editing}}<div class="lc-actions">
+        {{$id := .ID}}{{range .Actions}}<form method="POST"><input type="hidden" name="id" value="{{$id}}">{{with .Act}}<input type="hidden" name="act" value="{{.}}">{{end}}<button type="submit" name="{{.Name}}" class="{{.Class}}">{{.Label}}</button></form>
+        {{end}}
+      </div>{{end}}
+    </li>
+
+=== learnings ===
+{{with $.LibraryBootCard}}{{template "bootCard" .}}{{end}}{{with $.LearnPage}}
+  <div class="lib-filters">
+    {{range .Chips}}<form method="POST"><input type="hidden" name="status" value="{{.Value}}"><button type="submit" name="setLearnFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
+    {{end}}<form method="POST" class="lib-auto-form"><button type="submit" name="toggleAutoLearn" class="lib-auto" role="switch" aria-checked="{{if $.AutoLearnOff}}false{{else}}true{{end}}" title="When your agent goes idle and a review has 5 or more new comments, replies or decisions, ask it to learn from them"><span class="ck-switch{{if $.AutoLearnOff}} off{{end}}" aria-hidden="true"></span>Learn after each review</button></form>
+    {{if .Scopes}}<form method="POST" class="lib-scope-form">
+      <select name="scope" aria-label="Scope" lvt-on:change="setLearnFilter">
+        <option value=""{{if eq .Scope ""}} selected{{end}}>All scopes</option>
+        {{range .Scopes}}<option value="{{.Name}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </form>{{end}}
+    <form method="POST" class="lib-boot-form"><button type="submit" name="openPastReviews" class="ck-link">{{if $.BootOpen}}Hide past reviews{{else}}Read past reviews{{end}}</button></form>
+  </div>
+  {{with .Empty}}<p class="ckp-empty">{{.}}</p>{{end}}
+  <ul class="lib-list">
+    {{range .Cards}}{{template "learnCard" .}}{{end}}
+  </ul>
+  <div class="lib-io">
+    <span>Review on another machine too? Carry your learnings across: newer ones win.</span>
+    <a role="button" class="outline" href="/_library-export" download>Export learnings</a>
+    <form method="POST" action="/_library-import" enctype="multipart/form-data" class="lib-import" lvt-form:no-intercept>
+      <input type="file" name="file" accept=".jsonl,application/x-ndjson,application/json" aria-label="Learnings file to import" required>
+      <button type="submit" class="outline">Import</button>
+    </form>
+  </div>
+{{end}}
 === library ===
-{{with $.CheckPage}}
+{{if $.ShowLibrary}}
 <section class="library" data-key="library" aria-label="Library">
   <header class="lib-head">
     <strong class="lib-title">{{template "iconLibrary"}} Library</strong>
-    <span class="lib-src">the checks every review on this machine uses · edits to rule files show up live</span>
+    <span class="lib-src">shared by every review on this machine · changes show up live</span>
     <details class="lib-editor">
       <summary>Open rule files in: {{range $.EditorOptions}}{{if .Selected}}{{.Label}}{{end}}{{end}}</summary>
       <form method="POST" class="checks-editor">
@@ -549,14 +632,17 @@
         <button type="submit" name="setEditor" class="outline">Save</button>
       </form>
     </details>
-    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form>
+    <span class="lib-head-actions"><a role="button" class="outline lib-review" href="/_library-review" target="_blank" rel="noopener" title="Open the library folder as a review: comments and suggestions on library files go to your agent">Review in prereview</a>
+    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form></span>
   </header>
   <div class="lib-tabs" role="tablist">
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Learnings</button>
+    <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnLearnings}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnLearnings}}true{{else}}false{{end}}">Learnings{{if $.LearnNew}}<span class="ck-pill ck-new">{{$.LearnNew}} new</span>{{end}}</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
-    <button type="button" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button>
+    <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnChecks}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnChecks}}true{{else}}false{{end}}">Checks</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
   </div>
+  {{template "learnings" $}}
+  {{with $.CheckPage}}
   <div class="ckp-bar">
     <form method="POST" lvt-form:preserve class="ckp-search-form">
       <input type="search" name="q" class="ckp-search" value="{{.Query}}" placeholder="Search checks and findings" aria-label="Search checks and findings" lvt-on:input="setChecksQuery" lvt-mod:debounce="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
@@ -607,12 +693,13 @@
       {{if and (not .Groups) (not .Folded) (not .ShowVale)}}<p class="ckp-empty">{{if .Query}}No check matches “{{.Query}}”.{{else}}No checks match these filters.{{end}}</p>{{end}}
     </div>
   </div>
+  {{end}}
 </section>
 {{end}}
 === libraryButton ===
 
   <form method="POST" class="library-form">
-    <button type="submit" name="toggleLibrary" class="contrast library-trigger{{if $.ShowLibrary}} is-on{{end}}" aria-pressed="{{if $.ShowLibrary}}true{{else}}false{{end}}" title="Library: the checks every review on this machine uses">{{template "iconLibrary"}}<span class="tb-label">Library</span></button>
+    <button type="submit" name="toggleLibrary" class="contrast library-trigger{{if $.ShowLibrary}} is-on{{end}}" aria-pressed="{{if $.ShowLibrary}}true{{else}}false{{end}}" title="Library: the learnings and checks every review on this machine uses">{{template "iconLibrary"}}<span class="tb-label">Library</span>{{if $.LearnNew}}<span class="lib-badge" title="{{$.LearnNew}} new learning{{if ne $.LearnNew 1}}s{{end}} proposed">{{$.LearnNew}}</span>{{end}}</button>
   </form>
 
 === markdownView ===
@@ -868,7 +955,7 @@
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
-  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}
+  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
   
   
   {{if $.ShowQuizNav}}
@@ -967,6 +1054,13 @@
 <script defer src="/mermaid-init.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
 
 
 

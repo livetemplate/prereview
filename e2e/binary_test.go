@@ -57,9 +57,21 @@ func prereviewBinary(t *testing.T) string {
 // suite has run — a per-test t.Cleanup would delete it out from under the
 // tests that follow.
 func TestMain(m *testing.M) {
+	// Every server and CLI this suite launches inherits a throwaway per-user
+	// library, so none reads or writes the developer's real learnings or
+	// sessions. prefsIsolatedEnv narrows it per repo; this is the backstop for
+	// the launches that don't go through it.
+	lib, err := os.MkdirTemp("", "prereview-e2e-library-")
+	if err == nil {
+		os.Setenv("PREREVIEW_LIBRARY_DIR", lib)
+		os.Setenv("PREREVIEW_SCAN_HOME", filepath.Join(lib, "no-home")) // never walk the real $HOME
+	}
 	code := m.Run()
 	if buildDir != "" {
 		_ = os.RemoveAll(buildDir)
+	}
+	if lib != "" {
+		_ = os.RemoveAll(lib)
 	}
 	os.Exit(code)
 }

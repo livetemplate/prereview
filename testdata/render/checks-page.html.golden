@@ -323,7 +323,7 @@
       name="toggleLibrary"
       class="contrast library-trigger is-on"
       aria-pressed="true"
-      title="Library: the checks every review on this machine uses"
+      title="Library: the learnings and checks every review on this machine uses"
     ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tb-label">Library</span></button>
@@ -637,7 +637,7 @@
     <strong class="lib-title"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Library</strong>
-    <span class="lib-src">the checks every review on this machine uses · edits to rule files show up live</span>
+    <span class="lib-src">shared by every review on this machine · changes show up live</span>
     <details class="lib-editor">
       <summary>Open rule files in: VS Code</summary>
       <form method="POST" class="checks-editor">
@@ -651,14 +651,17 @@
         <button type="submit" name="setEditor" class="outline">Save</button>
       </form>
     </details>
-    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form>
+    <span class="lib-head-actions"><a role="button" class="outline lib-review" href="/_library-review" target="_blank" rel="noopener" title="Open the library folder as a review: comments and suggestions on library files go to your agent">Review in prereview</a>
+    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form></span>
   </header>
   <div class="lib-tabs" role="tablist">
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Learnings</button>
+    <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Learnings</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
-    <button type="button" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button>
+    <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
   </div>
+  
+  
   <div class="ckp-bar">
     <form method="POST" lvt-form:preserve class="ckp-search-form">
       <input type="search" name="q" class="ckp-search" value="" placeholder="Search checks and findings"
@@ -778,6 +781,7 @@
                 </span>
                 
               </div>
+              
             </div>
             
           </li>
@@ -824,6 +828,7 @@
       
     </div>
   </div>
+  
 </section>
 
 
