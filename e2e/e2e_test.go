@@ -4461,6 +4461,24 @@ func TestE2E_HTMLPreviewRendersAndAutoHeights(t *testing.T) {
 // posts out is stable. (Static inline CSS only — NEVER a JS framework whose JIT
 // would shift layout after the rects are cached.)
 func setupFixtureHTMLRegionRepo(t *testing.T) string {
+	return setupFixtureHTMLRegionRepoBody(t,
+		"<section style=\"background:#eef\">Top block</section>\n"+
+			"<section style=\"background:#fee\">Bottom block</section>\n")
+}
+
+// setupFixtureHTMLRegionRepoContents wraps the two sections in one
+// display:contents element (what livetemplate's data-lvt-id root and many app
+// shells render): the only top-level block then has no box of its own (0×0).
+// Line 4 = the wrapper (the block, 4..7), line 5 = the top section.
+func setupFixtureHTMLRegionRepoContents(t *testing.T) string {
+	return setupFixtureHTMLRegionRepoBody(t,
+		"<div style=\"display:contents\">\n"+
+			"<section style=\"background:#eef\">Top block</section>\n"+
+			"<section style=\"background:#fee\">Bottom block</section>\n"+
+			"</div>\n")
+}
+
+func setupFixtureHTMLRegionRepoBody(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
 	runCmd(t, dir, "git", "init", "-q", "-b", "main")
@@ -4475,14 +4493,29 @@ func setupFixtureHTMLRegionRepo(t *testing.T) string {
 		"<!doctype html>\n"+
 			"<html><head><style>body{margin:0}section{height:240px;margin:0}</style></head>\n"+
 			"<body>\n"+
-			"<section style=\"background:#eef\">Top block</section>\n"+
-			"<section style=\"background:#fee\">Bottom block</section>\n"+
+			body+
 			"</body></html>\n")
 	return dir
 }
 
 func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
-	p := bootChromeAgainstRepo(t, setupFixtureHTMLRegionRepo(t), 1200, 800)
+	// Line 4 = the top section (source line of its block).
+	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepo(t), 4)
+}
+
+// A page whose top-level block is a display:contents wrapper (no box of its
+// own) must still take a drawn region: the bridge measures it by its children.
+// Before the fix every drag was a silent no-op (the only block measured 0×0).
+func TestE2E_HTMLPreviewRegionSelectContentsWrapper(t *testing.T) {
+	// The wrapper is the block (lines 4..7); the top section is line 5.
+	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepoContents(t), 5)
+}
+
+// checkHTMLRegionSelect arms region select on region.html, drags a box over the
+// top ~100px of the preview, and asserts a line comment covering topBlockLine.
+func checkHTMLRegionSelect(t *testing.T, repo string, topBlockLine int) {
+	t.Helper()
+	p := bootChromeAgainstRepo(t, repo, 1200, 800)
 	p.waitReady()
 
 	var mu sync.Mutex
@@ -4539,8 +4572,7 @@ func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
 
 	// Read the iframe's OWN viewport rect (parent-readable — no contentDocument
 	// needed). The fixture's top block is the first 240px of content, so a box
-	// over the iframe's top ~100px always resolves to it (source line 4).
-	const topBlockLine = 4
+	// over the iframe's top ~100px always resolves to it.
 	var ir struct{ Left, Top, Width, Height float64 }
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
 		const r = document.querySelector('iframe.html-preview').getBoundingClientRect();
@@ -4558,7 +4590,9 @@ func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
 	y1 := ir.Top + 12
 	x2 := ir.Left + ir.Width*0.80
 	y2 := ir.Top + 100
-	if err := chromedp.Run(p.ctx,
+	dragCtx, dragCancel := context.WithTimeout(p.ctx, 15*time.Second) // a missed drag must fail, not hang
+	defer dragCancel()
+	if err := chromedp.Run(dragCtx,
 		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).
 			WithButton(cdpinput.Left).WithClickCount(1),
 		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).
