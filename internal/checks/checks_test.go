@@ -405,14 +405,17 @@ func TestLibraryLoadsJudges(t *testing.T) {
 func TestJudgePrompt(t *testing.T) {
 	a := ParseJudge("reader-first", SourceUser, "", []byte("---\nkind: judge\nname: Reader first\n---\nLead with the action?\n"))
 	b := ParseJudge("no-hype", SourceUser, "", []byte("---\nkind: judge\nname: No hype\n---\nNo marketing tone?\n"))
-	p := JudgePrompt("docs/my file.md", "/repo/.prereview", []*Rule{a, b})
+	p := JudgePrompt("docs/my file.md", "/repo/.prereview", "c0ffee", []*Rule{a, b})
 	for _, want := range []string{
 		"### Reader first", "Lead with the action?", "### No hype", "No marketing tone?",
-		"prereview judge --out /repo/.prereview --file 'docs/my file.md' --judge reader-first --verdict pass|fail",
+		"prereview judge --out /repo/.prereview --file 'docs/my file.md' --judge reader-first --content-hash c0ffee --rubric-hash " + a.RubricHash + " --verdict pass|fail",
 		"--judge no-hype", "Do **not** edit the file",
 	} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt missing %q:\n%s", want, p)
 		}
+	}
+	if !IsJudgeRequest(p, "docs/my file.md") || IsJudgeRequest(p, "docs/other.md") {
+		t.Error("IsJudgeRequest must recognise the request for its own file only")
 	}
 }

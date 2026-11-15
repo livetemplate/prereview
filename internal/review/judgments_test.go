@@ -129,15 +129,27 @@ func TestCheckStrip_Judges(t *testing.T) {
 		t.Fatal(err)
 	}
 	last := s.Comments[len(s.Comments)-1]
-	if last.Kind != "file" || !strings.Contains(last.Body, "--judge reader-first") || !strings.Contains(last.Body, "Does it lead with what the reader must do?") {
+	if last.Kind != "file" || !strings.Contains(last.Body, "--judge reader-first") || !strings.Contains(last.Body, "Does it lead with what the reader must do?") ||
+		!strings.Contains(last.Body, "--content-hash "+checks.ContentHash(sideContent(s.CurrentDiff, "new"))) {
 		t.Errorf("Run judges queues one file-level request naming the command and rubric: %+v", last)
 	}
 	if st := s.CheckStrip(); st.JudgeWaiting != 1 {
 		t.Errorf("after Run judges the bar waits: %+v", st)
 	}
-	s.JudgeWait[s.SelectedFile] = time.Now().Add(-11 * time.Minute).UTC().Format(time.RFC3339Nano)
+	// Waiting is the queue's own: the open request comment, so another tab (or a
+	// reload) sees it too.
+	other := PrereviewState{SelectedFile: s.SelectedFile, Comments: s.Comments, Checks: s.Checks, AgentMode: true}
+	if st := other.CheckStrip(); st.JudgeWaiting != 1 {
+		t.Errorf("another tab sees the wait: %+v", st)
+	}
+	req := len(s.Comments) - 1
+	s.Comments[req].Created = time.Now().Add(-11 * time.Minute)
 	if st := s.CheckStrip(); st.JudgeWaiting != 0 || !st.JudgeTimedOut {
 		t.Errorf("after 10 minutes with no answer it offers to run again: %+v", st)
+	}
+	s.Comments[req].Processed = true
+	if st := s.CheckStrip(); st.JudgeWaiting != 0 || st.JudgeTimedOut {
+		t.Errorf("a request the agent marked done stops the wait: %+v", st)
 	}
 
 	// The agent answers (fail, with a quote): the judge joins the failing list,

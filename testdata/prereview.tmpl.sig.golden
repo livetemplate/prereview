@@ -98,13 +98,10 @@
               {{range .Verdicts}}
               <div class="ckp-file jv{{if eq .Status "stale"}} is-stale{{end}}" data-key="ckp-v-{{.Path}}">
                 <header><code>{{.Path}}</code>{{if .Open}} <span class="ck-pill ck-open">open</span>{{end}}<span class="ck-pill ck-{{.Status}}">{{if eq .Status "notrun"}}not run{{else}}{{if eq .Status "stale"}}file changed since{{else}}{{.Status}}{{end}}{{end}}</span>
-                  {{if .CanShow}}<form method="POST" class="ckp-show"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>{{end}}
                 </header>
                 {{with .Critique}}<p class="jv-critique">{{.}}</p>{{end}}
-                {{if and .At (ne .Status "notrun")}}<div class="jv-actions"><span class="jv-label">Agree?</span>
-                  <form method="POST"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="label" value="agree"><button type="submit" name="labelJudgment" class="outline jv-btn{{if eq .Label "agree"}} is-on{{end}}" aria-pressed="{{if eq .Label "agree"}}true{{else}}false{{end}}">Agree</button></form>
-                  <form method="POST"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="label" value="disagree"><button type="submit" name="labelJudgment" class="outline jv-btn{{if eq .Label "disagree"}} is-on{{end}}" aria-pressed="{{if eq .Label "disagree"}}true{{else}}false{{end}}">Disagree</button></form>
-                  {{with .Model}}<span class="ck-src">{{.}}</span>{{end}}
+                {{if and .At (ne .Status "notrun")}}<div class="jv-actions">
+                  {{template "judgeVerdictActions" .}}
                 </div>{{end}}
               </div>
               {{end}}
@@ -147,7 +144,7 @@
 {{with $.CheckStrip}}
   <div class="ck-strip{{if not .Selected}} is-idle{{end}}{{if .Judge}} is-judge{{end}}" data-key="checks-strip" role="{{if .Selected}}status{{else}}group{{end}}" aria-label="{{if .Judge}}Showing one judge{{else}}{{if .Selected}}Showing one check{{else}}Failing checks on this file{{end}}{{end}}">
     {{if .Judge}}
-    <span class="ck-pill ck-{{.Judge.Status}}">{{if eq .Judge.Status "stale"}}stale{{else}}{{.Judge.Status}}{{end}}</span><b class="ck-strip-name" title="{{.Name}}">{{.Name}}</b>
+    <span class="ck-pill ck-{{.Judge.Status}}">{{.Judge.Status}}</span><b class="ck-strip-name" title="{{.Name}}">{{.Name}}</b>
     <span class="ck-pill ck-advisory">judge · advisory</span>
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
     <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this judge">×</button></form>
@@ -173,12 +170,8 @@
     {{with .Critique}}<p class="jv-critique">{{.}}</p>{{end}}
     {{if eq .Status "stale"}}<p class="jv-stale">This verdict is for an older version of the file or the rubric.</p>{{end}}
     <div class="jv-actions">
-      {{if .CanShow}}<form method="POST"><input type="hidden" name="id" value="{{$.SelectedCheck}}"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>
-      {{end}}<form method="POST"><input type="hidden" name="id" value="{{$.SelectedCheck}}"><button type="submit" name="queueJudgment" class="outline">Queue as comment</button></form>
-      <span class="jv-label">Agree?</span>
-      <form method="POST"><input type="hidden" name="id" value="{{$.SelectedCheck}}"><input type="hidden" name="label" value="agree"><button type="submit" name="labelJudgment" class="outline jv-btn{{if eq .Label "agree"}} is-on{{end}}" aria-pressed="{{if eq .Label "agree"}}true{{else}}false{{end}}">Agree</button></form>
-      <form method="POST"><input type="hidden" name="id" value="{{$.SelectedCheck}}"><input type="hidden" name="label" value="disagree"><button type="submit" name="labelJudgment" class="outline jv-btn{{if eq .Label "disagree"}} is-on{{end}}" aria-pressed="{{if eq .Label "disagree"}}true{{else}}false{{end}}">Disagree</button></form>
-      {{with .Model}}<span class="ck-src">{{.}}</span>{{end}}
+      <form method="POST"><input type="hidden" name="id" value="{{.CheckID}}"><button type="submit" name="queueJudgment" class="outline">Queue as comment</button></form>
+      {{template "judgeVerdictActions" .}}
     </div>
   </div>{{end}}
 {{end}}
@@ -513,6 +506,12 @@
 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none" /></svg>
 === iconWarning ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 4l9 15H3z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round" /><path d="M12 10v4M12 16.5v.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+=== judgeVerdictActions ===
+{{if .CanShow}}<form method="POST" class="ckp-show"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>
+      {{end}}<span class="jv-label">Agree?</span>
+      <form method="POST"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="label" value="agree"><button type="submit" name="labelJudgment" class="outline jv-btn{{if eq .Label "agree"}} is-on{{end}}" aria-pressed="{{if eq .Label "agree"}}true{{else}}false{{end}}">Agree</button></form>
+      <form method="POST"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="label" value="disagree"><button type="submit" name="labelJudgment" class="outline jv-btn{{if eq .Label "disagree"}} is-on{{end}}" aria-pressed="{{if eq .Label "disagree"}}true{{else}}false{{end}}">Disagree</button></form>
+      {{with .Model}}<span class="ck-src">{{.}}</span>{{end}}
 === kbdHelp ===
 <div class="kbd-help-backdrop{{if .KeyHelpOpen}} is-open{{end}}" lvt-on:click="toggleKeyboardHelp" aria-hidden="true"></div>
 <div class="kbd-help-modal{{if .KeyHelpOpen}} is-open{{end}}" role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
@@ -968,6 +967,9 @@
 <script defer src="/mermaid-init.js"></script>
 </body>
 </html>
+
+
+
 
 
 

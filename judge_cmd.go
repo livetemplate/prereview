@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -13,29 +14,36 @@ import (
 )
 
 // runJudge implements `prereview judge --out <store> --file F --judge ID
-// --verdict pass|fail --critique "…" [--quote "…"] [--model M]`: the coding
-// agent's answer to a "Run judges" request (checks M2). One call per judge; each
-// appends one verdict to <store>/judgments.jsonl, which the review UI picks up
-// live. prereview never calls an LLM — the agent is the judge.
+// --content-hash H --rubric-hash R --verdict pass|fail --critique "…"
+// [--quote "…"] [--model M]`: the coding agent's answer to a "Run judges"
+// request (checks M2). One call per judge; each appends one verdict to
+// <store>/judgments.jsonl, which the review UI picks up live. prereview never
+// calls an LLM — the agent is the judge.
 //
-// It records the file's content hash and the rubric's hash with the verdict, so
-// the review can tell when a verdict is out of date (the file or the rubric
-// changed since). Everything is validated before anything is written.
+// The request carries the file's content hash and each rubric's hash, and the
+// verdict records them, so the review can tell when it goes out of date (the file
+// or the rubric changed since). The CLI never resolves or re-reads the file: a
+// store's directory isn't necessarily the repo (--out), and the hash from the
+// request is exactly what was judged. Everything is validated before anything is
+// written.
 func runJudge(args []string) error {
 	fs := flag.NewFlagSet("judge", flag.ContinueOnError)
 	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
-	file := fs.String("file", "", "the judged file, relative to the review's root (as the request names it)")
-	judge := fs.String("judge", "", "the judge's ID (as the request names it)")
+	file := fs.String("file", "", "the judged file, as the request names it (review-relative)")
+	judge := fs.String("judge", "", "the judge's ID, as the request names it")
+	contentHash := fs.String("content-hash", "", "the file's content hash, as the request names it")
+	rubricHash := fs.String("rubric-hash", "", "the judge's rubric hash, as the request names it")
 	verdict := fs.String("verdict", "", "pass or fail")
 	critique := fs.String("critique", "", "why it passed or failed, in a sentence or two")
 	quote := fs.String("quote", "", "optional: the exact passage the critique is about, so the reviewer can jump to it")
 	model := fs.String("model", "", "optional: the model id that judged")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
-			"Usage: prereview judge --out <store> --file <f> --judge <id> --verdict pass|fail --critique \"…\" [--quote \"…\"] [--model <id>]\n\n"+
+			"Usage: prereview judge --out <store> --file <f> --judge <id> --content-hash <h> --rubric-hash <h>\n"+
+				"                       --verdict pass|fail --critique \"…\" [--quote \"…\"] [--model <id>]\n\n"+
 				"  Record your verdict for one judge on one file, answering a \"Run judges\"\n"+
 				"  request from the review. The request lists each judge's rubric and the\n"+
-				"  exact command. A verdict is binary; the critique says why.\n")
+				"  exact command (with both hashes). A verdict is binary; the critique says why.\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -44,26 +52,16 @@ func runJudge(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("unexpected argument %q (flags only)", fs.Arg(0))
 	}
-	if *file == "" || *judge == "" || *verdict == "" || strings.TrimSpace(*critique) == "" {
+	if *file == "" || *judge == "" || *verdict == "" || strings.TrimSpace(*critique) == "" || *contentHash == "" || *rubricHash == "" {
 		fs.Usage()
-		return errors.New("--file, --judge, --verdict and --critique are required")
+		return errors.New("--file, --judge, --content-hash, --rubric-hash, --verdict and --critique are required (copy the command from the request)")
 	}
-	if *verdict != checks.StatusPass && *verdict != checks.StatusFail {
+	if !review.ValidVerdict(*verdict) {
 		return fmt.Errorf("--verdict must be pass or fail, got %q", *verdict)
 	}
-
-	store, err := storeDir(*out)
+	rel, err := reviewRelPath(*file)
 	if err != nil {
 		return err
-	}
-	root := storeRoot(store)
-	rel, abs, err := reviewFile(root, *file)
-	if err != nil {
-		return err
-	}
-	lines, err := checks.ReadLines(abs)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", rel, err)
 	}
 
 	lib := checks.Load(checks.Dir{Path: userChecksDir(), Source: checks.SourceUser})
@@ -84,40 +82,30 @@ func runJudge(args []string) error {
 		return fmt.Errorf("judge %q doesn't apply to %s (its files: %v)", *judge, rel, rule.Files)
 	}
 
+	store, err := storeDir(*out)
+	if err != nil {
+		return err
+	}
 	j := review.Judgment{File: rel, Judge: rule.ID, Verdict: *verdict, Critique: strings.TrimSpace(*critique),
 		Quote: strings.TrimSpace(*quote), Model: strings.TrimSpace(*model),
-		ContentHash: checks.ContentHash(lines), RubricHash: rule.RubricHash}
+		ContentHash: *contentHash, RubricHash: *rubricHash}
 	if err := review.AppendJudgment(filepath.Join(store, review.CommentsFileName), j); err != nil {
 		return err
 	}
 	fmt.Printf("recorded %s on %s: %s\n", rule.ID, rel, *verdict)
+	if *rubricHash != rule.RubricHash {
+		fmt.Fprintf(os.Stderr, "note: %s's rubric changed since the request; the review shows this verdict as out of date\n", rule.ID)
+	}
 	return nil
 }
 
-// storeRoot is the directory a store belongs to: the path above its
-// .prereview segment (the REPO line printed at launch).
-func storeRoot(store string) string {
-	p := filepath.ToSlash(store)
-	if i := strings.LastIndex(p, "/"+storeDirName); i >= 0 {
-		return filepath.FromSlash(p[:i])
+// reviewRelPath checks a judged file is named the way the review keys files:
+// a clean, relative, slash path that doesn't climb out of the review.
+func reviewRelPath(file string) (string, error) {
+	p := filepath.ToSlash(file)
+	clean := path.Clean(p)
+	if path.IsAbs(clean) || filepath.IsAbs(file) || clean == ".." || strings.HasPrefix(clean, "../") || clean == "." {
+		return "", fmt.Errorf("%s is outside the review: --file takes the review-relative path the request names", file)
 	}
-	return filepath.Dir(store)
-}
-
-// reviewFile resolves a judged file against the review's root and refuses one
-// outside it. It returns the repo-relative (slash) path the review keys on.
-func reviewFile(root, file string) (rel, abs string, err error) {
-	abs = file
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(root, file)
-	}
-	abs = filepath.Clean(abs)
-	r, err := filepath.Rel(root, abs)
-	if err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-		return "", "", fmt.Errorf("%s is outside the review (%s)", file, root)
-	}
-	if fi, err := os.Stat(abs); err != nil || !fi.Mode().IsRegular() {
-		return "", "", fmt.Errorf("%s: not a file in the review (%s)", file, root)
-	}
-	return filepath.ToSlash(r), abs, nil
+	return clean, nil
 }

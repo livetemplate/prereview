@@ -23,9 +23,6 @@ const (
 	JudgeLabelsFileName = "judge-labels.jsonl"
 )
 
-// JudgeVerdicts are the only verdicts: binary, with a critique (no scores).
-var JudgeVerdicts = []string{checks.StatusPass, checks.StatusFail}
-
 // Judgment is one verdict, the agent-facing schema of judgments.jsonl.
 type Judgment struct {
 	File        string `json:"file"`  // repo-relative
@@ -77,7 +74,7 @@ func loadJudgments(path string) map[string]Judgment {
 	out := map[string]Judgment{}
 	readJSONL(path, func(line []byte) {
 		var j Judgment
-		if json.Unmarshal(line, &j) != nil || j.File == "" || j.Judge == "" || !validVerdict(j.Verdict) {
+		if json.Unmarshal(line, &j) != nil || j.File == "" || j.Judge == "" || !ValidVerdict(j.Verdict) {
 			return
 		}
 		out[judgmentKey(j.File, j.Judge)] = j
@@ -118,7 +115,8 @@ func readJSONL(path string, each func([]byte)) {
 	}
 }
 
-func validVerdict(v string) bool { return v == checks.StatusPass || v == checks.StatusFail }
+// ValidVerdict reports one of the only verdicts: binary, with a critique (no scores).
+func ValidVerdict(v string) bool { return v == checks.StatusPass || v == checks.StatusFail }
 
 // appendJSONL appends one JSON line to path, creating it.
 func appendJSONL(path string, v any) error {
@@ -136,7 +134,7 @@ func appendJSONL(path string, v any) error {
 // AppendJudgment validates and records a verdict (the `prereview judge` write
 // path). The caller supplies the hashes it computed from the file and rubric.
 func AppendJudgment(csvPath string, j Judgment) error {
-	if !validVerdict(j.Verdict) {
+	if !ValidVerdict(j.Verdict) {
 		return fmt.Errorf("verdict must be pass or fail, got %q", j.Verdict)
 	}
 	if strings.TrimSpace(j.Critique) == "" {
@@ -154,12 +152,11 @@ func AppendJudgment(csvPath string, j Judgment) error {
 // is read only to locate a current verdict's quote, which becomes its one
 // finding so the file view can mark it and jump to it.
 func judgeResult(r *checks.Rule, j Judgment, ok bool, contentHash string, lines func() []string) checks.Result {
-	res := checks.Result{ID: r.ID, Name: r.Name, Description: r.Description, Category: r.Category,
-		Type: checks.TypeJudge, Level: r.Level, Source: r.Source, Path: r.Path}
+	if r.Err != "" {
+		return checks.ErrorResult(r, r.Err)
+	}
+	res := checks.NewResult(r)
 	switch {
-	case r.Err != "":
-		res.Status, res.Err = checks.StatusError, r.Err
-		return res
 	case !ok:
 		res.Status = checks.StatusNotRun
 		return res
@@ -170,9 +167,11 @@ func judgeResult(r *checks.Rule, j Judgment, ok bool, contentHash string, lines 
 		return res
 	}
 	res.Status = j.Verdict
-	if f, found := quoteFinding(lines(), j.Quote); j.Quote != "" && found {
-		f.Message, f.Severity = j.Critique, checks.LevelSuggestion
-		res.Findings = []checks.Finding{f}
+	if j.Quote != "" { // read the text only for a verdict that quotes it
+		if f, found := quoteFinding(lines(), j.Quote); found {
+			f.Message, f.Severity = j.Critique, checks.LevelSuggestion
+			res.Findings = []checks.Finding{f}
+		}
 	}
 	return res
 }

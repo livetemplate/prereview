@@ -73,11 +73,11 @@ type PrereviewState struct {
 	ShowPassingGroups bool   `json:"show_passing_groups"`
 	// Judges (M2): ChecksKind filters the page to checkers or judges ("" both);
 	// JudgeLabels are the reviewer's Agree/Disagree answers (judge-labels.jsonl,
-	// keyed labelKey); JudgeWait is when "Run judges" was last sent, per file
-	// (RFC 3339, so state stays plain JSON).
+	// keyed labelKey); JudgmentsSeen is the judgments.jsonl fingerprint this tab
+	// last applied (the watcher re-applies checks only when it changes).
 	ChecksKind     string            `json:"checks_kind"`
 	JudgeLabels    map[string]string `json:"judge_labels"`
-	JudgeWait      map[string]string `json:"judge_wait"`
+	JudgmentsSeen  string            `json:"judgments_seen"`
 	DisabledChecks []string          `json:"disabled_checks"`
 	Editor         string            `json:"editor"`
 	EditorTemplate string            `json:"editor_template"`

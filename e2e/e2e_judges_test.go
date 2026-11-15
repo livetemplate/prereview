@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -26,10 +27,16 @@ const readerFirstJudge = "---\nkind: judge\nname: Reader first\ncategory: Reader
 	"Does the text lead with what the reader must do?\n"
 
 // playJudge records a verdict the way the agent does: the real CLI, with the
+// content and rubric hashes copied from the queued request's command and the
 // same checks folder the server reads.
-func playJudge(t *testing.T, p *runningPrereview, repo string, args ...string) {
+func playJudge(t *testing.T, p *runningPrereview, repo, request string, args ...string) {
 	t.Helper()
-	cmd := exec.Command(p.binary, append([]string{"judge", "--out", p.store}, args...)...)
+	m := regexp.MustCompile(`--content-hash (\S+) --rubric-hash (\S+)`).FindStringSubmatch(request)
+	if m == nil {
+		t.Fatalf("the request has no hashes to copy:\n%s", request)
+	}
+	args = append([]string{"judge", "--out", p.store, "--content-hash", m[1], "--rubric-hash", m[2]}, args...)
+	cmd := exec.Command(p.binary, args...)
 	cmd.Env = append(os.Environ(), "PREREVIEW_CHECKS_DIR="+checksDirFor(repo))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("prereview judge: %v: %s", err, out)
@@ -71,15 +78,16 @@ func TestE2E_Judges(t *testing.T) {
 			if got := textOf(t, p, `.ck-strip .ck-waiting`); got != "Asked your agent · 1 judge" {
 				t.Errorf("waiting %q%s", got, diag())
 			}
-			if cm := onlyComment(t, p); cm.Kind != "file" || !strings.Contains(cm.Body, "--judge reader-first") {
-				t.Errorf("queued request %+v%s", cm, diag())
+			request := onlyComment(t, p)
+			if request.Kind != "file" || !strings.Contains(request.Body, "--judge reader-first") {
+				t.Errorf("queued request %+v%s", request, diag())
 			}
 
 			// The agent answers (fail, quoting line 40): live, no reload.
 			if err := chromedp.Run(ctx, chromedp.Evaluate(`window.__noReload = 1`, nil)); err != nil {
 				t.Fatal(err)
 			}
-			playJudge(t, p, repo, "--file", "notes.md", "--judge", "reader-first", "--verdict", "fail",
+			playJudge(t, p, repo, request.Body, "--file", "notes.md", "--judge", "reader-first", "--verdict", "fail",
 				"--critique", "Buries what the reader must do.", "--quote", "This is very good.", "--model", "test-model")
 			if err := chromedp.Run(ctx, chromedp.WaitVisible(`.ck-strip .ck-strip-pick button.is-judge`, chromedp.ByQuery)); err != nil {
 				t.Fatalf("the verdict didn't render live: %v%s", err, diag())

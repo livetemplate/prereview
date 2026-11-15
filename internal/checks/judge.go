@@ -132,16 +132,26 @@ func rubricTitle(s string) string {
 // JudgePrompt is the request the reviewer's "Run judges" queues to the agent: a
 // file-level comment listing each judge's rubric and the exact command that
 // records its verdict. store is the review's STORE path (the agent passes it as
-// --out).
-func JudgePrompt(file, store string, judges []*Rule) string {
+// --out); contentHash is the file's ContentHash as the review shows it, carried
+// in each command with the rubric's hash so the verdict records exactly what was
+// judged (the CLI never has to resolve or re-read the file).
+func JudgePrompt(file, store, contentHash string, judges []*Rule) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Judge `%s` against %d rubric(s). For each one, read the whole file, decide pass or fail, and record the verdict with the exact command below — one call per judge. Do **not** edit the file and do **not** propose suggestions for this request; then mark this comment done.\n\n", file, len(judges))
+	fmt.Fprintf(&b, judgeRequestLead+"%s` against %d rubric(s). For each one, read the whole file, decide pass or fail, and record the verdict with the exact command below — one call per judge. Do **not** edit the file and do **not** propose suggestions for this request; then mark this comment done.\n\n", file, len(judges))
 	b.WriteString("A verdict is binary: pass only if the file clearly meets the rubric. The critique says why in one or two sentences; when it is about a specific passage, add `--quote` with that exact text from the file so the reviewer can jump to it.\n")
 	for _, j := range judges {
-		fmt.Fprintf(&b, "\n### %s\n\n%s\n\n```\nprereview judge --out %s --file %s --judge %s --verdict pass|fail --critique \"…\" [--quote \"exact text\"] [--model <your model id>]\n```\n",
-			j.Name, j.Rubric, shellQuote(store), shellQuote(file), j.ID)
+		fmt.Fprintf(&b, "\n### %s\n\n%s\n\n```\nprereview judge --out %s --file %s --judge %s --content-hash %s --rubric-hash %s --verdict pass|fail --critique \"…\" [--quote \"exact text\"] [--model <your model id>]\n```\n",
+			j.Name, j.Rubric, shellQuote(store), shellQuote(file), j.ID, contentHash, j.RubricHash)
 	}
 	return b.String()
+}
+
+// judgeRequestLead opens every judge request; IsJudgeRequest recognises one.
+const judgeRequestLead = "Judge `"
+
+// IsJudgeRequest reports a comment body that is a "Run judges" request for file.
+func IsJudgeRequest(body, file string) bool {
+	return strings.HasPrefix(body, judgeRequestLead+file+"` against ")
 }
 
 // shellQuote single-quotes s when it holds anything a shell would split on.

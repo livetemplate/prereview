@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -30,6 +29,7 @@ func judgeFixture(t *testing.T) (root, store string) {
 func TestRunJudge_Records(t *testing.T) {
 	root, store := judgeFixture(t)
 	err := runJudge([]string{"--out", store, "--file", "doc.md", "--judge", "reader-first", "--verdict", "fail",
+		"--content-hash", "c0ffee", "--rubric-hash", "r1",
 		"--critique", "Buries the action.", "--quote", "very good", "--model", "claude-opus-5-5"})
 	if err != nil {
 		t.Fatal(err)
@@ -42,11 +42,11 @@ func TestRunJudge_Records(t *testing.T) {
 	if err := json.Unmarshal(data, &j); err != nil {
 		t.Fatalf("%v: %s", err, data)
 	}
-	lines, _ := checks.ReadLines(filepath.Join(root, "doc.md"))
 	if j.File != "doc.md" || j.Judge != "reader-first" || j.Verdict != "fail" || j.Quote != "very good" ||
-		j.Model != "claude-opus-5-5" || j.ContentHash != checks.ContentHash(lines) || j.RubricHash == "" || j.At == "" {
-		t.Errorf("recorded %+v", j)
+		j.Model != "claude-opus-5-5" || j.ContentHash != "c0ffee" || j.RubricHash != "r1" || j.At == "" {
+		t.Errorf("recorded %+v (the hashes come from the request)", j)
 	}
+	_ = root
 }
 
 func TestRunJudge_Rejects(t *testing.T) {
@@ -54,12 +54,13 @@ func TestRunJudge_Rejects(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "other.md")
 	os.WriteFile(outside, []byte("x\n"), 0o644)
 	base := func(over ...string) []string {
-		args := map[string]string{"--out": store, "--file": "doc.md", "--judge": "reader-first", "--verdict": "pass", "--critique": "Fine."}
+		args := map[string]string{"--out": store, "--file": "doc.md", "--judge": "reader-first", "--verdict": "pass", "--critique": "Fine.",
+			"--content-hash": "c0ffee", "--rubric-hash": "r1"}
 		for i := 0; i+1 < len(over); i += 2 {
 			args[over[i]] = over[i+1]
 		}
 		var out []string
-		for _, k := range []string{"--out", "--file", "--judge", "--verdict", "--critique"} {
+		for _, k := range []string{"--out", "--file", "--judge", "--verdict", "--critique", "--content-hash", "--rubric-hash"} {
 			if args[k] != "" {
 				out = append(out, k, args[k])
 			}
@@ -70,13 +71,14 @@ func TestRunJudge_Rejects(t *testing.T) {
 		args []string
 		want string
 	}{
-		"unknown judge":     {base("--judge", "nope"), `no judge "nope"`},
-		"a checker":         {base("--judge", "house"), "is a checker"},
-		"bad verdict":       {base("--verdict", "maybe"), "pass or fail"},
-		"no critique":       {base("--critique", ""), "required"},
-		"outside":           {base("--file", outside), "outside the review"},
-		"escape with ../":   {base("--file", "../x.md"), "outside the review"},
-		"not in the review": {base("--file", "missing.md"), "not a file in the review"},
+		"unknown judge":   {base("--judge", "nope"), `no judge "nope"`},
+		"a checker":       {base("--judge", "house"), "is a checker"},
+		"bad verdict":     {base("--verdict", "maybe"), "pass or fail"},
+		"no critique":     {base("--critique", ""), "required"},
+		"outside":         {base("--file", outside), "outside the review"},
+		"escape with ../": {base("--file", "../x.md"), "outside the review"},
+		"no content hash": {base("--content-hash", ""), "required"},
+		"not applicable":  {base("--file", "code.go"), "doesn't apply"},
 	} {
 		err := runJudge(tc.args)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -87,16 +89,4 @@ func TestRunJudge_Rejects(t *testing.T) {
 		t.Error("a rejected verdict must write nothing")
 	}
 	_ = root
-}
-
-func TestStoreRoot(t *testing.T) {
-	for store, want := range map[string]string{
-		"/repo/.prereview":          "/repo",
-		"/repo/.prereview/doc.md-1": "/repo",
-		"/a/b/.prereview/":          "/a/b",
-	} {
-		if got := storeRoot(filepath.FromSlash(store)); got != filepath.FromSlash(want) {
-			t.Errorf("storeRoot(%q) = %q, want %q", store, got, want)
-		}
-	}
 }

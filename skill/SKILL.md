@@ -429,16 +429,20 @@ the whole file, decide pass or fail for each rubric, and record each verdict:
 
 ```bash
 prereview judge --out "<STORE>" --file docs/x.md --judge reader-first \
+  --content-hash <from the request> --rubric-hash <from the request> \
   --verdict fail --critique "Explains storage before saying what to do." \
   --quote "comments, suggestions and versions are kept" --model <your model id>
 ```
 
+- **Copy each command from the request**: it carries the file's and the rubric's
+  hashes, which record exactly what you judged (the review shows a verdict as out of
+  date once either changes).
 - **One call per judge.** A verdict is binary; the critique says why in a sentence
   or two. Pass only when the file clearly meets the rubric.
 - **`--quote`** (optional): the exact passage the critique is about, copied from
   the file, so the reviewer can jump to it. Leave it out for whole-document points.
-- Validated before anything is written: an unknown judge, a file outside the review
-  or a missing critique fails with a non-zero exit.
+- Validated before anything is written: an unknown judge, one that doesn't apply to
+  the file, a path outside the review or a missing critique fails with a non-zero exit.
 - Then `done` the request comment. Judges are advisory: the reviewer agrees or
   disagrees with each verdict, which calibrates the judge over time.
 

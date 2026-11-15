@@ -51,8 +51,8 @@ type Result struct {
 	JudgedAt string `json:"judged_at,omitempty"`
 }
 
-// newResult starts a Result carrying the rule's identity.
-func newResult(r *Rule) Result {
+// NewResult starts a Result carrying the rule's identity (judges too).
+func NewResult(r *Rule) Result {
 	return Result{ID: r.ID, Name: r.Name, Description: r.Description, Category: r.Category, Type: r.Type,
 		Level: r.Level, Source: r.Source, Path: r.Path}
 }
@@ -72,14 +72,14 @@ func (res Result) finish() Result {
 
 // ErrorResult is a rule that couldn't run (a parse error, a failed command).
 func ErrorResult(r *Rule, msg string) Result {
-	res := newResult(r)
+	res := NewResult(r)
 	res.Err = msg
 	return res.finish()
 }
 
 // RunningResult is a placeholder for an async rule whose result hasn't arrived.
 func RunningResult(r *Rule) Result {
-	res := newResult(r)
+	res := NewResult(r)
 	res.Status = StatusRunning
 	return res
 }
@@ -92,7 +92,7 @@ func RunInline(r *Rule, d *Doc) Result {
 	if r.Err != "" {
 		return ErrorResult(r, r.Err)
 	}
-	res := newResult(r)
+	res := NewResult(r)
 	switch r.Type {
 	case TypeExistence, TypeSubstitution, TypeVocab:
 		res.Findings = d.matchPatterns(r)

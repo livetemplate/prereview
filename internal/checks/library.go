@@ -40,13 +40,16 @@ func Load(dirs ...Dir) *Library {
 	h := sha256.New()
 	add := func(name, source, p string, data []byte) {
 		id := ruleID(name)
-		h.Write([]byte(source + "\x00" + p + "\x00" + name + "\x00"))
-		h.Write(data)
-		h.Write([]byte{0})
 		if strings.HasSuffix(name, ".md") {
+			// Judges never run here, so they stay out of the hash: editing a
+			// rubric must not invalidate every checker result (RubricHash
+			// versions each judge on its own).
 			byID[id] = ParseJudge(id, source, p, data)
 			return
 		}
+		h.Write([]byte(source + "\x00" + p + "\x00" + name + "\x00"))
+		h.Write(data)
+		h.Write([]byte{0})
 		byID[id] = ParseRule(id, source, p, data)
 	}
 	entries, _ := fs.ReadDir(builtinFS, "builtin")

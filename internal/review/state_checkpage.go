@@ -283,6 +283,10 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		p.Categories = append(p.Categories, cc)
 	}
 
+	var tallies map[string][2]int
+	if p.Judges > 0 {
+		tallies = s.agreementTallies()
+	}
 	// Groups, in sidebar order.
 	byCat := map[string]*CheckGroup{}
 	for _, a := range base {
@@ -301,7 +305,7 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		case checks.StatusError:
 			g.Errors++
 		}
-		g.Rows = append(g.Rows, s.checkRow(a, st))
+		g.Rows = append(g.Rows, s.checkRow(a, st, tallies))
 		p.Matches++
 	}
 	// Passing groups fold only on the unfiltered page: a search, chip, category
@@ -365,13 +369,13 @@ func findingView(path string, r checks.Result, i int) FindingView {
 
 // checkRow renders one aggregated check; an expanded row carries its findings
 // (capped) and errors.
-func (s PrereviewState) checkRow(a *checkAgg, status string) CheckRow {
+func (s PrereviewState) checkRow(a *checkAgg, status string, tallies map[string][2]int) CheckRow {
 	r := a.first
 	row := CheckRow{ID: r.ID, Name: r.Name, Description: r.Description, Category: r.Category,
 		Source: r.Source, Status: status, Count: a.count, Expanded: s.ExpandedCheck == r.ID,
 		RulePath: r.Path}
 	if a.isJudge {
-		s.judgeRow(&row, a)
+		s.judgeRow(&row, a, tallies[row.ID])
 		return row
 	}
 	switch status {
@@ -463,7 +467,7 @@ type CheckStrip struct {
 	Pos      int // 1-based finding under the cursor
 	Count    int
 	Failing  []CheckPick
-	Judge    *JudgeCard // the selected check is a judge
+	Judge    *JudgeVerdictView // the selected check is a judge: its card
 
 	// Judges on this file (idle bar).
 	JudgesRun     int  // enabled judges that apply: "Run judges (n)"
@@ -480,10 +484,19 @@ type CheckPick struct {
 	Judge    bool
 }
 
-// JudgeCard is a picked judge's verdict, shown above the file.
-type JudgeCard struct {
-	Status, Critique, Model, At, Label string
-	CanShow                            bool // its quote was found in the file
+// openJudgeRequest is when the open file's newest still-open "Run judges"
+// request was queued (zero if none). Derived from the request comment — shared
+// by every tab and surviving a reload — so the waiting state is the queue's own:
+// it ends when verdicts land or the agent marks the request done.
+func (s PrereviewState) openJudgeRequest() time.Time {
+	var asked time.Time
+	for _, c := range s.Comments {
+		if c.File == s.SelectedFile && c.Kind == commentKindFile && !c.Resolved && !c.Processed &&
+			checks.IsJudgeRequest(c.Body, s.SelectedFile) && c.Created.After(asked) {
+			asked = c.Created
+		}
+	}
+	return asked
 }
 
 // judgeWaitTimeout is how long "Asked your agent" waits for a judge's verdict
@@ -497,16 +510,15 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 	}
 	if r, ok := s.checkResult(s.SelectedCheck); ok && r.Type == checks.TypeJudge && !s.checkDisabled(r.ID) &&
 		(r.Status == checks.StatusPass || r.Status == checks.StatusFail || r.Status == checks.StatusStale) {
-		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: len(r.Findings), Pos: 1,
-			Judge: &JudgeCard{Status: r.Status, Critique: r.Critique, Model: r.Model, At: r.JudgedAt,
-				Label: s.JudgeLabels[labelKey(s.SelectedFile, r.ID, r.JudgedAt)], CanShow: len(r.Findings) > 0}}
+		v := s.verdictView(s.SelectedFile, r)
+		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: len(r.Findings), Pos: 1, Judge: &v}
 	}
 	if r, ok := s.selectedFindings(); ok {
 		n := len(r.Findings)
 		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: n, Pos: min(max(s.FindingCursor, 0), n-1) + 1}
 	}
 	st := &CheckStrip{NeedsAgent: !s.AgentMode}
-	asked, _ := time.Parse(time.RFC3339Nano, s.JudgeWait[s.SelectedFile])
+	asked := s.openJudgeRequest()
 	unanswered := 0
 	for _, r := range s.Checks.Results {
 		if s.checkDisabled(r.ID) {
@@ -560,13 +572,18 @@ func (s PrereviewState) aggJudge(a *checkAgg, path string, r checks.Result, q st
 	if r.ID != s.ExpandedCheck {
 		return
 	}
-	a.verdicts = append(a.verdicts, JudgeVerdictView{Path: path, CheckID: r.ID, Open: path == s.SelectedFile,
+	a.verdicts = append(a.verdicts, s.verdictView(path, r))
+}
+
+// verdictView is one judge result as the page row and the file's card show it.
+func (s PrereviewState) verdictView(path string, r checks.Result) JudgeVerdictView {
+	return JudgeVerdictView{Path: path, CheckID: r.ID, Open: path == s.SelectedFile,
 		Status: r.Status, Critique: r.Critique, Model: r.Model, At: r.JudgedAt,
-		Label: s.JudgeLabels[labelKey(path, r.ID, r.JudgedAt)], CanShow: len(r.Findings) > 0})
+		Label: s.JudgeLabels[labelKey(path, r.ID, r.JudgedAt)], CanShow: len(r.Findings) > 0}
 }
 
 // judgeRow fills a judge's summary, detail and agreement.
-func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg) {
+func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg, tally [2]int) {
 	row.IsJudge = true
 	n := func(st string) int { return a.judged[st] }
 	files := n(checks.StatusPass) + n(checks.StatusFail) + n(checks.StatusStale) + n(checks.StatusNotRun)
@@ -588,7 +605,7 @@ func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg) {
 		row.Summary = "not run"
 	}
 	row.Detail = "judge · advisory · " + row.SourceLabel()
-	row.Agreement = s.judgeAgreement(row.ID)
+	row.Agreement = agreementText(tally)
 	if row.RulePath != "" {
 		row.EditorURL = editorURL(s.Editor, s.EditorTemplate, s.EditorSSHHost, row.RulePath, 1)
 	}
@@ -596,21 +613,30 @@ func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg) {
 	row.Verdicts = a.verdicts
 }
 
-// judgeAgreement is how often you agreed with a judge's verdicts so far — its
-// calibration (M5 scores it; M2 shows it).
-func (s PrereviewState) judgeAgreement(id string) string {
-	agree, total := 0, 0
+// agreementTallies counts your answers per judge — [agree, total] — once per
+// page build (labels are keyed file\x00judge\x00at).
+func (s PrereviewState) agreementTallies() map[string][2]int {
+	out := map[string][2]int{}
 	for k, label := range s.JudgeLabels {
 		parts := strings.SplitN(k, "\x00", 3)
-		if len(parts) == 3 && parts[1] == id {
-			total++
-			if label == LabelAgree {
-				agree++
-			}
+		if len(parts) != 3 {
+			continue
 		}
+		t := out[parts[1]]
+		if label == LabelAgree {
+			t[0]++
+		}
+		t[1]++
+		out[parts[1]] = t
 	}
-	if total == 0 {
+	return out
+}
+
+// agreementText is how often you agreed with a judge's verdicts so far — its
+// calibration (M5 scores it; M2 shows it).
+func agreementText(t [2]int) string {
+	if t[1] == 0 {
 		return "no answers from you yet"
 	}
-	return fmt.Sprintf("agrees with you %d of %d", agree, total)
+	return fmt.Sprintf("agrees with you %d of %d", t[0], t[1])
 }

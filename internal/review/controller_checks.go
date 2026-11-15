@@ -2,11 +2,8 @@ package review
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -276,24 +273,44 @@ func judgeResults(res []checks.Result, path string, judges []*checks.Rule, verdi
 	return res
 }
 
-// keyContentHash is the content part of a checkKey as a checks.ContentHash
-// (both hash the lines the same way), so the page needn't re-read a file to
-// tell whether a verdict is current.
+// keyContentHash is a checkKey's content part — checks.ContentHash of the lines —
+// so the page needn't re-read a file to tell whether a verdict is current.
 func keyContentHash(key string) string {
 	_, rest, _ := strings.Cut(key, "\x00")
 	h, _, _ := strings.Cut(rest, "\x00")
-	if len(h) > 16 {
-		h = h[:16]
-	}
 	return h
 }
 
-// verdicts loads the agent's judge verdicts (small, agent-appended).
+// verdicts is the agent's judge verdicts, latest per (file, judge), re-read only
+// when judgments.jsonl changes. Shared by every tab: read-only.
 func (c *PrereviewController) verdicts() map[string]Judgment {
 	if c.CSVPath == "" {
 		return nil
 	}
-	return loadJudgments(JudgmentsPath(c.CSVPath))
+	p := JudgmentsPath(c.CSVPath)
+	fp := statusFingerprint(p)
+	c.judgeMu.Lock()
+	defer c.judgeMu.Unlock()
+	if c.judgeCache == nil || fp != c.judgeFP {
+		c.judgeCache, c.judgeFP = loadJudgments(p), fp
+	}
+	return c.judgeCache
+}
+
+// judgeLabels is the reviewer's Agree/Disagree answers, re-read only when
+// judge-labels.jsonl changes. Shared by every tab: read-only.
+func (c *PrereviewController) judgeLabels() map[string]string {
+	if c.CSVPath == "" {
+		return nil
+	}
+	p := JudgeLabelsPath(c.CSVPath)
+	fp := statusFingerprint(p)
+	c.judgeMu.Lock()
+	defer c.judgeMu.Unlock()
+	if c.labelCache == nil || fp != c.labelFP {
+		c.labelCache, c.labelFP = loadJudgeLabels(p), fp
+	}
+	return c.labelCache
 }
 
 // results returns path's results for one content (key = checkKey) from the
@@ -341,8 +358,8 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 	if len(rules) == 0 && len(judges) == 0 && cs.mode == valeOff {
 		return
 	}
-	if c.CSVPath != "" {
-		state.JudgeLabels = loadJudgeLabels(JudgeLabelsPath(c.CSVPath))
+	if len(judges) > 0 {
+		state.JudgeLabels = c.judgeLabels()
 	}
 	lines := sideContent(d, "new")
 	if len(lines) == 0 {
@@ -584,12 +601,7 @@ func (r *checkRunner) release() { <-r.sem }
 // checkKey identifies one file's content under one library; it ends with the
 // library hash so a memoised key can be checked against a reloaded library.
 func checkKey(path string, lines []string, libHash string) string {
-	h := sha256.New()
-	for _, l := range lines {
-		h.Write([]byte(l))
-		h.Write([]byte{'\n'})
-	}
-	return path + "\x00" + hex.EncodeToString(h.Sum(nil)) + "\x00" + libHash
+	return path + "\x00" + checks.ContentHash(lines) + "\x00" + libHash
 }
 
 // ToggleLibrary opens or closes the Library (the toolbar button), on the Checks
@@ -751,7 +763,12 @@ func (c *PrereviewController) ToggleCheckEnabled(state PrereviewState, ctx *live
 // open edit survives. path names the finding's file (the Checks page queues
 // findings in files that aren't open); "" means the open file.
 func (c *PrereviewController) QueueFinding(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	path, id, idx := ctx.GetString("path"), ctx.GetString("id"), ctx.GetInt("index")
+	return c.queueFinding(state, ctx.GetString("path"), ctx.GetString("id"), ctx.GetInt("index"))
+}
+
+// queueFinding queues finding idx of check id in path ("" = the open file) as a
+// text comment on its span, labelled by kind ("(check: …)" / "(judge: …)").
+func (c *PrereviewController) queueFinding(state PrereviewState, path, id string, idx int) (PrereviewState, error) {
 	if path == "" {
 		path = state.SelectedFile
 	}
@@ -771,8 +788,12 @@ func (c *PrereviewController) QueueFinding(state PrereviewState, ctx *livetempla
 	if anchor.Snippet == "" {
 		anchor.Snippet = f.Message // a zero-width span still needs a snippet
 	}
+	kind := "check"
+	if res.Type == checks.TypeJudge {
+		kind = "judge"
+	}
 	cm := newTextComment(path, f.Line, f.EndLine, f.FromCol, f.ToCol, "new",
-		fmt.Sprintf("%s (check: %s)", f.Message, res.Name), anchor)
+		fmt.Sprintf("%s (%s: %s)", f.Message, kind, res.Name), anchor)
 	state.Comments = append(state.Comments, cm)
 	if err := c.persist(state.Comments); err != nil {
 		state.Comments = state.Comments[:len(state.Comments)-1]
@@ -902,18 +923,11 @@ func (c *PrereviewController) RunJudges(state PrereviewState, ctx *livetemplate.
 	if len(run) == 0 {
 		return state, nil
 	}
-	resetToFileComment(&state)
-	state.DraftBody = ""
-	state, err := c.addFileLevelComment(state, checks.JudgePrompt(state.SelectedFile, filepath.Dir(c.CSVPath), run))
+	prompt := checks.JudgePrompt(state.SelectedFile, filepath.Dir(c.CSVPath), checks.ContentHash(sideContent(d, "new")), run)
+	state, err := c.queueFileComment(state, prompt)
 	if err != nil {
 		return state, err
 	}
-	wait := maps.Clone(state.JudgeWait)
-	if wait == nil {
-		wait = map[string]string{}
-	}
-	wait[state.SelectedFile] = time.Now().UTC().Format(time.RFC3339Nano)
-	state.JudgeWait = wait
 	state.Flash = fmt.Sprintf("Asked your agent to run %d judge%s", len(run), plural(len(run)))
 	return state, nil
 }
@@ -929,18 +943,11 @@ func (c *PrereviewController) LabelJudgment(state PrereviewState, ctx *livetempl
 	if label != LabelAgree && label != LabelDisagree {
 		return state, fmt.Errorf("label judgment: unknown label %q", label)
 	}
-	var at string
-	for _, pc := range state.pageFiles() {
-		if pc.Path != path {
-			continue
-		}
-		if r, ok := resultFor(pc.Results, id); ok && r.Type == checks.TypeJudge {
-			at = r.JudgedAt
-		}
-	}
-	if at == "" {
+	j, ok := c.verdicts()[judgmentKey(path, id)]
+	if !ok {
 		return state, fmt.Errorf("label judgment: no verdict from %s on %s", id, path)
 	}
+	at := j.At
 	if state.JudgeLabels[labelKey(path, id, at)] == label {
 		label = "" // the same answer again takes it back
 	}
@@ -948,7 +955,7 @@ func (c *PrereviewController) LabelJudgment(state PrereviewState, ctx *livetempl
 		When: time.Now().UTC().Format(time.RFC3339)}); err != nil {
 		return state, fmt.Errorf("label judgment: %w", err)
 	}
-	state.JudgeLabels = loadJudgeLabels(JudgeLabelsPath(c.CSVPath))
+	state.JudgeLabels = c.judgeLabels()
 	go c.broadcast("ChecksUpdated") // other tabs show the answer too
 	return state, nil
 }
@@ -963,10 +970,7 @@ func (c *PrereviewController) QueueJudgment(state PrereviewState, ctx *livetempl
 		return state, fmt.Errorf("queue judgment: no verdict from %s", id)
 	}
 	if len(r.Findings) > 0 {
-		return c.QueueFinding(state, livetemplate.NewContext(context.Background(), "queueFinding",
-			map[string]interface{}{"path": state.SelectedFile, "id": id, "index": 0}))
+		return c.queueFinding(state, "", id, 0)
 	}
-	resetToFileComment(&state)
-	state.DraftBody = ""
-	return c.addFileLevelComment(state, fmt.Sprintf("%s (judge: %s)", r.Critique, r.Name))
+	return c.queueFileComment(state, fmt.Sprintf("%s (judge: %s)", r.Critique, r.Name))
 }
