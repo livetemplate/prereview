@@ -678,10 +678,10 @@
   
   <div class="ck-strip" data-key="checks-strip" role="status" aria-label="Showing one check">
     
-    <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name">Filler intensifiers</b>
-    <span class="ck-strip-pos">finding 1 of 1 in this file</span>
+    <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name" title="Filler intensifiers">Filler intensifiers</b>
     <span class="ck-strip-nav">
       <form method="POST"><input type="hidden" name="dir" value="-1"><button type="submit" name="stepFinding" class="outline" aria-label="Previous finding">‹</button></form>
+      <span class="ck-strip-pos"><span class="ck-pos-long">finding 1 of 1 in this file</span><span class="ck-pos-short" aria-hidden="true">1/1</span></span>
       <form method="POST"><input type="hidden" name="dir" value="1"><button type="submit" name="stepFinding" class="outline" aria-label="Next finding">›</button></form>
     </span>
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>

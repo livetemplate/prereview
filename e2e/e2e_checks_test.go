@@ -135,8 +135,13 @@ func TestE2E_ChecksPage(t *testing.T) {
 			); err != nil {
 				t.Fatalf("pick the check: %v%s", err, diag())
 			}
-			if got := textOf(t, p, `.ck-strip .ck-strip-pos`); got != "finding 1 of 1 in this file" {
+			if got := textOf(t, p, `.ck-strip .ck-pos-long`); got != "finding 1 of 1 in this file" {
 				t.Errorf("stepper says %q%s", got, diag())
+			}
+			// The stepper is one row at every width (it wrapped on a phone).
+			var rows int
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`new Set([...document.querySelector('.ck-strip').children].filter(e => e.offsetParent).map(e => Math.round(e.getBoundingClientRect().top / 8))).size`, &rows)); err != nil || rows != 1 {
+				t.Errorf("the stepper bar spans %d rows (%v)%s", rows, err, diag())
 			}
 			if got := textOf(t, p, `.code mark.check-finding`); got != "very" {
 				t.Errorf("marked span = %q, want very%s", got, diag())
@@ -368,7 +373,7 @@ func TestE2E_ChecksShowInFile(t *testing.T) {
 	if got := textOf(t, p, `header.file-head .file-path, header.file-head h2, header.file-head`); !strings.Contains(got, "other.md") {
 		t.Errorf("the file shown isn't other.md: %q%s", got, diag())
 	}
-	if got := textOf(t, p, `.ck-strip .ck-strip-pos`); got != "finding 1 of 2 in this file" {
+	if got := textOf(t, p, `.ck-strip .ck-pos-long`); got != "finding 1 of 2 in this file" {
 		t.Errorf("stepper %q%s", got, diag())
 	}
 	if n := countSel(t, p, `.code mark.check-finding`); n != 2 {
@@ -387,14 +392,14 @@ func TestE2E_ChecksShowInFile(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	waitJSTrue(t, p.ctx, `document.querySelector('.ck-strip .ck-strip-pos').textContent.trim() === 'finding 2 of 2 in this file'`, 5*time.Second, "› steps to the second finding")
+	waitJSTrue(t, p.ctx, `document.querySelector('.ck-strip .ck-pos-long').textContent.trim() === 'finding 2 of 2 in this file'`, 5*time.Second, "› steps to the second finding")
 	if got := textOf(t, p, `.code .line.is-cursor .gutter, .code .line.is-cursor`); got == first {
 		t.Errorf("› didn't move the cursor row (%q)%s", got, diag())
 	}
 	if err := chromedp.Run(ctx, chromedp.Click(`.ck-strip-nav form:last-child button`, chromedp.ByQuery)); err != nil {
 		t.Fatal(err)
 	}
-	waitJSTrue(t, p.ctx, `document.querySelector('.ck-strip .ck-strip-pos').textContent.trim() === 'finding 1 of 2 in this file'`, 5*time.Second, "› from the last wraps to the first, in this file")
+	waitJSTrue(t, p.ctx, `document.querySelector('.ck-strip .ck-pos-long').textContent.trim() === 'finding 1 of 2 in this file'`, 5*time.Second, "› from the last wraps to the first, in this file")
 	if got := textOf(t, p, `header.file-head`); !strings.Contains(got, "other.md") {
 		t.Errorf("stepping changed the file%s", diag())
 	}

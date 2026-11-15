@@ -30,10 +30,10 @@
 {{define "checksStrip"}}{{with $.CheckStrip}}
   <div class="ck-strip{{if not .Selected}} is-idle{{end}}" data-key="checks-strip" role="{{if .Selected}}status{{else}}group{{end}}" aria-label="{{if .Selected}}Showing one check{{else}}Failing checks on this file{{end}}">
     {{if .Selected}}
-    <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name">{{.Name}}</b>
-    <span class="ck-strip-pos">finding {{.Pos}} of {{.Count}} in this file</span>
+    <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name" title="{{.Name}}">{{.Name}}</b>
     <span class="ck-strip-nav">
       <form method="POST"><input type="hidden" name="dir" value="-1"><button type="submit" name="stepFinding" class="outline" aria-label="Previous finding">‹</button></form>
+      <span class="ck-strip-pos"><span class="ck-pos-long">finding {{.Pos}} of {{.Count}} in this file</span><span class="ck-pos-short" aria-hidden="true">{{.Pos}}/{{.Count}}</span></span>
       <form method="POST"><input type="hidden" name="dir" value="1"><button type="submit" name="stepFinding" class="outline" aria-label="Next finding">›</button></form>
     </span>
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
