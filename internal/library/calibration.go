@@ -31,8 +31,8 @@ type Label struct {
 	ContentHash string `json:"content_hash"`
 	Verdict     string `json:"verdict"` // pass | fail: what the judge said
 	Critique    string `json:"critique,omitempty"`
-	Label       string `json:"label"`   // agree | disagree; "" takes the answer back
-	Store       string `json:"store"`   // the review it was given in
+	Label       string `json:"label"` // agree | disagree; "" takes the answer back
+	Store       string `json:"store"` // the review it was given in
 	File        string `json:"file"`
 	At          string `json:"at"`   // the verdict's time: which verdict this answers
 	When        string `json:"when"` // when you answered
@@ -50,10 +50,10 @@ type Calibration struct {
 	Agree, Total int // answers for the current rubric
 	WindowAgree  int // of the last CalibrateWindow
 	Calibrated   bool
-	Earlier      int  // answers given to earlier rubric versions (history)
-	OneSided     bool // every labeled verdict was the same: it doesn't discriminate
-	Flaky        bool // the same content got both verdicts from the same rubric
-	Disagreed    []Label
+	Earlier      int     // answers given to earlier rubric versions (history)
+	OneSided     bool    // every labeled verdict was the same: it doesn't discriminate
+	Flaky        bool    // the same content got both verdicts from the same rubric
+	Disagreed    []Label // the latest CalibrateWindow you disagreed with
 }
 
 // LoadCalibration folds the log for every judge whose current rubric hash is in
@@ -120,6 +120,9 @@ func Calibrate(ls []Label, rubric string) Calibration {
 		if len(vs) > 1 {
 			c.Flaky = true
 		}
+	}
+	if n := len(c.Disagreed); n > CalibrateWindow { // the most recent are what a rubric fix needs
+		c.Disagreed = c.Disagreed[n-CalibrateWindow:]
 	}
 	c.OneSided = c.Total >= 5 && len(verdicts) == 1
 	c.Calibrated = c.Total >= CalibrateMinLabels && c.WindowAgree >= CalibrateMinAgree && !c.Flaky

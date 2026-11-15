@@ -519,7 +519,7 @@ func renderFixtures() []renderFixture {
 		}
 		return checks.Result{ID: "reader-first", Name: "Written for the reader", Category: "Reader-first", Type: "judge",
 			Level: "suggestion", Source: "user", Path: "/home/u/.config/prereview/checks/reader-first.md", Status: status,
-			Critique: critique, Model: "claude-opus-5-5", JudgedAt: at, Findings: findings}
+			Critique: critique, Model: "claude-opus-5-5", JudgedAt: at, Findings: findings, Advisory: true}
 	}
 	failJudge := judgeRes("fail", "Explains storage before saying what to do.",
 		[]checks.Finding{{Line: 1, EndLine: 1, FromCol: 0, ToCol: 4, Message: "Explains storage before saying what to do.", Severity: "suggestion", Match: "This"}})
@@ -542,7 +542,9 @@ func renderFixtures() []renderFixture {
 	judgeCard := checksStrip
 	judgeCard.Checks = judgesFile
 	judgeCard.SelectedCheck = "reader-first"
-	judgeCard.JudgeCal = map[string]library.Calibration{"reader-first": {Agree: 9, Total: 10, WindowAgree: 9, Calibrated: true}}
+	calibratedJudge := failJudge
+	calibratedJudge.Advisory = false // calibrated: it counts
+	judgeCard.Checks = &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), calibratedJudge)}
 	judgeCard.AgentMode = true
 	judgeRun := checksStrip
 	judgeRun.SelectedCheck = ""
@@ -633,7 +635,7 @@ func renderFixtures() []renderFixture {
 				{Label: "v0.27 notes", Cells: []review.BenchCell{{Mark: "✓", Class: "bm-ok"}, {Mark: "!", Class: "bm-err", Title: "errored (not counted): timed out"}, {Mark: "…", Class: "bm-wait", Title: "waiting for your agent"}}},
 				{Label: "v0.28 draft", Cells: []review.BenchCell{{Mark: "✗", Class: "bm-no", Title: "2 findings"}, {Mark: "✓", Class: "bm-ok"}, {Mark: "✗", Class: "bm-no", Title: "Buries the action."}}}},
 			Runs: []review.BenchRunRow{
-				{When: "15 Nov 2026 10:12", Score: "0.67 so far (1 waiting)", Pins: "filler@3f2a · house@91c0 · reader@77ab", Comparable: true, Partial: true},
+				{When: "15 Nov 2026 10:12", Score: "0.67 so far (1 waiting)", Pins: "filler@3f2a · house@91c0 · reader@77ab", Comparable: true},
 				{When: "14 Nov 2026 09:00", Score: "0.88", Model: "claude-opus-5-5", Pins: "filler@3f2a · house@91c0 · reader@1d4e"}},
 			DefPath: "/home/u/.config/prereview/benchmarks/release-notes/benchmark.yml"}},
 		Judges: []review.JudgeCalRow{{Name: "Reader first", Agrees: "9 / 10", Status: "calibrated", Calibrated: true},

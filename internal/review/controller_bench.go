@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
-	"time"
 
 	"github.com/livetemplate/livetemplate"
 
@@ -61,7 +61,7 @@ type BenchCell struct {
 // BenchRunRow is one run in the runs table.
 type BenchRunRow struct {
 	When, Score, Model, Pins string
-	Comparable, Partial      bool
+	Comparable               bool
 }
 
 // JudgeCalRow is one judge's calibration on the Benchmarks tab.
@@ -81,34 +81,21 @@ func (c *PrereviewController) applyBenchTab(state *PrereviewState) {
 	}
 	tab := &BenchTab{CanAdd: state.CurrentDiff != nil && !state.CurrentDiff.IsBinary && state.SelectedFile != ""}
 	rules := c.rulesByID()
-	for _, bm := range bench.List(c.LibraryDir) {
-		tab.Cards = append(tab.Cards, c.benchCard(state, bm, rules))
+	for _, e := range c.benchmarks() {
+		tab.Cards = append(tab.Cards, c.benchCard(state, e.bm, e.runs, rules))
 	}
 	cal := c.calibration()
 	for _, r := range rules {
-		if !r.IsJudge() || r.Err != "" {
-			continue
+		if r.IsJudge() && r.Err == "" {
+			agrees, status := calibrationShort(cal[r.ID])
+			tab.Judges = append(tab.Judges, JudgeCalRow{Name: r.Name, Agrees: agrees, Status: status, Calibrated: cal[r.ID].Calibrated})
 		}
-		cc := cal[r.ID]
-		row := JudgeCalRow{Name: r.Name, Agrees: fmt.Sprintf("%d / %d", cc.Agree, cc.Total), Calibrated: cc.Calibrated, Status: "advisory"}
-		switch {
-		case cc.Calibrated:
-			row.Status = "calibrated"
-		case cc.Total < library.CalibrateMinLabels:
-			row.Status = fmt.Sprintf("advisory · needs %d answers", library.CalibrateMinLabels)
-		}
-		if cc.Flaky {
-			row.Status += " · flaky"
-		}
-		if cc.OneSided {
-			row.Status += " · doesn't discriminate"
-		}
-		tab.Judges = append(tab.Judges, row)
 	}
+	slices.SortFunc(tab.Judges, func(a, b JudgeCalRow) int { return strings.Compare(a.Name, b.Name) })
 	state.BenchTab = tab
 }
 
-func (c *PrereviewController) benchCard(state *PrereviewState, bm bench.Benchmark, rules map[string]*checks.Rule) BenchCard {
+func (c *PrereviewController) benchCard(state *PrereviewState, bm bench.Benchmark, runs []bench.Run, rules map[string]*checks.Rule) BenchCard {
 	card := BenchCard{ID: bm.ID, Name: bm.Name, Cases: len(bm.Cases), DefPath: bench.DefPath(c.LibraryDir, bm.ID)}
 	card.EditorURL = editorURL(state.Editor, state.EditorTemplate, state.EditorSSHHost, card.DefPath, 1)
 	for _, k := range bm.Checks {
@@ -126,7 +113,6 @@ func (c *PrereviewController) benchCard(state *PrereviewState, bm bench.Benchmar
 		}
 		card.Headers = append(card.Headers, name)
 	}
-	runs := bench.LoadRuns(c.LibraryDir, bm.ID)
 	tr := bm.Trend(runs)
 	switch {
 	case tr.N == 0:
@@ -137,35 +123,29 @@ func (c *PrereviewController) benchCard(state *PrereviewState, bm bench.Benchmar
 		card.Score, card.Spread = fmt.Sprintf("%.2f", tr.Mean), fmt.Sprintf("± %.2f over %d runs · weighted pass rate", tr.Std, tr.N)
 	}
 	var anchor *bench.Run
-	for i := range runs {
-		if runs[i].ID == tr.Latest {
-			anchor = &runs[i]
-		}
+	if tr.Latest >= 0 {
+		anchor = &runs[tr.Latest]
 	}
-	if len(runs) > 0 { // the matrix shows the newest run, finished or not
-		latest := runs[0]
-		card.Asking = !bm.Score(latest).Complete
-		for _, cs := range bm.Cases {
-			row := BenchRow{Label: cs.Label}
+	if len(runs) > 0 {
+		card.Asking = !bm.Score(runs[0]).Complete
+	}
+	for _, cs := range bm.Cases { // the matrix shows the newest run, finished or not
+		row := BenchRow{Label: cs.Label}
+		if len(runs) > 0 {
 			for _, k := range bm.Checks {
-				row.Cells = append(row.Cells, benchCell(latest, cs.ID, k.ID))
+				row.Cells = append(row.Cells, benchCell(runs[0], cs.ID, k.ID))
 			}
-			card.Rows = append(card.Rows, row)
 		}
-	} else {
-		for _, cs := range bm.Cases {
-			card.Rows = append(card.Rows, BenchRow{Label: cs.Label})
-		}
+		card.Rows = append(card.Rows, row)
 	}
 	for i, r := range runs {
 		if i == maxBenchRuns {
 			break
 		}
 		s := bm.Score(r)
-		row := BenchRunRow{When: shortWhen(r.At), Model: r.Model, Partial: !s.Complete, Pins: pinsText(bm, r.Pins),
-			Comparable: anchor == nil || bench.Comparable(*anchor, r)}
-		row.Score = fmt.Sprintf("%.2f", s.Value)
-		if row.Partial {
+		row := BenchRunRow{When: shortTime(r.At), Model: r.Model, Pins: pinsText(bm, r.Pins),
+			Comparable: anchor == nil || bench.Comparable(*anchor, r), Score: fmt.Sprintf("%.2f", s.Value)}
+		if !s.Complete {
 			row.Score = fmt.Sprintf("%.2f so far (%d waiting)", s.Value, s.Pending)
 		}
 		card.Runs = append(card.Runs, row)
@@ -199,14 +179,6 @@ func pinsText(bm bench.Benchmark, p bench.Pins) string {
 	return strings.Join(parts, " · ")
 }
 
-func shortWhen(ts string) string {
-	t, err := time.Parse(time.RFC3339Nano, ts)
-	if err != nil {
-		return ts
-	}
-	return t.Local().Format("2 Jan 2006 15:04")
-}
-
 // rulesByID is the loaded checks, by id.
 func (c *PrereviewController) rulesByID() map[string]*checks.Rule {
 	r := c.runner()
@@ -219,18 +191,13 @@ func (c *PrereviewController) rulesByID() map[string]*checks.Rule {
 	return out
 }
 
-// checkPin is a check's version: a judge's rubric hash, a checker's file
-// content (a built-in's is the binary's version).
-func (c *PrereviewController) checkPin(rule *checks.Rule) string {
+// checkPin is a check's version as loaded: a judge's rubric hash, a checker's
+// file content (a built-in's embedded file) — exactly what this run will use.
+func checkPin(rule *checks.Rule) string {
 	if rule.IsJudge() {
 		return rule.RubricHash
 	}
-	if rule.Path != "" {
-		if b, err := os.ReadFile(rule.Path); err == nil {
-			return bench.HashBytes(b)
-		}
-	}
-	return bench.HashBytes([]byte("builtin:" + rule.ID + ":" + c.Version))
+	return rule.ContentHash
 }
 
 // CreateBenchmark starts a benchmark from the open file: it becomes the first
@@ -300,16 +267,15 @@ func (c *PrereviewController) RunBenchmark(state PrereviewState, ctx *livetempla
 		if err != nil {
 			return state, err
 		}
-		b, err := os.ReadFile(p)
+		lines, err := checks.ReadLines(p) // split as the judge CLI's hash expects
 		if err != nil {
 			return state, fmt.Errorf("case %s: %w", cs.Label, err)
 		}
-		lines := strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
 		texts[cs.ID], pins.Cases[cs.ID] = lines, checks.ContentHash(lines)
 	}
 	for _, k := range bm.Checks {
 		if r := rules[k.ID]; r != nil && r.Err == "" {
-			pins.Checks[k.ID] = c.checkPin(r)
+			pins.Checks[k.ID] = checkPin(r)
 		} else {
 			pins.Checks[k.ID] = "missing"
 		}
@@ -318,10 +284,10 @@ func (c *PrereviewController) RunBenchmark(state PrereviewState, ctx *livetempla
 	if err != nil {
 		return state, err
 	}
-	var judges []bench.JudgeAsk
+	var judges []*checks.Rule
 	for _, k := range bm.Checks {
 		if r := rules[k.ID]; r != nil && r.Err == "" && r.IsJudge() {
-			judges = append(judges, bench.JudgeAsk{ID: r.ID, Name: r.Name, Rubric: r.Rubric, RubricHash: r.RubricHash})
+			judges = append(judges, r)
 		}
 	}
 	go c.runBenchCheckers(bm, run, rules, texts)
@@ -332,7 +298,7 @@ func (c *PrereviewController) RunBenchmark(state PrereviewState, ctx *livetempla
 			var cases []bench.CaseAsk
 			for _, cs := range bm.Cases {
 				p, _ := bench.CasePath(c.LibraryDir, bm.ID, cs)
-				cases = append(cases, bench.CaseAsk{ID: cs.ID, Label: cs.Label, Path: p, ContentHash: pins.Cases[cs.ID]})
+				cases = append(cases, bench.CaseAsk{ID: cs.ID, Path: p, ContentHash: pins.Cases[cs.ID]})
 			}
 			if state, err = c.queueRequest(state, bench.JudgePrompt(bm, run, judges, cases)); err != nil {
 				return state, err
@@ -343,9 +309,6 @@ func (c *PrereviewController) RunBenchmark(state PrereviewState, ctx *livetempla
 	c.applyBenchTab(&state)
 	return state, nil
 }
-
-// benchCommandTimeout bounds a command checker in a benchmark run.
-const benchCommandTimeout = 30 * time.Second
 
 // runBenchCheckers records every checker's result on every case, then tells the
 // tabs. A missing or broken check is an error (missing from the score, shown).
@@ -371,16 +334,14 @@ func (c *PrereviewController) runBenchCheckers(bm bench.Benchmark, run string, r
 						rec.Status, rec.Critique = bench.Error, err.Error()
 						break
 					}
-					ctx, cancel := context.WithTimeout(context.Background(), benchCommandTimeout)
-					res = checks.RunCommand(ctx, r, abs, []byte(strings.Join(texts[cs.ID], "\n")+"\n"))
-					cancel()
+					res = checks.RunCommand(context.Background(), r, abs, []byte(strings.Join(texts[cs.ID], "\n")+"\n")) // its own timeout
 				} else {
 					res = checks.RunInline(r, checks.NewDoc(cs.Label, texts[cs.ID]))
 				}
 				rec.Status = bench.Pass
 				switch res.Status {
 				case checks.StatusFail:
-					rec.Status, rec.Critique = bench.Fail, fmt.Sprintf("%d finding%s", len(res.Findings), plural(len(res.Findings)))
+					rec.Status, rec.Critique = bench.Fail, fmt.Sprintf("%d finding%s", len(res.Findings), library.Plural(len(res.Findings)))
 				case checks.StatusError:
 					rec.Status, rec.Critique = bench.Error, res.Err
 				}
@@ -397,29 +358,39 @@ func (c *PrereviewController) runBenchCheckers(bm bench.Benchmark, run string, r
 // benchFingerprint is every benchmark's definition and run log: a result from
 // the agent, or an edit to a benchmark.yml, refreshes the tab.
 func (c *PrereviewController) benchFingerprint() string {
-	files, _ := filepath.Glob(filepath.Join(bench.Dir(c.LibraryDir), "*", "*"))
+	defs, _ := filepath.Glob(filepath.Join(bench.Dir(c.LibraryDir), "*", bench.DefFile))
+	runs, _ := filepath.Glob(filepath.Join(bench.Dir(c.LibraryDir), "*", bench.RunsFile))
 	var b strings.Builder
-	for _, f := range files {
-		if base := filepath.Base(f); base == bench.RunsFile || base == bench.DefFile {
-			b.WriteString(f + statusFingerprint(f) + "|")
-		}
+	for _, f := range append(defs, runs...) {
+		b.WriteString(f + statusFingerprint(f) + "|")
 	}
 	return b.String()
 }
 
 // benchChanged reports whether any benchmark moved since the watcher last looked.
 func (c *PrereviewController) benchChanged() bool {
-	if c.LibraryDir == "" {
-		return false
-	}
+	return c.LibraryDir != "" && c.watchMoved(&c.benchWatchFP, c.benchFingerprint())
+}
+
+// benchEntry is one benchmark with its folded runs (newest first).
+type benchEntry struct {
+	bm   bench.Benchmark
+	runs []bench.Run
+}
+
+// benchmarks is every benchmark with its runs, re-read only when one changes —
+// once per server, however many tabs show the Benchmarks tab.
+func (c *PrereviewController) benchmarks() []benchEntry {
 	fp := c.benchFingerprint()
-	c.calMu.Lock()
-	defer c.calMu.Unlock()
-	if fp == c.benchWatchFP {
-		return false
+	c.benchMu.Lock()
+	defer c.benchMu.Unlock()
+	if c.benchCache == nil || fp != c.benchFP {
+		c.benchCache, c.benchFP = []benchEntry{}, fp
+		for _, bm := range bench.List(c.LibraryDir) {
+			c.benchCache = append(c.benchCache, benchEntry{bm, bench.LoadRuns(c.LibraryDir, bm.ID)})
+		}
 	}
-	c.benchWatchFP = fp
-	return true
+	return c.benchCache
 }
 
 // BenchmarksUpdated refreshes the Benchmarks tab after a result or an edit.

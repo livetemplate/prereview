@@ -46,13 +46,13 @@ func TestTrend_ComparableCompleteRunsOnly(t *testing.T) {
 	runs := []Run{ // newest first
 		run("r5", "5", p1, "m", map[string]string{"a/filler": Pass}), // partial: ignored
 		run("r4", "4", p1, "m", all(Pass)),
-		run("r3", "3", p2, "m", all(Fail)),      // not comparable: another rubric
-		run("r2", "2", p1, "other", all(Fail)),  // not comparable: another model
+		run("r3", "3", p2, "m", all(Fail)),     // not comparable: another rubric
+		run("r2", "2", p1, "other", all(Fail)), // not comparable: another model
 		run("r1", "1", p1, "m", all(Fail)),
 		run("r0", "0", p1, "m", all(Pass)),
 	}
 	tr := bm.Trend(runs)
-	if tr.Latest != "r4" || tr.N != 3 || math.Abs(tr.Mean-2.0/3) > 1e-9 || tr.Std == 0 {
+	if tr.Latest != 1 || tr.N != 3 || math.Abs(tr.Mean-2.0/3) > 1e-9 || tr.Std == 0 {
 		t.Fatalf("trend = %+v, want r4 anchoring {r4, r1, r0}", tr)
 	}
 	if Comparable(runs[1], runs[2]) || Comparable(runs[1], runs[3]) || !Comparable(runs[1], runs[4]) {

@@ -49,6 +49,8 @@ type Result struct {
 	Critique string `json:"critique,omitempty"`
 	Model    string `json:"model,omitempty"`
 	JudgedAt string `json:"judged_at,omitempty"`
+	// Advisory: a judge you haven't calibrated yet (M5) — shown, not counted.
+	Advisory bool `json:"advisory,omitempty"`
 }
 
 // NewResult starts a Result carrying the rule's identity (judges too).

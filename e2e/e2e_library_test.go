@@ -163,14 +163,7 @@ func TestE2E_LibraryLearnings(t *testing.T) {
 		t.Errorf("edited text = %q%s", got, diag())
 	}
 
-	// No sideways scroll at phone width.
-	var sw, cw int
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`document.documentElement.scrollWidth`, &sw),
-		chromedp.Evaluate(`document.documentElement.clientWidth`, &cw),
-	); err != nil || sw > cw {
-		t.Errorf("the Learnings tab scrolls sideways at %dpx: scrollWidth %d > %d (%v)%s", w, sw, cw, err, diag())
-	}
+	noHorizontalScroll(t, p, diag)
 }
 
 // TestE2E_LibraryLiveAcrossSessions: two reviews (two servers) share the per-user

@@ -1,12 +1,9 @@
 package bench
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"maps"
-	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
@@ -91,18 +88,7 @@ func appendRecord(lib, id string, rec Record) error {
 		return err
 	}
 	rec.At = library.Now()
-	unlock, err := library.Lock(lib)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	return library.Append(p, rec)
-}
-
-// RunsPath is a benchmark's run log ("" for a bad id).
-func RunsPath(lib, id string) string {
-	p, _ := path(lib, id, RunsFile)
-	return p
+	return library.Append(p, rec) // one O_APPEND line: concurrent writers lose nothing
 }
 
 // LoadRuns folds a benchmark's run log, newest first.
@@ -111,18 +97,11 @@ func LoadRuns(lib, id string) []Run {
 	if err != nil {
 		return nil
 	}
-	f, err := os.Open(p)
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
 	byID := map[string]*Run{}
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for sc.Scan() {
+	library.EachLine(p, func(line []byte) {
 		var rec Record
-		if json.Unmarshal(sc.Bytes(), &rec) != nil || rec.Run == "" {
-			continue
+		if json.Unmarshal(line, &rec) != nil || rec.Run == "" {
+			return
 		}
 		r := byID[rec.Run]
 		switch {
@@ -134,7 +113,7 @@ func LoadRuns(lib, id string) []Run {
 				r.Model = rec.Model
 			}
 		}
-	}
+	})
 	out := make([]Run, 0, len(byID))
 	for _, r := range byID {
 		out = append(out, *r)
@@ -194,12 +173,12 @@ const TrendRuns = 3
 type Trend struct {
 	Mean, Std float64
 	N         int
-	Latest    string // the newest complete run the trend is anchored to
+	Latest    int // index (in the runs given) of the newest complete run it's anchored to; -1 without one
 }
 
 // Trend scores runs (newest first).
 func (bm Benchmark) Trend(runs []Run) Trend {
-	var t Trend
+	t := Trend{Latest: -1}
 	var anchor *Run
 	var xs []float64
 	for i := range runs {
@@ -209,7 +188,7 @@ func (bm Benchmark) Trend(runs []Run) Trend {
 			continue
 		}
 		if anchor == nil {
-			anchor, t.Latest = &runs[i], r.ID
+			anchor, t.Latest = &runs[i], i
 		}
 		if !Comparable(*anchor, r) {
 			continue
@@ -229,6 +208,3 @@ func DefPath(lib, id string) string {
 	p, _ := path(lib, id, DefFile)
 	return p
 }
-
-// FolderOf is a benchmark's folder.
-func FolderOf(lib, id string) string { return filepath.Join(Dir(lib), id) }

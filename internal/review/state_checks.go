@@ -76,7 +76,7 @@ func (s PrereviewState) CheckSummary() CheckSummary {
 		return cs
 	}
 	for _, r := range s.Checks.Results {
-		if s.checkDisabled(r.ID) || r.Status == checks.StatusNotRun || r.Status == checks.StatusStale || s.isAdvisoryJudge(r) {
+		if s.checkDisabled(r.ID) || r.Status == checks.StatusNotRun || r.Status == checks.StatusStale || r.Advisory {
 			continue
 		}
 		cs.Total++

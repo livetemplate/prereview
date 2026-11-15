@@ -282,10 +282,12 @@ func (cs checkSetup) rulesFor(path string) (checkers, judges []*checks.Rule) {
 // judgeResults appends each judge's latest verdict on path as a result.
 // contentHash identifies the text the review shows; lines loads it only to
 // locate a current verdict's quote.
-func judgeResults(res []checks.Result, path string, judges []*checks.Rule, verdicts map[string]Judgment, contentHash string, lines func() []string) []checks.Result {
+func judgeResults(res []checks.Result, path string, judges []*checks.Rule, verdicts map[string]Judgment, calibrated map[string]bool, contentHash string, lines func() []string) []checks.Result {
 	for _, jr := range judges {
 		j, ok := verdicts[judgmentKey(path, jr.ID)]
-		res = append(res, judgeResult(jr, j, ok, contentHash, lines))
+		r := judgeResult(jr, j, ok, contentHash, lines)
+		r.Advisory = !calibrated[jr.ID] // only a calibrated judge counts (M5)
+		res = append(res, r)
 	}
 	return res
 }
@@ -377,7 +379,6 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 	}
 	if len(judges) > 0 {
 		state.JudgeLabels = c.judgeLabels()
-		state.JudgeCal = c.calibration()
 	}
 	lines := sideContent(d, "new")
 	if len(lines) == 0 {
@@ -398,7 +399,7 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 	}
 	res, _ := c.results(cs, d.Path, key, rules, func() []string { return lines })
 	if len(judges) > 0 {
-		res = judgeResults(res, d.Path, judges, c.verdicts(), keyContentHash(key), func() []string { return lines })
+		res = judgeResults(res, d.Path, judges, c.verdicts(), c.calibrated(), keyContentHash(key), func() []string { return lines })
 	}
 	state.Checks = &FileChecks{Results: res, ValeNotice: valeNotice(cs.mode), ValeTrust: cs.mode == valeUntrusted}
 }
@@ -411,15 +412,15 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 // The open file is skipped: the page takes its displayed text (pageFiles), so the
 // page and the inline marks agree, and its two runs can't cancel each other.
 func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
-	state.JudgeCal = c.calibration() // the page shows every judge's standing
 	defer c.applyRuleHistory(state) // the expanded rule's versions, on every path out
-	state.ReviewChecks = nil
+	state.ReviewChecks, state.JudgeCal = nil, nil
 	if !state.ShowLibrary || !state.LibraryOnChecks() || c.ExternalMode || c.RepoPath == "" {
 		return
 	}
+	state.JudgeCal = c.calibration() // each judge's standing, only while the page shows it
 	cs := c.checkSetup(state.TrustedVale)
 	targets := checkTargets(state.Files)
-	verdicts := c.verdicts()
+	verdicts, calibrated := c.verdicts(), c.calibrated()
 	rc := &ReviewChecks{Total: len(targets), ValeNotice: valeNotice(cs.mode), ValeTrust: cs.mode == valeUntrusted}
 	if len(targets) > maxCheckFiles {
 		targets = targets[:maxCheckFiles]
@@ -443,7 +444,7 @@ func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 			return lines
 		}
 		if res, ok := c.results(cs, f.Path, key, rules, load); ok {
-			res = judgeResults(res, f.Path, judges, verdicts, keyContentHash(key), load)
+			res = judgeResults(res, f.Path, judges, verdicts, calibrated, keyContentHash(key), load)
 			rc.Files = append(rc.Files, PathChecks{Path: f.Path, Results: res})
 		}
 	}

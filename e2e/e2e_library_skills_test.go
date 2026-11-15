@@ -104,13 +104,7 @@ func TestE2E_LearningProducesSkillAndCheck(t *testing.T) {
 		time.Sleep(250 * time.Millisecond)
 	}
 
-	var sw, cw int
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`document.documentElement.scrollWidth`, &sw),
-		chromedp.Evaluate(`document.documentElement.clientWidth`, &cw),
-	); err != nil || sw > cw {
-		t.Errorf("scrolls sideways at %dpx: %d > %d (%v)%s", w, sw, cw, err, diag())
-	}
+	noHorizontalScroll(t, p, diag)
 }
 
 // TestE2E_ImportSkill: a skill you made (with plugin-eval graders) in the fake

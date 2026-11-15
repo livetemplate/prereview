@@ -45,12 +45,14 @@ func Load(dirs ...Dir) *Library {
 			// rubric must not invalidate every checker result (RubricHash
 			// versions each judge on its own).
 			byID[id] = ParseJudge(id, source, p, data)
+			byID[id].ContentHash = shortHash(data)
 			return
 		}
 		h.Write([]byte(source + "\x00" + p + "\x00" + name + "\x00"))
 		h.Write(data)
 		h.Write([]byte{0})
 		byID[id] = ParseRule(id, source, p, data)
+		byID[id].ContentHash = shortHash(data) // the version a benchmark run pins
 	}
 	entries, _ := fs.ReadDir(builtinFS, "builtin")
 	for _, e := range entries {

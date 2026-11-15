@@ -312,3 +312,16 @@ func storeCounts(st library.StoreInfo) string {
 	}
 	return strings.Join(parts, " · ")
 }
+
+// timeLayout is a library time as cards show it ("15 Nov 2026 10:41").
+const timeLayout = "2 Jan 2006 15:04"
+
+// shortTime renders an RFC 3339 timestamp in timeLayout (the raw text when it
+// doesn't parse).
+func shortTime(ts string) string {
+	t, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return ts
+	}
+	return t.Local().Format(timeLayout)
+}

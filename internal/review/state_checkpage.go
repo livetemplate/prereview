@@ -517,7 +517,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 	if r, ok := s.checkResult(s.SelectedCheck); ok && r.Type == checks.TypeJudge && !s.checkDisabled(r.ID) &&
 		(r.Status == checks.StatusPass || r.Status == checks.StatusFail || r.Status == checks.StatusStale) {
 		v := s.verdictView(s.SelectedFile, r)
-		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: len(r.Findings), Pos: 1, Judge: &v, Calibrated: s.judgeCalibrated(r.ID)}
+		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: len(r.Findings), Pos: 1, Judge: &v, Calibrated: !r.Advisory}
 	}
 	if r, ok := s.selectedFindings(); ok {
 		n := len(r.Findings)
@@ -542,7 +542,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 		st.JudgesRun++
 		switch r.Status {
 		case checks.StatusFail:
-			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Judge: true, Advisory: !s.judgeCalibrated(r.ID)})
+			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Judge: true, Advisory: r.Advisory})
 		case checks.StatusStale:
 			st.JudgesStale++
 		}
@@ -616,14 +616,41 @@ func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg) {
 		row.Detail = "judge · calibrated · " + row.SourceLabel()
 	}
 	row.Agreement = calibrationText(cal)
-	for _, l := range cal.Disagreed {
-		row.Disagreed = append(row.Disagreed, Disagreement{File: l.File, Verdict: l.Verdict, Critique: l.Critique})
+	if row.Expanded { // only the open row lists them
+		for _, l := range cal.Disagreed {
+			row.Disagreed = append(row.Disagreed, Disagreement{File: l.File, Verdict: l.Verdict, Critique: l.Critique})
+		}
 	}
 	if row.RulePath != "" {
 		row.EditorURL = editorURL(s.Editor, s.EditorTemplate, s.EditorSSHHost, row.RulePath, 1)
 	}
 	row.Errors = a.errs
 	row.Verdicts = a.verdicts
+}
+
+// calibrationShort is a judge's standing in a word or two, and the agreement it
+// rests on ("9 / 10"): the Benchmarks tab's calibration table. The counted window
+// once calibrated, all answers before.
+func calibrationShort(c library.Calibration) (agrees, status string) {
+	agrees, status = fmt.Sprintf("%d / %d", c.Agree, c.Total), "advisory"
+	switch {
+	case c.Calibrated:
+		agrees, status = fmt.Sprintf("%d / %d", c.WindowAgree, min(c.Total, library.CalibrateWindow)), "calibrated"
+	case c.Total < library.CalibrateMinLabels:
+		status = fmt.Sprintf("advisory · needs %d answers", library.CalibrateMinLabels)
+	}
+	return agrees, status + calibrationFlags(c)
+}
+
+func calibrationFlags(c library.Calibration) string {
+	var t string
+	if c.Flaky {
+		t += " · flaky"
+	}
+	if c.OneSided {
+		t += " · doesn't discriminate"
+	}
+	return t
 }
 
 // calibrationText is a judge's standing as the Checks page states it.

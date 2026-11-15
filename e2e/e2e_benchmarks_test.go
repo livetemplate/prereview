@@ -124,13 +124,7 @@ func TestE2E_Benchmark(t *testing.T) {
 	if got := textOf(t, p, card+` .bm-runs tbody tr:first-child`); !strings.Contains(got, "test-model") {
 		t.Errorf("the run doesn't pin the judge model: %q%s", got, diag())
 	}
-	var sw, cw int
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`document.documentElement.scrollWidth`, &sw),
-		chromedp.Evaluate(`document.documentElement.clientWidth`, &cw),
-	); err != nil || sw > cw {
-		t.Errorf("the Benchmarks tab scrolls sideways at %dpx: %d > %d%s", w, sw, cw, diag())
-	}
+	noHorizontalScroll(t, p, diag)
 }
 
 // TestE2E_JudgeCalibration: with 10 of your answers for the judge's current

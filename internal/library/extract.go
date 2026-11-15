@@ -139,7 +139,9 @@ func ExtractionPrompt(stores []string, existing []Learning) string {
 	return b.String()
 }
 
-// plural is "s" unless n is 1.
+// Plural is "s" unless n is 1.
+func Plural(n int) string { return plural(n) }
+
 func plural(n int) string {
 	if n == 1 {
 		return ""

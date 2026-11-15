@@ -99,8 +99,12 @@ func TestCheckSummary_MergesJudges(t *testing.T) {
 	if got := judgedState(t, c, "", "", nil).CheckSummary(); got.Total != 3 || got.Passed != 2 {
 		t.Errorf("a judge with no verdict counts in neither number: %+v", got)
 	}
-	calibrated := func(s PrereviewState) PrereviewState {
-		s.JudgeCal = map[string]library.Calibration{"reader-first": {Calibrated: true}}
+	calibrated := func(s PrereviewState) PrereviewState { // as applyChecks marks a calibrated judge
+		for i := range s.Checks.Results {
+			if s.Checks.Results[i].ID == "reader-first" {
+				s.Checks.Results[i].Advisory = false
+			}
+		}
 		return s
 	}
 	if got := judgedState(t, c, "pass", "", nil).CheckSummary(); got.Total != 3 || got.Passed != 2 {

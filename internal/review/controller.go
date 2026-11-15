@@ -194,8 +194,14 @@ type PrereviewController struct {
 	calFP      string
 	calWatchFP string
 	calCache   map[string]library.Calibration
-	// benchWatchFP is the benchmarks' fingerprint the watcher last fanned out.
+	// benchWatchFP is the benchmarks' fingerprint the watcher last fanned out;
+	// watchMu guards it and calWatchFP (watchMoved).
 	benchWatchFP string
+	watchMu      sync.Mutex
+	// benchCache is every benchmark and its runs, by benchFingerprint.
+	benchMu    sync.Mutex
+	benchFP    string
+	benchCache []benchEntry
 
 	// AgentHome is where generated skills are installed (skills.AgentHome,
 	// resolved once at launch); "" disables them.

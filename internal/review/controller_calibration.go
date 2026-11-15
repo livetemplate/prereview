@@ -1,9 +1,12 @@
 package review
 
 import (
+	"fmt"
+	"maps"
 	"path/filepath"
+	"slices"
+	"strings"
 
-	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
 )
 
@@ -27,8 +30,8 @@ func (c *PrereviewController) calibration() map[string]library.Calibration {
 			rubrics[rule.ID] = rule.RubricHash
 		}
 	}
-	fp := statusFingerprint(c.calibrationPath()) + "|" + r.lib.Hash + "|" + r.stamp
 	r.mu.Unlock()
+	fp := statusFingerprint(c.calibrationPath()) + "|" + fmt.Sprint(rubrics)
 	c.calMu.Lock()
 	defer c.calMu.Unlock()
 	if c.calCache == nil || fp != c.calFP {
@@ -41,26 +44,43 @@ func (c *PrereviewController) calibrationPath() string {
 	return filepath.Join(c.LibraryDir, library.CalibrationFile)
 }
 
-// calibrationChanged reports whether the label log moved since the watcher last
-// looked (an answer in any review), so the watcher re-counts every tab once.
+// calibrated is the set of judges that count in n/m.
+func (c *PrereviewController) calibrated() map[string]bool {
+	out := map[string]bool{}
+	for id, cal := range c.calibration() {
+		if cal.Calibrated {
+			out[id] = true
+		}
+	}
+	return out
+}
+
+// calibrationChanged reports whether any judge's standing moved since the
+// watcher last looked (an answer in any review, or a rubric edit), keyed on the
+// standings rather than the log file — so another review's answer that changes
+// nothing here re-counts no tab.
 func (c *PrereviewController) calibrationChanged() bool {
 	if c.LibraryDir == "" {
 		return false
 	}
-	fp := statusFingerprint(c.calibrationPath())
-	c.calMu.Lock()
-	defer c.calMu.Unlock()
-	if fp == c.calWatchFP {
-		return false
+	cal := c.calibration()
+	ids := slices.Sorted(maps.Keys(cal))
+	var key strings.Builder
+	for _, id := range ids {
+		s := cal[id]
+		fmt.Fprintf(&key, "%s:%v:%d:%d:%d|", id, s.Calibrated, s.Agree, s.Total, len(s.Disagreed))
 	}
-	c.calWatchFP = fp
-	return true
+	return c.watchMoved(&c.calWatchFP, key.String())
 }
 
-// judgeCalibrated reports whether a judge counts in n/m (it's calibrated).
-func (s PrereviewState) judgeCalibrated(id string) bool { return s.JudgeCal[id].Calibrated }
-
-// isAdvisoryJudge reports a judge result that is shown but not counted.
-func (s PrereviewState) isAdvisoryJudge(r checks.Result) bool {
-	return r.Type == checks.TypeJudge && !s.judgeCalibrated(r.ID)
+// watchMoved records fp as the watcher's last look at one area and reports
+// whether it changed (every area's "fan it out once" check).
+func (c *PrereviewController) watchMoved(last *string, fp string) bool {
+	c.watchMu.Lock()
+	defer c.watchMu.Unlock()
+	if fp == *last {
+		return false
+	}
+	*last = fp
+	return true
 }

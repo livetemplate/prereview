@@ -91,7 +91,7 @@ func (c *PrereviewController) libraryScope() []FileRef {
 	}
 	r.mu.Unlock()
 	srcs, _ := filepath.Glob(skills.Env{LibDir: c.LibraryDir}.SourcePath("*"))
-	defs, _ := filepath.Glob(bench.DefPath(c.LibraryDir, "*"))
+	defs, _ := filepath.Glob(filepath.Join(bench.Dir(c.LibraryDir), "*", bench.DefFile))
 	srcs = append(srcs, defs...)
 	for _, p := range srcs {
 		if k := c.libraryKey(p); k != "" {
@@ -173,7 +173,7 @@ func (c *PrereviewController) ruleHistory(key string) []RuleVersion {
 			cur, _ = vs.Blob(h.SHA)
 		}
 		if i > first || first == 0 {
-			v := RuleVersion{Seq: h.Seq, When: h.TS.Local().Format("2 Jan 2006 15:04"), Note: h.Changelog, Current: i == len(hist)-1}
+			v := RuleVersion{Seq: h.Seq, When: h.TS.Local().Format(timeLayout), Note: h.Changelog, Current: i == len(hist)-1}
 			if i > 0 {
 				v.Stat, v.Diff, v.More = ruleDiff(key, prev, cur)
 				if h.SHA == "" {

@@ -411,3 +411,22 @@ func sameEffect(a, b Learning) bool {
 	return a.Text == b.Text && a.Scope == b.Scope && a.Checker == b.Checker && a.Judge == b.Judge &&
 		strings.Join(a.Produces, ",") == strings.Join(b.Produces, ",") && strings.Join(a.Globs, ",") == strings.Join(b.Globs, ",")
 }
+
+// EachLine calls fn for every non-empty line of path (a missing file is empty):
+// the reader every append-only log here uses.
+func EachLine(path string, fn func([]byte)) { eachLine(path, fn) }
+
+// Slug renders s as an id: lowercase letters, digits and dashes, at most 48
+// runes ("Technical docs" → "technical-docs"); fallback when nothing is left.
+func Slug(s, fallback string) string {
+	s = strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), "-"), "-")
+	if len(s) > 48 {
+		s = strings.Trim(s[:48], "-")
+	}
+	if s == "" {
+		return fallback
+	}
+	return s
+}
+
+var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
