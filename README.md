@@ -398,10 +398,10 @@ re-reads the queue and applies the open comments).
 ## Output
 
 `<repo>/.prereview/comments.csv` is the source of truth — RFC-4180
-quoted, 18 columns, one row per comment:
+quoted, 19 columns, one row per comment:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request,check
 ```
 
 `kind` is `line` (default), `text` (a character range within a line —

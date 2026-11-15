@@ -376,10 +376,10 @@ shape as a snapshot.
 ### Header (load-bearing — column order is the contract)
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request,check
 ```
 
-Older CSVs may have 7–17 columns; columns 0–7 are stable, so index by position and
+Older CSVs may have 7–18 columns; columns 0–7 are stable, so index by position and
 treat missing trailing columns as empty/default. Columns are only ever appended.
 
 ### Column details
@@ -404,6 +404,7 @@ treat missing trailing columns as empty/default. Columns are only ever appended.
 | `hidden` | bool | `true`, `false` | Reviewer-only view flag. **Ignore it** — never affects whether a row is actionable. |
 | `enqueued` | bool | `true`, `false` | Queue view flag (#119): `false` = a reviewer *draft* not yet released to the agent. **Ignore it** — the snapshot already excludes drafts. Absent on legacy rows (read as `true`). |
 | `request` | enum | `extraction`, `judge`, `benchmark`, `quiz`, *(empty)* | Set when prereview — not the reviewer — queued the row as a request to you (read past reviews, run a file's or a benchmark's judges, write a quiz); the body says exactly what to do. Empty for every reviewer comment. These are never reviewer signals: don't learn from them. |
+| `check` | string | `filler-intensifiers`, *(empty)* | The ID of the check or judge whose finding the reviewer queued as this comment (the body already names it). **Ignore it** — it links the comment to its finding card in the review. Empty for every other comment. |
 
 ### Parsing example
 

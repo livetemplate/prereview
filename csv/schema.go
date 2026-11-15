@@ -71,6 +71,12 @@ const (
 	// for every reviewer comment. Set once at creation, never edited. ABSENT
 	// (short legacy rows) reads as "". Learnings never count or cite a request.
 	ColRequest = "request"
+	// `check` is the ID of the check or judge whose finding this comment was
+	// queued from ("Queue as comment" on a finding card), empty for every other
+	// comment. Set once at creation, never edited, so editing the body keeps the
+	// link. ABSENT (short legacy rows) reads as "". The skill ignores it: the
+	// body already names the check.
+	ColCheck = "check"
 )
 
 // The `request` column's values: what prereview asked the agent to do.
@@ -86,5 +92,5 @@ const (
 var Header = []string{
 	ColID, ColFile, ColFromLine, ColToLine, ColSide, ColBody, ColCreatedAt, ColResolved,
 	ColAnchor, ColAnchorStatus, ColKind, ColArea, ColURL, ColFromCol, ColToCol, ColHidden,
-	ColEnqueued, ColRequest,
+	ColEnqueued, ColRequest, ColCheck,
 }

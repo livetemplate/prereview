@@ -215,6 +215,27 @@ func TestRead_EnqueuedColumn(t *testing.T) {
 	}
 }
 
+// TestRead_CheckColumn pins the `check` column: an 18-col row (written before it
+// existed) is not a queued finding, a 19-col one keeps its check ID.
+func TestRead_CheckColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "comments.csv")
+	content := strings.Join([]string{
+		"id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request,check",
+		`legacy,a.md,4,4,new,cut it (check: Filler),2026-05-14T10:00:00Z,false,,,text,,,2,6,false,true,`,        // 18 cols ⇒ ""
+		`queued,a.md,4,4,new,cut it (check: Filler),2026-05-14T10:00:00Z,false,,,text,,,2,6,false,true,,filler`, // 19 cols
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := Read(path)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("read: %v, %d rows", err, len(got))
+	}
+	if got[0].Check != "" || got[1].Check != "filler" {
+		t.Fatalf("check = %q, %q; want \"\", \"filler\"", got[0].Check, got[1].Check)
+	}
+}
+
 // TestRead_RequestColumn pins the `request` column: a 17-col row (written before
 // it existed) reads as a reviewer comment, an 18-col one keeps its kind, and the
 // Writer→Read round trip carries it.

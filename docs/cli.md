@@ -321,7 +321,7 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 
 ## Output
 
-`<store>/comments.csv` is the source of truth (RFC-4180, **18 columns**, atomically
+`<store>/comments.csv` is the source of truth (RFC-4180, **19 columns**, atomically
 written via tmp+fsync+rename). The store is `<store-root>/.prereview/`, where the
 store root is the review path by default and `--out` redirects it in any mode (and is
 required with `--external`).
@@ -344,7 +344,7 @@ CSVs may have fewer trailing columns — index by position, default missing ones
 empty):
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request,check
 ```
 
 `kind` is `line` (default), `text` (a character range within a line, via

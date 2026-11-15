@@ -32,10 +32,10 @@ Three things matter to an agent — the last two are two views of the same queue
 
 ### 1. `.prereview/comments.csv` — the source of truth
 
-RFC-4180 quoted, one row per comment, **18 columns**:
+RFC-4180 quoted, one row per comment, **19 columns**:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request,check
 ```
 
 You rarely parse this directly — `prereview comments --json` (below) returns the

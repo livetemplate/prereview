@@ -108,23 +108,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	if err != nil {
 		return fmt.Errorf("read existing csv: %w", err)
 	}
-	initialComments := make([]review.Comment, 0, len(existing))
-	for _, r := range existing {
-		initialComments = append(initialComments, review.Comment{
-			ID:       r.ID,
-			File:     r.File,
-			FromLine: r.FromLine,
-			ToLine:   r.ToLine,
-			FromCol:  r.FromCol,
-			ToCol:    r.ToCol,
-			Side:     r.Side,
-			Body:     r.Body,
-			Created:  r.CreatedAt,
-			Resolved: r.Resolved,
-			Hidden:   r.Hidden,
-			Draft:    r.Draft,
-		})
-	}
+	initialComments := review.CommentsFromRows(existing)
 
 	// livetemplate.New requires templates as files on disk. Stage the embedded
 	// split set to a temp dir for the lifetime of the process. Same workaround

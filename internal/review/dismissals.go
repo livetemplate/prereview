@@ -166,7 +166,7 @@ func (c *PrereviewController) RestoreDismissed(state PrereviewState, ctx *livete
 func (c *PrereviewController) HideFinding(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	r, f, ok := state.finding(ctx.GetString("id"), ctx.GetInt("index"))
 	if ok {
-		state.HiddenFindings = append(state.HiddenFindings, findingKey(state.SelectedFile, f, r.Name))
+		state.HiddenFindings = append(state.HiddenFindings, findingKey(state.SelectedFile, f, r.ID))
 	}
 	return state, nil
 }
@@ -180,7 +180,7 @@ func (c *PrereviewController) ShowHiddenFindings(state PrereviewState, ctx *live
 	var keep []string
 	hide := map[string]bool{}
 	for _, f := range r.Findings {
-		hide[findingKey(state.SelectedFile, f, r.Name)] = true
+		hide[findingKey(state.SelectedFile, f, r.ID)] = true
 	}
 	for _, k := range state.HiddenFindings {
 		if !hide[k] {
