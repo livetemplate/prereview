@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/library"
 )
 
@@ -69,7 +70,7 @@ func TestBootCard_WhenItShows(t *testing.T) {
 	if s.BootCard() != nil {
 		t.Fatal("offered again after it was answered")
 	}
-	s.Comments = []Comment{{ID: "x", Kind: commentKindFile, Body: library.ExtractionPrompt([]string{"/h/a/.prereview"}, nil)}}
+	s.Comments = []Comment{{ID: "x", Kind: commentKindFile, Request: csv.RequestExtraction, Body: library.ExtractionPrompt([]string{"/h/a/.prereview"}, nil)}}
 	if c := s.BootCard(); c == nil || !c.Reading {
 		t.Fatalf("an open extraction request shows progress: %+v", c)
 	}

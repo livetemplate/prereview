@@ -13,6 +13,7 @@ import (
 
 	"github.com/livetemplate/livetemplate"
 
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/bench"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
@@ -300,7 +301,7 @@ func (c *PrereviewController) RunBenchmark(state PrereviewState, ctx *livetempla
 				p, _ := bench.CasePath(c.LibraryDir, bm.ID, cs)
 				cases = append(cases, bench.CaseAsk{ID: cs.ID, Path: p, ContentHash: pins.Cases[cs.ID]})
 			}
-			if state, err = c.queueRequest(state, bench.JudgePrompt(bm, run, judges, cases)); err != nil {
+			if state, err = c.queueRequest(state, csv.RequestBenchmark, bench.JudgePrompt(bm, run, judges, cases)); err != nil {
 				return state, err
 			}
 			state.Flash = fmt.Sprintf("Running “%s”: %d judge%s asked of your agent", bm.Name, len(judges), plural(len(judges)))

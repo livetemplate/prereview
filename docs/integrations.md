@@ -32,10 +32,10 @@ Three things matter to an agent — the last two are two views of the same queue
 
 ### 1. `.prereview/comments.csv` — the source of truth
 
-RFC-4180 quoted, one row per comment, **17 columns**:
+RFC-4180 quoted, one row per comment, **18 columns**:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request
 ```
 
 You rarely parse this directly — `prereview comments --json` (below) returns the
@@ -45,7 +45,9 @@ complete list of still-actionable comments. `kind` is `line` (default), `text` (
 character range within a line; `from_col`/`to_col` are the 0-based rune offsets),
 `file`, `area` (an image rectangle, `area` column holds `{x,y,w,h}` fractions), or
 `region` (a live-site rectangle anchored to `url`). `hidden` and `enqueued` are
-reviewer/queue view flags — ignore them. Older CSVs may have fewer trailing
+reviewer/queue view flags — ignore them. `request` is set (`extraction`, `judge`,
+`benchmark`, `quiz`) when prereview, not the reviewer, queued the row as a request
+to you; its body says exactly what to do. Older CSVs may have fewer trailing
 columns; index by position and default missing ones to empty. Full column docs:
 [skill/reference.md](../skill/reference.md#csv-schema).
 

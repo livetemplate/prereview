@@ -415,7 +415,4 @@ func TestJudgePrompt(t *testing.T) {
 			t.Errorf("prompt missing %q:\n%s", want, p)
 		}
 	}
-	if !IsJudgeRequest(p, "docs/my file.md") || IsJudgeRequest(p, "docs/other.md") {
-		t.Error("IsJudgeRequest must recognise the request for its own file only")
-	}
 }

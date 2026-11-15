@@ -226,20 +226,26 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 	return state, nil
 }
 
+// queueFileComment queues body as a file-level comment on the open file for the
+// agent to pick up — a request (quiz, judges; request is its csv.Request* kind)
+// or a critique (request "") — closing whatever composer was open and scrolling
+// to the new card: Quiz me, Run judges and Queue as comment all go through it.
+func (c *PrereviewController) queueFileComment(state PrereviewState, request, body string) (PrereviewState, error) {
+	resetToFileComment(&state)
+	state.CommentMode, state.DraftBody, state.LastDeletedComment = "", "", nil
+	state, err := c.queueRequest(state, request, body)
+	if err != nil {
+		return state, err
+	}
+	state.ScrollToCommentID, state.ScrollToHeadingID = state.Comments[len(state.Comments)-1].ID, ""
+	return state, nil
+}
+
 // addFileLevelComment is the AddComment branch for whole-file comments.
 // Mirrors the line-comment path's append-and-persist shape but skips
 // every line-range / anchor concern. Edits to an existing file-level
 // comment update in place when EditingCommentID is set — same rule as
 // the line-comment path.
-// queueFileComment queues body as a file-level comment on the open file for the
-// agent to pick up — a request (quiz, judges) or a critique — leaving whatever
-// composer was open: Quiz me, Run judges and Queue as comment all go through it.
-func (c *PrereviewController) queueFileComment(state PrereviewState, body string) (PrereviewState, error) {
-	resetToFileComment(&state)
-	state.DraftBody = ""
-	return c.addFileLevelComment(state, body)
-}
-
 func (c *PrereviewController) addFileLevelComment(state PrereviewState, body string) (PrereviewState, error) {
 	var rollback func()
 	if state.EditingCommentID != "" {

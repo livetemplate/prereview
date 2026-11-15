@@ -54,7 +54,14 @@ type Row struct {
 	// agent — "save auto-enqueues". A draft (true) is kept out of the actionable
 	// snapshot until the reviewer enqueues it.
 	Draft bool
+	// Request is the `request` column: a Request* value when prereview queued
+	// this row as a request to the agent, "" for a reviewer comment.
+	Request string
 }
+
+// IsRequest reports a row prereview queued as a request to the agent: never a
+// reviewer signal or evidence.
+func (r Row) IsRequest() bool { return r.Request != "" }
 
 // Writer serializes Rows to a CSV file atomically. Each Write replaces the
 // entire file (write-tmp → fsync → rename → fsync parent dir), so the file
@@ -177,5 +184,6 @@ func rowToRecord(r Row) []string {
 		strconv.Itoa(r.ToCol),
 		hidden,
 		enqueued,
+		r.Request,
 	}
 }

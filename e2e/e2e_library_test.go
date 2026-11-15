@@ -270,7 +270,7 @@ func TestE2E_FirstLaunch(t *testing.T) {
 	}
 	var requests []string
 	for _, r := range rows {
-		if strings.HasPrefix(r.Body, "Read past reviews and propose learnings") {
+		if r.Request == csv.RequestExtraction {
 			requests = append(requests, r.Body)
 		}
 	}

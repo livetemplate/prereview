@@ -398,16 +398,17 @@ re-reads the queue and applies the open comments).
 ## Output
 
 `<repo>/.prereview/comments.csv` is the source of truth — RFC-4180
-quoted, 17 columns, one row per comment:
+quoted, 18 columns, one row per comment:
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request
 ```
 
 `kind` is `line` (default), `text` (a character range within a line —
 `from_col`/`to_col`), `file`, `area`, or `region` (a live-site rectangle
 from `--external`, anchored to a `url`); `area` carries the rectangle as
-`{x,y,w,h}` fractions. See [skill/reference.md](skill/reference.md) for the
+`{x,y,w,h}` fractions; `request` is set on the rows prereview itself queued
+as a request to the agent (`extraction`, `judge`, `benchmark`, `quiz`). See [skill/reference.md](skill/reference.md) for the
 full column docs.
 
 For a single-file review the store is per file, under the parent directory's

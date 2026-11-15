@@ -7,6 +7,7 @@ import (
 
 	"github.com/livetemplate/livetemplate"
 
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/skills"
 )
@@ -134,7 +135,7 @@ func (c *PrereviewController) ReadPastReviews(state PrereviewState, ctx *livetem
 		return state, fmt.Errorf("read past reviews: no review ticked")
 	}
 	ls := c.learnings()
-	state, err := c.queueRequest(state, library.ExtractionPrompt(picked, ls))
+	state, err := c.queueRequest(state, csv.RequestExtraction, library.ExtractionPrompt(picked, ls))
 	if err != nil {
 		return state, err
 	}
@@ -305,7 +306,7 @@ func (c *PrereviewController) AutoLearn(state PrereviewState, ctx *livetemplate.
 		return state, nil
 	}
 	store := filepath.Dir(c.CSVPath)
-	state, err := c.queueRequest(state, library.ExtractionPrompt([]string{store}, c.learnings()))
+	state, err := c.queueRequest(state, csv.RequestExtraction, library.ExtractionPrompt([]string{store}, c.learnings()))
 	if err != nil {
 		return state, err
 	}

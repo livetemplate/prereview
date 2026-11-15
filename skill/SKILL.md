@@ -322,10 +322,10 @@ comment wants **suggestions, not a direct fix** — the body says so; follow it.
 ## Comprehension quizzes (`prereview quiz`, #191)
 
 The reviewer can also ask for a **comprehension quiz** about a file's diff, via
-"Quiz me" in the file header. Like a prompt it arrives as a `kind=file` comment,
-and its body spells out the contract — but it wants **neither a fix nor a
-suggestion**. Answer with `prereview quiz`, never `prereview suggest`, and do not
-edit any files.
+"Quiz me" in the file header. Like a prompt it arrives as a `kind=file` comment
+(marked `"request":"quiz"`), and its body spells out the contract — but it wants
+**neither a fix nor a suggestion**. Answer with `prereview quiz`, never `prereview
+suggest`, and do not edit any files.
 
 ```bash
 prereview quiz --out "<STORE>" --file quiz.json    # or pipe JSON on stdin
@@ -423,9 +423,10 @@ count for exactly this, and warns them on End session — don't be the reason it
 ## Judges (`prereview judge`)
 
 The reviewer can ask you to **judge** a file against their rubrics ("Run judges"
-in the file bar). It arrives as a `kind=file` comment listing each judge's rubric
-and the exact command per judge. It wants **neither a fix nor a suggestion**: read
-the whole file, decide pass or fail for each rubric, and record each verdict:
+in the file bar). It arrives as a `kind=file` comment marked `"request":"judge"`,
+listing each judge's rubric and the exact command per judge. It wants **neither a
+fix nor a suggestion**: read the whole file, decide pass or fail for each rubric,
+and record each verdict:
 
 ```bash
 prereview judge --out "<STORE>" --file docs/x.md --judge reader-first \
@@ -447,9 +448,9 @@ prereview judge --out "<STORE>" --file docs/x.md --judge reader-first \
   verdict, which calibrates the judge over time: only a judge that agrees with them
   often enough counts in their checks.
 
-**A benchmark run** arrives as a request starting "Run the judges of a benchmark",
-listing every judge's rubric and every case's snapshot (a file in the library) with
-the exact command per case and judge:
+**A benchmark run** arrives as a request marked `"request":"benchmark"`, listing
+every judge's rubric and every case's snapshot (a file in the library) with the
+exact command per case and judge:
 
 ```bash
 prereview judge --bench <id> --run <run> --case <case> --judge <judge> \
@@ -465,8 +466,8 @@ different models aren't comparable. Then `done` the request.
 
 The reviewer can ask you to **read their past reviews and propose learnings**
 ("Read past reviews" in the Library, or automatically after a review when
-"Learn after each review" is on). It arrives as a `kind=file` comment starting
-"Read past reviews and propose learnings", naming the review stores to read, the
+"Learn after each review" is on). It arrives as a `kind=file` comment marked
+`"request":"extraction"`, naming the review stores to read, the
 signal files in each, the learnings already in the library and the exact command.
 It wants **neither a fix nor a suggestion**:
 

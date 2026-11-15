@@ -50,7 +50,7 @@ flags, or `prereview help` for the top-level list.
 | `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](#suggested-edits). |
 | `prereview quiz [--file <f>\|-]` | Submit a **comprehension quiz** about a file's diff for the reviewer to answer (append to `quiz.jsonl`). Each question needs >= 2 `options`, a 0-based `answer`, a `why`, and `from_line`/`to_line`/`side`; `probe` is one of change-type / localization / consequence / rationale / decision. **Validated before anything is written** — an out-of-range answer, a missing explanation, or a non-`decision` question without a line anchor fails with a non-zero exit naming the question. The server additionally flags a question whose cited line is not in the diff. |
 | `prereview learn propose --text "…" --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <p>]… [--replaces <id>] [--produces instruction,checker,judge] [--checker <rule.yml\|->] [--judge <rubric.md\|->]` | Propose one **learning** drawn from the reviewer's past reviews, answering a "Read past reviews" request (append to `~/.config/prereview/learnings.jsonl` as *proposed*; the reviewer accepts it in Library → Learnings). Every `--evidence` must resolve to a real record (comment or suggestion `id`, or a reply as `<target_id>@<at>`) or nothing is written; request comments are never evidence. `--checker`/`--judge` attach a drafted rule YAML / judge rubric, validated first (a checker can't be `extends: command`); accepted, it lands in the reviewer's checks folder as `learned-<id>`. `prereview learn list [--status s] [--json]` prints the library. |
-| `prereview judge --bench <id> --run <run> --case <case> --judge <id> --content-hash <h> --rubric-hash <h> --verdict pass\|fail --critique "…" [--model <id>]` | Record one judge's verdict on one **benchmark case**, answering a "Run the judges of a benchmark" request (append to the benchmark's `runs.jsonl` in the library). Copy each command from the request; the hashes must match the run's pins. Pass `--model`: the run pins the judging model. |
+| `prereview judge --bench <id> --run <run> --case <case> --judge <id> --content-hash <h> --rubric-hash <h> --verdict pass\|fail --critique "…" [--model <id>]` | Record one judge's verdict on one **benchmark case**, answering a benchmark request (`"request":"benchmark"`) (append to the benchmark's `runs.jsonl` in the library). Copy each command from the request; the hashes must match the run's pins. Pass `--model`: the run pins the judging model. |
 | `prereview judge --file <f> --judge <id> --content-hash <h> --rubric-hash <h> --verdict pass\|fail --critique "…" [--quote "…"] [--model <id>]` | Record one judge's **verdict** on one file, answering a "Run judges" request (append to `judgments.jsonl`). One call per judge; **copy the command from the request** — it carries the file's and the rubric's hashes, recorded with the verdict so the review shows it as out of date once either changes. Validated first: the judge must exist and apply to the file, the path must be review-relative, the verdict is `pass` or `fail`, and a critique is required. |
 | `prereview reply [--answered] <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment, suggestion **or quiz question** (the latter addressed as `<quizID>:<questionID>`), so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. `--answered` also settles a **comment** with no edit (it reads "answered" instead of "done"); it fails on a suggestion or quiz id. See [Threads](#threads). |
 | `prereview applied <suggestion-id>...` | Ack that you applied an **accepted** suggestion's edit to the file, so the UI marks it "applied" and drops it from the snapshot. Ids come from a snapshot's `suggestions[]` (`verdict=accept`); validated against suggestions. Idempotent. |
@@ -209,8 +209,10 @@ Every event has `event`, a monotonic `seq`, and an RFC-3339 `ts`. Each comment i
 `resolved`, with `area` as a nested object (or `null`) — no nested JSON-in-a-string.
 Each comment carries: `id`, `kind`, `file`, `from_line`, `to_line`, `from_col`,
 `to_col`, `side`, `body`, `url`, `area`, `created_at`, `anchor_status`, `text` (the
-exact selected substring, for `kind=text`), and `thread` (the conversation, present
-only when non-empty — see [Threads](#threads)). See [Comment data](#comment-data) for
+exact selected substring, for `kind=text`), `thread` (the conversation, present
+only when non-empty — see [Threads](#threads)), and `request` (present only on a row
+prereview queued as a request to you — see the `request` column below). See
+[Comment data](#comment-data) for
 how to interpret them.
 
 ```jsonc
@@ -374,10 +376,10 @@ shape as a snapshot.
 ### Header (load-bearing — column order is the contract)
 
 ```
-id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued
+id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url,from_col,to_col,hidden,enqueued,request
 ```
 
-Older CSVs may have 7–16 columns; columns 0–7 are stable, so index by position and
+Older CSVs may have 7–17 columns; columns 0–7 are stable, so index by position and
 treat missing trailing columns as empty/default. Columns are only ever appended.
 
 ### Column details
@@ -401,6 +403,7 @@ treat missing trailing columns as empty/default. Columns are only ever appended.
 | `to_col` | int (0-based rune) | `12` | End (exclusive) of the `kind=text` range. `0` for every other kind. |
 | `hidden` | bool | `true`, `false` | Reviewer-only view flag. **Ignore it** — never affects whether a row is actionable. |
 | `enqueued` | bool | `true`, `false` | Queue view flag (#119): `false` = a reviewer *draft* not yet released to the agent. **Ignore it** — the snapshot already excludes drafts. Absent on legacy rows (read as `true`). |
+| `request` | enum | `extraction`, `judge`, `benchmark`, `quiz`, *(empty)* | Set when prereview — not the reviewer — queued the row as a request to you (read past reviews, run a file's or a benchmark's judges, write a quiz); the body says exactly what to do. Empty for every reviewer comment. These are never reviewer signals: don't learn from them. |
 
 ### Parsing example
 

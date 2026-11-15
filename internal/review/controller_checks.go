@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
@@ -838,10 +839,11 @@ func (c *PrereviewController) appendQueued(state PrereviewState, cm Comment) (Pr
 }
 
 // queueRequest queues body as a file-level request to the agent on the open file
-// (an extraction), without touching the composer.
-func (c *PrereviewController) queueRequest(state PrereviewState, body string) (PrereviewState, error) {
+// (request is its csv.Request* kind; "" for a plain comment, see
+// queueFileComment), without touching the composer.
+func (c *PrereviewController) queueRequest(state PrereviewState, request, body string) (PrereviewState, error) {
 	return c.appendQueued(state, Comment{ID: newCommentID(), File: state.SelectedFile, Body: body,
-		Created: time.Now().UTC(), Kind: commentKindFile})
+		Created: time.Now().UTC(), Kind: commentKindFile, Request: request})
 }
 
 // findingSnippet is the text a finding covers, joined across lines.
@@ -963,7 +965,7 @@ func (c *PrereviewController) RunJudges(state PrereviewState, ctx *livetemplate.
 		return state, nil
 	}
 	prompt := checks.JudgePrompt(state.SelectedFile, filepath.Dir(c.CSVPath), checks.ContentHash(sideContent(d, "new")), run)
-	state, err := c.queueFileComment(state, prompt)
+	state, err := c.queueFileComment(state, csv.RequestJudge, prompt)
 	if err != nil {
 		return state, err
 	}
@@ -1019,5 +1021,5 @@ func (c *PrereviewController) QueueJudgment(state PrereviewState, ctx *livetempl
 	if len(r.Findings) > 0 {
 		return c.queueFinding(state, "", id, 0)
 	}
-	return c.queueFileComment(state, fmt.Sprintf("%s (judge: %s)", r.Critique, r.Name))
+	return c.queueFileComment(state, "", fmt.Sprintf("%s (judge: %s)", r.Critique, r.Name))
 }

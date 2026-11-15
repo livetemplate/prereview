@@ -41,7 +41,8 @@ batch and exits on the terminating `end` event — otherwise just re-read
 `prereview comments --json`. A `files_changed` event in that stream means the
 reviewer edited or restored the listed files on disk: re-read them before editing.
 
-If a comment asks for a comprehension quiz (the reviewer clicked "Quiz me"), do
+If a comment asks for a comprehension quiz (the reviewer clicked "Quiz me"; the
+comment is marked `"request":"quiz"`), do
 not edit files and do not suggest edits - reply with a quiz instead:
 
     prereview quiz --out <STORE> --file quiz.json

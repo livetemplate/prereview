@@ -646,6 +646,7 @@ func commentRow(cm Comment) csv.Row {
 		ToCol:        cm.ToCol,
 		Hidden:       cm.Hidden,
 		Draft:        cm.Draft,
+		Request:      cm.Request,
 	}
 }
 
@@ -737,6 +738,7 @@ func commentsFromRows(rows []csv.Row) []Comment {
 			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus,
 			Kind: r.Kind, Area: parseArea(r.Area), URL: r.URL,
 			FromCol: r.FromCol, ToCol: r.ToCol, Hidden: r.Hidden, Draft: r.Draft,
+			Request: r.Request,
 		})
 	}
 	return out
