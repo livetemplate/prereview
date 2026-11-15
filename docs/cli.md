@@ -256,7 +256,10 @@ prereview check     [--json] <file>...
 - **`prereview learn propose`** — the coding agent's answer to a "Read past reviews"
   request (or a "Learn after each review" one): `prereview learn propose --text "…"
   --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <pattern>]…
-  [--replaces <id>] [--produces instruction,checker,judge]`, one call per lesson.
+  [--replaces <id>] [--produces instruction,checker,judge] [--checker <rule.yml|->]
+  [--judge <rubric.md|->]`, one call per lesson. `--checker`/`--judge` attach a
+  drafted rule or rubric (validated; never a command check) that lands in your
+  checks folder when the lesson is accepted.
   Every `--evidence` must name a real record in that store (a comment id, a
   suggestion id, or a thread reply as `<target_id>@<at>`), or nothing is written. The
   lesson is appended to `~/.config/prereview/learnings.jsonl` as *proposed*; the
@@ -311,6 +314,7 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 | `PREREVIEW_CHECKS_DIR` | Override the checks rule folder (default `~/.config/prereview/checks`). |
 | `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer (default `~/.config/prereview`). |
 | `PREREVIEW_SCAN_HOME` | Where the first-launch scan looks for past reviews (default your home folder). |
+| `PREREVIEW_HOME` | The home folder prereview writes agent integrations under: its own skill (`--install-skill`, the startup sync) and generated skills (default your home folder). |
 
 ## Output
 

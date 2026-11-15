@@ -599,6 +599,7 @@
       <p class="lc-text">Writing</p>
       <div class="lc-row"><span><b>9</b> instructions</span><span><b>2</b> checkers</span><span><b>1</b> judge</span><span>scope: Writing (all documents)</span></div>
       <div class="lc-agents"><span class="ck-pill ck-pass" title="installed">Claude Code ✓</span><span class="ck-pill ck-muted" title="not set up here">Cursor — not set up here</span></div>
+      
       <div class="lc-conflict"><b>You edited this skill</b>, so prereview stopped regenerating it from your learnings; its installs follow your edit.</div>
       <details class="ckp-history" open><summary>History (2 versions)</summary>
                 <ol>

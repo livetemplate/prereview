@@ -249,6 +249,7 @@
       <p class="lc-text">{{.Name}}</p>
       <div class="lc-row"><span><b>{{.Lines}}</b> instruction{{if ne .Lines 1}}s{{end}}</span><span><b>{{.Checkers}}</b> checker{{if ne .Checkers 1}}s{{end}}</span><span><b>{{.Judges}}</b> judge{{if ne .Judges 1}}s{{end}}</span><span>scope: {{.Scope}}</span></div>
       <div class="lc-agents">{{range .Installs}}<span class="ck-pill {{if .OK}}ck-pass{{else}}ck-muted{{end}}" title="{{.State}}">{{.Label}}{{if .OK}} ✓{{else}} — {{.State}}{{end}}</span>{{end}}</div>
+      {{if gt .Lines 50}}<div class="lc-conflict"><b>{{.Lines}} instructions</b>: a skill this long starts to contradict itself. Give a scope its own skill, or reject the learnings that overlap.</div>{{end}}
       {{if .Edited}}<div class="lc-conflict"><b>You edited this skill</b>, so prereview stopped regenerating it from your learnings; its installs follow your edit.</div>{{end}}
       {{with .History}}{{template "libHistory" .}}{{end}}
       <div class="lc-actions">

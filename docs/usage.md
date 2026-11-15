@@ -240,9 +240,40 @@ shows how many are waiting.
 - **Another machine**: **Export learnings** downloads them as a file; **Import** on
   the other machine merges it. Newer changes win, and importing the same file twice
   adds nothing.
+- **A learning can carry a check.** When your agent proposes a lesson that can be
+  checked, it can draft the checker (banned words, a preferred spelling) or judge
+  (a yes/no rubric) with it; the card shows it before you accept.
 - **Review in prereview** (the Library header) opens a review of the library folder
   itself (`~/.config/prereview`) in a new tab, so you can comment on your rule files
   and have your agent change them, with the same version history.
+
+## Skills
+
+Accepted learnings become **skills your agents load**. The Library's **Skills** tab
+shows them:
+
+- Every accepted learning becomes one line of a skill prereview writes for you:
+  `learned-writing`, or a skill of its own for a scope (when five accepted learnings
+  share one, the tab offers **Create skill**). The checkers and judges learnings
+  carry go into your checks folder as `learned-…` checks.
+- The skill is **installed for every agent set up on this machine**:
+  `~/.claude/skills` (Claude Code), `~/.agents/skills` (Codex, Gemini CLI, opencode),
+  `~/.codex/skills`, and `~/.cursor/rules` (as a Cursor rule). An agent whose folder
+  doesn't exist is skipped — prereview never creates it. Each card says where the
+  skill is installed, or why not.
+- **Edit the learnings, not the skill.** If you do edit a skill's `SKILL.md`,
+  prereview stops regenerating it (its installs follow your edit) until you choose
+  **Regenerate from learnings**. Every regeneration is a version: the card's history
+  shows what each learning changed, with **Restore**.
+- **Your own skills** found in those folders can be **imported by reference**:
+  prereview reads them and never writes into their folders. Graders in a skill's
+  `evals/` that can check a document become checks (an `llm` grader becomes a
+  judge, a `regex` with `match: not_contains` a checker); the rest, which grade an
+  agent's run, are listed as not used. Learnings whose scope is the skill's name
+  form its **overlay**: **Export patch** gives you a diff that adds them to the
+  skill, for you to apply.
+- **Learnings imported from another machine** arrive proposed: a file never
+  changes your skills or checks until you accept it here.
 
 ## Themes & modes
 

@@ -469,6 +469,18 @@ prereview learn propose --text "Cut filler words: basically, really, very." \
   doesn't resolve is refused and nothing is written.
 - **Don't repeat** a learning the request lists. When the signals contradict one,
   propose the new lesson with `--replaces <id>`: once accepted, newer wins.
+- **When a lesson can be checked, draft the check too.** A mechanical one (banned
+  words, a preferred spelling) gets `--checker rule.yml`: `extends: existence`
+  (`tokens: [...]`), `substitution` (`swap: {bad: good}`), `occurrence` or
+  `vocab`, plus `name` and `message` — never `extends: command` (refused). One that
+  takes judgment gets `--judge rubric.md`: `---` / `kind: judge` / `name: …` /
+  `---`, then one yes/no rubric question. Both are validated before anything is
+  written, and the reviewer sees them on the card before accepting.
+- Once accepted, a lesson becomes a line in a skill prereview generates
+  (`learned-writing`, or one per scope the reviewer gave its own skill) and
+  installs for every agent set up on the machine, so you'll find it among your
+  skills next time. Don't edit a `learned-*` skill: say so in a comment instead —
+  an edit there stops prereview updating it.
 - Prefer a few general lessons over many narrow ones. Then `done` the request.
 
 **The library review.** The Library's "Review in prereview" opens a review of the
