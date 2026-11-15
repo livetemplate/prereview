@@ -95,10 +95,12 @@ type CheckRow struct {
 
 // CheckFileFindings is one file's findings under an expanded row.
 type CheckFileFindings struct {
-	Path     string
-	Open     bool // the file on screen
-	Count    int
-	Findings []FindingView
+	Path      string
+	CheckID   string
+	Open      bool // the file on screen
+	Count     int
+	Dismissed int // findings you ignored here (Show again)
+	Findings  []FindingView
 }
 
 // JudgeVerdictView is one file's verdict under an expanded judge row.
@@ -196,7 +198,7 @@ func (s PrereviewState) CheckPage() *CheckPage {
 			a.total += len(r.Findings)
 			// Only the expanded row lists findings; the rest only count them.
 			listed := r.ID == s.ExpandedCheck
-			ff := CheckFileFindings{Path: pc.Path, Open: pc.Path == s.SelectedFile}
+			ff := CheckFileFindings{Path: pc.Path, CheckID: r.ID, Open: pc.Path == s.SelectedFile, Dismissed: r.Dismissed}
 			for i, f := range r.Findings {
 				if a.nameHit || strings.Contains(strings.ToLower(f.Message), q) || strings.Contains(strings.ToLower(f.Match), q) {
 					ff.Count++
@@ -207,7 +209,7 @@ func (s PrereviewState) CheckPage() *CheckPage {
 					}
 				}
 			}
-			if ff.Count > 0 {
+			if ff.Count > 0 || (listed && ff.Dismissed > 0) {
 				a.count += ff.Count
 				a.files = append(a.files, ff)
 			}
@@ -476,6 +478,7 @@ type CheckStrip struct {
 	Failing    []CheckPick
 	Judge      *JudgeVerdictView // the selected check is a judge: its card
 	Calibrated bool              // that judge counts (else advisory)
+	Hidden     int               // the picked check's cards you hid this session
 
 	// Judges on this file (idle bar).
 	JudgesRun     int  // enabled judges that apply: "Run judges (n)"
@@ -524,7 +527,13 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 	}
 	if r, ok := s.selectedFindings(); ok {
 		n := len(r.Findings)
-		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: n, Pos: min(max(s.FindingCursor, 0), n-1) + 1}
+		st := &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: n, Pos: min(max(s.FindingCursor, 0), n-1) + 1}
+		for _, f := range r.Findings {
+			if slices.Contains(s.HiddenFindings, findingKey(s.SelectedFile, f, r.Name)) {
+				st.Hidden++
+			}
+		}
+		return st
 	}
 	st := &CheckStrip{NeedsAgent: !s.AgentMode}
 	asked := s.openJudgeRequest()

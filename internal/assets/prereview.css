@@ -3942,4 +3942,7 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
 .finding-check { font-weight: 700; color: var(--mark); }
 .finding-msg { color: var(--pico-color); flex: 1 1 12rem; }
 .finding-queue { margin: 0; }
+.finding-actions { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+.ckp-dismissed { display: inline; margin: 0 0 0 0.5rem; }
+.ck-strip-hidden { margin: 0; }
 .finding-queue button { margin: 0; padding: 0.1rem 0.55rem; min-height: 0; font-size: 0.75rem; }

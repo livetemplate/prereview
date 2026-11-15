@@ -398,6 +398,7 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 		r.mu.Unlock()
 	}
 	res, _ := c.results(cs, d.Path, key, rules, func() []string { return lines })
+	res = withoutDismissed(res, d.Path, func() []string { return lines }, c.dismissals())
 	if len(judges) > 0 {
 		res = judgeResults(res, d.Path, judges, c.verdicts(), c.calibrated(), keyContentHash(key), func() []string { return lines })
 	}
@@ -420,7 +421,7 @@ func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 	state.JudgeCal = c.calibration() // each judge's standing, only while the page shows it
 	cs := c.checkSetup(state.TrustedVale)
 	targets := checkTargets(state.Files)
-	verdicts, calibrated := c.verdicts(), c.calibrated()
+	verdicts, calibrated, dismissed := c.verdicts(), c.calibrated(), c.dismissals()
 	rc := &ReviewChecks{Total: len(targets), ValeNotice: valeNotice(cs.mode), ValeTrust: cs.mode == valeUntrusted}
 	if len(targets) > maxCheckFiles {
 		targets = targets[:maxCheckFiles]
@@ -444,6 +445,7 @@ func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 			return lines
 		}
 		if res, ok := c.results(cs, f.Path, key, rules, load); ok {
+			res = withoutDismissed(res, f.Path, load, dismissed)
 			res = judgeResults(res, f.Path, judges, verdicts, calibrated, keyContentHash(key), load)
 			rc.Files = append(rc.Files, PathChecks{Path: f.Path, Results: res})
 		}

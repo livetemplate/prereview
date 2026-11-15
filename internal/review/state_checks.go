@@ -155,12 +155,13 @@ func (s PrereviewState) FindingsByRow() map[string][]FindingView {
 	out := map[string][]FindingView{}
 	queued := s.queuedFindings()
 	for i := range r.Findings {
-		if queued[findingKey(s.SelectedFile, r.Findings[i], r.Name)] {
-			continue // its comment card is right there: one card, not two
+		k := findingKey(s.SelectedFile, r.Findings[i], r.Name)
+		if queued[k] || slices.Contains(s.HiddenFindings, k) {
+			continue // queued: its comment card is right there; hidden: folded this session
 		}
 		fv := findingView(s.SelectedFile, r, i)
-		k := rowKeysFor(fv.Line, "new")[0]
-		out[k] = append(out[k], fv)
+		row := rowKeysFor(fv.Line, "new")[0]
+		out[row] = append(out[row], fv)
 	}
 	return out
 }

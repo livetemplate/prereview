@@ -114,7 +114,13 @@ that flag wording, run every time the file loads. The file header shows
 - The bar becomes **finding 1 of n** with **‹ ›** to step through the findings in
   this file (it wraps; it never changes file), and **×** to go back to the list.
 - **Queue as comment** on a card turns the finding into an ordinary comment on
-  that span, so your agent fixes it from the queue like any other.
+  that span, so your agent fixes it from the queue like any other. A queued
+  finding then shows only as its comment.
+- **Ignore** says it's fine here: the finding stops counting (a check with nothing
+  left passes) and stays dismissed while that line is unchanged. The Checks page
+  shows "1 ignored · show again" to bring it back.
+- **Hide** folds the card for now so you can read; the underline and the count
+  stay, and "1 hidden · show" on the bar brings it back.
 
 **The Checks page** (the toolbar's **Library** button, or **Checks n/m** /
 **All checks** for the open file) lists every check across every changed file:

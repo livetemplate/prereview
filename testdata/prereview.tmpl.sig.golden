@@ -172,14 +172,15 @@
               {{end}}
               {{range .ByFile}}
               <div class="ckp-file" data-key="ckp-file-{{.Path}}">
-                <header><code>{{.Path}}</code>{{if .Open}} <span class="ck-pill ck-open">open</span>{{end}}<span class="ckp-file-n">{{.Count}}</span>
-                  {{with index .Findings 0}}<form method="POST" class="ckp-show"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>{{end}}
+                <header><code>{{.Path}}</code>{{if .Open}} <span class="ck-pill ck-open">open</span>{{end}}<span class="ckp-file-n">{{.Count}}</span>{{if .Dismissed}}<form method="POST" class="ckp-dismissed"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><button type="submit" name="restoreDismissed" class="ck-link" title="Bring back the findings you ignored in this file">{{.Dismissed}} ignored · show again</button></form>{{end}}
+                  {{if .Findings}}{{with index .Findings 0}}<form method="POST" class="ckp-show"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>{{end}}{{end}}
                 </header>
                 <ol>
                   {{range .Findings}}<li data-key="ckp-f-{{.Path}}-{{.CheckID}}-{{.Index}}">
                     <form method="POST" class="ckp-at-form"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="jumpToFinding" class="ckp-at">{{.Label}}</button></form>
                     <span class="ckp-msg">{{.Message}}</span>
-                    {{if .Queued}}<span class="ck-pill ck-open ckp-q" title="Already queued as a comment">Queued</span>{{else}}<form method="POST" class="ckp-q"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="queueFinding" class="outline">Queue</button></form>{{end}}
+                    {{if .Queued}}<span class="ck-pill ck-open ckp-q" title="Already queued as a comment">Queued</span>{{else}}<form method="POST" class="ckp-q"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="queueFinding" class="outline">Queue</button></form>
+                    <form method="POST" class="ckp-q"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="dismissFinding" class="outline secondary" title="It's fine here: stop flagging this one">Ignore</button></form>{{end}}
                   </li>
                   {{end}}
                 </ol>
@@ -223,6 +224,7 @@
       <span class="ck-strip-pos"><span class="ck-pos-long">finding {{.Pos}} of {{.Count}} in this file</span><span class="ck-pos-short" aria-hidden="true">{{.Pos}}/{{.Count}}</span></span>
       <form method="POST"><input type="hidden" name="dir" value="1"><button type="submit" name="stepFinding" class="outline" aria-label="Next finding">›</button></form>
     </span>
+    {{if .Hidden}}<form method="POST" class="ck-strip-hidden"><button type="submit" name="showHiddenFindings" class="ck-link" title="Show the cards you hid">{{.Hidden}} hidden · show</button></form>{{end}}
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
     <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this check">×</button></form>
     {{else}}
@@ -504,7 +506,11 @@
       <div class="finding-card sev-{{.Severity}}" data-key="finding-{{.CheckID}}-{{.Index}}" role="note">
         <span class="finding-check">{{.CheckName}}</span>
         <span class="finding-msg">{{.Message}}</span>
-        <form method="POST" class="finding-queue"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="queueFinding" class="outline">Queue as comment</button></form>
+        <span class="finding-actions">
+          <form method="POST" class="finding-queue"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="queueFinding" class="outline">Queue as comment</button></form>
+          <form method="POST" class="finding-queue"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="dismissFinding" class="outline secondary" title="It's fine here: stop flagging this one">Ignore</button></form>
+          <form method="POST" class="finding-queue"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="hideFinding" class="outline secondary" title="Fold this card for now; the underline stays">Hide</button></form>
+        </span>
       </div>
 
 === htmlView ===

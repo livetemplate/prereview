@@ -161,6 +161,9 @@ type PrereviewController struct {
 	judgeCache map[string]Judgment
 	labelFP    string
 	labelCache map[string]string
+	// The review's ignored findings (dismissals), by the log's fingerprint.
+	dismissFP    string
+	dismissCache map[string]Dismissal
 
 	// LibraryDir is the per-user library (~/.config/prereview): learnings,
 	// sessions, extractions. "" disables the Learnings tab. The folded learnings

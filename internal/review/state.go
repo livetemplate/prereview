@@ -60,6 +60,8 @@ type PrereviewState struct {
 	Checks        *FileChecks   `json:"checks"`
 	ReviewChecks  *ReviewChecks `json:"review_checks"`
 	SelectedCheck string        `json:"selected_check" lvt:"persist"`
+	// HiddenFindings are finding cards you folded this session (findingKey).
+	HiddenFindings []string `json:"hidden_findings"`
 	FindingCursor int           `json:"finding_cursor"`
 	// The Checks page (the Library frame, Checks tab): open state and its filters.
 	// Session view state, never ui-prefs: a filter carried into the next review

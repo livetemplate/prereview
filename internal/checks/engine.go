@@ -51,6 +51,8 @@ type Result struct {
 	JudgedAt string `json:"judged_at,omitempty"`
 	// Advisory: a judge you haven't calibrated yet (M5) — shown, not counted.
 	Advisory bool `json:"advisory,omitempty"`
+	// Dismissed: findings you ignored here (dropped from Findings).
+	Dismissed int `json:"dismissed,omitempty"`
 }
 
 // NewResult starts a Result carrying the rule's identity (judges too).
