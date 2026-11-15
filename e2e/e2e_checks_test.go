@@ -169,6 +169,9 @@ func TestE2E_ChecksPage(t *testing.T) {
 			if n := countSel(t, p, `.code mark.comment-span.check-finding`); n != 1 {
 				t.Errorf("the commented span must carry both marks; got %d%s", n, diag())
 			}
+			if n := countSel(t, p, `.code .finding-card`); n != 0 {
+				t.Errorf("the queued finding still shows its own card (with Queue as comment) under its comment: %d%s", n, diag())
+			}
 
 			// × returns the bar to the list and clears the marks.
 			if err := chromedp.Run(ctx,

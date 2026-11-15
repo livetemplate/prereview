@@ -413,3 +413,26 @@ func TestVale_RunsOnlyWhenTrusted(t *testing.T) {
 		t.Errorf("no vale binary: %+v", s.Checks)
 	}
 }
+
+// A finding already queued as an open comment shows once (its comment card),
+// not a second time as a finding card; resolving the comment brings it back.
+func TestFindingsByRow_SkipsQueued(t *testing.T) {
+	c := checksController(t)
+	s := PrereviewState{SelectedFile: "doc.md", CurrentDiff: mdDiff()}
+	c.applyChecks(&s)
+	s.SelectedCheck = "filler-intensifiers"
+	if n := len(s.FindingsByRow()); n != 1 {
+		t.Fatalf("finding cards = %d, want 1", n)
+	}
+	s, err := c.queueFinding(s, "doc.md", "filler-intensifiers", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(s.FindingsByRow()); n != 0 {
+		t.Fatalf("a queued finding still has its own card (%d)", n)
+	}
+	s.Comments[len(s.Comments)-1].Resolved = true
+	if n := len(s.FindingsByRow()); n != 1 {
+		t.Fatalf("resolving the comment should bring the finding back (%d)", n)
+	}
+}

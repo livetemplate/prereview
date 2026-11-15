@@ -168,6 +168,7 @@ func (s PrereviewState) CheckPage() *CheckPage {
 	// Aggregate per check (library order) over the files the file chip allows,
 	// keeping only what a search matches.
 	q := strings.ToLower(strings.TrimSpace(s.ChecksQuery))
+	queued := s.queuedFindings()
 	var order []string
 	aggs := map[string]*checkAgg{}
 	for _, pc := range files {
@@ -200,7 +201,9 @@ func (s PrereviewState) CheckPage() *CheckPage {
 				if a.nameHit || strings.Contains(strings.ToLower(f.Message), q) || strings.Contains(strings.ToLower(f.Match), q) {
 					ff.Count++
 					if listed {
-						ff.Findings = append(ff.Findings, findingView(pc.Path, r, i))
+						fv := findingView(pc.Path, r, i)
+						fv.Queued = queued[findingKey(pc.Path, f, r.Name)]
+						ff.Findings = append(ff.Findings, fv)
 					}
 				}
 			}
