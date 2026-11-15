@@ -1,6 +1,7 @@
 package gitdiff
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -281,5 +282,54 @@ func TestRenderHTMLPreview_ExplicitHeadImplicitBody(t *testing.T) {
 	}
 	if blocks[0].StartLine != 2 {
 		t.Errorf("h1 block start = %d, want 2", blocks[0].StartLine)
+	}
+}
+
+// Every element inside <body> carries its own source range (so a drawn region
+// is precise on a page whose content sits in nested wrappers; a one-line nested
+// element carries data-from alone), while the returned blocks stay the top-level
+// children (always both ends) and nothing inside script, style or svg is annotated.
+func TestRenderHTMLPreview_NestedRanges(t *testing.T) {
+	src := strings.Join([]string{
+		"<!doctype html>",                     // 1
+		"<html><head></head><body>",           // 2
+		"<div id=\"app\">",                    // 3
+		"  <header>Title</header>",            // 4
+		"  <main>",                            // 5
+		"    <p>One <b>bold</b></p>",          // 6
+		"    <img src=\"a.png\">",             // 7
+		"    <svg><path d=\"M0 0\"/></svg>",   // 8
+		"    <script>var x = '<p>';</script>", // 9
+		"  </main>",                           // 10
+		"</div>",                              // 11
+		"<footer>Bye</footer>",                // 12
+		"</body></html>",                      // 13
+	}, "\n") + "\n"
+	doc, blocks := RenderHTMLPreview([]byte(src), "x.html")
+
+	if want := []HTMLBlock{{StartLine: 3, EndLine: 11}, {StartLine: 12, EndLine: 12}}; !reflect.DeepEqual(blocks, want) {
+		t.Errorf("top-level blocks = %+v, want %+v", blocks, want)
+	}
+	for _, tag := range []string{
+		`<div id="app" data-from="3" data-to="11">`,
+		`<header data-from="4">`,
+		`<main data-from="5" data-to="10">`,
+		`<p data-from="6">`,
+		`<b data-from="6">`,
+		`<img src="a.png" data-from="7">`,
+		`<svg data-from="8">`,
+		`<footer data-from="12" data-to="12">`,
+	} {
+		if !strings.Contains(doc, tag) {
+			t.Errorf("missing %s in:\n%s", tag, doc)
+		}
+	}
+	for _, bad := range []string{`<path d="M0 0" data-from`, `<script data-from`, `var x = '<p data-from`} {
+		if strings.Contains(doc, bad) {
+			t.Errorf("annotated inside a non-block element: found %q", bad)
+		}
+	}
+	if !strings.Contains(doc, "<script>var x = '<p>';</script>") {
+		t.Errorf("script text must pass through verbatim:\n%s", doc)
 	}
 }
