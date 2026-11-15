@@ -104,6 +104,14 @@
   <ul class="lib-list">
     {{range .Cards}}{{template "learnCard" .}}{{end}}
   </ul>
+  <div class="lib-io">
+    <span>Review on another machine too? Carry your learnings across: newer ones win.</span>
+    <a role="button" class="outline" href="/_library-export" download>Export learnings</a>
+    <form method="POST" action="/_library-import" enctype="multipart/form-data" class="lib-import" lvt-form:no-intercept>
+      <input type="file" name="file" accept=".jsonl,application/x-ndjson,application/json" aria-label="Learnings file to import" required>
+      <button type="submit" class="outline">Import</button>
+    </form>
+  </div>
 {{end}}{{end}}
 
 {{define "learnCard"}}

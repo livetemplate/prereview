@@ -211,6 +211,8 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	registerAssetRoutes(mux)
 	if controller.LibraryDir != "" {
 		mux.HandleFunc("/_library-review", libraryReviewHandler(controller.LibraryDir))
+		mux.HandleFunc("/_library-export", libraryExportHandler(controller.LibraryDir))
+		mux.HandleFunc("/_library-import", libraryImportHandler(controller.LibraryDir))
 	}
 
 	// Decide what to actually bind to. On a remote (SSH) box with no

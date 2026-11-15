@@ -3682,6 +3682,10 @@ button.lib-tab .ck-pill { margin-left: 0.3rem; }
 .lc-edit label { display: flex; gap: 0.4rem; align-items: center; margin: 0; font-size: 0.78rem; color: var(--text-muted); }
 .lc-edit input { margin: 0; padding: 0.15rem 0.45rem; height: auto; font-size: 0.82rem; }
 .lib-boot-form { margin: 0; }
+.lib-io { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.4rem 0.25rem 1rem; color: var(--text-faint); font-size: 0.76rem; }
+.lib-io a[role="button"], .lib-io button { margin: 0; padding: 0.2rem 0.65rem; min-height: 28px; width: auto; font-size: 0.78rem; display: inline-flex; align-items: center; }
+.lib-import { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0; }
+.lib-import input[type="file"] { margin: 0; padding: 0.1rem; font-size: 0.74rem; width: auto; max-width: 14rem; height: auto; }
 
 /* A rule file's history on the Checks tab (M3 library versions). */
 .ckp-history { margin: 0.5rem 0 0; font-size: 0.78rem; }

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 
 	"github.com/livetemplate/prereview/csv"
@@ -402,5 +403,74 @@ func killLibraryReview(t *testing.T, repo string) {
 		if proc, err := os.FindProcess(rec.PID); err == nil {
 			_ = proc.Kill()
 		}
+	}
+}
+
+// TestE2E_LibraryExportImport: Export downloads this machine's learnings; Import
+// (a plain form post with the file) merges another machine's — a second import of
+// the same file adds nothing — and the imported learning shows in the Library.
+func TestE2E_LibraryExportImport(t *testing.T) {
+	const w, h = 390, 844
+	repo := setupFixtureRepoChecks(t, "notes.md")
+	past := seedReviewStore(t, filepath.Join(t.TempDir(), "notes"),
+		csv.Row{ID: "c1", File: "plan.md", FromLine: 4, ToLine: 4, Body: "Drop it.", CreatedAt: time.Now()})
+	p := bootChromeAgainstRepo(t, repo, w, h)
+	diag := captureDiag(t, p)
+	p.waitReadyAt(w, h)
+	mine := learnPropose(t, p, "--text", "Mine.", "--evidence", past+":c1")
+	ctx, cancel := within(p, 40*time.Second)
+	defer cancel()
+
+	var exported string
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(learnCard(mine), chromedp.ByQuery),
+		chromedp.Evaluate(`fetch(document.querySelector('.lib-io a[href="/_library-export"]').href).then(r => r.text())`, &exported,
+			func(p *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams { return p.WithAwaitPromise(true) }),
+	); err != nil {
+		t.Fatalf("export: %v%s", err, diag())
+	}
+	if !strings.Contains(exported, `"id":"`+mine+`"`) {
+		t.Fatalf("the export lacks this machine's learning:\n%s", exported)
+	}
+
+	theirs := filepath.Join(t.TempDir(), "laptop.jsonl")
+	line := `{"id":"lfromlaptop","text":"Theirs.","scope":"Email","evidence":[],"status":"accepted","created_at":"2026-11-10T00:00:00Z","updated_at":"2026-11-10T00:00:00Z","machine":"laptop"}` + "\n"
+	if err := os.WriteFile(theirs, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	importOnce := func() string {
+		t.Helper()
+		var res string
+		if err := chromedp.Run(ctx,
+			chromedp.Navigate(p.url),
+			chromedp.WaitVisible(`.library-trigger`, chromedp.ByQuery),
+			chromedp.Sleep(time.Second), // the socket (clicks before it are lost)
+			chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.lib-import input[type="file"]`, chromedp.ByQuery),
+			chromedp.SetUploadFiles(`.lib-import input[type="file"]`, []string{theirs}, chromedp.ByQuery),
+			chromedp.Click(`.lib-import button`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.import-result`, chromedp.ByQuery),
+			chromedp.Text(`.import-result`, &res, chromedp.ByQuery),
+		); err != nil {
+			t.Fatalf("import: %v%s", err, diag())
+		}
+		return res
+	}
+	if got := importOnce(); got != "Imported 1 learning." {
+		t.Errorf("first import: %q", got)
+	}
+	if got := importOnce(); !strings.HasPrefix(got, "Nothing new") {
+		t.Errorf("importing the same file again: %q", got)
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`a[href="/"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.library-trigger`, chromedp.ByQuery),
+		chromedp.Sleep(time.Second),
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.Click(learnChip("accepted"), chromedp.ByQuery),
+		chromedp.WaitVisible(learnCard("lfromlaptop")+`.is-accepted`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("the imported learning isn't in the Library: %v%s", err, diag())
 	}
 }
