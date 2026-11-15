@@ -620,6 +620,26 @@ func renderFixtures() []renderFixture {
 	bootReading.Comments = append(bootReading.Comments, review.Comment{ID: "x1", File: bootReading.SelectedFile, Kind: "file",
 		Body: library.ExtractionPrompt([]string{"/home/u/notes/.prereview"}, nil), Created: time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)})
 
+	// checks M5: the Benchmarks tab — a benchmark with its score over 3 runs, the
+	// latest run's matrix (a judge still waiting, an errored checker), a run that
+	// isn't comparable, the new-benchmark form and the judge calibration table.
+	benchTab := repoBase()
+	benchTab.ShowLibrary, benchTab.LibraryTab = true, "benchmarks"
+	benchTab.BenchTab = &review.BenchTab{CanAdd: true,
+		Cards: []review.BenchCard{{ID: "release-notes", Name: "Release notes", Cases: 2, Checkers: 2, Judges: 1,
+			Score: "0.83", Spread: "± 0.06 over 3 runs · weighted pass rate", Asking: true,
+			Headers: []string{"Filler intensifiers", "House", "Reader first"},
+			Rows: []review.BenchRow{
+				{Label: "v0.27 notes", Cells: []review.BenchCell{{Mark: "✓", Class: "bm-ok"}, {Mark: "!", Class: "bm-err", Title: "errored (not counted): timed out"}, {Mark: "…", Class: "bm-wait", Title: "waiting for your agent"}}},
+				{Label: "v0.28 draft", Cells: []review.BenchCell{{Mark: "✗", Class: "bm-no", Title: "2 findings"}, {Mark: "✓", Class: "bm-ok"}, {Mark: "✗", Class: "bm-no", Title: "Buries the action."}}}},
+			Runs: []review.BenchRunRow{
+				{When: "15 Nov 2026 10:12", Score: "0.67 so far (1 waiting)", Pins: "filler@3f2a · house@91c0 · reader@77ab", Comparable: true, Partial: true},
+				{When: "14 Nov 2026 09:00", Score: "0.88", Model: "claude-opus-5-5", Pins: "filler@3f2a · house@91c0 · reader@1d4e"}},
+			DefPath: "/home/u/.config/prereview/benchmarks/release-notes/benchmark.yml"}},
+		Judges: []review.JudgeCalRow{{Name: "Reader first", Agrees: "9 / 10", Status: "calibrated", Calibrated: true},
+			{Name: "No marketing", Agrees: "6 / 6", Status: "advisory · needs 10 answers"}},
+	}
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -657,6 +677,7 @@ func renderFixtures() []renderFixture {
 		{"learnings-superseded", superseded},
 		{"learnings-accepted", acceptedL},
 		{"library-skills", skillsTab},
+		{"library-benchmarks", benchTab},
 		{"boot-offer", boot},
 		{"boot-reading", bootReading},
 		{"search-open", searchOpen},

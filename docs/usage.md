@@ -202,8 +202,30 @@ Pass when the first paragraph says what changes for the reader.
   queue it as a comment, or answer **Agree** / **Disagree**. Your answers are how a
   judge earns trust; the Checks page shows how often each one agrees with you.
 - A verdict goes out of date when the file or the rubric changes; the bar then
-  offers **Re-run judges**. Judges are advisory: they count in **Checks n/m** once
-  they have a current verdict, but nothing is blocked on them.
+  offers **Re-run judges**.
+- **A judge starts advisory**: it shows its verdict and critique (tagged *judge ·
+  advisory*) but doesn't count in **Checks n/m** or turn the button red. It earns its
+  place once it agrees with you often enough: at least 10 of your answers for its
+  current rubric, with 8 of the last 10 agreeing. Your answers count across every
+  review on this machine. Edit the rubric and it starts over (a changed rubric is a
+  different judge). The Checks page shows each judge's standing, flags one that is
+  *flaky* (the same text got both verdicts) or *doesn't discriminate* (every verdict
+  you answered was the same), and lists the verdicts you disagreed with, with the
+  critique, so you can fix the rubric. Nothing is ever blocked on a judge.
+
+**Benchmarks** (Library → Benchmarks) tell you whether a change to a check, a
+rubric or your agent's model made things better or worse:
+
+- **New benchmark** from the open file makes it the first case: a snapshot, so later
+  edits to the file don't move the benchmark. It's scored by every check that
+  applies to the file; change its checks and weights in its `benchmark.yml` (Open in
+  editor). **Add the open file as a case** adds another snapshot.
+- **Run benchmark** runs the checkers at once and asks your agent for the judges in
+  one request (it needs `prereview --agent`). The score is the weighted pass rate;
+  an errored check counts as missing, not as a fail, and is shown with **!**.
+- The score shows the mean ± spread of the last three comparable runs. Every run
+  pins each check's version, each case's text and the judging model; runs that
+  differ are marked *not comparable* in the runs table and kept out of the score.
 
 **Rule history.** Every edit to a rule file in your checks folder is kept as a
 version. Expand one of your checks on the Checks page to see its history, newest

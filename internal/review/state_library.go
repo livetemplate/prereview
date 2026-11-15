@@ -78,6 +78,9 @@ func (s PrereviewState) libraryTab() string {
 func (s PrereviewState) LibraryOnLearnings() bool { return s.libraryTab() == libTabLearnings }
 func (s PrereviewState) LibraryOnChecks() bool    { return s.libraryTab() == libTabChecks }
 func (s PrereviewState) LibraryOnSkills() bool    { return s.libraryTab() == libTabSkills }
+func (s PrereviewState) LibraryOnBenchmarks() bool {
+	return s.libraryTab() == libTabBenchmarks
+}
 
 // LearnPage builds the Learnings tab, or nil when it isn't showing.
 func (s PrereviewState) LearnPage() *LearnPage {

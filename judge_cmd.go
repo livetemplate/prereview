@@ -7,8 +7,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/livetemplate/prereview/internal/bench"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
@@ -39,13 +41,18 @@ func runJudge(args []string) error {
 	critique := fs.String("critique", "", "why it passed or failed, in a sentence or two")
 	quote := fs.String("quote", "", "optional: the exact passage the critique is about, so the reviewer can jump to it")
 	model := fs.String("model", "", "optional: the model id that judged")
+	benchID := fs.String("bench", "", "answering a benchmark run: the benchmark's id (with --run and --case, instead of --out and --file)")
+	runID := fs.String("run", "", "the benchmark run's id, as the request names it")
+	caseID := fs.String("case", "", "the benchmark case's id, as the request names it")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview judge --out <store> --file <f> --judge <id> --content-hash <h> --rubric-hash <h>\n"+
 				"                       --verdict pass|fail --critique \"…\" [--quote \"…\"] [--model <id>]\n\n"+
 				"  Record your verdict for one judge on one file, answering a \"Run judges\"\n"+
 				"  request from the review. The request lists each judge's rubric and the\n"+
-				"  exact command (with both hashes). A verdict is binary; the critique says why.\n")
+				"  exact command (with both hashes). A verdict is binary; the critique says why.\n"+
+				"  Answering a benchmark run: --bench <id> --run <run> --case <case> instead of\n"+
+				"  --out/--file, as the benchmark's request names them.\n")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -53,6 +60,9 @@ func runJudge(args []string) error {
 	if fs.NArg() > 0 {
 		fs.Usage()
 		return fmt.Errorf("unexpected argument %q (flags only)", fs.Arg(0))
+	}
+	if *benchID != "" {
+		return judgeBenchCase(*benchID, *runID, *caseID, *judge, *contentHash, *rubricHash, *verdict, *critique, *model)
 	}
 	if *file == "" || *judge == "" || *verdict == "" || strings.TrimSpace(*critique) == "" || *contentHash == "" || *rubricHash == "" {
 		fs.Usage()
@@ -110,4 +120,49 @@ func reviewRelPath(file string) (string, error) {
 		return "", fmt.Errorf("%s is outside the review: --file takes the review-relative path the request names", file)
 	}
 	return clean, nil
+}
+
+// judgeBenchCase records a verdict for one case of a benchmark run (checks M5):
+// validated against the run's pins — the case must be in the run and the
+// content and rubric hashes must be the ones it started with — before anything
+// is written.
+func judgeBenchCase(benchID, runID, caseID, judge, contentHash, rubricHash, verdict, critique, model string) error {
+	switch {
+	case runID == "" || caseID == "" || judge == "" || verdict == "" || strings.TrimSpace(critique) == "" || contentHash == "" || rubricHash == "":
+		return errors.New("--bench needs --run, --case, --judge, --content-hash, --rubric-hash, --verdict and --critique (copy the command from the request)")
+	case !review.ValidVerdict(verdict):
+		return fmt.Errorf("--verdict must be pass or fail, got %q", verdict)
+	case !bench.ValidID(benchID) || !bench.ValidID(runID) || !bench.ValidID(caseID):
+		return errors.New("--bench, --run and --case take the ids the request names")
+	}
+	lib := library.Dir()
+	bm, err := bench.Load(lib, benchID)
+	if err != nil {
+		return fmt.Errorf("no benchmark %q: %w", benchID, err)
+	}
+	var run *bench.Run
+	for _, r := range bench.LoadRuns(lib, benchID) {
+		if r.ID == runID {
+			run = &r
+			break
+		}
+	}
+	switch {
+	case run == nil:
+		return fmt.Errorf("benchmark %s has no run %s", benchID, runID)
+	case !slices.ContainsFunc(bm.Checks, func(c bench.CheckSpec) bool { return c.ID == judge }):
+		return fmt.Errorf("benchmark %s doesn't score %s", benchID, judge)
+	case run.Pins.Cases[caseID] == "":
+		return fmt.Errorf("run %s has no case %s", runID, caseID)
+	case run.Pins.Cases[caseID] != contentHash:
+		return fmt.Errorf("case %s's content hash is %s in this run, not %s: copy the command from the request", caseID, run.Pins.Cases[caseID], contentHash)
+	case run.Pins.Checks[judge] != rubricHash:
+		return fmt.Errorf("%s's rubric is %s in this run, not %s: copy the command from the request", judge, run.Pins.Checks[judge], rubricHash)
+	}
+	if err := bench.RecordResult(lib, benchID, bench.Record{Run: runID, Case: caseID, Check: judge, Judge: true,
+		Status: verdict, Critique: strings.TrimSpace(critique), Model: strings.TrimSpace(model)}); err != nil {
+		return err
+	}
+	fmt.Printf("recorded %s on %s/%s: %s\n", judge, benchID, caseID, verdict)
+	return nil
 }

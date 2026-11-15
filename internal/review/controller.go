@@ -194,6 +194,8 @@ type PrereviewController struct {
 	calFP      string
 	calWatchFP string
 	calCache   map[string]library.Calibration
+	// benchWatchFP is the benchmarks' fingerprint the watcher last fanned out.
+	benchWatchFP string
 
 	// AgentHome is where generated skills are installed (skills.AgentHome,
 	// resolved once at launch); "" disables them.

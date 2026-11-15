@@ -11,6 +11,7 @@ import (
 	"github.com/livetemplate/livetemplate"
 
 	"github.com/livetemplate/prereview/gitdiff"
+	"github.com/livetemplate/prereview/internal/bench"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/skills"
 	"github.com/livetemplate/prereview/internal/library"
@@ -90,6 +91,8 @@ func (c *PrereviewController) libraryScope() []FileRef {
 	}
 	r.mu.Unlock()
 	srcs, _ := filepath.Glob(skills.Env{LibDir: c.LibraryDir}.SourcePath("*"))
+	defs, _ := filepath.Glob(bench.DefPath(c.LibraryDir, "*"))
+	srcs = append(srcs, defs...)
 	for _, p := range srcs {
 		if k := c.libraryKey(p); k != "" {
 			refs = append(refs, FileRef{Path: k, AbsPath: p})

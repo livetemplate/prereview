@@ -50,6 +50,7 @@ func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 		state.LearnStore = filepath.Dir(c.CSVPath)
 	}
 	c.applySkillsTab(state)
+	c.applyBenchTab(state)
 	state.Bootstrapped = c.LibraryDir == "" || library.Bootstrapped(c.LibraryDir)
 	state.BootStores, state.BootScanned = nil, false
 	if !state.Bootstrapped || state.BootOpen {
@@ -188,7 +189,7 @@ func (c *PrereviewController) LibraryUpdated(state PrereviewState, ctx *livetemp
 // SetLibraryTab switches the Library's tab.
 func (c *PrereviewController) SetLibraryTab(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	tab := ctx.GetString("tab")
-	if !slices.Contains([]string{libTabLearnings, libTabSkills, libTabChecks}, tab) {
+	if !slices.Contains([]string{libTabLearnings, libTabSkills, libTabChecks, libTabBenchmarks}, tab) {
 		return state, fmt.Errorf("library: unknown tab %q", tab)
 	}
 	state.LibraryTab = tab

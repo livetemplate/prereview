@@ -27,9 +27,9 @@
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnLearnings}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnLearnings}}true{{else}}false{{end}}">Learnings{{if $.LearnNew}}<span class="ck-pill ck-new">{{$.LearnNew}} new</span>{{end}}</button></form>
     <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnSkills}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnSkills}}true{{else}}false{{end}}">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnChecks}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnChecks}}true{{else}}false{{end}}">Checks</button></form>
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
+    <form method="POST"><input type="hidden" name="tab" value="benchmarks"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnBenchmarks}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnBenchmarks}}true{{else}}false{{end}}">Benchmarks</button></form>
   </div>
-  {{template "learnings" $}}{{with $.SkillsTab}}{{template "skillsTab" .}}{{end}}
+  {{template "learnings" $}}{{with $.SkillsTab}}{{template "skillsTab" .}}{{end}}{{with $.BenchTab}}{{template "benchTab" .}}{{end}}
   {{with $.CheckPage}}
   <div class="ckp-bar">
     <form method="POST" lvt-form:preserve class="ckp-search-form">
@@ -284,4 +284,44 @@
     {{end}}
   </ul>
   {{with .Empty}}<p class="ckp-empty">{{.}}</p>{{end}}
+{{end}}
+
+{{/* The Benchmarks tab (checks M5): each benchmark's score over its recent
+     comparable runs, the latest run's case × check matrix, the runs with their
+     pins, and every judge's calibration. Called with the BenchTab as `.`. */}}
+{{define "benchTab"}}{{$canAdd := .CanAdd}}
+  <ul class="lib-list">
+    {{range .Cards}}<li class="lib-card" data-key="bench-{{.ID}}">
+      <header><span>{{.Cases}} case{{if ne .Cases 1}}s{{end}} · {{.Checkers}} checker{{if ne .Checkers 1}}s{{end}} · {{.Judges}} judge{{if ne .Judges 1}}s{{end}} · {{if .Weighted}}weighted{{else}}weights equal{{end}}</span>{{if .Asking}}<span class="ck-pill ck-new">waiting for your agent</span>{{end}}</header>
+      <p class="lc-text">{{.Name}}</p>
+      <div class="bm-score">{{.Score}} <small>{{.Spread}}</small></div>
+      {{if .Rows}}<div class="bm-table-wrap"><table class="bm-table">
+        <thead><tr><th>Case</th>{{range .Headers}}<th class="c">{{.}}</th>{{end}}</tr></thead>
+        <tbody>{{range .Rows}}<tr><td>{{.Label}}</td>{{range .Cells}}<td class="c {{.Class}}" title="{{.Title}}">{{.Mark}}</td>{{end}}</tr>{{end}}</tbody>
+      </table></div>{{end}}
+      {{with .Runs}}<details class="bm-runs"><summary>Runs (pinned: check versions + judge model)</summary>
+        <div class="bm-table-wrap"><table class="bm-table"><thead><tr><th>When</th><th>Score</th><th>Judge model</th><th>Checks</th></tr></thead><tbody>
+          {{range .}}<tr{{if not .Comparable}} class="bm-incomparable" title="Different checks, cases or model: not comparable with the latest run"{{end}}><td>{{.When}}</td><td>{{.Score}}</td><td>{{.Model}}</td><td>{{.Pins}}{{if not .Comparable}} · not comparable{{end}}</td></tr>
+          {{end}}</tbody></table></div></details>{{end}}
+      <div class="lc-actions">
+        <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="runBenchmark"{{if or (not .Rows) (not .Headers)}} disabled{{end}}>Run benchmark</button></form>
+        {{if $canAdd}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="addBenchmarkCase" class="outline">Add the open file as a case</button></form>{{end}}
+        {{if .EditorURL}}<a role="button" class="outline secondary" href="{{.EditorURL}}" title="{{.DefPath}}">Open in editor</a>{{end}}
+      </div>
+      {{if not .EditorURL}}<input class="check-path" type="text" readonly value="{{.DefPath}}" aria-label="Benchmark file path">{{end}}
+    </li>
+    {{end}}{{if .CanAdd}}<li class="lib-card" data-key="bench-new">
+      <p class="lc-text">New benchmark</p>
+      <form method="POST" class="lib-bench-new"><label>Name <input type="text" name="name" placeholder="Release notes" autocomplete="off" required></label><button type="submit" name="createBenchmark" class="outline">Create from the open file</button></form>
+      <p class="ck-src">The open file becomes its first case (a snapshot: later edits don't move it), scored by every check that applies to it. Change its checks and weights in its <code>benchmark.yml</code>.</p>
+    </li>
+    {{else if not .Cards}}<li class="lib-card"><p class="ckp-empty">Open a file to start a benchmark from it.</p></li>
+    {{end}}{{with .Judges}}<li class="lib-card" data-key="bench-calibration">
+      <header><span>judge calibration · your Agree/Disagree answers are the labels</span></header>
+      <p class="lc-text">Judge agreement</p>
+      <div class="bm-table-wrap"><table class="bm-table"><thead><tr><th>Judge</th><th>Agrees</th><th>Status</th></tr></thead><tbody>
+        {{range .}}<tr><td>{{.Name}}</td><td>{{.Agrees}}</td><td><span class="ck-pill {{if .Calibrated}}ck-pass{{else}}ck-advisory{{end}}">{{.Status}}</span></td></tr>
+        {{end}}</tbody></table></div>
+    </li>{{end}}
+  </ul>
 {{end}}

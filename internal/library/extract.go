@@ -52,9 +52,22 @@ const extractionLead = "Read past reviews and propose learnings"
 // IsExtractionRequest reports a comment body that is an extraction request.
 func IsExtractionRequest(body string) bool { return strings.HasPrefix(body, extractionLead) }
 
+// BenchRequestLead opens every benchmark judge request (checks M5).
+const BenchRequestLead = "Run the judges of a benchmark"
+
+// IsBenchRequest reports a comment body that is a benchmark judge request.
+func IsBenchRequest(body string) bool { return strings.HasPrefix(body, BenchRequestLead) }
+
 // isRequest reports a comment that is prereview asking the agent for something
-// (an extraction or a judge run): never a reviewer signal or evidence.
-func isRequest(body string) bool { return IsExtractionRequest(body) || checks.IsAnyJudgeRequest(body) }
+// (an extraction, a judge run, a benchmark's judges): never a reviewer signal
+// or evidence.
+func isRequest(body string) bool {
+	return IsExtractionRequest(body) || checks.IsAnyJudgeRequest(body) || IsBenchRequest(body)
+}
+
+// SafeText reports text that can go verbatim into a request (no control,
+// separator or format characters, no backticks) — see safePath.
+func SafeText(s string) bool { return safePath(s) }
 
 // storeCount is what a store holds: the reviewer's comments (requests to the
 // agent excluded), their thread replies and suggestion decisions, and the
