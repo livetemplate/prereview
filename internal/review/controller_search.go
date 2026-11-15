@@ -58,7 +58,7 @@ func (c *PrereviewController) JumpToSearchResult(state PrereviewState, ctx *live
 			return state, fmt.Errorf("load diff %s: %w", file, err)
 		}
 		state.SelectedFile = file
-		state.CurrentDiff = diff
+		c.showDiff(&state, diff)
 		c.applyVersionList(&state) // per-file version timeline (#90)
 	}
 	// A content hit carries a working-tree line (new>0) to reveal + scroll to; a
@@ -73,8 +73,7 @@ func (c *PrereviewController) JumpToSearchResult(state PrereviewState, ctx *live
 		state.RevealFile = ""
 	}
 	state.SearchOpen = false
-	state.ShowAllComments = false
-	state.ShowQuiz = false
+	closeFullViews(&state)
 	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
 	return state, nil

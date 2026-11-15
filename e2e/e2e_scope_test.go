@@ -167,11 +167,7 @@ func TestE2E_QueueScopeSwitch(t *testing.T) {
 
 	// A DIRECTORY review (not single-file), so both files are genuinely in scope.
 	p := bootChromeAgainstRepo(t, dir, 1400, 1000, "--agent")
-	diag := func() string {
-		var html string
-		_ = chromedp.Run(p.ctx, chromedp.OuterHTML(`body`, &html, chromedp.ByQuery))
-		return "\n--- server ---\n" + p.stderr.String() + "\n--- html ---\n" + html
-	}
+	diag := captureDiag(t, p) // server log, console, WS frames, HTML
 	p.waitReady()
 	p.clickFile("b.md")
 

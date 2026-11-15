@@ -824,12 +824,17 @@ func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
 // line — adds are (0,n), dels (m,0), ctx (m,n) — so the key never collides.
 func (s PrereviewState) LineDisplay() map[string]template.HTML {
 	lines := s.VisibleLines()
+	findings := s.findingMarksByLine() // built once, not re-scanned per line
 	out := make(map[string]template.HTML, len(lines))
 	for _, line := range lines {
 		if line.Kind == "fold" {
 			continue // fold rows render their own label, no code content
 		}
-		out[fmt.Sprintf("L%d-%d", line.OldNum, line.NewNum)] = s.markedLineContent(line)
+		var fm []gitdiff.ColRange
+		if line.Kind != "del" {
+			fm = findings[line.NewNum]
+		}
+		out[fmt.Sprintf("L%d-%d", line.OldNum, line.NewNum)] = s.markedLineContent(line, fm)
 	}
 	return out
 }
@@ -839,16 +844,34 @@ func (s PrereviewState) LineDisplay() map[string]template.HTML {
 // <mark class="comment-span">. Falls back to the escaped raw content when the
 // line carries no chroma highlight, and returns the fragment untouched when no
 // text comment covers the line — so an ordinary line pays only a slice scan.
-func (s PrereviewState) markedLineContent(line gitdiff.DiffLine) template.HTML {
+func (s PrereviewState) markedLineContent(line gitdiff.DiffLine, extra []gitdiff.ColRange) template.HTML {
 	frag := line.HighlightedContent
 	if frag == "" {
 		frag = template.HTML(template.HTMLEscapeString(line.Content))
 	}
-	ranges := s.textMarksForLine(line)
+	ranges := append(s.textMarksForLine(line), extra...)
 	if len(ranges) == 0 {
 		return frag
 	}
 	return gitdiff.MarkRanges(frag, ranges)
+}
+
+// spanOnLine is the [from, to) rune range a span from (fromLine, fromCol) to
+// (toLine, toCol) covers on line ln: from fromCol on its first line, to toCol on
+// its last, and the whole line (to lineEndSentinel) in between. ok is false when
+// ln is outside the span.
+func spanOnLine(ln, fromLine, fromCol, toLine, toCol int) (from, to int, ok bool) {
+	if ln < fromLine || ln > toLine {
+		return 0, 0, false
+	}
+	from, to = 0, lineEndSentinel
+	if ln == fromLine {
+		from = fromCol
+	}
+	if ln == toLine {
+		to = toCol
+	}
+	return from, to, true
 }
 
 // textMarksForLine collects the rune ranges to highlight on one diff line from
@@ -880,13 +903,7 @@ func (s PrereviewState) textMarksForLine(line gitdiff.DiffLine) []gitdiff.ColRan
 		if ln < c.FromLine || ln > c.ToLine {
 			continue
 		}
-		from, to := 0, lineEndSentinel
-		if ln == c.FromLine {
-			from = c.FromCol
-		}
-		if ln == c.ToLine {
-			to = c.ToCol
-		}
+		from, to, _ := spanOnLine(ln, c.FromLine, c.FromCol, c.ToLine, c.ToCol)
 		out = append(out, gitdiff.ColRange{From: from, To: to})
 	}
 	return out

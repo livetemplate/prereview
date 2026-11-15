@@ -115,6 +115,7 @@
 {{template "quizView" $}}
 {{else if .ShowAllComments}}
 {{template "allComments" $}}
+{{else if .ShowLibrary}}{{template "library" $}}
 {{else}}
 {{with .CurrentDiff}}
 {{/* #191: lvt-spy makes the quiz navigator highlight the on-screen question
@@ -130,7 +131,7 @@
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
-  {{end}}
+  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}
   {{/* File-level comments + composer. Lives above the body branch so
        it's visible for every preview mode (line view, markdown blocks,
        HTML blocks, binary preview, "no diff content" placeholder).

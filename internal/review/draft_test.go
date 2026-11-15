@@ -176,3 +176,25 @@ func TestEnqueue_IdempotentAndMissing(t *testing.T) {
 		t.Error("enqueue of an unknown id should error")
 	}
 }
+
+// A debounced saveDraft that lands after the Save closed its composer must not
+// resurrect the text into the next composer (seen as "prior commenthello world"
+// in TestE2E_FileCommentModalKeepsFocus under load).
+func TestSaveDraft_IgnoredOnceTheComposerClosed(t *testing.T) {
+	c := checksController(t) // any controller: SaveDraft touches no store
+	s := PrereviewState{SelectionAnchor: 3, SelectionEnd: 3, SelectionSide: "new"}
+	s, _ = c.SaveDraft(s, checksCtx("saveDraft", map[string]interface{}{"body": "typing"}))
+	if s.DraftBody != "typing" {
+		t.Fatalf("an open composer keeps its draft: %q", s.DraftBody)
+	}
+	s.SelectionAnchor, s.SelectionEnd, s.DraftBody = 0, 0, "" // Save closed it
+	s, _ = c.SaveDraft(s, checksCtx("saveDraft", map[string]interface{}{"body": "prior comment"}))
+	if s.DraftBody != "" {
+		t.Errorf("a late saveDraft resurrected %q", s.DraftBody)
+	}
+	s.CommentMode = "file"
+	s, _ = c.SaveDraft(s, checksCtx("saveDraft", map[string]interface{}{"body": "file note"}))
+	if s.DraftBody != "file note" {
+		t.Errorf("the file composer keeps its draft: %q", s.DraftBody)
+	}
+}

@@ -13,6 +13,14 @@ import (
 // SaveDraft updates DraftBody as the user types. Bound to the textarea's
 // change event so the draft survives reconnect (state has lvt:"persist").
 func (c *PrereviewController) SaveDraft(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	// The input is debounced, so its last saveDraft can land AFTER the Save that
+	// closed the composer (type, then click Save within the debounce). Applying it
+	// then would resurrect the saved text in the next composer you open, so a
+	// draft only lands while a composer is open: a line/text selection, or a file,
+	// area or region comment.
+	if state.SelectionAnchor == 0 && state.CommentMode == "" {
+		return state, nil
+	}
 	state.DraftBody = ctx.GetString("body")
 	return state, nil
 }
@@ -417,20 +425,7 @@ func (c *PrereviewController) addTextComment(state PrereviewState, body string) 
 		}
 	}
 	if rollback == nil {
-		cm := Comment{
-			ID:           newCommentID(),
-			File:         state.SelectedFile,
-			FromLine:     from,
-			ToLine:       to,
-			FromCol:      state.SelectionFromCol,
-			ToCol:        state.SelectionToCol,
-			Side:         side,
-			Body:         body,
-			Created:      time.Now().UTC(),
-			Kind:         commentKindText,
-			Anchor:       anchor,
-			AnchorStatus: anchorOK,
-		}
+		cm := newTextComment(state.SelectedFile, from, to, state.SelectionFromCol, state.SelectionToCol, side, body, anchor)
 		state.Comments = append(state.Comments, cm)
 		noteEnqueue(&state) // #129: a new saved comment enters the queue → pulse
 		state.ScrollToCommentID = cm.ID
@@ -458,6 +453,25 @@ func (c *PrereviewController) addTextComment(state PrereviewState, body string) 
 	return state, nil
 }
 
+// newTextComment builds a new character-range (kind=text) comment — the reviewer's
+// own selection (addTextComment) or a queued check finding (QueueFinding).
+func newTextComment(file string, from, to, fromCol, toCol int, side, body string, anchor CommentAnchor) Comment {
+	return Comment{
+		ID:           newCommentID(),
+		File:         file,
+		FromLine:     from,
+		ToLine:       to,
+		FromCol:      fromCol,
+		ToCol:        toCol,
+		Side:         side,
+		Body:         body,
+		Created:      time.Now().UTC(),
+		Kind:         commentKindText,
+		Anchor:       anchor,
+		AnchorStatus: anchorOK,
+	}
+}
+
 // EditComment seeds the composer with an existing comment's body +
 // line range so the user can rewrite it. The original comment stays in
 // state.Comments — AddComment detects EditingCommentID and updates
@@ -478,7 +492,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	// Region comments (--external) have no file, so skip the git call entirely.
 	if cm.File != "" {
 		if diff, err := c.loadDiffCached(state.Base, cm.File); err == nil {
-			state.CurrentDiff = diff
+			c.showDiff(&state, diff)
 		}
 	}
 	// Route the composer into the right mode based on the comment's
@@ -520,8 +534,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	// The composer only renders in the diff branch; when Edit is invoked
 	// from the all-comments view this drops back into the file so the
 	// edit composer is actually visible (no-op when already in the diff).
-	state.ShowAllComments = false
-	state.ShowQuiz = false
+	closeFullViews(&state)
 	return state, nil
 }
 
@@ -545,7 +558,7 @@ func (c *PrereviewController) ReanchorComment(state PrereviewState, ctx *livetem
 	cm := state.Comments[idx]
 	state.SelectedFile = cm.File
 	if diff, err := c.loadDiffCached(state.Base, cm.File); err == nil {
-		state.CurrentDiff = diff
+		c.showDiff(&state, diff)
 	}
 	// No pre-seeded selection — the whole point is to choose a new spot.
 	state.SelectionAnchor = 0
@@ -555,8 +568,7 @@ func (c *PrereviewController) ReanchorComment(state PrereviewState, ctx *livetem
 	state.ReanchorCommentID = cm.ID
 	state.EditingCommentID = ""
 	state.LastDeletedComment = nil
-	state.ShowAllComments = false
-	state.ShowQuiz = false
+	closeFullViews(&state)
 	return state, nil
 }
 

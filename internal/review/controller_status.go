@@ -346,18 +346,24 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 				continue
 			}
 			lastPresence = presenceKey
-			c.sessionMu.Lock()
-			session := c.session
-			c.sessionMu.Unlock()
-			if session == nil {
-				continue // no tab has ever connected yet
-			}
-			if err := session.TriggerAction("LLMStatusChanged", nil); err != nil &&
-				!errors.Is(err, livetemplate.ErrSessionDisconnected) {
-				// ErrSessionDisconnected just means no tab is open right now; keep
-				// watching so a later-opened tab still gets live updates.
-				slog.Warn("llm-status: TriggerAction failed", "err", err)
-			}
+			c.broadcast("LLMStatusChanged")
 		}
+	}
+}
+
+// broadcast dispatches action to every open tab of the session (each re-runs it
+// against its own state). No tab connected yet, or none open right now
+// (ErrSessionDisconnected), is not an error: a later tab reads current state on
+// Mount.
+func (c *PrereviewController) broadcast(action string) {
+	c.sessionMu.Lock()
+	session := c.session
+	c.sessionMu.Unlock()
+	if session == nil {
+		return
+	}
+	if err := session.TriggerAction(action, nil); err != nil &&
+		!errors.Is(err, livetemplate.ErrSessionDisconnected) {
+		slog.Warn("broadcast: TriggerAction failed", "action", action, "err", err)
 	}
 }

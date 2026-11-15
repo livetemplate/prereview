@@ -215,6 +215,21 @@ func userPromptsDir() string {
 	return filepath.Join(dir, "prereview", "prompts")
 }
 
+// userChecksDir is the checks rule folder (checks M1): ~/.config/prereview/checks.
+// A rule file there with a built-in's ID replaces it; command checks may only live
+// here. PREREVIEW_CHECKS_DIR overrides it (tests). "" when the user-config dir can't
+// be resolved: the built-in rules still run.
+func userChecksDir() string {
+	if p := os.Getenv("PREREVIEW_CHECKS_DIR"); p != "" {
+		return p
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "prereview", "checks")
+}
+
 // userQuizzesDir is the comprehension-quiz prompt overlay directory (#191):
 // ~/.config/prereview/quizzes. PREREVIEW_QUIZZES_DIR overrides it. Kept separate
 // from the suggestions library above because the two answer with different verbs

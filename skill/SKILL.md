@@ -177,6 +177,18 @@ read in the context of the full set. Comment kinds (`line`/`text`/`file`/`area`/
 `region`), resolved handling, and re-anchoring are detailed in
 [reference.md → Comment data](./reference.md#comment-data).
 
+### Self-check prose (optional)
+
+After editing a prose file (`.md`, `.txt`, …), you can run the same checks the
+reviewer sees in the file header:
+
+```sh
+prereview check <file>...      # exit 1 = a check failed; findings print as path:line:col
+```
+
+Fix what clearly applies; leave judgment calls to the reviewer. A finding the
+reviewer wants fixed reaches you as an ordinary comment.
+
 ## Echo your status (optional — the reviewer already sees your edits)
 
 prereview watches the reviewed files: the moment you edit one, every open tab gets a

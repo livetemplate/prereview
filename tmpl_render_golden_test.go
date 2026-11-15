@@ -11,6 +11,7 @@ import (
 
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/gitdiff"
+	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -443,6 +444,57 @@ func renderFixtures() []renderFixture {
 		{ID: "s1", File: "app.go", FromLine: 41, ToLine: 41, Side: "new", OriginalText: "old", ProposedText: "new"},
 	}
 
+	// checks M1b: the file view with one check selected — the bar is its finding
+	// stepper, and its finding is marked and carded inline.
+	fileChecks := &review.FileChecks{
+		ValeNotice: "This repo has a Vale config. Running it can start tools the config names, so it stays off until you trust this repo.",
+		ValeTrust:  true,
+		Results: []checks.Result{
+			{ID: "filler-intensifiers", Name: "Filler intensifiers", Category: "Concision", Type: "existence", Level: "suggestion", Source: "builtin", Status: "fail",
+				Findings: []checks.Finding{{Line: 1, EndLine: 1, FromCol: 8, ToCol: 12, Message: "'very' adds emphasis, not meaning; try cutting it.", Severity: "suggestion", Match: "very"}}},
+			{ID: "house-style", Name: "House style", Category: "Yours", Type: "command", Level: "warning", Source: "user", Path: "/home/u/.config/prereview/checks/house-style.yml", Status: "running"},
+			{ID: "broken", Name: "broken", Category: "Yours", Source: "user", Path: "/home/u/.config/prereview/checks/broken.yml", Status: "error", Err: "invalid YAML: yaml: line 1: did not find expected node content"},
+			{ID: "weasel-words", Name: "Weasel words", Category: "Clarity", Type: "existence", Level: "warning", Source: "builtin", Status: "pass"},
+			{ID: "off", Name: "Disabled one", Category: "Clarity", Type: "existence", Level: "warning", Source: "builtin", Status: "pass"},
+		},
+	}
+	checksStrip := repoBase()
+	checksStrip.SelectedFile = "notes.txt"
+	checksStrip.CurrentDiff = &gitdiff.FileDiff{
+		Path: "notes.txt",
+		Lines: []gitdiff.DiffLine{
+			{Kind: "add", NewNum: 1, Content: "This is very good."},
+			{Kind: "add", NewNum: 2, Content: "Plain line."},
+		},
+	}
+	checksStrip.SelectedCheck = "filler-intensifiers"
+	checksStrip.DisabledChecks = []string{"off"}
+	checksStrip.Checks = fileChecks
+
+	// checks M1b: the Checks page across two files — status chips, the category
+	// sidebar, one expanded row with findings grouped by file, a running and an
+	// errored rule, a disabled one (which keeps its group listed) and the Vale
+	// trust prompt in the Vale category.
+	checksPage := checksStrip
+	checksPage.SelectedCheck = ""
+	checksPage.ShowLibrary = true
+	checksPage.ExpandedCheck = "filler-intensifiers"
+	checksPage.Editor = review.EditorVSCode
+	checksPage.EditorSSHHost = "devbox"
+	checksPage.ReviewChecks = &review.ReviewChecks{
+		Total:      2,
+		ValeNotice: fileChecks.ValeNotice,
+		ValeTrust:  true,
+		Files: []review.PathChecks{
+			{Path: "notes.txt", Results: fileChecks.Results},
+			{Path: "docs/guide.md", Results: []checks.Result{
+				{ID: "filler-intensifiers", Name: "Filler intensifiers", Category: "Concision", Type: "existence", Level: "suggestion", Source: "builtin", Status: "fail",
+					Findings: []checks.Finding{{Line: 3, EndLine: 3, FromCol: 0, ToCol: 6, Message: "'Really' adds emphasis, not meaning; try cutting it.", Severity: "suggestion", Match: "Really"}}},
+				{ID: "weasel-words", Name: "Weasel words", Category: "Clarity", Type: "existence", Level: "warning", Source: "builtin", Status: "pass"},
+			}},
+		},
+	}
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -470,6 +522,8 @@ func renderFixtures() []renderFixture {
 		{"agent-mode", agent},
 		{"agent-answered", answered},
 		{"past-eof", pastEOF},
+		{"checks-strip", checksStrip},
+		{"checks-page", checksPage},
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},

@@ -1859,6 +1859,7 @@ header.file-head .file-head-comment button svg { display: block; }
 .file-head-comment-label { display: none; }
 .versions-trigger-label { display: none; }
 .prompts-trigger-label, .quiz-trigger-label { display: none; }
+.checks-trigger-label { display: none; }
 
 /* Diff viewer container — was <pre> but that preserves whitespace which
    made every template-loop newline a visible blank line. Now a <div>
@@ -3242,6 +3243,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   .file-head-comment-label { display: inline; }
   .versions-trigger-label { display: inline; }
   .prompts-trigger-label, .quiz-trigger-label { display: inline; }
+  .checks-trigger-label { display: inline; }
   /* The filename already headlines the diff (.file-head) and the
      all-comments view (.ac-head). Showing it again in the top bar is
      pure duplication on desktop — drop just the filename, keep the
@@ -3547,3 +3549,229 @@ main.viewer > article[lvt-spy] {
 .quiz-card.is-settled:target { display: block; }
 /* And give the peeked card a moment of emphasis so the eye lands on it. */
 .quiz-card:target { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Checks (checks M1). The header chip matches the Versions chip; its count pill
+   is green when every enabled check passed, the mark colour when one failed.
+   Every colour is a semantic token, so all schemes × modes follow. */
+header.file-head .file-head-checks { margin: 0; }
+.checks-trigger {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin: 0; padding: 0.2rem 0.55rem; min-height: 0;
+  font-size: 0.8rem; font-weight: 500; white-space: nowrap;
+  background: var(--soft-bg); color: var(--pico-h1-color);
+  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
+}
+.checks-trigger:hover, .checks-trigger:focus-visible {
+  background: var(--soft-bg-hover); border-color: var(--accent);
+}
+.checks-trigger svg { display: block; color: var(--pico-muted-color); }
+.checks-count {
+  font-size: 0.72rem; font-weight: 700; padding: 0.02rem 0.32rem; border-radius: 999px;
+  background: var(--pico-card-sectioning-background-color); color: var(--pico-h1-color);
+}
+.checks-trigger.is-passing .checks-count { background: color-mix(in srgb, var(--pr-add) 18%, transparent); color: var(--pr-add); }
+.checks-trigger.is-failing .checks-count { background: var(--mark-wash); color: var(--mark); }
+
+/* The toolbar's Library button (shown when the review has checks). */
+.library-form { margin: 0; }
+.library-trigger { display: inline-flex; align-items: center; gap: 0.35rem; }
+.library-trigger.is-on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.library-trigger svg { display: block; }
+/* Icon-only below 1400px: with the agent's Queue beside it, the labelled button
+   pushed the Queue onto a second toolbar row at 1200px (its panel then opened
+   off-screen; caught by TestE2E_QueueScopeSwitch). The title attribute names it. */
+@media (max-width: 1399px) { .library-trigger .tb-label { display: none; } }
+
+/* Shared status pills (Checks page rows, the file view's bar). */
+.ck-pill {
+  display: inline-flex; align-items: center; padding: 0.05rem 0.45rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; line-height: 1.5; white-space: nowrap; border: 1px solid transparent;
+}
+.ck-pass { color: var(--pr-add); background: var(--pr-add-bg); }
+.ck-fail { color: var(--pr-del); background: var(--pr-del-bg); }
+.ck-error { color: var(--mark); background: var(--mark-wash); }
+.ck-running, .ck-off { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
+.ck-open { color: var(--accent); background: var(--accent-weak); }
+button.ck-link {
+  margin: 0; padding: 0; min-height: 0; width: auto; background: none; border: 0;
+  color: var(--accent); font-size: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+
+/* The Library: a full-page view like All comments (checks M1b: Checks tab only). */
+.library { display: flex; flex-direction: column; padding: 0.5rem 0.75rem 1.5rem; font-family: var(--sans); font-size: 0.85rem; }
+.library form { margin: 0; }
+.lib-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem;
+  padding: 0.35rem 0 0.5rem; border-bottom: 1px solid var(--border);
+}
+.lib-title { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-strong); font-size: 1rem; }
+.lib-src { color: var(--text-faint); font-size: 0.76rem; flex: 1 1 14rem; }
+.lib-editor { margin: 0; font-size: 0.78rem; color: var(--text-muted); }
+.lib-editor > summary { cursor: pointer; }
+.lib-editor[open] > summary { margin-bottom: 0.4rem; }
+.lib-back button { margin: 0; padding: 0.25rem 0.7rem; min-height: 0; width: auto; font-size: 0.8rem; }
+.lib-tabs { display: flex; gap: 0.15rem; overflow-x: auto; padding-top: 0.4rem; border-bottom: 1px solid var(--border); }
+button.lib-tab {
+  margin: 0 0 -1px; padding: 0.4rem 0.75rem; min-height: 0; width: auto; border: 0; border-bottom: 2px solid transparent;
+  background: none; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; white-space: nowrap; border-radius: 0;
+}
+button.lib-tab[disabled] { opacity: 0.55; cursor: default; }
+button.lib-tab.is-on { color: var(--text-strong); border-bottom-color: var(--accent); }
+button.lib-chip {
+  margin: 0; padding: 0.15rem 0.6rem; min-height: 26px; width: auto; border-radius: 999px; font-size: 0.78rem;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+}
+button.lib-chip.is-on { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); font-weight: 600; }
+.checks-editor {
+  display: flex; flex-wrap: wrap; gap: 0.4rem 0.75rem; align-items: center;
+  font-size: 0.78rem; color: var(--text-muted);
+}
+.checks-editor label { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0; font-size: 0.78rem; }
+.checks-editor select, .checks-editor input {
+  margin: 0; padding: 0.1rem 0.4rem; height: auto; width: auto; min-width: 0; font-size: 0.78rem;
+}
+.checks-editor select { padding-right: 1.8rem; background-position: right 0.4rem center; }
+.checks-editor input { width: 12rem; max-width: 100%; }
+.checks-editor button { margin: 0; padding: 0.15rem 0.6rem; min-height: 0; width: auto; font-size: 0.78rem; }
+
+/* Checks tab: search + filter bar, category sidebar, grouped rows. */
+.ckp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem 0.6rem; padding: 0.6rem 0 0.2rem; }
+.ckp-search-form { flex: 1 1 16rem; }
+.ckp-bar input.ckp-search { margin: 0; height: auto; min-height: 32px; padding: 0.25rem 0.75rem 0.25rem 2.4rem; font-size: 0.85rem; background-position: 0.8rem 50%; }
+.ckp-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.ckp-chips select { margin: 0; width: auto; height: auto; padding: 0.15rem 1.8rem 0.15rem 0.5rem; min-height: 28px; font-size: 0.78rem; }
+.ckp-file-chip code { font-size: 0.74rem; padding: 0; background: none; }
+.ckp-scope { color: var(--text-faint); font-size: 0.74rem; flex-basis: 100%; }
+.ckp { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 1rem; padding-top: 0.4rem; align-items: start; }
+.ckp-cats { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0.5rem; }
+button.ckp-cat {
+  display: flex; align-items: center; gap: 0.35rem; margin: 0; padding: 0.3rem 0.55rem; min-height: 30px; width: 100%;
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+  color: var(--text); font-size: 0.82rem; text-align: left;
+}
+button.ckp-cat:hover { background: var(--soft-bg); }
+button.ckp-cat.is-on { background: var(--accent-weak); border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--text-strong); font-weight: 600; }
+.ckp-cat-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ckp-cat-note { color: var(--text-faint); font-size: 0.68rem; white-space: nowrap; }
+.ckp-cat-n { color: var(--text-faint); font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+button.ckp-cat.is-on .ckp-cat-n { color: var(--text-strong); }
+.ckp-cat-fail { color: var(--pr-del); background: var(--pr-del-bg); border-radius: 999px; padding: 0 0.4rem; font-size: 0.7rem; font-weight: 700; }
+.ckp-main { min-width: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.ckp-group h3 { margin: 0 0 0.3rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.ckp-group h3 small { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--text-faint); margin-left: 0.3rem; }
+.ckp-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.ckp-list > li { list-style: none; margin: 0; }
+.ckp-row + .ckp-row { border-top: 1px solid var(--border); }
+button.ckp-row-head {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 0.6rem;
+  width: 100%; margin: 0; padding: 0.45rem 0.6rem; min-height: 0; background: transparent; border: 0; border-radius: 0;
+  color: var(--text); text-align: left; font-size: 0.85rem;
+}
+button.ckp-row-head:hover { background: var(--soft-bg); }
+.ckp-row.is-open > form > .ckp-row-head { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.ckp-row.is-off { opacity: 0.65; }
+.ckp-title { display: flex; flex-direction: column; min-width: 0; }
+.ckp-name { font-weight: 600; color: var(--text-strong); }
+.ckp-desc { color: var(--text-muted); font-size: 0.74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ckp-sum { color: var(--text-muted); font-size: 0.76rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ckp-row.is-fail .ckp-sum { color: var(--text); }
+.ckp-src { color: var(--text-faint); font-size: 0.72rem; }
+.ckp-chev { color: var(--text-faint); width: 0.8rem; }
+.ckp-detail { padding: 0.2rem 0.6rem 0.6rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.ckp-err { margin: 0; color: var(--mark); font-size: 0.8rem; overflow-wrap: anywhere; }
+.ckp-file { border-left: 2px solid var(--border-strong); padding-left: 0.55rem; }
+.ckp-file > header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem; font-size: 0.78rem; }
+.ckp-file > header code { font-size: 0.76rem; overflow-wrap: anywhere; }
+.ckp-file-n { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.ckp-show { margin-left: auto !important; }
+.ckp-show button { margin: 0; padding: 0.1rem 0.55rem; min-height: 26px; width: auto; font-size: 0.74rem; }
+.ckp-file ol { list-style: none; margin: 0.2rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.ckp-file li { list-style: none; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; font-size: 0.8rem; padding: 0.1rem 0; margin: 0; }
+button.ckp-at {
+  margin: 0; padding: 0 0.3rem; min-height: 24px; width: auto; background: transparent; border: 0;
+  color: var(--accent); font-family: var(--jbm); font-size: 0.74rem; text-decoration: underline; text-underline-offset: 2px;
+}
+.ckp-msg { min-width: 0; color: var(--text); }
+.ckp-q button { margin: 0; padding: 0.05rem 0.5rem; min-height: 24px; width: auto; font-size: 0.72rem; }
+.ckp-rule {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem;
+  color: var(--text-muted); font-size: 0.74rem; border-top: 1px dashed var(--border); padding-top: 0.45rem;
+}
+.ckp-rule code { font-size: 0.72rem; overflow-wrap: anywhere; }
+.ckp-rule-actions { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; margin-left: auto; }
+.ckp-rule-actions button, .ckp-rule-actions a[role="button"] {
+  margin: 0; padding: 0.1rem 0.55rem; min-height: 26px; width: auto; font-size: 0.74rem; display: inline-flex; align-items: center;
+}
+input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto; font-family: var(--jbm); font-size: 0.75rem; }
+.ckp-trust {
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 0.55rem 0.7rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem;
+}
+.ckp-trust p { margin: 0; flex: 1 1 18rem; font-size: 0.8rem; color: var(--text-muted); }
+.ckp-trust button { margin: 0; padding: 0.2rem 0.7rem; min-height: 28px; width: auto; font-size: 0.78rem; }
+.ckp-more, .ckp-hits, .ckp-empty { margin: 0; color: var(--text-faint); font-size: 0.78rem; }
+.ckp-inline { display: inline; }
+.ckp-inline button.ck-link { display: inline; vertical-align: baseline; }
+@media (max-width: 720px) {
+  .library { padding: 0.5rem 1rem 1.5rem; }
+  .ckp { grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+  .ckp-cats { position: static; flex-direction: row; flex-wrap: wrap; gap: 0.3rem; }
+  button.ckp-cat { width: auto; border-color: var(--border); border-radius: 999px; min-height: 28px; padding: 0.15rem 0.6rem; }
+  .ckp-row-head { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .ckp-src, .ckp-chev { display: none; }
+  .ckp-file li { grid-template-columns: auto minmax(0, 1fr); }
+  .ckp-file li .ckp-q { grid-column: 2; justify-self: start; }
+}
+
+/* The file view's bar: the failing checks to pick from, or the selected check's
+   finding stepper. One line; wraps on a phone. */
+.ck-strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem;
+  margin: 0.4rem 0.75rem; padding: 0.35rem 0.6rem; font-family: var(--sans); font-size: 0.82rem;
+  border: 1px solid color-mix(in srgb, var(--pr-del) 35%, var(--border)); border-radius: var(--radius-sm); background: var(--surface);
+}
+.ck-strip.is-idle { border-color: var(--border); }
+/* The stepper stays in view while ‹ › scroll the file to each finding. */
+.ck-strip:not(.is-idle) { position: sticky; top: 0; z-index: 6; box-shadow: var(--shadow-sm); } /* like .quiz-nav */
+.ck-strip form { margin: 0; }
+.ck-strip-name { color: var(--text-strong); }
+.ck-strip-pos { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ck-strip-nav { display: inline-flex; align-items: center; gap: 0.4rem; }
+.ck-pos-short { display: none; }
+.ck-strip button.outline { margin: 0; padding: 0 0.55rem; min-height: 26px; width: auto; font-size: 0.85rem; }
+.ck-strip-pick button.outline { font-size: 0.8rem; color: var(--text); border-color: color-mix(in srgb, var(--pr-del) 45%, var(--border)); }
+.ck-strip-n { color: var(--pr-del); font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 0.25rem; }
+.ck-strip-all { margin-left: auto !important; }
+.ck-strip-close { margin-left: 0.2rem !important; }
+/* Phone: the stepper is one row — the name truncates first, "1/8" replaces the
+   long position, and the red border already says it's failing (no pill). */
+@media (max-width: 640px) {
+  .ck-strip:not(.is-idle) { flex-wrap: nowrap; gap: 0.45rem; margin: 0.4rem 0.5rem; padding: 0.3rem 0.5rem; }
+  .ck-strip:not(.is-idle) .ck-pill { display: none; }
+  .ck-strip:not(.is-idle) .ck-strip-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ck-strip:not(.is-idle) > * { flex-shrink: 0; }
+  .ck-strip:not(.is-idle) > .ck-strip-name { flex-shrink: 1; }
+  .ck-pos-long { display: none; }
+  .ck-pos-short { display: inline; }
+  .ck-strip-all { margin-left: 0 !important; }
+}
+
+/* A selected check's span: a dotted mark-colour underline, distinct from a text
+   comment's tinted span. Inside a commented span both classes apply. */
+.code .content mark.check-finding {
+  background: none; color: inherit; border-radius: 0;
+  text-decoration: underline wavy var(--mark); text-underline-offset: 3px;
+}
+.code .content mark.comment-span.check-finding { background: var(--pr-sel-bg); }
+.finding-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem;
+  margin: 0.35rem 0.4rem; padding: 0.4rem 0.7rem;
+  background: var(--pr-comment-bg); border: 1px dashed var(--pr-comment-bd);
+  border-left: 3px solid var(--mark); border-radius: var(--radius-md);
+  font-family: var(--sans); font-size: 0.8rem; line-height: 1.45;
+}
+.finding-check { font-weight: 700; color: var(--mark); }
+.finding-msg { color: var(--pico-color); flex: 1 1 12rem; }
+.finding-queue { margin: 0; }
+.finding-queue button { margin: 0; padding: 0.1rem 0.55rem; min-height: 0; font-size: 0.75rem; }

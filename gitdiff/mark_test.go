@@ -134,17 +134,57 @@ func TestMarkRanges_NoOpCases(t *testing.T) {
 }
 
 func TestNormalizeRanges_MergesAndSorts(t *testing.T) {
-	in := []ColRange{{5, 10}, {0, 4}, {8, 12}, {3, 3}, {-2, 2}}
+	in := []ColRange{{From: 5, To: 10}, {From: 0, To: 4}, {From: 8, To: 12}, {From: 3, To: 3}, {From: -2, To: 2}}
 	got := normalizeRanges(in)
 	// -2→0 clamps to {0,2}; {0,4} overlaps → {0,4}; {5,10}+{8,12} → {5,12};
 	// {3,3} dropped. Result: {0,4},{5,12}.
-	want := []ColRange{{0, 4}, {5, 12}}
+	want := []ColRange{{0, 4, markSpanClass}, {5, 12, markSpanClass}}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("range %d = %v, want %v", i, got[i], want[i])
+		}
+	}
+}
+
+// #checks: a finding (its own class) inside a commented span must stay
+// distinguishable — the overlap carries both classes, the rest keeps its own.
+func TestNormalizeRanges_CrossClassOverlap(t *testing.T) {
+	got := normalizeRanges([]ColRange{
+		{From: 0, To: 10},                         // comment
+		{From: 4, To: 14, Class: "check-finding"}, // finding overlapping its tail
+		{From: 20, To: 22, Class: "check-finding"},
+		{From: 22, To: 24, Class: "check-finding"}, // touches → merges
+	})
+	want := []ColRange{
+		{0, 4, markSpanClass},
+		{4, 10, markSpanClass + " check-finding"},
+		{10, 14, "check-finding"},
+		{20, 24, "check-finding"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("range %d = %v, want %v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestMarkRanges_CrossClassRendersBothClasses(t *testing.T) {
+	frag := template.HTML(`<span class="n">hello world</span>`)
+	got := MarkRanges(frag, []ColRange{{From: 0, To: 5}, {From: 3, To: 8, Class: "check-finding"}})
+	assertTextContentUnchanged(t, frag, got)
+	for _, want := range []string{
+		`<mark class="comment-span">hel</mark>`,
+		`<mark class="comment-span check-finding">lo</mark>`,
+		`<mark class="check-finding"> wo</mark>`,
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("missing %s in %s", want, got)
 		}
 	}
 }

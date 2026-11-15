@@ -98,6 +98,9 @@
       {{- /* quiz questions anchored to this line (#191) — an annotation like the
              two above, so the code the question asks about IS its context */ -}}
       {{- range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end -}}
+      {{- /* the selected check's findings ending on this row (new side only — keyed
+             by $rowkey, so a del row never matches) */ -}}
+      {{- range (index $.FindingsByRow $rowkey)}}{{template "findingCard" .}}{{end -}}
       {{- if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside) -}}
       {{template "composer" $}}
       {{- end -}}</div>
