@@ -165,7 +165,8 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		return
 	}
 	c.runner()
-	c.checkpointLibrary(VersionTriggerFileEdit) // edits made while no server ran
+	c.checkpointLibrary(VersionTriggerFileEdit, "") // edits made while no server ran
+	c.syncSkills("")                                   // bring generated skills in line after an upgrade
 	c.learningsChanged()                        // the baseline: only later writes fan out
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
@@ -175,10 +176,11 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 			return
 		case <-ticker.C:
 			if c.reloadChecksIfChanged() {
-				c.checkpointLibrary(VersionTriggerFileEdit)
+				c.checkpointLibrary(VersionTriggerFileEdit, "")
 				c.broadcast("ChecksUpdated")
 			}
 			if c.learningsChanged() { // any server's write to the shared library
+				c.syncSkills("") // idempotent: a no-op when the writer already synced
 				c.broadcast("LibraryUpdated")
 			}
 		}

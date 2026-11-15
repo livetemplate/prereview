@@ -741,10 +741,12 @@ In each store, the signals and their evidence ids (`--evidence &lt;store&gt;:&lt
 One call per lesson:
 
 ```
-prereview learn propose --text &#34;&lt;one instruction&gt;&#34; --scope &#34;&lt;where it applies, e.g. Technical docs&gt;&#34; --evidence &lt;store&gt;:&lt;id&gt; [--evidence …] [--glob &#39;docs/**/*.md&#39;] [--replaces &lt;id&gt;] [--produces instruction,checker,judge]
+prereview learn propose --text &#34;&lt;one instruction&gt;&#34; --scope &#34;&lt;where it applies, e.g. Technical docs&gt;&#34; --evidence &lt;store&gt;:&lt;id&gt; [--evidence …] [--glob &#39;docs/**/*.md&#39;] [--replaces &lt;id&gt;] [--checker rule.yml] [--judge rubric.md]
 ```
 
-Propose only what the signals support, and cite every signal a lesson rests on: a citation that doesn&#39;t resolve is refused. Prefer a few general lessons over many narrow ones; the reviewer accepts each in Library → Learnings.
+Propose only what the signals support, and cite every signal a lesson rests on: a citation that doesn&#39;t resolve is refused. Prefer a few general lessons over many narrow ones; the reviewer accepts each in Library → Learnings, and an accepted lesson becomes a line in their skills.
+
+When a lesson can be checked mechanically (banned words, a preferred spelling), also draft a checker and pass it with `--checker &lt;file&gt;`: a rule YAML with `extends: existence` (`tokens: [...]`), `substitution` (`swap: {bad: good}`), `occurrence` or `vocab`, plus `name` and `message`. Never `extends: command`: it is refused. When it takes judgment (&#34;lead with what changed for the reader&#34;), draft a judge instead with `--judge &lt;file&gt;`: `---\nkind: judge\nname: …\n---` followed by one yes/no rubric question. Both are validated before anything is written; the reviewer sees them on the card before accepting.
 </div><div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="x1">

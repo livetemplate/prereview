@@ -131,8 +131,9 @@ func ExtractionPrompt(stores []string, existing []Learning) string {
 		fmt.Fprintf(&b, "- `%s` [%s · %s] %s\n", l.ID, l.Status, l.Scope, l.Text)
 		listed++
 	}
-	b.WriteString("\nOne call per lesson:\n\n```\nprereview learn propose --text \"<one instruction>\" --scope \"<where it applies, e.g. Technical docs>\" --evidence <store>:<id> [--evidence …] [--glob 'docs/**/*.md'] [--replaces <id>] [--produces instruction,checker,judge]\n```\n\n" +
-		"Propose only what the signals support, and cite every signal a lesson rests on: a citation that doesn't resolve is refused. Prefer a few general lessons over many narrow ones; the reviewer accepts each in Library → Learnings.\n")
+	b.WriteString("\nOne call per lesson:\n\n```\nprereview learn propose --text \"<one instruction>\" --scope \"<where it applies, e.g. Technical docs>\" --evidence <store>:<id> [--evidence …] [--glob 'docs/**/*.md'] [--replaces <id>] [--checker rule.yml] [--judge rubric.md]\n```\n\n" +
+		"Propose only what the signals support, and cite every signal a lesson rests on: a citation that doesn't resolve is refused. Prefer a few general lessons over many narrow ones; the reviewer accepts each in Library → Learnings, and an accepted lesson becomes a line in their skills.\n\n" +
+		"When a lesson can be checked mechanically (banned words, a preferred spelling), also draft a checker and pass it with `--checker <file>`: a rule YAML with `extends: existence` (`tokens: [...]`), `substitution` (`swap: {bad: good}`), `occurrence` or `vocab`, plus `name` and `message`. Never `extends: command`: it is refused. When it takes judgment (\"lead with what changed for the reader\"), draft a judge instead with `--judge <file>`: `---\\nkind: judge\\nname: …\\n---` followed by one yes/no rubric question. Both are validated before anything is written; the reviewer sees them on the card before accepting.\n")
 	return b.String()
 }
 

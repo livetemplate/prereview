@@ -41,6 +41,11 @@ func Propose(dir string, p Proposal) (Learning, error) {
 			return Learning{}, fmt.Errorf("learn propose: --produces %q: want one of %s", k, strings.Join(ProducesKinds, ", "))
 		}
 	}
+	// No --produces means an instruction; a drafted checker or judge is added on
+	// top, never instead (that's what --produces checker alone says).
+	if len(p.Produces) == 0 && (strings.TrimSpace(p.Checker) != "" || strings.TrimSpace(p.Judge) != "") {
+		p.Produces = []string{"instruction"}
+	}
 	for _, d := range []struct {
 		body  string
 		judge bool

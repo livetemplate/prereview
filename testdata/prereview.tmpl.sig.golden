@@ -158,15 +158,7 @@
                 </span>
                 {{if and .RulePath (not .EditorURL)}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
               </div>
-              {{if .History}}{{$rule := .ID}}<details class="ckp-history"{{if gt (len .History) 1}} open{{end}}><summary>History ({{len .History}} version{{if ne (len .History) 1}}s{{end}})</summary>
-                <ol>
-                  {{range .History}}<li data-key="ckp-v{{.Seq}}">
-                    <span class="ckp-hv-head"><b>{{if .Current}}Current{{else}}Version {{.Seq}}{{end}}</b> · {{.When}}{{with .Stat}} · {{.}}{{end}}{{if not .Current}} <form method="POST" class="ckp-inline"><input type="hidden" name="id" value="{{$rule}}"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreRuleVersion" class="outline">Restore</button></form>{{end}}</span>
-                    {{if .Diff}}<div class="lc-diff">{{range .Diff}}<pre class="{{if eq .Kind "add"}}sg-new{{else}}sg-old{{end}}">{{if eq .Kind "add"}}+{{else}}−{{end}} {{.Text}}</pre>{{end}}{{if .More}}<pre class="sg-more">… {{.More}} more changed line{{if ne .More 1}}s{{end}}</pre>{{end}}</div>{{end}}
-                  </li>
-                  {{end}}
-                </ol>
-              </details>{{end}}
+              {{with .History}}{{template "libHistory" .}}{{end}}
             </div>
             {{end}}
           </li>
@@ -580,7 +572,9 @@
       {{if .Evidence}}<details{{if eq .Status "proposed"}} open{{end}}><summary>Evidence ({{len .Evidence}})</summary><ul class="lc-evidence">
         {{range .Evidence}}<li><span class="ev-where">{{.Where}}</span>{{with .Quote}}<br><q>{{.}}</q>{{end}}</li>
         {{end}}</ul></details>{{end}}
-      {{with .Produces}}<div class="lc-row"><span>would become: <b>{{.}}</b></span></div>{{end}}
+      {{$accepted := eq .Status "accepted"}}{{with .Produces}}<div class="lc-row"><span>{{if $accepted}}became{{else}}would become{{end}}: <b>{{.}}</b></span></div>{{end}}
+      {{with .Checker}}<details class="lc-drafted"><summary>Checker it adds</summary><pre>{{.}}</pre></details>{{end}}
+      {{with .Judge}}<details class="lc-drafted"><summary>Judge it adds</summary><pre>{{.}}</pre></details>{{end}}
       {{if not .Editing}}<div class="lc-actions">
         {{$id := .ID}}{{range .Actions}}<form method="POST"><input type="hidden" name="id" value="{{$id}}">{{with .Act}}<input type="hidden" name="act" value="{{.}}">{{end}}<button type="submit" name="{{.Name}}" class="{{.Class}}">{{.Label}}</button></form>
         {{end}}
@@ -613,6 +607,16 @@
     </form>
   </div>
 {{end}}
+=== libHistory ===
+{{if .Versions}}{{$id := .ID}}{{$act := .Action}}<details class="ckp-history"{{if gt (len .Versions) 1}} open{{end}}><summary>History ({{len .Versions}} version{{if ne (len .Versions) 1}}s{{end}})</summary>
+                <ol>
+                  {{range .Versions}}<li data-key="ckp-v{{.Seq}}">
+                    <span class="ckp-hv-head"><b>{{if .Current}}Current{{else}}Version {{.Seq}}{{end}}</b> · {{.When}}{{with .Stat}} · {{.}}{{end}}{{with .Note}} · {{.}}{{end}}{{if not .Current}} <form method="POST" class="ckp-inline"><input type="hidden" name="id" value="{{$id}}"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="{{$act}}" class="outline">Restore</button></form>{{end}}</span>
+                    {{if .Diff}}<div class="lc-diff">{{range .Diff}}<pre class="{{if eq .Kind "add"}}sg-new{{else}}sg-old{{end}}">{{if eq .Kind "add"}}+{{else}}−{{end}} {{.Text}}</pre>{{end}}{{if .More}}<pre class="sg-more">… {{.More}} more changed line{{if ne .More 1}}s{{end}}</pre>{{end}}</div>{{end}}
+                  </li>
+                  {{end}}
+                </ol>
+              </details>{{end}}
 === library ===
 {{if $.ShowLibrary}}
 <section class="library" data-key="library" aria-label="Library">
@@ -637,11 +641,11 @@
   </header>
   <div class="lib-tabs" role="tablist">
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnLearnings}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnLearnings}}true{{else}}false{{end}}">Learnings{{if $.LearnNew}}<span class="ck-pill ck-new">{{$.LearnNew}} new</span>{{end}}</button></form>
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
+    <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnSkills}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnSkills}}true{{else}}false{{end}}">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnChecks}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnChecks}}true{{else}}false{{end}}">Checks</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
   </div>
-  {{template "learnings" $}}
+  {{template "learnings" $}}{{with $.SkillsTab}}{{template "skillsTab" .}}{{end}}
   {{with $.CheckPage}}
   <div class="ckp-bar">
     <form method="POST" lvt-form:preserve class="ckp-search-form">
@@ -1121,6 +1125,12 @@
 
 
 
+
+
+
+
+
+
 === quitDialog ===
 <dialog id="confirm-quit"><article><header><strong>Quit prereview?</strong></header><p><small>Stops the prereview server and closes the review. Saved comments are already written to the CSV; this can't be undone from the browser.</small></p><footer>
     <form method="POST">
@@ -1277,6 +1287,32 @@
   </div>
   {{end}}
 </div>
+=== skillsTab ===
+
+  <ul class="lib-list">
+    {{range .Proposals}}<li class="lib-card is-proposed" data-key="skill-proposal-{{.Scope}}">
+      <header><span class="ck-pill ck-new">proposed</span><span>{{.Count}} accepted learnings share the scope “{{.Scope}}”</span></header>
+      <p class="lc-text">{{.Scope}}</p>
+      <div class="lc-row"><span>would extend <b>Writing</b> with its own skill for these {{.Count}} learnings</span></div>
+      <div class="lc-actions"><form method="POST"><input type="hidden" name="scope" value="{{.Scope}}"><button type="submit" name="createSkill" class="accept">Create skill</button></form><form method="POST"><input type="hidden" name="scope" value="{{.Scope}}"><button type="submit" name="dismissSkillScope" class="outline secondary">Not now</button></form></div>
+    </li>
+    {{end}}{{range .Cards}}<li class="lib-card" data-key="skill-{{.ID}}">
+      <header><span class="ck-pill ck-pass">prereview's</span><span><code>{{.SourceRel}}</code></span></header>
+      <p class="lc-text">{{.Name}}</p>
+      <div class="lc-row"><span><b>{{.Lines}}</b> instruction{{if ne .Lines 1}}s{{end}}</span><span><b>{{.Checkers}}</b> checker{{if ne .Checkers 1}}s{{end}}</span><span><b>{{.Judges}}</b> judge{{if ne .Judges 1}}s{{end}}</span><span>scope: {{.Scope}}</span></div>
+      <div class="lc-agents">{{range .Installs}}<span class="ck-pill {{if .OK}}ck-pass{{else}}ck-muted{{end}}" title="{{.State}}">{{.Label}}{{if .OK}} ✓{{else}} — {{.State}}{{end}}</span>{{end}}</div>
+      {{if .Edited}}<div class="lc-conflict"><b>You edited this skill</b>, so prereview stopped regenerating it from your learnings; its installs follow your edit.</div>{{end}}
+      {{with .History}}{{template "libHistory" .}}{{end}}
+      <div class="lc-actions">
+        {{if .EditorURL}}<a role="button" class="outline" href="{{.EditorURL}}" title="{{.Source}}">Open SKILL.md in editor</a>{{end}}
+        {{if .Edited}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="regenerateSkill" class="outline">Regenerate from learnings</button></form>{{end}}
+      </div>
+      {{if not .EditorURL}}<input class="check-path" type="text" readonly value="{{.Source}}" aria-label="Skill file path">{{end}}
+    </li>
+    {{end}}
+  </ul>
+  {{with .Empty}}<p class="ckp-empty">{{.}}</p>{{end}}
+
 === statusBanners ===
 {{if .Quitting}}
 <div class="banner-stopping" role="status">

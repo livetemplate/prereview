@@ -48,6 +48,7 @@ func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 		state.Learnings = ls
 		state.LearnStore = filepath.Dir(c.CSVPath)
 	}
+	c.applySkillsTab(state)
 	state.Bootstrapped = c.LibraryDir == "" || library.Bootstrapped(c.LibraryDir)
 	state.BootStores, state.BootScanned = nil, false
 	if !state.Bootstrapped || state.BootOpen {
@@ -133,7 +134,7 @@ func (c *PrereviewController) ReadPastReviews(state PrereviewState, ctx *livetem
 	}
 	state.BootOpen = false
 	state.Flash = fmt.Sprintf("Asked your agent to read %d past review%s", len(picked), plural(len(picked)))
-	return c.libraryWritten(state), nil
+	return c.libraryWritten(state, ""), nil
 }
 
 // DismissPastReviews answers the offer with "Not now" (on every review of this
@@ -145,7 +146,7 @@ func (c *PrereviewController) DismissPastReviews(state PrereviewState, ctx *live
 		}
 	}
 	state.BootOpen = false
-	return c.libraryWritten(state), nil
+	return c.libraryWritten(state, ""), nil
 }
 
 // learningsChanged reports whether the log moved since the watcher last looked
@@ -174,7 +175,7 @@ func (c *PrereviewController) LibraryUpdated(state PrereviewState, ctx *livetemp
 // SetLibraryTab switches the Library's tab.
 func (c *PrereviewController) SetLibraryTab(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	tab := ctx.GetString("tab")
-	if !slices.Contains([]string{libTabLearnings, libTabChecks}, tab) {
+	if !slices.Contains([]string{libTabLearnings, libTabSkills, libTabChecks}, tab) {
 		return state, fmt.Errorf("library: unknown tab %q", tab)
 	}
 	state.LibraryTab = tab
@@ -202,10 +203,24 @@ func (c *PrereviewController) LearningAction(state PrereviewState, ctx *livetemp
 	if c.LibraryDir == "" {
 		return state, fmt.Errorf("no library folder")
 	}
-	if err := library.Act(c.LibraryDir, ctx.GetString("id"), ctx.GetString("act")); err != nil {
+	id, act := ctx.GetString("id"), ctx.GetString("act")
+	if err := library.Act(c.LibraryDir, id, act); err != nil {
 		return state, err
 	}
-	return c.libraryWritten(state), nil
+	return c.libraryWritten(state, learningChangelog(c.learnings(), id, act)), nil
+}
+
+// learningChangelog names what a card action did, for the library version it
+// causes: `Accepted "Cut filler words."`.
+func learningChangelog(ls []library.Learning, id, act string) string {
+	verb := map[string]string{library.ActAccept: "Accepted", library.ActReject: "Rejected",
+		library.ActDelete: "Deleted", library.ActRestore: "Restored", "edit": "Edited"}[act]
+	for _, l := range ls {
+		if l.ID == id {
+			return verb + " “" + clip(l.Text, 80) + "”"
+		}
+	}
+	return verb + " a learning"
 }
 
 // EditLearning opens a card's editor (again closes it).
@@ -227,12 +242,13 @@ func (c *PrereviewController) SaveLearning(state PrereviewState, ctx *livetempla
 		return state, err
 	}
 	state.LearnEdit = ""
-	return c.libraryWritten(state), nil
+	return c.libraryWritten(state, learningChangelog(c.learnings(), ctx.GetString("id"), "edit")), nil
 }
 
 // libraryWritten refreshes this tab after its own write and fans it out to the
 // others now (the watcher would, a tick later; other servers learn it that way).
-func (c *PrereviewController) libraryWritten(state PrereviewState) PrereviewState {
+func (c *PrereviewController) libraryWritten(state PrereviewState, changelog string) PrereviewState {
+	c.syncSkills(changelog)
 	c.applyLibrary(&state)
 	c.learningsChanged() // this server's tabs are told now, not again on the tick
 	go c.broadcast("LibraryUpdated")

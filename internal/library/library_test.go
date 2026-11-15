@@ -445,7 +445,11 @@ func TestPropose_DraftedCheckerAndJudge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(l.Checker, "basically]\n") || !strings.HasPrefix(l.Judge, "---") || fmt.Sprint(l.Produces) != "[checker judge]" {
+	only, err := Propose(dir, Proposal{Text: "x", Evidence: ev, Produces: []string{"checker"}, Checker: "extends: existence\nname: F\ntokens: [a]"})
+	if err != nil || fmt.Sprint(only.Produces) != "[checker]" {
+		t.Fatalf("--produces checker means checks only: %v %v", only.Produces, err)
+	}
+	if !strings.HasSuffix(l.Checker, "basically]\n") || !strings.HasPrefix(l.Judge, "---") || fmt.Sprint(l.Produces) != "[instruction checker judge]" {
 		t.Fatalf("stored %+v", l)
 	}
 }

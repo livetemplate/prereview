@@ -15,6 +15,7 @@ import (
 	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/library"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // PrereviewController holds singleton dependencies. State is cloned per
@@ -188,6 +189,9 @@ type PrereviewController struct {
 	libHistMu sync.Mutex
 	libHistFP string
 	libHist   map[string][]RuleVersion
+	// The latest generated-skills sync (syncSkills), for the Skills tab.
+	skillMu     sync.Mutex
+	skillReport skills.Report
 }
 
 type cachedDiff struct {

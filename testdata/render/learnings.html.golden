@@ -582,7 +582,7 @@
   </header>
   <div class="lib-tabs" role="tablist">
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab is-on" role="tab" aria-selected="true">Learnings<span class="ck-pill ck-new">2 new</span></button></form>
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
+    <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Checks</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
   </div>
@@ -613,6 +613,8 @@
         <li><span class="ev-where">thread reply · notes · 28 Oct 2026</span><br><q>no “very” please</q></li>
         </ul></details>
       <div class="lc-row"><span>would become: <b>instruction · checker</b></span></div>
+      
+      
       <div class="lc-actions">
         <form method="POST"><input type="hidden" name="id" value="l1"><input type="hidden" name="act" value="accept"><button type="submit" name="learningAction" class="accept">Accept</button></form>
         <form method="POST"><input type="hidden" name="id" value="l1"><button type="submit" name="editLearning" class="outline">Edit</button></form>
@@ -633,6 +635,8 @@
       <details open><summary>Evidence (1)</summary><ul class="lc-evidence">
         <li><span class="ev-where">suggestion · docs/a.md L7 · this review</span><br><q>too wordy</q></li>
         </ul></details>
+      
+      
       
       
     </li>

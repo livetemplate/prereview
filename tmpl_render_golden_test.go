@@ -559,6 +559,7 @@ func renderFixtures() []renderFixture {
 			CreatedAt: "2026-11-14T09:00:00Z", UpdatedAt: "2026-11-14T09:00:00Z",
 			Evidence: []library.Evidence{ev("/repo/.prereview", "suggestion", "docs/a.md", 7, "too wordy", "")}},
 		{ID: "l3", Text: "Prefer prose over bullet lists.", Scope: "Technical docs", Status: "accepted",
+			Produces: []string{"instruction", "checker"}, Checker: "extends: existence\nname: Lists\ntokens: [bullet]\n",
 			CreatedAt: "2026-08-02T09:00:00Z", UpdatedAt: "2026-08-02T09:00:00Z"},
 		{ID: "l4", Text: "Lead with what changed for the user.", Scope: "Release notes", Status: "superseded", SupersededBy: "l3",
 			CreatedAt: "2026-07-01T09:00:00Z", UpdatedAt: "2026-11-09T09:00:00Z"},
@@ -572,6 +573,25 @@ func renderFixtures() []renderFixture {
 	superseded := learnings
 	superseded.LearnStatus = "superseded"
 	superseded.LearnEdit = ""
+	acceptedL := learnings
+	acceptedL.LearnStatus = "accepted"
+	acceptedL.LearnEdit = ""
+
+	// checks M4: the Skills tab — a generated Writing skill installed for Claude
+	// but not set up for Cursor, edited by you, with its history; a scope proposal.
+	skillsTab := repoBase()
+	skillsTab.ShowLibrary, skillsTab.LibraryTab = true, "skills"
+	skillsTab.SkillsTab = &review.SkillsTab{
+		Proposals: []review.SkillProposal{{Scope: "Technical docs", Count: 5}},
+		Cards: []review.SkillCard{{ID: "learned-writing", Name: "Writing", Scope: "Writing (all documents)",
+			Source: "/home/u/.config/prereview/skills/learned-writing/SKILL.md", SourceRel: "~/.config/prereview/skills/learned-writing/SKILL.md",
+			Lines: 9, Checkers: 2, Judges: 1, Edited: true,
+			Installs: []review.SkillInstall{{Label: "Claude Code", State: "installed", OK: true}, {Label: "Cursor", State: "not set up here"}},
+			History: &review.HistoryView{ID: "learned-writing", Action: "restoreSkillVersion", Versions: []review.RuleVersion{
+				{Seq: 4, When: "15 Nov 2026 10:41", Current: true, Stat: "+1 −0", Note: "Accepted “Cut filler words.”",
+					Diff: []review.RuleDiffRow{{Kind: "add", Text: "- Cut filler words. <!-- learning l1 -->"}}},
+				{Seq: 1, When: "9 Nov 2026 09:00"}}}}},
+	}
 
 	// checks M3: first launch — the offer above the file (two past reviews, one
 	// unticked, an agent attached) and the progress once the agent is reading.
@@ -624,6 +644,8 @@ func renderFixtures() []renderFixture {
 		{"checks-judge-run", judgeRun},
 		{"learnings", learnings},
 		{"learnings-superseded", superseded},
+		{"learnings-accepted", acceptedL},
+		{"library-skills", skillsTab},
 		{"boot-offer", boot},
 		{"boot-reading", bootReading},
 		{"search-open", searchOpen},
