@@ -12,10 +12,11 @@ import (
 const findingMarkClass = "check-finding"
 
 // CheckSummary is the file header's "n/m passed": ONE count over the enabled
-// checkers and judges. A running check counts toward Total but not Passed until it
-// lands; a judge counts only with a current verdict (not run or stale counts in
-// neither number), and a failing judge marks the button failing — judges stay
-// advisory, nothing gates on it.
+// checkers and the calibrated judges (M5). A running check counts toward Total
+// but not Passed until it lands; a judge counts only once calibrated and with a
+// current verdict (not run or stale counts in neither number), and then a
+// failing judge marks the button failing. An advisory judge is shown, never
+// counted. Nothing gates on any of it.
 type CheckSummary struct {
 	Passed  int
 	Total   int
@@ -75,7 +76,7 @@ func (s PrereviewState) CheckSummary() CheckSummary {
 		return cs
 	}
 	for _, r := range s.Checks.Results {
-		if s.checkDisabled(r.ID) || r.Status == checks.StatusNotRun || r.Status == checks.StatusStale {
+		if s.checkDisabled(r.ID) || r.Status == checks.StatusNotRun || r.Status == checks.StatusStale || s.isAdvisoryJudge(r) {
 			continue
 		}
 		cs.Total++

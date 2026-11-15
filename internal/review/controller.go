@@ -189,6 +189,12 @@ type PrereviewController struct {
 	libHistMu sync.Mutex
 	libHistFP string
 	libHist   map[string][]RuleVersion
+	// Judge calibration (M5): the folded label log, by its fingerprint + the rules.
+	calMu      sync.Mutex
+	calFP      string
+	calWatchFP string
+	calCache   map[string]library.Calibration
+
 	// AgentHome is where generated skills are installed (skills.AgentHome,
 	// resolved once at launch); "" disables them.
 	AgentHome string

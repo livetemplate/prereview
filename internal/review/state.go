@@ -78,14 +78,16 @@ type PrereviewState struct {
 	// JudgeLabels are the reviewer's Agree/Disagree answers (judge-labels.jsonl,
 	// keyed labelKey); JudgmentsSeen is the judgments.jsonl fingerprint this tab
 	// last applied (the watcher re-applies checks only when it changes).
-	ChecksKind     string            `json:"checks_kind"`
-	JudgeLabels    map[string]string `json:"judge_labels"`
-	JudgmentsSeen  string            `json:"judgments_seen"`
-	DisabledChecks []string          `json:"disabled_checks"`
-	Editor         string            `json:"editor"`
-	EditorTemplate string            `json:"editor_template"`
-	EditorSSHHost  string            `json:"editor_ssh_host"`
-	TrustedVale    []string          `json:"trusted_vale"`
+	ChecksKind string `json:"checks_kind"`
+	// JudgeCal is each judge's calibration (M5): only calibrated judges count in n/m.
+	JudgeCal       map[string]library.Calibration `json:"judge_cal"`
+	JudgeLabels    map[string]string              `json:"judge_labels"`
+	JudgmentsSeen  string                         `json:"judgments_seen"`
+	DisabledChecks []string                       `json:"disabled_checks"`
+	Editor         string                         `json:"editor"`
+	EditorTemplate string                         `json:"editor_template"`
+	EditorSSHHost  string                         `json:"editor_ssh_host"`
+	TrustedVale    []string                       `json:"trusted_vale"`
 
 	// The Library's Learnings tab (checks M3). LibraryTab is "" (Learnings, the
 	// first tab) or "checks". Learnings is the folded log, carried only while that

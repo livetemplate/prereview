@@ -149,6 +149,7 @@
               </div>
               {{end}}
               {{if .More}}<p class="ckp-more">{{.More}} more finding{{if ne .More 1}}s{{end}} not listed; turn the check off, or narrow it with a search.</p>{{end}}
+              {{with .Disagreed}}<details class="lc-drafted ckp-disagreed"><summary>You disagreed with {{len .}} verdict{{if ne (len .) 1}}s{{end}}: edit the rubric to fix them</summary><ul class="lc-evidence">{{range .}}<li><span class="ev-where"><code>{{.File}}</code> · it said {{.Verdict}}</span>{{with .Critique}}<br><q>{{.}}</q>{{end}}</li>{{end}}</ul></details>{{end}}
               <div class="ckp-rule">
                 <span>{{.Detail}} · category <b>{{.Category}}</b>{{with .Agreement}} · {{.}}{{end}}{{with .RulePath}} · <code>{{.}}</code>{{end}}</span>
                 <span class="ckp-rule-actions">
@@ -175,7 +176,7 @@
   <div class="ck-strip{{if not .Selected}} is-idle{{end}}{{if .Judge}} is-judge{{end}}" data-key="checks-strip" role="{{if .Selected}}status{{else}}group{{end}}" aria-label="{{if .Judge}}Showing one judge{{else}}{{if .Selected}}Showing one check{{else}}Failing checks on this file{{end}}{{end}}">
     {{if .Judge}}
     <span class="ck-pill ck-{{.Judge.Status}}">{{.Judge.Status}}</span><b class="ck-strip-name" title="{{.Name}}">{{.Name}}</b>
-    <span class="ck-pill ck-advisory">judge · advisory</span>
+    <span class="ck-pill ck-advisory" title="{{if .Calibrated}}Calibrated: counts in Checks n/m{{else}}Advisory: shown, not counted, until it agrees with you often enough{{end}}">judge · {{if .Calibrated}}calibrated{{else}}advisory{{end}}</span>
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
     <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this judge">×</button></form>
     {{else}}{{if .Selected}}
@@ -189,7 +190,7 @@
     <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this check">×</button></form>
     {{else}}
     {{if .Failing}}<span class="ck-strip-pos">Failing:</span>
-    {{range .Failing}}<form method="POST" class="ck-strip-pick"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline{{if .Judge}} is-judge{{end}}">{{.Name}} {{if .Judge}}<span class="ck-judge-tag">judge</span>{{else}}<span class="ck-strip-n">{{.Count}}</span>{{end}}</button></form>
+    {{range .Failing}}<form method="POST" class="ck-strip-pick"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline{{if .Judge}} is-judge{{end}}">{{.Name}} {{if .Judge}}<span class="ck-judge-tag">judge{{if .Advisory}} · advisory{{end}}</span>{{else}}<span class="ck-strip-n">{{.Count}}</span>{{end}}</button></form>
     {{end}}{{end}}{{if .JudgesRun}}{{if .NeedsAgent}}<span class="ck-strip-run"><button type="button" class="outline" disabled title="Judges are run by your coding agent">Run judges — needs an agent</button> <a class="ck-link" href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></span>
     {{else}}{{if .JudgeWaiting}}<span class="ck-waiting" role="status">Asked your agent · {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}</span>
     {{else}}<form method="POST" class="ck-strip-run"><button type="submit" name="runJudges" class="outline">{{if .JudgeTimedOut}}No answer yet — run judges again{{else}}{{if .JudgesStale}}Re-run judges ({{.JudgesStale}} stale){{else}}Run judges ({{.JudgesRun}}){{end}}{{end}}</button></form>

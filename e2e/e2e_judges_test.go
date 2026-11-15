@@ -95,8 +95,12 @@ func TestE2E_Judges(t *testing.T) {
 			if n := countSel(t, p, `.ck-strip .ck-waiting`); n != 0 {
 				t.Errorf("still waiting after the answer%s", diag())
 			}
-			if got := textOf(t, p, `.checks-trigger .checks-count`); got != "2/4" {
-				t.Errorf("one count over checkers + judges: %q, want 2/4%s", got, diag())
+			// Not calibrated yet (M5): listed on the bar as advisory, not counted.
+			if got := textOf(t, p, `.checks-trigger .checks-count`); got != "2/3" {
+				t.Errorf("an advisory judge's verdict counted: %q, want 2/3%s", got, diag())
+			}
+			if got := textOf(t, p, `.ck-strip .ck-strip-pick button.is-judge .ck-judge-tag`); got != "judge · advisory" {
+				t.Errorf("bar tag = %q, want judge · advisory%s", got, diag())
 			}
 
 			// Pick it: the critique card, one-row bar, Show in file lands on the quote.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // The Checks page (the Library frame's Checks tab): every check across every
@@ -82,12 +83,13 @@ type CheckRow struct {
 	EditorURL                               template.URL
 	Detail                                  string // "built-in · existence · files *.md"
 	IsJudge                                 bool
-	Agreement                               string // a judge's "agrees with you 5 of 7"
+	Agreement                               string         // a judge's calibration ("agrees with you 5 of 7 · …")
+	Disagreed                               []Disagreement // verdicts you disagreed with (expanded judge rows)
 	// Expanded rows only:
 	Verdicts []JudgeVerdictView // a judge's verdict per file
 	ByFile   []CheckFileFindings
 	Errors   []CheckFileError
-	More     int           // findings past maxPageFindings
+	More     int          // findings past maxPageFindings
 	History  *HistoryView // the rule file's versions (yours only), newest first
 }
 
@@ -286,10 +288,6 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		p.Categories = append(p.Categories, cc)
 	}
 
-	var tallies map[string][2]int
-	if p.Judges > 0 {
-		tallies = s.agreementTallies()
-	}
 	// Groups, in sidebar order.
 	byCat := map[string]*CheckGroup{}
 	for _, a := range base {
@@ -308,7 +306,7 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		case checks.StatusError:
 			g.Errors++
 		}
-		g.Rows = append(g.Rows, s.checkRow(a, st, tallies))
+		g.Rows = append(g.Rows, s.checkRow(a, st))
 		p.Matches++
 	}
 	// Passing groups fold only on the unfiltered page: a search, chip, category
@@ -372,13 +370,13 @@ func findingView(path string, r checks.Result, i int) FindingView {
 
 // checkRow renders one aggregated check; an expanded row carries its findings
 // (capped) and errors.
-func (s PrereviewState) checkRow(a *checkAgg, status string, tallies map[string][2]int) CheckRow {
+func (s PrereviewState) checkRow(a *checkAgg, status string) CheckRow {
 	r := a.first
 	row := CheckRow{ID: r.ID, Name: r.Name, Description: r.Description, Category: r.Category,
 		Source: r.Source, Status: status, Count: a.count, Expanded: s.ExpandedCheck == r.ID,
 		RulePath: r.Path}
 	if a.isJudge {
-		s.judgeRow(&row, a, tallies[row.ID])
+		s.judgeRow(&row, a)
 		return row
 	}
 	switch status {
@@ -468,12 +466,13 @@ func (s PrereviewState) pageFiles() []PathChecks {
 // check's finding stepper; with a judge selected it names it and Judge carries
 // the critique card.
 type CheckStrip struct {
-	Selected bool
-	ID, Name string
-	Pos      int // 1-based finding under the cursor
-	Count    int
-	Failing  []CheckPick
-	Judge    *JudgeVerdictView // the selected check is a judge: its card
+	Selected   bool
+	ID, Name   string
+	Pos        int // 1-based finding under the cursor
+	Count      int
+	Failing    []CheckPick
+	Judge      *JudgeVerdictView // the selected check is a judge: its card
+	Calibrated bool              // that judge counts (else advisory)
 
 	// Judges on this file (idle bar).
 	JudgesRun     int  // enabled judges that apply: "Run judges (n)"
@@ -488,6 +487,7 @@ type CheckPick struct {
 	ID, Name string
 	Count    int
 	Judge    bool
+	Advisory bool // a judge not yet calibrated: listed, not counted
 }
 
 // openJudgeRequest is when the open file's newest still-open "Run judges"
@@ -517,7 +517,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 	if r, ok := s.checkResult(s.SelectedCheck); ok && r.Type == checks.TypeJudge && !s.checkDisabled(r.ID) &&
 		(r.Status == checks.StatusPass || r.Status == checks.StatusFail || r.Status == checks.StatusStale) {
 		v := s.verdictView(s.SelectedFile, r)
-		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: len(r.Findings), Pos: 1, Judge: &v}
+		return &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: len(r.Findings), Pos: 1, Judge: &v, Calibrated: s.judgeCalibrated(r.ID)}
 	}
 	if r, ok := s.selectedFindings(); ok {
 		n := len(r.Findings)
@@ -542,7 +542,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 		st.JudgesRun++
 		switch r.Status {
 		case checks.StatusFail:
-			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Judge: true})
+			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Judge: true, Advisory: !s.judgeCalibrated(r.ID)})
 		case checks.StatusStale:
 			st.JudgesStale++
 		}
@@ -589,7 +589,7 @@ func (s PrereviewState) verdictView(path string, r checks.Result) JudgeVerdictVi
 }
 
 // judgeRow fills a judge's summary, detail and agreement.
-func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg, tally [2]int) {
+func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg) {
 	row.IsJudge = true
 	n := func(st string) int { return a.judged[st] }
 	files := n(checks.StatusPass) + n(checks.StatusFail) + n(checks.StatusStale) + n(checks.StatusNotRun)
@@ -610,8 +610,15 @@ func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg, tally [2]int) {
 	default:
 		row.Summary = "not run"
 	}
+	cal := s.JudgeCal[row.ID]
 	row.Detail = "judge · advisory · " + row.SourceLabel()
-	row.Agreement = agreementText(tally)
+	if cal.Calibrated {
+		row.Detail = "judge · calibrated · " + row.SourceLabel()
+	}
+	row.Agreement = calibrationText(cal)
+	for _, l := range cal.Disagreed {
+		row.Disagreed = append(row.Disagreed, Disagreement{File: l.File, Verdict: l.Verdict, Critique: l.Critique})
+	}
 	if row.RulePath != "" {
 		row.EditorURL = editorURL(s.Editor, s.EditorTemplate, s.EditorSSHHost, row.RulePath, 1)
 	}
@@ -619,30 +626,32 @@ func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg, tally [2]int) {
 	row.Verdicts = a.verdicts
 }
 
-// agreementTallies counts your answers per judge — [agree, total] — once per
-// page build (labels are keyed file\x00judge\x00at).
-func (s PrereviewState) agreementTallies() map[string][2]int {
-	out := map[string][2]int{}
-	for k, label := range s.JudgeLabels {
-		parts := strings.SplitN(k, "\x00", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		t := out[parts[1]]
-		if label == LabelAgree {
-			t[0]++
-		}
-		t[1]++
-		out[parts[1]] = t
+// calibrationText is a judge's standing as the Checks page states it.
+func calibrationText(c library.Calibration) string {
+	var t string
+	switch {
+	case c.Total == 0 && c.Earlier > 0:
+		t = fmt.Sprintf("no answers for this rubric yet (%d for earlier versions)", c.Earlier)
+	case c.Total == 0:
+		t = "no answers from you yet"
+	case c.Calibrated:
+		t = fmt.Sprintf("calibrated: agrees with you %d of the last %d", c.WindowAgree, min(c.Total, library.CalibrateWindow))
+	case c.Total < library.CalibrateMinLabels:
+		t = fmt.Sprintf("agrees with you %d of %d · counts once %d answers agree %d of %d", c.Agree, c.Total,
+			library.CalibrateMinLabels, library.CalibrateMinAgree, library.CalibrateWindow)
+	default:
+		t = fmt.Sprintf("agrees with you %d of the last %d · counts at %d", c.WindowAgree, library.CalibrateWindow, library.CalibrateMinAgree)
 	}
-	return out
+	if c.Flaky {
+		t += " · flaky: the same text got both verdicts"
+	}
+	if c.OneSided {
+		t += " · doesn't discriminate: every verdict you answered was the same"
+	}
+	return t
 }
 
-// agreementText is how often you agreed with a judge's verdicts so far — its
-// calibration (M5 scores it; M2 shows it).
-func agreementText(t [2]int) string {
-	if t[1] == 0 {
-		return "no answers from you yet"
-	}
-	return fmt.Sprintf("agrees with you %d of %d", t[0], t[1])
+// Disagreement is a verdict you disagreed with, for editing the rubric.
+type Disagreement struct {
+	File, Verdict, Critique string
 }

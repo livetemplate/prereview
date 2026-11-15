@@ -15,6 +15,7 @@ import (
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // FileChecks is the selected file's check outcome, attached to state by
@@ -165,6 +166,7 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		return
 	}
 	c.runner()
+	c.calibrationChanged()                          // the baseline: only later answers fan out
 	c.checkpointLibrary(VersionTriggerFileEdit, "") // edits made while no server ran
 	c.syncSkills("")                                   // bring generated skills in line after an upgrade
 	c.learningsChanged()                        // the baseline: only later writes fan out
@@ -177,6 +179,9 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		case <-ticker.C:
 			if c.reloadChecksIfChanged() {
 				c.checkpointLibrary(VersionTriggerFileEdit, "")
+				c.broadcast("ChecksUpdated")
+			}
+			if c.calibrationChanged() { // an answer in any review re-counts every tab
 				c.broadcast("ChecksUpdated")
 			}
 			if c.learningsChanged() { // any server's write to the shared library
@@ -368,6 +373,7 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 	}
 	if len(judges) > 0 {
 		state.JudgeLabels = c.judgeLabels()
+		state.JudgeCal = c.calibration()
 	}
 	lines := sideContent(d, "new")
 	if len(lines) == 0 {
@@ -401,6 +407,7 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 // The open file is skipped: the page takes its displayed text (pageFiles), so the
 // page and the inline marks agree, and its two runs can't cancel each other.
 func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
+	state.JudgeCal = c.calibration() // the page shows every judge's standing
 	defer c.applyRuleHistory(state) // the expanded rule's versions, on every path out
 	state.ReviewChecks = nil
 	if !state.ShowLibrary || !state.LibraryOnChecks() || c.ExternalMode || c.RepoPath == "" {
@@ -980,7 +987,15 @@ func (c *PrereviewController) LabelJudgment(state PrereviewState, ctx *livetempl
 		When: time.Now().UTC().Format(time.RFC3339)}); err != nil {
 		return state, fmt.Errorf("label judgment: %w", err)
 	}
+	if c.LibraryDir != "" { // the calibration label: this answer, the verdict it answers, its rubric version
+		if err := library.RecordLabel(c.LibraryDir, library.Label{Judge: id, RubricHash: j.RubricHash, ContentHash: j.ContentHash,
+			Verdict: j.Verdict, Critique: j.Critique, Label: label, Store: filepath.Dir(c.CSVPath), File: path, At: at}); err != nil {
+			return state, fmt.Errorf("label judgment: %w", err)
+		}
+		c.calibrationChanged() // this server's tabs are re-counted below, not again on the tick
+	}
 	state.JudgeLabels = c.judgeLabels()
+	state.JudgeCal = c.calibration()
 	go c.broadcast("ChecksUpdated") // other tabs show the answer too
 	return state, nil
 }

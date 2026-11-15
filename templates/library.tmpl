@@ -176,6 +176,7 @@
               </div>
               {{end}}
               {{if .More}}<p class="ckp-more">{{.More}} more finding{{if ne .More 1}}s{{end}} not listed; turn the check off, or narrow it with a search.</p>{{end}}
+              {{with .Disagreed}}<details class="lc-drafted ckp-disagreed"><summary>You disagreed with {{len .}} verdict{{if ne (len .) 1}}s{{end}}: edit the rubric to fix them</summary><ul class="lc-evidence">{{range .}}<li><span class="ev-where"><code>{{.File}}</code> · it said {{.Verdict}}</span>{{with .Critique}}<br><q>{{.}}</q>{{end}}</li>{{end}}</ul></details>{{end}}
               <div class="ckp-rule">
                 <span>{{.Detail}} · category <b>{{.Category}}</b>{{with .Agreement}} · {{.}}{{end}}{{with .RulePath}} · <code>{{.}}</code>{{end}}</span>
                 <span class="ckp-rule-actions">

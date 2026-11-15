@@ -534,9 +534,15 @@ func renderFixtures() []renderFixture {
 		{Path: "docs/guide.md", Results: []checks.Result{judgeRes("stale", "Leads with the diagram.", nil)}},
 		{Path: "docs/faq.md", Results: []checks.Result{judgeRes("notrun", "", nil)}},
 	}}
+	// checks M5: calibration — the page's judge is advisory (7 of 9, two you
+	// disagreed with); the file bar's picked judge is calibrated.
+	judgePage.JudgeCal = map[string]library.Calibration{"reader-first": {Agree: 7, Total: 9, WindowAgree: 7,
+		Disagreed: []library.Label{{File: "docs/guide.md", Verdict: "pass", Critique: "Leads with the diagram."},
+			{File: "notes.txt", Verdict: "fail", Critique: "Buries the action."}}}}
 	judgeCard := checksStrip
 	judgeCard.Checks = judgesFile
 	judgeCard.SelectedCheck = "reader-first"
+	judgeCard.JudgeCal = map[string]library.Calibration{"reader-first": {Agree: 9, Total: 10, WindowAgree: 9, Calibrated: true}}
 	judgeCard.AgentMode = true
 	judgeRun := checksStrip
 	judgeRun.SelectedCheck = ""
