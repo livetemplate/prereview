@@ -144,7 +144,14 @@ func mustWrite(t *testing.T, dir, path, content string) {
 func prefsIsolatedEnv(repo string) []string {
 	prefs := filepath.Join(filepath.Dir(repo), "prereview-ui-prefs.json")
 	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+prefs, "PREREVIEW_CHECKS_DIR="+checksDirFor(repo),
-		"PREREVIEW_LIBRARY_DIR="+libraryDirFor(repo))
+		"PREREVIEW_LIBRARY_DIR="+libraryDirFor(repo), "PREREVIEW_SCAN_HOME="+scanHomeFor(repo))
+}
+
+// scanHomeFor is where a test server's first-launch scan looks for past reviews
+// (never the developer's real home). Usually empty, so no offer shows; a test
+// seeds stores under it to see one.
+func scanHomeFor(repo string) string {
+	return filepath.Join(filepath.Dir(repo), "prereview-scan-home")
 }
 
 // checksDirFor is the isolated checks rule folder a test server for repo reads.

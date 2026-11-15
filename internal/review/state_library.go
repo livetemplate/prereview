@@ -3,7 +3,9 @@ package review
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/livetemplate/prereview/internal/library"
@@ -207,4 +209,101 @@ func titleCase(s string) string {
 		return s
 	}
 	return string(s[0]-'a'+'A') + s[1:]
+}
+
+// BootCard is the first-launch offer to learn from past reviews, or the
+// progress once your agent is reading them.
+type BootCard struct {
+	Reading  bool // an extraction request is open
+	Scanning bool // the scan hasn't finished
+	Stores   []BootStore
+	Picked   int
+	CanRead  bool // an agent is attached
+	Waiting  int  // learnings proposed and waiting for you
+}
+
+// BootStore is one past review in the offer.
+type BootStore struct {
+	Store, Label, Counts string
+	Picked               bool
+}
+
+// BootCard is the offer above the file view: until it's answered on this machine,
+// and while the agent reads.
+func (s PrereviewState) BootCard() *BootCard {
+	if s.ShowLibrary {
+		return nil
+	}
+	return s.bootCard(!s.Bootstrapped)
+}
+
+// LibraryBootCard is the same offer on the Learnings tab: reopened there by
+// "Read past reviews", or still unanswered.
+func (s PrereviewState) LibraryBootCard() *BootCard {
+	if !s.ShowLibrary || !s.LibraryOnLearnings() {
+		return nil
+	}
+	return s.bootCard(!s.Bootstrapped || s.BootOpen)
+}
+
+func (s PrereviewState) bootCard(offer bool) *BootCard {
+	if s.extractionOpen() {
+		return &BootCard{Reading: true, Waiting: s.LearnNew}
+	}
+	if !offer {
+		return nil
+	}
+	if !s.BootScanned {
+		if !s.BootOpen {
+			return nil // the first-launch scan is still running: don't flash a card
+		}
+		return &BootCard{Scanning: true}
+	}
+	if len(s.BootStores) == 0 && !s.BootOpen {
+		return nil // nothing to learn from yet
+	}
+	c := &BootCard{CanRead: s.AgentMode}
+	for _, st := range s.BootStores {
+		b := BootStore{Store: st.Store, Label: st.Label, Counts: storeCounts(st), Picked: !slices.Contains(s.BootSkip, st.Store)}
+		if b.Picked {
+			c.Picked++
+		}
+		c.Stores = append(c.Stores, b)
+	}
+	return c
+}
+
+// pickedBootStores is the ticked stores' paths, in list order.
+func (s PrereviewState) pickedBootStores() []string {
+	var out []string
+	for _, st := range s.BootStores {
+		if !slices.Contains(s.BootSkip, st.Store) {
+			out = append(out, st.Store)
+		}
+	}
+	return out
+}
+
+// extractionOpen reports an extraction request the agent hasn't finished.
+func (s PrereviewState) extractionOpen() bool {
+	for _, c := range s.Comments {
+		if c.Kind == commentKindFile && !c.Resolved && !c.Processed && library.IsExtractionRequest(c.Body) {
+			return true
+		}
+	}
+	return false
+}
+
+// storeCounts is a past review's size: "16 comments · 6 suggestions · 3 versions".
+func storeCounts(st library.StoreInfo) string {
+	var parts []string
+	for _, p := range []struct {
+		n    int
+		word string
+	}{{st.Comments, "comment"}, {st.Suggestions, "suggestion"}, {st.Versions, "version"}} {
+		if p.n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s%s", p.n, p.word, plural(p.n)))
+		}
+	}
+	return strings.Join(parts, " · ")
 }

@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-
-	"github.com/livetemplate/prereview/internal/flock"
 )
 
 // Produces values a learning may ask for (they act in M4).
@@ -138,7 +136,7 @@ func Edit(dir, id, text, scope string) error {
 // update is the library's read-modify-write: under the lock it folds the log,
 // lets fn decide the new states, and appends them (stamped).
 func update(dir string, fn func(map[string]Learning) ([]Learning, error)) error {
-	unlock, err := flock.Lock(lockPath(dir))
+	unlock, err := lockLibrary(dir)
 	if err != nil {
 		return err
 	}

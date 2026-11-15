@@ -97,6 +97,14 @@ type PrereviewState struct {
 	LearnStatus string             `json:"learn_status"` // "" = proposed
 	LearnScope  string             `json:"learn_scope"`  // "" = every scope
 	LearnEdit   string             `json:"learn_edit"`   // the card being edited
+	// First launch (M3): the past reviews the scan found (carried only while the
+	// card can show), the ones you unticked, whether the offer was answered on
+	// this machine, and whether the Learnings tab's "Read past reviews" reopened it.
+	BootStores   []library.StoreInfo `json:"boot_stores"`
+	BootScanned  bool                `json:"boot_scanned"`
+	BootSkip     []string            `json:"boot_skip"`
+	Bootstrapped bool                `json:"bootstrapped"`
+	BootOpen     bool                `json:"boot_open"`
 
 	// Artifact versioning (#90). Versions is the selected file's version
 	// timeline (newest first), populated from the version store each Mount /

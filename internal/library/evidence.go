@@ -38,6 +38,7 @@ const (
 	suggestionsFile  = "suggestions.jsonl"
 	agentRepliesFile = "agent-replies.jsonl"
 	reviewerReplies  = "reviewer-replies.jsonl"
+	decisionsFile    = "suggestion-decisions.jsonl"
 )
 
 // ParseRef splits "store:id". The store is everything before the LAST colon, so
@@ -67,6 +68,9 @@ func Resolve(ref string) (Evidence, error) {
 	if rows, err := csv.Read(filepath.Join(abs, commentsFile)); err == nil {
 		for _, r := range rows {
 			if r.ID == id {
+				if isRequest(r.Body) {
+					return Evidence{}, fmt.Errorf("evidence %q: that comment is a request to the agent, not a reviewer signal", ref)
+				}
 				return Evidence{Store: abs, ID: id, Kind: EvidenceComment, File: r.File, Line: r.FromLine,
 					Quote: r.Body, At: r.CreatedAt.UTC().Format(time.RFC3339)}, nil
 			}

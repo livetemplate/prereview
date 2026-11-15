@@ -154,6 +154,13 @@ func IsJudgeRequest(body, file string) bool {
 	return strings.HasPrefix(body, judgeRequestLead+file+"` against ")
 }
 
+// IsAnyJudgeRequest reports a "Run judges" request for any file: a request to
+// the agent, not a reviewer signal (learnings never count or cite one).
+func IsAnyJudgeRequest(body string) bool {
+	rest, ok := strings.CutPrefix(body, judgeRequestLead)
+	return ok && strings.Contains(rest, "` against ")
+}
+
 // shellQuote single-quotes s when it holds anything a shell would split on.
 func shellQuote(s string) string {
 	if s != "" && strings.IndexFunc(s, func(r rune) bool {

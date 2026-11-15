@@ -81,6 +81,34 @@
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === blockSuggestions ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}
+=== bootCard ===
+
+  <section class="boot" data-key="boot" aria-label="{{if .Reading}}Reading past reviews{{else}}Learn from your past reviews{{end}}">
+    {{if .Reading}}
+    <h2>Reading past reviews…</h2>
+    <div class="boot-progress" aria-hidden="true"><span></span></div>
+    <p>Your agent is reading them{{if .Waiting}} · {{.Waiting}} learning{{if ne .Waiting 1}}s{{end}} waiting in Library → Learnings{{end}}. You can keep reviewing; new learnings appear there as they're proposed.</p>
+    {{else}}{{if .Scanning}}
+    <h2>Looking for past reviews…</h2>
+    <div class="boot-progress" aria-hidden="true"><span></span></div>
+    {{else}}{{if not .Stores}}
+    <h2>No past reviews found</h2>
+    <p>No review on this machine has comments yet. Learnings come from what you say in reviews.</p>
+    {{else}}
+    <h2>Learn from your past reviews</h2>
+    <p>prereview found {{len .Stores}} review{{if ne (len .Stores) 1}}s{{end}} with comments on this machine. Your agent can read the comments, replies and accept/reject decisions in the ones you tick and propose learnings for you to accept. Nothing is read until you ask, and nothing takes effect until you accept.</p>
+    <ul class="boot-list">
+      {{range .Stores}}<li data-key="boot-{{.Store}}"><form method="POST"><input type="hidden" name="store" value="{{.Store}}"><button type="submit" name="toggleBootStore" class="boot-item" role="checkbox" aria-checked="{{if .Picked}}true{{else}}false{{end}}" title="{{.Store}}"><span class="boot-box" aria-hidden="true">{{if .Picked}}✓{{end}}</span><span class="bp">{{.Label}}</span><span class="bc">{{.Counts}}</span></button></form></li>
+      {{end}}
+    </ul>
+    <div class="boot-actions">
+      <form method="POST"><button type="submit" name="readPastReviews"{{if or (not .CanRead) (not .Picked)}} disabled{{end}}>Read {{.Picked}} with my agent</button></form>
+      <form method="POST"><button type="submit" name="dismissPastReviews" class="outline secondary">Not now</button></form>
+      <span class="boot-note">{{if .CanRead}}Later: Library → Learnings → Read past reviews{{else}}Reading needs an agent: start prereview with <code>--agent</code>.{{end}}</span>
+    </div>
+    {{end}}{{end}}{{end}}
+  </section>
+
 === checkRow ===
 
           <li class="ckp-row is-{{.Status}}{{if .Expanded}} is-open{{end}}" data-key="ckp-row-{{.ID}}">
@@ -554,7 +582,7 @@
     </li>
 
 === learnings ===
-{{with $.LearnPage}}
+{{with $.LibraryBootCard}}{{template "bootCard" .}}{{end}}{{with $.LearnPage}}
   <div class="lib-filters">
     {{range .Chips}}<form method="POST"><input type="hidden" name="status" value="{{.Status}}"><button type="submit" name="setLearnFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
     {{end}}{{if .Scopes}}<form method="POST" class="lib-scope-form">
@@ -563,6 +591,7 @@
         {{range .Scopes}}<option value="{{.Name}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
       </select>
     </form>{{end}}
+    <form method="POST" class="lib-boot-form"><button type="submit" name="openPastReviews" class="ck-link">{{if $.BootOpen}}Hide past reviews{{else}}Read past reviews{{end}}</button></form>
   </div>
   {{with .Empty}}<p class="ckp-empty">{{.}}</p>{{end}}
   <ul class="lib-list">
@@ -910,7 +939,7 @@
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
-  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}
+  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
   
   
   {{if $.ShowQuizNav}}
@@ -1009,6 +1038,9 @@
 <script defer src="/mermaid-init.js"></script>
 </body>
 </html>
+
+
+
 
 
 

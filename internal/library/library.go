@@ -207,9 +207,12 @@ func sortLearnings(ls []Learning) {
 // compaction's rename can't drop a line appended to the old file meanwhile.
 func lockPath(dir string) string { return filepath.Join(dir, ".lock") }
 
+// lockLibrary takes the library lock.
+func lockLibrary(dir string) (func(), error) { return flock.Lock(lockPath(dir)) }
+
 // appendLocked appends v to the named log under the library lock.
 func appendLocked(dir, name string, v any) error {
-	unlock, err := flock.Lock(lockPath(dir))
+	unlock, err := lockLibrary(dir)
 	if err != nil {
 		return err
 	}
@@ -221,7 +224,7 @@ func appendLocked(dir, name string, v any) error {
 // tombstones kept), via temp + rename under the library lock. The fold is
 // unchanged; only superseded lines go.
 func Compact(dir string) error {
-	unlock, err := flock.Lock(lockPath(dir))
+	unlock, err := lockLibrary(dir)
 	if err != nil {
 		return err
 	}
@@ -266,7 +269,7 @@ func Import(dir, from string) (int, error) {
 	if _, err := os.Stat(from); err != nil {
 		return 0, err
 	}
-	unlock, err := flock.Lock(lockPath(dir))
+	unlock, err := lockLibrary(dir)
 	if err != nil {
 		return 0, err
 	}

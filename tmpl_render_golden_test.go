@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/gitdiff"
@@ -563,6 +564,22 @@ func renderFixtures() []renderFixture {
 	superseded.LearnStatus = "superseded"
 	superseded.LearnEdit = ""
 
+	// checks M3: first launch — the offer above the file (two past reviews, one
+	// unticked, an agent attached) and the progress once the agent is reading.
+	boot := goBase()
+	boot.AgentMode = true
+	boot.BootScanned = true
+	boot.BootStores = []library.StoreInfo{
+		{Store: "/home/u/notes/.prereview", Root: "/home/u/notes", Label: "~/notes", Comments: 16, Suggestions: 6, Versions: 3},
+		{Store: "/home/u/code/app/.prereview", Root: "/home/u/code/app", Label: "~/code/app", Comments: 1},
+	}
+	boot.BootSkip = []string{"/home/u/code/app/.prereview"}
+	bootReading := goBase()
+	bootReading.Bootstrapped = true
+	bootReading.LearnNew = 3
+	bootReading.Comments = append(bootReading.Comments, review.Comment{ID: "x1", File: bootReading.SelectedFile, Kind: "file",
+		Body: library.ExtractionPrompt([]string{"/home/u/notes/.prereview"}, nil), Created: time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)})
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -597,6 +614,8 @@ func renderFixtures() []renderFixture {
 		{"checks-judge-run", judgeRun},
 		{"learnings", learnings},
 		{"learnings-superseded", superseded},
+		{"boot-offer", boot},
+		{"boot-reading", bootReading},
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},

@@ -48,6 +48,100 @@ func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 		state.Learnings = ls
 		state.LearnStore = filepath.Dir(c.CSVPath)
 	}
+	state.Bootstrapped = c.LibraryDir == "" || library.Bootstrapped(c.LibraryDir)
+	state.BootStores, state.BootScanned = nil, false
+	if !state.Bootstrapped || state.BootOpen {
+		c.bootMu.Lock()
+		state.BootStores, state.BootScanned = c.bootStores, c.bootScanned
+		c.bootMu.Unlock()
+	}
+}
+
+// libraryFingerprint is what the watcher compares: the learnings log and the
+// first-launch marker (answering the offer in one review hides it in the others).
+func (c *PrereviewController) libraryFingerprint() string {
+	return statusFingerprint(filepath.Join(c.LibraryDir, library.LearningsFile)) + "|" +
+		statusFingerprint(filepath.Join(c.LibraryDir, library.BootstrapFile))
+}
+
+// ScanPastReviews looks for review stores on this machine (the first-launch
+// offer) and tells every tab when it's done. Read-only; run in the background —
+// a walk of a real home takes a while.
+func (c *PrereviewController) ScanPastReviews() {
+	stores := library.Scan(library.ScanRoot(), library.ScanMaxDepth)
+	c.bootMu.Lock()
+	c.bootStores, c.bootScanned = stores, true
+	c.bootMu.Unlock()
+	c.broadcast("LibraryUpdated")
+}
+
+// OpenPastReviews reopens the offer from the Learnings tab, rescanning.
+func (c *PrereviewController) OpenPastReviews(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.BootOpen = !state.BootOpen
+	if state.BootOpen {
+		c.bootMu.Lock()
+		c.bootScanned = false
+		c.bootMu.Unlock()
+		go c.ScanPastReviews()
+	}
+	c.applyLibrary(&state)
+	return state, nil
+}
+
+// ToggleBootStore ticks or unticks one past review in the offer. A server-side
+// set, not checkbox values: a lone checkbox posts a boolean, not its value.
+func (c *PrereviewController) ToggleBootStore(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	store := ctx.GetString("store")
+	if i := slices.Index(state.BootSkip, store); i >= 0 {
+		state.BootSkip = slices.Delete(slices.Clone(state.BootSkip), i, i+1)
+	} else {
+		state.BootSkip = append(slices.Clone(state.BootSkip), store)
+	}
+	return state, nil
+}
+
+// ReadPastReviews queues one extraction request naming exactly the ticked
+// stores, records that they were read (with their signal counts, for the
+// auto-extraction gate) and answers the first-launch offer.
+func (c *PrereviewController) ReadPastReviews(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if !state.AgentMode {
+		return state, fmt.Errorf("read past reviews: no agent attached (start one with prereview --agent)")
+	}
+	if state.SelectedFile == "" {
+		return state, fmt.Errorf("read past reviews: open a file first (the request is queued on it)")
+	}
+	picked := state.pickedBootStores()
+	if len(picked) == 0 {
+		return state, fmt.Errorf("read past reviews: no review ticked")
+	}
+	ls, _ := c.learnings()
+	state, err := c.queueFileComment(state, library.ExtractionPrompt(picked, ls))
+	if err != nil {
+		return state, err
+	}
+	for _, s := range picked {
+		if err := library.RecordExtraction(c.LibraryDir, s, library.ReviewerSignals(s)); err != nil {
+			return state, err
+		}
+	}
+	if err := library.MarkBootstrapped(c.LibraryDir, "read"); err != nil {
+		return state, err
+	}
+	state.BootOpen = false
+	state.Flash = fmt.Sprintf("Asked your agent to read %d past review%s", len(picked), plural(len(picked)))
+	return c.libraryWritten(state), nil
+}
+
+// DismissPastReviews answers the offer with "Not now" (on every review of this
+// machine; the Learnings tab can reopen it).
+func (c *PrereviewController) DismissPastReviews(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if !state.Bootstrapped {
+		if err := library.MarkBootstrapped(c.LibraryDir, "dismissed"); err != nil {
+			return state, err
+		}
+	}
+	state.BootOpen = false
+	return c.libraryWritten(state), nil
 }
 
 // learningsChanged reports whether the log moved since the watcher last looked
@@ -56,7 +150,7 @@ func (c *PrereviewController) learningsChanged() bool {
 	if c.LibraryDir == "" {
 		return false
 	}
-	fp := statusFingerprint(filepath.Join(c.LibraryDir, library.LearningsFile))
+	fp := c.libraryFingerprint()
 	c.learnMu.Lock()
 	defer c.learnMu.Unlock()
 	if fp == c.learnWatchFP {

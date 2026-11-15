@@ -48,3 +48,36 @@ func TestStoreLabel(t *testing.T) {
 		}
 	}
 }
+
+func TestBootCard_WhenItShows(t *testing.T) {
+	stores := []library.StoreInfo{{Store: "/h/a/.prereview", Label: "~/a", Comments: 2}, {Store: "/h/b/.prereview", Label: "~/b", Comments: 1}}
+	s := PrereviewState{BootStores: stores}
+	if s.BootCard() != nil {
+		t.Fatal("shown while the scan is still running")
+	}
+	s.BootScanned = true
+	c := s.BootCard()
+	if c == nil || c.Picked != 2 || c.CanRead {
+		t.Fatalf("offer = %+v, want both ticked and no agent", c)
+	}
+	s.BootSkip, s.AgentMode = []string{"/h/b/.prereview"}, true
+	if c := s.BootCard(); c.Picked != 1 || !c.CanRead || s.pickedBootStores()[0] != "/h/a/.prereview" || len(s.pickedBootStores()) != 1 {
+		t.Fatalf("unticked b: %+v %v", c, s.pickedBootStores())
+	}
+	s.Bootstrapped = true
+	if s.BootCard() != nil {
+		t.Fatal("offered again after it was answered")
+	}
+	s.Comments = []Comment{{ID: "x", Kind: commentKindFile, Body: library.ExtractionPrompt([]string{"/h/a/.prereview"}, nil)}}
+	if c := s.BootCard(); c == nil || !c.Reading {
+		t.Fatalf("an open extraction request shows progress: %+v", c)
+	}
+	s.Comments[0].Processed = true
+	if s.BootCard() != nil {
+		t.Fatal("progress kept showing after the agent finished")
+	}
+	s.ShowLibrary, s.BootOpen = true, true
+	if c := s.LibraryBootCard(); c == nil || len(c.Stores) != 2 {
+		t.Fatalf("Read past reviews reopens the offer on the Learnings tab: %+v", c)
+	}
+}

@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -215,5 +216,98 @@ func TestE2E_LibraryLiveAcrossSessions(t *testing.T) {
 		chromedp.WaitVisible(learnCard(id)+`.is-accepted`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("B didn't see A's accept: %v%s", err, diagB())
+	}
+}
+
+// TestE2E_FirstLaunch: on a machine that hasn't answered the offer, the review
+// lists the past reviews found under $HOME (here a seeded fake home), each
+// ticked; "Read with my agent" queues ONE extraction request naming exactly the
+// ticked stores. The agent then answers it as written — citing a thread reply by
+// the request's `<target_id>@<at>` format — and the learning shows in the Library.
+func TestE2E_FirstLaunch(t *testing.T) {
+	const w, h = 390, 844
+	repo := setupFixtureRepoChecks(t, "notes.md")
+	home := scanHomeFor(repo)
+	notes := seedReviewStore(t, filepath.Join(home, "notes"),
+		csv.Row{ID: "c1", File: "plan.md", FromLine: 4, ToLine: 4, Body: "Drop “basically”.", CreatedAt: time.Now()})
+	const replyAt = int64(1762000000000000000)
+	if err := os.WriteFile(filepath.Join(notes, "reviewer-replies.jsonl"),
+		[]byte(`{"target_id":"c1","body":"still filler","at":1762000000000000000}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app := seedReviewStore(t, filepath.Join(home, "code", "app"),
+		csv.Row{ID: "a1", File: "README.md", FromLine: 1, ToLine: 1, Body: "Say what it does first.", CreatedAt: time.Now()},
+		csv.Row{ID: "a2", File: "README.md", FromLine: 2, ToLine: 2, Body: "Shorter.", CreatedAt: time.Now()})
+	private := seedReviewStore(t, filepath.Join(home, "private"),
+		csv.Row{ID: "p1", File: "diary.md", FromLine: 1, ToLine: 1, Body: "personal", CreatedAt: time.Now()})
+	seedReviewStore(t, filepath.Join(home, "proj", "node_modules", "dep"), // skipped by the scan
+		csv.Row{ID: "n1", File: "x.md", FromLine: 1, ToLine: 1, Body: "never listed", CreatedAt: time.Now()})
+
+	p := bootChromeAgainstRepo(t, repo, w, h, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReadyAt(w, h)
+	ctx, cancel := within(p, 40*time.Second)
+	defer cancel()
+	item := func(store string) string { return `.boot-list li[data-key="boot-` + store + `"] button` }
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible(`.boot`, chromedp.ByQuery),
+		chromedp.WaitVisible(item(notes)+`[aria-checked="true"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(item(app)+`[aria-checked="true"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(item(private)+`[aria-checked="true"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("the first-launch offer didn't list the past reviews: %v%s", err, diag())
+	}
+	if n := countSel(t, p, `.boot-list li`); n != 3 {
+		t.Errorf("listed %d past reviews, want 3 (node_modules is skipped)%s", n, diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(item(private), chromedp.ByQuery),
+		chromedp.WaitVisible(item(private)+`[aria-checked="false"]`, chromedp.ByQuery),
+		chromedp.Click(`button[name="readPastReviews"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.boot[aria-label="Reading past reviews"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("Read with my agent: %v%s", err, diag())
+	}
+
+	rows, err := csv.Read(filepath.Join(p.store, "comments.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var requests []string
+	for _, r := range rows {
+		if strings.HasPrefix(r.Body, "Read past reviews and propose learnings") {
+			requests = append(requests, r.Body)
+		}
+	}
+	if len(requests) != 1 {
+		t.Fatalf("queued %d extraction requests, want 1%s", len(requests), diag())
+	}
+	req := requests[0]
+	if !strings.Contains(req, "`"+notes+"`") || !strings.Contains(req, "`"+app+"`") || strings.Contains(req, private) {
+		t.Fatalf("the request must name exactly the ticked stores:\n%s", req)
+	}
+	if !strings.Contains(req, "<target_id>@<at>") || !strings.Contains(req, "prereview learn propose") {
+		t.Fatalf("the request doesn't say how to cite a reply or what to run:\n%s", req)
+	}
+
+	// The agent answers as the request says.
+	id := learnPropose(t, p, "--text", "Cut filler words.", "--evidence", notes+":c1",
+		"--evidence", fmt.Sprintf("%s:c1@%d", notes, replyAt))
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible(`.boot[aria-label="Reading past reviews"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.library-trigger .lib-badge`, chromedp.ByQuery),
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(learnCard(id)+`.is-proposed`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("the agent's learning didn't show: %v%s", err, diag())
+	}
+	if got := textOf(t, p, learnCard(id)+` .lc-evidence`); !strings.Contains(got, "still filler") {
+		t.Errorf("the reply evidence didn't resolve: %q%s", got, diag())
+	}
+
+	// The answer is recorded for the machine (applyLibrary hides the offer once
+	// bootstrap.json exists; the state unit test pins that).
+	if _, err := os.Stat(filepath.Join(libraryDirFor(repo), "bootstrap.json")); err != nil {
+		t.Errorf("the answer wasn't recorded: %v", err)
 	}
 }

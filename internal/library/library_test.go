@@ -320,3 +320,51 @@ func TestSessionsAndExtractions(t *testing.T) {
 		t.Fatalf("last extraction = %+v", e)
 	}
 }
+
+func TestReviewerSignals_SkipRequestsAndAgentSuggestions(t *testing.T) {
+	store := seedStore(t, t.TempDir()) // c1 + suggestion s1 + one reviewer reply
+	if n := ReviewerSignals(store); n != 2 {
+		t.Fatalf("signals = %d, want 2 (comment + reply; the agent's suggestion doesn't count)", n)
+	}
+	writeComments(t, store,
+		csv.Row{ID: "c1", File: "README.md", FromLine: 3, ToLine: 3, Body: "Drop 'basically'", CreatedAt: time.Now()},
+		csv.Row{ID: "r1", File: "README.md", Kind: "file", Body: ExtractionPrompt([]string{store}, nil), CreatedAt: time.Now()},
+		csv.Row{ID: "j1", File: "README.md", Kind: "file", Body: "Judge `README.md` against 1 rubric(s).", CreatedAt: time.Now()})
+	write(t, filepath.Join(store, decisionsFile), `{"id":"s1","decision":"reject"}`+"\n")
+	if n := ReviewerSignals(store); n != 3 {
+		t.Fatalf("signals = %d, want 3 (comment + reply + decision; requests excluded)", n)
+	}
+	if _, err := Resolve(store + ":r1"); err == nil || !strings.Contains(err.Error(), "request") {
+		t.Fatalf("a request comment resolved as evidence: %v", err)
+	}
+}
+
+func TestExtractionPrompt(t *testing.T) {
+	p := ExtractionPrompt([]string{"/a/.prereview", "/b/.prereview"}, []Learning{
+		{ID: "l1", Text: "Keep it short.", Scope: "Email", Status: StatusAccepted},
+		{ID: "l2", Text: "rejected one", Status: StatusRejected},
+	})
+	if !IsExtractionRequest(p) {
+		t.Fatal("the prompt isn't recognised as a request")
+	}
+	for _, want := range []string{"from 2 review stores", "`/a/.prereview`", "`/b/.prereview`", "`l1` [accepted · Email] Keep it short.",
+		"<target_id>@<at>", "prereview learn propose", "--replaces <id>"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, p)
+		}
+	}
+	if strings.Contains(p, "rejected one") {
+		t.Error("a rejected learning is listed as one to dedupe against")
+	}
+}
+
+func TestBootstrapMarker(t *testing.T) {
+	dir := t.TempDir()
+	if Bootstrapped(dir) {
+		t.Fatal("bootstrapped before answering")
+	}
+	must(t, MarkBootstrapped(dir, "dismissed"))
+	if !Bootstrapped(dir) {
+		t.Fatal("not bootstrapped after answering")
+	}
+}

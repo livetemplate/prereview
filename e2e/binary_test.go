@@ -64,6 +64,7 @@ func TestMain(m *testing.M) {
 	lib, err := os.MkdirTemp("", "prereview-e2e-library-")
 	if err == nil {
 		os.Setenv("PREREVIEW_LIBRARY_DIR", lib)
+		os.Setenv("PREREVIEW_SCAN_HOME", filepath.Join(lib, "no-home")) // never walk the real $HOME
 	}
 	code := m.Run()
 	if buildDir != "" {

@@ -87,7 +87,7 @@
 </section>
 {{end}}{{end}}
 
-{{define "learnings"}}{{with $.LearnPage}}
+{{define "learnings"}}{{with $.LibraryBootCard}}{{template "bootCard" .}}{{end}}{{with $.LearnPage}}
   <div class="lib-filters">
     {{range .Chips}}<form method="POST"><input type="hidden" name="status" value="{{.Status}}"><button type="submit" name="setLearnFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
     {{end}}{{if .Scopes}}<form method="POST" class="lib-scope-form">
@@ -96,6 +96,7 @@
         {{range .Scopes}}<option value="{{.Name}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
       </select>
     </form>{{end}}
+    <form method="POST" class="lib-boot-form"><button type="submit" name="openPastReviews" class="ck-link">{{if $.BootOpen}}Hide past reviews{{else}}Read past reviews{{end}}</button></form>
   </div>
   {{with .Empty}}<p class="ckp-empty">{{.}}</p>{{end}}
   <ul class="lib-list">
@@ -177,4 +178,34 @@
             </div>
             {{end}}
           </li>
+{{end}}
+
+{{/* First launch (M3): the past reviews found on this machine, ticked by default;
+     your agent reads the ticked ones. Called with the BootCard as `.`. */}}
+{{define "bootCard"}}
+  <section class="boot" data-key="boot" aria-label="{{if .Reading}}Reading past reviews{{else}}Learn from your past reviews{{end}}">
+    {{if .Reading}}
+    <h2>Reading past reviews…</h2>
+    <div class="boot-progress" aria-hidden="true"><span></span></div>
+    <p>Your agent is reading them{{if .Waiting}} · {{.Waiting}} learning{{if ne .Waiting 1}}s{{end}} waiting in Library → Learnings{{end}}. You can keep reviewing; new learnings appear there as they're proposed.</p>
+    {{else if .Scanning}}
+    <h2>Looking for past reviews…</h2>
+    <div class="boot-progress" aria-hidden="true"><span></span></div>
+    {{else if not .Stores}}
+    <h2>No past reviews found</h2>
+    <p>No review on this machine has comments yet. Learnings come from what you say in reviews.</p>
+    {{else}}
+    <h2>Learn from your past reviews</h2>
+    <p>prereview found {{len .Stores}} review{{if ne (len .Stores) 1}}s{{end}} with comments on this machine. Your agent can read the comments, replies and accept/reject decisions in the ones you tick and propose learnings for you to accept. Nothing is read until you ask, and nothing takes effect until you accept.</p>
+    <ul class="boot-list">
+      {{range .Stores}}<li data-key="boot-{{.Store}}"><form method="POST"><input type="hidden" name="store" value="{{.Store}}"><button type="submit" name="toggleBootStore" class="boot-item" role="checkbox" aria-checked="{{if .Picked}}true{{else}}false{{end}}" title="{{.Store}}"><span class="boot-box" aria-hidden="true">{{if .Picked}}✓{{end}}</span><span class="bp">{{.Label}}</span><span class="bc">{{.Counts}}</span></button></form></li>
+      {{end}}
+    </ul>
+    <div class="boot-actions">
+      <form method="POST"><button type="submit" name="readPastReviews"{{if or (not .CanRead) (not .Picked)}} disabled{{end}}>Read {{.Picked}} with my agent</button></form>
+      <form method="POST"><button type="submit" name="dismissPastReviews" class="outline secondary">Not now</button></form>
+      <span class="boot-note">{{if .CanRead}}Later: Library → Learnings → Read past reviews{{else}}Reading needs an agent: start prereview with <code>--agent</code>.{{end}}</span>
+    </div>
+    {{end}}
+  </section>
 {{end}}

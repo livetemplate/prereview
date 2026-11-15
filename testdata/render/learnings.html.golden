@@ -597,6 +597,7 @@
         <option value="Release notes">Release notes</option><option value="Technical docs">Technical docs</option><option value="Writing (all documents)">Writing (all documents)</option>
       </select>
     </form>
+    <form method="POST" class="lib-boot-form"><button type="submit" name="openPastReviews" class="ck-link">Read past reviews</button></form>
   </div>
   
   <ul class="lib-list">

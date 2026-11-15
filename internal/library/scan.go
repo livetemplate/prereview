@@ -15,6 +15,7 @@ import (
 type StoreInfo struct {
 	Store       string // the store directory (…/.prereview or a per-target subdirectory)
 	Root        string // what was reviewed: the directory above the .prereview segment
+	Label       string // Root as the list shows it: "~/code/app", plus the per-target store's name
 	Comments    int
 	Suggestions int
 	Versions    int
@@ -59,7 +60,12 @@ func Scan(home string, maxDepth int) []StoreInfo {
 			return nil
 		}
 		root := filepath.Dir(p)
+		label := "~"
+		if rel, err := filepath.Rel(home, root); err == nil && rel != "." {
+			label = "~/" + filepath.ToSlash(rel)
+		}
 		if info, ok := inspect(p, root); ok {
+			info.Label = label
 			out = append(out, info)
 		}
 		// Per-target stores (#199) live one level down.
@@ -67,6 +73,7 @@ func Scan(home string, maxDepth int) []StoreInfo {
 			for _, e := range entries {
 				if e.IsDir() {
 					if info, ok := inspect(filepath.Join(p, e.Name()), root); ok {
+						info.Label = label + " · " + e.Name()
 						out = append(out, info)
 					}
 				}

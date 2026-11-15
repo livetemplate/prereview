@@ -275,6 +275,17 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	stopChecks := make(chan struct{})
 	defer close(stopChecks)
 	go controller.WatchChecks(stopChecks, review.ChecksPollInterval)
+	// The per-user library (checks M3): note this review so extraction can find
+	// it later, and on a machine that hasn't answered the first-launch offer, look
+	// for past reviews in the background (a home-directory walk takes a while).
+	if lib := controller.LibraryDir; lib != "" {
+		if err := library.RecordSession(lib, library.Session{Store: filepath.Dir(csvPath), Repo: absRepo, Target: tgt.SingleFile}); err != nil {
+			slog.Warn("library: recording the session failed", "err", err)
+		}
+		if !library.Bootstrapped(lib) {
+			go controller.ScanPastReviews()
+		}
+	}
 
 	return serveAndWait(srv, ln, nil, shutdownReq)
 }

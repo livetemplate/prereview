@@ -170,6 +170,10 @@ type PrereviewController struct {
 	learnFP      string
 	learnWatchFP string
 	learnCache   []library.Learning
+	// The first-launch scan's result (ScanPastReviews), shared by every tab.
+	bootMu      sync.Mutex
+	bootScanned bool
+	bootStores  []library.StoreInfo
 }
 
 type cachedDiff struct {

@@ -3678,7 +3678,45 @@ button.lib-tab .ck-pill { margin-left: 0.3rem; }
 .lc-edit textarea { margin: 0; font-size: 0.9rem; min-height: 3.2rem; }
 .lc-edit label { display: flex; gap: 0.4rem; align-items: center; margin: 0; font-size: 0.78rem; color: var(--text-muted); }
 .lc-edit input { margin: 0; padding: 0.15rem 0.45rem; height: auto; font-size: 0.82rem; }
+.lib-boot-form { margin: 0; }
+.lib-boot-form .ck-link { font-size: 0.78rem; }
+
+/* First launch (M3): learn from past reviews. */
+.boot {
+  margin: 0.6rem 0.5rem; padding: 0.8rem 0.95rem; background: var(--surface-card);
+  border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm); font-size: 0.85rem;
+}
+.boot h2 { font-size: 1.05rem; margin: 0 0 0.35rem; color: var(--text-strong); }
+.boot p { margin: 0 0 0.6rem; color: var(--text-muted); }
+.boot-list { list-style: none; margin: 0.4rem 0 0.6rem; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.boot-list > li { list-style: none; margin: 0; }
+.boot-list > li::marker { content: none; }
+.boot-list form { margin: 0; }
+button.boot-item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.5rem; align-items: center;
+  width: 100%; margin: 0; padding: 0.3rem 0.45rem; min-height: 32px; text-align: left;
+  background: none; border: 0; border-radius: var(--radius-sm); color: var(--text);
+}
+button.boot-item:hover { background: var(--soft-bg); }
+.boot-box {
+  display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem;
+  border: 1.5px solid var(--border-strong); border-radius: 3px; font-size: 0.7rem; font-weight: 700; color: var(--pico-primary-inverse);
+}
+button.boot-item[aria-checked="true"] .boot-box { background: var(--accent); border-color: var(--accent); }
+.boot-list .bp { font-family: var(--jbm); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-list .bc { color: var(--text-faint); font-size: 0.74rem; white-space: nowrap; }
+.boot-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+.boot-actions form { margin: 0; }
+.boot-actions button { margin: 0; padding: 0.35rem 0.9rem; min-height: 32px; width: auto; font-size: 0.84rem; }
+.boot-note { color: var(--text-faint); font-size: 0.74rem; }
+.boot-progress { height: 6px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; margin: 0.4rem 0 0.6rem; }
+.boot-progress > span { display: block; height: 100%; width: 35%; background: var(--accent); animation: boot-slide 1.6s ease-in-out infinite; }
+@keyframes boot-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .boot-progress > span { animation: none; width: 100%; opacity: 0.5; } }
 @media (max-width: 640px) {
+  .boot { margin: 0.5rem 0.25rem; }
+  .boot-list .bc { display: none; }
   .lib-scope-form { margin-left: 0 !important; width: 100%; }
   .lib-filters select { width: 100%; }
 }
