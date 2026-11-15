@@ -35,14 +35,48 @@ var voidElements = map[string]bool{
 }
 
 // openElement is one element open inside <body> while RenderHTMLPreview
-// buffers its content to learn its end line.
+// waits for its end line.
 type openElement struct {
-	name     string
-	attrs    []rawAttr
 	start    int
-	buf      bytes.Buffer
 	annotate bool // gets data-from/data-to
 	inner    bool // its descendants may be annotated
+	patch    int  // index into the patches its range fills, or -1
+}
+
+// rangePatch is a start tag's range attributes, spliced into the output at
+// byte offset at (just before the tag's '>') once the element has closed.
+type rangePatch struct {
+	at   int
+	text string
+}
+
+// rangeAttrs are an element's data-from/data-to. A top-level block always gets
+// both; a one-line nested element (most of them) gets data-from alone — the
+// bridge defaults data-to to data-from — to keep the srcdoc lean.
+func rangeAttrs(from, to int, top bool) []rawAttr {
+	if !top && from == to {
+		return []rawAttr{{"data-from", strconv.Itoa(from)}}
+	}
+	return []rawAttr{{"data-from", strconv.Itoa(from)}, {"data-to", strconv.Itoa(to)}}
+}
+
+// splicePatches inserts every patch's text at its offset in one pass. Patches
+// are recorded in document order (start tags), so their offsets ascend.
+func splicePatches(out []byte, patches []rangePatch) string {
+	n := len(out)
+	for _, p := range patches {
+		n += len(p.text)
+	}
+	var b strings.Builder
+	b.Grow(n)
+	prev := 0
+	for _, p := range patches {
+		b.Write(out[prev:p.at])
+		b.WriteString(p.text)
+		prev = p.at
+	}
+	b.Write(out[prev:])
+	return b.String()
 }
 
 // nonBlockElements render nothing themselves, so they get no line range.
@@ -139,22 +173,19 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 		inHead   bool
 		inBody   bool
 		baseDone bool
-		// stack holds the elements open INSIDE <body>. Each buffers its content
-		// until it closes, when its start tag is written with the now-known end
-		// line as data-to (so every element carries its own source range, which
-		// is what makes a drawn region precise). The bottom frame is a top-level
-		// <body> child: those are also the returned blocks.
-		stack []*openElement
+		// stack holds the elements open INSIDE <body>; the bottom frame is a
+		// top-level <body> child (those are also the returned blocks). Every
+		// element's range attributes are only known when it closes, so instead
+		// of buffering content per element (which copies the same bytes once per
+		// nesting level — quadratic on deep markup) everything streams into out
+		// once, each annotated start tag records where its '>' landed, and the
+		// ranges are spliced in at the end. Linear in the input at any depth.
+		stack   []openElement
+		patches []rangePatch
 	)
 
-	// sink is where passthrough bytes go: into the innermost open element's
-	// buffer while inside one, else straight to the output.
-	sink := func() *bytes.Buffer {
-		if n := len(stack); n > 0 {
-			return &stack[n-1].buf
-		}
-		return &out
-	}
+	// sink is where passthrough bytes go: always the single output buffer.
+	sink := func() *bytes.Buffer { return &out }
 
 	// stamp decides, for an element opening at the current depth, whether it
 	// gets data-from/data-to and whether its descendants may. A top-level child
@@ -171,33 +202,50 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 		return annotate, parentInner && !opaqueElements[name]
 	}
 
-	// emit writes a finished element (start tag with its range when annotated,
-	// then content and end tag) to its parent, recording top-level blocks.
-	emit := func(name string, attrs []rawAttr, from, to int, annotate, selfClosing bool, content, end []byte) {
-		switch {
-		case annotate && len(stack) == 0:
-			attrs = appendDataRange(attrs, from, to) // a block: always both ends
-		case annotate && from == to:
-			// A one-line nested element (most of them): data-to defaults to
-			// data-from in the bridge, so leave it out to keep the srcdoc lean.
-			attrs = append(append(make([]rawAttr, 0, len(attrs)+1), attrs...), rawAttr{"data-from", strconv.Itoa(from)})
-		case annotate:
-			attrs = appendDataRange(attrs, from, to)
+	// emitVoid writes an element with no content (void or self-closing): its
+	// range is known now, so its attributes are written directly.
+	emitVoid := func(name string, attrs []rawAttr, from, to int, annotate, selfClosing bool) {
+		top := len(stack) == 0
+		if annotate {
+			attrs = append(append(make([]rawAttr, 0, len(attrs)+2), attrs...), rangeAttrs(from, to, top)...)
 		}
-		w := sink()
-		w.Write(serializeTag(name, attrs, selfClosing))
-		w.Write(content)
-		w.Write(end)
-		if annotate && len(stack) == 0 {
+		out.Write(serializeTag(name, attrs, selfClosing))
+		if annotate && top {
 			blocks = append(blocks, HTMLBlock{StartLine: from, EndLine: to})
 		}
 	}
 
-	// closeTop pops the innermost open element and emits it, ending at endLine.
+	// open writes an element's start tag now and, when annotated, records where
+	// its closing '>' is so closeTop can splice the range in before it.
+	open := func(name string, attrs []rawAttr, from int, annotate, inner bool) {
+		tag := serializeTag(name, attrs, false)
+		out.Write(tag[:len(tag)-1])
+		f := openElement{start: from, annotate: annotate, inner: inner, patch: -1}
+		if annotate {
+			patches = append(patches, rangePatch{at: out.Len()})
+			f.patch = len(patches) - 1
+		}
+		out.WriteByte('>')
+		stack = append(stack, f)
+	}
+
+	// closeTop pops the innermost open element, ending at endLine.
 	closeTop := func(endLine int, end []byte) {
 		f := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		emit(f.name, f.attrs, f.start, endLine, f.annotate, false, f.buf.Bytes(), end)
+		out.Write(end)
+		if f.patch < 0 {
+			return
+		}
+		top := len(stack) == 0
+		var b strings.Builder
+		for _, a := range rangeAttrs(f.start, endLine, top) {
+			b.WriteString(" " + a.key + `="` + a.val + `"`)
+		}
+		patches[f.patch].text = b.String()
+		if top {
+			blocks = append(blocks, HTMLBlock{StartLine: f.start, EndLine: endLine})
+		}
 	}
 
 	// openImplicitStructure handles a start/self-closing tag seen while
@@ -276,10 +324,10 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 			}
 			annotate, inner := stamp(name)
 			if selfClosing || voidElements[name] {
-				emit(name, attrs, startLine, line, annotate, selfClosing, nil, nil)
+				emitVoid(name, attrs, startLine, line, annotate, selfClosing)
 				continue
 			}
-			stack = append(stack, &openElement{name: name, attrs: attrs, start: startLine, annotate: annotate, inner: inner})
+			open(name, attrs, startLine, annotate, inner)
 
 		case html.EndTagToken:
 			nameBytes, _ := z.TagName()
@@ -308,7 +356,7 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 	if len(blocks) == 0 {
 		return "", nil
 	}
-	return out.String(), blocks
+	return splicePatches(out.Bytes(), patches), blocks
 }
 
 // previewBaseHref builds the <base> href for a file at currentPath: the
@@ -323,18 +371,6 @@ func previewBaseHref(currentPath string) string {
 		return "/"
 	}
 	return "/" + encodePath(dir) + "/"
-}
-
-// appendDataRange returns attrs plus data-from/data-to carrying the
-// block's source line range. The input slice is not mutated.
-func appendDataRange(attrs []rawAttr, from, to int) []rawAttr {
-	out := make([]rawAttr, 0, len(attrs)+2)
-	out = append(out, attrs...)
-	out = append(out,
-		rawAttr{"data-from", strconv.Itoa(from)},
-		rawAttr{"data-to", strconv.Itoa(to)},
-	)
-	return out
 }
 
 // readAttrs drains the tokenizer's attribute cursor for the current

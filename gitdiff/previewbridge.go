@@ -20,11 +20,12 @@ package gitdiff
 // region-select still has something to hit. A block with nothing visible inside
 // is left out rather than posted as a 0×0 rect.
 //
-// Only CONTENT blocks are posted: an annotated element with no annotated
-// descendant, or with text of its own. Every element carries its own range
-// (RenderHTMLPreview), and the client unions every posted block a drawn box
-// touches, so leaving pure wrappers out makes that union exactly the lines the
-// box covers — a wrapper would otherwise widen it to the whole page. An invisible
+// Every visible block is posted; a pure WRAPPER (an annotated element whose
+// content is all in annotated descendants — no text of its own) carries
+// wrap:true. Every element has its own range (RenderHTMLPreview), and the
+// client (lineRangeFromBlocks, livetemplate/client#165) unions only the content
+// blocks a drawn box touches — exactly the lines it covers — and falls back to
+// the smallest wrapper when the box hits only empty space (padding, gaps). An invisible
 // block (visibility:hidden, or under an opacity:0 ancestor — e.g. a closed
 // full-screen backdrop) is left out too: its box would join every drag. Posts are
 // coalesced (one per 32ms): scroll fires per frame and each post measures every
@@ -43,7 +44,7 @@ const previewBridgeJS = `<script>(function(){
 function box(el){var r=el.getBoundingClientRect();if(r.width||r.height)return{left:r.left,top:r.top,right:r.right,bottom:r.bottom};var u=null,c=el.children;for(var i=0;i<c.length;i++){var b=box(c[i]);if(!b)continue;u=u?{left:Math.min(u.left,b.left),top:Math.min(u.top,b.top),right:Math.max(u.right,b.right),bottom:Math.max(u.bottom,b.bottom)}:b;}return u;}
 function faded(a,m){if(!a||a===document.documentElement)return false;if(m.has(a))return m.get(a);var v=getComputedStyle(a).opacity==='0'||faded(a.parentElement,m);m.set(a,v);return v;}
 function ownText(el){for(var n=el.firstChild;n;n=n.nextSibling)if(n.nodeType===3&&/\S/.test(n.data))return true;return false;}
-function rects(){var o=[],e=document.querySelectorAll('[data-from]'),wrap=new Set(),i,el,p;for(i=0;i<e.length;i++){p=e[i].parentElement;p=p&&p.closest('[data-from]');if(p)wrap.add(p);}var m=new Map();for(i=0;i<e.length;i++){el=e[i];if(wrap.has(el)&&!ownText(el))continue;if(getComputedStyle(el).visibility==='hidden'||faded(el,m))continue;var r=box(el),f=parseInt(el.getAttribute('data-from'),10),t=parseInt(el.getAttribute('data-to'),10);if(!(f>0)||!r)continue;o.push({from:f,to:(t>=f?t:f),left:r.left,top:r.top,right:r.right,bottom:r.bottom});}return o;}
+function rects(){var o=[],e=document.querySelectorAll('[data-from]'),wrap=new Set(),i,el,p;for(i=0;i<e.length;i++){p=e[i].parentElement;p=p&&p.closest('[data-from]');if(p)wrap.add(p);}var m=new Map();for(i=0;i<e.length;i++){el=e[i];if(getComputedStyle(el).visibility==='hidden'||faded(el,m))continue;var r=box(el),f=parseInt(el.getAttribute('data-from'),10),t=parseInt(el.getAttribute('data-to'),10);if(!(f>0)||!r)continue;var b={from:f,to:(t>=f?t:f),left:r.left,top:r.top,right:r.right,bottom:r.bottom};if(wrap.has(el)&&!ownText(el))b.wrap=true;o.push(b);}return o;}
 function send(){queued=false;try{parent.postMessage({__lvtPreview:true,type:'size',height:document.documentElement.scrollHeight},'*');parent.postMessage({__lvtPreview:true,type:'blocks',blocks:rects()},'*');}catch(e){}}
 var queued=false;function post(){if(queued)return;queued=true;setTimeout(send,32);}
 if(document.readyState!=='loading')post();else document.addEventListener('DOMContentLoaded',post);

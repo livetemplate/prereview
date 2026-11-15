@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRenderHTMLPreview_HappyPath(t *testing.T) {
@@ -331,5 +332,24 @@ func TestRenderHTMLPreview_NestedRanges(t *testing.T) {
 	}
 	if !strings.Contains(doc, "<script>var x = '<p>';</script>") {
 		t.Errorf("script text must pass through verbatim:\n%s", doc)
+	}
+}
+
+// Deeply nested markup (within the 1MB preview cap) must render in linear time:
+// ranges are spliced into one output buffer, not built by copying each
+// element's content into its parent (which was quadratic in the depth).
+func TestRenderHTMLPreview_DeepNestingIsLinear(t *testing.T) {
+	const depth = 100000 // ~1.1MB of <div>…</div>
+	src := "<body>" + strings.Repeat("<div>\n", depth) + "x" + strings.Repeat("</div>", depth) + "</body>"
+	start := time.Now()
+	doc, blocks := RenderHTMLPreview([]byte(src), "x.html")
+	if took := time.Since(start); took > 5*time.Second {
+		t.Fatalf("rendering %d nested divs took %s (quadratic?)", depth, took)
+	}
+	if len(blocks) != 1 || blocks[0].StartLine != 1 || blocks[0].EndLine != depth+1 {
+		t.Errorf("blocks = %+v", blocks)
+	}
+	if !strings.Contains(doc, `<div data-from="1" data-to="100001">`) || !strings.Contains(doc, "<div data-from=\"100000\" data-to=\"100001\">\nx</div>") {
+		t.Errorf("outer/innermost ranges missing")
 	}
 }

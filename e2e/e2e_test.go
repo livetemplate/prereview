@@ -4481,6 +4481,16 @@ func setupFixtureHTMLRegionRepoContents(t *testing.T) string {
 			"<div style=\"position:fixed;inset:0;opacity:0;pointer-events:none\"></div>\n")
 }
 
+// setupFixtureHTMLRegionRepoGap puts the content below 160px of empty padding
+// inside a wrapper: a box drawn over the padding hits no content block, so it
+// resolves to the smallest wrapper around it (lines 4..6).
+func setupFixtureHTMLRegionRepoGap(t *testing.T) string {
+	return setupFixtureHTMLRegionRepoBody(t,
+		"<main style=\"display:block;padding-top:160px\">\n"+
+			"<section style=\"background:#eef\">Below the gap</section>\n"+
+			"</main>\n")
+}
+
 func setupFixtureHTMLRegionRepoBody(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -4513,6 +4523,13 @@ func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
 // and the bridge posts only content blocks.
 func TestE2E_HTMLPreviewRegionSelectContentsWrapper(t *testing.T) {
 	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepoContents(t), 5, 5)
+}
+
+// A box over empty space (a wrapper's padding) hits no content block; it must
+// still open the composer, on the smallest wrapper around it, instead of
+// silently doing nothing.
+func TestE2E_HTMLPreviewRegionSelectEmptySpace(t *testing.T) {
+	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepoGap(t), 4, 6)
 }
 
 // checkHTMLRegionSelect arms region select on region.html, drags a box over the
