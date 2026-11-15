@@ -14,6 +14,12 @@ package gitdiff
 // payload carries __lvtPreview:true, so posting with targetOrigin '*' is safe
 // (an opaque srcdoc has no resolvable origin to target anyway).
 //
+// box() measures a block that has no box of its own — display:contents, which
+// livetemplate's data-lvt-id root and many app shells use for the one element
+// wrapping the page — as the union of its children's boxes (recursively), so
+// region-select still has something to hit. A block with nothing visible inside
+// is left out rather than posted as a 0×0 rect.
+//
 // Mirrors internal/proxy/proxy.go's proxyBeaconJS (the --external live-site
 // bridge): same {__lvt…:true,type,…} envelope and the re-announce-on-delays
 // trick — the parent directive attaches only after the deferred client connects
@@ -23,7 +29,8 @@ package gitdiff
 // html/template's attribute autoescaper when placed in srcdoc="…" (same path as
 // the <base>/<style> in headInject); the browser reconstitutes and runs it.
 const previewBridgeJS = `<script>(function(){
-function rects(){var o=[],e=document.querySelectorAll('[data-from]');for(var i=0;i<e.length;i++){var el=e[i],r=el.getBoundingClientRect(),f=parseInt(el.getAttribute('data-from'),10),t=parseInt(el.getAttribute('data-to'),10);if(!(f>0))continue;o.push({from:f,to:(t>=f?t:f),left:r.left,top:r.top,right:r.right,bottom:r.bottom});}return o;}
+function box(el){var r=el.getBoundingClientRect();if(r.width||r.height)return{left:r.left,top:r.top,right:r.right,bottom:r.bottom};var u=null,c=el.children;for(var i=0;i<c.length;i++){var b=box(c[i]);if(!b)continue;u=u?{left:Math.min(u.left,b.left),top:Math.min(u.top,b.top),right:Math.max(u.right,b.right),bottom:Math.max(u.bottom,b.bottom)}:b;}return u;}
+function rects(){var o=[],e=document.querySelectorAll('[data-from]');for(var i=0;i<e.length;i++){var el=e[i],r=box(el),f=parseInt(el.getAttribute('data-from'),10),t=parseInt(el.getAttribute('data-to'),10);if(!(f>0)||!r)continue;o.push({from:f,to:(t>=f?t:f),left:r.left,top:r.top,right:r.right,bottom:r.bottom});}return o;}
 function post(){try{parent.postMessage({__lvtPreview:true,type:'size',height:document.documentElement.scrollHeight},'*');parent.postMessage({__lvtPreview:true,type:'blocks',blocks:rects()},'*');}catch(e){}}
 if(document.readyState!=='loading')post();else document.addEventListener('DOMContentLoaded',post);
 addEventListener('load',post);addEventListener('scroll',post,true);
