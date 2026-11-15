@@ -498,6 +498,15 @@ func renderFixtures() []renderFixture {
 		},
 	}
 
+	// checks M3: the expanded rule's file history (library versions) with a diff
+	// and Restore on the older version.
+	checksHistory := checksPage
+	checksHistory.CheckHistory = []review.RuleVersion{
+		{Seq: 3, When: "15 Nov 2026 10:02", Current: true, Stat: "+1 −1",
+			Diff: []review.RuleDiffRow{{Kind: "del", Text: "tokens: [very]"}, {Kind: "add", Text: "tokens: [very, really]"}}},
+		{Seq: 0, When: "14 Nov 2026 09:00"},
+	}
+
 	// checks M2: judges — the page filtered to judges with one expanded (a fail
 	// whose quote was found, a stale verdict, a not-run file, your Agree), the file
 	// bar with that judge picked (its critique card), and the idle bar offering
@@ -610,6 +619,7 @@ func renderFixtures() []renderFixture {
 		{"checks-strip", checksStrip},
 		{"checks-page", checksPage},
 		{"checks-page-judge", judgePage},
+		{"checks-page-history", checksHistory},
 		{"checks-judge-card", judgeCard},
 		{"checks-judge-run", judgeRun},
 		{"learnings", learnings},

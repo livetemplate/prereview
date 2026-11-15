@@ -209,6 +209,9 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	// falls through to the LiveHandler unchanged.
 	mux.Handle("/", staticFallback(absRepo, tmpl.Handle(controller, livetemplate.AsState(initial))))
 	registerAssetRoutes(mux)
+	if controller.LibraryDir != "" {
+		mux.HandleFunc("/_library-review", libraryReviewHandler(controller.LibraryDir))
+	}
 
 	// Decide what to actually bind to. On a remote (SSH) box with no
 	// explicit --host, prefer this host's Tailscale IP: reachable from

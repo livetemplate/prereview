@@ -651,7 +651,8 @@
         <button type="submit" name="setEditor" class="outline">Save</button>
       </form>
     </details>
-    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form>
+    <span class="lib-head-actions"><a role="button" class="outline lib-review" href="/_library-review" target="_blank" rel="noopener" title="Open the library folder as a review: comments and suggestions on library files go to your agent">Review in prereview</a>
+    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form></span>
   </header>
   <div class="lib-tabs" role="tablist">
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Learnings</button></form>
@@ -758,6 +759,7 @@
                 </span>
                 
               </div>
+              
             </div>
             
           </li>

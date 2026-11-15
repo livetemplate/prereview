@@ -158,6 +158,15 @@
                 </span>
                 {{if and .RulePath (not .EditorURL)}}<input class="check-path" type="text" readonly value="{{.RulePath}}" aria-label="Rule file path">{{end}}
               </div>
+              {{if .History}}{{$rule := .ID}}<details class="ckp-history"{{if gt (len .History) 1}} open{{end}}><summary>History ({{len .History}} version{{if ne (len .History) 1}}s{{end}})</summary>
+                <ol>
+                  {{range .History}}<li data-key="ckp-v{{.Seq}}">
+                    <span class="ckp-hv-head"><b>{{if .Current}}Current{{else}}Version {{.Seq}}{{end}}</b> · {{.When}}{{with .Stat}} · {{.}}{{end}}{{if not .Current}} <form method="POST" class="ckp-inline"><input type="hidden" name="id" value="{{$rule}}"><input type="hidden" name="seq" value="{{.Seq}}"><button type="submit" name="restoreRuleVersion" class="outline">Restore</button></form>{{end}}</span>
+                    {{if .Diff}}<div class="lc-diff">{{range .Diff}}<pre class="{{if eq .Kind "add"}}sg-new{{else}}sg-old{{end}}">{{if eq .Kind "add"}}+{{else}}−{{end}} {{.Text}}</pre>{{end}}{{if .More}}<pre class="sg-more">… {{.More}} more changed line{{if ne .More 1}}s{{end}}</pre>{{end}}</div>{{end}}
+                  </li>
+                  {{end}}
+                </ol>
+              </details>{{end}}
             </div>
             {{end}}
           </li>
@@ -618,7 +627,8 @@
         <button type="submit" name="setEditor" class="outline">Save</button>
       </form>
     </details>
-    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form>
+    <span class="lib-head-actions"><a role="button" class="outline lib-review" href="/_library-review" target="_blank" rel="noopener" title="Open the library folder as a review: comments and suggestions on library files go to your agent">Review in prereview</a>
+    <form method="POST" class="lib-back"><button type="submit" name="toggleLibrary" class="outline contrast">Back</button></form></span>
   </header>
   <div class="lib-tabs" role="tablist">
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnLearnings}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnLearnings}}true{{else}}false{{end}}">Learnings{{if $.LearnNew}}<span class="ck-pill ck-new">{{$.LearnNew}} new</span>{{end}}</button></form>

@@ -178,6 +178,9 @@ type PrereviewController struct {
 	// learn from it (maybeAutoLearn); the first tab that can queue the request
 	// claims it (AutoLearn), so it's queued once however many tabs are open.
 	autoLearn atomic.Pointer[string]
+	// The library's version store (rule-file history), opened on first use.
+	libVersionsOnce sync.Once
+	libVersions     *VersionStore
 }
 
 type cachedDiff struct {

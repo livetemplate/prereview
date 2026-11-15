@@ -3623,6 +3623,9 @@ button.ck-link {
 .lib-editor > summary { cursor: pointer; }
 .lib-editor[open] > summary { margin-bottom: 0.4rem; }
 .lib-back button { margin: 0; padding: 0.25rem 0.7rem; min-height: 0; width: auto; font-size: 0.8rem; }
+.lib-head-actions { display: inline-flex; gap: 0.4rem; align-items: center; margin-left: auto; }
+.lib-head-actions form { margin: 0; }
+.lib-head-actions a[role="button"] { margin: 0; padding: 0.25rem 0.7rem; font-size: 0.8rem; min-height: 0; display: inline-flex; align-items: center; }
 .lib-tabs { display: flex; gap: 0.15rem; overflow-x: auto; padding-top: 0.4rem; border-bottom: 1px solid var(--border); }
 button.lib-tab {
   margin: 0 0 -1px; padding: 0.4rem 0.75rem; min-height: 0; width: auto; border: 0; border-bottom: 2px solid transparent;
@@ -3679,6 +3682,20 @@ button.lib-tab .ck-pill { margin-left: 0.3rem; }
 .lc-edit label { display: flex; gap: 0.4rem; align-items: center; margin: 0; font-size: 0.78rem; color: var(--text-muted); }
 .lc-edit input { margin: 0; padding: 0.15rem 0.45rem; height: auto; font-size: 0.82rem; }
 .lib-boot-form { margin: 0; }
+
+/* A rule file's history on the Checks tab (M3 library versions). */
+.ckp-history { margin: 0.5rem 0 0; font-size: 0.78rem; }
+.ckp-history > summary { color: var(--text-muted); cursor: pointer; }
+.ckp-history ol { list-style: none; margin: 0.35rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.ckp-history li { list-style: none; margin: 0; }
+.ckp-history li::marker { content: none; }
+.ckp-hv-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; color: var(--text-muted); }
+.ckp-hv-head b { color: var(--text); }
+.ckp-hv-head button { margin: 0; padding: 0.1rem 0.5rem; min-height: 24px; width: auto; font-size: 0.74rem; }
+.lc-diff { display: flex; flex-direction: column; gap: 1px; margin: 0.25rem 0 0; border-radius: var(--radius-sm); overflow: hidden; }
+.lc-diff pre { margin: 0; padding: 0.15rem 0.45rem; font-family: var(--jbm); font-size: 0.74rem; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-muted); }
+.lc-diff .sg-old { background: var(--pr-del-bg); color: var(--pr-del); }
+.lc-diff .sg-new { background: var(--pr-add-bg); color: var(--pr-add); }
 .lib-auto-form { margin: 0 0 0 auto !important; }
 .lib-auto-form + .lib-scope-form { margin-left: 0 !important; }
 button.lib-auto {

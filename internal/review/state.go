@@ -71,6 +71,8 @@ type PrereviewState struct {
 	ChecksCategory    string `json:"checks_category"` // "" (all) or a category label
 	ChecksFile        string `json:"checks_file"`     // "" (every file) or one path
 	ExpandedCheck     string `json:"expanded_check"`
+	// CheckHistory is the expanded rule file's versions (M3), newest first.
+	CheckHistory []RuleVersion `json:"check_history"`
 	ShowPassingGroups bool   `json:"show_passing_groups"`
 	// Judges (M2): ChecksKind filters the page to checkers or judges ("" both);
 	// JudgeLabels are the reviewer's Agree/Disagree answers (judge-labels.jsonl,

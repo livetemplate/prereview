@@ -165,7 +165,8 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		return
 	}
 	c.runner()
-	c.learningsChanged() // the baseline: only later writes fan out
+	c.checkpointLibrary(VersionTriggerFileEdit) // edits made while no server ran
+	c.learningsChanged()                        // the baseline: only later writes fan out
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
@@ -174,6 +175,7 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 			return
 		case <-ticker.C:
 			if c.reloadChecksIfChanged() {
+				c.checkpointLibrary(VersionTriggerFileEdit)
 				c.broadcast("ChecksUpdated")
 			}
 			if c.learningsChanged() { // any server's write to the shared library
@@ -397,6 +399,7 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 // The open file is skipped: the page takes its displayed text (pageFiles), so the
 // page and the inline marks agree, and its two runs can't cancel each other.
 func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
+	defer c.applyRuleHistory(state) // the expanded rule's versions, on every path out
 	state.ReviewChecks = nil
 	if !state.ShowLibrary || !state.LibraryOnChecks() || c.ExternalMode || c.RepoPath == "" {
 		return
@@ -679,6 +682,7 @@ func (c *PrereviewController) ExpandCheck(state PrereviewState, ctx *livetemplat
 		id = ""
 	}
 	state.ExpandedCheck = id
+	c.applyRuleHistory(&state)
 	return state, nil
 }
 

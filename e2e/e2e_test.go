@@ -154,9 +154,10 @@ func scanHomeFor(repo string) string {
 	return filepath.Join(filepath.Dir(repo), "prereview-scan-home")
 }
 
-// checksDirFor is the isolated checks rule folder a test server for repo reads.
+// checksDirFor is the isolated checks rule folder a test server for repo reads:
+// inside the test's library folder, as ~/.config/prereview/checks is.
 func checksDirFor(repo string) string {
-	return filepath.Join(filepath.Dir(repo), "prereview-checks")
+	return filepath.Join(libraryDirFor(repo), "checks")
 }
 
 // libraryDirFor is the isolated per-user library (learnings, sessions) a test

@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -309,5 +310,97 @@ func TestE2E_FirstLaunch(t *testing.T) {
 	// bootstrap.json exists; the state unit test pins that).
 	if _, err := os.Stat(filepath.Join(libraryDirFor(repo), "bootstrap.json")); err != nil {
 		t.Errorf("the answer wasn't recorded: %v", err)
+	}
+}
+
+// TestE2E_LibraryVersions: an edit to a rule file on disk becomes a version in
+// that check's history on the Library's Checks tab, with its diff; Restore brings
+// the old content back (as a new version); Review in prereview opens a review of
+// the library folder whose Versions panel shows the same timeline.
+func TestE2E_LibraryVersions(t *testing.T) {
+	repo := setupFixtureRepoChecks(t, "notes.md")
+	// A failing rule (the fixture's "Plain line N" lines), so its row is listed:
+	// the page folds categories where every check passes.
+	const v1 = "extends: existence\nname: House\ncategory: Style\ntokens: [Plain]\n"
+	writeRule(t, repo, "house.yml", v1)
+	rule := filepath.Join(checksDirFor(repo), "house.yml")
+	t.Cleanup(func() { killLibraryReview(t, repo) })
+
+	p := bootChromeAgainstRepo(t, repo, 1200, 800)
+	diag := captureDiag(t, p)
+	p.waitReady()
+	ctx, cancel := within(p, 60*time.Second)
+	defer cancel()
+	history := pageRow("house") + ` .ckp-history`
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.Click(checksTab, chromedp.ByQuery),
+		chromedp.Click(pageRow("house")+` .ckp-row-head`, chromedp.ByQuery),
+		chromedp.WaitVisible(history+` li[data-key="ckp-v0"]`, chromedp.ByQuery),
+	); err != nil {
+		var row string
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(document.querySelector('.library')||{outerHTML:'no library'}).outerHTML.slice(0, 6000)`, &row))
+		t.Fatalf("the rule's first version: %v\n%s%s", err, row, diag())
+	}
+
+	if err := os.WriteFile(rule, []byte(strings.Replace(v1, "[Plain]", "[Plain, good]", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := chromedp.Run(ctx, chromedp.WaitVisible(history+` li:nth-child(2)[data-key="ckp-v0"]`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("the edit didn't become a version: %v%s", err, diag())
+	}
+	if got := textOf(t, p, history+` li:first-child .lc-diff`); !strings.Contains(got, "+ tokens: [Plain, good]") || !strings.Contains(got, "− tokens: [Plain]") {
+		t.Errorf("the new version's diff = %q%s", got, diag())
+	}
+
+	if err := chromedp.Run(ctx,
+		chromedp.Click(history+` li[data-key="ckp-v0"] button[name="restoreRuleVersion"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(history+` li:nth-child(3)[data-key="ckp-v0"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("Restore: %v%s", err, diag())
+	}
+	if b, _ := os.ReadFile(rule); string(b) != v1 {
+		t.Fatalf("after Restore the rule reads %q, want the first version back", b)
+	}
+
+	// Review in prereview: the same tab follows the link (a new tab is the real
+	// thing; the redirect and the review behind it are what's under test).
+	var href string
+	if err := chromedp.Run(ctx,
+		chromedp.AttributeValue(`a.lib-review`, "href", &href, nil, chromedp.ByQuery),
+		chromedp.Evaluate(`(() => { const a = document.querySelector('a.lib-review'); a.removeAttribute('target'); a.click(); })()`, nil),
+		chromedp.WaitVisible(`#files-drawer button.file-btn[title="checks/house.yml"]`, chromedp.ByQuery),
+	); err != nil {
+		var loc string
+		_ = chromedp.Run(p.ctx, chromedp.Location(&loc))
+		t.Fatalf("Review in prereview (%s → %s): %v%s", href, loc, err, diag())
+	}
+	var loc string
+	if err := chromedp.Run(ctx, chromedp.Location(&loc)); err != nil || strings.HasPrefix(loc, p.url) {
+		t.Fatalf("still on the review (%s, %v)", loc, err)
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Sleep(time.Second), // the new page's socket (clicks before it are lost)
+		chromedp.Click(`#files-drawer button.file-btn[title="checks/house.yml"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.versions-count`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("open the rule in the library review: %v%s", err, diag())
+	}
+	if got := textOf(t, p, `.versions-count`); got != "3" {
+		t.Errorf("the library review shows %s versions of the rule, want the same 3%s", got, diag())
+	}
+}
+
+// killLibraryReview stops the review server Review in prereview started.
+func killLibraryReview(t *testing.T, repo string) {
+	b, err := os.ReadFile(filepath.Join(libraryDirFor(repo), ".prereview", "library-review.json"))
+	if err != nil {
+		return
+	}
+	var rec struct{ PID int }
+	if json.Unmarshal(b, &rec) == nil && rec.PID > 0 {
+		if proc, err := os.FindProcess(rec.PID); err == nil {
+			_ = proc.Kill()
+		}
 	}
 }
