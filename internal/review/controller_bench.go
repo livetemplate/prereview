@@ -364,8 +364,15 @@ func (c *PrereviewController) runBenchCheckers(bm bench.Benchmark, run string, r
 			default:
 				var res checks.Result
 				if r.Async() {
+					// The snapshot's absolute path, never the label: a command's argv gets
+					// the path, and a name starting with "-" would read as a flag.
+					abs, err := bench.CasePath(c.LibraryDir, bm.ID, cs)
+					if err != nil {
+						rec.Status, rec.Critique = bench.Error, err.Error()
+						break
+					}
 					ctx, cancel := context.WithTimeout(context.Background(), benchCommandTimeout)
-					res = checks.RunCommand(ctx, r, cs.Label, []byte(strings.Join(texts[cs.ID], "\n")+"\n"))
+					res = checks.RunCommand(ctx, r, abs, []byte(strings.Join(texts[cs.ID], "\n")+"\n"))
 					cancel()
 				} else {
 					res = checks.RunInline(r, checks.NewDoc(cs.Label, texts[cs.ID]))
