@@ -134,6 +134,10 @@ type Comment struct {
 	// reviewer said: a csv.Request* value, "" for reviewer comments. Set once
 	// at creation (queueRequest); the CSV `request` column.
 	Request string `json:"request,omitempty"`
+	// Check is the ID of the check or judge whose finding this comment was
+	// queued from (queueFinding), "" otherwise: what links a queued finding to
+	// its card, whatever the body says. The CSV `check` column.
+	Check string `json:"check,omitempty"`
 }
 
 // IsFileLevel reports whether this comment applies to the whole file

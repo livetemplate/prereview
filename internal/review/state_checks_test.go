@@ -184,8 +184,8 @@ func TestQueueFinding_CreatesTextComment(t *testing.T) {
 		t.Error("a queued finding must pulse the queue like any new comment")
 	}
 	disk := c.loadCommentsFromDisk()
-	if len(disk) != 1 || disk[0].ID != cm.ID {
-		t.Errorf("not persisted: %+v", disk)
+	if len(disk) != 1 || disk[0].ID != cm.ID || disk[0].Check != "filler-intensifiers" {
+		t.Errorf("not persisted with the check's ID: %+v", disk)
 	}
 }
 
@@ -431,7 +431,25 @@ func TestFindingsByRow_SkipsQueued(t *testing.T) {
 	if n := len(s.FindingsByRow()); n != 0 {
 		t.Fatalf("a queued finding still has its own card (%d)", n)
 	}
-	s.Comments[len(s.Comments)-1].Resolved = true
+	// The link is the comment's Check (the check's ID), not its body or the
+	// check's name: editing either keeps the card folded into its comment.
+	q := &s.Comments[len(s.Comments)-1]
+	q.Body = "Reworded by the reviewer, label gone."
+	for i := range s.Checks.Results {
+		if s.Checks.Results[i].ID == "filler-intensifiers" {
+			s.Checks.Results[i].Name = "Renamed check"
+		}
+	}
+	if n := len(s.FindingsByRow()); n != 0 {
+		t.Fatalf("editing the comment or renaming the check brought its card back (%d)", n)
+	}
+	// A comment that only ends like a finding's label folds nothing.
+	q.Check, q.Body = "", "Too strong (check: Filler intensifiers)"
+	if n := len(s.FindingsByRow()); n != 1 {
+		t.Fatalf("an unmarked comment ending like a label folded the card (%d)", n)
+	}
+	q.Check = "filler-intensifiers"
+	q.Resolved = true
 	if n := len(s.FindingsByRow()); n != 1 {
 		t.Fatalf("resolving the comment should bring the finding back (%d)", n)
 	}

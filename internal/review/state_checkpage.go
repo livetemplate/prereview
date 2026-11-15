@@ -205,7 +205,7 @@ func (s PrereviewState) CheckPage() *CheckPage {
 					ff.Count++
 					if listed {
 						fv := findingView(pc.Path, r, i)
-						fv.Queued = queued[findingKey(pc.Path, f, r.Name)]
+						fv.Queued = queued[findingKey(pc.Path, f, r.ID)]
 						ff.Findings = append(ff.Findings, fv)
 					}
 				}
@@ -530,7 +530,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 		n := len(r.Findings)
 		st := &CheckStrip{Selected: true, ID: r.ID, Name: r.Name, Count: n, Pos: min(max(s.FindingCursor, 0), n-1) + 1}
 		for _, f := range r.Findings {
-			if slices.Contains(s.HiddenFindings, findingKey(s.SelectedFile, f, r.Name)) {
+			if slices.Contains(s.HiddenFindings, findingKey(s.SelectedFile, f, r.ID)) {
 				st.Hidden++
 			}
 		}

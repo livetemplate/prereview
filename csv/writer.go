@@ -57,6 +57,9 @@ type Row struct {
 	// Request is the `request` column: a Request* value when prereview queued
 	// this row as a request to the agent, "" for a reviewer comment.
 	Request string
+	// Check is the `check` column: the check/judge ID a queued finding came
+	// from, "" otherwise.
+	Check string
 }
 
 // IsRequest reports a row prereview queued as a request to the agent: never a
@@ -185,5 +188,6 @@ func rowToRecord(r Row) []string {
 		hidden,
 		enqueued,
 		r.Request,
+		r.Check,
 	}
 }

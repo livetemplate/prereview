@@ -794,7 +794,8 @@ func (c *PrereviewController) QueueFinding(state PrereviewState, ctx *livetempla
 }
 
 // queueFinding queues finding idx of check id in path ("" = the open file) as a
-// text comment on its span, labelled by kind ("(check: …)" / "(judge: …)").
+// text comment on its span, labelled for the agent by kind ("(check: …)" /
+// "(judge: …)") and linked to its card by Check (the check's ID).
 func (c *PrereviewController) queueFinding(state PrereviewState, path, id string, idx int) (PrereviewState, error) {
 	if path == "" {
 		path = state.SelectedFile
@@ -819,8 +820,10 @@ func (c *PrereviewController) queueFinding(state PrereviewState, path, id string
 	if res.Type == checks.TypeJudge {
 		kind = "judge"
 	}
-	return c.appendQueued(state, newTextComment(path, f.Line, f.EndLine, f.FromCol, f.ToCol, "new",
-		fmt.Sprintf("%s (%s: %s)", f.Message, kind, res.Name), anchor))
+	cm := newTextComment(path, f.Line, f.EndLine, f.FromCol, f.ToCol, "new",
+		fmt.Sprintf("%s (%s: %s)", f.Message, kind, res.Name), anchor)
+	cm.Check = res.ID
+	return c.appendQueued(state, cm)
 }
 
 // appendQueued adds a comment the server built (a finding, a request to the

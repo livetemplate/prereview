@@ -3,7 +3,6 @@ package review
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
@@ -155,7 +154,7 @@ func (s PrereviewState) FindingsByRow() map[string][]FindingView {
 	out := map[string][]FindingView{}
 	queued := s.queuedFindings()
 	for i := range r.Findings {
-		k := findingKey(s.SelectedFile, r.Findings[i], r.Name)
+		k := findingKey(s.SelectedFile, r.Findings[i], r.ID)
 		if queued[k] || slices.Contains(s.HiddenFindings, k) {
 			continue // queued: its comment card is right there; hidden: folded this session
 		}
@@ -167,28 +166,19 @@ func (s PrereviewState) FindingsByRow() map[string][]FindingView {
 }
 
 // queuedFindings is every finding already queued as a comment that is still
-// open: the comment Queue made carries the finding's file and exact span, and
-// its body ends "(check: <name>)" (or "(judge: <name>)").
+// open: the comment Queue made carries the finding's file, its exact span and
+// the check's ID (Comment.Check), whatever its body now says.
 func (s PrereviewState) queuedFindings() map[string]bool {
 	out := map[string]bool{}
 	for _, c := range s.Comments {
-		if c.Resolved || c.Kind != commentKindText || !strings.HasSuffix(c.Body, ")") {
-			continue
+		if c.Check != "" && !c.Resolved {
+			out[findingKey(c.File, checks.Finding{Line: c.FromLine, EndLine: c.ToLine, FromCol: c.FromCol, ToCol: c.ToCol}, c.Check)] = true
 		}
-		i := strings.LastIndex(c.Body, " (")
-		if i < 0 {
-			continue
-		}
-		kind, name, ok := strings.Cut(strings.TrimSuffix(c.Body[i+2:], ")"), ": ")
-		if !ok || (kind != "check" && kind != "judge") {
-			continue
-		}
-		out[findingKey(c.File, checks.Finding{Line: c.FromLine, EndLine: c.ToLine, FromCol: c.FromCol, ToCol: c.ToCol}, name)] = true
 	}
 	return out
 }
 
-// findingKey identifies a finding by file, span and check name.
+// findingKey identifies a finding by file, span and check ID.
 func findingKey(path string, f checks.Finding, check string) string {
 	return fmt.Sprintf("%s\x00%d:%d:%d:%d\x00%s", path, f.Line, f.EndLine, f.FromCol, f.ToCol, check)
 }

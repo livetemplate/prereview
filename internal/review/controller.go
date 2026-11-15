@@ -647,6 +647,7 @@ func commentRow(cm Comment) csv.Row {
 		Hidden:       cm.Hidden,
 		Draft:        cm.Draft,
 		Request:      cm.Request,
+		Check:        cm.Check,
 	}
 }
 
@@ -723,13 +724,13 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 		slog.Warn("loadCommentsFromDisk", "err", err)
 		return nil
 	}
-	return commentsFromRows(rows)
+	return CommentsFromRows(rows)
 }
 
-// commentsFromRows is the shared CSV-row → Comment projection used by both the
-// live server (loadCommentsFromDisk) and the `prereview comments` subcommand
-// (LoadComments), so the two never drift on how a row maps to a comment.
-func commentsFromRows(rows []csv.Row) []Comment {
+// CommentsFromRows is the shared CSV-row → Comment projection used by the live
+// server (loadCommentsFromDisk, the startup preload) and the `prereview comments`
+// subcommand (LoadComments), so they never drift on how a row maps to a comment.
+func CommentsFromRows(rows []csv.Row) []Comment {
 	out := make([]Comment, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, Comment{
@@ -738,7 +739,7 @@ func commentsFromRows(rows []csv.Row) []Comment {
 			Anchor: parseAnchor(r.Anchor), AnchorStatus: r.AnchorStatus,
 			Kind: r.Kind, Area: parseArea(r.Area), URL: r.URL,
 			FromCol: r.FromCol, ToCol: r.ToCol, Hidden: r.Hidden, Draft: r.Draft,
-			Request: r.Request,
+			Request: r.Request, Check: r.Check,
 		})
 	}
 	return out
@@ -765,7 +766,7 @@ func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
 	if err != nil {
 		return nil, err
 	}
-	comments := commentsFromRows(rows)
+	comments := CommentsFromRows(rows)
 	if scope := SessionScope(csvPath); scope != "" {
 		comments = slices.DeleteFunc(comments, func(cm Comment) bool { return cm.File != scope })
 	}
@@ -816,7 +817,7 @@ func LoadOpenComments(csvPath string) (OpenSet, error) {
 	if err != nil {
 		return OpenSet{}, err
 	}
-	comments := commentsFromRows(rows)
+	comments := CommentsFromRows(rows)
 	if scope := SessionScope(csvPath); scope != "" {
 		comments = slices.DeleteFunc(comments, func(cm Comment) bool { return cm.File != scope })
 	}
