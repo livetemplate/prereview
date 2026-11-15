@@ -49,7 +49,9 @@ func (h *settleHarness) settled(gen int64) {
 }
 
 func TestFilesChangedWhileAgentWatches(t *testing.T) {
-	h := newSettleHarness(t, 100*time.Millisecond)
+	// The quiet window is 10× the gap between the burst's edits: at 100ms a
+	// stalled CI runner split the burst into two settles (gen=2).
+	h := newSettleHarness(t, burstSettle)
 	h.watching()
 	for _, body := range []string{"v1 a", "v1 b", "v1 c"} { // a burst is one event
 		h.edit(body)
@@ -78,7 +80,7 @@ func TestFilesChangedWithoutWatchIsUnattributed(t *testing.T) {
 
 // One edit while the watch was NOT attached taints the whole run.
 func TestFilesChangedAttributionNeedsEveryEdit(t *testing.T) {
-	h := newSettleHarness(t, 150*time.Millisecond)
+	h := newSettleHarness(t, burstSettle)
 	h.edit("v1 by the agent")
 	time.Sleep(40 * time.Millisecond)
 	h.watching()
