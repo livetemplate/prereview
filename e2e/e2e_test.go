@@ -4475,7 +4475,20 @@ func setupFixtureHTMLRegionRepoContents(t *testing.T) string {
 		"<div style=\"display:contents\">\n"+
 			"<section style=\"background:#eef\">Top block</section>\n"+
 			"<section style=\"background:#fee\">Bottom block</section>\n"+
-			"</div>\n")
+			"</div>\n"+
+			// Line 8: an invisible full-screen layer (a closed modal backdrop). Its
+			// box covers every drag, so it must not count as content.
+			"<div style=\"position:fixed;inset:0;opacity:0;pointer-events:none\"></div>\n")
+}
+
+// setupFixtureHTMLRegionRepoGap puts the content below 160px of empty padding
+// inside a wrapper: a box drawn over the padding hits no content block, so it
+// resolves to the smallest wrapper around it (lines 4..6).
+func setupFixtureHTMLRegionRepoGap(t *testing.T) string {
+	return setupFixtureHTMLRegionRepoBody(t,
+		"<main style=\"display:block;padding-top:160px\">\n"+
+			"<section style=\"background:#eef\">Below the gap</section>\n"+
+			"</main>\n")
 }
 
 func setupFixtureHTMLRegionRepoBody(t *testing.T, body string) string {
@@ -4500,20 +4513,29 @@ func setupFixtureHTMLRegionRepoBody(t *testing.T, body string) string {
 
 func TestE2E_HTMLPreviewRegionSelect(t *testing.T) {
 	// Line 4 = the top section (source line of its block).
-	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepo(t), 4)
+	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepo(t), 4, 4)
 }
 
 // A page whose top-level block is a display:contents wrapper (no box of its
-// own) must still take a drawn region: the bridge measures it by its children.
-// Before the fix every drag was a silent no-op (the only block measured 0×0).
+// own) must still take a drawn region (#235: the bridge measures it by its
+// children), and the region must be precise: just the top section (line 5),
+// not the wrapper's whole range (4..7) — every element carries its own range
+// and the bridge posts only content blocks.
 func TestE2E_HTMLPreviewRegionSelectContentsWrapper(t *testing.T) {
-	// The wrapper is the block (lines 4..7); the top section is line 5.
-	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepoContents(t), 5)
+	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepoContents(t), 5, 5)
+}
+
+// A box over empty space (a wrapper's padding) hits no content block; it must
+// still open the composer, on the smallest wrapper around it, instead of
+// silently doing nothing.
+func TestE2E_HTMLPreviewRegionSelectEmptySpace(t *testing.T) {
+	checkHTMLRegionSelect(t, setupFixtureHTMLRegionRepoGap(t), 4, 6)
 }
 
 // checkHTMLRegionSelect arms region select on region.html, drags a box over the
-// top ~100px of the preview, and asserts a line comment covering topBlockLine.
-func checkHTMLRegionSelect(t *testing.T, repo string, topBlockLine int) {
+// top ~100px of the preview (inside the top section), and asserts a line
+// comment on exactly [wantFrom, wantTo].
+func checkHTMLRegionSelect(t *testing.T, repo string, wantFrom, wantTo int) {
 	t.Helper()
 	p := bootChromeAgainstRepo(t, repo, 1200, 800)
 	p.waitReady()
@@ -4630,9 +4652,9 @@ func checkHTMLRegionSelect(t *testing.T, repo string, topBlockLine int) {
 	if from <= 0 || to < from {
 		t.Errorf("bad persisted line range from=%q to=%q", row[2], row[3])
 	}
-	// The resolved range must cover the top block (source line 4) we dragged over.
-	if from > topBlockLine || to < topBlockLine {
-		t.Errorf("persisted range [%d,%d] does not cover the top block (line %d)", from, to, topBlockLine)
+	// The resolved range is exactly the block we dragged over.
+	if from != wantFrom || to != wantTo {
+		t.Errorf("persisted range [%d,%d], want [%d,%d] (the top section only)", from, to, wantFrom, wantTo)
 	}
 
 	mu.Lock()

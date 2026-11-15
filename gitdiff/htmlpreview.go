@@ -34,6 +34,58 @@ var voidElements = map[string]bool{
 	"param": true, "source": true, "track": true, "wbr": true,
 }
 
+// openElement is one element open inside <body> while RenderHTMLPreview
+// waits for its end line.
+type openElement struct {
+	start    int
+	annotate bool // gets data-from/data-to
+	inner    bool // its descendants may be annotated
+	patch    int  // index into the patches its range fills, or -1
+}
+
+// rangePatch is a start tag's range attributes, spliced into the output at
+// byte offset at (just before the tag's '>') once the element has closed.
+type rangePatch struct {
+	at   int
+	text string
+}
+
+// rangeAttrs are an element's data-from/data-to. A top-level block always gets
+// both; a one-line nested element (most of them) gets data-from alone — the
+// bridge defaults data-to to data-from — to keep the srcdoc lean.
+func rangeAttrs(from, to int, top bool) []rawAttr {
+	if !top && from == to {
+		return []rawAttr{{"data-from", strconv.Itoa(from)}}
+	}
+	return []rawAttr{{"data-from", strconv.Itoa(from)}, {"data-to", strconv.Itoa(to)}}
+}
+
+// splicePatches inserts every patch's text at its offset in one pass. Patches
+// are recorded in document order (start tags), so their offsets ascend.
+func splicePatches(out []byte, patches []rangePatch) string {
+	n := len(out)
+	for _, p := range patches {
+		n += len(p.text)
+	}
+	var b strings.Builder
+	b.Grow(n)
+	prev := 0
+	for _, p := range patches {
+		b.Write(out[prev:p.at])
+		b.WriteString(p.text)
+		prev = p.at
+	}
+	b.Write(out[prev:])
+	return b.String()
+}
+
+// nonBlockElements render nothing themselves, so they get no line range.
+var nonBlockElements = map[string]bool{"script": true, "style": true, "template": true, "noscript": true}
+
+// opaqueElements' descendants aren't layout blocks (or aren't markup at all):
+// nothing inside them is annotated. An <svg> itself is a block; its shapes are not.
+var opaqueElements = map[string]bool{"script": true, "style": true, "template": true, "noscript": true, "svg": true, "math": true}
+
 // headMetaElements is the HTML5 metadata-content set: elements that belong
 // in <head>. In a document written without explicit <head>/<body> tags
 // (both are optional in HTML5), these still count as head content and pass
@@ -66,9 +118,11 @@ type rawAttr struct {
 //     encoded) so relative href/src resolve to server-absolute paths the
 //     static fallback serves — srcdoc otherwise inherits the parent's base
 //     and would fetch a subdirectory file's assets from the repo root.
-//   - Each top-level <body> child element gets data-from/data-to
-//     attributes carrying its source line range; the client maps a click
-//     inside the iframe to the matching range via closest('[data-from]').
+//   - Every element inside <body> gets data-from/data-to attributes carrying
+//     its own source line range (not inside script/style/template/noscript or
+//     svg/math internals), so a drawn region resolves to just the elements it
+//     covers. The returned blocks are the top-level <body> children only (they
+//     group the comment list under the preview).
 //   - The preview bridge beacon (previewBridgeJS) is injected so the iframe can
 //     post its height + block rects out (the iframe is opaque-origin, so the
 //     parent can't read its contentDocument).
@@ -108,7 +162,7 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 	// runs the page's own scripts, so it posts its height + block rects out to
 	// the parent rather than the parent reading its contentDocument.
 	headInject := `<base href="` + htmlpkg.EscapeString(previewBaseHref(currentPath)) + `">` +
-		`<style>[data-from]{cursor:pointer}</style>` + previewBridgeJS
+		`<style>body>[data-from]{cursor:pointer}</style>` + previewBridgeJS
 
 	z := html.NewTokenizer(bytes.NewReader(src))
 	line := 1
@@ -119,36 +173,79 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 		inHead   bool
 		inBody   bool
 		baseDone bool
-		// depthInBody counts the open-tag stack INSIDE <body>. 0 means
-		// we're between top-level children; >=1 means we're inside the
-		// current top-level child (which is buffered in childBuf until it
-		// closes, so its start tag can be emitted with the now-known end
-		// line as data-to).
-		depthInBody    int
-		childBuf       bytes.Buffer
-		childName      string
-		childAttrs     []rawAttr
-		childStartLine int
+		// stack holds the elements open INSIDE <body>; the bottom frame is a
+		// top-level <body> child (those are also the returned blocks). Every
+		// element's range attributes are only known when it closes, so instead
+		// of buffering content per element (which copies the same bytes once per
+		// nesting level — quadratic on deep markup) everything streams into out
+		// once, each annotated start tag records where its '>' landed, and the
+		// ranges are spliced in at the end. Linear in the input at any depth.
+		stack   []openElement
+		patches []rangePatch
 	)
 
-	// sink is where passthrough bytes go: into the current top-level child
-	// buffer while we're inside one, else straight to the output.
-	sink := func() *bytes.Buffer {
-		if depthInBody >= 1 {
-			return &childBuf
+	// sink is where passthrough bytes go: always the single output buffer.
+	sink := func() *bytes.Buffer { return &out }
+
+	// stamp decides, for an element opening at the current depth, whether it
+	// gets data-from/data-to and whether its descendants may. A top-level child
+	// is a block unless it's a <script> (no visual content; it still runs); a
+	// nested element is annotated unless it's non-rendering or inside an element
+	// whose children aren't layout blocks (svg internals, script/style text…).
+	stamp := func(name string) (annotate, inner bool) {
+		parentInner := len(stack) == 0 || stack[len(stack)-1].inner
+		if len(stack) == 0 {
+			annotate = name != "script"
+		} else {
+			annotate = parentInner && !nonBlockElements[name]
 		}
-		return &out
+		return annotate, parentInner && !opaqueElements[name]
 	}
 
-	// emitChild flushes the buffered top-level child: its start tag (with
-	// the data-from/data-to range appended) followed by its inner content
-	// and close tag (already in childBuf).
-	emitChild := func(endLine int, selfClosing bool) {
-		attrs := appendDataRange(childAttrs, childStartLine, endLine)
-		out.Write(serializeTag(childName, attrs, selfClosing))
-		out.Write(childBuf.Bytes())
-		blocks = append(blocks, HTMLBlock{StartLine: childStartLine, EndLine: endLine})
-		childBuf.Reset()
+	// emitVoid writes an element with no content (void or self-closing): its
+	// range is known now, so its attributes are written directly.
+	emitVoid := func(name string, attrs []rawAttr, from, to int, annotate, selfClosing bool) {
+		top := len(stack) == 0
+		if annotate {
+			attrs = append(append(make([]rawAttr, 0, len(attrs)+2), attrs...), rangeAttrs(from, to, top)...)
+		}
+		out.Write(serializeTag(name, attrs, selfClosing))
+		if annotate && top {
+			blocks = append(blocks, HTMLBlock{StartLine: from, EndLine: to})
+		}
+	}
+
+	// open writes an element's start tag now and, when annotated, records where
+	// its closing '>' is so closeTop can splice the range in before it.
+	open := func(name string, attrs []rawAttr, from int, annotate, inner bool) {
+		tag := serializeTag(name, attrs, false)
+		out.Write(tag[:len(tag)-1])
+		f := openElement{start: from, annotate: annotate, inner: inner, patch: -1}
+		if annotate {
+			patches = append(patches, rangePatch{at: out.Len()})
+			f.patch = len(patches) - 1
+		}
+		out.WriteByte('>')
+		stack = append(stack, f)
+	}
+
+	// closeTop pops the innermost open element, ending at endLine.
+	closeTop := func(endLine int, end []byte) {
+		f := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		out.Write(end)
+		if f.patch < 0 {
+			return
+		}
+		top := len(stack) == 0
+		var b strings.Builder
+		for _, a := range rangeAttrs(f.start, endLine, top) {
+			b.WriteString(" " + a.key + `="` + a.val + `"`)
+		}
+		patches[f.patch].text = b.String()
+		if top {
+			blocks = append(blocks, HTMLBlock{StartLine: f.start, EndLine: endLine})
+		}
 	}
 
 	// openImplicitStructure handles a start/self-closing tag seen while
@@ -167,17 +264,15 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 			return true
 		}
 		inBody = true
-		depthInBody = 0
 		return false
 	}
 
 	for {
 		tt := z.Next()
 		if tt == html.ErrorToken {
-			// Malformed input — flush any unclosed child at EOF.
-			if depthInBody >= 1 {
-				emitChild(line, false)
-				depthInBody = 0
+			// Malformed input — close whatever is still open at EOF.
+			for len(stack) > 0 {
+				closeTop(line, nil)
 			}
 			break
 		}
@@ -189,7 +284,8 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 		case html.DoctypeToken, html.CommentToken, html.TextToken:
 			sink().Write(raw)
 
-		case html.StartTagToken:
+		case html.StartTagToken, html.SelfClosingTagToken:
+			selfClosing := tt == html.SelfClosingTagToken
 			nameBytes, hasAttr := z.TagName()
 			name := string(nameBytes)
 			var attrs []rawAttr
@@ -197,96 +293,49 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 				attrs = readAttrs(z)
 			}
 
-			if !inHead && !inBody && name == "head" {
+			if !selfClosing && !inHead && !inBody && name == "head" {
 				out.Write(serializeTag(name, attrs, false))
 				out.WriteString(headInject)
 				baseDone = true
 				inHead = true
 				continue
 			}
-			if !inBody && name == "body" {
+			if !selfClosing && !inBody && name == "body" {
 				if !baseDone {
 					out.WriteString(headInject)
 					baseDone = true
 				}
 				out.Write(serializeTag(name, attrs, false))
 				inBody = true
-				depthInBody = 0
 				continue
 			}
 			// No explicit <head>/<body> yet: a head-metadata tag is head
 			// content (passthrough); the first flow tag opens the body and
-			// falls through to the top-level-child logic below.
+			// falls through to the body logic below.
 			if !inHead && !inBody && name != "html" {
 				if openImplicitStructure(name) {
-					out.Write(serializeTag(name, attrs, false))
+					out.Write(serializeTag(name, attrs, selfClosing))
 					continue
 				}
 			}
-			if inBody && depthInBody == 0 {
-				// A <script> as a direct <body> child passes through to run, but
-				// is NOT a commentable block (no visual content). Leaving
-				// depthInBody at 0 lets its rawtext + </script> flow to `out` as
-				// passthrough, and the next real child starts fresh.
-				if name == "script" {
-					out.Write(serializeTag(name, attrs, false))
-					continue
-				}
-				// A new top-level <body> child opens: start buffering it so
-				// emitChild can stamp data-to once we know the end line.
-				childName = name
-				childAttrs = attrs
-				childStartLine = startLine
-				depthInBody = 1
-				if voidElements[name] {
-					emitChild(line, false)
-					depthInBody = 0
-				}
+			if !inBody {
+				sink().Write(serializeTag(name, attrs, selfClosing))
 				continue
 			}
-			// Nested inside a child, or inside <head>, or outside <body>.
-			sink().Write(serializeTag(name, attrs, false))
-			if inBody && depthInBody >= 1 && !voidElements[name] {
-				depthInBody++
-			}
-
-		case html.SelfClosingTagToken:
-			nameBytes, hasAttr := z.TagName()
-			name := string(nameBytes)
-			var attrs []rawAttr
-			if hasAttr {
-				attrs = readAttrs(z)
-			}
-			// Mirror the start-tag path: a self-closing head-metadata tag
-			// (e.g. <link/>, <meta/>) is head content; the first flow tag
-			// implicitly opens the body.
-			if !inHead && !inBody && name != "html" {
-				if openImplicitStructure(name) {
-					out.Write(serializeTag(name, attrs, true))
-					continue
-				}
-			}
-			if inBody && depthInBody == 0 {
-				// Self-closing <script/> as a body child: pass through, no block
-				// (mirrors the start-tag case above).
-				if name == "script" {
-					out.Write(serializeTag(name, attrs, true))
-					continue
-				}
-				childName = name
-				childAttrs = attrs
-				childStartLine = startLine
-				depthInBody = 1
-				emitChild(line, true)
-				depthInBody = 0
+			annotate, inner := stamp(name)
+			if selfClosing || voidElements[name] {
+				emitVoid(name, attrs, startLine, line, annotate, selfClosing)
 				continue
 			}
-			sink().Write(serializeTag(name, attrs, true))
+			open(name, attrs, startLine, annotate, inner)
 
 		case html.EndTagToken:
 			nameBytes, _ := z.TagName()
 			name := string(nameBytes)
 			if inBody && name == "body" {
+				for len(stack) > 0 { // unclosed elements end with the body
+					closeTop(line, nil)
+				}
 				inBody = false
 				out.Write(raw)
 				continue
@@ -296,12 +345,8 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 				out.Write(raw)
 				continue
 			}
-			if inBody && depthInBody >= 1 {
-				childBuf.Write(raw)
-				depthInBody--
-				if depthInBody == 0 {
-					emitChild(line, false)
-				}
+			if inBody && len(stack) > 0 {
+				closeTop(line, raw)
 				continue
 			}
 			out.Write(raw)
@@ -311,7 +356,7 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 	if len(blocks) == 0 {
 		return "", nil
 	}
-	return out.String(), blocks
+	return splicePatches(out.Bytes(), patches), blocks
 }
 
 // previewBaseHref builds the <base> href for a file at currentPath: the
@@ -326,18 +371,6 @@ func previewBaseHref(currentPath string) string {
 		return "/"
 	}
 	return "/" + encodePath(dir) + "/"
-}
-
-// appendDataRange returns attrs plus data-from/data-to carrying the
-// block's source line range. The input slice is not mutated.
-func appendDataRange(attrs []rawAttr, from, to int) []rawAttr {
-	out := make([]rawAttr, 0, len(attrs)+2)
-	out = append(out, attrs...)
-	out = append(out,
-		rawAttr{"data-from", strconv.Itoa(from)},
-		rawAttr{"data-to", strconv.Itoa(to)},
-	)
-	return out
 }
 
 // readAttrs drains the tokenizer's attribute cursor for the current
