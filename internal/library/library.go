@@ -16,7 +16,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/livetemplate/prereview/internal/flock"
@@ -117,6 +119,12 @@ func Machine() string {
 	return h
 }
 
+// ValidID reports an id safe to use in a file name: letters, digits, - and _.
+// A record with any other id (a torn line, a crafted import) is never read.
+func ValidID(id string) bool { return validID.MatchString(id) }
+
+var validID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
 // NewID returns a random learning id.
 func NewID() string {
 	b := make([]byte, 6)
@@ -181,8 +189,8 @@ func foldLearnings(r io.Reader) (byID map[string]Learning, n int) {
 	eachLineIn(r, func(b []byte) {
 		n++
 		var l Learning
-		if json.Unmarshal(b, &l) != nil || l.ID == "" {
-			return
+		if json.Unmarshal(b, &l) != nil || !ValidID(l.ID) {
+			return // an id names files (learned-<id>.yml): never a path
 		}
 		if cur, ok := byID[l.ID]; ok && !newer(l.UpdatedAt, l.Machine, cur.UpdatedAt, cur.Machine) {
 			return
@@ -297,30 +305,37 @@ func Compact(dir string) error {
 const compactSlack = 200
 
 // Import merges another machine's export (a learnings log) into dir: each
-// record that is newer than what dir holds for its id is appended as is (its
+// record that is newer than what dir holds for its id is appended (its
 // updated_at and machine kept, so every machine folds the same way). Importing
-// the same file twice appends nothing the second time. Returns how many
-// records were taken.
-func Import(dir string, from io.Reader) (int, error) {
+// the same file twice appends nothing the second time. A learning that would
+// take effect here — accepted, and new or different from the one held — arrives
+// *proposed*: an imported file never installs a skill line or a check without
+// your accept on this machine. Returns how many records were taken, and how
+// many of those wait for that accept.
+func Import(dir string, from io.Reader) (taken, toAccept int, err error) {
 	theirs, _ := foldLearnings(from)
 	unlock, err := lockLibrary(dir)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer unlock()
 	have, _ := foldFile(dir)
 	path := filepath.Join(dir, LearningsFile)
-	var n int
 	for _, l := range theirs {
-		if cur, ok := have[l.ID]; ok && !newer(l.UpdatedAt, l.Machine, cur.UpdatedAt, cur.Machine) {
+		cur, ok := have[l.ID]
+		if ok && !newer(l.UpdatedAt, l.Machine, cur.UpdatedAt, cur.Machine) {
 			continue
 		}
-		if err := Append(path, l); err != nil {
-			return n, err
+		if l.Status == StatusAccepted && !(ok && cur.Status == StatusAccepted && sameEffect(cur, l)) {
+			l.Status, l.SupersededBy = StatusProposed, ""
+			toAccept++
 		}
-		n++
+		if err := Append(path, l); err != nil {
+			return taken, toAccept, err
+		}
+		taken++
 	}
-	return n, nil
+	return taken, toAccept, nil
 }
 
 // Export writes dir's folded learnings to w as a log (tombstones included, so a
@@ -375,4 +390,11 @@ func LastExtractions(dir string) map[string]Extraction {
 // RecordExtraction appends that a store was read (with its signal count then).
 func RecordExtraction(dir string, store string, signals int) error {
 	return appendLocked(dir, ExtractionsFile, Extraction{Store: store, At: Now(), Signals: signals, Machine: Machine()})
+}
+
+// sameEffect: two versions of a learning would put the same thing into skills
+// and checks.
+func sameEffect(a, b Learning) bool {
+	return a.Text == b.Text && a.Scope == b.Scope && a.Checker == b.Checker && a.Judge == b.Judge &&
+		strings.Join(a.Produces, ",") == strings.Join(b.Produces, ",") && strings.Join(a.Globs, ",") == strings.Join(b.Globs, ",")
 }

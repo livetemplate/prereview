@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/livetemplate/prereview/internal/library"
 )
@@ -91,15 +92,22 @@ func (o *Owner) Status(path string) error {
 	return nil
 }
 
-// Write puts data at path when prereview may: the file is absent or still
-// exactly what prereview last wrote. root, when set, must already exist (an
-// agent's skills folder: prereview creates only its own folder inside it). It
-// reports whether it changed anything.
+// Write puts data at path inside an agent's skills root when prereview may: the
+// root already exists (prereview never creates an agent's folder, only its own
+// skill folder inside it), and the file is absent or still exactly what
+// prereview last wrote. It reports whether it changed anything.
 func (o *Owner) Write(root, path string, data []byte) (bool, error) {
-	if root != "" {
-		if fi, err := os.Stat(root); err != nil || !fi.IsDir() {
-			return false, ErrNoRoot
-		}
+	if fi, err := os.Stat(root); err != nil || !fi.IsDir() {
+		return false, ErrNoRoot
+	}
+	return o.WriteIn(root, path, data)
+}
+
+// WriteIn is Write for prereview's own folders (the library's skill sources,
+// your checks folder): base may be created, but path must stay inside it.
+func (o *Owner) WriteIn(base, path string, data []byte) (bool, error) {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path || !within(base, path) {
+		return false, errors.New("refusing a path outside " + base + ": " + path)
 	}
 	if cur, err := os.ReadFile(path); err == nil {
 		if err := o.Status(path); err != nil {
@@ -189,4 +197,10 @@ func atomicWrite(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+// within reports whether path is inside dir.
+func within(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, "../") && !filepath.IsAbs(rel)
 }

@@ -147,7 +147,7 @@ func editDefs(lib string, fn func(*defs)) error {
 func Sync(env Env, ls []library.Learning) (Report, error) {
 	var rep Report
 	ds, _ := Defs(env.LibDir)
-	gen := Generate(ls, ds)
+	gen := Generate(withoutOverlays(env.LibDir, ls), ds)
 	err := Own(env.LibDir, func(o *Owner) error {
 		want := map[string]bool{}
 		note := func(path string, changed bool) {
@@ -159,7 +159,7 @@ func Sync(env Env, ls []library.Learning) (Report, error) {
 		for _, s := range gen {
 			sr := SkillReport{Skill: s, Source: env.SourcePath(s.ID)}
 			src := []byte(s.SkillMD())
-			switch changed, err := o.Write("", sr.Source, src); {
+			switch changed, err := o.WriteIn(filepath.Join(env.LibDir, "skills"), sr.Source, src); {
 			case errors.Is(err, ErrEdited):
 				sr.Edited = true
 				src, _ = os.ReadFile(sr.Source) // installs follow your edit
@@ -196,13 +196,27 @@ func Sync(env Env, ls []library.Learning) (Report, error) {
 					break
 				}
 				p := filepath.Join(env.ChecksDir, c.File())
-				changed, err := o.Write("", p, []byte(c.Body))
+				changed, err := o.WriteIn(env.ChecksDir, p, []byte(c.Body))
 				if err != nil && !errors.Is(err, ErrEdited) && !errors.Is(err, ErrForeign) {
 					return err
 				}
 				note(p, changed)
 			}
 			rep.Skills = append(rep.Skills, sr)
+		}
+		for _, imp := range Imports(env.LibDir) { // checks read from an imported skill's evals
+			ics, _ := ImportedChecks(env, imp)
+			for _, ic := range ics {
+				if env.ChecksDir == "" {
+					break
+				}
+				p := filepath.Join(env.ChecksDir, ic.File())
+				changed, err := o.WriteIn(env.ChecksDir, p, []byte(ic.Body))
+				if err != nil && !errors.Is(err, ErrEdited) && !errors.Is(err, ErrForeign) {
+					return err
+				}
+				note(p, changed)
+			}
 		}
 		for _, p := range o.Paths() { // what a learning no longer asks for
 			if want[p] {
@@ -221,7 +235,7 @@ func Sync(env Env, ls []library.Learning) (Report, error) {
 // from the learnings again (the next Sync installs it).
 func Regenerate(env Env, ls []library.Learning, id string) error {
 	ds, _ := Defs(env.LibDir)
-	for _, s := range Generate(ls, ds) {
+	for _, s := range Generate(withoutOverlays(env.LibDir, ls), ds) {
 		if s.ID == id {
 			return Own(env.LibDir, func(o *Owner) error { return o.Reclaim(env.SourcePath(id), []byte(s.SkillMD())) })
 		}

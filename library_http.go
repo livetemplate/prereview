@@ -21,6 +21,7 @@ import (
 
 	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // libraryReviewFile records the review server started on the library folder
@@ -235,12 +236,15 @@ func libraryImportHandler(libraryDir string) http.HandlerFunc {
 			return
 		}
 		defer f.Close()
-		n, err := library.Import(libraryDir, f)
+		n, toAccept, err := library.Import(libraryDir, f)
 		if err != nil {
 			importResult(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		msg := fmt.Sprintf("Imported %d learning%s.", n, map[bool]string{true: "", false: "s"}[n == 1]) // a one-off; no plural helper in main
+		if toAccept > 0 {
+			msg += fmt.Sprintf(" %d of them wait for your accept in Proposed: an imported learning never changes your skills or checks until you accept it here.", toAccept)
+		}
 		if n == 0 {
 			msg = "Nothing new: this library already has everything in that file."
 		}
@@ -255,4 +259,28 @@ func importResult(w http.ResponseWriter, status int, msg string) {
 	fmt.Fprintf(w, `<!doctype html><meta name=viewport content="width=device-width"><title>Import learnings</title>`+
 		`<link rel="stylesheet" href="/pico.min.css"><main class="container"><p class="import-result">%s</p><p><a href="/">Back to the review</a> — the new learnings are in Library → Learnings.</p></main>`,
 		html.EscapeString(msg))
+}
+
+// librarySkillPatchHandler serves /_library-skill-patch?name=…: the overlay of
+// an imported skill (the learnings scoped to it) as a unified diff, for you to
+// apply in the skill's folder. prereview never writes the skill itself.
+func librarySkillPatchHandler(libraryDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := r.URL.Query().Get("name")
+		for _, imp := range skills.Imports(libraryDir) {
+			if imp.Name != name {
+				continue
+			}
+			patch, err := skills.OverlayPatch(imp, skills.Overlay(library.LoadLearnings(libraryDir), name))
+			if err != nil || patch == "" {
+				http.Error(w, "nothing to export for "+name, http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "text/x-diff; charset=utf-8")
+			w.Header().Set("Content-Disposition", `attachment; filename="`+slugBase(name)+`-learned.patch"`)
+			_, _ = io.WriteString(w, patch)
+			return
+		}
+		http.Error(w, "no imported skill "+name, http.StatusNotFound)
+	}
 }

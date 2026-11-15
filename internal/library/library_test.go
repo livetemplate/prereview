@@ -128,12 +128,12 @@ func TestImport_SameFileTwiceIsNoop(t *testing.T) {
 	if err := Export(src, &export); err != nil {
 		t.Fatal(err)
 	}
-	n, err := Import(dst, bytes.NewReader(export.Bytes()))
+	n, _, err := Import(dst, bytes.NewReader(export.Bytes()))
 	if err != nil || n != 1 {
 		t.Fatalf("first import took %d (%v), want 1 (only a; b is older than ours)", n, err)
 	}
 	size := lines(t, filepath.Join(dst, LearningsFile))
-	n, err = Import(dst, bytes.NewReader(export.Bytes()))
+	n, _, err = Import(dst, bytes.NewReader(export.Bytes()))
 	if err != nil || n != 0 || lines(t, filepath.Join(dst, LearningsFile)) != size {
 		t.Fatalf("second import took %d (%v) and grew the log; want a no-op", n, err)
 	}
@@ -451,5 +451,31 @@ func TestPropose_DraftedCheckerAndJudge(t *testing.T) {
 	}
 	if !strings.HasSuffix(l.Checker, "basically]\n") || !strings.HasPrefix(l.Judge, "---") || fmt.Sprint(l.Produces) != "[instruction checker judge]" {
 		t.Fatalf("stored %+v", l)
+	}
+}
+
+// An imported file can't make anything take effect without an accept here, and
+// a crafted id can never name a path.
+func TestImport_AcceptedArrivesProposed_BadIDsDropped(t *testing.T) {
+	dst := t.TempDir()
+	appendRaw(t, dst, Learning{ID: "same", Text: "Kept.", Status: StatusAccepted, UpdatedAt: "2026-11-01T00:00:00Z", Machine: "box"})
+	in := strings.Join([]string{
+		`{"id":"lnew","text":"New.","status":"accepted","updated_at":"2026-11-05T00:00:00Z","machine":"laptop"}`,
+		`{"id":"same","text":"Kept.","status":"accepted","updated_at":"2026-11-05T00:00:00Z","machine":"laptop"}`,
+		`{"id":"../../.bashrc","text":"x","status":"accepted","checker":"extends: existence\nname: X\ntokens: [a]\n","updated_at":"2026-11-05T00:00:00Z"}`,
+	}, "\n") + "\n"
+	n, toAccept, err := Import(dst, strings.NewReader(in))
+	if err != nil || n != 2 || toAccept != 1 {
+		t.Fatalf("import = %d taken, %d to accept, %v; want 2, 1 (the bad id dropped)", n, toAccept, err)
+	}
+	got := map[string]string{}
+	for _, l := range LoadLearnings(dst) {
+		got[l.ID] = l.Status
+	}
+	if got["lnew"] != StatusProposed || got["same"] != StatusAccepted || len(got) != 2 {
+		t.Fatalf("statuses = %v", got)
+	}
+	if n, _, _ := Import(dst, strings.NewReader(in)); n != 0 {
+		t.Fatalf("importing the same file again took %d", n)
 	}
 }

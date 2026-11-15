@@ -591,6 +591,10 @@ func renderFixtures() []renderFixture {
 				{Seq: 4, When: "15 Nov 2026 10:41", Current: true, Stat: "+1 −0", Note: "Accepted “Cut filler words.”",
 					Diff: []review.RuleDiffRow{{Kind: "add", Text: "- Cut filler words. <!-- learning l1 -->"}}},
 				{Seq: 1, When: "9 Nov 2026 09:00"}}}}},
+		Imported: []review.ImportedCard{{Name: "house-style", Path: "/home/u/.claude/skills/house-style/SKILL.md", PathRel: "~/.claude/skills/house-style/SKILL.md",
+			Changed: true, Overlay: 2, Checks: []string{"house-style: reader-first", "house-style: no-utilize"},
+			Skipped: []string{"notes/ran-tests.md: a tool_used grader grades an agent run, not a document"}}},
+		Found: []review.FoundSkill{{Name: "blog-voice", Hash: "abc123", Where: "~/.claude/skills/blog-voice/SKILL.md", Copies: 2, HasEvals: true}},
 	}
 
 	// checks M3: first launch — the offer above the file (two past reviews, one

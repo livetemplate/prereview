@@ -213,6 +213,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		mux.HandleFunc("/_library-review", guardLibraryRoute(libraryReviewHandler(controller.LibraryDir)))
 		mux.HandleFunc("/_library-export", guardLibraryRoute(libraryExportHandler(controller.LibraryDir)))
 		mux.HandleFunc("/_library-import", guardLibraryRoute(libraryImportHandler(controller.LibraryDir)))
+		mux.HandleFunc("/_library-skill-patch", guardLibraryRoute(librarySkillPatchHandler(controller.LibraryDir)))
 	}
 
 	// Decide what to actually bind to. On a remote (SSH) box with no

@@ -619,6 +619,25 @@
       </div>
       <input class="check-path" type="text" readonly value="/home/u/.config/prereview/skills/learned-writing/SKILL.md" aria-label="Skill file path">
     </li>
+    <li class="lib-card" data-key="skill-imported-house-style">
+      <header><span class="ck-pill ck-advisory">imported · by reference</span><span><code>~/.claude/skills/house-style/SKILL.md</code> · changed since you imported it</span></header>
+      <p class="lc-text">house-style</p>
+      <div class="lc-row"><span>prereview never edits this folder</span><span><b>2</b> checks read from its <code>evals/</code></span></div>
+      <details class="lc-drafted"><summary>1 grader not used</summary><ul class="lc-evidence"><li>notes/ran-tests.md: a tool_used grader grades an agent run, not a document</li></ul></details>
+      <div class="lc-conflict"><b>2 learnings attached as an overlay</b> (their scope is “house-style”). The skill changed since you imported it, so check where the patch lands. Export them as a patch to apply to the skill yourself.</div>
+      <div class="lc-actions">
+        <a role="button" class="outline" href="/_library-skill-patch?name=house-style" download>Export patch</a>
+        
+        <form method="POST"><input type="hidden" name="name" value="house-style"><button type="submit" name="forgetImport" class="outline secondary">Stop tracking</button></form>
+      </div>
+    </li>
+    <li class="lib-card" data-key="skill-found">
+      <header><span class="ck-pill ck-muted">found on this machine</span></header>
+      <p class="lc-text">Import a skill</p>
+      <div class="lc-row" data-key="skill-found-abc123"><span><code>~/.claude/skills/blog-voice/SKILL.md</code> (and 2 copies) · instructions + <code>evals/</code></span>
+        <form method="POST" class="ckp-inline"><input type="hidden" name="hash" value="abc123"><button type="submit" name="importSkill" class="outline">Import blog-voice</button></form></div>
+      
+    </li>
     
   </ul>
   

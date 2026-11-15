@@ -37,6 +37,11 @@ func TestOwner(t *testing.T) {
 	if ch, err := write(path, "v1"); err != nil || !ch {
 		t.Fatalf("first write: %v %v", ch, err)
 	}
+	for _, bad := range []string{filepath.Join(root, "..", "evil", "SKILL.md"), filepath.Join(home, ".bashrc"), "relative/SKILL.md"} {
+		if _, err := write(bad, "x"); err == nil {
+			t.Errorf("wrote outside the skills root: %s", bad)
+		}
+	}
 	if ch, err := write(path, "v1"); err != nil || ch {
 		t.Fatalf("same bytes again should be a no-op: %v %v", ch, err)
 	}

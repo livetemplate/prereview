@@ -1309,6 +1309,25 @@
       </div>
       {{if not .EditorURL}}<input class="check-path" type="text" readonly value="{{.Source}}" aria-label="Skill file path">{{end}}
     </li>
+    {{end}}{{range .Imported}}<li class="lib-card" data-key="skill-imported-{{.Name}}">
+      <header><span class="ck-pill ck-advisory">imported · by reference</span><span><code>{{.PathRel}}</code> · {{if .Changed}}changed since you imported it{{else}}unchanged since import{{end}}</span></header>
+      <p class="lc-text">{{.Name}}</p>
+      <div class="lc-row"><span>prereview never edits this folder</span>{{with .Checks}}<span><b>{{len .}}</b> check{{if ne (len .) 1}}s{{end}} read from its <code>evals/</code></span>{{end}}</div>
+      {{with .Skipped}}<details class="lc-drafted"><summary>{{len .}} grader{{if ne (len .) 1}}s{{end}} not used</summary><ul class="lc-evidence">{{range .}}<li>{{.}}</li>{{end}}</ul></details>{{end}}
+      {{if .Overlay}}<div class="lc-conflict"><b>{{.Overlay}} learning{{if ne .Overlay 1}}s{{end}} attached as an overlay</b> (their scope is “{{.Name}}”).{{if .Changed}} The skill changed since you imported it, so check where the patch lands.{{end}} Export them as a patch to apply to the skill yourself.</div>{{end}}
+      <div class="lc-actions">
+        {{if .Overlay}}<a role="button" class="outline" href="/_library-skill-patch?name={{.Name}}" download>Export patch</a>{{end}}
+        {{if .EditorURL}}<a role="button" class="outline" href="{{.EditorURL}}" title="{{.Path}}">Open in editor</a>{{end}}
+        <form method="POST"><input type="hidden" name="name" value="{{.Name}}"><button type="submit" name="forgetImport" class="outline secondary">Stop tracking</button></form>
+      </div>
+    </li>
+    {{end}}{{if .Found}}<li class="lib-card" data-key="skill-found">
+      <header><span class="ck-pill ck-muted">found on this machine</span></header>
+      <p class="lc-text">Import a skill</p>
+      {{range .Found}}<div class="lc-row" data-key="skill-found-{{.Hash}}"><span><code>{{.Where}}</code>{{if gt .Copies 1}} (and {{.Copies}} copies){{end}} · {{if .HasEvals}}instructions + <code>evals/</code>{{else}}instructions only{{end}}</span>
+        <form method="POST" class="ckp-inline"><input type="hidden" name="hash" value="{{.Hash}}"><button type="submit" name="importSkill" class="outline">Import {{.Name}}</button></form></div>
+      {{end}}
+    </li>
     {{end}}
   </ul>
   {{with .Empty}}<p class="ckp-empty">{{.}}</p>{{end}}

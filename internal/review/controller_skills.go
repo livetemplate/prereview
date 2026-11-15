@@ -76,7 +76,26 @@ const libTabSkills = "skills"
 type SkillsTab struct {
 	Cards     []SkillCard
 	Proposals []SkillProposal
+	Imported  []ImportedCard
+	Found     []FoundSkill
 	Empty     string
+}
+
+// ImportedCard is a skill you imported (read by reference, never written).
+type ImportedCard struct {
+	Name, PathRel, Path string
+	EditorURL           template.URL
+	Changed             bool // its SKILL.md differs from when you imported it
+	Overlay             int  // accepted learnings attached to it (scope = its name)
+	Checks              []string // checks read from its evals/ (names)
+	Skipped             []string // its graders that grade an agent run, with why
+}
+
+// FoundSkill is a skill on this machine you could import.
+type FoundSkill struct {
+	Name, Hash, Where string
+	Copies            int
+	HasEvals          bool
 }
 
 // SkillCard is one generated skill.
@@ -132,12 +151,37 @@ func (c *PrereviewController) applySkillsTab(state *PrereviewState) {
 		}
 		tab.Cards = append(tab.Cards, card)
 	}
+	env, _ := c.skillEnv()
+	imports := skills.Imports(c.LibraryDir)
+	imported := map[string]bool{}
+	for _, imp := range imports {
+		imported[imp.Name] = true
+		card := ImportedCard{Name: imp.Name, Path: imp.Path, PathRel: tildePath(home, imp.Path),
+			EditorURL: editorURL(state.Editor, state.EditorTemplate, state.EditorSSHHost, imp.Path, 1),
+			Changed:   imp.Changed(), Overlay: len(skills.Overlay(c.learnings(), imp.Name))}
+		ics, skipped := skills.ImportedChecks(env, imp)
+		for _, ic := range ics {
+			card.Checks = append(card.Checks, ic.Name)
+		}
+		for _, sk := range skipped {
+			card.Skipped = append(card.Skipped, filepath.Base(filepath.Dir(filepath.Dir(sk.Source)))+"/"+filepath.Base(sk.Source)+": "+sk.Reason)
+		}
+		tab.Imported = append(tab.Imported, card)
+	}
+	for _, f := range skills.Discover(env) {
+		if !imported[f.Name] {
+			tab.Found = append(tab.Found, FoundSkill{Name: f.Name, Hash: f.Hash, Where: tildePath(home, f.Paths[0]), Copies: len(f.Paths), HasEvals: f.HasEvals})
+		}
+	}
 	defs, dismissed := skills.Defs(c.LibraryDir)
+	for name := range imported {
+		dismissed = append(dismissed, name) // an imported skill's scope is its overlay, not a proposal
+	}
 	for scope, n := range skills.Proposals(c.learnings(), defs, dismissed) {
 		tab.Proposals = append(tab.Proposals, SkillProposal{Scope: scope, Count: n})
 	}
 	slices.SortFunc(tab.Proposals, func(a, b SkillProposal) int { return strings.Compare(a.Scope, b.Scope) })
-	if len(tab.Cards) == 0 && len(tab.Proposals) == 0 {
+	if len(tab.Cards)+len(tab.Proposals)+len(tab.Imported)+len(tab.Found) == 0 {
 		tab.Empty = "No skills yet. Accept a learning and it becomes a line in your Writing skill, installed for every agent set up on this machine."
 	}
 	state.SkillsTab = tab
@@ -200,4 +244,33 @@ func (c *PrereviewController) RestoreSkillVersion(state PrereviewState, ctx *liv
 	}
 	state.Flash = "Restored an earlier version of the skill"
 	return c.libraryWritten(state, "Restored an earlier version"), nil
+}
+
+// ImportSkill imports a skill found on this machine, by reference, with the
+// checks its evals/ carries.
+func (c *PrereviewController) ImportSkill(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	env, ok := c.skillEnv()
+	if !ok {
+		return state, errors.New("no library folder")
+	}
+	h := ctx.GetString("hash")
+	for _, f := range skills.Discover(env) {
+		if f.Hash == h {
+			if err := skills.ImportSkill(c.LibraryDir, f); err != nil {
+				return state, err
+			}
+			state.Flash = "Imported " + f.Name + " (prereview never edits its folder)"
+			return c.libraryWritten(state, "Imported the “"+f.Name+"” skill"), nil
+		}
+	}
+	return state, errors.New("that skill is no longer there")
+}
+
+// ForgetImport drops an imported skill from the library; its folder is untouched.
+func (c *PrereviewController) ForgetImport(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	name := ctx.GetString("name")
+	if err := skills.ForgetImport(c.LibraryDir, name); err != nil {
+		return state, err
+	}
+	return c.libraryWritten(state, "Stopped tracking the “"+name+"” skill"), nil
 }
