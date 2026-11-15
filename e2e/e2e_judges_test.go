@@ -137,6 +137,7 @@ func TestE2E_Judges(t *testing.T) {
 			// Queue as comment (the quote was found: a text comment on it): the
 			// card says Queued instead of offering it again.
 			queueJudgmentOnce(t, p, diag)
+			judgeCardFits(t, p, vp.name, map[string]string{"phone": "wrap", "desktop": "one line"}[vp.name], diag)
 
 			// Agree persists across a reload, and so does Queued.
 			if err := chromedp.Run(ctx,
@@ -174,6 +175,12 @@ func TestE2E_Judges(t *testing.T) {
 				scancel()
 				if err != nil {
 					t.Fatalf("judges on the page: %s: %v%s", st.name, err, diag())
+				}
+			}
+			if dir := os.Getenv("PREREVIEW_JUDGE_SHOTS"); dir != "" { // the verdict row shares the card's action groups
+				var buf []byte
+				if err := chromedp.Run(ctx, chromedp.Screenshot(pageRow("reader-first")+` .ckp-file.jv`, &buf, chromedp.ByQuery)); err == nil {
+					_ = os.WriteFile(filepath.Join(dir, strings.NewReplacer("/", "-").Replace(t.Name())+"-page.png"), buf, 0o644)
 				}
 			}
 			if got := textOf(t, p, pageRow("reader-first")+` .ckp-rule`); !strings.Contains(got, "agrees with you 1 of 1") {
@@ -237,6 +244,47 @@ func assertQueued(t *testing.T, p *runningPrereview, diag func() string) {
 	}
 }
 
+// judgeCardFits checks the judge card's action row: the act group (Queue or
+// Queued, Show in file) and the calibration group (Agree? …, model) each stay
+// on one line inside the card. layout "wrap" wants the calibration group on its
+// own line (a phone), "one line" both groups side by side (desktop). PREREVIEW_JUDGE_SHOTS saves a screenshot of the card as <name>.png.
+func judgeCardFits(t *testing.T, p *runningPrereview, name, layout string, diag func() string) {
+	t.Helper()
+	var m struct {
+		Card, Agree        struct{ Left, Right, Top, Bottom float64 }
+		FirstTop, Height   float64
+		AgreeOneLine, Fits bool
+	}
+	js := `(() => {
+		const r = e => { const b = e.getBoundingClientRect(); return {Left: b.left, Right: b.right, Top: b.top, Bottom: b.bottom} };
+		const card = document.querySelector('.jv-card'), agree = card.querySelector('.jv-agree');
+		const kids = [...card.querySelectorAll('.jv-actions > *')];
+		const btns = [...agree.querySelectorAll('button')];
+		return {Card: r(card), Agree: r(agree), FirstTop: kids[0].getBoundingClientRect().top,
+			Height: btns[0].getBoundingClientRect().height,
+			AgreeOneLine: btns.every(b => Math.abs(b.getBoundingClientRect().top - btns[0].getBoundingClientRect().top) < 2),
+			Fits: kids.every(k => { const b = k.getBoundingClientRect(); return b.left >= card.getBoundingClientRect().left - 1 && b.right <= card.getBoundingClientRect().right + 1 })};
+	})()`
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(js, &m)); err != nil {
+		t.Fatalf("measure the judge card: %v%s", err, diag())
+	}
+	if !m.Fits || !m.AgreeOneLine {
+		t.Errorf("the judge card's actions overflow or split mid-group: %+v%s", m, diag())
+	}
+	if wrapped := m.Agree.Top > m.FirstTop+m.Height/2; wrapped != (layout == "wrap") {
+		t.Errorf("the calibration group should be %q, wrapped=%v: %+v%s", layout, wrapped, m, diag())
+	}
+	if dir := os.Getenv("PREREVIEW_JUDGE_SHOTS"); dir != "" {
+		var buf []byte
+		if err := chromedp.Run(p.ctx, // back to the top: a file-level Queue scrolled to the new comment inside main.viewer
+			chromedp.Evaluate(`(() => { const v = document.querySelector('main.viewer') || document.scrollingElement; v.scrollTop = 0; window.scrollTo(0, 0); })()`, nil),
+			chromedp.Sleep(150*time.Millisecond),
+			chromedp.Screenshot(`.jv-card`, &buf, chromedp.ByQuery)); err == nil {
+			_ = os.WriteFile(filepath.Join(dir, strings.NewReplacer("/", "-").Replace(t.Name())+".png"), buf, 0o644)
+		}
+	}
+}
+
 // A critique whose quote wasn't found (or had none) queues as a file-level
 // comment; its card shows Queued too, across a reload.
 func TestE2E_JudgeQueuedFileLevel(t *testing.T) {
@@ -273,6 +321,7 @@ func TestE2E_JudgeQueuedFileLevel(t *testing.T) {
 				t.Fatalf("a critique with no quote offers Show in file%s", diag())
 			}
 			queueJudgmentOnce(t, p, diag)
+			judgeCardFits(t, p, vp.name, map[string]string{"phone": "wrap", "desktop": "one line"}[vp.name], diag)
 
 			if err := chromedp.Run(ctx, chromedp.Reload()); err != nil {
 				t.Fatal(err)
