@@ -176,6 +176,35 @@ the row shows the file's path to copy.
 `prereview check <file>…` runs the same checks from the terminal and exits 1 when
 any fails.
 
+### Judges
+
+A **judge** is a rubric your coding agent answers: one yes/no question about a
+whole document plus what passing looks like ("Does it lead with what the reader
+must do?"). prereview never calls a model itself; judges need a review started with
+`--agent`. Put one in your checks folder as a Markdown file:
+
+```markdown
+<!-- ~/.config/prereview/checks/reader-first.md -->
+---
+kind: judge
+name: Written for the reader
+category: Reader-first      # optional; groups it on the Checks page
+files: ["*.md"]             # optional; defaults to the prose types
+---
+Does the text lead with what the reader must do or will notice, before how it works?
+Pass when the first paragraph says what changes for the reader.
+```
+
+- **Run judges** in the file bar asks your agent to judge the open file against every
+  judge that applies. Verdicts appear live: pass or fail with a critique, and
+  **Show in file** when the critique quotes a passage.
+- A failing judge joins the bar's list (tagged *judge*). Pick it to see its critique,
+  queue it as a comment, or answer **Agree** / **Disagree**. Your answers are how a
+  judge earns trust; the Checks page shows how often each one agrees with you.
+- A verdict goes out of date when the file or the rubric changes; the bar then
+  offers **Re-run judges**. Judges are advisory: they count in **Checks n/m** once
+  they have a current verdict, but nothing is blocked on them.
+
 ## Themes & modes
 
 The toolbar's palette button cycles the **color scheme** (Solarized, Gruvbox,

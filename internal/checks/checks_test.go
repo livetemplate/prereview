@@ -356,3 +356,63 @@ func mustRead(t *testing.T, path string) []byte {
 	}
 	return data
 }
+
+func TestParseJudge(t *testing.T) {
+	good := []byte("---\nkind: judge\nname: Reader first\ncategory: Reader-first\nfiles: [\"*.md\"]\n---\n# Does the text lead with what the reader must do?\n\nPass when the first paragraph says what changes for the reader.\n")
+	r := ParseJudge("reader-first", SourceUser, "/x/reader-first.md", good)
+	if r.Err != "" || !r.IsJudge() || r.Name != "Reader first" || r.Category != "Reader-first" || r.RubricHash == "" {
+		t.Fatalf("good judge: %+v", r)
+	}
+	if r.Description != "Does the text lead with what the reader must do?" {
+		t.Errorf("description from the rubric's first line: %q", r.Description)
+	}
+	edited := ParseJudge("reader-first", SourceUser, "", []byte(strings.Replace(string(good), "first paragraph", "opening", 1)))
+	if edited.RubricHash == r.RubricHash {
+		t.Error("editing the rubric must change its hash (marks old verdicts stale)")
+	}
+	for name, src := range map[string]string{
+		"no frontmatter": "Is it clear?\n",
+		"not a judge":    "---\nkind: checker\n---\nIs it clear?\n",
+		"empty rubric":   "---\nkind: judge\n---\n\n",
+		"bad glob":       "---\nkind: judge\nfiles: [\"[\"]\n---\nIs it clear?\n",
+	} {
+		if r := ParseJudge("x", SourceUser, "", []byte(src)); r.Err == "" || !r.IsJudge() {
+			t.Errorf("%s: want an errored judge, got %+v", name, r)
+		}
+	}
+}
+
+func TestLibraryLoadsJudges(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "clear.md"), []byte("---\nkind: judge\nname: Clear\n---\nIs it clear?\n"), 0o644)
+	lib := Load(Dir{Path: dir, Source: SourceUser})
+	var j *Rule
+	for _, r := range lib.Rules {
+		if r.ID == "clear" {
+			j = r
+		}
+	}
+	if j == nil || !j.IsJudge() || j.Err != "" {
+		t.Fatalf("judge not loaded: %+v", j)
+	}
+	for _, res := range lib.RunAll(context.Background(), dir, "a.md", []string{"text"}, false) {
+		if res.ID == "clear" {
+			t.Error("RunAll must not run a judge (the agent answers it)")
+		}
+	}
+}
+
+func TestJudgePrompt(t *testing.T) {
+	a := ParseJudge("reader-first", SourceUser, "", []byte("---\nkind: judge\nname: Reader first\n---\nLead with the action?\n"))
+	b := ParseJudge("no-hype", SourceUser, "", []byte("---\nkind: judge\nname: No hype\n---\nNo marketing tone?\n"))
+	p := JudgePrompt("docs/my file.md", "/repo/.prereview", []*Rule{a, b})
+	for _, want := range []string{
+		"### Reader first", "Lead with the action?", "### No hype", "No marketing tone?",
+		"prereview judge --out /repo/.prereview --file 'docs/my file.md' --judge reader-first --verdict pass|fail",
+		"--judge no-hype", "Do **not** edit the file",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt missing %q:\n%s", want, p)
+		}
+	}
+}

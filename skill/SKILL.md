@@ -420,6 +420,28 @@ it. Before you end your turn, drain every `accept` in the latest snapshot: apply
 `prereview applied "<id>"`. The reviewer's Queue shows an amber "accepted, awaiting apply"
 count for exactly this, and warns them on End session — don't be the reason it's non-zero.
 
+## Judges (`prereview judge`)
+
+The reviewer can ask you to **judge** a file against their rubrics ("Run judges"
+in the file bar). It arrives as a `kind=file` comment listing each judge's rubric
+and the exact command per judge. It wants **neither a fix nor a suggestion**: read
+the whole file, decide pass or fail for each rubric, and record each verdict:
+
+```bash
+prereview judge --out "<STORE>" --file docs/x.md --judge reader-first \
+  --verdict fail --critique "Explains storage before saying what to do." \
+  --quote "comments, suggestions and versions are kept" --model <your model id>
+```
+
+- **One call per judge.** A verdict is binary; the critique says why in a sentence
+  or two. Pass only when the file clearly meets the rubric.
+- **`--quote`** (optional): the exact passage the critique is about, copied from
+  the file, so the reviewer can jump to it. Leave it out for whole-document points.
+- Validated before anything is written: an unknown judge, a file outside the review
+  or a missing critique fails with a non-zero exit.
+- Then `done` the request comment. Judges are advisory: the reviewer agrees or
+  disagrees with each verdict, which calibrates the judge over time.
+
 ## Notes
 
 - Comments auto-save on every add/edit/delete — the user never needs to "save".

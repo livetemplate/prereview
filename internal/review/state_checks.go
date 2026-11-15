@@ -11,8 +11,11 @@ import (
 // finding inside a commented phrase carries both classes (gitdiff.MarkRanges).
 const findingMarkClass = "check-finding"
 
-// CheckSummary is the file header's "n/m passed": enabled checks only. A running
-// check counts toward Total but not Passed until it lands.
+// CheckSummary is the file header's "n/m passed": ONE count over the enabled
+// checkers and judges. A running check counts toward Total but not Passed until it
+// lands; a judge counts only with a current verdict (not run or stale counts in
+// neither number), and a failing judge marks the button failing — judges stay
+// advisory, nothing gates on it.
 type CheckSummary struct {
 	Passed  int
 	Total   int
@@ -72,7 +75,7 @@ func (s PrereviewState) CheckSummary() CheckSummary {
 		return cs
 	}
 	for _, r := range s.Checks.Results {
-		if s.checkDisabled(r.ID) {
+		if s.checkDisabled(r.ID) || r.Status == checks.StatusNotRun || r.Status == checks.StatusStale {
 			continue
 		}
 		cs.Total++

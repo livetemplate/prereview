@@ -133,6 +133,17 @@ func main() {
 	// comprehension quiz about a file's diff, which the review UI renders for the
 	// reviewer to answer before accepting the change (#191). A bare positional verb
 	// like `done`/`suggest`, so intercept it before flag parsing.
+	// `prereview judge --out <store> --file <f> --judge <id> --verdict pass|fail
+	// --critique "…"` — the coding agent answers a "Run judges" request (checks
+	// M2): one verdict per call, appended to judgments.jsonl for the review UI.
+	if len(os.Args) > 1 && os.Args[1] == "judge" {
+		if err := runJudge(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview judge:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "quiz" {
 		if err := runQuiz(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview quiz:", err)

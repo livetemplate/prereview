@@ -740,6 +740,7 @@
             <div class="ckp-detail">
               
               
+              
               <div class="ckp-file" data-key="ckp-file-notes.txt">
                 <header><code>notes.txt</code> <span class="ck-pill ck-open">open</span><span class="ckp-file-n">1</span>
                   <form method="POST" class="ckp-show"><input type="hidden" name="path" value="notes.txt"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>

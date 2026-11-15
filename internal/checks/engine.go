@@ -44,6 +44,11 @@ type Result struct {
 	Status      string    `json:"status"`
 	Err         string    `json:"error,omitempty"`
 	Findings    []Finding `json:"findings,omitempty"`
+	// A judge's verdict (Type judge): the critique, the model that ran it and
+	// when. A judge's finding, when present, is its quote located in the file.
+	Critique string `json:"critique,omitempty"`
+	Model    string `json:"model,omitempty"`
+	JudgedAt string `json:"judged_at,omitempty"`
 }
 
 // newResult starts a Result carrying the rule's identity.

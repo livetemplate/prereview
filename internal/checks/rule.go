@@ -91,6 +91,8 @@ type Rule struct {
 	Source      string
 	Path        string // file on disk; "" for a built-in
 	Err         string
+	Rubric      string // a judge's rubric (the .md body)
+	RubricHash  string // a judge's rubric version: a verdict for another hash is stale
 
 	patterns []pattern // compiled matchers (existence, substitution, vocab)
 	token    *regexp.Regexp
@@ -114,7 +116,7 @@ const errCommandSource = "command checks may only live in your own checks folder
 
 // ruleID is a rule file's ID: its name without the YAML extension.
 func ruleID(name string) string {
-	return strings.TrimSuffix(strings.TrimSuffix(name, ".yml"), ".yaml")
+	return strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(name, ".yml"), ".yaml"), ".md")
 }
 
 // Applies reports whether the rule checks the file at rel (a slash path). A glob

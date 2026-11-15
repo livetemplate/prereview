@@ -1,0 +1,216 @@
+package review
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/livetemplate/prereview/internal/checks"
+)
+
+// Judges (checks M2). A judge is a Markdown rubric in the check library; the
+// coding agent answers "Run judges" requests with `prereview judge`, which
+// appends verdicts to the AGENT-owned judgments.jsonl. The reviewer's Agree /
+// Disagree answers go to the SERVER-owned judge-labels.jsonl (one writer per
+// file, like quiz.jsonl / quiz-answers.jsonl). Both are append-only and loaded
+// last-write-wins, so a re-run or a changed answer simply appends.
+const (
+	JudgmentsFileName   = "judgments.jsonl"
+	JudgeLabelsFileName = "judge-labels.jsonl"
+)
+
+// JudgeVerdicts are the only verdicts: binary, with a critique (no scores).
+var JudgeVerdicts = []string{checks.StatusPass, checks.StatusFail}
+
+// Judgment is one verdict, the agent-facing schema of judgments.jsonl.
+type Judgment struct {
+	File        string `json:"file"`  // repo-relative
+	Judge       string `json:"judge"` // the judge's check ID
+	Verdict     string `json:"verdict"`
+	Critique    string `json:"critique"`
+	Quote       string `json:"quote,omitempty"` // exact text the critique is about
+	Model       string `json:"model,omitempty"`
+	ContentHash string `json:"content_hash"` // checks.ContentHash of the file judged
+	RubricHash  string `json:"rubric_hash"`  // the rubric version judged against
+	At          string `json:"at"`           // RFC 3339
+}
+
+// JudgeLabel is the reviewer's answer to one verdict: the calibration label M5
+// scores judges against.
+type JudgeLabel struct {
+	File  string `json:"file"`
+	Judge string `json:"judge"`
+	At    string `json:"at"`    // the verdict's At, so a re-run asks again
+	Label string `json:"label"` // agree | disagree
+	When  string `json:"when"`
+}
+
+// Judge labels.
+const (
+	LabelAgree    = "agree"
+	LabelDisagree = "disagree"
+)
+
+// JudgmentsPath / JudgeLabelsPath sit beside comments.csv in the review's store.
+func JudgmentsPath(csvPath string) string {
+	return filepath.Join(filepath.Dir(csvPath), JudgmentsFileName)
+}
+
+func JudgeLabelsPath(csvPath string) string {
+	return filepath.Join(filepath.Dir(csvPath), JudgeLabelsFileName)
+}
+
+// judgmentKey identifies a verdict slot: one judge on one file.
+func judgmentKey(file, judge string) string { return file + "\x00" + judge }
+
+// labelKey identifies one verdict's label.
+func labelKey(file, judge, at string) string { return file + "\x00" + judge + "\x00" + at }
+
+// loadJudgments reads the agent's verdicts, latest per (file, judge). Tolerant:
+// a missing file is no verdicts and a torn line is skipped — the file is
+// agent-appended and a review must never break on it.
+func loadJudgments(path string) map[string]Judgment {
+	out := map[string]Judgment{}
+	readJSONL(path, func(line []byte) {
+		var j Judgment
+		if json.Unmarshal(line, &j) != nil || j.File == "" || j.Judge == "" || !validVerdict(j.Verdict) {
+			return
+		}
+		out[judgmentKey(j.File, j.Judge)] = j
+	})
+	return out
+}
+
+// loadJudgeLabels reads the reviewer's answers, latest per verdict.
+func loadJudgeLabels(path string) map[string]string {
+	out := map[string]string{}
+	readJSONL(path, func(line []byte) {
+		var l JudgeLabel
+		if json.Unmarshal(line, &l) != nil || l.File == "" || l.Judge == "" {
+			return
+		}
+		switch l.Label {
+		case LabelAgree, LabelDisagree:
+			out[labelKey(l.File, l.Judge, l.At)] = l.Label
+		case "":
+			delete(out, labelKey(l.File, l.Judge, l.At)) // an answer taken back
+		}
+	})
+	return out
+}
+
+func readJSONL(path string, each func([]byte)) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		if line := sc.Bytes(); len(line) > 0 {
+			each(line)
+		}
+	}
+}
+
+func validVerdict(v string) bool { return v == checks.StatusPass || v == checks.StatusFail }
+
+// appendJSONL appends one JSON line to path, creating it.
+func appendJSONL(path string, v any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(v)
+}
+
+// AppendJudgment validates and records a verdict (the `prereview judge` write
+// path). The caller supplies the hashes it computed from the file and rubric.
+func AppendJudgment(csvPath string, j Judgment) error {
+	if !validVerdict(j.Verdict) {
+		return fmt.Errorf("verdict must be pass or fail, got %q", j.Verdict)
+	}
+	if strings.TrimSpace(j.Critique) == "" {
+		return fmt.Errorf("a verdict needs a critique (why it passed or failed)")
+	}
+	if j.At == "" {
+		j.At = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	return appendJSONL(JudgmentsPath(csvPath), j)
+}
+
+// judgeResult turns a judge rule and its latest verdict into the Result the
+// checks views render: not run, stale (the file or the rubric changed since),
+// or the verdict. contentHash is the file's checks.ContentHash as shown; lines
+// is read only to locate a current verdict's quote, which becomes its one
+// finding so the file view can mark it and jump to it.
+func judgeResult(r *checks.Rule, j Judgment, ok bool, contentHash string, lines func() []string) checks.Result {
+	res := checks.Result{ID: r.ID, Name: r.Name, Description: r.Description, Category: r.Category,
+		Type: checks.TypeJudge, Level: r.Level, Source: r.Source, Path: r.Path}
+	switch {
+	case r.Err != "":
+		res.Status, res.Err = checks.StatusError, r.Err
+		return res
+	case !ok:
+		res.Status = checks.StatusNotRun
+		return res
+	}
+	res.Critique, res.Model, res.JudgedAt = j.Critique, j.Model, j.At
+	if j.ContentHash != contentHash || j.RubricHash != r.RubricHash {
+		res.Status = checks.StatusStale
+		return res
+	}
+	res.Status = j.Verdict
+	if f, found := quoteFinding(lines(), j.Quote); j.Quote != "" && found {
+		f.Message, f.Severity = j.Critique, checks.LevelSuggestion
+		res.Findings = []checks.Finding{f}
+	}
+	return res
+}
+
+// quoteFinding locates quote in lines (first occurrence; may span lines, with
+// the quote's own line breaks or a single space standing for one) and returns
+// its span in rune columns, the coordinates every finding uses.
+func quoteFinding(lines []string, quote string) (checks.Finding, bool) {
+	q := strings.TrimSpace(quote)
+	if q == "" {
+		return checks.Finding{}, false
+	}
+	text := strings.Join(lines, "\n")
+	idx := strings.Index(text, q)
+	if idx < 0 {
+		// tolerate the agent re-flowing a multi-line passage onto one line
+		flat := strings.ReplaceAll(text, "\n", " ")
+		if idx = strings.Index(flat, q); idx < 0 {
+			return checks.Finding{}, false
+		}
+	}
+	start, end := runePos(text, idx), runePos(text, idx+len(q))
+	return checks.Finding{Line: start.line, FromCol: start.col, EndLine: end.line, ToCol: end.col, Match: q}, true
+}
+
+type linePos struct{ line, col int }
+
+// runePos converts a byte offset in text (lines joined by \n) to a 1-based line
+// and a 0-based rune column.
+func runePos(text string, off int) linePos {
+	p := linePos{line: 1}
+	for _, r := range text[:off] {
+		if r == '\n' {
+			p.line++
+			p.col = 0
+			continue
+		}
+		p.col++
+	}
+	return p
+}

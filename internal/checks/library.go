@@ -43,6 +43,10 @@ func Load(dirs ...Dir) *Library {
 		h.Write([]byte(source + "\x00" + p + "\x00" + name + "\x00"))
 		h.Write(data)
 		h.Write([]byte{0})
+		if strings.HasSuffix(name, ".md") {
+			byID[id] = ParseJudge(id, source, p, data)
+			return
+		}
 		byID[id] = ParseRule(id, source, p, data)
 	}
 	entries, _ := fs.ReadDir(builtinFS, "builtin")
@@ -86,7 +90,7 @@ func Load(dirs ...Dir) *Library {
 }
 
 func isRuleFile(name string) bool {
-	return strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")
+	return strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".md")
 }
 
 // Builtin returns a built-in rule file's bytes, for "copy to my folder".
@@ -136,7 +140,7 @@ func (lib *Library) RunAll(ctx context.Context, repo, rel string, lines []string
 	doc := NewDoc(rel, lines)
 	for _, r := range lib.Rules {
 		switch {
-		case !r.Applies(rel):
+		case !r.Applies(rel), r.IsJudge(): // judges are the agent's to answer
 		case r.Async():
 			out = append(out, RunCommand(ctx, r, abs, content))
 		default:

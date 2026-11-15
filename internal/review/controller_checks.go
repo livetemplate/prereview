@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -251,14 +252,48 @@ func (c *PrereviewController) checkSetup(trusted []string) checkSetup {
 }
 
 // rulesFor is the library rules whose files globs match path.
-func (cs checkSetup) rulesFor(path string) []*checks.Rule {
-	var rules []*checks.Rule
+func (cs checkSetup) rulesFor(path string) (checkers, judges []*checks.Rule) {
 	for _, rule := range cs.lib.Rules {
-		if rule.Applies(path) {
-			rules = append(rules, rule)
+		switch {
+		case !rule.Applies(path):
+		case rule.IsJudge():
+			judges = append(judges, rule)
+		default:
+			checkers = append(checkers, rule)
 		}
 	}
-	return rules
+	return checkers, judges
+}
+
+// judgeResults appends each judge's latest verdict on path as a result.
+// contentHash identifies the text the review shows; lines loads it only to
+// locate a current verdict's quote.
+func judgeResults(res []checks.Result, path string, judges []*checks.Rule, verdicts map[string]Judgment, contentHash string, lines func() []string) []checks.Result {
+	for _, jr := range judges {
+		j, ok := verdicts[judgmentKey(path, jr.ID)]
+		res = append(res, judgeResult(jr, j, ok, contentHash, lines))
+	}
+	return res
+}
+
+// keyContentHash is the content part of a checkKey as a checks.ContentHash
+// (both hash the lines the same way), so the page needn't re-read a file to
+// tell whether a verdict is current.
+func keyContentHash(key string) string {
+	_, rest, _ := strings.Cut(key, "\x00")
+	h, _, _ := strings.Cut(rest, "\x00")
+	if len(h) > 16 {
+		h = h[:16]
+	}
+	return h
+}
+
+// verdicts loads the agent's judge verdicts (small, agent-appended).
+func (c *PrereviewController) verdicts() map[string]Judgment {
+	if c.CSVPath == "" {
+		return nil
+	}
+	return loadJudgments(JudgmentsPath(c.CSVPath))
 }
 
 // results returns path's results for one content (key = checkKey) from the
@@ -302,9 +337,12 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 		return
 	}
 	cs := c.checkSetup(state.TrustedVale)
-	rules := cs.rulesFor(d.Path)
-	if len(rules) == 0 && cs.mode == valeOff {
+	rules, judges := cs.rulesFor(d.Path)
+	if len(rules) == 0 && len(judges) == 0 && cs.mode == valeOff {
 		return
+	}
+	if c.CSVPath != "" {
+		state.JudgeLabels = loadJudgeLabels(JudgeLabelsPath(c.CSVPath))
 	}
 	lines := sideContent(d, "new")
 	if len(lines) == 0 {
@@ -324,6 +362,9 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 		r.mu.Unlock()
 	}
 	res, _ := c.results(cs, d.Path, key, rules, func() []string { return lines })
+	if len(judges) > 0 {
+		res = judgeResults(res, d.Path, judges, c.verdicts(), keyContentHash(key), func() []string { return lines })
+	}
 	state.Checks = &FileChecks{Results: res, ValeNotice: valeNotice(cs.mode), ValeTrust: cs.mode == valeUntrusted}
 }
 
@@ -341,6 +382,7 @@ func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 	}
 	cs := c.checkSetup(state.TrustedVale)
 	targets := checkTargets(state.Files)
+	verdicts := c.verdicts()
 	rc := &ReviewChecks{Total: len(targets), ValeNotice: valeNotice(cs.mode), ValeTrust: cs.mode == valeUntrusted}
 	if len(targets) > maxCheckFiles {
 		targets = targets[:maxCheckFiles]
@@ -349,8 +391,8 @@ func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 		if state.Checks != nil && f.Path == state.SelectedFile {
 			continue
 		}
-		rules := cs.rulesFor(f.Path)
-		if len(rules) == 0 && cs.mode == valeOff {
+		rules, judges := cs.rulesFor(f.Path)
+		if len(rules) == 0 && len(judges) == 0 && cs.mode == valeOff {
 			continue
 		}
 		key, lines, ok := c.diskKey(f.Path, cs.lib.Hash)
@@ -364,6 +406,7 @@ func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 			return lines
 		}
 		if res, ok := c.results(cs, f.Path, key, rules, load); ok {
+			res = judgeResults(res, f.Path, judges, verdicts, keyContentHash(key), load)
 			rc.Files = append(rc.Files, PathChecks{Path: f.Path, Results: res})
 		}
 	}
@@ -823,4 +866,107 @@ func (c *PrereviewController) JumpToFinding(state PrereviewState, ctx *livetempl
 	state.FindingCursor = idx
 	moveCursorTo(&state, f)
 	return state, nil
+}
+
+// SetChecksKind sets the Checks page's kind chip: "" (checkers and judges),
+// "checker" or "judge".
+func (c *PrereviewController) SetChecksKind(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	v := ctx.GetString("kind")
+	if v != "" && v != "checker" && v != checks.TypeJudge {
+		return state, fmt.Errorf("checks kind: unknown %q", v)
+	}
+	state.ChecksKind = v
+	return state, nil
+}
+
+// RunJudges asks the agent to judge the open file: ONE file-level comment whose
+// body lists every enabled judge's rubric and the exact `prereview judge`
+// command per judge (the RequestQuiz pattern — the agent picks it up from the
+// queue it already works). prereview never calls an LLM itself.
+func (c *PrereviewController) RunJudges(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if !state.AgentMode {
+		return state, fmt.Errorf("run judges: no agent attached (start one with prereview --agent)")
+	}
+	d := state.CurrentDiff
+	if d == nil || state.SelectedFile == "" {
+		return state, fmt.Errorf("run judges: no file selected")
+	}
+	cs := c.checkSetup(state.TrustedVale)
+	_, judges := cs.rulesFor(d.Path)
+	var run []*checks.Rule
+	for _, j := range judges {
+		if j.Err == "" && !state.checkDisabled(j.ID) {
+			run = append(run, j)
+		}
+	}
+	if len(run) == 0 {
+		return state, nil
+	}
+	resetToFileComment(&state)
+	state.DraftBody = ""
+	state, err := c.addFileLevelComment(state, checks.JudgePrompt(state.SelectedFile, filepath.Dir(c.CSVPath), run))
+	if err != nil {
+		return state, err
+	}
+	wait := maps.Clone(state.JudgeWait)
+	if wait == nil {
+		wait = map[string]string{}
+	}
+	wait[state.SelectedFile] = time.Now().UTC().Format(time.RFC3339Nano)
+	state.JudgeWait = wait
+	state.Flash = fmt.Sprintf("Asked your agent to run %d judge%s", len(run), plural(len(run)))
+	return state, nil
+}
+
+// LabelJudgment records your Agree / Disagree on a judge's current verdict for
+// a file (path; "" = the open file) — the judge's calibration label. Choosing
+// the same answer again takes it back.
+func (c *PrereviewController) LabelJudgment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	path, id, label := ctx.GetString("path"), ctx.GetString("id"), ctx.GetString("label")
+	if path == "" {
+		path = state.SelectedFile
+	}
+	if label != LabelAgree && label != LabelDisagree {
+		return state, fmt.Errorf("label judgment: unknown label %q", label)
+	}
+	var at string
+	for _, pc := range state.pageFiles() {
+		if pc.Path != path {
+			continue
+		}
+		if r, ok := resultFor(pc.Results, id); ok && r.Type == checks.TypeJudge {
+			at = r.JudgedAt
+		}
+	}
+	if at == "" {
+		return state, fmt.Errorf("label judgment: no verdict from %s on %s", id, path)
+	}
+	if state.JudgeLabels[labelKey(path, id, at)] == label {
+		label = "" // the same answer again takes it back
+	}
+	if err := appendJSONL(JudgeLabelsPath(c.CSVPath), JudgeLabel{File: path, Judge: id, At: at, Label: label,
+		When: time.Now().UTC().Format(time.RFC3339)}); err != nil {
+		return state, fmt.Errorf("label judgment: %w", err)
+	}
+	state.JudgeLabels = loadJudgeLabels(JudgeLabelsPath(c.CSVPath))
+	go c.broadcast("ChecksUpdated") // other tabs show the answer too
+	return state, nil
+}
+
+// QueueJudgment queues a judge's critique on the open file as an ordinary
+// comment, so the agent can act on it: a text comment on the quoted passage when
+// the quote was found, else a file-level comment.
+func (c *PrereviewController) QueueJudgment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	r, ok := state.checkResult(id)
+	if !ok || r.Type != checks.TypeJudge || r.Critique == "" {
+		return state, fmt.Errorf("queue judgment: no verdict from %s", id)
+	}
+	if len(r.Findings) > 0 {
+		return c.QueueFinding(state, livetemplate.NewContext(context.Background(), "queueFinding",
+			map[string]interface{}{"path": state.SelectedFile, "id": id, "index": 0}))
+	}
+	resetToFileComment(&state)
+	state.DraftBody = ""
+	return c.addFileLevelComment(state, fmt.Sprintf("%s (judge: %s)", r.Critique, r.Name))
 }
