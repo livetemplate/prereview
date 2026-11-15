@@ -144,7 +144,14 @@ func mustWrite(t *testing.T, dir, path, content string) {
 func prefsIsolatedEnv(repo string) []string {
 	prefs := filepath.Join(filepath.Dir(repo), "prereview-ui-prefs.json")
 	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+prefs, "PREREVIEW_CHECKS_DIR="+checksDirFor(repo),
-		"PREREVIEW_LIBRARY_DIR="+libraryDirFor(repo), "PREREVIEW_SCAN_HOME="+scanHomeFor(repo))
+		"PREREVIEW_LIBRARY_DIR="+libraryDirFor(repo), "PREREVIEW_SCAN_HOME="+scanHomeFor(repo),
+		"PREREVIEW_HOME="+agentHomeFor(repo))
+}
+
+// agentHomeFor is the fake $HOME a test server writes agent integrations into
+// (its own skill sync, generated skills), never the developer's real one.
+func agentHomeFor(repo string) string {
+	return filepath.Join(filepath.Dir(repo), "prereview-agent-home")
 }
 
 // scanHomeFor is where a test server's first-launch scan looks for past reviews

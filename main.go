@@ -13,6 +13,7 @@ import (
 
 	"embed"
 
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 	"github.com/livetemplate/prereview/internal/update"
 )
@@ -355,7 +356,7 @@ func main() {
 	}
 
 	if *doInstallSkill {
-		home, err := os.UserHomeDir()
+		home, err := library.AgentHome()
 		if err != nil {
 			slog.Error("install skill: resolve home", "err", err)
 			os.Exit(1)
@@ -393,7 +394,7 @@ func main() {
 	// Scoop, and `go install` upgrades too. Best-effort: a review must start
 	// regardless.
 	skillUpdated := false
-	if home, err := os.UserHomeDir(); err != nil {
+	if home, err := library.AgentHome(); err != nil {
 		slog.Debug("skill sync: resolve home", "err", err)
 	} else if changed, serr := syncInstalledSkill(home); serr != nil {
 		slog.Debug("skill sync failed", "err", serr)

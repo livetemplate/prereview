@@ -22,6 +22,17 @@ func ScanRoot() string {
 	return h
 }
 
+// AgentHome is the root prereview writes agent integrations under — its own
+// skill (--install-skill, the startup sync) and generated skills
+// (~/.claude/skills, ~/.agents/skills, …): $PREREVIEW_HOME, else $HOME. Tests set
+// it so no run ever rewrites the developer's real agent folders.
+func AgentHome() (string, error) {
+	if d := os.Getenv("PREREVIEW_HOME"); d != "" {
+		return d, nil
+	}
+	return os.UserHomeDir()
+}
+
 // BootstrapFile marks that the first-launch offer was answered ("read" or
 // "dismissed"), so it isn't made again on this machine.
 const BootstrapFile = "bootstrap.json"
