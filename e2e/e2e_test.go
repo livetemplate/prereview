@@ -3680,9 +3680,17 @@ func TestE2E_TOCSidebarDesktop(t *testing.T) {
 		// is instant. Still give a beat for the rAF tick.
 		chromedp.Sleep(200*time.Millisecond),
 		chromedp.Evaluate(`window.location.hash`, &hashAfterClick),
-		chromedp.Evaluate(`(document.querySelector('.toc-sidebar [lvt-spy-link].lvt-active')||{}).getAttribute('href')||''`, &activeAfterClick),
 	); err != nil {
 		t.Fatalf("click toc link: %v\nstderr: %s", err, p.stderr.String())
+	}
+	// The spy activates on its next rAF, which a loaded machine (the full suite)
+	// can push past a fixed sleep: wait for it, then read what's active.
+	_ = chromedp.Run(p.ctx, chromedp.Poll(`!!document.querySelector('.toc-sidebar [lvt-spy-link].lvt-active[href="#second-section"]')`,
+		nil, chromedp.WithPollingTimeout(3*time.Second)))
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(document.querySelector('.toc-sidebar [lvt-spy-link].lvt-active')||{}).getAttribute('href')||''`, &activeAfterClick),
+	); err != nil {
+		t.Fatalf("read active toc link: %v", err)
 	}
 	if hashAfterClick != "#second-section" {
 		t.Errorf("location.hash after click = %q, want #second-section", hashAfterClick)
