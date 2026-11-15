@@ -226,14 +226,14 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 	return state, nil
 }
 
-// queueFileComment queues body as a file-level comment on the open file for the
-// agent to pick up — a request (quiz, judges; request is its csv.Request* kind)
-// or a critique (request "") — closing whatever composer was open and scrolling
-// to the new card: Quiz me, Run judges and Queue as comment all go through it.
-func (c *PrereviewController) queueFileComment(state PrereviewState, request, body string) (PrereviewState, error) {
+// queueFileComment queues cm (a fileComment) for the agent to pick up — a
+// request (quiz, judges) or a judge's critique — closing whatever composer was
+// open and scrolling to the new card: Quiz me, Run judges and Queue as comment
+// all go through it.
+func (c *PrereviewController) queueFileComment(state PrereviewState, cm Comment) (PrereviewState, error) {
 	resetToFileComment(&state)
 	state.CommentMode, state.DraftBody, state.LastDeletedComment = "", "", nil
-	state, err := c.queueRequest(state, request, body)
+	state, err := c.appendQueued(state, cm)
 	if err != nil {
 		return state, err
 	}

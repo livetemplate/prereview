@@ -258,3 +258,63 @@ func TestCheckPage_KindChips(t *testing.T) {
 		t.Errorf("judges only: %+v", p.Groups)
 	}
 }
+
+// A queued critique shows Queued on its card instead of offering Queue again, on
+// both branches (the quote found: a text comment on it; no quote: a file-level
+// comment), across a reload, until a newer verdict lands or it's resolved.
+func TestQueueJudgment(t *testing.T) {
+	for _, tc := range []struct{ name, quote, kind string }{
+		{"quoted", "very good", "text"},
+		{"file-level", "", "file"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := judgeController(t)
+			s := judgedState(t, c, "fail", tc.quote, nil)
+			s, _ = c.SelectCheck(s, checksCtx("selectCheck", map[string]interface{}{"id": "reader-first"}))
+			queued := func(s PrereviewState) bool { return s.CheckStrip().Judge.Queued }
+			if queued(s) {
+				t.Fatal("Queued before anything was queued")
+			}
+			queue := func(s PrereviewState) PrereviewState {
+				t.Helper()
+				s, err := c.QueueJudgment(s, checksCtx("queueJudgment", map[string]interface{}{"id": "reader-first"}))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return s
+			}
+			s = queue(s)
+			if len(s.Comments) != 1 || s.Comments[0].Kind != tc.kind || s.Comments[0].Check != "reader-first" {
+				t.Fatalf("queued %+v, want one %s comment marked reader-first", s.Comments, tc.kind)
+			}
+			if !queued(s) {
+				t.Error("the card isn't Queued after Queue as comment")
+			}
+			if s = queue(s); len(s.Comments) != 1 {
+				t.Errorf("queued twice: %d comments", len(s.Comments))
+			}
+
+			// A reload reads created_at back in whole seconds; still Queued.
+			s.Comments = c.loadCommentsFromDisk()
+			if len(s.Comments) != 1 || !queued(s) {
+				t.Errorf("not Queued after a reload: %+v", s.Comments)
+			}
+
+			// A newer verdict can be queued again.
+			later := judgedState(t, c, "fail", tc.quote, func(j *Judgment) {
+				j.Critique, j.At = "Still buries it.", time.Now().UTC().Add(2*time.Second).Format(time.RFC3339Nano)
+			})
+			later.Comments = s.Comments
+			later, _ = c.SelectCheck(later, checksCtx("selectCheck", map[string]interface{}{"id": "reader-first"}))
+			if queued(later) {
+				t.Error("a newer verdict reads as already queued")
+			}
+
+			// Resolved: Queue is offered again.
+			s.Comments[0].Resolved = true
+			if queued(s) {
+				t.Error("a resolved comment still reads as queued")
+			}
+		})
+	}
+}

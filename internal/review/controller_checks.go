@@ -841,12 +841,17 @@ func (c *PrereviewController) appendQueued(state PrereviewState, cm Comment) (Pr
 	return state, nil
 }
 
-// queueRequest queues body as a file-level request to the agent on the open file
-// (request is its csv.Request* kind; "" for a plain comment, see
-// queueFileComment), without touching the composer.
+// fileComment is a file-level comment on the open file as the server queues
+// one: request is its csv.Request* kind, "" for a plain comment.
+func fileComment(state PrereviewState, request, body string) Comment {
+	return Comment{ID: newCommentID(), File: state.SelectedFile, Body: body,
+		Created: time.Now().UTC(), Kind: commentKindFile, Request: request}
+}
+
+// queueRequest queues body as a file-level request to the agent on the open
+// file, without touching the composer (see queueFileComment).
 func (c *PrereviewController) queueRequest(state PrereviewState, request, body string) (PrereviewState, error) {
-	return c.appendQueued(state, Comment{ID: newCommentID(), File: state.SelectedFile, Body: body,
-		Created: time.Now().UTC(), Kind: commentKindFile, Request: request})
+	return c.appendQueued(state, fileComment(state, request, body))
 }
 
 // findingSnippet is the text a finding covers, joined across lines.
@@ -968,7 +973,7 @@ func (c *PrereviewController) RunJudges(state PrereviewState, ctx *livetemplate.
 		return state, nil
 	}
 	prompt := checks.JudgePrompt(state.SelectedFile, filepath.Dir(c.CSVPath), checks.ContentHash(sideContent(d, "new")), run)
-	state, err := c.queueFileComment(state, csv.RequestJudge, prompt)
+	state, err := c.queueFileComment(state, fileComment(state, csv.RequestJudge, prompt))
 	if err != nil {
 		return state, err
 	}
@@ -1014,15 +1019,22 @@ func (c *PrereviewController) LabelJudgment(state PrereviewState, ctx *livetempl
 
 // QueueJudgment queues a judge's critique on the open file as an ordinary
 // comment, so the agent can act on it: a text comment on the quoted passage when
-// the quote was found, else a file-level comment.
+// the quote was found, else a file-level comment. Either carries the judge's ID
+// (Comment.Check), so the card shows Queued; a verdict already queued (a stale
+// button in another tab) is left alone.
 func (c *PrereviewController) QueueJudgment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	id := ctx.GetString("id")
 	r, ok := state.checkResult(id)
 	if !ok || r.Type != checks.TypeJudge || r.Critique == "" {
 		return state, fmt.Errorf("queue judgment: no verdict from %s", id)
 	}
+	if state.judgmentQueued(state.SelectedFile, r) {
+		return state, nil
+	}
 	if len(r.Findings) > 0 {
 		return c.queueFinding(state, "", id, 0)
 	}
-	return c.queueFileComment(state, "", fmt.Sprintf("%s (judge: %s)", r.Critique, r.Name))
+	cm := fileComment(state, "", fmt.Sprintf("%s (judge: %s)", r.Critique, r.Name))
+	cm.Check = r.ID
+	return c.queueFileComment(state, cm)
 }

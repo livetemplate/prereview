@@ -125,7 +125,7 @@ func (c *PrereviewController) RequestQuiz(state PrereviewState, ctx *livetemplat
 	if body == "" {
 		return state, nil // no prompts, or a stale slug from an old render
 	}
-	state, err := c.queueFileComment(state, csv.RequestQuiz, body)
+	state, err := c.queueFileComment(state, fileComment(state, csv.RequestQuiz, body))
 	if err != nil {
 		return state, err
 	}

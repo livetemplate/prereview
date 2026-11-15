@@ -113,6 +113,7 @@ type JudgeVerdictView struct {
 	At              string // the verdict's time (labels key on it)
 	Label           string // your answer: agree | disagree | ""
 	CanShow         bool   // its quote was found: Show in file / Queue work
+	Queued          bool   // already queued as a comment (only the file's card offers Queue)
 }
 
 // CheckFileError is one file a check errored on.
@@ -560,7 +561,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 			st.JudgesStale++
 		}
 		if !asked.IsZero() {
-			if at, err := time.Parse(time.RFC3339Nano, r.JudgedAt); err != nil || at.Before(asked) {
+			if at, ok := judgedAt(r); !ok || at.Before(asked) {
 				unanswered++
 			}
 		}
@@ -598,7 +599,28 @@ func (s PrereviewState) aggJudge(a *checkAgg, path string, r checks.Result, q st
 func (s PrereviewState) verdictView(path string, r checks.Result) JudgeVerdictView {
 	return JudgeVerdictView{Path: path, CheckID: r.ID, Open: path == s.SelectedFile,
 		Status: r.Status, Critique: r.Critique, Model: r.Model, At: r.JudgedAt,
-		Label: s.JudgeLabels[labelKey(path, r.ID, r.JudgedAt)], CanShow: len(r.Findings) > 0}
+		Label: s.JudgeLabels[labelKey(path, r.ID, r.JudgedAt)], CanShow: len(r.Findings) > 0,
+		Queued: s.judgmentQueued(path, r)}
+}
+
+// judgedAt is when a judge's verdict was given; false when it has none.
+func judgedAt(r checks.Result) (time.Time, bool) {
+	at, err := time.Parse(time.RFC3339Nano, r.JudgedAt)
+	return at, err == nil
+}
+
+// judgmentQueued reports whether judge r's current verdict on path is already
+// queued: an open comment carrying the judge's ID (Comment.Check, quoted or
+// file-level), made since the verdict. A newer verdict can be queued again.
+func (s PrereviewState) judgmentQueued(path string, r checks.Result) bool {
+	at, ok := judgedAt(r)
+	if !ok {
+		return false
+	}
+	at = at.Truncate(time.Second) // created_at keeps whole seconds, so a reload drops the rest
+	return slices.ContainsFunc(s.Comments, func(c Comment) bool {
+		return c.queuedFromCheck() && c.Check == r.ID && c.File == path && !c.Created.Before(at)
+	})
 }
 
 // judgeRow fills a judge's summary, detail and agreement.

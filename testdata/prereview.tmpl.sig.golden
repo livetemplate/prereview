@@ -240,7 +240,7 @@
     {{with .Critique}}<p class="jv-critique">{{.}}</p>{{end}}
     {{if eq .Status "stale"}}<p class="jv-stale">This verdict is for an older version of the file or the rubric.</p>{{end}}
     <div class="jv-actions">
-      <form method="POST"><input type="hidden" name="id" value="{{.CheckID}}"><button type="submit" name="queueJudgment" class="outline">Queue as comment</button></form>
+      {{if .Queued}}<span class="ck-pill ck-open" title="Already queued as a comment">Queued</span>{{else}}<form method="POST"><input type="hidden" name="id" value="{{.CheckID}}"><button type="submit" name="queueJudgment" class="outline">Queue as comment</button></form>{{end}}
       {{template "judgeVerdictActions" .}}
     </div>
   </div>{{end}}
