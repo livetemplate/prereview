@@ -12,6 +12,7 @@ import (
 
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/skills"
 	"github.com/livetemplate/prereview/internal/library"
 )
 
@@ -56,13 +57,29 @@ func (c *PrereviewController) libraryKey(rulePath string) string {
 	return filepath.ToSlash(rel)
 }
 
-// checkpointLibrary records the checks folder's rule files as they are now (a
-// no-op when nothing changed since the last version).
-func (c *PrereviewController) checkpointLibrary(trigger string) {
+// checkpointLibrary records the library's versioned files as they are now — your
+// rule files and the generated skills' sources — with changelog (a no-op when
+// nothing changed since the last version).
+func (c *PrereviewController) checkpointLibrary(trigger, changelog string) {
 	vs := c.libVersionStore()
 	if vs == nil {
 		return
 	}
+	refs := c.libraryScope()
+	if len(refs) == 0 {
+		return
+	}
+	if cps, err := vs.Checkpoints(); err == nil && len(cps) == 0 {
+		trigger = VersionTriggerBaseline
+	}
+	if _, _, err := vs.Checkpoint(refs, trigger, changelog); err != nil {
+		slog.Warn("library checkpoint", "err", err)
+	}
+}
+
+// libraryScope is every file the library versions: your rule files (the loaded
+// user rules) and each generated skill's source (skills/<id>/SKILL.md).
+func (c *PrereviewController) libraryScope() []FileRef {
 	r := c.runner()
 	r.mu.Lock()
 	var refs []FileRef
@@ -72,21 +89,27 @@ func (c *PrereviewController) checkpointLibrary(trigger string) {
 		}
 	}
 	r.mu.Unlock()
-	if len(refs) == 0 {
-		return
+	srcs, _ := filepath.Glob(skills.Env{LibDir: c.LibraryDir}.SourcePath("*"))
+	for _, p := range srcs {
+		if k := c.libraryKey(p); k != "" {
+			refs = append(refs, FileRef{Path: k, AbsPath: p})
+		}
 	}
-	if cps, err := vs.Checkpoints(); err == nil && len(cps) == 0 {
-		trigger = VersionTriggerBaseline
-	}
-	if _, _, err := vs.Checkpoint(refs, trigger, ""); err != nil {
-		slog.Warn("library checkpoint", "err", err)
-	}
+	return refs
 }
 
-// RuleVersion is one point in a rule file's history on the Checks tab.
+// HistoryView is a library file's versions as the history partial shows them:
+// Restore posts Action with ID and the version's seq.
+type HistoryView struct {
+	ID, Action string
+	Versions   []RuleVersion
+}
+
+// RuleVersion is one point in a library file's history (a rule or a skill).
 type RuleVersion struct {
 	Seq     int
 	When    string
+	Note    string // the version's changelog ("Accepted “…”"), when it has one
 	Current bool
 	Stat    string        // "+2 −1" against the version before it
 	Diff    []RuleDiffRow // its added and removed lines
@@ -147,7 +170,7 @@ func (c *PrereviewController) ruleHistory(key string) []RuleVersion {
 			cur, _ = vs.Blob(h.SHA)
 		}
 		if i > first || first == 0 {
-			v := RuleVersion{Seq: h.Seq, When: h.TS.Local().Format("2 Jan 2006 15:04"), Current: i == len(hist)-1}
+			v := RuleVersion{Seq: h.Seq, When: h.TS.Local().Format("2 Jan 2006 15:04"), Note: h.Changelog, Current: i == len(hist)-1}
 			if i > 0 {
 				v.Stat, v.Diff, v.More = ruleDiff(key, prev, cur)
 				if h.SHA == "" {
@@ -215,7 +238,7 @@ func (c *PrereviewController) RestoreRuleVersion(state PrereviewState, ctx *live
 		return state, fmt.Errorf("restore: %w", err)
 	}
 	if c.reloadChecksIfChanged() {
-		c.checkpointLibrary(VersionTriggerRollback)
+		c.checkpointLibrary(VersionTriggerRollback, "")
 		go c.broadcast("ChecksUpdated") // other tabs; the watcher won't see it again
 	}
 	c.reapplyChecks(&state)

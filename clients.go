@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // body.md is the shared, agent-neutral one-shot workflow. Each non-Claude
@@ -233,11 +235,7 @@ func parseClientSelection(line string, targets []clientTarget) ([]string, error)
 // yamlQuote renders s as a YAML double-quoted scalar. Required for any value
 // that may contain a colon: an unquoted `description: a: b` parses as a nested
 // mapping and the whole frontmatter fails to load (Codex rejected exactly this).
-func yamlQuote(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	return `"` + s + `"`
-}
+func yamlQuote(s string) string { return skills.YAMLQuote(s) }
 
 // frontmatterDoc renders a markdown doc with a name+description YAML header,
 // the shape Codex skills and other markdown-skill formats expect.

@@ -88,7 +88,7 @@ type CheckRow struct {
 	ByFile   []CheckFileFindings
 	Errors   []CheckFileError
 	More     int           // findings past maxPageFindings
-	History  []RuleVersion // the rule file's versions (yours only), newest first
+	History  *HistoryView // the rule file's versions (yours only), newest first
 }
 
 // CheckFileFindings is one file's findings under an expanded row.
@@ -120,6 +120,8 @@ func (r CheckRow) SourceLabel() string {
 		return "built-in"
 	case checks.SourceUser:
 		return "yours"
+	case checks.SourceLearned:
+		return "learned"
 	case checks.SourceVale, checks.SourceRepo:
 		return "this repo"
 	}
@@ -408,7 +410,9 @@ func (s PrereviewState) checkRow(a *checkAgg, status string, tallies map[string]
 		return row
 	}
 	row.Errors = a.errs
-	row.History = s.CheckHistory
+	if len(s.CheckHistory) > 0 {
+		row.History = &HistoryView{ID: row.ID, Action: "restoreRuleVersion", Versions: s.CheckHistory}
+	}
 	shown := 0
 	for _, ff := range a.files {
 		if shown >= maxPageFindings {

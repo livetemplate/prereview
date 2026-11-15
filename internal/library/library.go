@@ -16,7 +16,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/livetemplate/prereview/internal/flock"
@@ -56,18 +58,22 @@ const DefaultScope = "Writing (all documents)"
 
 // Learning is one lesson drawn from your reviews.
 type Learning struct {
-	ID           string     `json:"id"`
-	Text         string     `json:"text"`
-	Scope        string     `json:"scope"`
-	Globs        []string   `json:"globs,omitempty"`
-	Evidence     []Evidence `json:"evidence"`
-	Produces     []string   `json:"produces,omitempty"` // instruction | checker | judge (acted on in M4)
-	Replaces     string     `json:"replaces,omitempty"` // the older learning this one would supersede
-	Status       string     `json:"status"`
-	SupersededBy string     `json:"superseded_by,omitempty"`
-	CreatedAt    string     `json:"created_at"`
-	UpdatedAt    string     `json:"updated_at"`
-	Machine      string     `json:"machine"`
+	ID       string     `json:"id"`
+	Text     string     `json:"text"`
+	Scope    string     `json:"scope"`
+	Globs    []string   `json:"globs,omitempty"`
+	Evidence []Evidence `json:"evidence"`
+	Produces []string   `json:"produces,omitempty"` // instruction | checker | judge
+	// Checker / Judge are the agent-drafted rule YAML and rubric Markdown a learning
+	// produces (checks.ValidateDrafted at propose time and again before writing).
+	Checker      string `json:"checker,omitempty"`
+	Judge        string `json:"judge,omitempty"`
+	Replaces     string `json:"replaces,omitempty"` // the older learning this one would supersede
+	Status       string `json:"status"`
+	SupersededBy string `json:"superseded_by,omitempty"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	Machine      string `json:"machine"`
 }
 
 // NewestEvidence is the newest evidence timestamp — the order conflicts follow
@@ -112,6 +118,12 @@ func Machine() string {
 	}
 	return h
 }
+
+// ValidID reports an id safe to use in a file name: letters, digits, - and _.
+// A record with any other id (a torn line, a crafted import) is never read.
+func ValidID(id string) bool { return validID.MatchString(id) }
+
+var validID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 // NewID returns a random learning id.
 func NewID() string {
@@ -177,8 +189,8 @@ func foldLearnings(r io.Reader) (byID map[string]Learning, n int) {
 	eachLineIn(r, func(b []byte) {
 		n++
 		var l Learning
-		if json.Unmarshal(b, &l) != nil || l.ID == "" {
-			return
+		if json.Unmarshal(b, &l) != nil || !ValidID(l.ID) {
+			return // an id names files (learned-<id>.yml): never a path
 		}
 		if cur, ok := byID[l.ID]; ok && !newer(l.UpdatedAt, l.Machine, cur.UpdatedAt, cur.Machine) {
 			return
@@ -240,6 +252,10 @@ func lockPath(dir string) string { return filepath.Join(dir, ".lock") }
 // lockLibrary takes the library lock.
 func lockLibrary(dir string) (func(), error) { return flock.Lock(lockPath(dir)) }
 
+// Lock takes the library lock for a read-modify-write outside this package
+// (generated skills record what they wrote under it).
+func Lock(dir string) (func(), error) { return lockLibrary(dir) }
+
 // appendLocked appends v to the named log under the library lock.
 func appendLocked(dir, name string, v any) error {
 	unlock, err := lockLibrary(dir)
@@ -268,20 +284,33 @@ func Compact(dir string) error {
 	if err := writeLearnings(&buf, byID); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, LearningsFile+".*")
+	return WriteFileAtomic(filepath.Join(dir, LearningsFile), buf.Bytes(), 0o644)
+}
+
+// WriteFileAtomic replaces path's content via a temp file + rename beside it, so
+// a reader never sees it half-written. A file that already exists keeps its mode;
+// a new one gets mode.
+func WriteFileAtomic(path string, data []byte, mode os.FileMode) error {
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
 		return err
 	}
-	if _, err := tmp.Write(buf.Bytes()); err != nil {
+	defer os.Remove(tmp.Name()) // a no-op after the rename
+	if err := tmp.Chmod(mode); err != nil {
 		tmp.Close()
-		os.Remove(tmp.Name())
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, LearningsFile))
+	return os.Rename(tmp.Name(), path)
 }
 
 // compactSlack is how many superseded lines the log may carry before Compact
@@ -289,30 +318,37 @@ func Compact(dir string) error {
 const compactSlack = 200
 
 // Import merges another machine's export (a learnings log) into dir: each
-// record that is newer than what dir holds for its id is appended as is (its
-// updated_at and machine kept, so every machine folds the same way). Importing
-// the same file twice appends nothing the second time. Returns how many
-// records were taken.
-func Import(dir string, from io.Reader) (int, error) {
+// record that is newer than what dir holds for its id is appended (its
+// updated_at and machine kept, so importing the same file twice appends nothing
+// the second time). A learning that would take effect here — accepted, and new
+// or different from the one held — arrives *proposed*: an imported file never
+// installs a skill line or a check without your accept on this machine. So the
+// same record can fold to accepted there and proposed here until you accept it. Returns how many records were taken, and how
+// many of those wait for that accept.
+func Import(dir string, from io.Reader) (taken, toAccept int, err error) {
 	theirs, _ := foldLearnings(from)
 	unlock, err := lockLibrary(dir)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer unlock()
 	have, _ := foldFile(dir)
 	path := filepath.Join(dir, LearningsFile)
-	var n int
 	for _, l := range theirs {
-		if cur, ok := have[l.ID]; ok && !newer(l.UpdatedAt, l.Machine, cur.UpdatedAt, cur.Machine) {
+		cur, ok := have[l.ID]
+		if ok && !newer(l.UpdatedAt, l.Machine, cur.UpdatedAt, cur.Machine) {
 			continue
 		}
-		if err := Append(path, l); err != nil {
-			return n, err
+		if l.Status == StatusAccepted && !(ok && cur.Status == StatusAccepted && sameEffect(cur, l)) {
+			l.Status, l.SupersededBy = StatusProposed, ""
+			toAccept++
 		}
-		n++
+		if err := Append(path, l); err != nil {
+			return taken, toAccept, err
+		}
+		taken++
 	}
-	return n, nil
+	return taken, toAccept, nil
 }
 
 // Export writes dir's folded learnings to w as a log (tombstones included, so a
@@ -367,4 +403,11 @@ func LastExtractions(dir string) map[string]Extraction {
 // RecordExtraction appends that a store was read (with its signal count then).
 func RecordExtraction(dir string, store string, signals int) error {
 	return appendLocked(dir, ExtractionsFile, Extraction{Store: store, At: Now(), Signals: signals, Machine: Machine()})
+}
+
+// sameEffect: two versions of a learning would put the same thing into skills
+// and checks.
+func sameEffect(a, b Learning) bool {
+	return a.Text == b.Text && a.Scope == b.Scope && a.Checker == b.Checker && a.Judge == b.Judge &&
+		strings.Join(a.Produces, ",") == strings.Join(b.Produces, ",") && strings.Join(a.Globs, ",") == strings.Join(b.Globs, ",")
 }

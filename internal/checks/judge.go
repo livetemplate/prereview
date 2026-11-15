@@ -43,7 +43,7 @@ func (r *Rule) IsJudge() bool { return r.Type == TypeJudge }
 func ParseJudge(id, source, filePath string, data []byte) *Rule {
 	r := &Rule{ID: id, Name: id, Source: source, Path: filePath, Type: TypeJudge,
 		Level: LevelSuggestion, Category: DefaultCategory(source)}
-	front, body, ok := splitFrontmatter(data)
+	front, body, ok := SplitFrontmatter(data)
 	if !ok {
 		r.Err = "a judge needs YAML frontmatter between --- lines (kind: judge, name, …) before its rubric"
 		return r
@@ -83,8 +83,8 @@ func ParseJudge(id, source, filePath string, data []byte) *Rule {
 	return r
 }
 
-// splitFrontmatter splits "---\n<yaml>\n---\n<body>".
-func splitFrontmatter(data []byte) (front, body []byte, ok bool) {
+// SplitFrontmatter splits "---\n<yaml>\n---\n<body>".
+func SplitFrontmatter(data []byte) (front, body []byte, ok bool) {
 	s := bytes.TrimLeft(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")), " \t\r\n")
 	if !bytes.HasPrefix(s, []byte("---")) {
 		return nil, nil, false
@@ -169,4 +169,30 @@ func shellQuote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// ValidateDrafted checks a checker (rule YAML) or judge (rubric Markdown) that an
+// agent drafted for a learning, before prereview writes it to your checks
+// folder: it must parse, and a checker may not be a command check — that runs a
+// program on your files, so command checks stay hand-written. judge selects the
+// rubric form.
+func ValidateDrafted(data []byte, judge bool) error {
+	if judge {
+		if j := ParseJudge("drafted", SourceUser, "", data); j.Err != "" {
+			return fmt.Errorf("judge: %s", j.Err)
+		}
+		return nil
+	}
+	var head struct {
+		Extends string `yaml:"extends"`
+	}
+	_ = yaml.Unmarshal(data, &head) // a malformed file is reported by ParseRule below
+	r := ParseRule("drafted", SourceUser, "", data)
+	switch {
+	case head.Extends == TypeCommand || r.Type == TypeCommand:
+		return fmt.Errorf("checker: a drafted checker can't be a command check (it would run a program); use existence, substitution, occurrence or vocab")
+	case r.Err != "":
+		return fmt.Errorf("checker: %s", r.Err)
+	}
+	return nil
 }

@@ -52,10 +52,13 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 	fs.Var(&evidence, "evidence", "repeatable, at least one: <store>:<id> of a comment, suggestion or reply the learning is drawn from (the request lists them)")
 	replaces := fs.String("replaces", "", "optional: the id of an existing learning this one would supersede (a conflict: newer wins once accepted)")
 	produces := fs.String("produces", "", "optional, comma-separated: what it should become — instruction, checker, judge")
+	checker := fs.String("checker", "", "optional: a file (or - for stdin) with the check rule YAML this lesson becomes (existence, substitution, occurrence or vocab; never command)")
+	judge := fs.String("judge", "", "optional: a file (or - for stdin) with the judge rubric Markdown this lesson becomes (kind: judge frontmatter + the rubric)")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview learn propose --text \"…\" --evidence <store>:<id> [--evidence …]\n"+
-				"                               [--scope \"…\"] [--glob <pattern>]… [--replaces <id>] [--produces instruction,checker,judge]\n\n"+
+				"                               [--scope \"…\"] [--glob <pattern>]… [--replaces <id>] [--produces instruction,checker,judge]\n"+
+				"                               [--checker <rule.yml|->] [--judge <rubric.md|->]\n\n"+
 				"  Propose one learning drawn from your reviews, answering an extraction request.\n"+
 				"  Every --evidence must name a real record, or nothing is written. The reviewer\n"+
 				"  accepts, edits or rejects it in the Library; nothing takes effect until then.\n\n")
@@ -73,6 +76,22 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 		if k = strings.TrimSpace(k); k != "" {
 			p.Produces = append(p.Produces, k)
 		}
+	}
+	if *checker == "-" && *judge == "-" {
+		return errors.New("only one of --checker and --judge can read stdin")
+	}
+	for _, f := range []struct {
+		from string
+		to   *string
+	}{{*checker, &p.Checker}, {*judge, &p.Judge}} {
+		if f.from == "" {
+			continue
+		}
+		b, err := readIDSource(f.from)
+		if err != nil {
+			return err
+		}
+		*f.to = string(b)
 	}
 	l, err := library.Propose(dir, p)
 	if err != nil {

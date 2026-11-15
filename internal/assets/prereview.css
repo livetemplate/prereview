@@ -3672,6 +3672,9 @@ button.lib-tab .ck-pill { margin-left: 0.3rem; }
 }
 .lc-row { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; color: var(--text-muted); font-size: 0.78rem; margin: 0.15rem 0; }
 .lc-row b { color: var(--text); font-weight: 600; }
+.lc-agents { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.3rem 0; }
+.lc-drafted { margin: 0.25rem 0; font-size: 0.78rem; }
+.lc-drafted pre { margin: 0.25rem 0 0; padding: 0.3rem 0.5rem; font-family: var(--jbm); font-size: 0.74rem; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-muted); border-radius: var(--radius-sm); }
 .lc-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
 .lc-actions form { margin: 0; }
 .lc-actions button { margin: 0; padding: 0.2rem 0.65rem; min-height: 28px; width: auto; font-size: 0.78rem; }

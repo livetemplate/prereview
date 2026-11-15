@@ -582,7 +582,7 @@
   </header>
   <div class="lib-tabs" role="tablist">
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab is-on" role="tab" aria-selected="true">Learnings<span class="ck-pill ck-new">2 new</span></button></form>
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
+    <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Checks</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
   </div>
@@ -607,6 +607,8 @@
     <li class="lib-card is-superseded" data-key="learn-l4">
       <header><span class="ck-pill ck-muted">superseded</span><span>scope: <b>Release notes</b></span><span>by “Prefer prose over bullet lists.” · 9 Nov 2026</span></header>
       <p class="lc-text">Lead with what changed for the user.</p>
+      
+      
       
       
       

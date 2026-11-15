@@ -175,3 +175,19 @@ func ReadLines(path string) ([]string, error) {
 	}
 	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n"), nil
 }
+
+// UserDirs are the rule folders every review loads on top of the built-ins:
+// your checks folder (trusted: may run commands) and, when set, the folder of
+// checks your accepted learnings produce (never commands).
+func UserDirs(checksDir, learnedDir string) []Dir {
+	return []Dir{{Path: checksDir, Source: SourceUser}, {Path: learnedDir, Source: SourceLearned}}
+}
+
+// StampDirs is Stamp over several folders.
+func StampDirs(dirs []Dir) string {
+	var b strings.Builder
+	for _, d := range dirs {
+		b.WriteString(Stamp(d.Path) + "|")
+	}
+	return b.String()
+}

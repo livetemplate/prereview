@@ -117,8 +117,8 @@ func (c *PrereviewController) runner() *checkRunner {
 		r := &checkRunner{cache: map[string]*checkEntry{}, keys: map[*gitdiff.FileDiff]string{},
 			inflight: map[string]context.CancelFunc{}, diskKeys: map[string]diskKey{},
 			sem: make(chan struct{}, checkWorkers)}
-		r.lib = checks.Load(checks.Dir{Path: c.ChecksDir, Source: checks.SourceUser})
-		r.stamp = checks.Stamp(c.ChecksDir)
+		r.lib = checks.Load(checks.UserDirs(c.ChecksDir, c.learnedDir())...)
+		r.stamp = checks.StampDirs(checks.UserDirs(c.ChecksDir, c.learnedDir()))
 		r.valeCfg, r.valeBin = c.valeState()
 		c.checks = r
 	})
@@ -138,7 +138,7 @@ func (c *PrereviewController) valeState() (bool, string) {
 // caller fans it out.
 func (c *PrereviewController) reloadChecksIfChanged() bool {
 	r := c.runner()
-	stamp := checks.Stamp(c.ChecksDir)
+	stamp := checks.StampDirs(checks.UserDirs(c.ChecksDir, c.learnedDir()))
 	cfg, bin := c.valeState()
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -147,7 +147,7 @@ func (c *PrereviewController) reloadChecksIfChanged() bool {
 	}
 	if stamp != r.stamp {
 		r.stamp = stamp
-		r.lib = checks.Load(checks.Dir{Path: c.ChecksDir, Source: checks.SourceUser})
+		r.lib = checks.Load(checks.UserDirs(c.ChecksDir, c.learnedDir())...)
 	}
 	if cfg != r.valeCfg || bin != r.valeBin {
 		r.valeCfg, r.valeBin = cfg, bin
@@ -165,7 +165,8 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		return
 	}
 	c.runner()
-	c.checkpointLibrary(VersionTriggerFileEdit) // edits made while no server ran
+	c.checkpointLibrary(VersionTriggerFileEdit, "") // edits made while no server ran
+	c.syncSkills("")                                   // bring generated skills in line after an upgrade
 	c.learningsChanged()                        // the baseline: only later writes fan out
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
@@ -175,10 +176,11 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 			return
 		case <-ticker.C:
 			if c.reloadChecksIfChanged() {
-				c.checkpointLibrary(VersionTriggerFileEdit)
+				c.checkpointLibrary(VersionTriggerFileEdit, "")
 				c.broadcast("ChecksUpdated")
 			}
 			if c.learningsChanged() { // any server's write to the shared library
+				c.syncSkills("") // idempotent: a no-op when the writer already synced
 				c.broadcast("LibraryUpdated")
 			}
 		}
@@ -667,7 +669,7 @@ func (c *PrereviewController) SetChecksFilter(state PrereviewState, ctx *livetem
 // fields.
 func (c *PrereviewController) SetChecksSource(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	v := ctx.GetString("source")
-	if !slices.Contains([]string{"", checks.SourceBuiltin, checks.SourceUser, checks.SourceVale}, v) {
+	if !slices.Contains([]string{"", checks.SourceBuiltin, checks.SourceUser, checks.SourceLearned, checks.SourceVale}, v) {
 		return state, fmt.Errorf("checks source: unknown %q", v)
 	}
 	state.ChecksSource = v

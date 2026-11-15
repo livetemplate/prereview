@@ -65,6 +65,7 @@ func TestMain(m *testing.M) {
 	if err == nil {
 		os.Setenv("PREREVIEW_LIBRARY_DIR", lib)
 		os.Setenv("PREREVIEW_SCAN_HOME", filepath.Join(lib, "no-home")) // never walk the real $HOME
+		os.Setenv("PREREVIEW_HOME", filepath.Join(lib, "agent-home"))   // never write the real ~/.claude, ~/.agents
 	}
 	code := m.Run()
 	if buildDir != "" {

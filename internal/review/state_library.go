@@ -40,7 +40,8 @@ type LearnCard struct {
 	Pill                    string // the status pill's color class suffix
 	Meta                    string // the header's right side: evidence count, or when / by what
 	Evidence                []LearnEvidence
-	Produces                string // "instruction · checker", as proposed (acts in M4)
+	Produces                string // "instruction · checker"
+	Checker, Judge          string // the drafted checker / judge it adds (shown before you accept)
 	Conflict                string // the learning a proposal would supersede
 	Editing                 bool
 	Actions                 []LearnAction // the card's buttons, in order
@@ -76,6 +77,7 @@ func (s PrereviewState) libraryTab() string {
 // LibraryOnLearnings / LibraryOnChecks pick the tab (zero-arg for the template).
 func (s PrereviewState) LibraryOnLearnings() bool { return s.libraryTab() == libTabLearnings }
 func (s PrereviewState) LibraryOnChecks() bool    { return s.libraryTab() == libTabChecks }
+func (s PrereviewState) LibraryOnSkills() bool    { return s.libraryTab() == libTabSkills }
 
 // LearnPage builds the Learnings tab, or nil when it isn't showing.
 func (s PrereviewState) LearnPage() *LearnPage {
@@ -151,6 +153,7 @@ func (s PrereviewState) learnCard(l library.Learning, byID map[string]library.Le
 		c.Conflict = "“" + clip(old.Text, 80) + "” (" + old.Status + " " + shortDate(old.UpdatedAt) + ")"
 	}
 	c.Produces = strings.Join(l.Produces, " · ")
+	c.Checker, c.Judge = l.Checker, l.Judge
 	for _, e := range l.Evidence {
 		c.Evidence = append(c.Evidence, LearnEvidence{Where: s.evidenceWhere(e), Quote: e.Quote})
 	}

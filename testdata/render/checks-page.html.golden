@@ -656,7 +656,7 @@
   </header>
   <div class="lib-tabs" role="tablist">
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Learnings</button></form>
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Skills</button>
+    <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button></form>
     <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
   </div>
@@ -680,6 +680,7 @@
           <option value="" selected>All sources</option>
           <option value="builtin">Built-in</option>
           <option value="user">Yours</option>
+          <option value="learned">Learned</option>
           <option value="vale">This repo (Vale)</option>
         </select>
       </form>

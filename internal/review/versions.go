@@ -48,6 +48,10 @@ const (
 	// no changelog — the diff is the deterministic record. Ordered after LLMDone in
 	// the watcher, so a done-message version wins when both apply (SHA no-op).
 	VersionTriggerFileEdit = "file-edit"
+	// Learning fires when accepting, editing or rejecting a learning regenerated
+	// a skill or a derived check in the library (checks M4); its changelog names
+	// the learning.
+	VersionTriggerLearning = "learning"
 )
 
 // ErrVersionTombstone is returned by Restore when the requested version is a

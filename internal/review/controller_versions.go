@@ -99,6 +99,8 @@ func versionLabel(trigger string) string {
 		return "Agent edit"
 	case VersionTriggerRollback:
 		return "Rolled back"
+	case VersionTriggerLearning:
+		return "From a learning"
 	default:
 		return "Version"
 	}

@@ -408,7 +408,8 @@ func killLibraryReview(t *testing.T, repo string) {
 
 // TestE2E_LibraryExportImport: Export downloads this machine's learnings; Import
 // (a plain form post with the file) merges another machine's — a second import of
-// the same file adds nothing — and the imported learning shows in the Library.
+// the same file adds nothing — and an imported accepted learning waits in
+// Proposed: a file never changes your skills or checks without your accept here.
 func TestE2E_LibraryExportImport(t *testing.T) {
 	const w, h = 390, 844
 	repo := setupFixtureRepoChecks(t, "notes.md")
@@ -455,7 +456,7 @@ func TestE2E_LibraryExportImport(t *testing.T) {
 		}
 		return res
 	}
-	if got := importOnce(); got != "Imported 1 learning." {
+	if got := importOnce(); !strings.HasPrefix(got, "Imported 1 learning. 1 of them wait for your accept") {
 		t.Errorf("first import: %q", got)
 	}
 	if got := importOnce(); !strings.HasPrefix(got, "Nothing new") {
@@ -466,9 +467,8 @@ func TestE2E_LibraryExportImport(t *testing.T) {
 		chromedp.WaitVisible(`.library-trigger`, chromedp.ByQuery),
 		chromedp.Sleep(time.Second),
 		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
-		chromedp.Click(learnChip("accepted"), chromedp.ByQuery),
-		chromedp.WaitVisible(learnCard("lfromlaptop")+`.is-accepted`, chromedp.ByQuery),
+		chromedp.WaitVisible(learnCard("lfromlaptop")+`.is-proposed`, chromedp.ByQuery), // accepted there, waits for you here
 	); err != nil {
-		t.Fatalf("the imported learning isn't in the Library: %v%s", err, diag())
+		t.Fatalf("the imported learning isn't waiting in Proposed: %v%s", err, diag())
 	}
 }
