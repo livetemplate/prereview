@@ -15,6 +15,7 @@ import (
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // FileChecks is the selected file's check outcome, attached to state by
@@ -165,9 +166,11 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 		return
 	}
 	c.runner()
+	c.calibrationChanged() // the baseline: only later answers fan out
+	c.benchChanged()
 	c.checkpointLibrary(VersionTriggerFileEdit, "") // edits made while no server ran
-	c.syncSkills("")                                   // bring generated skills in line after an upgrade
-	c.learningsChanged()                        // the baseline: only later writes fan out
+	c.syncSkills("")                                // bring generated skills in line after an upgrade
+	c.learningsChanged()                            // the baseline: only later writes fan out
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
@@ -178,6 +181,12 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 			if c.reloadChecksIfChanged() {
 				c.checkpointLibrary(VersionTriggerFileEdit, "")
 				c.broadcast("ChecksUpdated")
+			}
+			if c.calibrationChanged() { // an answer in any review re-counts every tab
+				c.broadcast("ChecksUpdated")
+			}
+			if c.benchChanged() { // a benchmark result (the agent's) or an edited benchmark.yml
+				c.broadcast("BenchmarksUpdated")
 			}
 			if c.learningsChanged() { // any server's write to the shared library
 				c.syncSkills("") // idempotent: a no-op when the writer already synced
@@ -273,10 +282,12 @@ func (cs checkSetup) rulesFor(path string) (checkers, judges []*checks.Rule) {
 // judgeResults appends each judge's latest verdict on path as a result.
 // contentHash identifies the text the review shows; lines loads it only to
 // locate a current verdict's quote.
-func judgeResults(res []checks.Result, path string, judges []*checks.Rule, verdicts map[string]Judgment, contentHash string, lines func() []string) []checks.Result {
+func judgeResults(res []checks.Result, path string, judges []*checks.Rule, verdicts map[string]Judgment, calibrated map[string]bool, contentHash string, lines func() []string) []checks.Result {
 	for _, jr := range judges {
 		j, ok := verdicts[judgmentKey(path, jr.ID)]
-		res = append(res, judgeResult(jr, j, ok, contentHash, lines))
+		r := judgeResult(jr, j, ok, contentHash, lines)
+		r.Advisory = !calibrated[jr.ID] // only a calibrated judge counts (M5)
+		res = append(res, r)
 	}
 	return res
 }
@@ -387,8 +398,9 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 		r.mu.Unlock()
 	}
 	res, _ := c.results(cs, d.Path, key, rules, func() []string { return lines })
+	res = withoutDismissed(res, d.Path, func() []string { return lines }, c.dismissals())
 	if len(judges) > 0 {
-		res = judgeResults(res, d.Path, judges, c.verdicts(), keyContentHash(key), func() []string { return lines })
+		res = judgeResults(res, d.Path, judges, c.verdicts(), c.calibrated(), keyContentHash(key), func() []string { return lines })
 	}
 	state.Checks = &FileChecks{Results: res, ValeNotice: valeNotice(cs.mode), ValeTrust: cs.mode == valeUntrusted}
 }
@@ -402,13 +414,14 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 // page and the inline marks agree, and its two runs can't cancel each other.
 func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 	defer c.applyRuleHistory(state) // the expanded rule's versions, on every path out
-	state.ReviewChecks = nil
+	state.ReviewChecks, state.JudgeCal = nil, nil
 	if !state.ShowLibrary || !state.LibraryOnChecks() || c.ExternalMode || c.RepoPath == "" {
 		return
 	}
+	state.JudgeCal = c.calibration() // each judge's standing, only while the page shows it
 	cs := c.checkSetup(state.TrustedVale)
 	targets := checkTargets(state.Files)
-	verdicts := c.verdicts()
+	verdicts, calibrated, dismissed := c.verdicts(), c.calibrated(), c.dismissals()
 	rc := &ReviewChecks{Total: len(targets), ValeNotice: valeNotice(cs.mode), ValeTrust: cs.mode == valeUntrusted}
 	if len(targets) > maxCheckFiles {
 		targets = targets[:maxCheckFiles]
@@ -432,7 +445,8 @@ func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 			return lines
 		}
 		if res, ok := c.results(cs, f.Path, key, rules, load); ok {
-			res = judgeResults(res, f.Path, judges, verdicts, keyContentHash(key), load)
+			res = withoutDismissed(res, f.Path, load, dismissed)
+			res = judgeResults(res, f.Path, judges, verdicts, calibrated, keyContentHash(key), load)
 			rc.Files = append(rc.Files, PathChecks{Path: f.Path, Results: res})
 		}
 	}
@@ -980,7 +994,15 @@ func (c *PrereviewController) LabelJudgment(state PrereviewState, ctx *livetempl
 		When: time.Now().UTC().Format(time.RFC3339)}); err != nil {
 		return state, fmt.Errorf("label judgment: %w", err)
 	}
+	if c.LibraryDir != "" { // the calibration label: this answer, the verdict it answers, its rubric version
+		if err := library.RecordLabel(c.LibraryDir, library.Label{Judge: id, RubricHash: j.RubricHash, ContentHash: j.ContentHash,
+			Verdict: j.Verdict, Critique: j.Critique, Label: label, Store: filepath.Dir(c.CSVPath), File: path, At: at}); err != nil {
+			return state, fmt.Errorf("label judgment: %w", err)
+		}
+		c.calibrationChanged() // this server's tabs are re-counted below, not again on the tick
+	}
 	state.JudgeLabels = c.judgeLabels()
+	state.JudgeCal = c.calibration()
 	go c.broadcast("ChecksUpdated") // other tabs show the answer too
 	return state, nil
 }

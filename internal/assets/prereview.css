@@ -3673,6 +3673,24 @@ button.lib-tab .ck-pill { margin-left: 0.3rem; }
 .lc-row { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; color: var(--text-muted); font-size: 0.78rem; margin: 0.15rem 0; }
 .lc-row b { color: var(--text); font-weight: 600; }
 .lc-agents { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.3rem 0; }
+
+/* The Benchmarks tab (M5). */
+.bm-score { font-size: 1.6rem; font-weight: 700; color: var(--text-strong); font-variant-numeric: tabular-nums; line-height: 1.1; margin: 0.2rem 0; }
+.bm-score small { font-size: 0.8rem; font-weight: 500; color: var(--text-muted); }
+.bm-table-wrap { overflow-x: auto; margin: 0.45rem 0; max-width: 100%; }
+.bm-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 0; }
+.bm-table th, .bm-table td { padding: 0.3rem 0.45rem; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; background: transparent; }
+.bm-table th { color: var(--text-faint); font-weight: 600; font-size: 0.72rem; }
+.bm-table td.c, .bm-table th.c { text-align: center; }
+.bm-ok { color: var(--pr-add); font-weight: 700; }
+.bm-no { color: var(--pr-del); font-weight: 700; }
+.bm-wait, .bm-err { color: var(--text-faint); }
+.bm-incomparable td { color: var(--text-faint); }
+.bm-runs > summary { font-size: 0.78rem; color: var(--text-muted); cursor: pointer; }
+.lib-bench-new { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.3rem 0; }
+.lib-bench-new label { display: inline-flex; gap: 0.35rem; align-items: center; margin: 0; font-size: 0.8rem; }
+.lib-bench-new input { margin: 0; padding: 0.15rem 0.45rem; height: auto; width: 12rem; max-width: 100%; font-size: 0.82rem; }
+.lib-bench-new button { margin: 0; padding: 0.2rem 0.65rem; min-height: 28px; width: auto; font-size: 0.78rem; }
 .lc-drafted { margin: 0.25rem 0; font-size: 0.78rem; }
 .lc-drafted pre { margin: 0.25rem 0 0; padding: 0.3rem 0.5rem; font-family: var(--jbm); font-size: 0.74rem; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-muted); border-radius: var(--radius-sm); }
 .lc-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
@@ -3924,4 +3942,7 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
 .finding-check { font-weight: 700; color: var(--mark); }
 .finding-msg { color: var(--pico-color); flex: 1 1 12rem; }
 .finding-queue { margin: 0; }
+.finding-actions { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+.ckp-dismissed { display: inline; margin: 0 0 0 0.5rem; }
+.ck-strip-hidden { margin: 0; }
 .finding-queue button { margin: 0; padding: 0.1rem 0.55rem; min-height: 0; font-size: 0.75rem; }

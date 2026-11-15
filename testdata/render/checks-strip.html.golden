@@ -684,6 +684,7 @@
       <span class="ck-strip-pos"><span class="ck-pos-long">finding 1 of 1 in this file</span><span class="ck-pos-short" aria-hidden="true">1/1</span></span>
       <form method="POST"><input type="hidden" name="dir" value="1"><button type="submit" name="stepFinding" class="outline" aria-label="Next finding">›</button></form>
     </span>
+    
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
     <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="filler-intensifiers"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this check">×</button></form>
     
@@ -725,7 +726,11 @@
       <div class="finding-card sev-suggestion" data-key="finding-filler-intensifiers-0" role="note">
         <span class="finding-check">Filler intensifiers</span>
         <span class="finding-msg">&#39;very&#39; adds emphasis, not meaning; try cutting it.</span>
-        <form method="POST" class="finding-queue"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="queueFinding" class="outline">Queue as comment</button></form>
+        <span class="finding-actions">
+          <form method="POST" class="finding-queue"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="queueFinding" class="outline">Queue as comment</button></form>
+          <form method="POST" class="finding-queue"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="dismissFinding" class="outline secondary" title="It's fine here: stop flagging this one">Ignore</button></form>
+          <form method="POST" class="finding-queue"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="hideFinding" class="outline secondary" title="Fold this card for now; the underline stays">Hide</button></form>
+        </span>
       </div>
 </div>
 <div class="line-row" data-key="row-L0-2"><div tabindex="0"

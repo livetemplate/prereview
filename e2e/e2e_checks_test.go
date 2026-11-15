@@ -169,6 +169,9 @@ func TestE2E_ChecksPage(t *testing.T) {
 			if n := countSel(t, p, `.code mark.comment-span.check-finding`); n != 1 {
 				t.Errorf("the commented span must carry both marks; got %d%s", n, diag())
 			}
+			if n := countSel(t, p, `.code .finding-card`); n != 0 {
+				t.Errorf("the queued finding still shows its own card (with Queue as comment) under its comment: %d%s", n, diag())
+			}
 
 			// × returns the bar to the list and clears the marks.
 			if err := chromedp.Run(ctx,
@@ -598,3 +601,70 @@ func TestE2E_ChecksValeTrust(t *testing.T) {
 // checksTab is the Library's Checks tab: the toolbar opens the Library on
 // Learnings (checks M3), a file's Checks button on Checks.
 const checksTab = `.lib-tabs form:has(input[name="tab"][value="checks"]) button`
+
+// TestE2E_FindingIgnoreHide: on a finding card, Hide folds the card for now (the
+// underline and the bar's count stay, "1 hidden · show" brings it back); Ignore
+// dismisses it — the check passes, Checks n/m goes up — and the Checks page's
+// "1 ignored · show again" brings it back. Phone.
+func TestE2E_FindingIgnoreHide(t *testing.T) {
+	const w, h = 390, 844
+	repo := setupFixtureRepoChecks(t, "notes.md") // "This is very good." on line 40
+	p := bootChromeAgainstRepo(t, repo, w, h)
+	diag := captureDiag(t, p)
+	p.waitReadyAt(w, h)
+	ctx, cancel := within(p, 40*time.Second)
+	defer cancel()
+	before := textOf(t, p, `.checks-trigger .checks-count`)
+
+	clickStripPick(t, p, "Filler intensifiers", diag)
+	card := `.code .finding-card`
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible(card, chromedp.ByQuery),
+		chromedp.Click(card+` button[name="hideFinding"]`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(card, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("hide: %v%s", err, diag())
+	}
+	if n := countSel(t, p, `.code mark.check-finding`); n != 1 {
+		t.Errorf("hiding the card removed its underline (%d marks)%s", n, diag())
+	}
+	if got := textOf(t, p, `.ck-strip-hidden button`); got != "1 hidden · show" {
+		t.Errorf("bar = %q%s", got, diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.ck-strip-hidden button`, chromedp.ByQuery),
+		chromedp.WaitVisible(card, chromedp.ByQuery),
+		chromedp.Click(card+` button[name="dismissFinding"]`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.code mark.check-finding`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("show, then ignore: %v%s", err, diag())
+	}
+	after := textOf(t, p, `.checks-trigger .checks-count`)
+	if after == before || !strings.HasPrefix(after, string(rune(before[0]+1))) {
+		t.Errorf("ignoring the only finding should pass the check: %s → %s%s", before, after, diag())
+	}
+
+	row := pageRow("filler-intensifiers")
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.checks-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.library`, chromedp.ByQuery),
+		// It passes now; on an unfiltered page its group would fold.
+		chromedp.Evaluate(`(document.querySelector('button[name="togglePassingGroups"]')||{click(){}}).click()`, nil),
+		chromedp.Click(row+` .ckp-row-head`, chromedp.ByQuery),
+		chromedp.WaitVisible(row+` .ckp-dismissed button`, chromedp.ByQuery),
+	); err != nil {
+		var lib string
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(document.querySelector('`+row+`')||document.querySelector('.library')||{outerHTML:'no library'}).outerHTML.slice(0, 4000)`, &lib))
+		t.Fatalf("the Checks page doesn't offer the ignored finding back: %v\n%s%s", err, lib, diag())
+	}
+	if got := textOf(t, p, row+` .ckp-dismissed button`); got != "1 ignored · show again" {
+		t.Errorf("page = %q%s", got, diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(row+` .ckp-dismissed button`, chromedp.ByQuery),
+		chromedp.WaitVisible(row+`.is-fail`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("show again: %v%s", err, diag())
+	}
+	noHorizontalScroll(t, p, diag)
+}

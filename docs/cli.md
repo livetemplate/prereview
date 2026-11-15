@@ -252,7 +252,10 @@ prereview check     [--json] <file>...
   --rubric-hash <h> --verdict pass|fail --critique "…" [--quote "…"] [--model <id>]`,
   one call per judge, copied from the request. Appends the verdict (with the
   request's file and rubric hashes, so the review can tell when it's out of date) to
-  the store's `judgments.jsonl`. Validated before anything is written.
+  the store's `judgments.jsonl`. Validated before anything is written. Answering a
+  benchmark run, `--bench <id> --run <run> --case <case>` replaces `--out`/`--file`:
+  the verdict goes to the benchmark's `runs.jsonl`, checked against the run's pinned
+  case and rubric hashes.
 - **`prereview learn propose`** — the coding agent's answer to a "Read past reviews"
   request (or a "Learn after each review" one): `prereview learn propose --text "…"
   --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <pattern>]…

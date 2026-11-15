@@ -658,7 +658,7 @@
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Learnings</button></form>
     <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button></form>
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
+    <form method="POST"><input type="hidden" name="tab" value="benchmarks"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Benchmarks</button></form>
   </div>
   
   
@@ -751,8 +751,9 @@
               
               
               
+              <details class="lc-drafted ckp-disagreed"><summary>You disagreed with 2 verdicts: edit the rubric to fix them</summary><ul class="lc-evidence"><li><span class="ev-where"><code>docs/guide.md</code> · it said pass</span><br><q>Leads with the diagram.</q></li><li><span class="ev-where"><code>notes.txt</code> · it said fail</span><br><q>Buries the action.</q></li></ul></details>
               <div class="ckp-rule">
-                <span>judge · advisory · yours · category <b>Reader-first</b> · agrees with you 1 of 1 · <code>/home/u/.config/prereview/checks/reader-first.md</code></span>
+                <span>judge · advisory · yours · category <b>Reader-first</b> · agrees with you 7 of 9 · counts once 10 answers agree 8 of 10 · <code>/home/u/.config/prereview/checks/reader-first.md</code></span>
                 <span class="ckp-rule-actions">
                   <a role="button" class="outline" href="vscode://vscode-remote/ssh-remote&#43;devbox/home/u/.config/prereview/checks/reader-first.md:1" title="/home/u/.config/prereview/checks/reader-first.md">Open in editor</a>
                   

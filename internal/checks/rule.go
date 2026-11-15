@@ -97,6 +97,7 @@ type Rule struct {
 	Err         string
 	Rubric      string // a judge's rubric (the .md body)
 	RubricHash  string // a judge's rubric version: a verdict for another hash is stale
+	ContentHash string // the rule file's bytes as loaded (a built-in's embedded file): its version
 
 	patterns []pattern // compiled matchers (existence, substitution, vocab)
 	token    *regexp.Regexp

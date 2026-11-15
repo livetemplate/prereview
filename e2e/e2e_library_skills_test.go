@@ -104,13 +104,7 @@ func TestE2E_LearningProducesSkillAndCheck(t *testing.T) {
 		time.Sleep(250 * time.Millisecond)
 	}
 
-	var sw, cw int
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`document.documentElement.scrollWidth`, &sw),
-		chromedp.Evaluate(`document.documentElement.clientWidth`, &cw),
-	); err != nil || sw > cw {
-		t.Errorf("scrolls sideways at %dpx: %d > %d (%v)%s", w, sw, cw, err, diag())
-	}
+	noHorizontalScroll(t, p, diag)
 }
 
 // TestE2E_ImportSkill: a skill you made (with plugin-eval graders) in the fake
@@ -123,8 +117,8 @@ func TestE2E_ImportSkill(t *testing.T) {
 	home := agentHomeFor(repo)
 	dir := filepath.Join(home, ".claude", "skills", "house-style")
 	files := map[string]string{
-		"SKILL.md": "---\nname: house-style\ndescription: \"Our house style\"\n---\n\nBe brief.\n",
-		"evals/notes/prompt.md":              "Write release notes.\n",
+		"SKILL.md":                            "---\nname: house-style\ndescription: \"Our house style\"\n---\n\nBe brief.\n",
+		"evals/notes/prompt.md":               "Write release notes.\n",
 		"evals/notes/graders/reader-first.md": "---\ntype: llm\n---\n\nPASS if it leads with what changed for the reader.\n",
 		"evals/notes/graders/no-utilize.md":   "---\ntype: regex\npattern: utilize\nflags: i\nmatch: not_contains\n---\n",
 		"evals/notes/graders/ran-tests.md":    "---\ntype: tool_used\ntool: Bash\n---\n",

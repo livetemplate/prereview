@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/livetemplate/prereview/internal/checks"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // judgeController is a checks controller with one judge in its rule folder.
@@ -98,12 +99,28 @@ func TestCheckSummary_MergesJudges(t *testing.T) {
 	if got := judgedState(t, c, "", "", nil).CheckSummary(); got.Total != 3 || got.Passed != 2 {
 		t.Errorf("a judge with no verdict counts in neither number: %+v", got)
 	}
-	if got := judgedState(t, c, "pass", "", nil).CheckSummary(); got.Total != 4 || got.Passed != 3 {
-		t.Errorf("a passing judge counts in both: %+v", got)
+	calibrated := func(s PrereviewState) PrereviewState { // as applyChecks marks a calibrated judge
+		for i := range s.Checks.Results {
+			if s.Checks.Results[i].ID == "reader-first" {
+				s.Checks.Results[i].Advisory = false
+			}
+		}
+		return s
+	}
+	if got := judgedState(t, c, "pass", "", nil).CheckSummary(); got.Total != 3 || got.Passed != 2 {
+		t.Errorf("an advisory judge (not calibrated) counts in neither number, even with a verdict: %+v", got)
+	}
+	c1 := judgeController(t)
+	if got := calibrated(judgedState(t, c1, "pass", "", nil)).CheckSummary(); got.Total != 4 || got.Passed != 3 {
+		t.Errorf("a calibrated passing judge counts in both: %+v", got)
 	}
 	c2 := judgeController(t)
-	if got := judgedState(t, c2, "fail", "", nil).CheckSummary(); got.Total != 4 || got.Passed != 2 || !got.Failing {
-		t.Errorf("a failing judge counts in the total and marks failing: %+v", got)
+	if got := calibrated(judgedState(t, c2, "fail", "", nil)).CheckSummary(); got.Total != 4 || got.Passed != 2 || !got.Failing {
+		t.Errorf("a calibrated failing judge counts in the total and marks failing: %+v", got)
+	}
+	c2b, c2c := judgeController(t), judgeController(t)
+	if got, none := judgedState(t, c2b, "fail", "", nil).CheckSummary(), judgedState(t, c2c, "", "", nil).CheckSummary(); got != none {
+		t.Errorf("an advisory failing judge changed the summary: %+v vs no verdict %+v", got, none)
 	}
 	c3 := judgeController(t)
 	if got := judgedState(t, c3, "pass", "", func(j *Judgment) { j.ContentHash = "old" }).CheckSummary(); got.Total != 3 {
@@ -181,6 +198,7 @@ func TestCheckStrip_Judges(t *testing.T) {
 
 func TestLabelJudgment(t *testing.T) {
 	c := judgeController(t)
+	c.LibraryDir = t.TempDir() // the answer also lands in the per-user calibration log
 	s := judgedState(t, c, "fail", "", nil)
 	s, err := c.LabelJudgment(s, checksCtx("labelJudgment", map[string]interface{}{"id": "reader-first", "label": "agree"}))
 	if err != nil {
@@ -201,13 +219,16 @@ func TestLabelJudgment(t *testing.T) {
 			}
 		}
 	}
-	if !row.IsJudge || row.Agreement != "agrees with you 1 of 1" || len(row.Verdicts) != 1 || row.Verdicts[0].Label != LabelAgree {
+	if !row.IsJudge || !strings.HasPrefix(row.Agreement, "agrees with you 1 of 1 · counts once 10 answers") || len(row.Verdicts) != 1 || row.Verdicts[0].Label != LabelAgree {
 		t.Errorf("judge row %+v", row)
+	}
+	if cal := library.LoadCalibration(c.LibraryDir, map[string]string{"reader-first": judgeRule(t, c).RubricHash})["reader-first"]; cal.Total != 1 || cal.Agree != 1 {
+		t.Errorf("the calibration log didn't get the answer with its rubric version: %+v", cal)
 	}
 	// The same answer again takes it back.
 	s, _ = c.LabelJudgment(s, checksCtx("labelJudgment", map[string]interface{}{"id": "reader-first", "label": "agree"}))
-	if len(s.JudgeLabels) != 0 {
-		t.Errorf("taking the answer back: %+v", s.JudgeLabels)
+	if len(s.JudgeLabels) != 0 || s.JudgeCal["reader-first"].Total != 0 {
+		t.Errorf("taking the answer back: %+v %+v", s.JudgeLabels, s.JudgeCal["reader-first"])
 	}
 }
 

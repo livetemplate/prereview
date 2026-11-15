@@ -717,7 +717,7 @@
   <div class="ck-strip is-judge" data-key="checks-strip" role="status" aria-label="Showing one judge">
     
     <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name" title="Written for the reader">Written for the reader</b>
-    <span class="ck-pill ck-advisory">judge · advisory</span>
+    <span class="ck-pill ck-advisory" title="Calibrated: counts in Checks n/m">judge · calibrated</span>
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
     <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="reader-first"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this judge">×</button></form>
     

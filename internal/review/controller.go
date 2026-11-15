@@ -161,6 +161,9 @@ type PrereviewController struct {
 	judgeCache map[string]Judgment
 	labelFP    string
 	labelCache map[string]string
+	// The review's ignored findings (dismissals), by the log's fingerprint.
+	dismissFP    string
+	dismissCache map[string]Dismissal
 
 	// LibraryDir is the per-user library (~/.config/prereview): learnings,
 	// sessions, extractions. "" disables the Learnings tab. The folded learnings
@@ -189,6 +192,20 @@ type PrereviewController struct {
 	libHistMu sync.Mutex
 	libHistFP string
 	libHist   map[string][]RuleVersion
+	// Judge calibration (M5): the folded label log, by its fingerprint + the rules.
+	calMu      sync.Mutex
+	calFP      string
+	calWatchFP string
+	calCache   map[string]library.Calibration
+	// benchWatchFP is the benchmarks' fingerprint the watcher last fanned out;
+	// watchMu guards it and calWatchFP (watchMoved).
+	benchWatchFP string
+	watchMu      sync.Mutex
+	// benchCache is every benchmark and its runs, by benchFingerprint.
+	benchMu    sync.Mutex
+	benchFP    string
+	benchCache []benchEntry
+
 	// AgentHome is where generated skills are installed (skills.AgentHome,
 	// resolved once at launch); "" disables them.
 	AgentHome string

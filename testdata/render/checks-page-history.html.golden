@@ -658,7 +658,7 @@
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Learnings</button></form>
     <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button></form>
-    <button type="button" class="lib-tab" role="tab" aria-selected="false" disabled title="Coming soon">Benchmarks</button>
+    <form method="POST"><input type="hidden" name="tab" value="benchmarks"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Benchmarks</button></form>
   </div>
   
   
@@ -754,6 +754,7 @@
                     <form method="POST" class="ckp-at-form"><input type="hidden" name="path" value="notes.txt"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="ckp-at">L1:8-12</button></form>
                     <span class="ckp-msg">&#39;very&#39; adds emphasis, not meaning; try cutting it.</span>
                     <form method="POST" class="ckp-q"><input type="hidden" name="path" value="notes.txt"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="queueFinding" class="outline">Queue</button></form>
+                    <form method="POST" class="ckp-q"><input type="hidden" name="path" value="notes.txt"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="dismissFinding" class="outline secondary" title="It's fine here: stop flagging this one">Ignore</button></form>
                   </li>
                   
                 </ol>
@@ -768,10 +769,12 @@
                     <form method="POST" class="ckp-at-form"><input type="hidden" name="path" value="docs/guide.md"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="ckp-at">L3:0-6</button></form>
                     <span class="ckp-msg">&#39;Really&#39; adds emphasis, not meaning; try cutting it.</span>
                     <form method="POST" class="ckp-q"><input type="hidden" name="path" value="docs/guide.md"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="queueFinding" class="outline">Queue</button></form>
+                    <form method="POST" class="ckp-q"><input type="hidden" name="path" value="docs/guide.md"><input type="hidden" name="id" value="filler-intensifiers"><input type="hidden" name="index" value="0"><button type="submit" name="dismissFinding" class="outline secondary" title="It's fine here: stop flagging this one">Ignore</button></form>
                   </li>
                   
                 </ol>
               </div>
+              
               
               
               <div class="ckp-rule">

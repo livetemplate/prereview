@@ -1,7 +1,9 @@
 package review
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
@@ -12,10 +14,11 @@ import (
 const findingMarkClass = "check-finding"
 
 // CheckSummary is the file header's "n/m passed": ONE count over the enabled
-// checkers and judges. A running check counts toward Total but not Passed until it
-// lands; a judge counts only with a current verdict (not run or stale counts in
-// neither number), and a failing judge marks the button failing — judges stay
-// advisory, nothing gates on it.
+// checkers and the calibrated judges (M5). A running check counts toward Total
+// but not Passed until it lands; a judge counts only once calibrated and with a
+// current verdict (not run or stale counts in neither number), and then a
+// failing judge marks the button failing. An advisory judge is shown, never
+// counted. Nothing gates on any of it.
 type CheckSummary struct {
 	Passed  int
 	Total   int
@@ -39,6 +42,7 @@ type FindingView struct {
 	Label     string // "L12", "L12:4-9" or "L12-14"
 	Message   string
 	Severity  string
+	Queued    bool // already queued as a comment (and not resolved): its comment card shows it
 }
 
 // ShowChecks gates the file-header button: the file has checks to report.
@@ -75,7 +79,7 @@ func (s PrereviewState) CheckSummary() CheckSummary {
 		return cs
 	}
 	for _, r := range s.Checks.Results {
-		if s.checkDisabled(r.ID) || r.Status == checks.StatusNotRun || r.Status == checks.StatusStale {
+		if s.checkDisabled(r.ID) || r.Status == checks.StatusNotRun || r.Status == checks.StatusStale || r.Advisory {
 			continue
 		}
 		cs.Total++
@@ -149,12 +153,44 @@ func (s PrereviewState) FindingsByRow() map[string][]FindingView {
 		return nil // a judge's critique is on its card above the file; its quote is only marked
 	}
 	out := map[string][]FindingView{}
+	queued := s.queuedFindings()
 	for i := range r.Findings {
+		k := findingKey(s.SelectedFile, r.Findings[i], r.Name)
+		if queued[k] || slices.Contains(s.HiddenFindings, k) {
+			continue // queued: its comment card is right there; hidden: folded this session
+		}
 		fv := findingView(s.SelectedFile, r, i)
-		k := rowKeysFor(fv.Line, "new")[0]
-		out[k] = append(out[k], fv)
+		row := rowKeysFor(fv.Line, "new")[0]
+		out[row] = append(out[row], fv)
 	}
 	return out
+}
+
+// queuedFindings is every finding already queued as a comment that is still
+// open: the comment Queue made carries the finding's file and exact span, and
+// its body ends "(check: <name>)" (or "(judge: <name>)").
+func (s PrereviewState) queuedFindings() map[string]bool {
+	out := map[string]bool{}
+	for _, c := range s.Comments {
+		if c.Resolved || c.Kind != commentKindText || !strings.HasSuffix(c.Body, ")") {
+			continue
+		}
+		i := strings.LastIndex(c.Body, " (")
+		if i < 0 {
+			continue
+		}
+		kind, name, ok := strings.Cut(strings.TrimSuffix(c.Body[i+2:], ")"), ": ")
+		if !ok || (kind != "check" && kind != "judge") {
+			continue
+		}
+		out[findingKey(c.File, checks.Finding{Line: c.FromLine, EndLine: c.ToLine, FromCol: c.FromCol, ToCol: c.ToCol}, name)] = true
+	}
+	return out
+}
+
+// findingKey identifies a finding by file, span and check name.
+func findingKey(path string, f checks.Finding, check string) string {
+	return fmt.Sprintf("%s\x00%d:%d:%d:%d\x00%s", path, f.Line, f.EndLine, f.FromCol, f.ToCol, check)
 }
 
 // findingLines reports the new-side lines a selected finding covers, so

@@ -413,3 +413,76 @@ func TestVale_RunsOnlyWhenTrusted(t *testing.T) {
 		t.Errorf("no vale binary: %+v", s.Checks)
 	}
 }
+
+// A finding already queued as an open comment shows once (its comment card),
+// not a second time as a finding card; resolving the comment brings it back.
+func TestFindingsByRow_SkipsQueued(t *testing.T) {
+	c := checksController(t)
+	s := PrereviewState{SelectedFile: "doc.md", CurrentDiff: mdDiff()}
+	c.applyChecks(&s)
+	s.SelectedCheck = "filler-intensifiers"
+	if n := len(s.FindingsByRow()); n != 1 {
+		t.Fatalf("finding cards = %d, want 1", n)
+	}
+	s, err := c.queueFinding(s, "doc.md", "filler-intensifiers", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(s.FindingsByRow()); n != 0 {
+		t.Fatalf("a queued finding still has its own card (%d)", n)
+	}
+	s.Comments[len(s.Comments)-1].Resolved = true
+	if n := len(s.FindingsByRow()); n != 1 {
+		t.Fatalf("resolving the comment should bring the finding back (%d)", n)
+	}
+}
+
+// Ignore drops one finding — the check passes with nothing left and stops
+// counting against n/m — survives a reload (it's in the store) and comes back
+// with Show again; Hide folds only its card, for this session.
+func TestIgnoreAndHideFinding(t *testing.T) {
+	c := checksController(t)
+	d := mdDiff()
+	var text []string
+	for _, l := range d.Lines {
+		text = append(text, l.Content)
+	}
+	if err := os.WriteFile(filepath.Join(c.RepoPath, "doc.md"), []byte(strings.Join(text, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := PrereviewState{SelectedFile: "doc.md", CurrentDiff: d}
+	c.applyChecks(&s)
+	before := s.CheckSummary()
+	s.SelectedCheck = "filler-intensifiers"
+
+	hidden, err := c.HideFinding(s, checksCtx("hideFinding", map[string]interface{}{"id": "filler-intensifiers", "index": 0}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hidden.FindingsByRow()) != 0 || len(hidden.findingMarksByLine()[25]) != 1 || hidden.CheckStrip().Hidden != 1 || hidden.CheckSummary() != before {
+		t.Fatalf("hide: cards=%d marks=%d hidden=%d", len(hidden.FindingsByRow()), len(hidden.findingMarksByLine()[25]), hidden.CheckStrip().Hidden)
+	}
+	if shown, _ := c.ShowHiddenFindings(hidden, nil); len(shown.FindingsByRow()) != 1 {
+		t.Fatal("Show didn't bring the hidden card back")
+	}
+
+	s, err = c.DismissFinding(s, checksCtx("dismissFinding", map[string]interface{}{"id": "filler-intensifiers", "index": 0}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := resultByID(t, s, "filler-intensifiers")
+	if r.Status != checks.StatusPass || len(r.Findings) != 0 || r.Dismissed != 1 {
+		t.Fatalf("after ignoring its only finding: %+v", r)
+	}
+	if got := s.CheckSummary(); got.Passed != before.Passed+1 || got.Failing {
+		t.Fatalf("an ignored finding still counts: %+v (was %+v)", got, before)
+	}
+	fresh := PrereviewState{SelectedFile: "doc.md", CurrentDiff: mdDiff()}
+	if c.applyChecks(&fresh); resultByID(t, fresh, "filler-intensifiers").Status != checks.StatusPass {
+		t.Fatal("the dismissal didn't survive a reload")
+	}
+	s, err = c.RestoreDismissed(s, checksCtx("restoreDismissed", map[string]interface{}{"path": "doc.md", "id": "filler-intensifiers"}))
+	if err != nil || resultByID(t, s, "filler-intensifiers").Status != checks.StatusFail {
+		t.Fatalf("Show again didn't bring it back: %v", err)
+	}
+}
