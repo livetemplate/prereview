@@ -110,3 +110,26 @@ func loadSuggestionsFromDir(t *testing.T, dir string) []review.Suggestion {
 	}
 	return out
 }
+
+// TestMisgroupWarnings (#206): same-start suggestions that won't group are named.
+func TestMisgroupWarnings(t *testing.T) {
+	payload := `[
+	 {"id":"c1-a","file":"a.md","from_line":4,"original":"Fast and simple.","proposed":"Fast."},
+	 {"id":"c1-b","file":"a.md","from_line":4,"original":"Fast and simple. Small.","proposed":"Small."},
+	 {"id":"ok-a","file":"a.md","from_line":9,"to_line":9,"original":"x","proposed":"y"},
+	 {"id":"ok-b","file":"a.md","from_line":9,"to_line":12,"original":"x","proposed":"z"},
+	 {"id":"ins-a","file":"a.md","from_line":20,"to_line":20,"original":"","proposed":"p"},
+	 {"id":"ins-b","file":"a.md","from_line":20,"to_line":21,"original":"","proposed":"q"},
+	 {"id":"old","file":"a.md","side":"old","from_line":4,"original":"other","proposed":"w"}
+	]`
+	sugs, err := parseSuggestionsInput([]byte(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := misgroupWarnings(sugs)
+	// ok-* group (the to_line hint is derived away); old is another side.
+	if len(got) != 2 || !strings.Contains(got[0], "c1-a and c1-b") || !strings.Contains(got[0], "a.md:4") ||
+		!strings.Contains(got[1], "ins-a and ins-b") {
+		t.Fatalf("want warnings for c1-a/c1-b and ins-a/ins-b only, got %q", got)
+	}
+}

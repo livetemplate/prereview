@@ -93,6 +93,13 @@ Want a different take? **Reply** on the suggestion's thread with what should
 change; the agent reworks it and re-submits (a reworked suggestion comes back
 for a fresh look).
 
+**Alternatives.** When a comment leaves a choice that is yours to make (tone, audience,
+scope), the agent may offer two versions as linked boxes ("alternative 1 of 2") instead
+of picking one, and mark your comment *answered*. Accepting one rejects the other. Reject
+both and the agent asks which direction you want; reply on the comment and it works from
+your reply instead. The Queue panel and the End-session dialog count the choices still
+awaiting your pick.
+
 Your decisions reach the agent the same way comments do — continuously, no
 hand-off step. prereview never edits your files itself; the agent does, so an
 accepted edit shows up as a normal diff you can commit. Use **Show / hide

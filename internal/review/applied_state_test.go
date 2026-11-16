@@ -108,3 +108,45 @@ func TestAwaitingApplyCount_TracksTheAcceptApplyCycle(t *testing.T) {
 			"part of this review", got)
 	}
 }
+
+// TestAwaitingPickCount (#206): forks (groups of 2+ alternatives) that still owe the
+// reviewer's pick, one row per state in the plan's contract.
+func TestAwaitingPickCount(t *testing.T) {
+	alt := func(id, file string, line int) Suggestion {
+		return Suggestion{ID: id, File: file, FromLine: line, ToLine: line, Side: "new",
+			OriginalText: "Fast and simple.", ProposedText: id}
+	}
+	a, b := alt("c1-a", "doc.md", 3), alt("c1-b", "doc.md", 3)
+	lone := Suggestion{ID: "lone", File: "doc.md", FromLine: 9, ToLine: 9, Side: "new", OriginalText: "teh", ProposedText: "the"}
+	verdict := func(sg Suggestion, v string) SuggestionDecision {
+		return SuggestionDecision{SuggestionID: sg.ID, Verdict: v, Fingerprint: suggestionFingerprint(sg)}
+	}
+	outdated := b
+	outdated.AnchorStatus = anchorOutdated
+
+	for _, tc := range []struct {
+		name string
+		s    PrereviewState
+		want int
+	}{
+		{"a lone suggestion is not a fork", PrereviewState{Suggestions: []Suggestion{lone}}, 0},
+		{"undecided fork", PrereviewState{Suggestions: []Suggestion{a, b, lone}}, 1},
+		{"one rejected, one undecided", PrereviewState{Suggestions: []Suggestion{a, b},
+			Decisions: []SuggestionDecision{verdict(a, verdictReject)}}, 1},
+		{"one accepted (sibling auto-rejected)", PrereviewState{Suggestions: []Suggestion{a, b},
+			Decisions: []SuggestionDecision{verdict(a, verdictAccept), verdict(b, verdictReject)}}, 0},
+		{"accepted and applied", PrereviewState{Suggestions: []Suggestion{a, b},
+			Decisions: []SuggestionDecision{verdict(a, verdictAccept)}, Applied: map[string]bool{"c1-a": true}}, 0},
+		{"both rejected: neither, the agent's turn", PrereviewState{Suggestions: []Suggestion{a, b},
+			Decisions: []SuggestionDecision{verdict(a, verdictReject), verdict(b, verdictReject)}}, 0},
+		{"an outdated member: the cards can't be acted on", PrereviewState{Suggestions: []Suggestion{a, outdated}}, 0},
+		{"hidden cards still count (hiding is view-only)", PrereviewState{Suggestions: []Suggestion{a, b},
+			Hidden: []HiddenSuggestion{{SuggestionID: "c1-a", Fingerprint: suggestionFingerprint(a)}, {SuggestionID: "c1-b", Fingerprint: suggestionFingerprint(b)}}}, 1},
+		{"counts forks, not suggestions; whole review", PrereviewState{SelectedFile: "doc.md",
+			Suggestions: []Suggestion{a, b, alt("c2-a", "other.md", 5), alt("c2-b", "other.md", 5), alt("c2-c", "other.md", 5)}}, 2},
+	} {
+		if got := tc.s.AwaitingPickCount(); got != tc.want {
+			t.Errorf("%s: AwaitingPickCount = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}

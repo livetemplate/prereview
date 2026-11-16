@@ -12,6 +12,8 @@ package review
 // "done" (via applied.jsonl). So the toolbar button, counts, and enqueue pulse
 // light up for a suggestion accept with no separate machinery.
 
+import "slices"
+
 // Queue states, in lifecycle order. A comment/suggestion is in exactly one.
 const (
 	queueDraft    = "draft"    // held back — not yet enqueued for the agent
@@ -250,6 +252,33 @@ func (s PrereviewState) AwaitingApplyCount() int {
 	n := 0
 	for _, sg := range s.scopedSuggestions() {
 		if s.suggestionAcceptedPending(sg.ID) {
+			n++
+		}
+	}
+	return n
+}
+
+// AwaitingPickCount is how many forks (groups of 2+ alternative suggestions, #117)
+// still owe the reviewer's pick, across the whole review (#206).
+//
+// An undecided suggestion has no queue state, and the agent parks the comment that asked
+// for the fork (`reply --answered`), so a fork nobody picks is silent: end the session
+// and that comment is never addressed. Like AwaitingApplyCount, this keeps it visible in
+// the Queue panel and on End session.
+//
+// A fork with an outdated member is skipped: the cards hide Accept/Reject once the text
+// is gone, so counting it would show a number the reviewer can't clear. Grouped over
+// scopedSuggestions, not visibleSuggestions: hiding cards is view-only and must not zero
+// the count.
+func (s PrereviewState) AwaitingPickCount() int {
+	decided := s.DecisionsBySuggestion()
+	n := 0
+	for _, g := range groupByKey(s.scopedSuggestions()) {
+		closed := slices.ContainsFunc(g, func(sg Suggestion) bool {
+			return decided[sg.ID].Verdict == verdictAccept || sg.AnchorOutdated()
+		})
+		open := slices.ContainsFunc(g, func(sg Suggestion) bool { return decided[sg.ID].Verdict != verdictReject })
+		if !closed && open { // picked or outdated → closed; every member rejected → the agent's turn
 			n++
 		}
 	}

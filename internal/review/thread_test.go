@@ -165,14 +165,20 @@ func TestActionableDecisions_UnreadOverlay(t *testing.T) {
 		// Accepted + applied by the agent (→ outdated), then the reviewer replied. The
 		// reply must override the applied/outdated suppression so the agent re-engages.
 		{ID: "applied-reply", AnchorStatus: anchorOutdated},
+		// #206: a rejected card the agent already replied on ("superseded") must still
+		// ship WITH that thread: the agent's last word is how it tells a handled reject
+		// from a fresh "neither" after a context reset.
+		{ID: "c1-a"},
 	}
 	decided := map[string]SuggestionDecision{
 		"applied-reply": {SuggestionID: "applied-reply", Verdict: verdictAccept},
+		"c1-a":          {SuggestionID: "c1-a", Verdict: verdictReject},
 	}
 	applied := map[string]bool{"applied-reply": true}
 	threads := map[string][]ThreadEntry{
 		"s1":            {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "tweak it", At: 2}},
 		"applied-reply": {{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, Body: "actually revert that", At: 2}},
+		"c1-a":          {{Author: AuthorAgent, Body: "superseded by your reply on c1", At: 1}},
 	}
 	got := actionableDecisions(sugs, decided, threads, applied)
 	ids := map[string]StreamDecision{}
@@ -192,6 +198,9 @@ func TestActionableDecisions_UnreadOverlay(t *testing.T) {
 		t.Error("an applied/outdated suggestion with an unread reviewer reply must re-surface (#164)")
 	} else if len(ar.Thread) != 2 || ar.Thread[1].Body != "actually revert that" {
 		t.Errorf("re-surfaced applied suggestion must carry the follow-up; got %+v", ar.Thread)
+	}
+	if r := ids["c1-a"]; r.Verdict != verdictReject || len(r.Thread) != 1 || r.Thread[0].Author != AuthorAgent {
+		t.Errorf("an agent-replied reject must ship with the agent's reply; got %+v", r)
 	}
 }
 

@@ -74,6 +74,9 @@ func runSuggest(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("no suggestions in payload")
 	}
+	for _, w := range misgroupWarnings(sugs) {
+		fmt.Fprintln(os.Stderr, "prereview suggest: warning:", w)
+	}
 
 	dir, err := storeDir(*out)
 	if err != nil {
@@ -153,4 +156,16 @@ func parseSuggestionsInput(raw []byte) ([]review.Suggestion, error) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+// misgroupWarnings words review.MisgroupedAtStart's pairs for stderr. suggest is a
+// tolerant append, so a misgroup is a warning, never an error (#206).
+func misgroupWarnings(sugs []review.Suggestion) []string {
+	var out []string
+	for _, p := range review.MisgroupedAtStart(sugs) {
+		out = append(out, fmt.Sprintf(
+			"%s and %s both start at %s:%d but are not alternatives (different \"original\", or different to_line for an insertion): accepting one won't reject the other. To offer a choice, quote the same span in both.",
+			p[0].ID, p[1].ID, p[1].File, p[1].FromLine))
+	}
+	return out
 }
