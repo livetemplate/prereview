@@ -50,7 +50,7 @@ func runDone(args []string) error {
 				"  validated against comments.csv — unknown ids fail. Read ids from a stable\n"+
 				"  interface with `prereview comments --json`.\n")
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 

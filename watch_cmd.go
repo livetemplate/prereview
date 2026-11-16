@@ -47,7 +47,7 @@ func runWatch(args []string) error {
 				"  that landed between rounds comes back instantly). Requires the review\n"+
 				"  server running with --agent; --out must match its STORE directory.\n")
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 	dir, err := storeDir(*out)

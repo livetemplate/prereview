@@ -50,3 +50,16 @@ func TestRunStatus(t *testing.T) {
 		t.Error("expected error when no state given")
 	}
 }
+
+// TestRunStatus_FreeTextAndLateFlags: the message is free text (it doubles as the
+// version changelog), so a dash-led line ("- fixed X") stays in it, and --out after the
+// message is still honoured rather than swallowed into the text.
+func TestRunStatus_FreeTextAndLateFlags(t *testing.T) {
+	dir := t.TempDir()
+	if err := runStatus([]string{"done", "- fixed X", "--out", dir}); err != nil {
+		t.Fatalf("runStatus: %v", err)
+	}
+	if s := readStatus(t, dir); s.State != "done" || s.Message != "- fixed X" {
+		t.Errorf("got %+v, want done / \"- fixed X\"", s)
+	}
+}

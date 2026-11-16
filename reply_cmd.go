@@ -46,7 +46,7 @@ func runReply(args []string) error {
 				"  `prereview comments --json`.\n\n"+
 				"  --answered settles a comment with no edit (instead of `prereview done`).\n")
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 

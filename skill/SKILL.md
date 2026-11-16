@@ -27,8 +27,7 @@ without exposing it publicly (`--host` overrides).
 ## Launch
 
 Run in the background with `--agent` (agent mode: a coding agent drives the review).
-The review path is the **positional argument** (defaults to the current directory);
-flags must come **before** it.
+The review path is the **positional argument** (defaults to the current directory).
 
 ```bash
 cd <repo>

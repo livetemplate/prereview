@@ -38,7 +38,7 @@ func runCheck(args []string, stdout io.Writer) error {
 				"  config when you've trusted it on the Checks page and vale is installed. Prints each finding as path:line:col; exits 1\n"+
 				"  when any check fails or errors. Checks turned off on the Checks page are skipped.\n")
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {

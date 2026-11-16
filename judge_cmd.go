@@ -54,7 +54,7 @@ func runJudge(args []string) error {
 				"  Answering a benchmark run: --bench <id> --run <run> --case <case> instead of\n"+
 				"  --out/--file, as the benchmark's request names them.\n")
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() > 0 {

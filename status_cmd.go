@@ -29,7 +29,7 @@ func runStatus(args []string) error {
 				"  optional message is short human detail (keep it plain). Written atomically\n"+
 				"  to <STORE>/llm-status.json; --out must match the STORE line.\n")
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersedText(fs, args); err != nil {
 		return err
 	}
 	rest := fs.Args()
