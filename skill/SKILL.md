@@ -166,12 +166,28 @@ then look across it for:
 - **Relationships & ordering** — a broader/structural comment reframes the local ones
   under it (a `kind=file` "rename this type" changes how you apply a `kind=line`
   comment referencing it). Settle structural decisions first, then local edits.
-- **Conflicts** — when two comments pull in opposite directions, reconcile them into
-  one coherent decision and surface the conflict to the user rather than letting the
-  last one win.
+- **Conflicts** — when comments on *different* lines pull in opposite directions,
+  reconcile them into one coherent decision and surface the conflict to the user.
 
-Then drive a **single, coherent change** across the affected files: each comment is an
-*input* to that holistic change, not a standalone instruction. Use
+**Plan the pass before your first edit** (skip this for a single comment):
+
+1. **Set aside requests** (`"request"` set): they are tasks, not edits. Handle each
+   after the edits, as its section below says.
+2. **On overlap, the later wins.** When two comments overlap (same file and lines, or
+   a `kind=file` comment and a line in that file) and the later one restates, narrows
+   or contradicts the earlier, make one edit for the later. Mark both ids `done` and
+   `reply` on the earlier one naming the comment it was folded into. "Later" means
+   further down `comments[]`, not a newer `created_at` (see
+   [reference.md → snapshot](./reference.md#agent-mode)).
+3. **One pass per file**: `kind=file` comments first (see *Relationships* above), then
+   line/text comments by ascending `from_line`. Across files, start with the one whose
+   change constrains the others; otherwise keep the review's file order.
+4. **`area`/`region` last**: they are feedback with no line to edit at.
+5. **Say the order** in one status line naming files only:
+   `prereview status --out "<STORE>" working "api.go, then README.md"`.
+6. **Execute it**, marking each id as you go (see *Mark each comment* below).
+
+Each comment is an *input* to that plan, not a standalone instruction. Use
 `from_line`/`to_line`/`side` to locate each anchor; the *intent* comes from the `body`
 read in the context of the full set. Comment kinds (`line`/`text`/`file`/`area`/
 `region`), resolved handling, and re-anchoring are detailed in

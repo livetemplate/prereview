@@ -17,9 +17,22 @@ they have commented, or has clicked End session:
     prereview comments --out <STORE> --json
 
 That is the complete set of still-actionable comments (resolved / outdated /
-draft already excluded). Apply them as ONE coherent change, not row by row: read
-them all first, look for shared themes and conflicts, then edit. Each entry has
-`file` + `from_line`/`to_line` to locate the anchor and `body` for intent.
+draft already excluded), in queue order, oldest first. Apply them as ONE coherent
+change, not row by row. Plan the pass before your first edit (skip this for a
+single comment):
+
+1. Set aside comments with `"request"` set (quiz, suggest, ...): tasks, not edits.
+2. When two comments overlap (same file and lines, or a `file` comment and a line
+   in it) and the later one restates, narrows or contradicts the earlier, the
+   later wins: one edit, mark both done, and reply on the earlier naming the
+   comment it was folded into. "Later" means further down the array, not a newer
+   `created_at` (it is second-resolution, so it ties).
+3. One pass per file: `file` comments first, then lines by ascending `from_line`;
+   `area`/`region` last.
+4. Say the order in one status line naming files only, e.g.
+   `prereview status --out <STORE> working "api.go, then README.md"`.
+
+Each entry has `file` + `from_line`/`to_line` to locate the anchor and `body` for intent.
 Interpret `kind`: `line`/`text` = an edit at those lines; `file` = whole-file
 guidance; `area` = a rectangle on an image (`area` = {x,y,w,h} fractions);
 `region` = a spot on a live page (`url`), which is feedback, not a file edit.

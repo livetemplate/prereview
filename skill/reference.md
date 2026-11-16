@@ -44,7 +44,7 @@ flags, or `prereview help` for the top-level list.
 | Subcommand | Purpose |
 |---|---|
 | `prereview watch [--since <seq>]` | The **one** queue reader (see [Agent mode](#agent-mode)). Prints every event after `--since`, blocks for the next when caught up, returns a batch so the agent can act, and exits on the `end` event. Each line carries a `seq`; loop by re-running with the highest seq seen. Never `tail`/`head` the log. |
-| `prereview comments [--json] [--all]` | List the review's comments from a stable interface (no CSV hand-parsing). Defaults to the actionable set; `--all` includes resolved/outdated/draft. `--json` emits the same shape as a `snapshot`. |
+| `prereview comments [--json] [--all]` | List the review's comments from a stable interface (no CSV hand-parsing). Defaults to the actionable set; `--all` includes resolved/outdated/draft. `--json` emits the same shape and order as a `snapshot`. |
 | `prereview done [--file <f>\|-] [--all-open] <id>...` | Mark comments **done** (badge them in the UI). Ids come from args, `--file`/stdin (bare ids, a JSON array, or JSONL objects with an `id`), or `--all-open` (the whole actionable set). Each explicit id is **validated against `comments.csv`** — an unknown id fails with a non-zero exit and is not recorded. |
 | `prereview status <working\|done> [message]` | Echo the agent's status to the review UI (a live pill across every open tab): `working` while applying a batch, `done` when finished. Writes `llm-status.json` atomically. |
 | `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](#suggested-edits). |
@@ -189,6 +189,9 @@ Four event types:
   replied on last drops out until the reviewer speaks again. While the reviewer has the
   queue **paused** (batching), no snapshot is emitted — mutations still persist, but
   `watch` blocks — and **resume** emits ONE coalesced snapshot of everything queued.
+  `comments[]` is in **queue order, oldest first** (an edited comment keeps its place):
+  to tell which of two comments is later, use array position, not the
+  second-resolution `created_at`, which ties.
 - **`files_changed`** — reviewed files changed on disk under you: the reviewer (or
   another tool) edited them, or the reviewer **restored a version**. One event per
   settled run of edits, not per write. Fields: `event, seq, ts, files[], version,
