@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+>
+<title>prereview · /repo</title>
+<link rel="stylesheet" href="/pico.min.css">
+<link rel="stylesheet" href="/livetemplate.css">
+<link rel="stylesheet" href="/syntax.css">
+<link rel="stylesheet" href="/prereview.css">
+</head>
+<body
+  data-lvt-loading-debounce-ms="200"
+  data-lvt-heartbeat-ms="10000"
+><div data-lvt-id="lvt-ID" data-lvt-loading="true">
+
+<div class="theme-root" data-scheme="solarized">
+
+<span class="kbd-esc" hidden aria-hidden="true"
+  lvt-on:window:keydown="clearSelection"
+  lvt-key="Escape"
+></span>
+
+
+
+<header class="bar bar-external">
+  <span class="ext-target">prereview · annotating <code>http://localhost:3000</code> <span class="ext-page">http://localhost:3000/</span></span>
+  <span class="bar-actions"><form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleAnnotations"
+        class="outline secondary anno-toggle"
+        aria-pressed="false"
+        title="Show/hide annotations"
+      >💬 4</button>
+    </form>
+    <form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleAgentPause"
+        class="contrast tb-pause"
+        title="Live — each annotation is sent as you make it. Pause to batch them instead."
+      >⏸ Pause — batch</button>
+    </form><form method="POST" style="margin:0">
+      <button
+        type="button"
+        command="show-modal"
+        commandfor="confirm-end-session"
+        class="contrast"
+        title="Emit session_end and stop the server — your agent stops consuming the stream"
+      >End session</button>
+    </form></span>
+</header>
+<div class="layout layout-external">
+  <main class="viewer ext-viewer">
+    <form method="POST" class="region-toggle">
+  <button
+    type="submit"
+    name="toggleRegionSelect"
+    class="outline secondary"
+    aria-pressed="false"
+  >▭ Select a region to comment</button>
+</form>
+    <div class="preview-stage ext-stage"
+         lvt-fx:proxy-bridge="setProxyURL"
+         data-key="ext-stage">
+      
+      <iframe
+        class="ext-frame"
+        src="http://localhost:7000"
+        title="Live preview of http://localhost:3000"
+        lvt-ignore
+      ></iframe>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer"><button type="button"
+                class="area-overlay pin-btn is-acted"
+                lvt-on:click="editComment"
+                data-id="r1"
+                data-key="pin-r1"
+                style="left:10.0000%;top:10.0000%;width:30.0000%;height:10.0000%;"
+                title="Worked on — fix r1"
+                aria-label="Edit annotation"></button><button type="button"
+                class="area-overlay pin-btn is-acted"
+                lvt-on:click="editComment"
+                data-id="r2"
+                data-key="pin-r2"
+                style="left:10.0000%;top:25.0000%;width:30.0000%;height:10.0000%;"
+                title="Answered — fix r2"
+                aria-label="Edit annotation"></button><button type="button"
+                class="area-overlay pin-btn"
+                lvt-on:click="editComment"
+                data-id="r3"
+                data-key="pin-r3"
+                style="left:10.0000%;top:40.0000%;width:30.0000%;height:10.0000%;"
+                title="fix r3"
+                aria-label="Edit annotation"></button><button type="button"
+                class="area-overlay pin-btn"
+                lvt-on:click="editComment"
+                data-id="r5"
+                data-key="pin-r5"
+                style="left:10.0000%;top:70.0000%;width:30.0000%;height:10.0000%;"
+                title="fix r5"
+                aria-label="Edit annotation"></button></div>
+      
+    </div>
+    
+  </main>
+  <aside
+    class="ext-sidebar"
+    aria-label="Annotations"
+  >
+    <header class="ext-sidebar-head"><strong>Annotations (4)</strong><form method="POST" style="margin:0">
+        <button
+          type="submit"
+          name="toggleAnnotations"
+          class="outline secondary close-btn"
+          aria-label="Close annotations"
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M6 6l12 12M18 6L6 18"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button>
+      </form></header>
+    <div class="ext-sidebar-body"><div
+        class="inline-comment ext-anno"
+        data-key="r1"
+        lvt-fx:animate="fade"
+      ><form method="POST" class="anno-locate-form">
+          <input type="hidden" name="id" value="r1">
+          <button
+            type="submit"
+            name="focusComment"
+            class="anno-locate"
+            title="Locate this region on the page"
+          ><span class="ext-page-link">📍 http://localhost:3000/</span> · <small class="processed-badge">worked on</small><span class="anno-body">fix r1</span></button>
+        </form><div class="thread"><div class="thread-entry thread-agent">
+    <div class="thread-meta"><span class="thread-author">agent</span> · <small class="thread-when">12:00 AM</small></div>
+    <div class="thread-body">Fixed the padding.</div>
+  </div></div><div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="r1">
+      <button
+        type="submit"
+        name="toggleResolved"
+        class="outline"
+      >Resolve</button>
+    </form><form method="POST"><input type="hidden" name="id" value="r1"><button type="submit" name="openReply" class="outline">Reply</button></form><form method="POST">
+      <input type="hidden" name="id" value="r1">
+      <button
+        type="submit"
+        name="editComment"
+        class="outline"
+      >Edit</button>
+    </form><button
+      type="button"
+      class="secondary outline"
+      command="show-modal"
+      commandfor="confirm-delete-r1"
+    >Delete</button><dialog id="confirm-delete-r1"><article><header><strong>Delete comment?</strong></header><p><small><code>http://localhost:3000/</code> · region</small></p><footer>
+    <form method="POST">
+      <input type="hidden" name="id" value="r1">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-delete-r1"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="deleteComment"
+          class="contrast"
+        >Delete</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog></div></div><div
+        class="inline-comment ext-anno"
+        data-key="r2"
+        lvt-fx:animate="fade"
+      ><form method="POST" class="anno-locate-form">
+          <input type="hidden" name="id" value="r2">
+          <button
+            type="submit"
+            name="focusComment"
+            class="anno-locate"
+            title="Locate this region on the page"
+          ><span class="ext-page-link">📍 http://localhost:3000/</span> · <small class="answered-badge" title="the agent replied with no edit — read its answer, then resolve or reply">answered</small><span class="anno-body">fix r2</span></button>
+        </form><div class="thread"><div class="thread-entry thread-agent">
+    <div class="thread-meta"><span class="thread-author">agent</span> · <small class="thread-when">12:00 AM</small></div>
+    <div class="thread-body">That spacing is intentional.</div>
+  </div></div><div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="r2">
+      <button
+        type="submit"
+        name="toggleResolved"
+        class="outline"
+      >Resolve</button>
+    </form><form method="POST"><input type="hidden" name="id" value="r2"><button type="submit" name="openReply" class="outline">Reply</button></form><form method="POST">
+      <input type="hidden" name="id" value="r2">
+      <button
+        type="submit"
+        name="editComment"
+        class="outline"
+      >Edit</button>
+    </form><button
+      type="button"
+      class="secondary outline"
+      command="show-modal"
+      commandfor="confirm-delete-r2"
+    >Delete</button><dialog id="confirm-delete-r2"><article><header><strong>Delete comment?</strong></header><p><small><code>http://localhost:3000/</code> · region</small></p><footer>
+    <form method="POST">
+      <input type="hidden" name="id" value="r2">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-delete-r2"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="deleteComment"
+          class="contrast"
+        >Delete</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog></div></div><div
+        class="inline-comment ext-anno"
+        data-key="r3"
+        lvt-fx:animate="fade"
+      ><form method="POST" class="anno-locate-form">
+          <input type="hidden" name="id" value="r3">
+          <button
+            type="submit"
+            name="focusComment"
+            class="anno-locate"
+            title="Locate this region on the page"
+          ><span class="ext-page-link">📍 http://localhost:3000/</span> · <small class="processed-badge">worked on</small> · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small><span class="anno-body">fix r3</span></button>
+        </form><div class="thread"><div class="thread-entry thread-agent">
+    <div class="thread-meta"><span class="thread-author">agent</span> · <small class="thread-when">12:00 AM</small></div>
+    <div class="thread-body">Moved it left.</div>
+  </div><div class="thread-entry thread-reviewer">
+    <div class="thread-meta"><span class="thread-author">reviewer</span> · <small class="thread-when">12:00 AM</small></div>
+    <div class="thread-body">Further left, please.</div>
+  </div></div><form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="r3">
+    <textarea
+      name="body"
+      placeholder="Reply to the agent…"
+      lvt-on:input="saveReplyDraft"
+      lvt-mod:debounce="200"
+      lvt-autofocus
+    ></textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form><div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="r3">
+      <button
+        type="submit"
+        name="toggleResolved"
+        class="outline"
+      >Resolve</button>
+    </form><form method="POST">
+      <input type="hidden" name="id" value="r3">
+      <button
+        type="submit"
+        name="editComment"
+        class="outline"
+      >Edit</button>
+    </form><button
+      type="button"
+      class="secondary outline"
+      command="show-modal"
+      commandfor="confirm-delete-r3"
+    >Delete</button><dialog id="confirm-delete-r3"><article><header><strong>Delete comment?</strong></header><p><small><code>http://localhost:3000/</code> · region</small></p><footer>
+    <form method="POST">
+      <input type="hidden" name="id" value="r3">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-delete-r3"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="deleteComment"
+          class="contrast"
+        >Delete</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog></div></div><div
+        class="inline-comment ext-anno"
+        data-key="r5"
+        lvt-fx:animate="fade"
+      ><form method="POST" class="anno-locate-form">
+          <input type="hidden" name="id" value="r5">
+          <button
+            type="submit"
+            name="focusComment"
+            class="anno-locate"
+            title="Locate this region on the page"
+          ><span class="ext-page-link">📍 http://localhost:3000/</span> · <small class="queued-badge" title="queued for the agent">queued</small><span class="anno-body">fix r5</span></button>
+        </form><div class="ic-actions">
+    <form method="POST">
+      <input type="hidden" name="id" value="r5">
+      <button
+        type="submit"
+        name="toggleResolved"
+        class="outline"
+      >Resolve</button>
+    </form><form method="POST"><input type="hidden" name="id" value="r5"><button type="submit" name="openReply" class="outline">Reply</button></form><form method="POST">
+      <input type="hidden" name="id" value="r5">
+      <button
+        type="submit"
+        name="editComment"
+        class="outline"
+      >Edit</button>
+    </form><button
+      type="button"
+      class="secondary outline"
+      command="show-modal"
+      commandfor="confirm-delete-r5"
+    >Delete</button><dialog id="confirm-delete-r5"><article><header><strong>Delete comment?</strong></header><p><small><code>http://localhost:3000/</code> · region</small></p><footer>
+    <form method="POST">
+      <input type="hidden" name="id" value="r5">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-delete-r5"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="deleteComment"
+          class="contrast"
+        >Delete</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog></div></div></div>
+  </aside>
+</div>
+<footer class="app-footer" role="contentinfo"><small>prereview v · external mode · <code>http://localhost:3000</code></small></footer>
+
+
+
+<dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p><footer>
+    <form method="POST">
+      <fieldset role="group">
+        <button
+          type="button"
+          command="close"
+          commandfor="confirm-end-session"
+          class="secondary"
+        >Cancel</button>
+        <button
+          type="submit"
+          name="endSession"
+          class="contrast"
+        >End session</button>
+      </fieldset>
+    </form>
+  </footer></article></dialog>
+
+
+</div>
+</div><script defer src="/livetemplate-client.js"></script>
+
+<script defer src="/mermaid-init.js"></script>
+</body>
+</html>
+
+

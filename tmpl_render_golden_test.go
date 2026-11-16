@@ -384,6 +384,37 @@ func renderFixtures() []renderFixture {
 		ProxyBaseURL: "http://localhost:7000",
 	}
 
+	// #248: live-site annotations in every agent state: worked on, answered, replied
+	// on by the reviewer (awaiting agent, reply form open), resolved, untouched. Pins the
+	// sidebar badges + thread + Reply and the pin boxes' is-acted / tooltip.
+	extActed := external
+	extActed.AgentMode = true
+	region := func(id string, y float64) review.Comment {
+		return review.Comment{ID: id, Kind: "region", URL: "http://localhost:3000/", Body: "fix " + id,
+			Area: review.Area{X: 0.1, Y: y, W: 0.3, H: 0.1}}
+	}
+	worked, ans, replied, done, fresh := region("r1", 0.1), region("r2", 0.25), region("r3", 0.4), region("r4", 0.55), region("r5", 0.7)
+	worked.Processed, ans.Answered, replied.Processed, done.Resolved = true, true, true, true
+	extActed.Comments = []review.Comment{worked, ans, replied, done, fresh}
+	extActed.ThreadEntries = []review.ThreadEntry{
+		{TargetID: "r1", Author: review.AuthorAgent, Body: "Fixed the padding.", At: 1},
+		{TargetID: "r2", Author: review.AuthorAgent, Body: "That spacing is intentional.", At: 2},
+		{TargetID: "r3", Author: review.AuthorAgent, Body: "Moved it left.", At: 3},
+		{TargetID: "r3", Author: review.AuthorReviewer, Body: "Further left, please.", At: 4},
+	}
+	extActed.ReplyingID = "r3"
+
+	// #248: image area comments in the same states (worked on, answered, resolved, open).
+	imgAreas := binary("logo.png")
+	imgAreas.AgentMode = true
+	area := func(id string, x float64) review.Comment {
+		return review.Comment{ID: id, Kind: "area", File: "logo.png", Body: "box " + id,
+			Area: review.Area{X: x, Y: 0.1, W: 0.2, H: 0.2}}
+	}
+	a1, a2, a3, a4 := area("a1", 0.05), area("a2", 0.3), area("a3", 0.55), area("a4", 0.8)
+	a1.Processed, a2.Answered, a3.Resolved = true, true, true
+	imgAreas.Comments = []review.Comment{a1, a2, a3, a4}
+
 	// version-view (historical read-only) + a populated version timeline so the
 	// file-header Versions panel (Phase 2) is exercised, not dark.
 	version := goBase()
@@ -437,6 +468,14 @@ func renderFixtures() []renderFixture {
 		{ID: "c2", File: "app.go", Body: "why a map here?", Kind: "line", FromLine: 2, ToLine: 2, Side: "new", Answered: true},
 	}
 	answered.ThreadEntries = []review.ThreadEntry{{TargetID: "c2", Author: review.AuthorAgent, Body: "Lookups dominate; order never matters.", At: 1}}
+
+	// #149 reply form open on a comment card, with a half-typed draft: pins the shared
+	// replyForm partial (#248) so its markup can't drift.
+	replyOpen := goBase()
+	replyOpen.AgentMode = true
+	replyOpen.Comments = []review.Comment{{ID: "c1", File: "app.go", Body: "rename", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"}}
+	replyOpen.ReplyingID = "c1"
+	replyOpen.ReplyDraft = "half-typed"
 
 	// #218: a comment and a suggestion whose lines the shrunk file no longer has render
 	// in the end-of-file block (an outdated comment and an undecided suggestion).
@@ -655,6 +694,7 @@ func renderFixtures() []renderFixture {
 		{"markdown-view", md},
 		{"html-view", html},
 		{"binary-image", binary("logo.png")},
+		{"binary-image-areas", imgAreas},
 		{"binary-pdf", binary("doc.pdf")},
 		{"binary-video", binary("clip.mp4")},
 		{"binary-audio", binary("sound.mp3")},
@@ -666,9 +706,11 @@ func renderFixtures() []renderFixture {
 		{"quiz-me-button", quizBtn},
 		{"quiz-me-picker", quizPicker},
 		{"external", external},
+		{"external-acted", extActed},
 		{"version-view", version},
 		{"agent-mode", agent},
 		{"agent-answered", answered},
+		{"reply-open", replyOpen},
 		{"past-eof", pastEOF},
 		{"checks-strip", checksStrip},
 		{"checks-page", checksPage},

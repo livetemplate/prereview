@@ -296,10 +296,10 @@
     {{- if and .AnchorEdited (not .Resolved) (not .Processed)}} · <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}
     {{- if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}
     {{- if .Draft}} · <small class="draft-badge">draft</small>{{end}}
-    {{- if .Processed}} · <small class="processed-badge">worked on</small>{{end}}
+    {{- if .Processed}} · {{template "processedBadge"}}{{end}}
     {{- if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}
-    {{- if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}
-    {{- if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end -}}
+    {{- if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}
+    {{- if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end -}}
   </span></header>
   {{- /* selected phrase (kind=text) — shows what the comment is about, esp. for
          rendered-view comments that anchor line-level */ -}}
@@ -314,20 +314,7 @@
   {{- template "thread" (index $.Threads .ID) -}}
   {{- /* #149 reviewer reply — the inline form when open on this card. */ -}}
   {{- if eq $.ReplyingID .ID -}}
-  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
-    <input type="hidden" name="id" value="{{.ID}}">
-    <textarea
-      name="body"
-      placeholder="Reply to the agent…"
-      lvt-on:input="saveReplyDraft"
-      lvt-mod:debounce="200"
-      lvt-autofocus
-    >{{$.ReplyDraft}}</textarea>
-    <div class="reply-actions">
-      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
-      <button type="submit" name="postReply">Send reply</button>
-    </div>
-  </form>
+  {{- template "replyForm" $ -}}
   {{- end -}}
   {{- /* resolve / re-anchor / edit / delete / reply */ -}}
   <div class="ic-actions">
@@ -431,7 +418,7 @@
     {{- if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}
     {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}
     {{- if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}
-    {{- if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end -}}
+    {{- if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end -}}
     {{- /* Hide controls — a pure declutter, always available (even for a decided or
            outdated card), separate from the accept/reject flow. Hiding never counts
            as a reject and never reaches the LLM. */ -}}
@@ -456,20 +443,7 @@
   {{- template "thread" (index $.Threads .ID) -}}
   {{- /* #149 reviewer reply — inline form when open, else a Reply button. */ -}}
   {{- if eq $.ReplyingID .ID -}}
-  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
-    <input type="hidden" name="id" value="{{.ID}}">
-    <textarea
-      name="body"
-      placeholder="Reply to the agent…"
-      lvt-on:input="saveReplyDraft"
-      lvt-mod:debounce="200"
-      lvt-autofocus
-    >{{$.ReplyDraft}}</textarea>
-    <div class="reply-actions">
-      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
-      <button type="submit" name="postReply">Send reply</button>
-    </div>
-  </form>
+  {{- template "replyForm" $ -}}
   {{- else -}}
   <div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>
   {{- end -}}
@@ -520,7 +494,7 @@
   lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}
 >
   {{- /* line span · resolved badge */ -}}
-  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · <small class="processed-badge">worked on</small>{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · <small class="queued-badge" title="queued for the agent">queued</small>{{end}}{{if index $.AwaitingAgent .ID}} · <small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}</span></header>
+  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}</span></header>
   {{- /* comment text */ -}}
   <div class="body">{{.Body}}</div>
   {{- /* #149 conversation thread + reviewer reply — the same pair commentCardFull
@@ -529,20 +503,7 @@
          reviewer's follow-ups belong here too (#167). */ -}}
   {{- template "thread" (index $.Threads .ID) -}}
   {{- if eq $.ReplyingID .ID -}}
-  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
-    <input type="hidden" name="id" value="{{.ID}}">
-    <textarea
-      name="body"
-      placeholder="Reply to the agent…"
-      lvt-on:input="saveReplyDraft"
-      lvt-mod:debounce="200"
-      lvt-autofocus
-    >{{$.ReplyDraft}}</textarea>
-    <div class="reply-actions">
-      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
-      <button type="submit" name="postReply">Send reply</button>
-    </div>
-  </form>
+  {{- template "replyForm" $ -}}
   {{- end -}}
   {{- /* resolve / reply / edit / delete */ -}}
   <div class="ic-actions">
@@ -645,6 +606,29 @@
 </div>
 {{end}}
 
+{{/* replyForm — the #149 reviewer reply form, shared by every card that takes a
+     reply (comment, suggestion, simple comment, external annotation). Called with the
+     root state and only rendered while $.ReplyingID is the card's id, so that is the
+     id it posts. The quiz's form differs (composite id) and stays inline. */}}
+{{define "replyForm"}}<form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ReplyingID}}">
+    <textarea
+      name="body"
+      placeholder="Reply to the agent…"
+      lvt-on:input="saveReplyDraft"
+      lvt-mod:debounce="200"
+      lvt-autofocus
+    >{{.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>{{end}}
+
 {{- /* #205: the "answered" card badge — the agent replied with no edit. One copy, used
        by the inline cards and the all-comments overview. */ -}}
 {{define "answeredBadge"}}<small class="answered-badge" title="the agent replied with no edit — read its answer, then resolve or reply">answered</small>{{end}}
+{{/* The other agent-state badges, shared by every card that shows them (#248). */}}
+{{define "processedBadge"}}<small class="processed-badge">worked on</small>{{end}}
+{{define "awaitingBadge"}}<small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}
+{{define "queuedBadge"}}<small class="queued-badge" title="queued for the agent">queued</small>{{end}}

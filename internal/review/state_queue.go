@@ -92,6 +92,23 @@ func (s PrereviewState) CommentQueueStates() map[string]string {
 	return out
 }
 
+// AgentActedLabels maps each comment the agent worked on or answered, while it is the
+// reviewer's turn, to "Worked on" / "Answered" (#248). Region boxes (live page and
+// image) draw these acted-on and put the label in the tooltip. It follows
+// CommentQueueStates, so resolving or replying drops it. Zero-arg for the framework.
+func (s PrereviewState) AgentActedLabels() map[string]string {
+	out := map[string]string{}
+	for id, st := range s.CommentQueueStates() {
+		switch st {
+		case queueDone:
+			out[id] = "Worked on"
+		case queueAnswered:
+			out[id] = "Answered"
+		}
+	}
+	return out
+}
+
 // suggestionQueueState classifies a suggestion for the queue view (#159). An
 // applied suggestion is "done" (the edit is on disk — checked FIRST, since an
 // applied suggestion is also anchor-outdated); an accepted-but-not-applied one is
