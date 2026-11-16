@@ -23,6 +23,7 @@ import (
 	"github.com/chromedp/cdproto/input"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/device"
 )
 
 // mustJSON unmarshals a JSON string produced by an in-page Evaluate into dst.
@@ -74,6 +75,26 @@ func setupFixtureTextSelectRepo(t *testing.T) string {
 	return dir
 }
 
+// selectGreetJS selects the "Greet" token on demo.go line 3 (runes [5,10)) via a
+// native Range, which fires selectionchange, the text-select directive's trigger.
+const selectGreetJS = `(() => {
+	const host = document.querySelector('.code');
+	const line = host.querySelector('[data-line="3"] [data-line-text]');
+	let target = null;
+	for (const s of line.querySelectorAll('span')) {
+		if (s.textContent === 'Greet') { target = s; break; }
+	}
+	if (!target) return 'no Greet token';
+	const node = target.firstChild;
+	const r = document.createRange();
+	r.setStart(node, 0);
+	r.setEnd(node, 5);
+	const sel = window.getSelection();
+	sel.removeAllRanges();
+	sel.addRange(r);
+	return 'ok';
+})()`
+
 func TestE2E_TextSelectComment(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureTextSelectRepo(t), 1200, 800)
 
@@ -101,31 +122,11 @@ func TestE2E_TextSelectComment(t *testing.T) {
 			"\n--- html ---\n" + html
 	}
 
-	// Wait for the diff view, then select the "Greet" token on line 3 via a
-	// native Range (this fires selectionchange, the directive's trigger).
-	selectJS := `(() => {
-		const host = document.querySelector('.code');
-		const line = host.querySelector('[data-line="3"] [data-line-text]');
-		let target = null;
-		for (const s of line.querySelectorAll('span')) {
-			if (s.textContent === 'Greet') { target = s; break; }
-		}
-		if (!target) return 'no Greet token';
-		const node = target.firstChild;
-		const r = document.createRange();
-		r.setStart(node, 0);
-		r.setEnd(node, 5);
-		const sel = window.getSelection();
-		sel.removeAllRanges();
-		sel.addRange(r);
-		return 'ok';
-	})()`
-
 	var selResult string
 	ctx, cancel := context.WithTimeout(p.ctx, 15*time.Second)
 	err := chromedp.Run(ctx,
 		chromedp.WaitVisible(`.code [data-line="3"] [data-line-text]`, chromedp.ByQuery),
-		chromedp.Evaluate(selectJS, &selResult),
+		chromedp.Evaluate(selectGreetJS, &selResult),
 		// Debounced selectionchange (150ms) then the floating button appears.
 		chromedp.Sleep(400*time.Millisecond),
 		chromedp.WaitVisible(`[data-lvt-text-select-button]`, chromedp.ByQuery),
@@ -541,5 +542,111 @@ func TestE2E_TextSelectRenderedMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(csv, "tighten this claim") {
 		t.Errorf("CSV missing body:\n%s", csv)
+	}
+}
+
+// TestE2E_TextSelectTouch is #243: on a phone, tapping the floating Comment
+// button must open the composer for the selected word, and the button must sit
+// where iOS's Copy/Look Up callout can't cover it.
+//
+// iOS clears a non-editable selection when you tap outside it, so by the time
+// the button's click runs the selection is gone. Desktop Chromium keeps it alive
+// through a CDP touch tap, so the test MODELS iOS with a capture touchstart
+// listener that calls removeAllRanges(). The tap is held 300ms, past the
+// directive's 150ms selectionchange debounce, so a button that hides on the
+// collapse (and lets the release land on the line underneath) fails too.
+//
+// The OS callout itself can't be drawn under emulation; geometry asserts the
+// button is pinned at the bottom of the viewport, clear of the selection.
+func TestE2E_TextSelectTouch(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureTextSelectRepo(t), 1200, 800)
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("demo.go")
+	if err := chromedp.Run(p.ctx, chromedp.Emulate(device.IPhone11), chromedp.Sleep(300*time.Millisecond)); err != nil {
+		t.Fatalf("emulate phone: %v", err)
+	}
+	var coarse bool
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`matchMedia('(pointer: coarse)').matches`, &coarse)); err != nil || !coarse {
+		t.Fatalf("(pointer: coarse) not active under device emulation (err=%v) — the placement check would be vacuous%s", err, diag())
+	}
+
+	// The iOS model: a tap outside the selection clears it.
+	const iosClearsSelectionOnTap = `document.addEventListener('touchstart', () => getSelection().removeAllRanges(), true)`
+	var sel string
+	var geom struct {
+		Btn, Sel struct{ Left, Top, Right, Bottom float64 }
+		W, H     float64
+	}
+	ctx, cancel := context.WithTimeout(p.ctx, 15*time.Second)
+	err := chromedp.Run(ctx,
+		chromedp.WaitVisible(`.code [data-line="3"] [data-line-text]`, chromedp.ByQuery),
+		chromedp.Evaluate(iosClearsSelectionOnTap, nil),
+		chromedp.Evaluate(selectGreetJS, &sel),
+		chromedp.WaitVisible(`[data-lvt-text-select-button]`, chromedp.ByQuery),
+		chromedp.Evaluate(`(() => {
+			const box = r => ({Left: r.left, Top: r.top, Right: r.right, Bottom: r.bottom});
+			return {
+				Btn: box(document.querySelector('[data-lvt-text-select-button]').getBoundingClientRect()),
+				Sel: box(getSelection().getRangeAt(0).getBoundingClientRect()),
+				W: innerWidth, H: innerHeight,
+			};
+		})()`, &geom),
+	)
+	cancel()
+	if err != nil || sel != "ok" {
+		t.Fatalf("selecting Greet / showing the Comment button: %v (select=%q)%s", err, sel, diag())
+	}
+
+	// Placement: centered, pinned to the bottom, clear of the selection.
+	b, s := geom.Btn, geom.Sel
+	if b.Left < 0 || b.Top < 0 || b.Right > geom.W || b.Bottom > geom.H {
+		t.Errorf("Comment button %+v is outside the %vx%v viewport", b, geom.W, geom.H)
+	}
+	if c := (b.Left + b.Right) / 2; c < geom.W/2-2 || c > geom.W/2+2 {
+		t.Errorf("Comment button center x=%v, want the viewport center %v (±2)", c, geom.W/2)
+	}
+	if gap := geom.H - b.Bottom; gap > 40 {
+		t.Errorf("Comment button bottom is %vpx above the viewport bottom, want ≤40 (pinned to the bottom edge)", gap)
+	}
+	if b.Left < s.Right && s.Left < b.Right && b.Top < s.Bottom && s.Top < b.Bottom {
+		t.Errorf("Comment button %+v overlaps the selection %+v", b, s)
+	}
+
+	// Tap it: touch down, hold past the debounce, release.
+	x, y := (b.Left+b.Right)/2, (b.Top+b.Bottom)/2
+	var heading string
+	tapCtx, tapCancel := context.WithTimeout(p.ctx, 10*time.Second)
+	err = chromedp.Run(tapCtx,
+		input.DispatchTouchEvent(input.TouchStart, []*input.TouchPoint{{X: x, Y: y}}),
+		chromedp.Sleep(300*time.Millisecond),
+		input.DispatchTouchEvent(input.TouchEnd, []*input.TouchPoint{}),
+		chromedp.WaitVisible(`.composer`, chromedp.ByQuery),
+		chromedp.Text(`.composer strong`, &heading, chromedp.ByQuery),
+	)
+	tapCancel()
+	if err != nil {
+		t.Fatalf("tapping Comment after iOS cleared the selection never opened the composer: %v%s", err, diag())
+	}
+	if !strings.Contains(heading, "L3:5-10") || !strings.Contains(heading, "Greet") {
+		t.Fatalf("composer is for the wrong target: heading %q, want L3:5-10 + Greet (a line composer means the tap fell through to the line)%s", heading, diag())
+	}
+
+	saveCtx, saveCancel := context.WithTimeout(p.ctx, 10*time.Second)
+	err = chromedp.Run(saveCtx,
+		chromedp.SendKeys(`.composer textarea[name="body"]`, "rename on phone", chromedp.ByQuery),
+		chromedp.Click(`.composer .save-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.inline-comment`, chromedp.ByQuery),
+	)
+	saveCancel()
+	if err != nil {
+		t.Fatalf("saving the phone text comment: %v%s", err, diag())
+	}
+	raw, err := os.ReadFile(filepath.Join(p.repo, ".prereview", "comments.csv"))
+	if err != nil {
+		t.Fatalf("read comments.csv: %v", err)
+	}
+	if !strings.Contains(string(raw), ",text,,,5,10") || !strings.Contains(string(raw), "rename on phone") {
+		t.Errorf("CSV has no kind=text row for runes 5-10 with the body:\n%s%s", raw, diag())
 	}
 }

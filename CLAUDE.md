@@ -221,9 +221,13 @@ keyboard). Anatomy:
   add(new) rows, so the composer / cards / `<mark>` gate on `$lside` (== the
   selection's side), or they render twice.
 - **Client** (`../client` `dom/directives.ts`, `lvt-fx:text-select` on `.code`):
-  native selection → floating Comment button (positioned BELOW the selection on
-  a coarse pointer, so iOS's OS-level Copy callout — which always beats z-index —
-  doesn't cover it). Keyboard is a **client-only block caret** overlay
+  native selection → floating Comment button. On a coarse pointer it is pinned
+  bottom-centre of the viewport: iOS's OS-level Copy callout always beats z-index
+  and flips above/below the selection by screen position, so a button beside the
+  selection got covered (#243). iOS also dismisses the selection on the tap, so the
+  button commits the range it was SHOWN for, never the live selection
+  (`TestE2E_TextSelectTouch` models this; desktop Chromium keeps the selection,
+  so a plain touch e2e can't see it). Keyboard is a **client-only block caret** overlay
   (`[data-lvt-text-caret]`, absolute in the now-`position:relative` `.code`) over
   the char at (is-cursor line, client column): ←/→ move the column, ↑/↓ reuse the
   server `CursorUp/Down` line cursor (the caret re-syncs via `entry.sync()` on
