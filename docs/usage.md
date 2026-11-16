@@ -37,7 +37,10 @@ re-encoding and resizing.
 
 **Annotate a live local site.** Started with `--external <url>` (see below),
 prereview proxies a running dev server so you can drag a box on any part of the
-live page and comment; the annotation re-pins as the page scrolls.
+live page and comment; the annotation re-pins as the page scrolls. Once the agent has
+worked on or answered a box, it turns dashed with a ✓ until you resolve it, and the
+**Annotations** panel shows its reply, with a **Reply** button to push back. Boxes on
+an image comment work the same way.
 
 **See every comment in one place.** **All comments** (in the **View ▾** menu, or
 press <kbd>a</kbd>) lists every comment across all files — line, text, file, and

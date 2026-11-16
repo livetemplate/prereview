@@ -82,13 +82,14 @@
         <button type="button"
                 class="area-overlay pin-btn
                 {{- if .Resolved}} is-resolved{{end}}
+                {{- if index $.AgentActedLabels .ID}} is-acted{{end}}
                 {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}
                 "
                 lvt-on:click="editComment"
                 data-id="{{.ID}}"
                 data-key="pin-{{.ID}}"
                 style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
-                title="{{.Body}}"
+                title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"
                 aria-label="Edit annotation"></button>
         {{- end -}}
         {{- if eq $.CommentMode "region" -}}
@@ -142,8 +143,15 @@
             title="Locate this region on the page"
           ><span class="ext-page-link">📍 {{.URL}}</span>
           {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
+          {{- if .Processed}} · {{template "processedBadge"}}{{end}}
+          {{- if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}
+          {{- if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}
+          {{- if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}
           {{- /* */ -}}<span class="anno-body">{{.Body}}</span></button>
         </form>
+        {{- /* #248: the agent's replies, and the reviewer's reply form */ -}}
+        {{- template "thread" (index $.Threads .ID) -}}
+        {{- if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end -}}
         {{- /* resolve / edit / delete */ -}}
         <div class="ic-actions">
     <form method="POST">
@@ -154,6 +162,9 @@
         class="outline"
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
+          {{- if ne $.ReplyingID .ID -}}
+          <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
+          {{- end -}}
           {{- if not .Resolved -}}
           <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">

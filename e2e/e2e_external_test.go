@@ -77,11 +77,11 @@ func (a *liveApp) hitCount(path string) int {
 // startPrereviewExternal launches the binary in --external mode and returns the
 // UI URL once READY prints. Mirrors startPrereview but with proxy-mode flags
 // (no repo positional).
-func startPrereviewExternal(t *testing.T, binary, target, out string) (string, string, *exec.Cmd, *bytesBuf) {
+func startPrereviewExternal(t *testing.T, binary, target, out string, extraArgs ...string) (string, string, *exec.Cmd, *bytesBuf) {
 	t.Helper()
-	cmd := exec.Command(binary,
+	cmd := exec.Command(binary, append([]string{
 		"--external", target, "--out", out,
-		"--port", "0", "--host", "127.0.0.1", "--no-update")
+		"--port", "0", "--host", "127.0.0.1", "--no-update"}, extraArgs...)...)
 	cmd.Env = prefsIsolatedEnv(out)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -130,12 +130,12 @@ func startPrereviewExternal(t *testing.T, binary, target, out string) (string, s
 // external mode, and wires a headless chrome — the external-mode analogue of
 // bootChromeAgainstRepo. runningPrereview.repo is set to the --out dir, and .store
 // to the printed STORE line, so readCSV() finds the annotations.
-func bootChromeExternal(t *testing.T, target string, viewportW, viewportH int) *runningPrereview {
+func bootChromeExternal(t *testing.T, target string, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
 	t.Helper()
 	chromium := findChromium(t)
 	binary := prereviewBinary(t)
 	out := t.TempDir()
-	url, store, srv, stderr := startPrereviewExternal(t, binary, target, out)
+	url, store, srv, stderr := startPrereviewExternal(t, binary, target, out, extraArgs...)
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(chromium),
@@ -156,7 +156,7 @@ func bootChromeExternal(t *testing.T, target string, viewportW, viewportH int) *
 		_ = srv.Process.Kill()
 		_, _ = srv.Process.Wait()
 	})
-	return &runningPrereview{t: t, url: url, repo: out, store: store, cmd: srv, stderr: stderr, ctx: ctx, cancel: cancel}
+	return &runningPrereview{t: t, url: url, repo: out, store: store, binary: binary, cmd: srv, stderr: stderr, ctx: ctx, cancel: cancel}
 }
 
 // TestE2E_ExternalRegionAnnotate drives the whole feature through a real
@@ -202,66 +202,11 @@ func TestE2E_ExternalRegionAnnotate(t *testing.T) {
 			p.stderr.String(), strings.Join(consoleLines, "\n"), strings.Join(wsFrames, "\n"), html)
 	}
 
-	// Frame the live site; wait for the client to wire + the beacon's nav to
-	// round-trip (CurrentURL renders into the header as .ext-page).
-	if err := chromedp.Run(p.ctx,
-		chromedp.EmulateViewport(1200, 900),
-		chromedp.Navigate(p.url),
-		chromedp.WaitVisible(`iframe.ext-frame`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.bar-external .ext-page`, chromedp.ByQuery),
-		chromedp.Sleep(500*time.Millisecond),
-	); err != nil {
-		t.Fatalf("frame live site + beacon nav: %v%s", err, diag())
-	}
-
+	annotateRegion(t, p, "CTA too low contrast", diag)
 	// Topology proof: the page's ROOT-RELATIVE /app.css forwarded through the
 	// proxy (a path-prefix proxy would have missed it).
 	if app.hitCount("/app.css") == 0 {
 		t.Fatalf("root-relative /app.css was not forwarded through the proxy%s", diag())
-	}
-
-	// Arm the toggle → the page-surface region overlay appears.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.region-overlay[data-surface="page"]`, chromedp.ByQuery),
-		chromedp.Sleep(200*time.Millisecond),
-	); err != nil {
-		t.Fatalf("arm region toggle: %v%s", err, diag())
-	}
-
-	// Read the overlay rect and drag a box well inside it.
-	var ov struct{ X, Y, Width, Height float64 }
-	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
-		const b = document.querySelector('.region-overlay[data-surface="page"]').getBoundingClientRect();
-		return { X: b.left, Y: b.top, Width: b.width, Height: b.height };
-	})()`, &ov)); err != nil {
-		t.Fatalf("read overlay rect: %v%s", err, diag())
-	}
-	if ov.Width < 50 || ov.Height < 50 {
-		t.Fatalf("overlay too small: %+v%s", ov, diag())
-	}
-	x1 := ov.X + ov.Width*0.30
-	y1 := ov.Y + ov.Height*0.30
-	x2 := ov.X + ov.Width*0.60
-	y2 := ov.Y + ov.Height*0.55
-	if err := chromedp.Run(p.ctx,
-		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).WithButton(cdpinput.Left).WithClickCount(1),
-		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).WithButton(cdpinput.Left),
-		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, x2, y2).WithButton(cdpinput.Left),
-		cdpinput.DispatchMouseEvent(cdpinput.MouseReleased, x2, y2).WithButton(cdpinput.Left).WithClickCount(1),
-		chromedp.WaitVisible(`.ext-composer textarea`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("region drag + composer: %v%s", err, diag())
-	}
-
-	// Type + save → persists and re-pins on the page. The on-page pin appears
-	// immediately; the annotations drawer is collapsed by default.
-	if err := chromedp.Run(p.ctx,
-		chromedp.SendKeys(`.ext-composer textarea`, "CTA too low contrast", chromedp.ByQuery),
-		chromedp.Click(`.ext-composer button[name="addComment"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.pin-layer .area-overlay`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("save region comment: %v%s", err, diag())
 	}
 
 	// Regression: after the post-save server render, the pin layer must keep
@@ -372,5 +317,67 @@ func TestE2E_ExternalRegionAnnotate(t *testing.T) {
 	}
 	if annoCount != 1 {
 		t.Errorf("sidebar should still list the page-1 annotation, got %d%s", annoCount, diag())
+	}
+}
+
+// annotateRegion frames the live site in p, arms region select, drags a box well
+// inside the page overlay and saves an annotation with body, waiting until its pin
+// is on the page.
+func annotateRegion(t *testing.T, p *runningPrereview, body string, diag func() string) {
+	t.Helper()
+	// Frame the live site; wait for the client to wire + the beacon's nav to
+	// round-trip (CurrentURL renders into the header as .ext-page).
+	if err := chromedp.Run(p.ctx,
+		chromedp.EmulateViewport(1200, 900),
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`iframe.ext-frame`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.bar-external .ext-page`, chromedp.ByQuery),
+		chromedp.Sleep(500*time.Millisecond),
+	); err != nil {
+		t.Fatalf("frame live site + beacon nav: %v%s", err, diag())
+	}
+
+	// Arm the toggle → the page-surface region overlay appears.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.region-overlay[data-surface="page"]`, chromedp.ByQuery),
+		chromedp.Sleep(200*time.Millisecond),
+	); err != nil {
+		t.Fatalf("arm region toggle: %v%s", err, diag())
+	}
+
+	// Read the overlay rect and drag a box well inside it.
+	var ov struct{ X, Y, Width, Height float64 }
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+		const b = document.querySelector('.region-overlay[data-surface="page"]').getBoundingClientRect();
+		return { X: b.left, Y: b.top, Width: b.width, Height: b.height };
+	})()`, &ov)); err != nil {
+		t.Fatalf("read overlay rect: %v%s", err, diag())
+	}
+	if ov.Width < 50 || ov.Height < 50 {
+		t.Fatalf("overlay too small: %+v%s", ov, diag())
+	}
+	x1 := ov.X + ov.Width*0.30
+	y1 := ov.Y + ov.Height*0.30
+	x2 := ov.X + ov.Width*0.60
+	y2 := ov.Y + ov.Height*0.55
+	if err := chromedp.Run(p.ctx,
+		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).WithButton(cdpinput.Left).WithClickCount(1),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).WithButton(cdpinput.Left),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, x2, y2).WithButton(cdpinput.Left),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseReleased, x2, y2).WithButton(cdpinput.Left).WithClickCount(1),
+		chromedp.WaitVisible(`.ext-composer textarea`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("region drag + composer: %v%s", err, diag())
+	}
+
+	// Type + save → persists and re-pins on the page. The on-page pin appears
+	// immediately; the annotations drawer is collapsed by default.
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`.ext-composer textarea`, body, chromedp.ByQuery),
+		chromedp.Click(`.ext-composer button[name="addComment"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.pin-layer .area-overlay`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("save region comment: %v%s", err, diag())
 	}
 }

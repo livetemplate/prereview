@@ -2,6 +2,7 @@ package review
 
 import (
 	"fmt"
+	"maps"
 	"testing"
 )
 
@@ -498,5 +499,23 @@ func TestSuggestionBlockedOnDrift(t *testing.T) {
 	}
 	if s.QueuedCount() != 1 || s.BlockedCount() != 1 {
 		t.Errorf("counts: queued=%d blocked=%d, want 1/1", s.QueuedCount(), s.BlockedCount())
+	}
+}
+
+// TestAgentActedLabels (#248): a region box is drawn "acted on" while the agent worked
+// on or answered the comment and it is the reviewer's turn. Resolving drops it, and so
+// does a reviewer reply, which hands the comment back to the agent.
+func TestAgentActedLabels(t *testing.T) {
+	c := func(id string) Comment { return Comment{ID: id, Kind: commentKindRegion, URL: "/p"} }
+	worked, ans, replied, resolved, fresh := c("w"), c("a"), c("r"), c("x"), c("f")
+	worked.Processed, ans.Answered, replied.Processed = true, true, true
+	resolved.Processed, resolved.Resolved = true, true
+	s := PrereviewState{
+		Comments:      []Comment{worked, ans, replied, resolved, fresh},
+		ThreadEntries: []ThreadEntry{{TargetID: "r", Author: AuthorReviewer, Body: "not quite", At: 1}},
+	}
+	want := map[string]string{"w": "Worked on", "a": "Answered"}
+	if got := s.AgentActedLabels(); !maps.Equal(got, want) {
+		t.Errorf("AgentActedLabels = %v, want %v", got, want)
 	}
 }

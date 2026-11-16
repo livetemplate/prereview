@@ -24,10 +24,10 @@
       alt="{{.Path}}"
       {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}
     >
-    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}"
+    {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}"
         data-key="ao-{{.ID}}"
         style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
-        title="{{.Body}}"></div>{{end}}
+        title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"></div>{{end}}
     {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending"
         data-key="ao-pending"
         style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
