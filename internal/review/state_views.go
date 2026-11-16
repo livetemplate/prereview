@@ -694,21 +694,36 @@ func (s PrereviewState) SuggestionGroups() map[string]SuggestionGroupInfo {
 	if len(vis) < 2 {
 		return nil
 	}
-	byKey := make(map[string][]string)
-	for _, sg := range vis {
-		k := sg.groupKey()
-		byKey[k] = append(byKey[k], sg.ID)
-	}
 	var out map[string]SuggestionGroupInfo
-	for _, ids := range byKey {
-		if len(ids) < 2 {
-			continue // not a group
-		}
+	for _, g := range groupByKey(vis) {
 		if out == nil {
-			out = make(map[string]SuggestionGroupInfo, len(ids))
+			out = make(map[string]SuggestionGroupInfo, len(g))
 		}
-		for i, id := range ids {
-			out[id] = SuggestionGroupInfo{Index: i + 1, Total: len(ids)}
+		for i, sg := range g {
+			out[sg.ID] = SuggestionGroupInfo{Index: i + 1, Total: len(g)}
+		}
+	}
+	return out
+}
+
+// groupByKey returns the alternatives groups (2+ suggestions sharing groupKey) among
+// sugs, each in submission order. The one definition of "a group" for every walk that
+// needs groups rather than siblings of one id: SuggestionGroups (over the visible set)
+// and AwaitingPickCount (over the scoped set, since hiding is view-only).
+func groupByKey(sugs []Suggestion) [][]Suggestion {
+	byKey := map[string][]Suggestion{}
+	var order []string
+	for _, sg := range sugs {
+		k := sg.groupKey()
+		if byKey[k] == nil {
+			order = append(order, k)
+		}
+		byKey[k] = append(byKey[k], sg)
+	}
+	var out [][]Suggestion
+	for _, k := range order {
+		if len(byKey[k]) > 1 {
+			out = append(out, byKey[k])
 		}
 	}
 	return out

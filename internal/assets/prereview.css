@@ -1197,6 +1197,9 @@ header.file-head .file-head-actions {
    (pending apply)" line badge uses — the toolbar count and the badge on the line mean
    the same thing, so they read the same. */
 .q-awaiting { color: var(--pr-open, #c9a000); }
+/* #206: a fork awaiting the reviewer's pick. Accent, like .q-answered and the cards'
+   "alternative N of M" tag: it is the reviewer's turn, not work the agent owes. */
+.q-pick { color: var(--accent); }
 /* #164: reviewer replied, the agent owes a response. Same --accent as the card's
    awaiting-badge so the toolbar count and the on-card badge read as the same thing.
    Rendered outside .queue-counts (it is whole-review, not per-file), so it carries its
@@ -1295,12 +1298,17 @@ header.file-head .file-head-actions {
 
 /* #171: the accepted-but-unapplied line. Tinted, not muted like the legend above it —
    this is the one queue state nothing else will chase, so it has to carry weight. */
-.queue-awaiting {
+.queue-awaiting, .queue-awaiting-pick {
   padding: 0.3rem 0.5rem 0.4rem; font-size: 0.75rem; line-height: 1.35;
   color: var(--pico-color);
   background: color-mix(in srgb, var(--pr-open, #c9a000) 12%, transparent);
   border-left: 2px solid var(--pr-open, #c9a000);
   margin-bottom: 0.3rem;
+}
+/* #206: the same line for forks awaiting the reviewer's pick, in accent (see .q-pick). */
+.queue-awaiting-pick {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-left-color: var(--accent);
 }
 /* #171: the same warning on the End-session confirm — the last chance to notice that
    accepted edits were never written to the file. */

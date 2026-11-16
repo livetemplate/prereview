@@ -47,6 +47,11 @@ instead of `done`, so it reads "answered" rather than "edited":
 
     prereview reply --out <STORE> --answered <id> --body "..."
 
+A comment can leave a taste call open: two defensible ways, where the right one depends on
+the reviewer's audience, tone or product scope, not on anything in the code. Don't pick
+one silently. Ask with `reply --answered`, naming both options, and edit nothing until
+they answer.
+
 Re-run `prereview comments --json` for more (the reviewer can keep commenting);
 dedupe by `id`. Stop when the reviewer clicks End session. If your harness can
 block on a stream, `prereview watch --out <STORE> --since <seq>` delivers each new

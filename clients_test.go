@@ -278,16 +278,39 @@ func TestClientContentShape(t *testing.T) {
 // pins the rules both must keep, not their wording.
 func TestSkillBodiesShareOrderingGuidance(t *testing.T) {
 	for name, body := range map[string]string{"skill/SKILL.md": skillMD, "skill/clients/body.md": clientBody} {
-		body = strings.Join(strings.Fields(body), " ") // match across markdown line wraps
+		body = skillText(body)
 		for _, want := range []string{
 			"Plan the pass before your first edit",
 			"the later wins", // overlap rule
 			"folded into",    // ...and the reply that keeps a fold visible
 			"One pass per file",
 		} {
-			if !strings.Contains(strings.ToLower(body), strings.ToLower(want)) {
+			if !strings.Contains(body, strings.ToLower(want)) {
 				t.Errorf("%s is missing the #207 ordering rule %q", name, want)
 			}
 		}
+	}
+}
+
+// skillText lowercases a skill body and collapses whitespace, so a presence check
+// matches across markdown line wraps.
+func skillText(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
+
+// TestSkillBodiesCarryForkGuidance (#206) pins the fork rules, not their wording.
+// SKILL.md offers alternatives on a taste call; body.md asks instead, because
+// `prereview comments --json` carries no suggestion decisions, so a fork offered from
+// body.md would never see the reviewer's pick.
+func TestSkillBodiesCarryForkGuidance(t *testing.T) {
+	skill, body := skillText(skillMD), skillText(clientBody)
+	for _, want := range []string{"taste call", "`<comment-id>-a`", "reply --answered", "apply neither"} {
+		if !strings.Contains(skill, want) {
+			t.Errorf("skill/SKILL.md is missing the #206 fork rule %q", want)
+		}
+	}
+	if !strings.Contains(body, "taste call") || !strings.Contains(body, "reply --answered") {
+		t.Error("skill/clients/body.md must tell agents to ask on a taste call (#206)")
+	}
+	if strings.Contains(body, "prereview suggest") {
+		t.Error("skill/clients/body.md must not offer `prereview suggest`: `comments --json` never returns the reviewer's pick")
 	}
 }

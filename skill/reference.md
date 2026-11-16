@@ -264,7 +264,10 @@ entry is `{ "author": "agent" | "reviewer", "body": "…", "at": "<RFC3339>" }`.
   `resolved`/`outdated`/`done` on its own, and marking `done` again won't settle it —
   only your `reply` drops it back out.
 
-Suggestion threads work identically — a `thread` on a `suggestions[]` entry.
+Suggestion threads work the same way — a `thread` on a `suggestions[]` entry — with one
+exception: a **decided** suggestion stays in `suggestions[]` whatever its thread says, until
+it is applied or goes outdated. A decided entry whose thread ends with your reply is one
+you already handled.
 
 ## Suggested edits
 
@@ -295,16 +298,27 @@ Fields per suggestion:
 - `note` — optional one-line rationale, shown on the box.
 
 **Proposing alternatives (a group).** To offer the user a *choice* between ways to edit
-the same text, submit multiple suggestions with the **same** `file`/`from_line`/`to_line`/
+the same text, submit multiple suggestions with the **same** `file`/`side`/`from_line`/
 `original` and different `proposed` (each a distinct `id`). prereview groups them: the
 user accepting one **auto-rejects the rest**, so you get exactly one `accept` and the
 others as `reject` — no need for them to reject each by hand.
+
+- **Same `original` is what makes a group.** When the alternatives change different
+  amounts of text, quote the **union** span as `original` in every one, and have the
+  narrower alternative repeat the text it leaves alone in its `proposed`.
+- **`to_line` is derived, except for an insertion.** prereview recomputes `to_line` from
+  `original`'s line count, so a wrong hint can't split a group. A pure insertion
+  (`original: ""`) keeps the `to_line` you send, so insert-alternatives must agree on it.
+  `suggest` warns on stderr when one payload has two suggestions starting on the same line
+  that won't group.
+- When to offer a choice unasked, and how to close it out, is in SKILL.md → *Offer
+  alternatives when the choice is the reviewer's*.
 
 **Applying the reviewer's decisions.** Each `snapshot`'s `suggestions[]` is a full
 snapshot of every decided suggestion (dedupe by `id`). Each entry:
 
 ```
-{"id","file","from_line","to_line","side","verdict","note","original","proposed","anchor_status"}
+{"id","file","from_line","to_line","side","verdict","note","original","proposed","anchor_status","thread"}
 ```
 
 Act by `verdict`:
@@ -314,7 +328,8 @@ Act by `verdict`:
   files). Then **`prereview applied "<id>"`** to ack it — that flips the card to "applied"
   and drops it from future snapshots (re-acking is harmless).
 - **`reject`** — the user declined it. **Drop it** — do not apply, do not re-submit.
-  (It keeps reappearing; dedupe by `id` and skip it, like a handled comment.)
+  (It keeps reappearing; dedupe by `id` and skip it, like a handled comment. If its
+  `thread` ends with your reply, you already handled it.)
 - **`revert`** — the user wants an edit you already applied UNDONE. The file holds your
   applied `proposed`; **restore `original` over it** (the inverse), then
   **`prereview reverted "<id>"`** to ack. That nets it back out of "applied" and returns

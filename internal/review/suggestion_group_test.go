@@ -100,3 +100,26 @@ func TestClearAccept_PreservesUnrelatedManualReject(t *testing.T) {
 		t.Errorf("unrelated manual reject must survive the group re-open, got verdict=%q auto=%v", d.Verdict, d.Auto)
 	}
 }
+
+// TestSuggestionGroups_ToLineHintIgnored (#206): grouping keys on the derived span, not
+// the agent's to_line hint. applySuggestions recomputes ToLine from the line count of
+// `original`, so two alternatives that quote the same text group even when their
+// to_line disagrees. A pure insertion (`original: ""`) has nothing to derive from, so
+// its to_line is taken as given: insert-alternatives must agree on it.
+func TestSuggestionGroups_ToLineHintIgnored(t *testing.T) {
+	c := ctrlWithSuggestions(t,
+		`{"id":"c1-a","file":"a.md","side":"new","from_line":4,"to_line":4,"original":"one\ntwo","proposed":"uno"}`,
+		`{"id":"c1-b","file":"a.md","side":"new","from_line":4,"to_line":9,"original":"one\ntwo","proposed":"dos"}`,
+		`{"id":"ins-a","file":"a.md","side":"new","from_line":20,"to_line":20,"original":"","proposed":"x"}`,
+		`{"id":"ins-b","file":"a.md","side":"new","from_line":20,"to_line":21,"original":"","proposed":"y"}`,
+	)
+	var st PrereviewState
+	c.applySuggestions(&st)
+	g := st.SuggestionGroups()
+	if g["c1-a"].Total != 2 || g["c1-b"].Total != 2 {
+		t.Errorf("same original, disagreeing to_line: want one group of 2, got a=%+v b=%+v", g["c1-a"], g["c1-b"])
+	}
+	if _, ok := g["ins-a"]; ok {
+		t.Errorf("insertions with different to_line must not group (nothing to derive the span from), got %+v", g["ins-a"])
+	}
+}

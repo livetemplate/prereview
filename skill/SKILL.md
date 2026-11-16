@@ -172,7 +172,8 @@ then look across it for:
 **Plan the pass before your first edit** (skip this for a single comment):
 
 1. **Set aside requests** (`"request"` set): they are tasks, not edits. Handle each
-   after the edits, as its section below says.
+   after the edits, as its section below says. A comment that leaves a taste call open
+   gets alternatives, not an edit (*Offer alternatives* under *Suggested edits*).
 2. **On overlap, the later wins.** When two comments overlap (same file and lines, or
    a `kind=file` comment and a line in that file) and the later one restates, narrows
    or contradicts the earlier, make one edit for the later. Mark both ids `done` and
@@ -335,6 +336,78 @@ file** — the reviewer accepts/rejects each box), then `done` the prompt commen
 `reply` a one-line summary ("proposed N edits below"). This is the one case where a
 comment wants **suggestions, not a direct fix** — the body says so; follow it.
 
+Submit a JSON payload — a single object, a JSON array, or newline-delimited objects —
+on stdin or via `--file`. The running UI picks them up live (no restart):
+
+```bash
+prereview suggest --out "<STORE>" <<'JSON'
+[
+  {"id":"s1","file":"docs/readme.md","from_line":12,"to_line":12,
+   "original":"The API might returns an error.",
+   "proposed":"The API may return an error.",
+   "note":"subject–verb agreement"}
+]
+JSON
+```
+
+Use a **stable `id`** you choose: re-submitting the same `id` *revises* that suggestion
+(last write wins); a new `id` adds one. Full field list and the accept/reject
+loop are in [reference.md → Suggested edits](./reference.md#suggested-edits).
+
+On each snapshot, `suggestions[]` is a full snapshot of every decided suggestion
+(dedupe by `id`). Act by `verdict`:
+
+- **`accept`** — apply the edit (replace `original` with `proposed` at the given
+  lines; you own the file write), then **`prereview applied "<id>"`** to ack it. That
+  flips the reviewer's card from "accepted" to "applied" and drops it from the snapshot.
+  Idempotent — re-acking an id is harmless (two snapshots can carry the same accept
+  before your ack lands, so dedupe by `id` like comments and ack once per id).
+- **`reject`** — drop it; do not apply or re-submit. Dedupe by `id` and skip it. A
+  reject keeps reappearing even after you reply on it: if its `thread` ends with you,
+  you already handled it.
+- **`revert`** — the reviewer changed their mind about an edit you already applied. The
+  file currently holds your applied `proposed` text; **restore the `original` text over
+  it** (the inverse of the accept), then **`prereview reverted "<id>"`** to ack. That
+  nets the suggestion back out of "applied" and returns the reviewer's card to undecided.
+  Idempotent per `id`, same as `applied`.
+
+After processing, run `prereview status --out "<STORE>" done` and go read the next event.
+
+**Never finish while an `accept` is unapplied.** prereview does not write the user's
+files — you do. An accepted edit that you don't apply and ack leaves the document
+inconsistent with the review, and once you stop watching, nothing else will ever apply
+it. Before you end your turn, drain every `accept` in the latest snapshot: apply it, then
+`prereview applied "<id>"`. The reviewer's Queue shows an amber "accepted, awaiting apply"
+count for exactly this, and warns them on End session — don't be the reason it's non-zero.
+
+### Offer alternatives when the choice is the reviewer's
+
+A comment can leave a **taste call** open: two defensible ways, where the right one depends
+on the reviewer's audience, tone or product scope, not on anything in the code. Propose
+both as grouped suggestions instead of picking one. If the file or the comment settles it,
+just do it. At most one fork per comment, and about two per batch.
+
+- **Submit them as one group** (see
+  [reference.md → Proposing alternatives](./reference.md#suggested-edits)), with ids
+  `<comment-id>-a` and `-b`, each `note` opening with the same one-line question.
+- **Park the comment** with `reply --answered` (see *Answered with no edit?*): "Two ways:
+  <question>. Pick a card." Leave those lines alone while the fork is open. A later
+  comment on them folds in: re-submit the alternatives under the same ids to reflect it,
+  then `reply --answered` on it naming the fork's comment.
+
+Close it out from `suggestions[]`, and `reply` on **every** card each time, so a reject
+whose thread ends with you reads as handled (see the `reject` rule above):
+
+- **One accepted**: apply it and `applied`, `done` the comment, `reply` on it which one
+  you took and why, and "took `-a`" on the other card.
+- **Both rejected, or the reviewer replied on the comment instead**: with a reply, edit
+  from it and `done` the comment; with none, ask on the comment which direction they
+  want and edit nothing. Then `reply` on each card naming the comment ("superseded; reject
+  this card", or "asked on `<comment-id>`").
+
+If the review ends with a fork unpicked, apply neither: tell the user in chat which
+comment still waits on a pick.
+
 ## Comprehension quizzes (`prereview quiz`, #191)
 
 The reviewer can also ask for a **comprehension quiz** about a file's diff, via
@@ -393,48 +466,6 @@ prereview reply --out "<STORE>" "z1:q3" --body "Fair - option 2 was ambiguous. R
 If the reviewer is right that a question is wrong, **fix it**: re-submit the quiz
 with the same `id` (last write wins) with that question corrected, then reply
 saying what you changed.
-
-Submit a JSON payload — a single object, a JSON array, or newline-delimited objects —
-on stdin or via `--file`. The running UI picks them up live (no restart):
-
-```bash
-prereview suggest --out "<STORE>" <<'JSON'
-[
-  {"id":"s1","file":"docs/readme.md","from_line":12,"to_line":12,
-   "original":"The API might returns an error.",
-   "proposed":"The API may return an error.",
-   "note":"subject–verb agreement"}
-]
-JSON
-```
-
-Use a **stable `id`** you choose: re-submitting the same `id` *revises* that suggestion
-(last write wins); a new `id` adds one. Full field list and the accept/reject
-loop are in [reference.md → Suggested edits](./reference.md#suggested-edits).
-
-On each snapshot, `suggestions[]` is a full snapshot of every decided suggestion
-(dedupe by `id`). Act by `verdict`:
-
-- **`accept`** — apply the edit (replace `original` with `proposed` at the given
-  lines; you own the file write), then **`prereview applied "<id>"`** to ack it. That
-  flips the reviewer's card from "accepted" to "applied" and drops it from the snapshot.
-  Idempotent — re-acking an id is harmless (two snapshots can carry the same accept
-  before your ack lands, so dedupe by `id` like comments and ack once per id).
-- **`reject`** — drop it; do not apply or re-submit. Dedupe by `id` and skip it.
-- **`revert`** — the reviewer changed their mind about an edit you already applied. The
-  file currently holds your applied `proposed` text; **restore the `original` text over
-  it** (the inverse of the accept), then **`prereview reverted "<id>"`** to ack. That
-  nets the suggestion back out of "applied" and returns the reviewer's card to undecided.
-  Idempotent per `id`, same as `applied`.
-
-After processing, run `prereview status --out "<STORE>" done` and go read the next event.
-
-**Never finish while an `accept` is unapplied.** prereview does not write the user's
-files — you do. An accepted edit that you don't apply and ack leaves the document
-inconsistent with the review, and once you stop watching, nothing else will ever apply
-it. Before you end your turn, drain every `accept` in the latest snapshot: apply it, then
-`prereview applied "<id>"`. The reviewer's Queue shows an amber "accepted, awaiting apply"
-count for exactly this, and warns them on End session — don't be the reason it's non-zero.
 
 ## Judges (`prereview judge`)
 

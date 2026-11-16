@@ -223,6 +223,10 @@
   {{- if .AwaitingApplyCount}}
   <p class="end-warn" role="alert"><small><strong>{{.AwaitingApplyCount}} accepted edit{{if ne .AwaitingApplyCount 1}}s{{end}} not yet applied.</strong> The agent still has to write {{if eq .AwaitingApplyCount 1}}it{{else}}them{{end}} to the file (<code>prereview applied</code>). Ending now leaves the document without {{if eq .AwaitingApplyCount 1}}that change{{else}}those changes{{end}}.</small></p>
   {{- end}}
+  {{- /* #206 */ -}}
+  {{- if .AwaitingPickCount}}
+  <p class="end-warn end-warn-pick" role="alert"><small><strong>{{.AwaitingPickCount}} fork{{if ne .AwaitingPickCount 1}}s{{end}} awaiting your pick.</strong> The agent offered alternatives and is waiting for you to accept one. Ending now leaves {{if eq .AwaitingPickCount 1}}that comment{{else}}those comments{{end}} unaddressed.</small></p>
+  {{- end}}
   {{- /* */ -}}
   <footer>
     <form method="POST">

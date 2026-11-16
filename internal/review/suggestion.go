@@ -234,17 +234,53 @@ func relocateSuggestions(suggestions []Suggestion, file string, diff *gitdiff.Fi
 func (c *PrereviewController) applySuggestions(state *PrereviewState) {
 	sugs := loadSuggestions(c.suggestionsPath())
 	for i := range sugs {
-		text := normJoinText(sugs[i].OriginalText)
-		sugs[i].Anchor = CommentAnchor{Text: text}
+		sugs[i].Anchor = CommentAnchor{Text: normJoinText(sugs[i].OriginalText)}
 		sugs[i].AnchorStatus = anchorOK
-		if text != "" {
-			// Derive the span from the fingerprint so a from/to hint that
-			// disagrees with the original's line count doesn't leave a stale span.
-			span := strings.Count(text, "\n")
-			sugs[i].ToLine = sugs[i].FromLine + span
-		}
+		sugs[i].deriveSpan()
 	}
 	state.Suggestions = sugs
+}
+
+// deriveSpan sets ToLine from the line count of OriginalText, so a to_line hint that
+// disagrees with the original doesn't leave a stale span (or split a group, since
+// groupKey includes ToLine). A pure insertion (empty original) has nothing to derive
+// from, so its ToLine is kept as given.
+func (s *Suggestion) deriveSpan() {
+	if text := normJoinText(s.OriginalText); text != "" {
+		s.ToLine = s.FromLine + strings.Count(text, "\n")
+	}
+}
+
+// MisgroupedAtStart returns the pairs in one payload that start on the same line of the
+// same file and side but are NOT one group (#206): their groupKey differs once the span
+// is derived the way the loader derives it. Accepting one such suggestion won't reject
+// the other, and accepting both makes conflicting edits, so this shape is almost always
+// a fork that meant to quote the same span in both. Two independent edits at one line
+// are legitimate, which is why callers warn rather than fail. Only the given payload is
+// checked; a fork split across two submissions is not seen.
+func MisgroupedAtStart(sugs []Suggestion) [][2]Suggestion {
+	type start struct {
+		file, side string
+		line       int
+	}
+	first := map[start]int{}
+	var out [][2]Suggestion
+	for i := range sugs {
+		s := sugs[i]
+		s.deriveSpan()
+		k := start{s.File, s.Side, s.FromLine}
+		j, seen := first[k]
+		if !seen {
+			first[k] = i
+			continue
+		}
+		prev := sugs[j]
+		prev.deriveSpan()
+		if prev.groupKey() != s.groupKey() {
+			out = append(out, [2]Suggestion{prev, s})
+		}
+	}
+	return out
 }
 
 // relocateSuggestionsSelected re-anchors the selected file's suggestions against
