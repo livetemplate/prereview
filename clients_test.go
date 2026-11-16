@@ -271,3 +271,23 @@ func TestClientContentShape(t *testing.T) {
 		}
 	}
 }
+
+// TestSkillBodiesShareOrderingGuidance (#207): SKILL.md reaches Claude only;
+// clients/body.md is what codex / gemini / cursor / opencode / agents get, so both
+// carry the pass-planning rules. body.md is a deliberate condensed subset; this
+// pins the rules both must keep, not their wording.
+func TestSkillBodiesShareOrderingGuidance(t *testing.T) {
+	for name, body := range map[string]string{"skill/SKILL.md": skillMD, "skill/clients/body.md": clientBody} {
+		body = strings.Join(strings.Fields(body), " ") // match across markdown line wraps
+		for _, want := range []string{
+			"Plan the pass before your first edit",
+			"the later wins", // overlap rule
+			"folded into",    // ...and the reply that keeps a fold visible
+			"One pass per file",
+		} {
+			if !strings.Contains(strings.ToLower(body), strings.ToLower(want)) {
+				t.Errorf("%s is missing the #207 ordering rule %q", name, want)
+			}
+		}
+	}
+}

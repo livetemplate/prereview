@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -326,5 +327,22 @@ func TestActionableComments_ReenqueueReturnsWork(t *testing.T) {
 	applyProcessedMarks(comments, csvPath)
 	if len(actionableComments(comments, nil)) != 1 {
 		t.Error("a re-enqueued comment must come back to the agent — otherwise ↺ is a dead button")
+	}
+}
+
+// TestActionableComments_PreservesQueueOrder pins #207's order contract (see
+// skill/reference.md): the skill's "later comment wins" rule reads array position,
+// so filtering must never reorder, and nothing may sort by file, line or time.
+func TestActionableComments_PreservesQueueOrder(t *testing.T) {
+	comments := []Comment{ // queue order; lines and files deliberately run the other way
+		{ID: "q1", File: "z.go", Kind: commentKindLine, FromLine: 40, ToLine: 40, Created: fixedTS},
+		{ID: "q2", File: "a.go", Kind: commentKindLine, FromLine: 9, ToLine: 9, Created: fixedTS},
+		{ID: "gone", File: "a.go", Kind: commentKindLine, FromLine: 5, ToLine: 5, Resolved: true, Created: fixedTS},
+		{ID: "q3", File: "z.go", Kind: commentKindLine, FromLine: 2, ToLine: 2, Created: fixedTS},
+		{ID: "q4", File: "a.go", Kind: commentKindFile, Created: fixedTS},
+	}
+	want := []string{"q1", "q2", "q3", "q4"}
+	if got := ids(actionableComments(comments, nil)); !slices.Equal(got, want) {
+		t.Fatalf("snapshot order = %v, want queue order %v (#207: the skill's later-wins rule reads array position)", got, want)
 	}
 }

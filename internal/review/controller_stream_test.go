@@ -2,6 +2,7 @@ package review
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -140,5 +141,51 @@ func TestFlushHandoff_NilEmitterSafe(t *testing.T) {
 	st := PrereviewState{Comments: []Comment{regionComment("a", "x")}}
 	if err := c.flushSnapshot(&st); err != nil {
 		t.Fatalf("flushSnapshot with nil emitter: %v", err)
+	}
+}
+
+// TestEmitSnapshot_PreservesQueueOrderAcrossEdit pins #207's order contract (see
+// skill/reference.md) through the real path: save → comments.csv → emitSnapshot's
+// reload. Saving an edit keeps the comment's place; an undone delete re-enters
+// last. Ids run c, a, b so a sort by id fails too.
+func TestEmitSnapshot_PreservesQueueOrderAcrossEdit(t *testing.T) {
+	old := emitDebounce
+	emitDebounce = time.Hour // no timer emit can interleave with the synchronous ones
+	t.Cleanup(func() { emitDebounce = old })
+	c, buf, _ := newStreamController(t)
+	t.Cleanup(c.stopPendingEmit)
+	lastSnapshot := func() []string {
+		t.Helper()
+		buf.Reset()
+		c.emitSnapshot()
+		evs := decodeEvents(t, buf.Bytes())
+		if len(evs) != 1 {
+			t.Fatalf("want 1 snapshot, got %d", len(evs))
+		}
+		return ids(evs[0].CommentList())
+	}
+
+	st := PrereviewState{Comments: []Comment{regionComment("c", "first"), regionComment("a", "second"), regionComment("b", "third")}}
+	if err := c.persist(st.Comments); err != nil {
+		t.Fatal(err)
+	}
+	st.EditingCommentID, st.CommentMode, st.CurrentURL = "a", commentKindRegion, "/p"
+	st.SelectionArea = Area{X: 0.3, Y: 0.3, W: 0.2, H: 0.1}
+	var err error
+	if st, err = c.addCommentBody(st, "second, reworded"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := lastSnapshot(), []string{"c", "a", "b"}; !slices.Equal(got, want) {
+		t.Fatalf("after saving an edit, snapshot = %v, want %v (#207: an edit must not move a comment)", got, want)
+	}
+
+	if st, err = c.DeleteComment(st, regionCtx("deleteComment", map[string]interface{}{"id": "c"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.UndoDelete(st, regionCtx("undoDelete", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := lastSnapshot(), []string{"a", "b", "c"}; !slices.Equal(got, want) {
+		t.Fatalf("after delete + undo, snapshot = %v, want %v (the restored comment re-enters last)", got, want)
 	}
 }
