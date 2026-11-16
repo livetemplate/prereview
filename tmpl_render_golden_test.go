@@ -579,6 +579,17 @@ func renderFixtures() []renderFixture {
 	judgePage.JudgeCal = map[string]library.Calibration{"reader-first": {Agree: 7, Total: 9, WindowAgree: 7,
 		Disagreed: []library.Label{{File: "docs/guide.md", Verdict: "pass", Critique: "Leads with the diagram."},
 			{File: "notes.txt", Verdict: "fail", Critique: "Buries the action."}}}}
+	// Markup snapshot of a described judge row beside an undescribed checker in one
+	// group. (The {{with}}-in-range shift this shape once hit only showed on live
+	// updates; TestE2E_WithInRangeChecksRows guards that.)
+	descJudge := judgeRes("pass", "", nil)
+	descJudge.Category, descJudge.Description = "Clarity", "Does every section carry the narrative forward?"
+	descPage := checksPage
+	descPage.ExpandedCheck = ""
+	descChecker := fileChecks.Results[0] // filler-intensifiers: fails, no description
+	descChecker.Category = "Clarity"
+	descPage.Checks = &review.FileChecks{Results: []checks.Result{descChecker, descJudge}}
+	descPage.ReviewChecks = &review.ReviewChecks{Total: 1, Files: []review.PathChecks{{Path: "notes.txt", Results: descPage.Checks.Results}}}
 	judgeCard := checksStrip
 	judgeCard.Checks = judgesFile
 	judgeCard.SelectedCheck = "reader-first"
@@ -715,6 +726,7 @@ func renderFixtures() []renderFixture {
 		{"checks-strip", checksStrip},
 		{"checks-page", checksPage},
 		{"checks-page-judge", judgePage},
+		{"checks-page-desc", descPage},
 		{"checks-page-history", checksHistory},
 		{"checks-judge-card", judgeCard},
 		{"checks-judge-run", judgeRun},
