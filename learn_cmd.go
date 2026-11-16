@@ -64,7 +64,7 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 				"  accepts, edits or rejects it in the Library; nothing takes effect until then.\n\n")
 		fs.PrintDefaults()
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() > 0 {
@@ -105,7 +105,7 @@ func runLearnList(dir string, args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("learn list", flag.ContinueOnError)
 	status := fs.String("status", "", "only this status: proposed, accepted, rejected, superseded")
 	asJSON := fs.Bool("json", false, "one JSON object per line (with evidence)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 	for _, l := range library.LoadLearnings(dir) {

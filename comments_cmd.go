@@ -34,7 +34,7 @@ func runComments(args []string) error {
 				"  resolved/outdated/draft. --json emits the same shape as the snapshot.\n"+
 				"  Pipe the ids into `prereview done --file -` to mark them worked on.\n")
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 	dir, err := storeDir(*out)

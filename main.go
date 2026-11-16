@@ -24,7 +24,6 @@ import (
 const topUsage = `Usage: prereview [flags] [path]
 
   path   git repo, non-git directory, or single file to review (default: current dir).
-         Flags must come before the path, e.g. ` + "`prereview --agent ./docs`" + `.
 
 Subcommands (for the coding agent; each takes --out <STORE>):
   check      run the review's checks on files and print the findings (--json); exits 1 on a failure
@@ -266,7 +265,7 @@ func main() {
 	doUninstall := flag.Bool("uninstall", false, "remove the prereview binary from disk, then exit (your review comments in each repo's .prereview/ are left untouched)")
 	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
 	replace := flag.Bool("replace", false, "if a prereview server is already running for THIS review's store, stop it and take over (otherwise launch errors). Reviews of different single files are different stores and never disturb each other.")
-	flag.Parse()
+	_ = parseInterspersed(flag.CommandLine, os.Args[1:]) // ExitOnError: a bad flag exits inside
 
 	// --agent is the single agent-mode flag. --skill/--stream are kept as
 	// deprecated aliases so existing skills/scripts keep launching agent mode;

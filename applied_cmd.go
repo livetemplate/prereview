@@ -37,7 +37,7 @@ func runMarkAck(name, usage, fileName, noun string, args []string) error {
 	out := fs.String("out", "", "this review's store: the STORE path printed at launch (the reviewed file, or a directory whose .prereview/ holds the review, also work); defaults to the current directory")
 	file := fs.String("file", "", "read suggestion ids from this file, or \"-\" for stdin (bare ids, a JSON array, or JSONL objects with an \"id\")")
 	fs.Usage = func() { fmt.Fprint(fs.Output(), usage) }
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 

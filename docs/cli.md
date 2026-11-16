@@ -10,9 +10,9 @@ Usage: prereview [flags] [path]
 
 `path` is the review target — a git repo, a non-git directory, or a single
 file. It's the trailing **positional** argument and defaults to the current
-directory, so a bare `prereview` just works. **Flags must come before the
-path** (Go's flag parser stops at the first non-flag): `prereview --agent ./docs`,
-not `prereview ./docs --agent`.
+directory, so a bare `prereview` just works. Flags can go before or after it
+(`prereview --agent ./docs` and `prereview ./docs --agent` are the same), and the
+same holds for every subcommand; a bare `--` ends flag parsing.
 
 ## Defaults
 

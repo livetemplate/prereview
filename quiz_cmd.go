@@ -58,7 +58,7 @@ func runQuiz(args []string) error {
 				"    }\n\n"+
 				"  --out must match the review's store (the STORE line).\n")
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
 

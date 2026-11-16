@@ -241,9 +241,6 @@ func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
 	// The two writes must straddle at least one poll: if working→done lands inside a
 	// single 750ms window the watcher only ever sees "done" (no working→done edge)
 	// and never checkpoints, so sleep >1 interval between them.
-	// Flag order matters: Go's flag package stops at the first positional, so --out
-	// must precede the <state> <message> positionals or it is silently ignored and
-	// the status file lands in the CWD instead of the demo store the server watches.
 	if err := agentRun(bin, "status", "--out", repo, "working", "Reworking the charge retry loop"); err != nil {
 		log.Printf("[gif:versions] %v", err)
 		return

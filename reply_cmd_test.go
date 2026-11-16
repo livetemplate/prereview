@@ -195,6 +195,23 @@ func TestRunReply_Answered(t *testing.T) {
 	}
 }
 
+// TestRunReply_FlagsAfterID: the form SKILL.md documents, `reply --answered <id>
+// --body …`, must work. Go's flag package stopped at the id, so --body became a second
+// positional and the reply failed with "takes exactly one id" (found in #206's demo).
+func TestRunReply_FlagsAfterID(t *testing.T) {
+	dir := t.TempDir()
+	seedStore(t, dir, []csv.Row{row("c1")})
+	if err := runReply([]string{"--out", dir, "--answered", "c1", "--body", "Two ways: pick a card."}); err != nil {
+		t.Fatalf("reply with --body after the id: %v", err)
+	}
+	if e := agentReplies(t, dir); len(e) != 1 || e[0].Body != "Two ways: pick a card." {
+		t.Fatalf("want the reply recorded with its body, got %+v", e)
+	}
+	if got := answeredIDs(t, dir); len(got) != 1 || got[0] != "c1" {
+		t.Fatalf("want c1 marked answered, got %v", got)
+	}
+}
+
 // TestRunReply_AnsweredRejectsNonComment (#205): a suggestion's outcome is the
 // reviewer's verdict and a quiz question has no queue state, so --answered on
 // either fails loudly — and records nothing at all.

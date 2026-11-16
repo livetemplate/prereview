@@ -324,8 +324,7 @@ shortcuts.
 ## CLI reference
 
 The review target is the trailing **positional path** (default: current
-directory), so a bare `prereview` just works. **Flags must come before the
-path** — `prereview --agent ./docs`, not `prereview ./docs --agent`.
+directory), so a bare `prereview` just works. Flags can go before or after it.
 
 ```bash
 prereview                                # current dir (git repo or not)

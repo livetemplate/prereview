@@ -234,7 +234,7 @@ everything else has a sane default, so a bare `prereview` just works.
 prereview                                # current dir (git repo or not) — just works
 prereview ./PLAN.md                      # a single file
 prereview ./design-docs                  # a non-git directory — every file shown whole
-prereview --base origin/main ../service  # a different git repo vs a ref (flags BEFORE the path)
+prereview --base origin/main ../service  # a different git repo vs a ref
 prereview --external http://localhost:5173 --out ./review   # annotate a live local site (dev server)
 prereview --agent                        # agent mode: stream the queue for an LLM (path defaults to .)
 prereview --agent --replace              # take over an already-running session for this review
@@ -243,7 +243,7 @@ prereview --agent --replace              # take over an already-running session 
 A non-git directory or single file is auto-detected: it's shown whole
 (every line commentable), with no diff and no base picker. Each single file gets
 its own store, so two files in one directory can be reviewed at the same time.
-Flags must come **before** the path. Full reference — every flag, mode, and combination —
+Full reference — every flag, mode, and combination —
 in **[docs/cli.md](docs/cli.md)**.
 
 ### What you can review
