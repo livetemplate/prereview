@@ -692,45 +692,6 @@
   
   
   
-  <div class="ann-nav" role="navigation" aria-label="Open items">
-    <form method="POST"><button type="submit" name="navPrev" class="outline ann-nav-step" aria-label="Previous open item" title="Previous open item (p)"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-  d="M15 6l-6 6 6 6"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  fill="none"
-/></svg></button></form>
-    <span class="ann-nav-label">1 open</span>
-    <form method="POST"><button type="submit" name="navNext" class="outline ann-nav-step" aria-label="Next open item" title="Next open item (n)"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-  d="M9 6l6 6-6 6"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  fill="none"
-/></svg></button></form>
-    <div
-      class="tb-dropdown ann-nav-kind"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
-      <button type="button" class="outline" aria-haspopup="menu" title="Which items to step through">All<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-  d="M6 9l6 6 6-6"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
-  fill="none"
-/></svg></button>
-      <div class="tb-dropdown-panel" role="menu" aria-label="Step through">
-        <form method="POST"><input type="hidden" name="kind" value=""><button type="submit" name="setNavKind" class="menu-item is-on" role="menuitemradio" aria-checked="true"><span class="menu-label">All</span></button></form><form method="POST"><input type="hidden" name="kind" value="comment"><button type="submit" name="setNavKind" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-label">Comments</span></button></form><form method="POST"><input type="hidden" name="kind" value="suggestion"><button type="submit" name="setNavKind" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-label">Suggestions</span></button></form><form method="POST"><input type="hidden" name="kind" value="quiz"><button type="submit" name="setNavKind" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-label">Quiz</span></button></form>
-      </div>
-    </div>
-    <span class="ann-nav-actions">
-      
-      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
-    </span>
-  </div>
-  
   <section class="boot" data-key="boot" aria-label="Reading past reviews">
     
     <h2>Reading past reviews…</h2>
