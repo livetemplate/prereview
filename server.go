@@ -595,16 +595,10 @@ func staticFallback(root string, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		full := filepath.Join(rootResolved, filepath.FromSlash(cleaned))
-		resolved, err := filepath.EvalSymlinks(full)
+		// ResolveWithin refuses a path, or a symlink on it, that leaves the
+		// repo; a missing file is a 404 too.
+		resolved, err := gitdiff.ResolveWithin(rootResolved, strings.TrimPrefix(cleaned, "/"))
 		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		// EvalSymlinks-then-prefix-check defeats symlinks that escape the
-		// repo. Append the separator on both sides so "/repo" doesn't
-		// accept "/repo-evil/foo.png".
-		if !strings.HasPrefix(resolved+string(filepath.Separator), rootResolved+string(filepath.Separator)) {
 			http.NotFound(w, r)
 			return
 		}

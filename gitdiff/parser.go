@@ -116,6 +116,9 @@ func tooLargeNote(size int64) string {
 // instead of loading content — the viewer renders the note and skips
 // the per-line markup entirely.
 func LoadDiff(repo, base, path string) (*FileDiff, error) {
+	if err := checkWithin(repo, path); err != nil {
+		return nil, err
+	}
 	if st, err := os.Stat(filepath.Join(repo, path)); err == nil && st.Size() > maxRenderableFileBytes {
 		return &FileDiff{Path: path, Note: tooLargeNote(st.Size())}, nil
 	}
