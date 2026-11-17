@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -155,20 +156,51 @@ func TestShouldAutoUpdate(t *testing.T) {
 		envUpdated string
 		want       bool
 	}{
-		{"released, no opt-out", "0.0.1", false, "", "", true},
+		{"released, not opted in → off", "0.0.1", false, "", "", false},
+		{"released, opted in", "0.0.1", false, "", "", true},
 		{"dev build", "dev", false, "", "", false},
-		{"--no-update flag", "0.0.1", true, "", "", false},
-		{"PREREVIEW_NO_UPDATE=1", "0.0.1", false, "1", "", false},
+		{"--no-update flag wins over the opt-in", "0.0.1", true, "", "", false},
+		{"PREREVIEW_NO_UPDATE=1 wins over the opt-in", "0.0.1", false, "1", "", false},
 		{"re-exec child guard", "0.0.1", false, "", "v0.0.2", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			auto := "1"
+			if strings.Contains(c.name, "not opted in") {
+				auto = ""
+			}
+			t.Setenv("PREREVIEW_AUTO_UPDATE", auto)
 			t.Setenv("PREREVIEW_NO_UPDATE", c.envNo)
 			t.Setenv("PREREVIEW_UPDATED", c.envUpdated)
 			if got := ShouldAutoUpdate(c.version, c.noFlag); got != c.want {
 				t.Errorf("ShouldAutoUpdate(%q,%v) = %v, want %v", c.version, c.noFlag, got, c.want)
 			}
 		})
+	}
+}
+
+func TestAutoUpdateNotice(t *testing.T) {
+	t.Setenv("PREREVIEW_AUTO_UPDATE", "")
+	t.Setenv("PREREVIEW_NO_UPDATE", "")
+	cache := t.TempDir()
+	if got := AutoUpdateNotice("0.29.0", cache, false); !strings.Contains(got, "PREREVIEW_AUTO_UPDATE=1") {
+		t.Fatalf("first launch notice = %q", got)
+	}
+	if got := AutoUpdateNotice("0.29.0", cache, false); got != "" {
+		t.Errorf("second launch printed %q, want nothing", got)
+	}
+	for name, run := range map[string]func() string{
+		"dev build":   func() string { return AutoUpdateNotice("dev", t.TempDir(), false) },
+		"--no-update": func() string { return AutoUpdateNotice("0.29.0", t.TempDir(), true) },
+		"opted in": func() string {
+			t.Setenv("PREREVIEW_AUTO_UPDATE", "1")
+			defer t.Setenv("PREREVIEW_AUTO_UPDATE", "")
+			return AutoUpdateNotice("0.29.0", t.TempDir(), false)
+		},
+	} {
+		if got := run(); got != "" {
+			t.Errorf("%s: notice = %q, want none", name, got)
+		}
 	}
 }
 

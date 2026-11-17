@@ -265,7 +265,7 @@ func main() {
 	clientFlag := flag.String("client", "", "agent(s) to install the integration for: a comma-separated list of claude,codex,gemini,opencode,aider,cursor (with --install-skill; empty shows an interactive menu)")
 	doUpdate := flag.Bool("update", false, "download and install the latest prereview release from GitHub, then exit")
 	doUninstall := flag.Bool("uninstall", false, "remove the prereview binary from disk, then exit (your review comments in each repo's .prereview/ are left untouched)")
-	noUpdate := flag.Bool("no-update", false, "skip the on-run update check (also honoured via PREREVIEW_NO_UPDATE=1)")
+	noUpdate := flag.Bool("no-update", false, "never run the on-launch update check, even with PREREVIEW_AUTO_UPDATE=1 (also PREREVIEW_NO_UPDATE=1). The check is off unless PREREVIEW_AUTO_UPDATE=1 is set")
 	replace := flag.Bool("replace", false, "if a prereview server is already running for THIS review's store, stop it and take over (otherwise launch errors). Reviews of different single files are different stores and never disturb each other.")
 	_ = parseInterspersed(flag.CommandLine, os.Args[1:]) // ExitOnError: a bad flag exits inside
 
@@ -389,6 +389,10 @@ func main() {
 
 	if update.ShouldAutoUpdate(version, *noUpdate) {
 		maybeAutoUpdate()
+	} else if cacheDir, err := os.UserCacheDir(); err == nil {
+		if notice := update.AutoUpdateNotice(version, cacheDir, *noUpdate); notice != "" {
+			fmt.Fprintln(os.Stderr, notice)
+		}
 	}
 
 	// Keep every already-installed agent integration in lockstep with this
