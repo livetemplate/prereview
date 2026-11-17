@@ -296,6 +296,10 @@ Fields per suggestion:
   paste it verbatim. Leave empty for a pure insertion.
 - `proposed` — the replacement text (multi-line is fine).
 - `note` — optional one-line rationale, shown on the box.
+- `for` — optional: the id of the comment this edit follows from. Every suggestion
+  naming the same comment shows as one group on it, with Accept all / Reject all, so
+  use it when one comment's change takes several edits (see SKILL.md → *Changes that
+  ripple*). It must name a comment in this review, or `suggest` refuses the payload.
 
 **Proposing alternatives (a group).** To offer the user a *choice* between ways to edit
 the same text, submit multiple suggestions with the **same** `file`/`side`/`from_line`/
@@ -318,8 +322,10 @@ others as `reject` — no need for them to reject each by hand.
 snapshot of every decided suggestion (dedupe by `id`). Each entry:
 
 ```
-{"id","file","from_line","to_line","side","verdict","note","original","proposed","anchor_status","thread"}
+{"id","for","file","from_line","to_line","side","verdict","note","original","proposed","anchor_status","thread"}
 ```
+
+`for` is present only on a suggestion that follows from a comment.
 
 Act by `verdict`:
 

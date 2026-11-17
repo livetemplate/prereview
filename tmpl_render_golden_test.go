@@ -373,6 +373,16 @@ func renderFixtures() []renderFixture {
 		shortcuts.Shortcuts = append(shortcuts.Shortcuts, review.Shortcut{Slug: p.Slug, Label: p.Title, Body: p.Body})
 	}
 
+	// #204 ripple: a comment with three follow-on suggestions, two of them
+	// alternatives for the same text (so Accept all leaves that pick to the reviewer).
+	ripple := goBase()
+	ripple.Comments = []review.Comment{{ID: "c1", File: "app.go", Body: "Drop this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"}}
+	ripple.Suggestions = []review.Suggestion{
+		{ID: "r1", For: "c1", File: "app.go", FromLine: 2, ToLine: 2, Side: "new", OriginalText: "two", ProposedText: ""},
+		{ID: "r2", For: "c1", File: "app.go", FromLine: 3, ToLine: 3, Side: "new", OriginalText: "three", ProposedText: "3a"},
+		{ID: "r3", For: "c1", File: "app.go", FromLine: 3, ToLine: 3, Side: "new", OriginalText: "three", ProposedText: "3b"},
+	}
+
 	// #191: the quiz questions rendered INLINE in the diff — the primary surface.
 	// The separate quiz screen is only the overview, so without this fixture the
 	// annotation rendering (line-anchored cards + the file-head card) is unguarded.
@@ -768,6 +778,7 @@ func renderFixtures() []renderFixture {
 		{"quiz-me-picker", quizPicker},
 		{"prompts-picker", promptsPicker},
 		{"shortcuts-composer", shortcuts},
+		{"ripple", ripple},
 		{"external", external},
 		{"external-acted", extActed},
 		{"version-view", version},

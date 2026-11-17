@@ -147,6 +147,8 @@ type StreamDecision struct {
 	Original     string `json:"original"`
 	Proposed     string `json:"proposed"`
 	AnchorStatus string `json:"anchor_status"`
+	// For is the comment this suggestion follows from (#204), when it has one.
+	For string `json:"for,omitempty"`
 	// Thread is the #149 conversation on this suggestion (see StreamComment.Thread).
 	Thread []StreamReply `json:"thread,omitempty"`
 }
@@ -184,6 +186,7 @@ func actionableDecisions(suggestions []Suggestion, decided map[string]Suggestion
 		}
 		out = append(out, StreamDecision{
 			ID:           sg.ID,
+			For:          sg.For,
 			File:         sg.File,
 			FromLine:     sg.FromLine,
 			ToLine:       sg.ToLine,

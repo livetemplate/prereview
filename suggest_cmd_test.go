@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -131,5 +132,23 @@ func TestMisgroupWarnings(t *testing.T) {
 	if len(got) != 2 || !strings.Contains(got[0], "c1-a and c1-b") || !strings.Contains(got[0], "a.md:4") ||
 		!strings.Contains(got[1], "ins-a and ins-b") {
 		t.Fatalf("want warnings for c1-a/c1-b and ins-a/ins-b only, got %q", got)
+	}
+}
+
+// #204: a suggestion's "for" must name a comment in the store, or nothing is written.
+func TestCheckFor(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "comments.csv")
+	if err := csv.NewWriter(csvPath).Write([]csv.Row{{ID: "c1", File: "a.md", FromLine: 1, ToLine: 1, Body: "drop"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkFor([]review.Suggestion{{ID: "s", For: "c1"}, {ID: "t"}}, csvPath); err != nil {
+		t.Errorf("a known comment: %v", err)
+	}
+	if err := checkFor([]review.Suggestion{{ID: "s", For: "nope"}}, csvPath); err == nil {
+		t.Error("an unknown comment was accepted")
+	}
+	if err := checkFor([]review.Suggestion{{ID: "s"}}, filepath.Join(dir, "missing.csv")); err != nil {
+		t.Errorf("no for, no read: %v", err)
 	}
 }

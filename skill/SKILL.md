@@ -379,6 +379,17 @@ it. Before you end your turn, drain every `accept` in the latest snapshot: apply
 `prereview applied "<id>"`. The reviewer's Queue shows an amber "accepted, awaiting apply"
 count for exactly this, and warns them on End session — don't be the reason it's non-zero.
 
+### Changes that ripple
+
+Some comments change more than their own lines: dropping a paragraph leaves a summary,
+a cross-reference or a transition pointing at nothing; a rename or a moved section does
+the same. Propose the change and every follow-on edit elsewhere in the file as
+suggestions that name the comment in `"for": "<comment id>"`. The reviewer then sees
+them as one group on the comment and can take or refuse the whole change at once.
+After submitting, `reply` on the comment with one line on what the edits do, then
+`done` it. Ripple edits can include alternatives (the next section) when one of them
+is a taste call.
+
 ### Offer alternatives when the choice is the reviewer's
 
 A comment can leave a **taste call** open: two defensible ways, where the right one depends

@@ -115,6 +115,13 @@ Want a different take? **Reply** on the suggestion's thread with what should
 change; the agent reworks it and re-submits (a reworked suggestion comes back
 for a fresh look).
 
+**Follow-on edits.** Some changes reach past their own lines: drop a paragraph and a
+summary or a cross-reference elsewhere goes stale. The agent proposes the change and each
+follow-on edit as suggestions linked to your comment, which shows "Follow-on edits: N
+open" with **Accept all** and **Reject all**. Each linked box has a *for your comment*
+link back. Accept all leaves any set of alternatives for you to pick. The *Drop this*
+shortcut asks for exactly this.
+
 **Alternatives.** When a comment leaves a choice that is yours to make (tone, audience,
 scope), the agent may offer two versions as linked boxes ("alternative 1 of 2") instead
 of picking one, and mark your comment *answered*. Accepting one rejects the other. Reject

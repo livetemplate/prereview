@@ -2648,6 +2648,20 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 .inline-suggestion .sg-hide-btn:hover,
 .sg-hidden-marker .sg-hide-btn:hover { color: var(--accent); text-decoration: underline; }
+/* #204 ripple: the comment's follow-on suggestions, one row of actions. */
+.ripple-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem;
+  margin: 0.4rem 0 0.2rem; padding: 0.35rem 0.5rem; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 0.8rem;
+}
+.ripple-row form { margin: 0; }
+.ripple-row button { width: auto; margin: 0; padding: 0.15rem 0.6rem; min-height: 0; font-size: 0.78rem; }
+.ripple-row .ripple-pick { color: var(--text-muted); }
+.sg-for { display: inline; margin: 0; }
+.sg-for-btn {
+  width: auto; margin: 0; padding: 0; min-height: 0; border: 0; background: none; box-shadow: none;
+  font-size: 0.72rem; color: var(--accent); text-decoration: underline; cursor: pointer;
+}
 /* #204 shortcut chips: one row above the comment box; it scrolls sideways on a
    phone instead of wrapping into a block that pushes the box down. */
 .sc-chips {

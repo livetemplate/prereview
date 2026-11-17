@@ -442,6 +442,7 @@ func onlyComment(t *testing.T, p *runningPrereview) streamComment {
 }
 
 type streamComment struct {
+	ID       string `json:"id"`
 	Kind     string `json:"kind"`
 	File     string `json:"file"`
 	FromLine int    `json:"from_line"`
