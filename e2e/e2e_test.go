@@ -141,6 +141,10 @@ func mustWrite(t *testing.T, dir, path, content string) {
 //
 // The checks rule folder is isolated the same way (checksDirFor), so a test's
 // rules never come from — or get copied into — the developer's real folder.
+//
+// The suggestion- and quiz-prompt overlays live inside the library folder, so the
+// isolated PREREVIEW_LIBRARY_DIR also keeps a developer's own prompts out of every
+// test.
 func prefsIsolatedEnv(repo string) []string {
 	prefs := filepath.Join(filepath.Dir(repo), "prereview-ui-prefs.json")
 	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+prefs, "PREREVIEW_CHECKS_DIR="+checksDirFor(repo),

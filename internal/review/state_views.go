@@ -74,13 +74,7 @@ func (s PrereviewState) pastEndSet() ([]Comment, []Suggestion) {
 	if s.SelectedFile == "" || s.CurrentDiff == nil || s.CurrentDiff.IsBinary {
 		return nil, nil
 	}
-	lastNew, lastOld := s.CurrentDiff.LastLine("new"), s.CurrentDiff.LastLine("old")
-	past := func(side string, toLine int) bool {
-		if side == "old" {
-			return toLine > lastOld
-		}
-		return toLine > lastNew // "new", "both" and "" anchor against the working tree
-	}
+	past := s.pastEndRule()
 	var cs []Comment
 	for _, c := range s.Comments {
 		if s.inlineComment(c) && past(c.Side, c.ToLine) {
@@ -94,6 +88,18 @@ func (s PrereviewState) pastEndSet() ([]Comment, []Suggestion) {
 		}
 	}
 	return cs, sgs
+}
+
+// pastEndRule reports whether an annotation ending on toLine (on side) has lost its
+// line. CurrentDiff must be non-nil.
+func (s PrereviewState) pastEndRule() func(side string, toLine int) bool {
+	lastNew, lastOld := s.CurrentDiff.LastLine("new"), s.CurrentDiff.LastLine("old")
+	return func(side string, toLine int) bool {
+		if side == "old" {
+			return toLine > lastOld
+		}
+		return toLine > lastNew // "new", "both" and "" anchor against the working tree
+	}
 }
 
 // PastEndComments / PastEndSuggestions are the end-of-file block's cards.
@@ -245,21 +251,120 @@ func isHidden(hidden map[string]string, sg Suggestion) bool {
 }
 
 // HiddenSuggestionCount is how many of the SELECTED file's suggestions are
-// currently hidden (fingerprint-matching), driving the "N hidden · show"
-// affordance. Scoped to the selected file so the count matches what a reviewer
-// could reveal on the page they're looking at. Zero-arg.
-func (s PrereviewState) HiddenSuggestionCount() int {
+// currently hidden (fingerprint-matching), driving the View menu's "N hidden ·
+// show". Zero-arg.
+func (s PrereviewState) HiddenSuggestionCount() int { return len(s.hiddenOnSelected()) }
+
+// hiddenOnSelected is the selected file's in-scope suggestions hidden against
+// their current content: visibleSuggestions' complement on this file.
+func (s PrereviewState) hiddenOnSelected() []Suggestion {
 	if len(s.Hidden) == 0 || s.SelectedFile == "" {
-		return 0
+		return nil
 	}
 	hidden := s.hiddenFingerprints()
-	n := 0
-	for _, sg := range s.Suggestions {
+	var out []Suggestion
+	for _, sg := range s.scopedSuggestions() {
 		if sg.File == s.SelectedFile && isHidden(hidden, sg) {
-			n++
+			out = append(out, sg)
 		}
 	}
-	return n
+	return out
+}
+
+// HiddenMark is the "N hidden suggestion(s) · Show" marker left where hidden
+// suggestions would render (#233). IDs (comma-joined) is exactly what its Show
+// button un-hides, so a marker never brings back more than it counts.
+type HiddenMark struct {
+	Label string
+	IDs   string
+	n     int
+}
+
+func (m *HiddenMark) add(id string) {
+	m.n++
+	if m.n == 1 {
+		m.IDs, m.Label = id, "1 hidden suggestion"
+		return
+	}
+	m.IDs, m.Label = m.IDs+","+id, fmt.Sprintf("%d hidden suggestions", m.n)
+}
+
+// markerSuggestions is hiddenOnSelected for the markers: none while the global
+// Hide suggestions toggle is on, which already says suggestions are off.
+func (s PrereviewState) markerSuggestions() []Suggestion {
+	if s.HideSuggestions {
+		return nil
+	}
+	return s.hiddenOnSelected()
+}
+
+// markAt adds id to the mark at key, creating it.
+func markAt(out map[string]*HiddenMark, key, id string) {
+	if out[key] == nil {
+		out[key] = &HiddenMark{}
+	}
+	out[key].add(id)
+}
+
+// HiddenSuggestionLines maps each diff row ("<line>-<side>", the keys
+// SuggestionCountLines uses) to the marker for the suggestions hidden there.
+// VisibleLines keeps these rows out of folds, so the marker stays where the card was.
+func (s PrereviewState) HiddenSuggestionLines() map[string]*HiddenMark {
+	sgs := s.markerSuggestions()
+	if len(sgs) == 0 {
+		return nil
+	}
+	out := map[string]*HiddenMark{}
+	for _, sg := range sgs {
+		for _, k := range rowKeysFor(sg.ToLine, sg.Side) {
+			markAt(out, k, sg.ID)
+		}
+	}
+	return out
+}
+
+// HiddenSuggestionBlocks is the block-view counterpart, keyed by markdownBlockKey,
+// over whichever block view is showing: rendered Markdown, or the HTML preview's
+// comment anchors (both render blockSuggestions).
+func (s PrereviewState) HiddenSuggestionBlocks() map[string]*HiddenMark {
+	sgs := s.markerSuggestions()
+	if len(sgs) == 0 {
+		return nil
+	}
+	out := map[string]*HiddenMark{}
+	mark := func(start, end int) {
+		for _, sg := range sgs {
+			if sg.ToLine >= start && sg.ToLine <= end {
+				markAt(out, markdownBlockKey(start, end), sg.ID)
+			}
+		}
+	}
+	for _, b := range s.RenderedMarkdown() {
+		mark(b.StartLine, b.EndLine)
+	}
+	for _, b := range s.RenderedHTML() {
+		mark(b.StartLine, b.EndLine)
+	}
+	return out
+}
+
+// PastEndHidden is the marker for hidden suggestions whose line is past the end of
+// the file (#218's block, by pastEndSet's rule), or nil.
+func (s PrereviewState) PastEndHidden() *HiddenMark {
+	if s.CurrentDiff == nil || s.CurrentDiff.IsBinary {
+		return nil
+	}
+	past := s.pastEndRule()
+	var m HiddenMark
+	for _, sg := range s.markerSuggestions() {
+		if past(sg.Side, sg.ToLine) {
+			m.add(sg.ID)
+		}
+	}
+	if m.n == 0 {
+		return nil
+	}
+	return &m
 }
 
 // A suggestion is in one of three badge/collapse states (#165). An UNDECIDED suggestion
@@ -278,10 +383,16 @@ func (s PrereviewState) HiddenSuggestionCount() int {
 // state without a verdict when the agent applies an edit the reviewer never accepted;
 // Peek / Show-resolved keep the card reachable, so the edit stays discoverable.
 func (s PrereviewState) suggestionUndecided(id string) bool {
+	return s.undecidedIn(s.DecisionsBySuggestion(), id)
+}
+
+// undecidedIn is suggestionUndecided against an already-built decisions map, for
+// callers that check many suggestions.
+func (s PrereviewState) undecidedIn(decisions map[string]SuggestionDecision, id string) bool {
 	if s.Applied[id] {
 		return false
 	}
-	d, ok := s.DecisionsBySuggestion()[id]
+	d, ok := decisions[id]
 	return !ok || (d.Verdict != verdictAccept && d.Verdict != verdictReject)
 }
 

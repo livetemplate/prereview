@@ -261,12 +261,6 @@ func findQuestion(quizzes []Quiz, quizID, questionID string) *Question {
 	return nil
 }
 
-// DismissQuizNav puts the navigator away for this session.
-func (c *PrereviewController) DismissQuizNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.QuizNavDismissed = true
-	return state, nil
-}
-
 // ToggleQuiz flips between the diff viewer and the comprehension-quiz view for
 // the selected file. Mirrors ToggleCommentList: closes the overflow menu so the
 // result is visible immediately, and is not persisted — reopening the browser

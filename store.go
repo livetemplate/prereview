@@ -202,18 +202,24 @@ func uiPrefsPath() string {
 }
 
 // userPromptsDir is the "ask for suggestions" prompt overlay directory (#147):
-// ~/.config/prereview/prompts. PREREVIEW_PROMPTS_DIR overrides it (tests, or a custom
-// library). "" when the user-config dir can't be resolved — the built-in prompts still
+// <library>/prompts, so ~/.config/prereview/prompts by default. PREREVIEW_PROMPTS_DIR
+// overrides it. "" when the library dir can't be resolved — the built-in prompts still
 // ship, so the picker never depends on this resolving.
 func userPromptsDir() string {
-	if p := os.Getenv("PREREVIEW_PROMPTS_DIR"); p != "" {
+	return libraryOverlayDir("PREREVIEW_PROMPTS_DIR", "prompts")
+}
+
+// libraryOverlayDir resolves a per-user overlay folder: the env var when set, else
+// the named folder inside the library (library.Dir), so PREREVIEW_LIBRARY_DIR moves
+// every overlay with it. "" when the library dir can't be resolved.
+func libraryOverlayDir(env, name string) string {
+	if p := os.Getenv(env); p != "" {
 		return p
 	}
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return ""
+	if dir := library.Dir(); dir != "" {
+		return filepath.Join(dir, name)
 	}
-	return filepath.Join(dir, "prereview", "prompts")
+	return ""
 }
 
 // userChecksDir is the checks rule folder (checks M1): ~/.config/prereview/checks.
@@ -221,30 +227,17 @@ func userPromptsDir() string {
 // here. PREREVIEW_CHECKS_DIR overrides it (tests). "" when the user-config dir can't
 // be resolved: the built-in rules still run.
 func userChecksDir() string {
-	if p := os.Getenv("PREREVIEW_CHECKS_DIR"); p != "" {
-		return p
-	}
-	if dir := library.Dir(); dir != "" {
-		return filepath.Join(dir, "checks") // inside the library, so rule history keys match its review
-	}
-	return ""
+	return libraryOverlayDir("PREREVIEW_CHECKS_DIR", "checks") // inside the library, so rule history keys match its review
 }
 
 // userQuizzesDir is the comprehension-quiz prompt overlay directory (#191):
-// ~/.config/prereview/quizzes. PREREVIEW_QUIZZES_DIR overrides it. Kept separate
+// <library>/quizzes. PREREVIEW_QUIZZES_DIR overrides it. Kept separate
 // from the suggestions library above because the two answer with different verbs
 // — a quiz prompt asks for `prereview quiz`, a suggestions prompt for
 // `prereview suggest` — so mixing them in one directory would put the wrong
 // instructions in the wrong picker. Same "" fallback: built-ins still ship.
 func userQuizzesDir() string {
-	if p := os.Getenv("PREREVIEW_QUIZZES_DIR"); p != "" {
-		return p
-	}
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "prereview", "quizzes")
+	return libraryOverlayDir("PREREVIEW_QUIZZES_DIR", "quizzes")
 }
 
 // storeDirName is the on-disk store directory, and targetsDirName the container

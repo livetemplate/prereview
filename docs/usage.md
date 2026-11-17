@@ -48,6 +48,13 @@ region kinds — each with a jump back to its source. **Show / hide resolved** k
 addressed comments out of the way (or hide a single resolved one to declutter
 without turning the whole group off).
 
+**Step through what's open.** While anything is waiting on you (an unresolved
+comment, an undecided suggestion, an unanswered quiz question), a bar at the top
+of the file reads "N open". **‹** and **›** (or <kbd>p</kbd> and <kbd>n</kbd>)
+step through those items in document order across files, opening each one's file
+and scrolling it into view. The chip next to the count limits the steps to
+comments, suggestions or quiz questions, and **×** hides the bar for the session.
+
 **Search across files.** Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>)
 to open a search palette that matches both file names and line contents across
 the changed files — toggle it to search every file. Picking a result opens the
@@ -86,6 +93,10 @@ suggestions** menu of ready-made prompts); it submits them with `prereview
 suggest`, and each appears inline as a **before → after** box, visually distinct
 from a comment.
 
+To add your own prompts to that menu, put one Markdown file per prompt in
+`~/.config/prereview/prompts/`. The file format is under `PREREVIEW_PROMPTS_DIR`
+in [`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment).
+
 On each box:
 
 - **Accept** — take the edit. The agent applies it and the box shows *applied*
@@ -107,6 +118,9 @@ Your decisions reach the agent the same way comments do — continuously, no
 hand-off step. prereview never edits your files itself; the agent does, so an
 accepted edit shows up as a normal diff you can commit. Use **Show / hide
 suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
+**Hide** on one box sets just that one aside: it leaves "1 hidden suggestion ·
+Show" on its line, and **Show** brings it back. The suggestion stays open for the
+agent either way.
 
 ## Checks
 

@@ -153,79 +153,63 @@ func TestClearSelection_ClosesKeyboardHelp(t *testing.T) {
 	}
 }
 
-// stepCommentState builds a single-file state with n open comments so
-// stepComment never needs to load a diff (target.File == SelectedFile).
-func stepCommentState(n int) PrereviewState {
+// navState builds a single-file state with n open comments, so stepping never needs
+// to load a diff (every target is in the selected file).
+func navState(n int) PrereviewState {
 	cs := make([]Comment, n)
 	for i := range cs {
-		cs[i] = Comment{ID: string(rune('a' + i)), File: "a.md"}
+		cs[i] = Comment{ID: string(rune('a' + i)), File: "a.md", ToLine: i + 1}
 	}
 	return PrereviewState{SelectedFile: "a.md", Comments: cs}
 }
 
-// TestStepComment_Wraparound pins next/prev stepping and wrap, starting from a
-// known focused comment.
-func TestStepComment_Wraparound(t *testing.T) {
+// TestNavStep_Wraparound pins n/p (navNext/navPrev) stepping and wrap in both
+// directions, and that a step leaves the all-comments overview.
+func TestNavStep_Wraparound(t *testing.T) {
 	c := &PrereviewController{}
-	st := stepCommentState(3) // ids: a, b, c
-
-	st.ScrollToCommentID = "a"
-	st, _ = c.NextComment(st, kbCtx("nextComment"))
-	if st.ScrollToCommentID != "b" {
-		t.Errorf("next from a: got %q want b", st.ScrollToCommentID)
+	st := navState(3) // ids: a, b, c
+	st.ShowAllComments = true
+	for _, want := range []string{"a", "b", "c", "a"} { // c -> wrap -> a
+		st, _ = c.NavNext(st, kbCtx("navNext"))
+		if st.ScrollToCommentID != want {
+			t.Fatalf("next: got %q want %q", st.ScrollToCommentID, want)
+		}
 	}
-	st, _ = c.NextComment(st, kbCtx("nextComment"))
-	st, _ = c.NextComment(st, kbCtx("nextComment")) // c -> wrap -> a
-	if st.ScrollToCommentID != "a" {
-		t.Errorf("next wrap: got %q want a", st.ScrollToCommentID)
-	}
-	st, _ = c.PrevComment(st, kbCtx("prevComment")) // a -> wrap -> c
+	st, _ = c.NavPrev(st, kbCtx("navPrev")) // a -> wrap -> c
 	if st.ScrollToCommentID != "c" {
 		t.Errorf("prev wrap: got %q want c", st.ScrollToCommentID)
 	}
-	// Stepping a comment leaves the all-comments overview so the target is
-	// visible in the diff.
 	if st.ShowAllComments {
-		t.Error("stepComment should close the all-comments overview")
+		t.Error("a step should close the all-comments overview")
 	}
 }
 
-// TestStepComment_StartsFromNothing pins the cursor-less case: Next lands on
-// the first comment, Prev on the last.
-func TestStepComment_StartsFromNothing(t *testing.T) {
+// TestNavStep_StartsFromNothing pins the cursor-less case: next lands on the first
+// item, previous on the last.
+func TestNavStep_StartsFromNothing(t *testing.T) {
 	c := &PrereviewController{}
-
-	st := stepCommentState(3)
-	st, _ = c.NextComment(st, kbCtx("nextComment"))
+	st, _ := c.NavNext(navState(3), kbCtx("navNext"))
 	if st.ScrollToCommentID != "a" {
 		t.Errorf("next from nothing: got %q want a", st.ScrollToCommentID)
 	}
-
-	st = stepCommentState(3)
-	st, _ = c.PrevComment(st, kbCtx("prevComment"))
+	st, _ = c.NavPrev(navState(3), kbCtx("navPrev"))
 	if st.ScrollToCommentID != "c" {
 		t.Errorf("prev from nothing: got %q want c", st.ScrollToCommentID)
 	}
 }
 
-// TestStepComment_EmptyAndResolved pins the no-op cases: no comments, and only
-// resolved comments (which VisibleComments filters out by default).
-func TestStepComment_EmptyAndResolved(t *testing.T) {
+// TestNavStep_EmptyAndResolved pins the no-op cases: no comments, and only resolved
+// comments (which aren't open items).
+func TestNavStep_EmptyAndResolved(t *testing.T) {
 	c := &PrereviewController{}
-
-	st := PrereviewState{SelectedFile: "a.md"}
-	st, err := c.NextComment(st, kbCtx("nextComment"))
-	if err != nil || st.ScrollToCommentID != "" {
+	st, err := c.NavNext(PrereviewState{SelectedFile: "a.md"}, kbCtx("navNext"))
+	if err != nil || st.ScrollToCommentID != "" || st.NavAt != nil {
 		t.Errorf("empty set should be a no-op, got id=%q err=%v", st.ScrollToCommentID, err)
 	}
-
-	st = PrereviewState{
-		SelectedFile: "a.md",
-		Comments:     []Comment{{ID: "a", File: "a.md", Resolved: true}},
-	}
-	st, _ = c.NextComment(st, kbCtx("nextComment"))
+	st = PrereviewState{SelectedFile: "a.md", Comments: []Comment{{ID: "a", File: "a.md", Resolved: true}}}
+	st, _ = c.NavNext(st, kbCtx("navNext"))
 	if st.ScrollToCommentID != "" {
-		t.Errorf("all-resolved (hidden) should be a no-op, got id=%q", st.ScrollToCommentID)
+		t.Errorf("all-resolved should be a no-op, got id=%q", st.ScrollToCommentID)
 	}
 }
 

@@ -39,8 +39,8 @@ func HiddenSuggestionPath(csvPath string) string {
 	return filepath.Join(filepath.Dir(csvPath), HiddenSuggestionFileName)
 }
 
-// newHidden pins a hide to the suggestion's current content fingerprint.
-func newHidden(sg Suggestion) HiddenSuggestion {
+// NewHidden pins a hide to the suggestion's current content fingerprint.
+func NewHidden(sg Suggestion) HiddenSuggestion {
 	return HiddenSuggestion{SuggestionID: sg.ID, Fingerprint: suggestionFingerprint(sg)}
 }
 

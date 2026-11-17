@@ -361,6 +361,11 @@ func renderFixtures() []renderFixture {
 		{Slug: "security", Title: "Quiz me like a security reviewer", Body: "security quiz"},
 	}
 
+	// #147/#211: the "Ask for suggestions" picker with the real built-in library, so
+	// the golden pins every shipped prompt row and the "Add your own prompts" link.
+	promptsPicker := goBase()
+	promptsPicker.Prompts = review.LoadPrompts("")
+
 	// #191: the quiz questions rendered INLINE in the diff — the primary surface.
 	// The separate quiz screen is only the overview, so without this fixture the
 	// annotation rendering (line-anchored cards + the file-head card) is unguarded.
@@ -486,6 +491,26 @@ func renderFixtures() []renderFixture {
 	pastEOF.Suggestions = []review.Suggestion{
 		{ID: "s1", File: "app.go", FromLine: 41, ToLine: 41, Side: "new", OriginalText: "old", ProposedText: "new"},
 	}
+
+	// #233: a hidden suggestion leaves a "Show" marker where its card was, on a diff
+	// row and on a rendered-Markdown block.
+	hiddenSg := review.Suggestion{ID: "s1", File: "app.go", FromLine: 2, ToLine: 2, Side: "new", OriginalText: "old", ProposedText: "new"}
+	hiddenRow := goBase()
+	hiddenRow.Suggestions = []review.Suggestion{hiddenSg}
+	hiddenRow.Hidden = []review.HiddenSuggestion{review.NewHidden(hiddenSg)}
+	mdSg := review.Suggestion{ID: "s2", File: "README.md", FromLine: 1, ToLine: 1, Side: "new", OriginalText: "# Title", ProposedText: "# Better"}
+	hiddenBlock := md
+	hiddenBlock.Suggestions = []review.Suggestion{mdSg}
+	hiddenBlock.Hidden = []review.HiddenSuggestion{review.NewHidden(mdSg)}
+
+	// #193: the open-items stepper with its cursor on the second item (a suggestion,
+	// which also carries the scroll target) and the Suggestions filter row listed.
+	annNav := goBase()
+	annNav.Comments = []review.Comment{{ID: "c1", File: "app.go", Body: "rename", Kind: "line", FromLine: 1, ToLine: 1, Side: "new"}}
+	annNav.Suggestions = []review.Suggestion{{ID: "s1", File: "app.go", FromLine: 2, ToLine: 2, Side: "new", OriginalText: "old", ProposedText: "new"}}
+	navAt := annNav.NavItems()[1].Pos
+	annNav.NavAt = &navAt
+	annNav.ScrollToItemKey = "sg:s1"
 
 	// checks M1b: the file view with one check selected — the bar is its finding
 	// stepper, and its finding is marked and carded inline.
@@ -716,6 +741,7 @@ func renderFixtures() []renderFixture {
 		{"quiz-inline", quizInline},
 		{"quiz-me-button", quizBtn},
 		{"quiz-me-picker", quizPicker},
+		{"prompts-picker", promptsPicker},
 		{"external", external},
 		{"external-acted", extActed},
 		{"version-view", version},
@@ -723,6 +749,9 @@ func renderFixtures() []renderFixture {
 		{"agent-answered", answered},
 		{"reply-open", replyOpen},
 		{"past-eof", pastEOF},
+		{"hidden-marker-row", hiddenRow},
+		{"hidden-marker-block", hiddenBlock},
+		{"ann-nav", annNav},
 		{"checks-strip", checksStrip},
 		{"checks-page", checksPage},
 		{"checks-page-judge", judgePage},

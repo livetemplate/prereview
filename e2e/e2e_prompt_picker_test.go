@@ -26,6 +26,9 @@ func TestE2E_PromptPicker(t *testing.T) {
 		chromedp.WaitVisible(`.prompts-trigger`, chromedp.ByQuery),
 		chromedp.Click(`.prompts-trigger`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.prompts-panel .prompt-row`, chromedp.ByQuery),
+		// #211: the panel ends with a link to where your own prompts go (its target
+		// section is checked in TestE2E_UsagePage).
+		chromedp.WaitVisible(`.prompts-panel .prompts-more[href="/_usage#suggested-edits"]`, chromedp.ByQuery),
 		chromedp.Evaluate(`[...document.querySelectorAll('.prompt-row')].find(b => b.textContent.trim() === 'Code review').click()`, nil),
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 	); err != nil {

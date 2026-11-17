@@ -46,8 +46,13 @@ func (s PrereviewState) CurrentQuiz() *Quiz {
 	if s.SelectedFile == "" {
 		return nil
 	}
+	return s.quizFor(s.SelectedFile)
+}
+
+// quizFor is the quiz a file shows: the last one recorded for it, or nil.
+func (s PrereviewState) quizFor(file string) *Quiz {
 	for i := len(s.Quizzes) - 1; i >= 0; i-- {
-		if s.Quizzes[i].File == s.SelectedFile {
+		if s.Quizzes[i].File == file {
 			return &s.Quizzes[i]
 		}
 	}
@@ -261,52 +266,6 @@ func (s PrereviewState) FileQuizItems() []QuizItem {
 		}
 	}
 	return out
-}
-
-// ShowQuizNav gates the navigator: it appears whenever the open file has a quiz,
-// unless dismissed or the overview is already showing (where it would duplicate
-// the list it sits above).
-//
-// A finished quiz reopens without its navigator (#212) — but answering the last
-// question doesn't yank the bar away mid-visit, so it stays while anything was
-// answered this visit.
-func (s PrereviewState) ShowQuizNav() bool {
-	if !s.HasQuiz() || s.QuizNavDismissed || s.ShowQuiz {
-		return false
-	}
-	for _, it := range s.QuizItems() {
-		if !it.Settled { // unanswered, or answered this visit — in THIS file's quiz
-			return true
-		}
-	}
-	return false
-}
-
-// QuizNavLabel summarises the navigator's state, e.g. "2/5 answered · 1 right".
-//
-// Progress and score are DIFFERENT fractions, and an earlier version showed
-// "1/5 answered" beside a "0/5" chip — two ratios side by side that looked like
-// they should agree. They are one phrase now, and the chip says what it does
-// ("Overview") rather than carrying a competing number.
-func (s PrereviewState) QuizNavLabel() string {
-	n, total := s.QuizAnsweredCount(), s.QuizQuestionCount()
-	if n == 0 {
-		return fmt.Sprintf("%d questions", total)
-	}
-	return fmt.Sprintf("%d/%d answered · %d right", n, total, s.QuizCorrectCount())
-}
-
-// NavState is the badge state for one question: "correct", "wrong" or "open".
-// Precomputed because a template cannot call a method with arguments.
-func (it QuizItem) NavState() string {
-	switch {
-	case !it.Answered:
-		return "open"
-	case it.Correct:
-		return "correct"
-	default:
-		return "wrong"
-	}
 }
 
 // QuizCountLines counts the quiz questions anchored to each row, keyed

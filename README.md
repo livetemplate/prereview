@@ -284,7 +284,9 @@ sidebar.
 **Take the agent's suggested edits.** Ask for suggestions two ways: in your
 LLM chat (*"review this doc and suggest edits in prereview"*), or right in a
 **comment** — leave one like *"suggest alternatives for this phrasing"* (the
-file header's **Ask for suggestions** menu has ready-made prompts too). Either
+file header's **Ask for suggestions** menu has ready-made prompts too). You can
+add your own prompts to that menu in `~/.config/prereview/prompts/` (see
+[docs/cli.md](docs/cli.md#environment)). Either
 way the agent submits them with `prereview suggest` and each renders inline as a
 before → after box. **Accept** to take it or **Reject** to drop it — the agent
 applies the ones you accept. Want a different take? Reply on the suggestion's

@@ -68,7 +68,10 @@ func answerInline(t *testing.T, p *runningPrereview, id string, diag func() stri
 	why := fmt.Sprintf(`.quiz-card[data-key='quiz-%s'] .quiz-why`, id)
 	ctx, cancel := context.WithTimeout(p.ctx, 5*time.Second)
 	defer cancel()
+	// Centre the option before clicking: a head question can sit just under the
+	// sticky toolbar, where chromedp counts it as in view and clicks the toolbar.
 	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q).scrollIntoView({block:'center'})`, sel), nil),
 		chromedp.Click(sel, chromedp.ByQuery),
 		chromedp.WaitVisible(why, chromedp.ByQuery),
 	); err != nil {
@@ -89,9 +92,10 @@ func clickRowBadge(t *testing.T, p *runningPrereview, id string) {
 	}
 }
 
+// quizNavCount counts the open-items bar (#193), which replaced the quiz navigator.
 func quizNavCount(t *testing.T, p *runningPrereview) int {
 	t.Helper()
-	return evalInt(t, p, `document.querySelectorAll('.quiz-nav').length`)
+	return evalInt(t, p, `document.querySelectorAll('.ann-nav').length`)
 }
 
 // reopenFile reloads the page (a new visit: QuizJustAnswered is session-only)
@@ -124,7 +128,7 @@ func TestE2E_QuizAnsweredCollapsedOnReopen(t *testing.T) {
 		}
 	}
 	if n := quizNavCount(t, p); n != 1 {
-		t.Errorf("the navigator must not vanish the moment the last question is answered, got %d", n)
+		t.Errorf("the open-items bar must not vanish the moment the last question is answered, got %d", n)
 	}
 
 	// Reopen: the finished quiz comes back closed.
@@ -133,7 +137,7 @@ func TestE2E_QuizAnsweredCollapsedOnReopen(t *testing.T) {
 		expectQuizCard(t, p, id, false, "a quiz that has been taken must reopen collapsed", diag)
 	}
 	if n := quizNavCount(t, p); n != 0 {
-		t.Errorf("a finished quiz must not bring its navigator back on reopen, got %d", n)
+		t.Errorf("a finished quiz (nothing else open) must not bring the bar back on reopen, got %d", n)
 	}
 	if n := evalInt(t, p, `document.querySelectorAll('.line-mark.is-open').length`); n != 0 {
 		t.Errorf("every answered row's badge must read done, %d read open", n)
@@ -153,7 +157,7 @@ func TestE2E_QuizAnsweredCollapsedOnReopen(t *testing.T) {
 }
 
 // A quiz left half-done reopens with the unanswered work showing and the
-// navigator back, while the answered card stays folded.
+// open-items bar back, while the answered card stays folded.
 func TestE2E_QuizAnsweredPartialReopen(t *testing.T) {
 	p, diag := bootQuizInline(t)
 	answerInline(t, p, "q1", diag)
@@ -164,7 +168,7 @@ func TestE2E_QuizAnsweredPartialReopen(t *testing.T) {
 		expectQuizCard(t, p, id, true, "an unanswered question stays visible as open work", diag)
 	}
 	if n := quizNavCount(t, p); n != 1 {
-		t.Errorf("an unfinished quiz keeps its navigator, got %d", n)
+		t.Errorf("an unfinished quiz keeps the bar, got %d", n)
 	}
 }
 

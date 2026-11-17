@@ -113,9 +113,11 @@ func TestE2E_Judges(t *testing.T) {
 			if got := textOf(t, p, `.jv-card .jv-critique`); got != "Buries what the reader must do." {
 				t.Errorf("critique %q%s", got, diag())
 			}
-			var rows int
-			if err := chromedp.Run(ctx, chromedp.Evaluate(`new Set([...document.querySelector('.ck-strip').children].filter(e => e.offsetParent).map(e => Math.round(e.getBoundingClientRect().top / 8))).size`, &rows)); err != nil || rows != 1 {
-				t.Errorf("the judge bar spans %d rows (%v)%s", rows, err, diag())
+			// One row: every visible child overlaps the others vertically. (Bucketing
+			// tops by 8px split a single row whenever the strip sat at a fractional y.)
+			var oneRow bool
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`(() => { const r = [...document.querySelector('.ck-strip').children].filter(e => e.offsetParent).map(e => e.getBoundingClientRect()); return Math.max(...r.map(b => b.top)) < Math.min(...r.map(b => b.bottom)) })()`, &oneRow)); err != nil || !oneRow {
+				t.Errorf("the judge bar spans more than one row (%v)%s", err, diag())
 			}
 			if err := chromedp.Run(ctx,
 				chromedp.Click(`.jv-card button[name="jumpToFinding"]`, chromedp.ByQuery),

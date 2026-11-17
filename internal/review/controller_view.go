@@ -292,11 +292,11 @@ func (c *PrereviewController) NavigateToHeading(state PrereviewState, ctx *livet
 	}
 	state.TOCOpen = false
 	closeFullViews(&state)
-	state.ScrollToHeadingID = id
 	// Heading scroll and comment scroll/focus are mutually exclusive intents —
 	// clear any pending comment target so it doesn't steal the scroll/focus
 	// (the comment card carries lvt-fx:scroll + lvt-autofocus on this match).
-	state.ScrollToCommentID = ""
+	clearScrollTargets(&state)
+	state.ScrollToHeadingID = id
 	return state, nil
 }
 
@@ -322,11 +322,8 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	return state, nil
 }
 
-// JumpToSuggestion selects the file an accepted suggestion lives in, from its
-// row in the queue panel (#159). It stops at file selection — suggestions have
-// no per-item scroll target today (unlike ScrollToCommentID), so the reviewer
-// lands on the file with the inline suggestion box visible; a precise scroll can
-// ride along with the collapse-to-badge work.
+// JumpToSuggestion selects the file a suggestion lives in, from its row in the
+// queue panel (#159), and scrolls its card into view (ScrollToItemKey, #193).
 func (c *PrereviewController) JumpToSuggestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	id := ctx.GetString("id")
 	if id == "" {
@@ -336,7 +333,11 @@ func (c *PrereviewController) JumpToSuggestion(state PrereviewState, ctx *livete
 	if sg == nil {
 		return state, fmt.Errorf("jumpToSuggestion: id %s not found", id)
 	}
-	return c.selectFileForJump(state, sg.File)
+	state, err := c.selectFileForJump(state, sg.File)
+	if err == nil {
+		state.ScrollToItemKey = "sg:" + id
+	}
+	return state, err
 }
 
 // selectFileForJump switches the view to file (loading its diff if it changed)
@@ -354,9 +355,16 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 		c.enterFile(&state, file, diff)
 	}
 	closeFullViews(&state)
+	clearScrollTargets(&state)
+	return state, nil
+}
+
+// clearScrollTargets drops every one-render scroll nudge, so a jump that sets none
+// (or a different one) leaves no stale target behind.
+func clearScrollTargets(state *PrereviewState) {
 	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
-	return state, nil
+	state.ScrollToItemKey = ""
 }
 
 // closeFullViews returns to the file view from any full-page view: the

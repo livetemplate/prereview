@@ -118,11 +118,7 @@
 {{else if .ShowLibrary}}{{template "library" $}}
 {{else}}
 {{with .CurrentDiff}}
-{{/* #191: lvt-spy makes the quiz navigator highlight the on-screen question
-     CLIENT-SIDE (rAF scroll listener toggling lvt-active on the matching
-     lvt-spy-link), the same primitive the TOC uses — no per-scroll server
-     round-trip, which is what made the highlight lag on a phone. */}}
-<article{{if $.HasQuiz}} lvt-spy=".quiz-card"{{end}}>
+<article>
 {{template "fileHeader" $}}
   {{if $.ViewingVersion}}
   {{/* Read-only banner while viewing a historical version. Commenting is gated
@@ -130,6 +126,29 @@
   <div class="version-view-banner" role="status">
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
+  </div>
+  {{end}}
+  {{/* #193 open-items stepper (state_nav.go). Sticky, and before the checks strip,
+       which sticks just below it. */}}
+  {{if $.ShowNav}}
+  <div class="ann-nav" role="navigation" aria-label="Open items">
+    <form method="POST"><button type="submit" name="navPrev" class="outline ann-nav-step" aria-label="Previous open item" title="Previous open item (p)">{{template "iconChevronLeft"}}</button></form>
+    <span class="ann-nav-label">{{$.NavLabel}}</span>
+    <form method="POST"><button type="submit" name="navNext" class="outline ann-nav-step" aria-label="Next open item" title="Next open item (n)">{{template "iconChevronRight"}}</button></form>
+    <div
+      class="tb-dropdown ann-nav-kind"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button type="button" class="outline" aria-haspopup="menu" title="Which items to step through">{{$.NavKindLabel}}{{template "iconChevronDown"}}</button>
+      <div class="tb-dropdown-panel" role="menu" aria-label="Step through">
+        {{range $.NavKinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="setNavKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}"><span class="menu-label">{{.Label}}</span></button></form>{{end}}
+      </div>
+    </div>
+    <span class="ann-nav-actions">
+      {{if $.HasQuiz}}<form method="POST"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>{{end}}
+      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
+    </span>
   </div>
   {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
   {{/* File-level comments + composer. Lives above the body branch so
@@ -139,22 +158,6 @@
        line view; the gutter / line badge is replaced with a "file" tag
        via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
        per-comment actions — no new endpoints. */}}
-  {{/* #191 quiz navigator — a badge per question, so moving between them is a tap
-       rather than a scroll-and-hope. Sticky, so it stays reachable while reading. */}}
-  {{if $.ShowQuizNav}}
-  <div class="quiz-nav" role="navigation" aria-label="Quiz questions">
-    <span class="quiz-nav-label">{{$.QuizNavLabel}}</span>
-    <ul class="quiz-nav-dots">
-      {{range $it := $.QuizItems}}
-      <li><a href="#qc-{{$it.ID}}" lvt-spy-link class="quiz-nav-dot is-{{$it.NavState}}" title="{{$it.Prompt}}">{{$it.Num}}</a></li>
-      {{end}}
-    </ul>
-    <span class="quiz-nav-actions">
-      <form method="POST" style="margin:0"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>
-      <form method="POST" style="margin:0"><button type="submit" name="dismissQuizNav" class="outline" title="Hide the quiz navigator">×</button></form>
-    </span>
-  </div>
-  {{end}}
   {{/* The file-head annotation group: file-level comments, image-area comments,
        and quiz questions with no line (kind=file, or an anchor that doesn't
        resolve). They share ONE row key so the existing toggleRow / ToggledRows

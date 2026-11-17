@@ -114,6 +114,11 @@ func TestE2E_UsagePage(t *testing.T) {
 	if strings.Contains(bodyText, "DECOY") {
 		t.Fatalf("/_usage served a repo decoy file — route was shadowed%s", diag())
 	}
+	// #211: the picker's "Add your own prompts" link lands on a section that names
+	// the folder.
+	if !evalBool(`!!document.getElementById('suggested-edits')`) || !strings.Contains(bodyText, "~/.config/prereview/prompts/") {
+		t.Fatalf("/_usage has no #suggested-edits section naming the prompt folder%s", diag())
+	}
 	// Themed by the same .theme-root tokens as the SPA…
 	if !evalBool(`!!document.querySelector('.theme-root[data-scheme]')`) {
 		t.Fatalf("/_usage is not wrapped in a themed .theme-root%s", diag())

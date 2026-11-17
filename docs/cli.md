@@ -305,6 +305,15 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 
 ## Environment
 
+- `PREREVIEW_PROMPTS_DIR` - override the suggestion-prompt overlay directory
+  (default `~/.config/prereview/prompts`). Each `*.md` file there adds a row to the
+  file header's **Ask for suggestions** menu. The filename minus `.md` is its id,
+  the first `# Heading` is the menu title, and the rest is the prompt text that
+  pre-fills the comment box. Reuse a built-in's filename (see
+  [`internal/review/builtin_prompts/`](../internal/review/builtin_prompts/)) to
+  replace it. A file with no text is skipped. prereview re-reads the folder each time a tab connects,
+  so reload the tab after editing. End the prompt by asking for `prereview suggest`
+  edits, as the built-ins do, so the agent answers with boxes you can accept.
 - `PREREVIEW_QUIZZES_DIR` - override the quiz-prompt overlay directory
   (default `~/.config/prereview/quizzes`). Drop a `*.md` file there to add your
   own quiz prompt, or reuse a built-in's filename to replace it. The prompt is
@@ -315,7 +324,7 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 |---|---|
 | `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: skip the on-run update check. |
 | `PREREVIEW_CHECKS_DIR` | Override the checks rule folder (default `~/.config/prereview/checks`). |
-| `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer (default `~/.config/prereview`). |
+| `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer, and the default `checks`, `prompts` and `quizzes` folders inside it (default `~/.config/prereview`). |
 | `PREREVIEW_SCAN_HOME` | Where the first-launch scan looks for past reviews (default your home folder). |
 | `PREREVIEW_HOME` | The home folder prereview writes agent integrations under: its own skill (`--install-skill`, the startup sync) and generated skills (default your home folder). |
 

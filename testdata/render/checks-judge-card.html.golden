@@ -44,11 +44,11 @@
     lvt-key="ArrowUp"
     lvt-mod:skip-when-typing
   ></span><span
-    lvt-on:window:keydown="nextComment"
+    lvt-on:window:keydown="navNext"
     lvt-key="n"
     lvt-mod:skip-when-typing
   ></span><span
-    lvt-on:window:keydown="prevComment"
+    lvt-on:window:keydown="navPrev"
     lvt-key="p"
     lvt-mod:skip-when-typing
   ></span><span
@@ -671,7 +671,6 @@
       data-lvt-viewport-items=".line, .md-block">
 
 
-
 <article>
   <header class="file-head"><span class="file-head-name" title="notes.txt"><strong class="fh-base">notes.txt</strong></span>
     
@@ -714,6 +713,8 @@
     </span>
   </header>
   
+  
+  
   <div class="ck-strip is-judge" data-key="checks-strip" role="status" aria-label="Showing one judge">
     
     <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name" title="Written for the reader">Written for the reader</b>
@@ -735,8 +736,6 @@
     </div>
   </div>
 
-  
-  
   
   
   
@@ -829,8 +828,8 @@
     <div class="kbd-row"><dt><kbd>k</kbd></dt><dd>Previous file</dd></div>
     <div class="kbd-row"><dt><kbd>↓</kbd></dt><dd>Move line cursor down</dd></div>
     <div class="kbd-row"><dt><kbd>↑</kbd></dt><dd>Move line cursor up</dd></div>
-    <div class="kbd-row"><dt><kbd>n</kbd></dt><dd>Next comment</dd></div>
-    <div class="kbd-row"><dt><kbd>p</kbd></dt><dd>Previous comment</dd></div>
+    <div class="kbd-row"><dt><kbd>n</kbd></dt><dd>Next open item</dd></div>
+    <div class="kbd-row"><dt><kbd>p</kbd></dt><dd>Previous open item</dd></div>
     <div class="kbd-row"><dt><kbd>c</kbd></dt><dd>Comment on this file</dd></div>
     <div class="kbd-row"><dt><kbd>f</kbd></dt><dd>Toggle file tree</dd></div>
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>

@@ -601,6 +601,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// it) is when the file list is rebuilt, so it's when that pass reruns.
 	c.applyReviewChecks(&state)
 	c.applyLibrary(&state)
+	state.noteNav()
 	return state, nil
 }
 

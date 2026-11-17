@@ -419,11 +419,30 @@ type PrereviewState struct {
 	Quizzes     []Quiz                `json:"quizzes"`
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
 
-	// QuizNavDismissed hides the quiz navigator for this session. The bar appears
-	// automatically whenever the file has a quiz — discoverability has been this
-	// feature's recurring failure, so it is not behind a menu — but it must be
-	// possible to put away while reading the diff.
-	QuizNavDismissed bool `json:"quiz_nav_dismissed"`
+	// NavDismissed hides the open-items stepper (#193) for this session. The bar
+	// appears whenever the review has open items, so it is not behind a menu, but it
+	// must be possible to put away while reading.
+	NavDismissed bool `json:"nav_dismissed"`
+
+	// NavSeen records that the stepper had open items this visit, so the bar stays
+	// (at "0 open") after the last one is decided instead of vanishing under the
+	// reviewer and shifting the page. Session-only: a later visit with nothing open
+	// shows no bar. Set by noteNav.
+	NavSeen bool `json:"nav_seen"`
+
+	// NavKind filters the stepper to one kind ("comment", "suggestion", "quiz");
+	// "" steps through all of them. Session-scoped.
+	NavKind string `json:"nav_kind"`
+
+	// NavAt is the stepper's cursor: the sort position of the last item it stepped
+	// to (nil before the first step). A position, not an index, so "next" after the
+	// current item is decided continues from there.
+	NavAt *NavPos `json:"nav_at"`
+
+	// ScrollToItemKey scrolls a suggestion ("sg:<id>") or quiz question ("qz:<id>")
+	// into view on the next render, the stepper's counterpart of ScrollToCommentID
+	// (comments keep that field, which also drives their focus).
+	ScrollToItemKey string `json:"scroll_to_item_key"`
 
 	// QuizJustAnswered holds the answer keys (answerKey) of questions answered in
 	// THIS visit. An answered question is collapsed by default (#212), but the one
@@ -906,11 +925,14 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
 	cards := s.AnnotationCountLines()
+	// A row whose suggestions are all hidden keeps its "Show" marker in place (#233).
+	hidden := s.HiddenSuggestionLines()
 	// The selected check's findings stay visible too — only that one check, so a
 	// rule with hundreds of hits can't unfold the file until you pick it.
 	found := s.findingLines()
 	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, func(l gitdiff.DiffLine) bool {
-		return cards[rowKey(l)] > 0 || (l.Kind != "del" && found[l.NewNum])
+		k := rowKey(l)
+		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum])
 	})
 }
 
