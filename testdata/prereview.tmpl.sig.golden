@@ -459,6 +459,8 @@
         {{range $.Prompts}}
         <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
         {{end}}
+        
+        <a class="prompts-more" role="menuitem" href="/_usage#suggested-edits" target="_blank" rel="noopener">Add your own prompts</a>
       </div>
     </div>
     {{end}}{{if $.ShowChecks}}{{template "checksButton" $}}{{end}}

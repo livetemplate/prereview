@@ -305,6 +305,15 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 
 ## Environment
 
+- `PREREVIEW_PROMPTS_DIR` - override the suggestion-prompt overlay directory
+  (default `~/.config/prereview/prompts`). Each `*.md` file there adds a row to the
+  file header's **Ask for suggestions** menu. The filename minus `.md` is its id,
+  the first `# Heading` is the menu title, and the rest is the prompt text that
+  pre-fills the comment box. Reuse a built-in's filename (`code-review.md`,
+  `consistency.md`, `grammar.md`, `preamble.md`, `prose.md`) to replace it. A file
+  with no text is skipped. prereview re-reads the folder each time a tab connects,
+  so reload the tab after editing. End the prompt by asking for `prereview suggest`
+  edits, as the built-ins do, so the agent answers with boxes you can accept.
 - `PREREVIEW_QUIZZES_DIR` - override the quiz-prompt overlay directory
   (default `~/.config/prereview/quizzes`). Drop a `*.md` file there to add your
   own quiz prompt, or reuse a built-in's filename to replace it. The prompt is

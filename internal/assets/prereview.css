@@ -1161,6 +1161,14 @@ header.file-head .file-head-actions {
   background: transparent; border: 0; cursor: pointer;
 }
 .prompt-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* #211: the footer link under the suggestion prompts, keyed on its own class so
+   the quiz picker (which shares .prompts-panel) is untouched. */
+.prompts-more {
+  display: block; margin-top: 0.25rem; padding: 0.4rem 0.5rem 0.2rem;
+  border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted);
+  text-decoration: none;
+}
+.prompts-more:hover { color: var(--accent); text-decoration: underline; }
 .version-restore { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 45%, transparent); }
 .version-restore:hover:not(:disabled) { background: color-mix(in srgb, var(--pr-del) 14%, transparent); }
 /* Read-only banner while viewing a historical version. */

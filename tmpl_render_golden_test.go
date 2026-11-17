@@ -361,6 +361,11 @@ func renderFixtures() []renderFixture {
 		{Slug: "security", Title: "Quiz me like a security reviewer", Body: "security quiz"},
 	}
 
+	// #147/#211: the "Ask for suggestions" picker with the real built-in library, so
+	// the golden pins every shipped prompt row and the "Add your own prompts" link.
+	promptsPicker := goBase()
+	promptsPicker.Prompts = review.LoadPrompts("")
+
 	// #191: the quiz questions rendered INLINE in the diff — the primary surface.
 	// The separate quiz screen is only the overview, so without this fixture the
 	// annotation rendering (line-anchored cards + the file-head card) is unguarded.
@@ -716,6 +721,7 @@ func renderFixtures() []renderFixture {
 		{"quiz-inline", quizInline},
 		{"quiz-me-button", quizBtn},
 		{"quiz-me-picker", quizPicker},
+		{"prompts-picker", promptsPicker},
 		{"external", external},
 		{"external-acted", extActed},
 		{"version-view", version},
