@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -202,5 +203,37 @@ func AltURLs(bindHost, tsIP, magicDNS string, port int) []string {
 	// Hostname first — it's the one a human actually wants to tap.
 	add(magicDNS)
 	add(tsIP)
+	return out
+}
+
+// AllowedOrigins is the WebSocket origin allow-list for a server reached
+// through publicURL, a proxy's address (#65); nil without one, which keeps
+// livetemplate's same-origin check. livetemplate's list REPLACES that check, so
+// it must also hold every URL prereview prints (the bind URL and AltURLs) or
+// those pages load and never go live; on a loopback bind, localhost and
+// 127.0.0.1 are both listed since either may be typed. It's built from AltURLs,
+// so a new ALT line can't be left out.
+func AllowedOrigins(publicURL, bindHost, tsIP, magicDNS string, port int) []string {
+	u, err := url.Parse(publicURL)
+	if publicURL == "" || err != nil || u.Scheme == "" || u.Host == "" {
+		return nil
+	}
+	out := []string{u.Scheme + "://" + u.Host}
+	add := func(o string) {
+		for _, have := range out {
+			if have == o {
+				return
+			}
+		}
+		out = append(out, o)
+	}
+	add(fmt.Sprintf("http://%s:%d", bindHost, port))
+	for _, alt := range AltURLs(bindHost, tsIP, magicDNS, port) {
+		add(alt)
+	}
+	if ip := net.ParseIP(bindHost); bindHost == "localhost" || (ip != nil && ip.IsLoopback()) {
+		add(fmt.Sprintf("http://localhost:%d", port))
+		add(fmt.Sprintf("http://127.0.0.1:%d", port))
+	}
 	return out
 }

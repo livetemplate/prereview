@@ -255,6 +255,7 @@ func main() {
 	external := flag.String("external", "", "annotate a live local website instead of files: reverse-proxies this http(s):// URL and overlays the region-annotation UI. Requires --out. Ignores [path]/--base.")
 	out := flag.String("out", "", "directory to create the annotation store under (its .prereview/ holds comments.csv). Defaults to the review path; required with --external (which has no review path). The resolved store is printed as the STORE line.")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
+	publicURL := flag.String("public-url", os.Getenv("PREREVIEW_PUBLIC_URL"), "the URL a browser outside this machine uses to reach the review, e.g. a sandbox proxy's https://vm.exe.xyz:4799 (also PREREVIEW_PUBLIC_URL). Printed as READY and allowed as a WebSocket origin; the bind port defaults to its port. The bind address is unchanged: widen it with --host")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
 	agent := flag.Bool("agent", false, "run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`); shows the Queue (Pause/Resume) + End session UI")
 	skill := flag.Bool("skill", false, "deprecated alias for --agent")
@@ -288,12 +289,15 @@ func main() {
 	// tree (so every line is commentable). See run().
 	explicitHost := false
 	explicitBase := false
+	explicitPort := false
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "host":
 			explicitHost = true
 		case "base":
 			explicitBase = true
+		case "port":
+			explicitPort = true
 		}
 	})
 
@@ -401,6 +405,12 @@ func main() {
 	}
 	reportSkillSyncs(os.Stderr, skillSyncs)
 
+	pubURL, listenPort, err := resolvePublicURL(*publicURL, *port, explicitPort, *external != "")
+	if err != nil {
+		slog.Error("fatal", "err", err)
+		os.Exit(1)
+	}
+
 	if *external != "" {
 		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode, skillSyncs, *replace); err != nil {
 			slog.Error("fatal", "err", err)
@@ -409,7 +419,7 @@ func main() {
 		return
 	}
 
-	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, explicitBase, *port, agentMode, skillSyncs, *out, *replace); err != nil {
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, explicitBase, listenPort, pubURL, agentMode, skillSyncs, *out, *replace); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}

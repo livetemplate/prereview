@@ -27,7 +27,7 @@ import (
 	"github.com/livetemplate/prereview/internal/skills"
 )
 
-func run(repo, base, host string, explicitHost, explicitBase bool, port int, agentMode bool, skillSyncs []skills.ClientSync, out string, replace bool) error {
+func run(repo, base, host string, explicitHost, explicitBase bool, port int, publicURL string, agentMode bool, skillSyncs []skills.ClientSync, out string, replace bool) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -119,15 +119,23 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	}
 	defer cleanup()
 
-	tmpl, err := livetemplate.New("prereview",
-		livetemplate.WithParseFiles(tmplFiles...),
-		// Diff payloads are large, highly repetitive HTML (1000+
-		// `<div class="line-row"><button…` rows). permessage-deflate
-		// compresses that ~10x on the wire — the dominant win for the
-		// iPhone-over-Tailscale path where transfer time, not localhost
-		// render, is the file-switch bottleneck.
-		livetemplate.WithWebSocketCompression(),
-	)
+	// Decide what to actually bind to. On a remote (SSH) box with no
+	// explicit --host, prefer this host's Tailscale IP: reachable from
+	// the user's phone over the tailnet, never exposed to the public
+	// internet the way --host 0.0.0.0 would. Locally, unchanged: the
+	// historical 127.0.0.1 default. Resolved before the template so a
+	// --public-url origin list (#65) can name the bind URL.
+	tsIP, magicDNS := netaddr.TailscaleIPv4()
+	bindHost, warn := netaddr.ResolveBindHost(explicitHost, host, netaddr.IsRemoteBox(), tsIP)
+	switch {
+	case publicURL != "" && !explicitHost:
+		// The tailnet hint doesn't apply behind a proxy; this one does.
+		fmt.Fprintf(os.Stderr, "prereview: bound %s for --public-url; if the proxy can't reach it there, pass --host (e.g. 0.0.0.0 behind a private proxy)\n", bindHost)
+	case warn != "" && publicURL == "":
+		fmt.Fprintf(os.Stderr, "prereview: %s\n", warn)
+	}
+
+	tmpl, err := newTemplate(tmplFiles, netaddr.AllowedOrigins(publicURL, bindHost, tsIP, magicDNS, port))
 	if err != nil {
 		return fmt.Errorf("livetemplate.New: %w", err)
 	}
@@ -204,17 +212,6 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		mux.HandleFunc("/_library-skill-patch", guardLibraryRoute(librarySkillPatchHandler(controller.LibraryDir)))
 	}
 
-	// Decide what to actually bind to. On a remote (SSH) box with no
-	// explicit --host, prefer this host's Tailscale IP: reachable from
-	// the user's phone over the tailnet, never exposed to the public
-	// internet the way --host 0.0.0.0 would. Locally, unchanged: the
-	// historical 127.0.0.1 default.
-	tsIP, magicDNS := netaddr.TailscaleIPv4()
-	bindHost, warn := netaddr.ResolveBindHost(explicitHost, host, netaddr.IsRemoteBox(), tsIP)
-	if warn != "" {
-		fmt.Fprintf(os.Stderr, "prereview: %s\n", warn)
-	}
-
 	addr := net.JoinHostPort(bindHost, fmt.Sprintf("%d", port))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -233,7 +230,14 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 	// already points at a reachable address — loopback locally, the
 	// Tailscale IP on a remote box — so the skill only has to render it
 	// as a clickable link.
-	fmt.Printf("READY %s\n", url)
+	// With --public-url (#65) READY is that URL, the one a browser outside the
+	// box can open, and the local bind URL drops to the first ALT line.
+	if publicURL != "" {
+		fmt.Printf("READY %s\n", publicURL)
+		fmt.Printf("ALT %s\n", url)
+	} else {
+		fmt.Printf("READY %s\n", url)
+	}
 	// ALT lines are additive, human-facing alternatives the harness
 	// ignores by contract: chiefly the MagicDNS hostname, far nicer to
 	// tap on a phone than a 100.x octet string. Same format, one per line.
@@ -447,10 +451,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		return fmt.Errorf("stage templates: %w", err)
 	}
 	defer cleanup()
-	tmpl, err := livetemplate.New("prereview",
-		livetemplate.WithParseFiles(tmplFiles...),
-		livetemplate.WithWebSocketCompression(),
-	)
+	tmpl, err := newTemplate(tmplFiles, nil)
 	if err != nil {
 		return fmt.Errorf("livetemplate.New: %w", err)
 	}
@@ -651,4 +652,18 @@ func agentHome() string {
 		return ""
 	}
 	return h
+}
+
+// newTemplate builds the page template for both modes. Diff payloads are
+// large, highly repetitive HTML (1000+ `<div class="line-row"><button…`
+// rows); permessage-deflate compresses them ~10x on the wire, the dominant
+// win on the phone-over-Tailscale path. origins, when set, is the WebSocket
+// origin allow-list (#65); nil keeps livetemplate's same-origin check. Never
+// DevMode or a permissive check: the origin check is the CSWSH guard.
+func newTemplate(files []string, origins []string) (*livetemplate.Template, error) {
+	opts := []livetemplate.Option{livetemplate.WithParseFiles(files...), livetemplate.WithWebSocketCompression()}
+	if len(origins) > 0 {
+		opts = append(opts, livetemplate.WithAllowedOrigins(origins))
+	}
+	return livetemplate.New("prereview", opts...)
 }
