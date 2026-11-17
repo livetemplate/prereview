@@ -12,7 +12,6 @@ package e2e
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -27,6 +26,9 @@ func TestE2E_PromptPicker(t *testing.T) {
 		chromedp.WaitVisible(`.prompts-trigger`, chromedp.ByQuery),
 		chromedp.Click(`.prompts-trigger`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.prompts-panel .prompt-row`, chromedp.ByQuery),
+		// #211: the panel ends with a link to where your own prompts go (its target
+		// section is checked in TestE2E_UsagePage).
+		chromedp.WaitVisible(`.prompts-panel .prompts-more[href="/_usage#suggested-edits"]`, chromedp.ByQuery),
 		chromedp.Evaluate(`[...document.querySelectorAll('.prompt-row')].find(b => b.textContent.trim() === 'Code review').click()`, nil),
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 	); err != nil {
@@ -71,48 +73,5 @@ func TestE2E_PromptPicker(t *testing.T) {
 	}
 	if !strings.Contains(rows[1][bodyIdx], "Review this file for bugs") {
 		t.Errorf("comment body should carry the prompt; got %q", rows[1][bodyIdx])
-	}
-}
-
-// #211: the picker says where your own prompts go. At phone size (a title= tooltip
-// never shows there), the panel ends with a link to the usage page's Suggested
-// edits section, and that section names the folder. The test env points
-// PREREVIEW_PROMPTS_DIR at an empty folder, so the rows are the built-ins only.
-func TestE2E_PromptPickerAddYourOwn(t *testing.T) {
-	p := bootChromeAgainstRepo(t, setupSuggestionRepo(t), 390, 844)
-	diag := captureDiag(t, p)
-	p.waitReadyAt(390, 844)
-	p.clickFile("app.go")
-	ctx, cancel := within(p, 30*time.Second)
-	defer cancel()
-
-	const link = `.prompts-panel .prompts-more`
-	var href string
-	if err := chromedp.Run(ctx,
-		chromedp.Click(`.prompts-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(link, chromedp.ByQuery),
-		chromedp.AttributeValue(link, "href", &href, nil, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("open the picker: %v%s", err, diag())
-	}
-	if href != "/_usage#suggested-edits" {
-		t.Errorf("footer link href = %q, want /_usage#suggested-edits%s", href, diag())
-	}
-	rows := evalStr(t, p, `[...document.querySelectorAll('.prompts-panel .prompt-row')].map(b => b.textContent.trim()).join("|")`)
-	if want := "Check consistency|Code review|Cut empty preamble|Fix grammar & spelling|Tighten the prose"; rows != want {
-		t.Errorf("picker rows = %q, want the built-ins %q%s", rows, want, diag())
-	}
-
-	// The link's target: the section exists and names the folder.
-	var section string
-	if err := chromedp.Run(ctx,
-		chromedp.Navigate(p.url+href),
-		chromedp.WaitVisible(`#suggested-edits`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('article').textContent`, &section),
-	); err != nil {
-		t.Fatalf("open the usage page: %v%s", err, diag())
-	}
-	if !strings.Contains(section, "~/.config/prereview/prompts/") {
-		t.Errorf("usage page doesn't name the prompt folder%s", diag())
 	}
 }

@@ -142,18 +142,14 @@ func mustWrite(t *testing.T, dir, path, content string) {
 // The checks rule folder is isolated the same way (checksDirFor), so a test's
 // rules never come from — or get copied into — the developer's real folder.
 //
-// The suggestion- and quiz-prompt overlays point at folders that don't exist, so
-// every test sees the built-ins only: the docs tell users to add prompts to
-// ~/.config/prereview/prompts, and a developer's own code-review.md would
-// otherwise change what the picker tests click.
+// The suggestion- and quiz-prompt overlays live inside the library folder, so the
+// isolated PREREVIEW_LIBRARY_DIR also keeps a developer's own prompts out of every
+// test.
 func prefsIsolatedEnv(repo string) []string {
-	dir := filepath.Dir(repo)
-	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+filepath.Join(dir, "prereview-ui-prefs.json"),
-		"PREREVIEW_CHECKS_DIR="+checksDirFor(repo),
+	prefs := filepath.Join(filepath.Dir(repo), "prereview-ui-prefs.json")
+	return append(os.Environ(), "PREREVIEW_UI_PREFS_PATH="+prefs, "PREREVIEW_CHECKS_DIR="+checksDirFor(repo),
 		"PREREVIEW_LIBRARY_DIR="+libraryDirFor(repo), "PREREVIEW_SCAN_HOME="+scanHomeFor(repo),
-		"PREREVIEW_HOME="+agentHomeFor(repo),
-		"PREREVIEW_PROMPTS_DIR="+filepath.Join(dir, "prereview-no-prompts"),
-		"PREREVIEW_QUIZZES_DIR="+filepath.Join(dir, "prereview-no-quizzes"))
+		"PREREVIEW_HOME="+agentHomeFor(repo))
 }
 
 // agentHomeFor is the fake $HOME a test server writes agent integrations into

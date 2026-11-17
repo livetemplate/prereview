@@ -86,11 +86,9 @@ suggestions** menu of ready-made prompts); it submits them with `prereview
 suggest`, and each appears inline as a **before → after** box, visually distinct
 from a comment.
 
-To add your own prompts to that menu, put a Markdown file per prompt in
-`~/.config/prereview/prompts/`: the first `# Heading` is its title in the menu
-and the rest is the prompt. A file with a built-in's name replaces it. The
-format is in [`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment)
-under `PREREVIEW_PROMPTS_DIR`.
+To add your own prompts to that menu, put one Markdown file per prompt in
+`~/.config/prereview/prompts/`. The file format is under `PREREVIEW_PROMPTS_DIR`
+in [`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment).
 
 On each box:
 
