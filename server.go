@@ -627,6 +627,11 @@ func staticFallback(root string, next http.Handler) http.Handler {
 		// here (images, PDFs, media) — none of these are intended as
 		// downloads in a code-review context.
 		w.Header().Set("Content-Disposition", "inline")
+		// Files from the reviewed tree are content under review, not part of
+		// the app: run them in a sandbox (an opaque origin, no access to
+		// prereview's cookies or socket) and never let a browser guess a type.
+		w.Header().Set("Content-Security-Policy", "sandbox")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// http.ServeContent sets Content-Type via mime.TypeByExtension,
 		// honours Range, and handles If-Modified-Since for 304s.
 		http.ServeContent(w, r, resolved, info.ModTime(), f)

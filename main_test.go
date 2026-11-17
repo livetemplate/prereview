@@ -249,6 +249,14 @@ func TestStaticFallback(t *testing.T) {
 					t.Errorf("Content-Type = %q, want prefix %q",
 						rr.Header().Get("Content-Type"), tc.wantCType)
 				}
+				if tc.wantStatus == http.StatusOK {
+					if got := rr.Header().Get("Content-Security-Policy"); got != "sandbox" {
+						t.Errorf("Content-Security-Policy = %q, want sandbox (repo files are content under review)", got)
+					}
+					if got := rr.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+						t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+					}
+				}
 			}
 		})
 	}
