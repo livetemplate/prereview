@@ -87,3 +87,44 @@ func TestIsValidRefRefusesOptions(t *testing.T) {
 		}
 	}
 }
+
+// TestLoadDiffPathIsLiteral: a path is a file name, not a git pathspec, so
+// pathspec magic can't widen it to files outside the review root.
+func TestLoadDiffPathIsLiteral(t *testing.T) {
+	parent := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = parent
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(parent, "outside.txt"), []byte("not under review\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(parent, "sub")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "in.txt"), []byte("under review\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "seed"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = parent
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(parent, "outside.txt"), []byte("not under review, edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := LoadDiff(repo, "HEAD", ":(top)outside.txt")
+	if d != nil {
+		for _, l := range d.Lines {
+			if strings.Contains(l.Content, "not under review") {
+				t.Fatalf("LoadDiff with a pathspec read a file outside the review root")
+			}
+		}
+	}
+}

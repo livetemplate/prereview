@@ -397,7 +397,9 @@ func EmptyTreeHash(repo string) (string, error) {
 // runGit executes `git <args...>` in repo and returns stdout. Stderr is
 // folded into the error so callers see the underlying git complaint.
 func runGit(repo string, args ...string) ([]byte, error) {
-	cmd := exec.Command("git", args...)
+	// --literal-pathspecs: every path prereview passes is a file name, never a
+	// pathspec, so ":(top)…" or "*" mean those characters and nothing more.
+	cmd := exec.Command("git", append([]string{"--literal-pathspecs"}, args...)...)
 	cmd.Dir = repo
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
