@@ -1,8 +1,12 @@
 package review
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
+
+	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/gitdiff"
 )
 
 // visIDs returns the IDs the render surfaces would show (through the single
@@ -150,5 +154,103 @@ func TestHideIsViewOnly(t *testing.T) {
 	}
 	if _, decided := st.DecisionsBySuggestion()["a"]; decided {
 		t.Error("a hidden suggestion must remain undecided (open for hand-off)")
+	}
+}
+
+// #233: a hidden suggestion's marker lands on its own row only (the same keys as
+// the count badge), not on both rows of a modified line, and goes away while the
+// global Hide suggestions toggle is on.
+func TestHiddenSuggestionLines(t *testing.T) {
+	newSide := Suggestion{ID: "a", File: "a.md", ToLine: 4, Side: "new", ProposedText: "x"}
+	both := Suggestion{ID: "b", File: "a.md", ToLine: 7, ProposedText: "y"}
+	st := PrereviewState{
+		SelectedFile: "a.md",
+		Suggestions:  []Suggestion{newSide, both},
+		Hidden:       []HiddenSuggestion{NewHidden(newSide), NewHidden(both)},
+	}
+	got := st.HiddenSuggestionLines()
+	if got["4-new"] == nil || got["4-old"] != nil {
+		t.Errorf("one-sided hide: want only 4-new, got %v", keysOf(got))
+	}
+	if got["7-new"] == nil || got["7-old"] == nil {
+		t.Errorf("whole-line hide: want 7-old and 7-new like its badge, got %v", keysOf(got))
+	}
+	if m := got["4-new"]; m.IDs != "a" || m.Label != "1 hidden suggestion" {
+		t.Errorf("4-new mark = %+v", *m)
+	}
+	st.HideSuggestions = true
+	if got := st.HiddenSuggestionLines(); got != nil {
+		t.Errorf("Hide suggestions on: want no markers, got %v", keysOf(got))
+	}
+}
+
+func keysOf(m map[string]*HiddenMark) []string {
+	var ks []string
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
+}
+
+// #233: in Diff view a row whose only annotation is a hidden suggestion stays out of
+// the fold, so its marker is still there to tap.
+func TestVisibleLines_KeepsHiddenSuggestionRow(t *testing.T) {
+	var lines []gitdiff.DiffLine
+	for i := 1; i <= 30; i++ {
+		kind := "ctx"
+		if i == 1 {
+			kind = "add"
+		}
+		lines = append(lines, gitdiff.DiffLine{Kind: kind, OldNum: i, NewNum: i, Content: "x"})
+	}
+	sg := Suggestion{ID: "a", File: "a.md", ToLine: 20, Side: "new", ProposedText: "y"}
+	st := PrereviewState{
+		SelectedFile: "a.md",
+		CurrentDiff:  &gitdiff.FileDiff{Path: "a.md", Lines: lines},
+		Suggestions:  []Suggestion{sg},
+		Hidden:       []HiddenSuggestion{NewHidden(sg)},
+	}
+	shown := func() bool {
+		for _, l := range st.VisibleLines() {
+			if l.Kind != "fold" && l.NewNum == 20 {
+				return true
+			}
+		}
+		return false
+	}
+	if !shown() {
+		t.Fatal("line 20 folded away although it carries a hidden suggestion's marker")
+	}
+	st.Hidden = nil
+	st.Suggestions = nil
+	if shown() {
+		t.Fatal("control: line 20 should fold when nothing is on it")
+	}
+}
+
+// #233: the marker's Show brings back exactly its IDs and leaves other hides alone.
+func TestUnhideSuggestions(t *testing.T) {
+	c := decisionController(t)
+	st := PrereviewState{
+		SelectedFile: "a.md",
+		Suggestions: []Suggestion{
+			{ID: "a", File: "a.md", ToLine: 3, ProposedText: "x"},
+			{ID: "b", File: "a.md", ToLine: 3, ProposedText: "y"},
+			{ID: "c", File: "a.md", ToLine: 9, ProposedText: "z"},
+		},
+	}
+	for _, id := range []string{"a", "b", "c"} {
+		st, _ = c.HideSuggestion(st, decisionCtx("hideSuggestion", id))
+	}
+	if m := st.HiddenSuggestionLines()["3-new"]; m == nil || m.IDs != "a,b" || m.Label != "2 hidden suggestions" {
+		t.Fatalf("row 3 mark = %+v", m)
+	}
+	ctx := livetemplate.NewContext(context.TODO(), "unhideSuggestions", map[string]interface{}{"ids": "a,b"})
+	st, _ = c.UnhideSuggestions(st, ctx)
+	if ids := visIDs(st); !hasID(ids, "a") || !hasID(ids, "b") || hasID(ids, "c") {
+		t.Errorf("after Show on row 3: visible %v, want a and b only", ids)
+	}
+	if reloaded := loadHidden(c.hiddenPath()); len(reloaded) != 1 || reloaded[0].SuggestionID != "c" {
+		t.Errorf("persisted hides = %+v, want only c", reloaded)
 	}
 }

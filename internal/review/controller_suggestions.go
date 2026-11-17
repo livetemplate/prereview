@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 
 	"github.com/livetemplate/livetemplate"
 )
@@ -145,7 +146,7 @@ func (c *PrereviewController) HideSuggestion(state PrereviewState, ctx *livetemp
 	if sg == nil {
 		return state, nil // raced away
 	}
-	c.commitHidden(&state, upsertHidden(slices.Clone(state.Hidden), newHidden(*sg)))
+	c.commitHidden(&state, upsertHidden(slices.Clone(state.Hidden), NewHidden(*sg)))
 	return state, nil
 }
 
@@ -161,7 +162,7 @@ func (c *PrereviewController) HideSuggestionGroup(state PrereviewState, ctx *liv
 	next := slices.Clone(state.Hidden)
 	for i := range state.Suggestions {
 		if state.Suggestions[i].groupKey() == key {
-			next = upsertHidden(next, newHidden(state.Suggestions[i]))
+			next = upsertHidden(next, NewHidden(state.Suggestions[i]))
 		}
 	}
 	c.commitHidden(&state, next)
@@ -173,21 +174,34 @@ func (c *PrereviewController) HideSuggestionGroup(state PrereviewState, ctx *liv
 // the count next to the affordance stays scoped to the page. Mirrors
 // UnhideAllResolved for comments.
 func (c *PrereviewController) ShowHiddenSuggestions(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	if len(state.Hidden) == 0 {
-		return state, nil
-	}
-	// Which hidden IDs belong to the selected file?
 	onFile := make(map[string]bool)
 	for _, sg := range state.Suggestions {
 		if sg.File == state.SelectedFile {
 			onFile[sg.ID] = true
 		}
 	}
-	next := slices.DeleteFunc(slices.Clone(state.Hidden), func(h HiddenSuggestion) bool {
-		return onFile[h.SuggestionID]
-	})
-	c.commitHidden(&state, next)
+	c.unhideWhere(&state, onFile)
 	return state, nil
+}
+
+// UnhideSuggestions brings back the hidden suggestions a #233 marker stands for:
+// "ids" is its comma-joined list, so Show restores exactly what the marker counted
+// and leaves every other hide alone.
+func (c *PrereviewController) UnhideSuggestions(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	ids := map[string]bool{}
+	for _, id := range strings.Split(ctx.GetString("ids"), ",") {
+		ids[id] = true
+	}
+	c.unhideWhere(&state, ids)
+	return state, nil
+}
+
+// unhideWhere drops the hides whose suggestion ID is in ids, in one write.
+func (c *PrereviewController) unhideWhere(state *PrereviewState, ids map[string]bool) {
+	next := slices.DeleteFunc(slices.Clone(state.Hidden), func(h HiddenSuggestion) bool { return ids[h.SuggestionID] })
+	if len(next) != len(state.Hidden) {
+		c.commitHidden(state, next)
+	}
 }
 
 // ClearSuggestionDecision removes a recorded decision (undo), returning the

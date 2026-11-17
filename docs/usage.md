@@ -111,6 +111,9 @@ Your decisions reach the agent the same way comments do — continuously, no
 hand-off step. prereview never edits your files itself; the agent does, so an
 accepted edit shows up as a normal diff you can commit. Use **Show / hide
 suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
+**Hide** on one box sets just that one aside: it leaves "1 hidden suggestion ·
+Show" on its line, and **Show** brings it back. The suggestion stays open for the
+agent either way.
 
 ## Checks
 

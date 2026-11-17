@@ -119,7 +119,7 @@
 === blockComments ===
 {{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileComments}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === blockSuggestions ===
-{{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}
+{{$bs := .StartLine}}{{$be := .EndLine}}{{range $.FileSuggestions}}{{if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end}}{{end}}{{with index $.HiddenSuggestionBlocks (printf "MB-%d-%d" $bs $be)}}{{template "hiddenMarker" .}}{{end}}
 === bootCard ===
 
   <section class="boot" data-key="boot" aria-label="{{if .Reading}}Reading past reviews{{else}}Learn from your past reviews{{end}}">
@@ -310,7 +310,7 @@
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
           <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
-      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end}}{{range (index $.FindingsByRow $rowkey)}}{{template "findingCard" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
+      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{with index $.HiddenSuggestionLines $rowkey}}{{template "hiddenMarker" .}}{{end}}{{range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end}}{{range (index $.FindingsByRow $rowkey)}}{{template "findingCard" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
 {{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>{{end}}
 === endSessionDialog ===
 <dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p>{{if .AwaitingApplyCount}}
@@ -504,6 +504,8 @@
         </span>
       </div>
 
+=== hiddenMarker ===
+<form method="POST" class="sg-hidden-marker"><input type="hidden" name="ids" value="{{.IDs}}"><span class="sg-hidden-label">{{.Label}}</span> <button type="submit" name="unhideSuggestions" class="sg-hide-btn">Show</button></form>
 === htmlView ===
 {{with $.CurrentDiff}}  
   <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
@@ -931,15 +933,15 @@
   </a>
 </div>
 === pastEndAnnotations ===
-{{if gt $.PastEndCount 0}}
+{{if or (gt $.PastEndCount 0) $.PastEndHidden}}
 <section class="past-eof{{if index $.RowToggled "eof"}} row-toggled{{end}}" data-key="past-eof" aria-label="Annotations past the end of the file">
   <div class="past-eof-head">
     <span class="past-eof-title">Past the end of the file</span>
     <small class="past-eof-note">Their lines no longer exist in this file.</small>
-    <button type="button" class="line-marks" lvt-on:click="toggleRow" data-row="eof" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.past-eof" aria-label="Show or hide the annotations past the end of the file" title="Show/hide the annotations past the end of the file"><span class="line-mark{{if $.PastEndHasOpen}} is-open{{else}}{{if $.PastEndHasAccepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$.PastEndCount}}</span></button>
+    {{if gt $.PastEndCount 0}}<button type="button" class="line-marks" lvt-on:click="toggleRow" data-row="eof" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.past-eof" aria-label="Show or hide the annotations past the end of the file" title="Show/hide the annotations past the end of the file"><span class="line-mark{{if $.PastEndHasOpen}} is-open{{else}}{{if $.PastEndHasAccepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$.PastEndCount}}</span></button>{{end}}
   </div>
   {{range $.PastEndComments}}{{template "commentCardFull" .}}{{end}}
-  {{range $.PastEndSuggestions}}{{template "suggestionCard" .}}{{end}}
+  {{range $.PastEndSuggestions}}{{template "suggestionCard" .}}{{end}}{{with $.PastEndHidden}}{{template "hiddenMarker" .}}{{end}}
 </section>
 {{end}}
 === prereview ===
@@ -1095,6 +1097,9 @@
 <script defer src="/mermaid-init.js"></script>
 </body>
 </html>
+
+
+
 
 
 

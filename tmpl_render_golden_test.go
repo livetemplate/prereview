@@ -492,6 +492,17 @@ func renderFixtures() []renderFixture {
 		{ID: "s1", File: "app.go", FromLine: 41, ToLine: 41, Side: "new", OriginalText: "old", ProposedText: "new"},
 	}
 
+	// #233: a hidden suggestion leaves a "Show" marker where its card was, on a diff
+	// row and on a rendered-Markdown block.
+	hiddenSg := review.Suggestion{ID: "s1", File: "app.go", FromLine: 2, ToLine: 2, Side: "new", OriginalText: "old", ProposedText: "new"}
+	hiddenRow := goBase()
+	hiddenRow.Suggestions = []review.Suggestion{hiddenSg}
+	hiddenRow.Hidden = []review.HiddenSuggestion{review.NewHidden(hiddenSg)}
+	mdSg := review.Suggestion{ID: "s2", File: "README.md", FromLine: 1, ToLine: 1, Side: "new", OriginalText: "# Title", ProposedText: "# Better"}
+	hiddenBlock := md
+	hiddenBlock.Suggestions = []review.Suggestion{mdSg}
+	hiddenBlock.Hidden = []review.HiddenSuggestion{review.NewHidden(mdSg)}
+
 	// checks M1b: the file view with one check selected — the bar is its finding
 	// stepper, and its finding is marked and carded inline.
 	fileChecks := &review.FileChecks{
@@ -729,6 +740,8 @@ func renderFixtures() []renderFixture {
 		{"agent-answered", answered},
 		{"reply-open", replyOpen},
 		{"past-eof", pastEOF},
+		{"hidden-marker-row", hiddenRow},
+		{"hidden-marker-block", hiddenBlock},
 		{"checks-strip", checksStrip},
 		{"checks-page", checksPage},
 		{"checks-page-judge", judgePage},

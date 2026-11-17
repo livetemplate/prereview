@@ -906,11 +906,14 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
 	cards := s.AnnotationCountLines()
+	// A row whose suggestions are all hidden keeps its "Show" marker in place (#233).
+	hidden := s.HiddenSuggestionLines()
 	// The selected check's findings stay visible too — only that one check, so a
 	// rule with hundreds of hits can't unfold the file until you pick it.
 	found := s.findingLines()
 	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, func(l gitdiff.DiffLine) bool {
-		return cards[rowKey(l)] > 0 || (l.Kind != "del" && found[l.NewNum])
+		k := rowKey(l)
+		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum])
 	})
 }
 
