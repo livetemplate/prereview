@@ -41,9 +41,10 @@ type LearnCard struct {
 	Pill                    string // the status pill's color class suffix
 	Meta                    string // the header's right side: evidence count, or when / by what
 	Evidence                []LearnEvidence
-	Produces                string // "instruction · checker"
-	Checker, Judge          string // the drafted checker / judge it adds (shown before you accept)
-	Conflict                string // the learning a proposal would supersede
+	Produces                string         // "instruction · checker"
+	Checker, Judge          string         // the drafted checker / judge it adds (shown before you accept)
+	Shortcut                *LearnShortcut // the comment-box chip it adds (#204), nil when none
+	Conflict                string         // the learning a proposal would supersede
 	Editing                 bool
 	Actions                 []LearnAction // the card's buttons, in order
 }
@@ -63,6 +64,11 @@ var (
 )
 
 // LearnEvidence is one cited record on a card.
+// LearnShortcut is the chip a learning adds to the comment box.
+type LearnShortcut struct {
+	Label, Body string
+}
+
 type LearnEvidence struct {
 	Where, Quote string
 }
@@ -79,6 +85,7 @@ func (s PrereviewState) libraryTab() string {
 func (s PrereviewState) LibraryOnLearnings() bool { return s.libraryTab() == libTabLearnings }
 func (s PrereviewState) LibraryOnChecks() bool    { return s.libraryTab() == libTabChecks }
 func (s PrereviewState) LibraryOnSkills() bool    { return s.libraryTab() == libTabSkills }
+func (s PrereviewState) LibraryOnShortcuts() bool { return s.libraryTab() == libTabShortcuts }
 func (s PrereviewState) LibraryOnBenchmarks() bool {
 	return s.libraryTab() == libTabBenchmarks
 }
@@ -158,6 +165,9 @@ func (s PrereviewState) learnCard(l library.Learning, byID map[string]library.Le
 	}
 	c.Produces = strings.Join(l.Produces, " · ")
 	c.Checker, c.Judge = l.Checker, l.Judge
+	if l.ShortcutBody != "" {
+		c.Shortcut = &LearnShortcut{Label: l.ShortcutLabel, Body: l.ShortcutBody}
+	}
 	for _, e := range l.Evidence {
 		c.Evidence = append(c.Evidence, LearnEvidence{Where: s.evidenceWhere(e), Quote: e.Quote})
 	}

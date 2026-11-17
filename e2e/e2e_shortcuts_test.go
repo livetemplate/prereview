@@ -13,11 +13,13 @@ package e2e
 import (
 	"encoding/json"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/livetemplate/prereview/csv"
 )
 
 // tapChip types typed into the focused composer, then fires the chip whose label is
@@ -135,5 +137,75 @@ func TestE2E_Shortcuts(t *testing.T) {
 	first := strings.TrimSpace(evalStr(t, p, `(document.querySelector('.composer .sc-chip')||{}).textContent||""`))
 	if first != "Needs evidence" {
 		t.Errorf("first chip after reload = %q, want the most used (Needs evidence)%s", first, diag())
+	}
+}
+
+// #204 P2: the agent's learning pass proposes a shortcut (the real CLI); accepting it
+// in Library → Learnings puts the chip in the comment box with no reload, the
+// Shortcuts tab lists it as learned, and Hide takes it out of the box again.
+func TestE2E_LibraryShortcuts(t *testing.T) {
+	const w, h = 390, 844
+	repo := setupFixtureTextSelectRepo(t)
+	past := seedReviewStore(t, filepath.Join(t.TempDir(), "notes"),
+		csv.Row{ID: "c1", File: "plan.md", FromLine: 4, ToLine: 4, Body: "why is this here", CreatedAt: time.Now().Add(-48 * time.Hour)})
+	p := bootChromeAgainstRepo(t, repo, w, h, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReadyAt(w, h)
+	ctx, cancel := within(p, 40*time.Second)
+	defer cancel()
+
+	id := learnPropose(t, p, "--text", "Ask why a passage is there.", "--evidence", past+":c1",
+		"--shortcut-label", "Why here?", "--shortcut-body", "WHY-BODY: make the case for keeping it.")
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(learnCard(id)+`.is-proposed`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("the proposal: %v%s", err, diag())
+	}
+	if got := textOf(t, p, learnCard(id)+` .lc-drafted summary`); got != "Shortcut it adds" {
+		t.Errorf("card shows %q, want the shortcut it adds%s", got, diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(learnAct(id, "accept"), chromedp.ByQuery),
+		chromedp.WaitNotPresent(learnCard(id), chromedp.ByQuery),
+		chromedp.Click(`.lib-tabs form:has(input[value="shortcuts"]) button`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.sc-row[data-key="sc-learned-`+id+`"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("accept, then the Shortcuts tab: %v%s", err, diag())
+	}
+	row := `.sc-row[data-key="sc-learned-` + id + `"]`
+	if got := textOf(t, p, row+` .ck-pill`) + " · " + textOf(t, p, row+` .sc-uses`); got != "learned · 0 uses" {
+		t.Errorf("row = %q, want learned · 0 uses%s", got, diag())
+	}
+
+	// Back to the file: the chip is in the comment box.
+	chip := `.composer .sc-chip[value="learned-` + id + `"]`
+	if err := chromedp.Run(ctx, chromedp.Click(`.lib-back button`, chromedp.ByQuery), chromedp.WaitNotPresent(`.library`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("close the Library: %v%s", err, diag())
+	}
+	p.clickFile("demo.go")
+	p.clickLine(0, 3)
+	if err := chromedp.Run(ctx, chromedp.WaitVisible(chip, chromedp.ByQuery)); err != nil {
+		t.Fatalf("the accepted shortcut isn't a chip: %v%s", err, diag())
+	}
+
+	// Hide it from the tab: the chip goes; the row stays, marked hidden.
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`button[name="clearSelection"]`, chromedp.ByQuery),
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(row, chromedp.ByQuery),
+		chromedp.Click(row+` button[name="hideShortcut"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(row+`.is-hidden`, chromedp.ByQuery),
+		chromedp.Click(`.lib-back button`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.library`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("hide: %v%s", err, diag())
+	}
+	p.clickLine(0, 4)
+	if err := chromedp.Run(ctx, chromedp.WaitVisible(`.composer .sc-chip`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("composer: %v%s", err, diag())
+	}
+	if n := countSel(t, p, chip); n != 0 {
+		t.Errorf("a hidden shortcut is still a chip%s", diag())
 	}
 }

@@ -613,6 +613,7 @@
       {{$accepted := eq .Status "accepted"}}{{with .Produces}}<div class="lc-row"><span>{{if $accepted}}became{{else}}would become{{end}}: <b>{{.}}</b></span></div>{{end}}
       {{with .Checker}}<details class="lc-drafted"><summary>Checker it adds</summary><pre>{{.}}</pre></details>{{end}}
       {{with .Judge}}<details class="lc-drafted"><summary>Judge it adds</summary><pre>{{.}}</pre></details>{{end}}
+      {{with .Shortcut}}<details class="lc-drafted"><summary>Shortcut it adds</summary><p><b>{{.Label}}</b></p><pre>{{.Body}}</pre></details>{{end}}
       {{if not .Editing}}<div class="lc-actions">
         {{$id := .ID}}{{range .Actions}}<form method="POST"><input type="hidden" name="id" value="{{$id}}">{{with .Act}}<input type="hidden" name="act" value="{{.}}">{{end}}<button type="submit" name="{{.Name}}" class="{{.Class}}">{{.Label}}</button></form>
         {{end}}
@@ -679,11 +680,12 @@
   </header>
   <div class="lib-tabs" role="tablist">
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnLearnings}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnLearnings}}true{{else}}false{{end}}">Learnings{{if $.LearnNew}}<span class="ck-pill ck-new">{{$.LearnNew}} new</span>{{end}}</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="shortcuts"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnShortcuts}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnShortcuts}}true{{else}}false{{end}}">Shortcuts</button></form>
     <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnSkills}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnSkills}}true{{else}}false{{end}}">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnChecks}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnChecks}}true{{else}}false{{end}}">Checks</button></form>
     <form method="POST"><input type="hidden" name="tab" value="benchmarks"><button type="submit" name="setLibraryTab" class="lib-tab{{if $.LibraryOnBenchmarks}} is-on{{end}}" role="tab" aria-selected="{{if $.LibraryOnBenchmarks}}true{{else}}false{{end}}">Benchmarks</button></form>
   </div>
-  {{template "learnings" $}}{{with $.SkillsTab}}{{template "skillsTab" .}}{{end}}{{with $.BenchTab}}{{template "benchTab" .}}{{end}}
+  {{template "learnings" $}}{{with $.ShortcutsTab}}{{template "shortcutsTab" .}}{{end}}{{with $.SkillsTab}}{{template "skillsTab" .}}{{end}}{{with $.BenchTab}}{{template "benchTab" .}}{{end}}
   {{with $.CheckPage}}
   <div class="ckp-bar">
     <form method="POST" lvt-form:preserve class="ckp-search-form">
@@ -1185,6 +1187,9 @@
 
 
 
+
+
+
 === processedBadge ===
 <small class="processed-badge">worked on</small>
 === queuedBadge ===
@@ -1354,6 +1359,16 @@
   </div>
   {{end}}
 </div>
+=== shortcutsTab ===
+<section class="lib-shortcuts">
+  <p class="sc-intro">One-tap comments for a line, a text selection or a block. The ones you use most come first. Add your own as Markdown files in <code>~/.config/prereview/shortcuts/</code>; an accepted learning can add one too.</p>
+  <ul class="lib-list">
+    {{range .Rows}}<li class="lib-card sc-row{{if .Hidden}} is-hidden{{end}}" data-key="sc-{{.Slug}}">
+      <header><b class="sc-label">{{.Label}}</b><span class="ck-pill">{{.Source}}</span><span class="sc-uses">{{.Uses}} use{{if ne .Uses 1}}s{{end}}</span><form method="POST" class="sc-toggle"><button type="submit" name="{{if .Hidden}}showShortcut{{else}}hideShortcut{{end}}" value="{{.Slug}}" class="outline secondary">{{if .Hidden}}Show{{else}}Hide{{end}}</button></form></header>
+      <p class="sc-body">{{.Body}}</p>
+    </li>{{end}}
+  </ul>
+</section>
 === skillsTab ===
 
   <ul class="lib-list">

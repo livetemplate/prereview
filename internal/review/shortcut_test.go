@@ -108,3 +108,53 @@ func TestSaveDraft_IgnoresAutosaveFromBeforeAShortcut(t *testing.T) {
 		t.Errorf("current autosave dropped: %q", st.DraftBody)
 	}
 }
+
+// An accepted learning that adds a shortcut is a chip; a proposed one isn't yet.
+// Hide takes a chip out of the composer but keeps it on the Library tab.
+func TestShortcuts_LearnedAndHidden(t *testing.T) {
+	lib := t.TempDir()
+	for _, l := range []library.Learning{
+		{ID: "a1", Text: "t", Status: library.StatusAccepted, ShortcutLabel: "Why?", ShortcutBody: "Why is this here?"},
+		{ID: "p1", Text: "t", Status: library.StatusProposed, ShortcutLabel: "Not yet", ShortcutBody: "not yet"},
+	} {
+		if err := library.Append(filepath.Join(lib, library.LearningsFile), l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := &PrereviewController{LibraryDir: lib}
+	st := PrereviewState{ShowLibrary: true, LibraryTab: libTabShortcuts}
+	c.applyShortcuts(&st)
+	c.applyShortcutsTab(&st)
+	find := func(list []Shortcut, slug string) *Shortcut {
+		for i := range list {
+			if list[i].Slug == slug {
+				return &list[i]
+			}
+		}
+		return nil
+	}
+	if s := find(st.Shortcuts, "learned-a1"); s == nil || s.Source != shortcutLearned || s.Label != "Why?" {
+		t.Fatalf("accepted shortcut learning: %+v", s)
+	}
+	if find(st.Shortcuts, "learned-p1") != nil {
+		t.Error("a proposed learning must not add a chip before it's accepted")
+	}
+	st, _ = c.HideShortcut(st, livetemplate.NewContext(context.TODO(), "hideShortcut", map[string]interface{}{"value": "learned-a1"}))
+	if find(st.Shortcuts, "learned-a1") != nil {
+		t.Error("a hidden shortcut is still a chip")
+	}
+	if s := find(st.ShortcutsTab.Rows, "learned-a1"); s == nil || !s.Hidden {
+		t.Errorf("the tab must still list it, marked hidden: %+v", s)
+	}
+	st, _ = c.ShowShortcut(st, livetemplate.NewContext(context.TODO(), "showShortcut", map[string]interface{}{"value": "learned-a1"}))
+	if find(st.Shortcuts, "learned-a1") == nil {
+		t.Error("Show must bring the chip back")
+	}
+}
+
+func TestUnwrapParagraphs(t *testing.T) {
+	got := unwrapParagraphs("Drop this. Then keep\nthe narrative whole.\n\nSecond   para\nhere.\n")
+	if want := "Drop this. Then keep the narrative whole.\n\nSecond para here."; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

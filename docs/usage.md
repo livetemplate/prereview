@@ -285,6 +285,11 @@ shows how many are waiting.
   proposal that contradicts an accepted lesson says so ("Replaces an older
   learning"); newer wins, so accepting it marks the old one **superseded**, which
   you can **Restore**. The status chips and the scope picker filter the list.
+- **Shortcuts**: when you give the same instruction in three or more comments, the
+  agent can propose a lesson that adds it to your comment box as a chip ("Shortcut
+  it adds" on the card). Accepting it adds the chip at once. The **Shortcuts** tab
+  lists every chip (built-in, from your folder, or learned) with how often you've
+  used it, and **Hide** takes one out of the comment box without deleting it.
 - **Learn after each review** (on by default): when your agent goes idle and the
   review holds five or more new comments, replies or decisions since it last read
   it, prereview asks the agent to read them and propose lessons. Turn it off on the
