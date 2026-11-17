@@ -8,28 +8,37 @@ import (
 
 // state_nav.go is the open-items stepper (#193): one ‹ N / M open › bar that walks
 // every annotation still waiting on the reviewer, in document order across files —
-// unresolved comments, undecided suggestions, unanswered quiz questions. It replaced
-// the quiz navigator's per-question dots, which didn't scale past a handful of
-// items. n/p step the same list.
+// unresolved comments, undecided suggestions, unanswered quiz questions. n/p step
+// the same list.
 
-// Nav kinds: the filter values (NavKind) and NavItem.Kind.
+// Nav kinds: the filter values (NavKind) and NavPos.Kind.
 const (
 	navComment    = "comment"
 	navSuggestion = "suggestion"
 	navQuiz       = "quiz"
 )
 
+// navKindTable is the filter chip's menu, in order. An item kind's index here is
+// also its tiebreak rank on a shared line (comment, suggestion, question).
+var navKindTable = []struct{ Kind, Label string }{
+	{"", "All"}, {navComment, "Comments"}, {navSuggestion, "Suggestions"}, {navQuiz, "Quiz"},
+}
+
+func navKindIndex(kind string) int {
+	return slices.IndexFunc(navKindTable, func(k struct{ Kind, Label string }) bool { return k.Kind == kind })
+}
+
 // NavPos is a stepper position: the sort key of an item. The cursor stores the last
 // target's key rather than its index, so deciding or resolving that item (which
 // drops it from the list) leaves "next" continuing from where the reviewer was
 // instead of restarting at item 1.
 type NavPos struct {
-	File     int    `json:"file"`      // rank in scopedFiles; unknown files sort last
-	Body     bool   `json:"body"`      // false = file head (file/area comments, anchorless questions)
-	Line     int    `json:"line"`      // ToLine (FromLine for a question)
-	KindRank int    `json:"kind_rank"` // comment, suggestion, quiz
-	Seq      int    `json:"seq"`       // position in its source list: a stable tiebreak
-	ID       string `json:"id"`
+	File int    `json:"file"` // rank in scopedFiles; unknown files sort last
+	Body bool   `json:"body"` // false = file head (file/area comments, head questions)
+	Line int    `json:"line"` // ToLine (FromLine for a question)
+	Kind string `json:"kind"`
+	Seq  int    `json:"seq"` // position in its source list: a stable tiebreak
+	ID   string `json:"id"`
 }
 
 func (a NavPos) compare(b NavPos) int {
@@ -42,20 +51,18 @@ func (a NavPos) compare(b NavPos) int {
 		}
 		return 1
 	}
-	return cmp.Or(cmp.Compare(a.Line, b.Line), cmp.Compare(a.KindRank, b.KindRank),
+	return cmp.Or(cmp.Compare(a.Line, b.Line), cmp.Compare(navKindIndex(a.Kind), navKindIndex(b.Kind)),
 		cmp.Compare(a.Seq, b.Seq), cmp.Compare(a.ID, b.ID))
 }
 
 // sameItem reports whether two positions name the same item. Seq is left out: it
 // is a list index, and it shifts when an earlier item is removed.
 func (a NavPos) sameItem(b NavPos) bool {
-	return a.File == b.File && a.KindRank == b.KindRank && a.ID == b.ID
+	return a.File == b.File && a.Kind == b.Kind && a.ID == b.ID
 }
 
-// NavItem is one stop: what to open and where it sorts.
+// NavItem is one stop: the file to open, the side its row is on, and where it sorts.
 type NavItem struct {
-	Kind string
-	ID   string
 	File string
 	Side string
 	Pos  NavPos
@@ -63,62 +70,51 @@ type NavItem struct {
 
 // navItems is every open item in the review, sorted, before the kind filter.
 func (s PrereviewState) navItems() []NavItem {
-	rank := map[string]int{}
-	for i, f := range s.scopedFiles() {
-		rank[f.Path] = i
-	}
-	fileRank := func(path string) int {
-		if r, ok := rank[path]; ok {
-			return r
-		}
-		return len(rank)
-	}
 	var out []NavItem
-	add := func(kind, id, file, side string, body bool, line, kindRank, seq int) {
-		out = append(out, NavItem{Kind: kind, ID: id, File: file, Side: side, Pos: NavPos{
-			File: fileRank(file), Body: body, Line: line, KindRank: kindRank, Seq: seq, ID: id,
-		}})
-	}
 	for i, c := range s.scopedComments() {
 		if !c.Resolved {
-			add(navComment, c.ID, c.File, c.Side, !c.IsFileLevel() && !c.IsAreaLevel(), c.ToLine, 0, i)
+			body := !c.IsFileLevel() && !c.IsAreaLevel()
+			out = append(out, NavItem{File: c.File, Side: c.Side, Pos: NavPos{Body: body, Line: c.ToLine, Kind: navComment, Seq: i, ID: c.ID}})
 		}
 	}
 	if !s.HideSuggestions {
 		decisions := s.DecisionsBySuggestion()
 		for i, sg := range s.visibleSuggestions() {
-			if s.Applied[sg.ID] {
-				continue
+			if s.undecidedIn(decisions, sg.ID) {
+				out = append(out, NavItem{File: sg.File, Side: sg.Side, Pos: NavPos{Body: true, Line: sg.ToLine, Kind: navSuggestion, Seq: i, ID: sg.ID}})
 			}
-			if d, ok := decisions[sg.ID]; ok && (d.Verdict == verdictAccept || d.Verdict == verdictReject) {
-				continue // decided: the agent's work now, not the reviewer's
-			}
-			add(navSuggestion, sg.ID, sg.File, sg.Side, true, sg.ToLine, 1, i)
 		}
 	}
 	for _, q := range s.latestQuizzes() {
-		if !s.inScope(q.File) {
-			continue
-		}
 		for i, qu := range q.Questions {
 			if _, answered := s.QuizAnswers[answerKey(q.ID, qu.ID)]; !answered {
-				add(navQuiz, qu.ID, q.File, qu.Side, qu.LineGrounded(), qu.FromLine, 2, i)
+				out = append(out, NavItem{File: q.File, Side: qu.Side, Pos: NavPos{Body: qu.LineGrounded(), Line: qu.FromLine, Kind: navQuiz, Seq: i, ID: qu.ID}})
 			}
 		}
+	}
+	rank := map[string]int{}
+	for i, f := range s.scopedFiles() {
+		rank[f.Path] = i
+	}
+	for i := range out {
+		r, ok := rank[out[i].File]
+		if !ok {
+			r = len(rank)
+		}
+		out[i].Pos.File = r
 	}
 	slices.SortFunc(out, func(a, b NavItem) int { return a.Pos.compare(b.Pos) })
 	return out
 }
 
-// latestQuizzes is each file's current quiz (the last one recorded for it), the one
-// CurrentQuiz shows when that file is open.
+// latestQuizzes is the quiz each in-scope file shows (quizFor), one per file.
 func (s PrereviewState) latestQuizzes() []Quiz {
 	seen := map[string]bool{}
 	var out []Quiz
-	for i := len(s.Quizzes) - 1; i >= 0; i-- {
-		if q := s.Quizzes[i]; !seen[q.File] {
+	for _, q := range s.Quizzes {
+		if !seen[q.File] && s.inScope(q.File) {
 			seen[q.File] = true
-			out = append(out, q)
+			out = append(out, *s.quizFor(q.File))
 		}
 	}
 	return out
@@ -130,7 +126,7 @@ func (s PrereviewState) NavItems() []NavItem {
 	if s.NavKind == "" {
 		return all
 	}
-	return slices.DeleteFunc(all, func(it NavItem) bool { return it.Kind != s.NavKind })
+	return slices.DeleteFunc(all, func(it NavItem) bool { return it.Pos.Kind != s.NavKind })
 }
 
 // navStep picks the next (delta>0) or previous item relative to the cursor, wrapping.
@@ -164,7 +160,7 @@ func (s PrereviewState) navStep(delta int) *NavItem {
 }
 
 // NavLabel is the bar's count: "3 / 12 open" while the cursor is on a live item,
-// else "12 open". Zero-arg.
+// else "12 open".
 func (s PrereviewState) NavLabel() string {
 	items := s.NavItems()
 	if s.NavAt != nil {
@@ -185,27 +181,19 @@ type NavKindOption struct {
 
 // NavKinds is the filter chip's menu, the active row marked.
 func (s PrereviewState) NavKinds() []NavKindOption {
-	out := []NavKindOption{{Kind: ""}, {Kind: navComment}, {Kind: navSuggestion}, {Kind: navQuiz}}
-	for i := range out {
-		out[i].Label = navKindLabel(out[i].Kind)
-		out[i].On = out[i].Kind == s.NavKind
+	out := make([]NavKindOption, len(navKindTable))
+	for i, k := range navKindTable {
+		out[i] = NavKindOption{Kind: k.Kind, Label: k.Label, On: k.Kind == s.NavKind}
 	}
 	return out
 }
 
 // NavKindLabel names the active filter on its chip.
-func (s PrereviewState) NavKindLabel() string { return navKindLabel(s.NavKind) }
-
-func navKindLabel(kind string) string {
-	switch kind {
-	case navComment:
-		return "Comments"
-	case navSuggestion:
-		return "Suggestions"
-	case navQuiz:
-		return "Quiz"
+func (s PrereviewState) NavKindLabel() string {
+	if i := navKindIndex(s.NavKind); i >= 0 {
+		return navKindTable[i].Label
 	}
-	return "All"
+	return navKindTable[0].Label
 }
 
 // ShowNav gates the bar: the reviewer hasn't put it away, a file view is showing

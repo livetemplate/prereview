@@ -1008,7 +1008,7 @@
     <div class="tb-dropdown ann-nav-kind" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
       <button type="button" class="outline" aria-haspopup="menu" title="Which items to step through">{{$.NavKindLabel}}{{template "iconChevronDown"}}</button>
       <div class="tb-dropdown-panel" role="menu" aria-label="Step through">
-        {{range $.NavKinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="setNavKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}">{{.Label}}</button></form>{{end}}
+        {{range $.NavKinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="setNavKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}"><span class="menu-label">{{.Label}}</span></button></form>{{end}}
       </div>
     </div>
     <span class="ann-nav-actions">

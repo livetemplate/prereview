@@ -2,14 +2,15 @@
 
 // End-to-end for #193: one sticky ‹ N / M open › bar steps through every open item
 // (unresolved comment, undecided suggestion, unanswered quiz question) in document
-// order across files, at phone size. It replaced the quiz navigator's dots. Every
-// item arrives after the page has loaded, so each render is a live update.
+// order across files, at phone size. Every item arrives after the page has loaded,
+// so each render is a live update.
 //
 // Run with: go test -tags=browser -run 'TestE2E_AnnotationNav|TestE2E_QuizStepper' ./e2e/...
 
 package e2e
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,17 +24,15 @@ func navLabel(t *testing.T, p *runningPrereview) string {
 	return strings.TrimSpace(evalStr(t, p, `(document.querySelector('.ann-nav .ann-nav-label')||{}).textContent||""`))
 }
 
-// waitNavLabel polls until the bar reads want.
+// waitNavLabel waits until the bar reads want.
 func waitNavLabel(t *testing.T, p *runningPrereview, want, why string, diag func() string) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if navLabel(t, p) == want {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
+	ctx, cancel := within(p, 10*time.Second)
+	defer cancel()
+	js := `((document.querySelector('.ann-nav .ann-nav-label')||{}).textContent||"").trim() === ` + strconv.Quote(want)
+	if err := chromedp.Run(ctx, chromedp.Poll(js, nil, chromedp.WithPollingInterval(50*time.Millisecond))); err != nil {
+		t.Fatalf("%s: bar reads %q, want %q%s", why, navLabel(t, p), want, diag())
 	}
-	t.Fatalf("%s: bar reads %q, want %q%s", why, navLabel(t, p), want, diag())
 }
 
 // navStep taps ‹ or › on the bar.
@@ -50,16 +49,13 @@ func navStep(t *testing.T, p *runningPrereview, action string, diag func() strin
 // scroll landed and nothing collapsed it.
 func expectInView(t *testing.T, p *runningPrereview, sel, why string, diag func() string) {
 	t.Helper()
-	js := `(()=>{const e=document.querySelector('` + sel + `'); if(!e||e.offsetParent===null) return 0;
-		const r=e.getBoundingClientRect(); return r.bottom>0 && r.top<innerHeight ? 1 : 0})()`
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if evalInt(t, p, js) == 1 {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
+	ctx, cancel := within(p, 10*time.Second)
+	defer cancel()
+	js := `(()=>{const e=document.querySelector(` + strconv.Quote(sel) + `); if(!e||e.offsetParent===null) return false;
+		const r=e.getBoundingClientRect(); return r.bottom>0 && r.top<innerHeight})()`
+	if err := chromedp.Run(ctx, chromedp.Poll(js, nil, chromedp.WithPollingInterval(50*time.Millisecond))); err != nil {
+		t.Fatalf("%s: %s is not on screen%s", why, sel, diag())
 	}
-	t.Fatalf("%s: %s is not on screen%s", why, sel, diag())
 }
 
 func TestE2E_AnnotationNav(t *testing.T) {

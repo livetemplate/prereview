@@ -383,10 +383,16 @@ func (s PrereviewState) PastEndHidden() *HiddenMark {
 // state without a verdict when the agent applies an edit the reviewer never accepted;
 // Peek / Show-resolved keep the card reachable, so the edit stays discoverable.
 func (s PrereviewState) suggestionUndecided(id string) bool {
+	return s.undecidedIn(s.DecisionsBySuggestion(), id)
+}
+
+// undecidedIn is suggestionUndecided against an already-built decisions map, for
+// callers that check many suggestions.
+func (s PrereviewState) undecidedIn(decisions map[string]SuggestionDecision, id string) bool {
 	if s.Applied[id] {
 		return false
 	}
-	d, ok := s.DecisionsBySuggestion()[id]
+	d, ok := decisions[id]
 	return !ok || (d.Verdict != verdictAccept && d.Verdict != verdictReject)
 }
 

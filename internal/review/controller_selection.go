@@ -131,7 +131,7 @@ func openThreadOnBlock(state PrereviewState, from, to int) (PrereviewState, bool
 			continue
 		}
 		// Un-collapse the block (#174's badge) so the thread is actually on screen.
-		delete(state.ToggledRows, fmt.Sprintf("MB-%d-%d", from, to))
+		delete(state.ToggledRows, markdownBlockKey(from, to))
 		state.ReplyingID = cm.ID
 		state.ReplyDraft = ""
 		// Clear the selection, or the NEW-comment composer renders inside the block on top

@@ -135,10 +135,7 @@
        line view; the gutter / line badge is replaced with a "file" tag
        via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
        per-comment actions — no new endpoints. */}}
-  {{/* #193 open-items stepper: ‹ › walk every unresolved comment, undecided
-       suggestion and unanswered quiz question in document order across files (n/p
-       do the same). Sticky, so it stays reachable while reading; one bar however
-       many items there are. */}}
+  {{/* #193 open-items stepper (state_nav.go). Sticky, so it stays reachable. */}}
   {{if $.ShowNav}}
   <div class="ann-nav" role="navigation" aria-label="Open items">
     <form method="POST"><button type="submit" name="navPrev" class="outline ann-nav-step" aria-label="Previous open item" title="Previous open item (p)">{{template "iconChevronLeft"}}</button></form>
@@ -151,7 +148,7 @@
     >
       <button type="button" class="outline" aria-haspopup="menu" title="Which items to step through">{{$.NavKindLabel}}{{template "iconChevronDown"}}</button>
       <div class="tb-dropdown-panel" role="menu" aria-label="Step through">
-        {{range $.NavKinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="setNavKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}">{{.Label}}</button></form>{{end}}
+        {{range $.NavKinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="setNavKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}"><span class="menu-label">{{.Label}}</span></button></form>{{end}}
       </div>
     </div>
     <span class="ann-nav-actions">

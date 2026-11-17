@@ -25,13 +25,13 @@ func (c *PrereviewController) navGo(state PrereviewState, delta int) (PrereviewS
 	}
 	pos := it.Pos
 	state.NavAt = &pos
-	switch it.Kind {
+	switch pos.Kind {
 	case navComment:
-		state.ScrollToCommentID = it.ID
+		state.ScrollToCommentID = pos.ID
 	case navSuggestion:
-		state.ScrollToItemKey = "sg:" + it.ID
+		state.ScrollToItemKey = "sg:" + pos.ID
 	case navQuiz:
-		state.ScrollToItemKey = "qz:" + it.ID
+		state.ScrollToItemKey = "qz:" + pos.ID
 	}
 	revealItem(&state, *it)
 	return state, nil
@@ -64,8 +64,7 @@ func revealItem(state *PrereviewState, it NavItem) {
 // SetNavKind filters the bar to one kind ("" = all). The cursor stays, so the next
 // step continues from the same place in the document.
 func (c *PrereviewController) SetNavKind(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	switch k := ctx.GetString("kind"); k {
-	case "", navComment, navSuggestion, navQuiz:
+	if k := ctx.GetString("kind"); navKindIndex(k) >= 0 {
 		state.NavKind = k
 	}
 	return state, nil

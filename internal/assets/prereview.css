@@ -3527,7 +3527,6 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .ann-nav .ann-nav-step { display: inline-flex; align-items: center; padding: 0.15rem 0.35rem; }
 .ann-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: center; }
 .ann-nav-kind > button { display: inline-flex; align-items: center; gap: 0.2rem; }
-.ann-nav-kind .menu-item.is-on { font-weight: 700; color: var(--accent); }
 .ann-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 /* The stepper centres its target, and the sticky bar sits above it: keep a quiz
    card clear of the bar when the head is scrolled to. */

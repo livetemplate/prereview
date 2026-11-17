@@ -46,8 +46,13 @@ func (s PrereviewState) CurrentQuiz() *Quiz {
 	if s.SelectedFile == "" {
 		return nil
 	}
+	return s.quizFor(s.SelectedFile)
+}
+
+// quizFor is the quiz a file shows: the last one recorded for it, or nil.
+func (s PrereviewState) quizFor(file string) *Quiz {
 	for i := len(s.Quizzes) - 1; i >= 0; i-- {
-		if s.Quizzes[i].File == s.SelectedFile {
+		if s.Quizzes[i].File == file {
 			return &s.Quizzes[i]
 		}
 	}

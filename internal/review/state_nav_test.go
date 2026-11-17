@@ -40,7 +40,7 @@ func decide(st *PrereviewState, id, verdict string) {
 func navIDs(items []NavItem) string {
 	var ids []string
 	for _, it := range items {
-		ids = append(ids, it.ID)
+		ids = append(ids, it.Pos.ID)
 	}
 	return strings.Join(ids, " ")
 }
@@ -93,10 +93,10 @@ func TestNavStep_ContinuesAfterTheCurrentItemLeaves(t *testing.T) {
 	if got := st.NavLabel(); got != "5 open" {
 		t.Errorf("label after s-b5 left = %q, want \"5 open\"", got)
 	}
-	if next := st.navStep(+1); next == nil || next.ID != "s-a2" {
-		t.Errorf("next after deciding s-b5 = %v, want s-a2", next)
+	if next := st.navStep(+1); next == nil || next.Pos.ID != "s-a2" {
+		t.Errorf("next after deciding s-b5 = %+v, want s-a2", next)
 	}
-	if prev := st.navStep(-1); prev == nil || prev.ID != "c-b5" {
+	if prev := st.navStep(-1); prev == nil || prev.Pos.ID != "c-b5" {
 		t.Errorf("prev after deciding s-b5 = %v, want c-b5", prev)
 	}
 }
@@ -106,14 +106,14 @@ func TestNavStep_ContinuesAfterTheCurrentItemLeaves(t *testing.T) {
 func TestRevealItem_OpensItsCollapsedRow(t *testing.T) {
 	st := navFixture()
 	st.ToggledRows = map[string]string{"5-old": "open", "5-new": "open", "9-new": "open", FileHeadRowKey: "open"}
-	revealItem(&st, NavItem{Kind: navComment, ID: "c-b5", Side: "", Pos: NavPos{Body: true, Line: 5}})
+	revealItem(&st, NavItem{Pos: NavPos{Body: true, Line: 5, Kind: navComment, ID: "c-b5"}})
 	if _, ok := st.ToggledRows["5-new"]; ok {
 		t.Error("row 5 should be opened")
 	}
 	if _, ok := st.ToggledRows["9-new"]; !ok {
 		t.Error("row 9 isn't the target and should stay collapsed")
 	}
-	revealItem(&st, NavItem{Kind: navComment, ID: "c-bfile", Pos: NavPos{}})
+	revealItem(&st, NavItem{Pos: NavPos{Kind: navComment, ID: "c-bfile"}})
 	if _, ok := st.ToggledRows[FileHeadRowKey]; ok {
 		t.Error("a head item should open the file-head group")
 	}
