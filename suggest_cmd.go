@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -162,29 +161,20 @@ func parseSuggestionsInput(raw []byte) ([]review.Suggestion, error) {
 	return out, nil
 }
 
-// checkFor refuses a payload whose "for" names a comment the store doesn't have
-// (#204): the group would hang off nothing, and the reviewer would never see its
-// Accept all. Nothing is appended when any one is wrong.
+// checkFor refuses a payload whose "for" names a comment the review doesn't have
+// (#204): the group would hang off nothing, so nothing is appended.
 func checkFor(sugs []review.Suggestion, csvPath string) error {
-	ids := map[string]bool{}
-	loaded := false
+	var ids []string
 	for _, s := range sugs {
-		if s.For == "" {
-			continue
+		if s.For != "" {
+			ids = append(ids, s.For)
 		}
-		if !loaded {
-			rows, err := csv.Read(csvPath)
-			if err != nil {
-				return fmt.Errorf("suggestion %s: \"for\": read %s: %w", s.ID, csvPath, err)
-			}
-			for _, r := range rows {
-				ids[r.ID] = true
-			}
-			loaded = true
-		}
-		if !ids[s.For] {
-			return fmt.Errorf("suggestion %s: \"for\": no comment %q in this review (use the id from the snapshot)", s.ID, s.For)
-		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := validateIDs(csvPath, ids); err != nil {
+		return fmt.Errorf("\"for\": %w", err)
 	}
 	return nil
 }

@@ -71,3 +71,20 @@ func TestRippleFor_SurvivesRevisionAndReachesTheAgent(t *testing.T) {
 		t.Errorf("snapshot decision = %+v, want for=c1", out)
 	}
 }
+
+// An alternative for a member's text that isn't linked to the comment still counts:
+// Accept all would otherwise decide that pick for the reviewer (the auto-reject).
+func TestRipple_AlternativeOutsideTheGroupHoldsTheMemberBack(t *testing.T) {
+	st := PrereviewState{SelectedFile: "a.md", Suggestions: []Suggestion{
+		{ID: "r1", For: "c1", File: "a.md", FromLine: 2, ToLine: 2, Side: "new", OriginalText: "two", ProposedText: "2a"},
+		{ID: "alt", File: "a.md", FromLine: 2, ToLine: 2, Side: "new", OriginalText: "two", ProposedText: "2b"},
+	}}
+	if g := st.RippleByComment()["c1"]; g.Acceptable != 0 || g.NeedPick != 1 {
+		t.Errorf("group = %+v, want r1 held back for a pick", g)
+	}
+	c := decisionController(t)
+	st, _ = c.AcceptRipple(st, rippleCtx("acceptRipple", "c1"))
+	if d := st.DecisionsBySuggestion(); d["r1"].Verdict != "" || d["alt"].Verdict != "" {
+		t.Errorf("Accept all decided a pick: %+v", d)
+	}
+}

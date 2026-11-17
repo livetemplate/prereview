@@ -20,7 +20,6 @@ type RippleGroup struct {
 	NeedPick   int // alternative sets (#117) with more than one undecided member
 }
 
-// rippleMembers is the in-scope suggestions that follow from commentID.
 func (s PrereviewState) rippleMembers(commentID string) []Suggestion {
 	var out []Suggestion
 	for _, sg := range s.scopedSuggestions() {
@@ -31,36 +30,38 @@ func (s PrereviewState) rippleMembers(commentID string) []Suggestion {
 	return out
 }
 
-// rippleAcceptable splits a group's undecided members into the ones Accept all takes
-// and the count of alternative sets it leaves for the reviewer to pick from: accepting
-// one alternative rejects the others, so taking them all would be a coin toss.
-func (s PrereviewState) rippleAcceptable(members []Suggestion, decisions map[string]SuggestionDecision) (take []Suggestion, needPick int) {
-	undecided := map[string][]Suggestion{}
-	var order []string
+// rippleSplit sorts a group's undecided members: the ones Accept all takes, and how
+// many alternative sets (#117) it leaves for the reviewer to pick from. A set is
+// judged across the whole review, not just the group: accepting one alternative
+// rejects the others, so taking a member whose set still has another undecided
+// alternative, linked to this comment or not, would decide the pick for them.
+func (s PrereviewState) rippleSplit(members []Suggestion, decisions map[string]SuggestionDecision) (take []Suggestion, open, needPick int) {
+	undecidedAlts := map[string]int{}
+	for _, g := range groupByKey(s.scopedSuggestions()) {
+		for _, sg := range g {
+			if s.undecidedIn(decisions, sg.ID) {
+				undecidedAlts[sg.groupKey()]++
+			}
+		}
+	}
+	pick := map[string]bool{}
 	for _, sg := range members {
 		if !s.undecidedIn(decisions, sg.ID) {
 			continue
 		}
-		k := sg.groupKey()
-		if _, ok := undecided[k]; !ok {
-			order = append(order, k)
-		}
-		undecided[k] = append(undecided[k], sg)
-	}
-	for _, k := range order {
-		if g := undecided[k]; len(g) == 1 {
-			take = append(take, g[0])
+		open++
+		if k := sg.groupKey(); undecidedAlts[k] > 1 {
+			pick[k] = true
 		} else {
-			needPick++
+			take = append(take, sg)
 		}
 	}
-	return take, needPick
+	return take, open, len(pick)
 }
 
 // RippleByComment maps a comment id to its follow-on group, for the row on the
 // comment's card. Zero-arg; nil when no suggestion names a comment.
 func (s PrereviewState) RippleByComment() map[string]*RippleGroup {
-	var out map[string]*RippleGroup
 	byComment := map[string][]Suggestion{}
 	for _, sg := range s.scopedSuggestions() {
 		if sg.For != "" {
@@ -71,40 +72,24 @@ func (s PrereviewState) RippleByComment() map[string]*RippleGroup {
 		return nil
 	}
 	decisions := s.DecisionsBySuggestion()
+	out := make(map[string]*RippleGroup, len(byComment))
 	for id, members := range byComment {
-		g := &RippleGroup{CommentID: id, Total: len(members)}
-		for _, sg := range members {
-			if s.undecidedIn(decisions, sg.ID) {
-				g.Open++
-			}
-		}
-		take, needPick := s.rippleAcceptable(members, decisions)
-		g.Acceptable, g.NeedPick = len(take), needPick
-		if out == nil {
-			out = map[string]*RippleGroup{}
-		}
-		out[id] = g
+		take, open, needPick := s.rippleSplit(members, decisions)
+		out[id] = &RippleGroup{CommentID: id, Total: len(members), Open: open, Acceptable: len(take), NeedPick: needPick}
 	}
 	return out
 }
 
 // AcceptRipple accepts every follow-on suggestion of a comment (the button's value),
-// except alternative sets still awaiting a pick. Each accept rejects its own
-// alternatives, as a single Accept does, and it's all one write.
+// except alternative sets still awaiting a pick, in one write.
 func (c *PrereviewController) AcceptRipple(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	members := state.rippleMembers(ctx.GetString("value"))
-	take, _ := state.rippleAcceptable(members, state.DecisionsBySuggestion())
+	take, _, _ := state.rippleSplit(state.rippleMembers(ctx.GetString("value")), state.DecisionsBySuggestion())
 	if len(take) == 0 {
 		return state, nil
 	}
 	next := slices.Clone(state.Decisions)
 	for _, sg := range take {
-		next = upsertDecision(next, newDecision(sg, verdictAccept, "", false))
-		for _, other := range state.Suggestions {
-			if other.ID != sg.ID && other.groupKey() == sg.groupKey() {
-				next = upsertDecision(next, newDecision(other, verdictReject, "", true))
-			}
-		}
+		next = acceptWithSiblings(next, sg, state.Suggestions)
 	}
 	c.commitDecisions(&state, next)
 	noteEnqueue(&state) // accepted edits are queued work, as with a single Accept
