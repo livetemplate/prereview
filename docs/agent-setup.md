@@ -12,7 +12,7 @@ prereview --version
 ```
 
 If that prints a version, go to step 3. prereview updates itself on launch, so
-an older version is fine.
+an older version is fine. If the command isn't found, go to step 2.
 
 ## 2. Install the binary
 
@@ -70,7 +70,8 @@ port with the sandbox's own:
 export PREREVIEW_PUBLIC_URL='https://your-vm.exe.xyz:4799'
 ```
 
-See [Behind a proxy or in a sandbox](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#behind-a-proxy-or-in-a-sandbox)
+If `prereview --help` doesn't list `--public-url`, run `prereview --update`
+first. See [Behind a proxy or in a sandbox](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#behind-a-proxy-or-in-a-sandbox)
 for other sandboxes and when to add `--host 0.0.0.0`.
 
 ## 6. Read the skill, then start
