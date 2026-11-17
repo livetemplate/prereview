@@ -7,6 +7,7 @@ import (
 
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/library"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // PrereviewState is the per-session state cloned by livetemplate. Fields
@@ -335,6 +336,11 @@ type PrereviewState struct {
 	// session emits the terminating end event. Not persisted — the
 	// controller is the source of truth; Mount refreshes it every connect.
 	AgentMode bool `json:"agent_mode"`
+
+	// SkillNotice is the launch's skill sync results (#208), mirrored from the
+	// controller at Mount: the banner that says which agents' prereview skill was
+	// refreshed (reload it there) or left alone. Mount refreshes it every connect.
+	SkillNotice []skills.ClientSync `json:"skill_notice,omitempty"`
 
 	// NoGit is mirrored from the controller (set when the path is a single
 	// file or a non-git directory) into state in Mount so the template

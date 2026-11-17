@@ -753,6 +753,17 @@ func renderFixtures() []renderFixture {
 			{Name: "No marketing", Agrees: "6 / 6", Status: "advisory · needs 10 answers"}},
 	}
 
+	// #208 skill notice: one refreshed row (asks for a reload), one edited row
+	// (names the fix), on both the file view and the external page.
+	skillRows := []skills.ClientSync{
+		{Client: "claude", Name: "Claude Code", Paths: []string{"/home/u/.claude/skills/prereview/SKILL.md"}, State: skills.Refreshed},
+		{Client: "cursor", Name: "cursor-agent", Paths: []string{"/home/u/.cursor/rules/prereview.mdc"}, State: skills.EditedThere},
+	}
+	skillNotice := diff
+	skillNotice.SkillNotice = skillRows
+	skillNoticeExt := external
+	skillNoticeExt.SkillNotice = skillRows
+
 	// empty states
 	emptyPick := repoBase() // Files present, no CurrentDiff selected
 	emptyPick.SelectedFile = ""
@@ -781,6 +792,8 @@ func renderFixtures() []renderFixture {
 		{"ripple", ripple},
 		{"external", external},
 		{"external-acted", extActed},
+		{"skill-notice", skillNotice},
+		{"skill-notice-external", skillNoticeExt},
 		{"version-view", version},
 		{"agent-mode", agent},
 		{"agent-answered", answered},

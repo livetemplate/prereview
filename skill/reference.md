@@ -173,7 +173,7 @@ Four event types:
 
 - **`ready`** (seq 0) — emitted once, after the stdout preamble. Fields:
   `event, seq, ts, repo, csv`, plus optional `paused` and `skill_updated`.
-  - `skill_updated:true` means this launch **refreshed the installed prereview skill**
+  - `skill_updated:true` means this launch **refreshed the installed Claude Code skill**
     to match the (possibly self-updated) binary — so the agent's loaded skill is now
     stale. The agent must re-read the skill from its install path
     (`~/.claude/skills/prereview/SKILL.md`) before continuing, and tell the user to

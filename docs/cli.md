@@ -158,6 +158,7 @@ Full event-schema and comment-field docs: [skill/reference.md](../skill/referenc
 | `--base <ref>` | `HEAD` | Git ref to diff against: `HEAD~1`, `main`, `origin/master`, a tag, a SHA — any rev-spec. **Git mode only** (ignored for a non-git dir / single file). |
 | `--port <n>` | `0` | TCP port; `0` = OS-assigned random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address — see [Binding](#binding--remote-access). |
+| `--public-url <url>` | — | The URL a browser outside this machine uses, such as a sandbox proxy's `https://vm.exe.xyz:4799`. Printed as `READY` and allowed as a WebSocket origin; the bind port defaults to the URL's port. Doesn't change the bind address, and can't be combined with `--external`. See [Behind a proxy or in a sandbox](#behind-a-proxy-or-in-a-sandbox). |
 | `--external <url>` | — | Annotate a **live local site** instead of files: reverse-proxies `<url>` on a second origin and overlays region annotation. **Requires `--out`**; ignores `[path]` and `--base`. See [External mode](#external-mode---external). |
 | `--out <dir>` | the review path | Store root — the directory under which the store holding `comments.csv` + the event log is created. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The resolved store is printed as the `STORE` stdout line, which is what the [subcommands](#subcommands) take as `--out`. |
 | `--agent` | `false` | Run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`) and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. See [Agent mode](#agent-mode---agent). |
@@ -171,7 +172,7 @@ These do one thing and exit — they don't start the server:
 | Flag | Effect |
 |---|---|
 | `--version` | Print the build version. |
-| `--install-skill` | Install the prereview integration for one or more coding agents and exit. With no `--client`, shows an interactive menu. The Claude Code skill auto-refreshes to match the binary on the next run after any upgrade (`--update`, brew, scoop, `go install`); other agents' files are not auto-refreshed — re-run with `--client=<id>` to update them. See [integrations.md](integrations.md). |
+| `--install-skill` | Install the prereview integration for one or more coding agents and exit. With no `--client`, shows an interactive menu. Every installed agent's files refresh to match the binary on the next run after any upgrade (`--update`, brew, scoop, `go install`); a file you edited is left alone, and re-running with `--client=<id>` replaces it. See [integrations.md](integrations.md#keeping-the-integration-current). |
 | `--client <ids>` | With `--install-skill`, the comma-separated agent(s) to install for: any of `claude,codex,gemini,opencode,aider,cursor`. Empty opens the menu. |
 | `--update` | Download and install the latest GitHub release (defers to brew/scoop if one manages the binary). |
 | `--uninstall` | Remove the binary (your `.prereview/` review comments are left untouched; defers to brew/scoop). |
@@ -303,6 +304,45 @@ pass an explicit `--host`. Passing `--host` explicitly is an absolute override
 interface, including any public IP. The first stdout line is `READY <url>`; extra
 `ALT <url>` lines (e.g. the MagicDNS hostname) may follow.
 
+### Behind a proxy or in a sandbox
+
+A sandbox that runs your agent, such as exe.dev or GitHub Codespaces, usually
+lets you reach a port through its own HTTPS proxy. Give prereview that address
+with `--public-url` (or `PREREVIEW_PUBLIC_URL`):
+
+```bash
+prereview --agent --public-url https://<vm>.exe.xyz:4799
+```
+
+- **`READY` prints the public URL**, so the link your agent shows you is the one
+  that opens from outside. The local URL moves to an `ALT` line.
+- **The bind port comes from the URL** (4799 above). A URL with no port of its
+  own, such as Codespaces' `https://<name>-4799.app.github.dev`, needs `--port
+  4799` as well.
+- **The bind address doesn't change.** It stays `127.0.0.1`, or the Tailscale IP
+  on a remote box. If the proxy reaches the machine on its network address
+  rather than on loopback, add `--host 0.0.0.0`. Do this only behind a private
+  proxy: prereview has no login, so anyone who reaches the port can drive the
+  review.
+- **The WebSocket origin check.** A proxy that rewrites the `Host` header, or
+  that drops `X-Forwarded-Proto`, fails livetemplate's same-origin check. The
+  page then loads but never updates. The server logs `WebSocket upgrade failed …
+  request origin not allowed by Upgrader.CheckOrigin`. `--public-url` adds the public URL to the allowed
+  origins, together with every URL prereview prints (`READY`, the `ALT` lines,
+  and `localhost` on a loopback bind). An address it never printed, such as an
+  `ssh -L` forward on a different local port, won't go live while
+  `--public-url` is set.
+
+Per sandbox:
+
+| Sandbox | Command | Notes |
+|---|---|---|
+| exe.dev | `prereview --agent --public-url https://<vm>.exe.xyz:<port>` | exe.dev forwards ports 3000–9999 at `https://<vm>.exe.xyz:<port>/`, and only users with access to the VM can open them ([exe.dev proxy docs](https://exe.dev/docs/proxy)). Its docs don't say whether the proxy connects on loopback; if the page doesn't load, add `--host 0.0.0.0`. |
+| GitHub Codespaces | `prereview --agent --port 4799 --public-url https://$CODESPACE_NAME-4799.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` | Forwarded ports are private to you by default. |
+
+`--external` can't run behind a one-port proxy: it serves the live site from a
+second, random port. prereview refuses `--external` with `--public-url`.
+
 ## Environment
 
 - `PREREVIEW_PROMPTS_DIR` - override the suggestion-prompt overlay directory
@@ -330,6 +370,7 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
 | Var | Effect |
 |---|---|
 | `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: skip the on-run update check. |
+| `PREREVIEW_PUBLIC_URL` | Same as `--public-url`; the flag wins when both are set. |
 | `PREREVIEW_CHECKS_DIR` | Override the checks rule folder (default `~/.config/prereview/checks`). |
 | `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer, and the default `checks`, `prompts` and `quizzes` folders inside it (default `~/.config/prereview`). |
 | `PREREVIEW_SCAN_HOME` | Where the first-launch scan looks for past reviews (default your home folder). |

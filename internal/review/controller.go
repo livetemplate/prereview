@@ -62,6 +62,12 @@ type PrereviewController struct {
 	// end event) instead of "Quit". Set once by main.go.
 	AgentMode bool
 
+	// SkillSyncs is what this launch's skill sync did to each installed agent
+	// integration (#208), set once by main.go. Mirrored into state at Mount until
+	// someone dismisses the notice; skillNoticeOff then hides it for the launch.
+	SkillSyncs     []skills.ClientSync
+	skillNoticeOff atomic.Bool
+
 	// PromptsDir is the user's "ask for suggestions" prompt overlay directory
 	// (~/.config/prereview/prompts), set once by main.go. Read every Mount and
 	// merged with the embedded built-ins in LoadPrompts. "" = built-ins only.
@@ -489,6 +495,10 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// below, so the "End session" button renders in both repo and external
 	// agent sessions.
 	state.AgentMode = c.AgentMode
+	state.SkillNotice = nil
+	if !c.skillNoticeOff.Load() {
+		state.SkillNotice = c.SkillSyncs
+	}
 
 	// SingleFile is mirror-only too (#171): the session's review SCOPE. A single-file
 	// review's store lives in the file's PARENT directory, so it is shared with every

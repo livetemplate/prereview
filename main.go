@@ -13,6 +13,7 @@ import (
 
 	"embed"
 
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 	"github.com/livetemplate/prereview/internal/skills"
 	"github.com/livetemplate/prereview/internal/update"
@@ -254,6 +255,7 @@ func main() {
 	external := flag.String("external", "", "annotate a live local website instead of files: reverse-proxies this http(s):// URL and overlays the region-annotation UI. Requires --out. Ignores [path]/--base.")
 	out := flag.String("out", "", "directory to create the annotation store under (its .prereview/ holds comments.csv). Defaults to the review path; required with --external (which has no review path). The resolved store is printed as the STORE line.")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
+	publicURL := flag.String("public-url", os.Getenv("PREREVIEW_PUBLIC_URL"), "the URL a browser outside this machine uses to reach the review, e.g. a sandbox proxy's https://vm.exe.xyz:4799 (also PREREVIEW_PUBLIC_URL). Printed as READY and allowed as a WebSocket origin; the bind port defaults to its port. The bind address is unchanged: widen it with --host")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
 	agent := flag.Bool("agent", false, "run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`); shows the Queue (Pause/Resume) + End session UI")
 	skill := flag.Bool("skill", false, "deprecated alias for --agent")
@@ -287,12 +289,15 @@ func main() {
 	// tree (so every line is commentable). See run().
 	explicitHost := false
 	explicitBase := false
+	explicitPort := false
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "host":
 			explicitHost = true
 		case "base":
 			explicitBase = true
+		case "port":
+			explicitPort = true
 		}
 	})
 
@@ -370,7 +375,7 @@ func main() {
 			return
 		}
 		for _, id := range ids {
-			paths, err := installClient(home, id)
+			paths, err := installClient(home, library.Dir(), id)
 			if err != nil {
 				slog.Error("install skill", "err", err)
 				os.Exit(1)
@@ -386,39 +391,35 @@ func main() {
 		maybeAutoUpdate()
 	}
 
-	// Keep an already-installed skill in lockstep with this binary. Runs
-	// after the (possibly re-exec'd) update so the *new* binary's embedded
-	// skill text is what lands on disk. Orthogonal to the binary lifecycle,
-	// so it sits outside the update/package-manager gates and covers brew,
-	// Scoop, and `go install` upgrades too. Best-effort: a review must start
-	// regardless.
-	skillUpdated := false
+	// Keep every already-installed agent integration in lockstep with this
+	// binary (#208). Runs after the (possibly re-exec'd) update so the *new*
+	// binary's embedded text is what lands, and outside the update gates so
+	// brew, Scoop and `go install` upgrades are covered too. Best-effort: a
+	// review starts regardless. The results go to stderr here, to the `ready`
+	// event (Claude only), and to the browser notice.
+	var skillSyncs []skills.ClientSync
 	if home, err := skills.AgentHome(); err != nil {
 		slog.Debug("skill sync: resolve home", "err", err)
-	} else if changed, serr := syncInstalledSkill(home); serr != nil {
-		slog.Debug("skill sync failed", "err", serr)
 	} else {
-		skillUpdated = changed
+		skillSyncs = syncInstalledSkills(home, library.Dir())
 	}
-	if skillUpdated {
-		// The refreshed skill on disk does NOT reload into an already-running
-		// agent's context, so its loaded copy is now stale. Make the drift
-		// actionable for both audiences: the agent must re-read the skill, and
-		// the human must reload it in their agent. In agent mode the `ready`
-		// event also carries skill_updated:true (the reliable machine channel —
-		// stderr may be detached on a backgrounded launch).
-		fmt.Fprintln(os.Stderr, "prereview: refreshed the prereview skill at ~/.claude/skills/prereview/ to match this binary. Re-read that SKILL.md before continuing, and reload the skill in your agent.")
+	reportSkillSyncs(os.Stderr, skillSyncs)
+
+	pubURL, listenPort, err := resolvePublicURL(*publicURL, *port, explicitPort, *external != "")
+	if err != nil {
+		slog.Error("fatal", "err", err)
+		os.Exit(1)
 	}
 
 	if *external != "" {
-		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode, skillUpdated, *replace); err != nil {
+		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode, skillSyncs, *replace); err != nil {
 			slog.Error("fatal", "err", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, explicitBase, *port, agentMode, skillUpdated, *out, *replace); err != nil {
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, explicitBase, listenPort, pubURL, agentMode, skillSyncs, *out, *replace); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}

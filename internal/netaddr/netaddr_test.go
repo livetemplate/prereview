@@ -112,3 +112,60 @@ func TestAltURLs(t *testing.T) {
 		})
 	}
 }
+
+// TestAllowedOrigins: with --public-url the origin list replaces livetemplate's
+// same-origin check, so it must hold the public origin and every URL prereview
+// prints (READY's bind URL and each AltURLs line), or that page never goes live.
+func TestAllowedOrigins(t *testing.T) {
+	has := func(list []string, o string) bool {
+		for _, x := range list {
+			if x == o {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("loopback bind behind a proxy", func(t *testing.T) {
+		got := AllowedOrigins("https://vm.exe.xyz:4799/some/path", "127.0.0.1", "100.1.2.3", "box.tail.ts.net", 4799)
+		for _, want := range []string{
+			"https://vm.exe.xyz:4799", "http://127.0.0.1:4799", "http://localhost:4799",
+		} {
+			if !has(got, want) {
+				t.Errorf("missing %q in %v", want, got)
+			}
+		}
+		for _, alt := range AltURLs("127.0.0.1", "100.1.2.3", "box.tail.ts.net", 4799) {
+			if !has(got, alt) {
+				t.Errorf("ALT %q is printed but not allowed: %v", alt, got)
+			}
+		}
+	})
+
+	t.Run("tailnet bind lists no loopback", func(t *testing.T) {
+		got := AllowedOrigins("https://vm.exe.xyz:4799", "100.1.2.3", "100.1.2.3", "box.tail.ts.net", 4799)
+		if has(got, "http://localhost:4799") || has(got, "http://127.0.0.1:4799") {
+			t.Errorf("loopback allowed on a tailnet bind: %v", got)
+		}
+		if !has(got, "http://100.1.2.3:4799") || !has(got, "http://box.tail.ts.net:4799") {
+			t.Errorf("tailnet URLs missing: %v", got)
+		}
+	})
+
+	t.Run("no public URL → nil (same-origin)", func(t *testing.T) {
+		if got := AllowedOrigins("", "127.0.0.1", "100.1.2.3", "box.tail.ts.net", 4799); got != nil {
+			t.Errorf("= %v, want nil", got)
+		}
+	})
+
+	t.Run("no duplicates", func(t *testing.T) {
+		got := AllowedOrigins("http://127.0.0.1:4799", "127.0.0.1", "", "", 4799)
+		seen := map[string]bool{}
+		for _, o := range got {
+			if seen[o] {
+				t.Errorf("duplicate %q in %v", o, got)
+			}
+			seen[o] = true
+		}
+	})
+}

@@ -131,29 +131,47 @@ func unknownClientErr(id string) error {
 	return fmt.Errorf("unknown client %q (known: %s)", id, strings.Join(clientIDs(), ", "))
 }
 
+// clientPath is where f lands under home.
+func clientPath(home string, f clientFile) string {
+	return filepath.Join(home, filepath.FromSlash(f.rel))
+}
+
+// name is the agent without the label's parenthetical ("Claude Code (streaming,
+// multi-round)" → "Claude Code"): how notices name it.
+func (t clientTarget) name() string {
+	name, _, _ := strings.Cut(t.label, " (")
+	return name
+}
+
+// fileMode is f's permission (0644 unless it sets one).
+func (f clientFile) fileMode() os.FileMode {
+	if f.mode == 0 {
+		return 0o644
+	}
+	return f.mode
+}
+
 // installClient writes every file for one client and returns the paths written.
-// MkdirAll + overwrite, so re-running upgrades the integration in place.
-func installClient(home, id string) ([]string, error) {
+// It overwrites whatever is there, a hand edit included (that is how you take
+// this binary's copy back), and records each file as prereview's in the
+// library's ownership record (lib) so the launch sync keeps it current.
+func installClient(home, lib, id string) ([]string, error) {
 	t, ok := clientByID(id)
 	if !ok {
 		return nil, unknownClientErr(id)
 	}
 	var written []string
-	for _, f := range t.files {
-		path := filepath.Join(home, filepath.FromSlash(f.rel))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return written, fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
+	err := skills.Own(lib, func(o *skills.Owner) error {
+		for _, f := range t.files {
+			path := clientPath(home, f)
+			if err := o.Put(path, []byte(f.body), f.fileMode()); err != nil {
+				return fmt.Errorf("write %s: %w", path, err)
+			}
+			written = append(written, path)
 		}
-		mode := f.mode
-		if mode == 0 {
-			mode = 0o644
-		}
-		if err := os.WriteFile(path, []byte(f.body), mode); err != nil {
-			return written, fmt.Errorf("write %s: %w", path, err)
-		}
-		written = append(written, path)
-	}
-	return written, nil
+		return nil
+	})
+	return written, err
 }
 
 // resolveClients turns the --client flag into a validated, deduped id list. An

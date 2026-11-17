@@ -15,7 +15,7 @@ func TestInstallClientWritesEveryTarget(t *testing.T) {
 	for _, target := range clientTargets() {
 		t.Run(target.id, func(t *testing.T) {
 			home := t.TempDir()
-			paths, err := installClient(home, target.id)
+			paths, err := installClient(home, libFor(home), target.id)
 			if err != nil {
 				t.Fatalf("installClient(%q): %v", target.id, err)
 			}
@@ -48,7 +48,7 @@ func TestInstallClientWritesEveryTarget(t *testing.T) {
 // Codex versions.
 func TestInstallClientCodexWritesBothDirs(t *testing.T) {
 	home := t.TempDir()
-	if _, err := installClient(home, "codex"); err != nil {
+	if _, err := installClient(home, libFor(home), "codex"); err != nil {
 		t.Fatalf("installClient(codex): %v", err)
 	}
 	for _, rel := range []string{
@@ -65,17 +65,17 @@ func TestInstallClientCodexWritesBothDirs(t *testing.T) {
 func TestInstallClientIdempotent(t *testing.T) {
 	home := t.TempDir()
 	for _, id := range clientIDs() {
-		if _, err := installClient(home, id); err != nil {
+		if _, err := installClient(home, libFor(home), id); err != nil {
 			t.Fatalf("installClient(%q) first run: %v", id, err)
 		}
-		if _, err := installClient(home, id); err != nil {
+		if _, err := installClient(home, libFor(home), id); err != nil {
 			t.Fatalf("installClient(%q) second run: %v", id, err)
 		}
 	}
 }
 
 func TestInstallClientUnknown(t *testing.T) {
-	if _, err := installClient(t.TempDir(), "bogus"); err == nil {
+	if _, err := installClient(t.TempDir(), t.TempDir(), "bogus"); err == nil {
 		t.Fatal("expected error for unknown client")
 	}
 }
@@ -170,7 +170,7 @@ func TestYAMLFrontmatterDescriptionQuoted(t *testing.T) {
 		"cursor":   ".cursor/rules/prereview.mdc",
 	}
 	for id, rel := range yamlClients {
-		if _, err := installClient(home, id); err != nil {
+		if _, err := installClient(home, libFor(home), id); err != nil {
 			t.Fatalf("installClient(%q): %v", id, err)
 		}
 		got, err := os.ReadFile(filepath.Join(home, filepath.FromSlash(rel)))
@@ -203,7 +203,7 @@ func TestYAMLFrontmatterDescriptionQuoted(t *testing.T) {
 // uses `--message` (which does apply edits headlessly).
 func TestAiderWrapper(t *testing.T) {
 	home := t.TempDir()
-	paths, err := installClient(home, "aider")
+	paths, err := installClient(home, libFor(home), "aider")
 	if err != nil {
 		t.Fatalf("installClient(aider): %v", err)
 	}
@@ -249,7 +249,7 @@ func TestYAMLQuote(t *testing.T) {
 // so a wrapper change that breaks the file format is caught here.
 func TestClientContentShape(t *testing.T) {
 	home := t.TempDir()
-	if _, err := installClient(home, "gemini"); err != nil {
+	if _, err := installClient(home, libFor(home), "gemini"); err != nil {
 		t.Fatal(err)
 	}
 	toml, _ := os.ReadFile(filepath.Join(home, ".gemini/commands/prereview.toml"))
@@ -262,7 +262,7 @@ func TestClientContentShape(t *testing.T) {
 		{"opencode", ".config/opencode/commands/prereview.md", "---\ndescription:"},
 		{"cursor", ".cursor/rules/prereview.mdc", "---\ndescription:"},
 	} {
-		if _, err := installClient(home, tc.id); err != nil {
+		if _, err := installClient(home, libFor(home), tc.id); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := os.ReadFile(filepath.Join(home, filepath.FromSlash(tc.rel)))
