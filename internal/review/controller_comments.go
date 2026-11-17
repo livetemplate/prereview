@@ -60,7 +60,9 @@ func (c *PrereviewController) materializeDraft(state PrereviewState) PrereviewSt
 // atomically, and clears selection + draft for the next round. Save enqueues
 // (the comment is actionable); the draft path is materializeDraft.
 func (c *PrereviewController) AddComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	return c.addCommentBody(state, strings.TrimSpace(ctx.GetString("body")))
+	state, err := c.addCommentBody(state, strings.TrimSpace(ctx.GetString("body")))
+	state.noteNav()
+	return state, err
 }
 
 // addCommentBody is AddComment's core, parameterized on the body so

@@ -72,7 +72,8 @@ type NavItem struct {
 func (s PrereviewState) navItems() []NavItem {
 	var out []NavItem
 	for i, c := range s.scopedComments() {
-		if !c.Resolved {
+		// A request (Run judges, Quiz me) is the agent's work, not a reviewer's note.
+		if !c.Resolved && c.Request == "" {
 			body := !c.IsFileLevel() && !c.IsAreaLevel()
 			out = append(out, NavItem{File: c.File, Side: c.Side, Pos: NavPos{Body: body, Line: c.ToLine, Kind: navComment, Seq: i, ID: c.ID}})
 		}
@@ -197,13 +198,21 @@ func (s PrereviewState) NavKindLabel() string {
 }
 
 // ShowNav gates the bar: the reviewer hasn't put it away, a file view is showing
-// (not a full-page view, not a live site), and the review has open items. It counts
-// before the filter, so a filter that matches nothing still leaves the chip to
-// change it. Once the reviewer has stepped or answered a question this visit, the
-// bar stays at "0 open" rather than vanishing under them (#212's rule).
+// (not a full-page view, not a live site), and the review has open items, or had
+// some this visit (NavSeen), so deciding the last one leaves the bar at "0 open"
+// rather than pulling it out from under the reviewer (#212's rule). It counts
+// before the filter, so a filter that matches nothing still leaves the chip.
 func (s PrereviewState) ShowNav() bool {
 	if s.NavDismissed || s.ExternalMode || s.ShowAllComments || s.ShowQuiz || s.ShowLibrary {
 		return false
 	}
-	return s.NavAt != nil || len(s.QuizJustAnswered) > 0 || len(s.navItems()) > 0
+	return s.NavSeen || len(s.navItems()) > 0
+}
+
+// noteNav sets NavSeen once the review has open items. Called wherever items
+// arrive: Mount, the watcher's reload (LLMStatusChanged), a new comment, a step.
+func (s *PrereviewState) noteNav() {
+	if !s.NavSeen && len(s.navItems()) > 0 {
+		s.NavSeen = true
+	}
 }

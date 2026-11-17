@@ -424,6 +424,12 @@ type PrereviewState struct {
 	// must be possible to put away while reading.
 	NavDismissed bool `json:"nav_dismissed"`
 
+	// NavSeen records that the stepper had open items this visit, so the bar stays
+	// (at "0 open") after the last one is decided instead of vanishing under the
+	// reviewer and shifting the page. Session-only: a later visit with nothing open
+	// shows no bar. Set by noteNav.
+	NavSeen bool `json:"nav_seen"`
+
 	// NavKind filters the stepper to one kind ("comment", "suggestion", "quiz");
 	// "" steps through all of them. Session-scoped.
 	NavKind string `json:"nav_kind"`

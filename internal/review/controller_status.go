@@ -240,6 +240,7 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	if c.reviewedGen.Load() != state.SeenReviewedGen && state.LLMState != LLMStateWorking {
 		state.PendingRefresh = true
 	}
+	state.noteNav()
 	return state, nil
 }
 

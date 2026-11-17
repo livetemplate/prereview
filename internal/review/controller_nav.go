@@ -25,6 +25,7 @@ func (c *PrereviewController) navGo(state PrereviewState, delta int) (PrereviewS
 	}
 	pos := it.Pos
 	state.NavAt = &pos
+	state.NavSeen = true
 	switch pos.Kind {
 	case navComment:
 		state.ScrollToCommentID = pos.ID

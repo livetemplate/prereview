@@ -42,18 +42,21 @@ func TestQuizItems_SettledOnlyWhenAnsweredBeforeThisVisit(t *testing.T) {
 
 // A finished quiz reopens without the open-items bar, but answering the last
 // question doesn't pull the bar away mid-visit (#212, now the #193 stepper).
-func TestShowNav_HiddenOnceTakenUnlessAnsweredThisVisit(t *testing.T) {
+func TestShowNav_HiddenOnceTakenUnlessSeenThisVisit(t *testing.T) {
 	st := headQuizState()
 	if !st.ShowNav() {
 		t.Fatal("an untaken quiz is open work, so the bar shows")
 	}
+	st.noteNav() // the visit that delivered the quiz (Mount / the watcher)
 	st.QuizAnswers = map[string]QuizAnswer{answerKey("z1", "q1"): {QuizID: "z1", QuestionID: "q1", Choice: 0}}
-	if st.ShowNav() {
-		t.Error("a quiz taken in an earlier visit, with nothing else open, must not bring the bar back (#212)")
-	}
-	st.QuizJustAnswered = map[string]bool{answerKey("z1", "q1"): true}
 	if !st.ShowNav() || st.NavLabel() != "0 open" {
 		t.Errorf("finishing the quiz this visit must leave the bar at \"0 open\", got show=%v label=%q", st.ShowNav(), st.NavLabel())
+	}
+	reopened := headQuizState()
+	reopened.QuizAnswers = st.QuizAnswers
+	reopened.noteNav() // a new visit: Mount finds nothing open
+	if reopened.ShowNav() {
+		t.Error("a quiz taken in an earlier visit, with nothing else open, must not bring the bar back (#212)")
 	}
 }
 

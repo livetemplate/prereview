@@ -17,6 +17,7 @@ func navFixture() PrereviewState {
 			{ID: "c-b5", File: "b.go", ToLine: 5},
 			{ID: "c-bfile", File: "b.go", Kind: "file"},
 			{ID: "c-done", File: "b.go", ToLine: 1, Resolved: true},
+			{ID: "c-req", File: "b.go", Kind: "file", Request: "judge"},
 		},
 		Suggestions: []Suggestion{
 			{ID: "s-b5", File: "b.go", ToLine: 5, ProposedText: "x"},
@@ -46,7 +47,8 @@ func navIDs(items []NavItem) string {
 }
 
 // Order: drawer order of files; in a file, the head first, then by line, then
-// comment before suggestion before question. Resolved comments aren't stops.
+// comment before suggestion before question. Resolved comments and requests to the
+// agent (Run judges, Quiz me) aren't stops.
 func TestNavItems_DocumentOrderAcrossFiles(t *testing.T) {
 	if got, want := navIDs(navFixture().NavItems()), "c-bfile c-b5 s-b5 s-a2 q-a4 c-a9"; got != want {
 		t.Errorf("order = %q, want %q", got, want)

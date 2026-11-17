@@ -790,7 +790,9 @@ func (c *PrereviewController) ToggleCheckEnabled(state PrereviewState, ctx *live
 // open edit survives. path names the finding's file (the Checks page queues
 // findings in files that aren't open); "" means the open file.
 func (c *PrereviewController) QueueFinding(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	return c.queueFinding(state, ctx.GetString("path"), ctx.GetString("id"), ctx.GetInt("index"))
+	state, err := c.queueFinding(state, ctx.GetString("path"), ctx.GetString("id"), ctx.GetInt("index"))
+	state.noteNav()
+	return state, err
 }
 
 // queueFinding queues finding idx of check id in path ("" = the open file) as a
