@@ -10,11 +10,8 @@ import (
 	"github.com/livetemplate/prereview/internal/library"
 )
 
-// shortcut.go is #204: one-tap comments on a selection. A chip on the line, text or
-// block composer pre-fills the comment with an instruction the reviewer keeps giving
-// ("Drop this", "Why is this here?"). Built-ins are embedded; the reviewer's own live
-// in <library>/shortcuts/*.md (same format as the prompt library); the chips are
-// ordered by how often each was tapped.
+// shortcut.go is #204: one-tap comments on a selection, for the instructions a
+// reviewer keeps giving ("Drop this", "Why is this here?").
 
 //go:embed builtin_shortcuts/*.md
 var builtinShortcutsFS embed.FS
@@ -38,7 +35,7 @@ func LoadShortcuts(userDir string) []Prompt {
 // chips under the reviewer's finger; it shows on the next one.
 func (c *PrereviewController) applyShortcuts(state *PrereviewState) {
 	var uses map[string]int
-	hidden := map[string]bool{}
+	var hidden map[string]bool
 	if c.LibraryDir != "" {
 		uses = library.ShortcutUseCounts(c.LibraryDir)
 		hidden = library.HiddenShortcuts(c.LibraryDir)

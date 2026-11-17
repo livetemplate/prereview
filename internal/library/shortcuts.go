@@ -46,39 +46,66 @@ type shortcutSettings struct {
 	Hidden []string `json:"hidden"`
 }
 
-func loadShortcutSettings(dir string) shortcutSettings {
-	var s shortcutSettings
-	if b, err := os.ReadFile(filepath.Join(dir, ShortcutsFile)); err == nil {
-		_ = json.Unmarshal(b, &s) // a torn file reads as "nothing hidden"
-	}
-	return s
-}
-
 // HiddenShortcuts is the set of shortcut slugs the reviewer hid from the composer.
 func HiddenShortcuts(dir string) map[string]bool {
-	out := map[string]bool{}
-	for _, slug := range loadShortcutSettings(dir).Hidden {
+	var out map[string]bool
+	for _, slug := range ReadJSON[shortcutSettings](filepath.Join(dir, ShortcutsFile)).Hidden {
+		if out == nil {
+			out = map[string]bool{}
+		}
 		out[slug] = true
 	}
 	return out
 }
 
-// SetShortcutHidden hides or shows slug, a read-modify-write under the library lock.
+// SetShortcutHidden hides or shows slug.
 func SetShortcutHidden(dir, slug string, hidden bool) error {
+	return EditJSON(dir, filepath.Join(dir, ShortcutsFile), func(s *shortcutSettings) (bool, error) {
+		was := slices.Contains(s.Hidden, slug)
+		if was == hidden {
+			return false, nil
+		}
+		s.Hidden = slices.DeleteFunc(s.Hidden, func(h string) bool { return h == slug })
+		if hidden {
+			s.Hidden = append(s.Hidden, slug)
+			slices.Sort(s.Hidden)
+		}
+		return true, nil
+	})
+}
+
+// ReadJSON reads a JSON record (the zero value when it's absent or torn).
+func ReadJSON[T any](path string) T {
+	var v T
+	if b, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(b, &v)
+	}
+	return v
+}
+
+// EditJSON is a read-modify-write of the JSON record at path under the lock of the
+// library at dir. fn reports whether it changed the record; an unchanged one isn't
+// rewritten.
+func EditJSON[T any](dir, path string, fn func(*T) (bool, error)) error {
 	unlock, err := lockLibrary(dir)
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	s := loadShortcutSettings(dir)
-	s.Hidden = slices.DeleteFunc(s.Hidden, func(h string) bool { return h == slug })
-	if hidden {
-		s.Hidden = append(s.Hidden, slug)
+	v := ReadJSON[T](path)
+	changed, ferr := fn(&v)
+	if !changed {
+		return ferr
 	}
-	slices.Sort(s.Hidden)
-	b, err := json.MarshalIndent(s, "", "  ")
+	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	return WriteFileAtomic(filepath.Join(dir, ShortcutsFile), append(b, '\n'), 0o644)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := WriteFileAtomic(path, append(b, '\n'), 0o644); err != nil {
+		return err
+	}
+	return ferr
 }

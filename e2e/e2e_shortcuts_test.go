@@ -11,6 +11,8 @@
 package e2e
 
 import (
+	"encoding/json"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -36,8 +38,8 @@ func tapChip(t *testing.T, p *runningPrereview, typed, label, want string, diag 
 	}
 	var value string
 	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`[...document.querySelectorAll('.composer .sc-chip')].find(b => b.textContent.trim() === `+jsString(label)+`).click()`, nil),
-		chromedp.Poll(`document.querySelector('.composer textarea').value.includes(`+jsString(want)+`)`, nil, chromedp.WithPollingInterval(50*time.Millisecond)),
+		chromedp.Evaluate(`[...document.querySelectorAll('.composer .sc-chip')].find(b => b.textContent.trim() === `+jsStr(label)+`).click()`, nil),
+		chromedp.Poll(`document.querySelector('.composer textarea').value.includes(`+jsStr(want)+`)`, nil, chromedp.WithPollingInterval(50*time.Millisecond)),
 		chromedp.Value(`.composer textarea`, &value, chromedp.ByQuery),
 	); err != nil {
 		var now string
@@ -47,22 +49,18 @@ func tapChip(t *testing.T, p *runningPrereview, typed, label, want string, diag 
 	return value
 }
 
-func jsString(s string) string { return "'" + strings.ReplaceAll(s, "'", "\\'") + "'" }
-
-// lastRow is the newest comments.csv row as column → value.
-func lastRow(t *testing.T, p *runningPrereview) map[string]string {
+// lastComment is the newest comment, read through the agent's own CLI.
+func lastComment(t *testing.T, p *runningPrereview) streamComment {
 	t.Helper()
-	rows := p.readCSV()
-	if len(rows) < 2 {
-		t.Fatalf("no comment rows: %v", rows)
+	out, err := exec.Command(p.binary, "comments", "--json", "--out", p.store).Output()
+	if err != nil {
+		t.Fatalf("prereview comments: %v", err)
 	}
-	out := map[string]string{}
-	for i, h := range rows[0] {
-		if i < len(rows[len(rows)-1]) {
-			out[h] = rows[len(rows)-1][i]
-		}
+	var cs []streamComment
+	if err := json.Unmarshal(out, &cs); err != nil || len(cs) == 0 {
+		t.Fatalf("comments --json (%v): %s", err, out)
 	}
-	return out
+	return cs[len(cs)-1]
 }
 
 func saveComposer(t *testing.T, p *runningPrereview, diag func() string) {
@@ -93,10 +91,9 @@ func TestE2E_Shortcuts(t *testing.T) {
 		t.Errorf("after the tap, focus is on %s, want the comment box%s", active, diag())
 	}
 	saveComposer(t, p, diag)
-	// A line comment is stored with an empty kind; a PickPrompt-style reset would
-	// have made it kind=file.
-	if row := lastRow(t, p); row["kind"] != "" || row["to_line"] != "3" || !strings.Contains(row["body"], "my note") || !strings.Contains(row["body"], "Make this shorter") {
-		t.Errorf("saved row kind=%q to_line=%q body=%q, want a line comment on L3 with both texts%s", row["kind"], row["to_line"], row["body"], diag())
+	// A line comment's kind is empty; a PickPrompt-style reset would make it "file".
+	if c := lastComment(t, p); c.Kind != "" || c.ToLine != 3 || !strings.Contains(c.Body, "my note") || !strings.Contains(c.Body, "Make this shorter") {
+		t.Errorf("saved comment kind=%q L%d body=%q, want a line comment on L3 with both texts%s", c.Kind, c.ToLine, c.Body, diag())
 	}
 
 	// A text comment keeps kind=text and its columns.
@@ -116,8 +113,8 @@ func TestE2E_Shortcuts(t *testing.T) {
 	tapChip(t, p, "", "Needs evidence", "This needs evidence", diag)
 	tapChip(t, p, "", "Needs evidence", "This needs evidence", diag) // a second tap: evidence now has 2 uses
 	saveComposer(t, p, diag)
-	if row := lastRow(t, p); row["kind"] != "text" || row["from_col"] != "5" || row["to_col"] != "10" {
-		t.Errorf("saved row kind=%q cols=%s-%s, want kind=text 5-10%s", row["kind"], row["from_col"], row["to_col"], diag())
+	if c := lastComment(t, p); c.Kind != "text" || c.FromCol != 5 || c.ToCol != 10 {
+		t.Errorf("saved comment kind=%q cols=%d-%d, want kind=text 5-10%s", c.Kind, c.FromCol, c.ToCol, diag())
 	}
 
 	// Next visit: the most-tapped chip leads.

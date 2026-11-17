@@ -7,7 +7,6 @@ package skills
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -158,35 +157,11 @@ func within(dir, path string) bool {
 
 // readJSON reads one of the library's skills/*.json records (zero when absent).
 func readJSON[T any](lib, name string) T {
-	var v T
-	if b, err := os.ReadFile(filepath.Join(lib, "skills", name)); err == nil {
-		_ = json.Unmarshal(b, &v)
-	}
-	return v
+	return library.ReadJSON[T](filepath.Join(lib, "skills", name))
 }
 
 // editJSON is a skills/*.json read-modify-write under the library lock; fn
 // reports whether it changed the record (an unchanged one isn't rewritten).
 func editJSON[T any](lib, name string, fn func(*T) (bool, error)) error {
-	unlock, err := library.Lock(lib)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	v := readJSON[T](lib, name)
-	changed, ferr := fn(&v)
-	if !changed {
-		return ferr
-	}
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Join(lib, "skills"), 0o755); err != nil {
-		return err
-	}
-	if err := library.WriteFileAtomic(filepath.Join(lib, "skills", name), append(b, '\n'), 0o644); err != nil {
-		return err
-	}
-	return ferr
+	return library.EditJSON(lib, filepath.Join(lib, "skills", name), fn)
 }
