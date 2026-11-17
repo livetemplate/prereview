@@ -690,15 +690,6 @@
     </span>
   </header>
   
-  <section class="boot" data-key="boot" aria-label="Reading past reviews">
-    
-    <h2>Reading past reviews…</h2>
-    <div class="boot-progress" aria-hidden="true"><span></span></div>
-    <p>Your agent is reading them · 3 learnings waiting in Library → Learnings. You can keep reviewing; new learnings appear there as they're proposed.</p>
-    
-  </section>
-
-  
   
   
   <div class="ann-nav" role="navigation" aria-label="Open items">
@@ -739,6 +730,15 @@
       <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
     </span>
   </div>
+  
+  <section class="boot" data-key="boot" aria-label="Reading past reviews">
+    
+    <h2>Reading past reviews…</h2>
+    <div class="boot-progress" aria-hidden="true"><span></span></div>
+    <p>Your agent is reading them · 3 learnings waiting in Library → Learnings. You can keep reviewing; new learnings appear there as they're proposed.</p>
+    
+  </section>
+
   
   
   

@@ -713,6 +713,8 @@
     </span>
   </header>
   
+  
+  
   <div class="ck-strip is-judge" data-key="checks-strip" role="status" aria-label="Showing one judge">
     
     <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name" title="Written for the reader">Written for the reader</b>
@@ -734,8 +736,6 @@
     </div>
   </div>
 
-  
-  
   
   
   

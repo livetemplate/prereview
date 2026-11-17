@@ -675,6 +675,8 @@
     </span>
   </header>
   
+  
+  
   <div class="ck-strip" data-key="checks-strip" role="status" aria-label="Showing one check">
     
     <span class="ck-pill ck-fail">fail</span><b class="ck-strip-name" title="Filler intensifiers">Filler intensifiers</b>
@@ -690,8 +692,6 @@
   </div>
   
 
-  
-  
   
   
   

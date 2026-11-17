@@ -3515,18 +3515,24 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    still open. It appears on its own whenever the file has a quiz, because
    discoverability has been this feature's recurring failure; the × puts it away. */
 /* #193 open-items stepper — one sticky bar however many items there are. */
+/* One fixed-height row, so a selected check's strip (which can wrap) can stick
+   right below it instead of on top of it. */
 .ann-nav {
-  position: sticky; top: 0; z-index: 6;
-  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
-  padding: 0.35rem 0.6rem; margin: 0 0 0.4rem;
+  --ann-nav-h: 2.2rem;
+  position: sticky; top: 0; z-index: 7;
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: nowrap;
+  height: var(--ann-nav-h); box-sizing: border-box;
+  padding: 0 0.6rem; margin: 0 0 0.4rem;
   background: var(--pico-card-background-color);
   border-bottom: 1px solid var(--pico-muted-border-color);
 }
 .ann-nav form { margin: 0; }
 .ann-nav button { margin: 0; padding: 0.15rem 0.5rem; min-height: 0; font-size: 0.75rem; width: auto; }
 .ann-nav .ann-nav-step { display: inline-flex; align-items: center; padding: 0.15rem 0.35rem; }
-.ann-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: center; }
+.ann-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ann-nav ~ .ck-strip:not(.is-idle) { top: 2.2rem; } /* --ann-nav-h */
 .ann-nav-kind > button { display: inline-flex; align-items: center; gap: 0.2rem; }
+.ann-nav-kind .tb-dropdown-panel { left: 0; right: auto; min-width: 10rem; } /* opens rightward: the chip sits left of centre */
 .ann-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 /* The stepper centres its target, and the sticky bar sits above it: keep a quiz
    card clear of the bar when the head is scrolled to. */

@@ -127,15 +127,9 @@
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
-  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
-  {{/* File-level comments + composer. Lives above the body branch so
-       it's visible for every preview mode (line view, markdown blocks,
-       HTML blocks, binary preview, "no diff content" placeholder).
-       File-level comments use the same inline-comment markup as the
-       line view; the gutter / line badge is replaced with a "file" tag
-       via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
-       per-comment actions — no new endpoints. */}}
-  {{/* #193 open-items stepper (state_nav.go). Sticky, so it stays reachable. */}}
+  {{end}}
+  {{/* #193 open-items stepper (state_nav.go). Sticky, and before the checks strip,
+       which sticks just below it. */}}
   {{if $.ShowNav}}
   <div class="ann-nav" role="navigation" aria-label="Open items">
     <form method="POST"><button type="submit" name="navPrev" class="outline ann-nav-step" aria-label="Previous open item" title="Previous open item (p)">{{template "iconChevronLeft"}}</button></form>
@@ -152,11 +146,18 @@
       </div>
     </div>
     <span class="ann-nav-actions">
-      {{if $.HasQuiz}}<form method="POST"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Quiz overview</button></form>{{end}}
+      {{if $.HasQuiz}}<form method="POST"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>{{end}}
       <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
     </span>
   </div>
-  {{end}}
+  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
+  {{/* File-level comments + composer. Lives above the body branch so
+       it's visible for every preview mode (line view, markdown blocks,
+       HTML blocks, binary preview, "no diff content" placeholder).
+       File-level comments use the same inline-comment markup as the
+       line view; the gutter / line badge is replaced with a "file" tag
+       via Comment.LineSpan. Edit / Resolve / Delete reuse the existing
+       per-comment actions — no new endpoints. */}}
   {{/* The file-head annotation group: file-level comments, image-area comments,
        and quiz questions with no line (kind=file, or an anchor that doesn't
        resolve). They share ONE row key so the existing toggleRow / ToggledRows

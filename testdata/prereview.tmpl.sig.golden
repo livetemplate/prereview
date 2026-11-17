@@ -997,8 +997,7 @@
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
-  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
-  
+  {{end}}
   
   {{if $.ShowNav}}
   <div class="ann-nav" role="navigation" aria-label="Open items">
@@ -1012,11 +1011,12 @@
       </div>
     </div>
     <span class="ann-nav-actions">
-      {{if $.HasQuiz}}<form method="POST"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Quiz overview</button></form>{{end}}
+      {{if $.HasQuiz}}<form method="POST"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>{{end}}
       <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
     </span>
   </div>
-  {{end}}
+  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
+  
   
   {{$fcs := $.FileLevelComments}}
   {{$acs := $.AreaComments}}

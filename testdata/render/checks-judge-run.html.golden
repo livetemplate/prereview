@@ -713,6 +713,8 @@
     </span>
   </header>
   
+  
+  
   <div class="ck-strip is-idle" data-key="checks-strip" role="group" aria-label="Failing checks on this file">
     
     <span class="ck-strip-pos">Failing:</span>
@@ -723,8 +725,6 @@
   </div>
   
 
-  
-  
   
   
   

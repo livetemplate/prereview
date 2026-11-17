@@ -793,7 +793,6 @@
   
   
   
-  
   <div class="ann-nav" role="navigation" aria-label="Open items">
     <form method="POST"><button type="submit" name="navPrev" class="outline ann-nav-step" aria-label="Previous open item" title="Previous open item (p)"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
   d="M15 6l-6 6 6 6"
@@ -832,6 +831,7 @@
       <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
     </span>
   </div>
+  
   
   
   
