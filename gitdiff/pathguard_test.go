@@ -66,3 +66,24 @@ func TestLoadersStayInsideTheRoot(t *testing.T) {
 		}
 	})
 }
+
+// TestIsValidRefRefusesOptions: a ref that starts with "-" is never valid,
+// even one git would accept as an option.
+func TestIsValidRefRefusesOptions(t *testing.T) {
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "seed"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if !IsValidRef(repo, "HEAD") {
+		t.Fatal("HEAD should be valid")
+	}
+	for _, ref := range []string{"--all", "-h", "--git-dir=x"} {
+		if IsValidRef(repo, ref) {
+			t.Errorf("IsValidRef(%q) = true, want false", ref)
+		}
+	}
+}
