@@ -209,6 +209,12 @@ func userPromptsDir() string {
 	return libraryOverlayDir("PREREVIEW_PROMPTS_DIR", "prompts")
 }
 
+// userShortcutsDir is the composer-shortcut overlay directory (#204):
+// <library>/shortcuts. PREREVIEW_SHORTCUTS_DIR overrides it.
+func userShortcutsDir() string {
+	return libraryOverlayDir("PREREVIEW_SHORTCUTS_DIR", "shortcuts")
+}
+
 // libraryOverlayDir resolves a per-user overlay folder: the env var when set, else
 // the named folder inside the library (library.Dir), so PREREVIEW_LIBRARY_DIR moves
 // every overlay with it. "" when the library dir can't be resolved.

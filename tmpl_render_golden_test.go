@@ -366,6 +366,13 @@ func renderFixtures() []renderFixture {
 	promptsPicker := goBase()
 	promptsPicker.Prompts = review.LoadPrompts("")
 
+	// #204: a line composer with the shortcut chips (every built-in, file order).
+	shortcuts := goBase()
+	shortcuts.SelectionAnchor, shortcuts.SelectionEnd, shortcuts.SelectionSide = 2, 2, "new"
+	for _, p := range review.LoadShortcuts("") {
+		shortcuts.Shortcuts = append(shortcuts.Shortcuts, review.Shortcut{Slug: p.Slug, Label: p.Title, Body: p.Body})
+	}
+
 	// #191: the quiz questions rendered INLINE in the diff — the primary surface.
 	// The separate quiz screen is only the overview, so without this fixture the
 	// annotation rendering (line-anchored cards + the file-head card) is unguarded.
@@ -742,6 +749,7 @@ func renderFixtures() []renderFixture {
 		{"quiz-me-button", quizBtn},
 		{"quiz-me-picker", quizPicker},
 		{"prompts-picker", promptsPicker},
+		{"shortcuts-composer", shortcuts},
 		{"external", external},
 		{"external-acted", extActed},
 		{"version-view", version},

@@ -73,6 +73,10 @@ type PrereviewController struct {
 	// because the two libraries answer with different verbs.
 	QuizzesDir string
 
+	// ShortcutsDir is the user overlay for #204 composer shortcuts
+	// (<library>/shortcuts). Read every Mount. "" = built-ins only.
+	ShortcutsDir string
+
 	// Emitter is the agent-mode JSON event log writer (stdout +
 	// .prereview/events.jsonl). Non-nil only in agent mode; the emit path and
 	// EndSession guard on nil so non-agent sessions emit nothing.
@@ -473,6 +477,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// user's edits to their prompt files show without a relaunch.
 	state.Prompts = LoadPrompts(c.PromptsDir)
 	state.QuizPrompts = LoadQuizPrompts(c.QuizzesDir)
+	c.applyShortcuts(&state)
 	// Loads the quizzes and the reviewer's answers. Grounding is deliberately NOT
 	// done here: CurrentDiff is not loaded until ~100 lines below, so grounding at
 	// this point would compare every cited line against a nil diff and mark the

@@ -21,6 +21,11 @@ func (c *PrereviewController) SaveDraft(state PrereviewState, ctx *livetemplate.
 	if state.SelectionAnchor == 0 && state.CommentMode == "" {
 		return state, nil
 	}
+	// A debounced autosave from the textarea a shortcut chip just replaced carries
+	// the old nonce; applying it would drop the shortcut's text from the draft.
+	if ctx.GetInt("nonce") != state.ComposerNonce {
+		return state, nil
+	}
 	state.DraftBody = ctx.GetString("body")
 	return state, nil
 }

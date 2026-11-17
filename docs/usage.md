@@ -48,6 +48,14 @@ region kinds — each with a jump back to its source. **Show / hide resolved** k
 addressed comments out of the way (or hide a single resolved one to declutter
 without turning the whole group off).
 
+**One-tap comments.** The comment box on a line, a text selection or a block has a
+row of chips. Each is an instruction you give often: *Drop this*, *Why is this here?*,
+*What does this mean?*, *Make this shorter* and more. A tap adds the chip's text after whatever
+you've typed, and you edit it before saving. The chips you tap most come first. Add
+your own as Markdown files in `~/.config/prereview/shortcuts/` (the format is under
+`PREREVIEW_SHORTCUTS_DIR` in
+[`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment)).
+
 **Step through what's open.** While anything is waiting on you (an unresolved
 comment, an undecided suggestion, an unanswered quiz question), a bar at the top
 of the file reads "N open". **‹** and **›** (or <kbd>p</kbd> and <kbd>n</kbd>)
