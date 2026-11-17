@@ -503,6 +503,15 @@ func renderFixtures() []renderFixture {
 	hiddenBlock.Suggestions = []review.Suggestion{mdSg}
 	hiddenBlock.Hidden = []review.HiddenSuggestion{review.NewHidden(mdSg)}
 
+	// #193: the open-items stepper with its cursor on the second item (a suggestion,
+	// which also carries the scroll target) and the Suggestions filter row listed.
+	annNav := goBase()
+	annNav.Comments = []review.Comment{{ID: "c1", File: "app.go", Body: "rename", Kind: "line", FromLine: 1, ToLine: 1, Side: "new"}}
+	annNav.Suggestions = []review.Suggestion{{ID: "s1", File: "app.go", FromLine: 2, ToLine: 2, Side: "new", OriginalText: "old", ProposedText: "new"}}
+	navAt := annNav.NavItems()[1].Pos
+	annNav.NavAt = &navAt
+	annNav.ScrollToItemKey = "sg:s1"
+
 	// checks M1b: the file view with one check selected — the bar is its finding
 	// stepper, and its finding is marked and carded inline.
 	fileChecks := &review.FileChecks{
@@ -742,6 +751,7 @@ func renderFixtures() []renderFixture {
 		{"past-eof", pastEOF},
 		{"hidden-marker-row", hiddenRow},
 		{"hidden-marker-block", hiddenBlock},
+		{"ann-nav", annNav},
 		{"checks-strip", checksStrip},
 		{"checks-page", checksPage},
 		{"checks-page-judge", judgePage},

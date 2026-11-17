@@ -48,6 +48,13 @@ region kinds — each with a jump back to its source. **Show / hide resolved** k
 addressed comments out of the way (or hide a single resolved one to declutter
 without turning the whole group off).
 
+**Step through what's open.** While anything is waiting on you (an unresolved
+comment, an undecided suggestion, an unanswered quiz question), a bar at the top
+of the file reads "N open". **‹** and **›** (or <kbd>p</kbd> and <kbd>n</kbd>)
+step through those items in document order across files, opening each one's file
+and scrolling it into view. The chip next to the count limits the steps to
+comments, suggestions or quiz questions, and **×** hides the bar for the session.
+
 **Search across files.** Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>)
 to open a search palette that matches both file names and line contents across
 the changed files — toggle it to search every file. Picking a result opens the

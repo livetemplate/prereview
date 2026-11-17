@@ -3437,8 +3437,7 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    EVERY quiz list belongs in this one rule. Adding a list elsewhere and styling
    it separately is how this recurs. */
 .quiz .quiz-list, .quiz .quiz-list > li,
-.quiz-options, .quiz-options > li,
-.quiz-nav-dots, .quiz-nav-dots > li { list-style: none; }
+.quiz-options, .quiz-options > li { list-style: none; }
 .quiz .quiz-list { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; }
 .quiz .quiz-q {
   margin: 0; padding: 0.7rem; border: 1px solid var(--pr-comment-bd);
@@ -3515,56 +3514,24 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    badge per question: tap to jump, colour says answered-right / answered-wrong /
    still open. It appears on its own whenever the file has a quiz, because
    discoverability has been this feature's recurring failure; the × puts it away. */
-.quiz-nav {
+/* #193 open-items stepper — one sticky bar however many items there are. */
+.ann-nav {
   position: sticky; top: 0; z-index: 6;
-  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
-  padding: 0.4rem 0.6rem; margin: 0 0 0.4rem;
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  padding: 0.35rem 0.6rem; margin: 0 0 0.4rem;
   background: var(--pico-card-background-color);
   border-bottom: 1px solid var(--pico-muted-border-color);
 }
-.quiz-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; }
-.quiz-nav-dots { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 0; padding: 0; }
-.quiz-nav-dot {
-  min-width: 1.7em; padding: 0.1rem 0.35rem; margin: 0; min-height: 0;
-  font-size: 0.72rem; font-variant-numeric: tabular-nums; line-height: 1.6;
-  border-radius: var(--radius-sm); border: 1px solid var(--pico-muted-border-color);
-  background: var(--surface); color: var(--pico-muted-color); cursor: pointer;
-}
-.quiz-nav-dot.is-open { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.quiz-nav-dot.is-correct { border-color: var(--pr-add); background: color-mix(in srgb, var(--pr-add) 16%, var(--surface)); color: inherit; }
-.quiz-nav-dot.is-wrong { border-color: var(--pr-del); background: color-mix(in srgb, var(--pr-del) 16%, var(--surface)); color: inherit; }
-/* "You are here". Driven CLIENT-SIDE by the lvt-spy scroll-spy (it toggles
-   lvt-active on the badge whose question card is on screen) — no server
-   round-trip, so it tracks the scroll without lag. A ring rather than a colour
-   change, because the badge's COLOUR already carries right / wrong / open;
-   overloading it would lose that. The ring sits outside the border so it reads on
-   every state. */
-.quiz-nav-dot.lvt-active {
-  outline: 2px solid var(--accent); outline-offset: 1px; font-weight: 700;
-}
-.quiz-nav-dot { text-decoration: none; }
-/* Native anchor scroll (href="#qc-…") lands the card at the top of the scroll
-   container, which is under the sticky navigator — so reserve the strip's height
-   plus the sticky toolbar above it, and the tap lands the question in the clear. */
+.ann-nav form { margin: 0; }
+.ann-nav button { margin: 0; padding: 0.15rem 0.5rem; min-height: 0; font-size: 0.75rem; width: auto; }
+.ann-nav .ann-nav-step { display: inline-flex; align-items: center; padding: 0.15rem 0.35rem; }
+.ann-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: center; }
+.ann-nav-kind > button { display: inline-flex; align-items: center; gap: 0.2rem; }
+.ann-nav-kind .menu-item.is-on { font-weight: 700; color: var(--accent); }
+.ann-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
+/* The stepper centres its target, and the sticky bar sits above it: keep a quiz
+   card clear of the bar when the head is scrolled to. */
 .quiz-card { scroll-margin-top: 7rem; }
-/* The spy's "active" trigger line, ~40% down the viewport. Two reasons it is not
-   near the top: (1) the active question should be the one you are READING (mid
-   screen), not one that has scrolled almost out of view; (2) the LAST question,
-   near the file end, can never be scrolled to the very top, so a top-edge trigger
-   would leave it un-highlighted the whole time you read it — at the bottom of the
-   page its badge would never light. 40vh clears both. */
-main.viewer > article[lvt-spy] {
-  --lvt-spy-margin: 40vh;
-  /* "Scroll beyond last line" (the pattern VS Code and docs sites use): reserve a
-     screenful below the diff so the LAST question can scroll up to the 40vh
-     trigger line and light its badge. Without it the last card tops out mid-screen
-     at max scroll — its top never reaches the trigger — so at the bottom of the
-     page its badge would never activate. Only when a quiz is present (this rule is
-     scoped to article[lvt-spy]). */
-  padding-bottom: 55vh;
-}
-.quiz-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
-.quiz-nav-actions button { margin: 0; padding: 0.1rem 0.45rem; min-height: 0; font-size: 0.72rem; }
 
 /* The file-head annotation group. It reuses .line-marks — the same badge a diff
    row shows — so collapsing a file comment, an area comment or an unanchored quiz
@@ -3948,7 +3915,7 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
 }
 .ck-strip.is-idle { border-color: var(--border); }
 /* The stepper stays in view while ‹ › scroll the file to each finding. */
-.ck-strip:not(.is-idle) { position: sticky; top: 0; z-index: 6; box-shadow: var(--shadow-sm); } /* like .quiz-nav */
+.ck-strip:not(.is-idle) { position: sticky; top: 0; z-index: 6; box-shadow: var(--shadow-sm); } /* like .ann-nav */
 .ck-strip form { margin: 0; }
 .ck-strip-name { color: var(--text-strong); }
 .ck-strip-pos { color: var(--text-muted); font-variant-numeric: tabular-nums; }

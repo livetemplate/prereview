@@ -297,6 +297,7 @@ func (c *PrereviewController) NavigateToHeading(state PrereviewState, ctx *livet
 	// clear any pending comment target so it doesn't steal the scroll/focus
 	// (the comment card carries lvt-fx:scroll + lvt-autofocus on this match).
 	state.ScrollToCommentID = ""
+	state.ScrollToItemKey = ""
 	return state, nil
 }
 
@@ -356,6 +357,7 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 	closeFullViews(&state)
 	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
+	state.ScrollToItemKey = ""
 	return state, nil
 }
 

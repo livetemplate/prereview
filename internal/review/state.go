@@ -419,11 +419,24 @@ type PrereviewState struct {
 	Quizzes     []Quiz                `json:"quizzes"`
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
 
-	// QuizNavDismissed hides the quiz navigator for this session. The bar appears
-	// automatically whenever the file has a quiz — discoverability has been this
-	// feature's recurring failure, so it is not behind a menu — but it must be
-	// possible to put away while reading the diff.
-	QuizNavDismissed bool `json:"quiz_nav_dismissed"`
+	// NavDismissed hides the open-items stepper (#193) for this session. The bar
+	// appears whenever the review has open items, so it is not behind a menu, but it
+	// must be possible to put away while reading.
+	NavDismissed bool `json:"nav_dismissed"`
+
+	// NavKind filters the stepper to one kind ("comment", "suggestion", "quiz");
+	// "" steps through all of them. Session-scoped.
+	NavKind string `json:"nav_kind"`
+
+	// NavAt is the stepper's cursor: the sort position of the last item it stepped
+	// to (nil before the first step). A position, not an index, so "next" after the
+	// current item is decided continues from there.
+	NavAt *NavPos `json:"nav_at"`
+
+	// ScrollToItemKey scrolls a suggestion ("sg:<id>") or quiz question ("qz:<id>")
+	// into view on the next render, the stepper's counterpart of ScrollToCommentID
+	// (comments keep that field, which also drives their focus).
+	ScrollToItemKey string `json:"scroll_to_item_key"`
 
 	// QuizJustAnswered holds the answer keys (answerKey) of questions answered in
 	// THIS visit. An answered question is collapsed by default (#212), but the one

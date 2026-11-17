@@ -1,0 +1,78 @@
+package review
+
+import (
+	"github.com/livetemplate/livetemplate"
+)
+
+// NavNext / NavPrev step the open-items bar (#193), and n/p call them too. They open
+// the item's file and scroll the item into view.
+func (c *PrereviewController) NavNext(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.navGo(state, +1)
+}
+
+func (c *PrereviewController) NavPrev(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.navGo(state, -1)
+}
+
+func (c *PrereviewController) navGo(state PrereviewState, delta int) (PrereviewState, error) {
+	it := state.navStep(delta)
+	if it == nil {
+		return state, nil
+	}
+	state, err := c.selectFileForJump(state, it.File)
+	if err != nil {
+		return state, err
+	}
+	pos := it.Pos
+	state.NavAt = &pos
+	switch it.Kind {
+	case navComment:
+		state.ScrollToCommentID = it.ID
+	case navSuggestion:
+		state.ScrollToItemKey = "sg:" + it.ID
+	case navQuiz:
+		state.ScrollToItemKey = "qz:" + it.ID
+	}
+	revealItem(&state, *it)
+	return state, nil
+}
+
+// revealItem opens the row, block or file-head group a target sits in if the
+// reviewer had collapsed it (#174's badge), so the scroll lands on a visible card.
+func revealItem(state *PrereviewState, it NavItem) {
+	if len(state.ToggledRows) == 0 {
+		return
+	}
+	if !it.Pos.Body {
+		delete(state.ToggledRows, FileHeadRowKey)
+		return
+	}
+	line := it.Pos.Line
+	for _, k := range rowKeysFor(line, it.Side) {
+		delete(state.ToggledRows, k)
+	}
+	for _, b := range state.RenderedMarkdown() {
+		if line >= b.StartLine && line <= b.EndLine {
+			delete(state.ToggledRows, markdownBlockKey(b.StartLine, b.EndLine))
+		}
+	}
+	if state.CurrentDiff != nil && !state.CurrentDiff.IsBinary && state.pastEndRule()(it.Side, line) {
+		delete(state.ToggledRows, PastEndRowKey)
+	}
+}
+
+// SetNavKind filters the bar to one kind ("" = all). The cursor stays, so the next
+// step continues from the same place in the document.
+func (c *PrereviewController) SetNavKind(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	switch k := ctx.GetString("kind"); k {
+	case "", navComment, navSuggestion, navQuiz:
+		state.NavKind = k
+	}
+	return state, nil
+}
+
+// DismissNav puts the bar away for this session.
+func (c *PrereviewController) DismissNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.NavDismissed = true
+	return state, nil
+}

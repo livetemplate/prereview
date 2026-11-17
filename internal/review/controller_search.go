@@ -76,5 +76,6 @@ func (c *PrereviewController) JumpToSearchResult(state PrereviewState, ctx *live
 	closeFullViews(&state)
 	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
+	state.ScrollToItemKey = ""
 	return state, nil
 }

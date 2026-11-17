@@ -989,8 +989,7 @@
 {{else}}{{if .ShowLibrary}}{{template "library" $}}
 {{else}}
 {{with .CurrentDiff}}
-
-<article{{if $.HasQuiz}} lvt-spy=".quiz-card"{{end}}>
+<article>
 {{template "fileHeader" $}}
   {{if $.ViewingVersion}}
   
@@ -1001,17 +1000,20 @@
   {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
   
   
-  {{if $.ShowQuizNav}}
-  <div class="quiz-nav" role="navigation" aria-label="Quiz questions">
-    <span class="quiz-nav-label">{{$.QuizNavLabel}}</span>
-    <ul class="quiz-nav-dots">
-      {{range $it := $.QuizItems}}
-      <li><a href="#qc-{{$it.ID}}" lvt-spy-link class="quiz-nav-dot is-{{$it.NavState}}" title="{{$it.Prompt}}">{{$it.Num}}</a></li>
-      {{end}}
-    </ul>
-    <span class="quiz-nav-actions">
-      <form method="POST" style="margin:0"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>
-      <form method="POST" style="margin:0"><button type="submit" name="dismissQuizNav" class="outline" title="Hide the quiz navigator">×</button></form>
+  {{if $.ShowNav}}
+  <div class="ann-nav" role="navigation" aria-label="Open items">
+    <form method="POST"><button type="submit" name="navPrev" class="outline ann-nav-step" aria-label="Previous open item" title="Previous open item (p)">{{template "iconChevronLeft"}}</button></form>
+    <span class="ann-nav-label">{{$.NavLabel}}</span>
+    <form method="POST"><button type="submit" name="navNext" class="outline ann-nav-step" aria-label="Next open item" title="Next open item (n)">{{template "iconChevronRight"}}</button></form>
+    <div class="tb-dropdown ann-nav-kind" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="outline" aria-haspopup="menu" title="Which items to step through">{{$.NavKindLabel}}{{template "iconChevronDown"}}</button>
+      <div class="tb-dropdown-panel" role="menu" aria-label="Step through">
+        {{range $.NavKinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="setNavKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}">{{.Label}}</button></form>{{end}}
+      </div>
+    </div>
+    <span class="ann-nav-actions">
+      {{if $.HasQuiz}}<form method="POST"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Quiz overview</button></form>{{end}}
+      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
     </span>
   </div>
   {{end}}
@@ -1199,7 +1201,7 @@
 === quizCard ===
 <div class="quiz-card{{if .Answered}} is-answered{{end}}{{if .Settled}} is-settled{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
   
-  <div class="quiz-card-head">
+  <div class="quiz-card-head"{{if eq $.ScrollToItemKey (printf "qz:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>
     <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}
   </div>
   <p class="quiz-prompt">{{.Prompt}}</p>
@@ -1429,7 +1431,7 @@
 </div>
 {{end}}
 === suggestionCard ===
-{{$d := index $.DecisionsBySuggestion .ID}}{{$applied := index $.Applied .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}" data-key="sg-{{.ID}}" lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
+{{$d := index $.DecisionsBySuggestion .ID}}{{$applied := index $.Applied .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}" data-key="sg-{{.ID}}"{{if eq $.ScrollToItemKey (printf "sg:%s" .ID)}} lvt-fx:scroll="into-view"{{end}} lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
     </span>
   </header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff{{if not .ProposedText}} is-deletion{{end}}">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}{{if .ProposedText}}<pre class="sg-new">{{.ProposedText}}</pre>{{else}}<p class="sg-del-note">delete — accepting removes {{.LineSpan}}</p>{{end}}
   </div>{{if and .AnchorOutdated (not $applied)}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{else}}<div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>{{end}}{{if $applied}}{{if $d.Revert}}<div class="sg-actions"><small class="sg-applied-status sg-reverting">Reverting — the agent will restore the original text.</small></div>{{else}}<div class="sg-actions">
