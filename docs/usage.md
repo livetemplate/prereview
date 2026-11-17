@@ -48,6 +48,14 @@ region kinds — each with a jump back to its source. **Show / hide resolved** k
 addressed comments out of the way (or hide a single resolved one to declutter
 without turning the whole group off).
 
+**One-tap comments.** The comment box on a line, a text selection or a block has a
+row of chips. Each is an instruction you give often: *Drop this*, *Why is this here?*,
+*What does this mean?*, *Make this shorter* and more. A tap adds the chip's text after whatever
+you've typed, and you edit it before saving. The chips you tap most come first. Add
+your own as Markdown files in `~/.config/prereview/shortcuts/` (the format is under
+`PREREVIEW_SHORTCUTS_DIR` in
+[`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment)).
+
 **Step through what's open.** While anything is waiting on you (an unresolved
 comment, an undecided suggestion, an unanswered quiz question), a bar at the top
 of the file reads "N open". **‹** and **›** (or <kbd>p</kbd> and <kbd>n</kbd>)
@@ -106,6 +114,13 @@ On each box:
 Want a different take? **Reply** on the suggestion's thread with what should
 change; the agent reworks it and re-submits (a reworked suggestion comes back
 for a fresh look).
+
+**Follow-on edits.** Some changes reach past their own lines: drop a paragraph and a
+summary or a cross-reference elsewhere goes stale. The agent proposes the change and each
+follow-on edit as suggestions linked to your comment, which shows "Follow-on edits: N
+open" with **Accept all** and **Reject all**. Each linked box has a *for your comment*
+link back. Accept all leaves any set of alternatives for you to pick. The *Drop this*
+shortcut asks for exactly this.
 
 **Alternatives.** When a comment leaves a choice that is yours to make (tone, audience,
 scope), the agent may offer two versions as linked boxes ("alternative 1 of 2") instead
@@ -277,6 +292,11 @@ shows how many are waiting.
   proposal that contradicts an accepted lesson says so ("Replaces an older
   learning"); newer wins, so accepting it marks the old one **superseded**, which
   you can **Restore**. The status chips and the scope picker filter the list.
+- **Shortcuts**: when you give the same instruction in three or more comments, the
+  agent can propose a lesson that adds it to your comment box as a chip ("Shortcut
+  it adds" on the card). Accepting it adds the chip at once. The **Shortcuts** tab
+  lists every chip (built-in, from your folder, or learned) with how often you've
+  used it, and **Hide** takes one out of the comment box without deleting it.
 - **Learn after each review** (on by default): when your agent goes idle and the
   review holds five or more new comments, replies or decisions since it last read
   it, prereview asks the agent to read them and propose lessons. Turn it off on the

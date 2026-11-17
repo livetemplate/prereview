@@ -482,3 +482,33 @@ func TestImport_AcceptedArrivesProposed_BadIDsDropped(t *testing.T) {
 		t.Fatalf("importing the same file again took %d", n)
 	}
 }
+
+// #204: a learning can add a comment-box shortcut; it needs both its label and its
+// text, and either flag alone (or --produces shortcut with neither) is refused.
+func TestPropose_Shortcut(t *testing.T) {
+	dir, store := t.TempDir(), seedStore(t, t.TempDir())
+	ev := []string{store + ":c1"}
+	for _, bad := range []Proposal{
+		{Text: "x", Evidence: ev, ShortcutLabel: "Why?"},
+		{Text: "x", Evidence: ev, ShortcutBody: "Why is this here?"},
+		{Text: "x", Evidence: ev, Produces: []string{"shortcut"}},
+	} {
+		if _, err := Propose(dir, bad); err == nil {
+			t.Errorf("accepted a half-drafted shortcut: %+v", bad)
+		}
+	}
+	l, err := Propose(dir, Proposal{Text: "Ask why a passage is there", Evidence: ev,
+		ShortcutLabel: " Why is this here? ", ShortcutBody: "Why is this here? Make the case for keeping it."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.ShortcutLabel != "Why is this here?" || strings.Join(l.Produces, ",") != "instruction,shortcut" {
+		t.Errorf("learning = %+v", l)
+	}
+	if got := LoadLearnings(dir); len(got) != 1 || got[0].ShortcutBody == "" {
+		t.Errorf("the shortcut didn't survive the log: %+v", got)
+	}
+	if p := ExtractionPrompt([]string{store}, nil); !strings.Contains(p, "--shortcut-label") {
+		t.Error("the extraction prompt doesn't ask for shortcuts")
+	}
+}

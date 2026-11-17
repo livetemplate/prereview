@@ -82,6 +82,9 @@ func runSuggest(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := checkFor(sugs, filepath.Join(dir, "comments.csv")); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", dir, err)
 	}
@@ -156,6 +159,24 @@ func parseSuggestionsInput(raw []byte) ([]review.Suggestion, error) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+// checkFor refuses a payload whose "for" names a comment the review doesn't have
+// (#204): the group would hang off nothing, so nothing is appended.
+func checkFor(sugs []review.Suggestion, csvPath string) error {
+	var ids []string
+	for _, s := range sugs {
+		if s.For != "" {
+			ids = append(ids, s.For)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := validateIDs(csvPath, ids); err != nil {
+		return fmt.Errorf("\"for\": %w", err)
+	}
+	return nil
 }
 
 // misgroupWarnings words review.MisgroupedAtStart's pairs for stderr. suggest is a

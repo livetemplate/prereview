@@ -56,6 +56,11 @@ type Suggestion struct {
 	OriginalText string `json:"original"`
 	ProposedText string `json:"proposed"`
 	Note         string `json:"note,omitempty"` // optional rationale from the LLM
+	// For is the comment this suggestion follows from (#204): a drop, a rename or a
+	// moved section usually needs edits elsewhere too, and every suggestion naming
+	// the same comment shows as one group on it, with Accept all / Reject all. Not
+	// part of the fingerprint, so a decision survives a re-link.
+	For string `json:"for,omitempty"`
 	// Anchor/AnchorStatus are DERIVED at load time from OriginalText + the live
 	// file (not part of the agent's payload) — the drift fingerprint. Kept off
 	// the JSON so the append-only file stays the agent's pure input.

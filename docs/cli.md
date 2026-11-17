@@ -314,6 +314,13 @@ interface, including any public IP. The first stdout line is `READY <url>`; extr
   replace it. A file with no text is skipped. prereview re-reads the folder each time a tab connects,
   so reload the tab after editing. End the prompt by asking for `prereview suggest`
   edits, as the built-ins do, so the agent answers with boxes you can accept.
+- `PREREVIEW_SHORTCUTS_DIR` - override the comment-shortcut overlay directory
+  (default `~/.config/prereview/shortcuts`). Each `*.md` file adds a chip to the
+  line, text and block comment boxes. The format matches the prompt folder above:
+  the first `# Heading` is the chip's label and the rest is the text it adds. Reuse a
+  built-in's filename (see
+  [`internal/review/builtin_shortcuts/`](../internal/review/builtin_shortcuts/)) to
+  replace it.
 - `PREREVIEW_QUIZZES_DIR` - override the quiz-prompt overlay directory
   (default `~/.config/prereview/quizzes`). Drop a `*.md` file there to add your
   own quiz prompt, or reuse a built-in's filename to replace it. The prompt is

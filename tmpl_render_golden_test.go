@@ -366,6 +366,23 @@ func renderFixtures() []renderFixture {
 	promptsPicker := goBase()
 	promptsPicker.Prompts = review.LoadPrompts("")
 
+	// #204: a line composer with the shortcut chips (every built-in, file order).
+	shortcuts := goBase()
+	shortcuts.SelectionAnchor, shortcuts.SelectionEnd, shortcuts.SelectionSide = 2, 2, "new"
+	for _, p := range review.LoadShortcuts("") {
+		shortcuts.Shortcuts = append(shortcuts.Shortcuts, review.Shortcut{Slug: p.Slug, Label: p.Title, Body: p.Body})
+	}
+
+	// #204 ripple: a comment with three follow-on suggestions, two of them
+	// alternatives for the same text (so Accept all leaves that pick to the reviewer).
+	ripple := goBase()
+	ripple.Comments = []review.Comment{{ID: "c1", File: "app.go", Body: "Drop this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"}}
+	ripple.Suggestions = []review.Suggestion{
+		{ID: "r1", For: "c1", File: "app.go", FromLine: 2, ToLine: 2, Side: "new", OriginalText: "two", ProposedText: ""},
+		{ID: "r2", For: "c1", File: "app.go", FromLine: 3, ToLine: 3, Side: "new", OriginalText: "three", ProposedText: "3a"},
+		{ID: "r3", For: "c1", File: "app.go", FromLine: 3, ToLine: 3, Side: "new", OriginalText: "three", ProposedText: "3b"},
+	}
+
 	// #191: the quiz questions rendered INLINE in the diff — the primary surface.
 	// The separate quiz screen is only the overview, so without this fixture the
 	// annotation rendering (line-anchored cards + the file-head card) is unguarded.
@@ -662,6 +679,24 @@ func renderFixtures() []renderFixture {
 	acceptedL.LearnStatus = "accepted"
 	acceptedL.LearnEdit = ""
 
+	// #204: a proposed learning that adds a comment-box shortcut, and the Library's
+	// Shortcuts tab with a built-in, one of yours, and a hidden learned one.
+	shortcutLearn := repoBase()
+	shortcutLearn.ShowLibrary = true
+	shortcutLearn.LearnNew = 1
+	shortcutLearn.LearnStore = "/repo/.prereview"
+	shortcutLearn.Learnings = []library.Learning{{ID: "l9", Text: "Ask why a passage is there before keeping it.", Scope: library.DefaultScope,
+		Status: "proposed", Produces: []string{"instruction", "shortcut"}, ShortcutLabel: "Why is this here?",
+		ShortcutBody: "Why is this here? Reply with the case for keeping it.", CreatedAt: "2026-11-15T09:00:00Z", UpdatedAt: "2026-11-15T09:00:00Z",
+		Evidence: []library.Evidence{ev("/repo/.prereview", "comment", "plan.md", 12, "why is this here", "2026-11-15T08:00:00Z")}}}
+	shortcutsTab := repoBase()
+	shortcutsTab.ShowLibrary, shortcutsTab.LibraryTab = true, "shortcuts"
+	shortcutsTab.ShortcutsTab = &review.ShortcutsTab{Rows: []review.Shortcut{
+		{Slug: "shorter", Label: "Make this shorter", Body: "Make this shorter.", Source: "built-in", Uses: 3},
+		{Slug: "tone", Label: "Warmer", Body: "Make the tone warmer.", Source: "yours", Uses: 1},
+		{Slug: "learned-l9", Label: "Why is this here?", Body: "Why is this here?", Source: "learned", Hidden: true},
+	}}
+
 	// checks M4: the Skills tab — a generated Writing skill installed for Claude
 	// but not set up for Cursor, edited by you, with its history; a scope proposal.
 	skillsTab := repoBase()
@@ -742,6 +777,8 @@ func renderFixtures() []renderFixture {
 		{"quiz-me-button", quizBtn},
 		{"quiz-me-picker", quizPicker},
 		{"prompts-picker", promptsPicker},
+		{"shortcuts-composer", shortcuts},
+		{"ripple", ripple},
 		{"external", external},
 		{"external-acted", extActed},
 		{"version-view", version},
@@ -762,6 +799,8 @@ func renderFixtures() []renderFixture {
 		{"learnings", learnings},
 		{"learnings-superseded", superseded},
 		{"learnings-accepted", acceptedL},
+		{"learnings-shortcut", shortcutLearn},
+		{"library-shortcuts", shortcutsTab},
 		{"library-skills", skillsTab},
 		{"library-benchmarks", benchTab},
 		{"boot-offer", boot},

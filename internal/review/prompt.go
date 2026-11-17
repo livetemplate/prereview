@@ -25,6 +25,7 @@ type Prompt struct {
 	Slug  string
 	Title string
 	Body  string
+	User  bool // from the user's folder (it replaced or added to the built-ins)
 }
 
 // LoadPrompts returns the embedded built-in prompts overlaid with the user's library
@@ -62,6 +63,7 @@ func loadPromptLibrary(builtinFS embed.FS, builtinDir, userDir string) []Prompt 
 					continue
 				}
 				if p, ok := parsePromptBytes(e.Name(), b); ok {
+					p.User = true
 					bySlug[p.Slug] = p
 				}
 			}

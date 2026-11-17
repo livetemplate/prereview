@@ -63,17 +63,21 @@ type Learning struct {
 	Scope    string     `json:"scope"`
 	Globs    []string   `json:"globs,omitempty"`
 	Evidence []Evidence `json:"evidence"`
-	Produces []string   `json:"produces,omitempty"` // instruction | checker | judge
+	Produces []string   `json:"produces,omitempty"` // instruction | checker | judge | shortcut
 	// Checker / Judge are the agent-drafted rule YAML and rubric Markdown a learning
 	// produces (checks.ValidateDrafted at propose time and again before writing).
-	Checker      string `json:"checker,omitempty"`
-	Judge        string `json:"judge,omitempty"`
-	Replaces     string `json:"replaces,omitempty"` // the older learning this one would supersede
-	Status       string `json:"status"`
-	SupersededBy string `json:"superseded_by,omitempty"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
-	Machine      string `json:"machine"`
+	Checker string `json:"checker,omitempty"`
+	Judge   string `json:"judge,omitempty"`
+	// ShortcutLabel / ShortcutBody are the composer chip an accepted learning adds
+	// (#204): the label on the chip and the comment text it fills in.
+	ShortcutLabel string `json:"shortcut_label,omitempty"`
+	ShortcutBody  string `json:"shortcut_body,omitempty"`
+	Replaces      string `json:"replaces,omitempty"` // the older learning this one would supersede
+	Status        string `json:"status"`
+	SupersededBy  string `json:"superseded_by,omitempty"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
+	Machine       string `json:"machine"`
 }
 
 // NewestEvidence is the newest evidence timestamp — the order conflicts follow

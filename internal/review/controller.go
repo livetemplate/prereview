@@ -73,6 +73,10 @@ type PrereviewController struct {
 	// because the two libraries answer with different verbs.
 	QuizzesDir string
 
+	// ShortcutsDir is the user overlay for #204 composer shortcuts
+	// (<library>/shortcuts). Read every Mount. "" = built-ins only.
+	ShortcutsDir string
+
 	// Emitter is the agent-mode JSON event log writer (stdout +
 	// .prereview/events.jsonl). Non-nil only in agent mode; the emit path and
 	// EndSession guard on nil so non-agent sessions emit nothing.

@@ -67,14 +67,7 @@ func (c *PrereviewController) AcceptSuggestion(state PrereviewState, ctx *livete
 		slog.Warn("accept on unknown suggestion", "id", id)
 		return state, nil
 	}
-	next := upsertDecision(slices.Clone(state.Decisions), newDecision(*sg, verdictAccept, "", false))
-	key := sg.groupKey()
-	for i := range state.Suggestions {
-		if other := state.Suggestions[i]; other.ID != id && other.groupKey() == key {
-			next = upsertDecision(next, newDecision(other, verdictReject, "", true))
-		}
-	}
-	c.commitDecisions(&state, next)
+	c.commitDecisions(&state, acceptWithSiblings(slices.Clone(state.Decisions), *sg, state.Suggestions))
 	// An accepted suggestion is now queued work for the agent (apply the edit), so
 	// it rides the exact same feedback adding a comment gets (#159): pulse the
 	// toolbar Queue button + bump its count. No toast — matching AddComment, which
@@ -82,6 +75,19 @@ func (c *PrereviewController) AcceptSuggestion(state PrereviewState, ctx *livete
 	// suggestion box stays put until the agent applies.
 	noteEnqueue(&state)
 	return state, nil
+}
+
+// acceptWithSiblings adds an accept for sg to next and an Auto reject for every other
+// alternative for the same text (#117).
+func acceptWithSiblings(next []SuggestionDecision, sg Suggestion, all []Suggestion) []SuggestionDecision {
+	next = upsertDecision(next, newDecision(sg, verdictAccept, "", false))
+	key := sg.groupKey()
+	for _, other := range all {
+		if other.ID != sg.ID && other.groupKey() == key {
+			next = upsertDecision(next, newDecision(other, verdictReject, "", true))
+		}
+	}
+	return next
 }
 
 // RequestRevert asks the agent to UNDO an already-applied accept (#159 M4.2): it sets

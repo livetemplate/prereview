@@ -16,6 +16,7 @@ import (
 const (
 	libTabLearnings = "learnings"
 	libTabChecks    = "checks"
+	libTabShortcuts = "shortcuts"
 )
 
 // learnings is the folded learnings log, re-read only when the file changes
@@ -51,6 +52,7 @@ func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 		state.LearnStore = filepath.Dir(c.CSVPath)
 	}
 	c.applySkillsTab(state)
+	c.applyShortcuts(state) // the chips and the tab: a learning can add a chip
 	c.applyBenchTab(state)
 	state.Bootstrapped = c.LibraryDir == "" || library.Bootstrapped(c.LibraryDir)
 	state.BootStores, state.BootScanned = nil, false
@@ -190,7 +192,7 @@ func (c *PrereviewController) LibraryUpdated(state PrereviewState, ctx *livetemp
 // SetLibraryTab switches the Library's tab.
 func (c *PrereviewController) SetLibraryTab(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	tab := ctx.GetString("tab")
-	if !slices.Contains([]string{libTabLearnings, libTabSkills, libTabChecks, libTabBenchmarks}, tab) {
+	if !slices.Contains([]string{libTabLearnings, libTabShortcuts, libTabSkills, libTabChecks, libTabBenchmarks}, tab) {
 		return state, fmt.Errorf("library: unknown tab %q", tab)
 	}
 	state.LibraryTab = tab

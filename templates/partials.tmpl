@@ -54,7 +54,7 @@
 {{define "composer" -}}
 <div
   class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}"
-  data-key="composer"
+  data-key="composer{{if $.ComposerNonce}}-{{$.ComposerNonce}}{{end}}"
   {{- if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}
 >
   {{- /* heading — varies by comment mode */ -}}
@@ -97,6 +97,9 @@
     lvt-on:keydown="addComment"
     lvt-key="Mod+Enter"
   >
+    {{- /* #204 shortcut chips: submit WITH this form, so the tap carries what's typed
+           (formnovalidate: the textarea is required, and a chip may start it). */ -}}
+    {{- if $.ShowShortcuts}}<div class="sc-chips" role="group" aria-label="Shortcuts">{{range $.Shortcuts}}<button type="submit" name="useShortcut" value="{{.Slug}}" class="sc-chip" formnovalidate title="{{.Body}}">{{.Label}}</button>{{end}}</div>{{end}}
     <textarea
       name="body"
       placeholder="
@@ -111,6 +114,7 @@
              materialized as a draft when you navigate away without Save (#105). */}}
       lvt-on:input="saveDraft"
       lvt-mod:debounce="150"
+      data-nonce="{{$.ComposerNonce}}"
     >{{$.DraftBody}}</textarea>
   </form>
   {{- /* cancel-form target */ -}}
@@ -317,6 +321,9 @@
   {{- if .AnchorOutdated -}}
   <details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>
   {{- end -}}
+  {{- /* #204 ripple: the suggestions that follow from this comment, taken or refused
+         as one change. Accept all leaves alternative sets for the reviewer to pick. */ -}}
+  {{- with index $.RippleByComment .ID}}<div class="ripple-row" role="group" aria-label="Follow-on edits"><span class="ripple-count">Follow-on edits: {{.Open}} open of {{.Total}}</span>{{if .Acceptable}}<form method="POST"><button type="submit" name="acceptRipple" value="{{.CommentID}}" class="accept">Accept all</button></form>{{end}}{{if .Open}}<form method="POST"><button type="submit" name="rejectRipple" value="{{.CommentID}}" class="outline reject">Reject all</button></form>{{end}}{{if .NeedPick}}<small class="ripple-pick">{{.NeedPick}} set{{if gt .NeedPick 1}}s{{end}} of alternatives need{{if eq .NeedPick 1}}s{{end}} your pick</small>{{end}}</div>{{end -}}
   {{- /* #149 conversation thread — the agent's replies ("what I did") + the
          reviewer's follow-ups, rendered under the body. Empty → nothing renders. */ -}}
   {{- template "thread" (index $.Threads .ID) -}}
@@ -423,6 +430,7 @@
   {{- /* sparkle label · group tag · line span · drift status · verdict */ -}}
   <header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>
     {{- if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>
+    {{- with .For}} · <form method="POST" class="sg-for"><input type="hidden" name="id" value="{{.}}"><button type="submit" name="jumpToComment" class="sg-for-btn" title="Part of a change your comment asked for: go to it">for your comment</button></form>{{end}}
     {{- if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}
     {{- if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}
     {{- if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}

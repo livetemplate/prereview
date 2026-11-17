@@ -62,7 +62,7 @@ type PrereviewState struct {
 	SelectedCheck string        `json:"selected_check" lvt:"persist"`
 	// HiddenFindings are finding cards you folded this session (findingKey).
 	HiddenFindings []string `json:"hidden_findings"`
-	FindingCursor int           `json:"finding_cursor"`
+	FindingCursor  int      `json:"finding_cursor"`
 	// The Checks page (the Library frame, Checks tab): open state and its filters.
 	// Session view state, never ui-prefs: a filter carried into the next review
 	// would hide its failures.
@@ -104,9 +104,11 @@ type PrereviewState struct {
 	LearnScope  string             `json:"learn_scope"`  // "" = every scope
 	LearnEdit   string             `json:"learn_edit"`   // the card being edited
 	// SkillsTab is the Library's Skills tab (checks M4), built while it's open.
-	SkillsTab     *SkillsTab `json:"skills_tab"`
-	BenchTab      *BenchTab  `json:"bench_tab"`      // the Benchmarks tab (M5), built while it's open
-	ExpandedSkill string     `json:"expanded_skill"` // the skill whose history shows
+	SkillsTab *SkillsTab `json:"skills_tab"`
+	// ShortcutsTab is the Library's Shortcuts tab (#204), built while it's open.
+	ShortcutsTab  *ShortcutsTab `json:"shortcuts_tab"`
+	BenchTab      *BenchTab     `json:"bench_tab"`      // the Benchmarks tab (M5), built while it's open
+	ExpandedSkill string        `json:"expanded_skill"` // the skill whose history shows
 	// First launch (M3): the past reviews the scan found (carried only while the
 	// card can show), the ones you unticked, whether the offer was answered on
 	// this machine, and whether the Learnings tab's "Read past reviews" reopened it.
@@ -234,6 +236,13 @@ type PrereviewState struct {
 	// Drives the file-header "Quiz me" control: one prompt renders a plain
 	// one-tap button, several render a picker.
 	QuizPrompts []Prompt `json:"quiz_prompts"`
+
+	// Shortcuts are the composer's one-tap chips (#204), loaded each Mount in the
+	// order they show (most used first). ComposerNonce is bumped only by a chip tap:
+	// it's in the composer's data-key, so the tap remounts the composer with the new
+	// text (the focused textarea is otherwise never written).
+	Shortcuts     []Shortcut `json:"shortcuts"`
+	ComposerNonce int        `json:"composer_nonce"`
 
 	// ReplyingID is the comment/suggestion whose inline reply form is open (#149;
 	// mirrors EditingCommentID); ReplyDraft holds the in-progress reply so it

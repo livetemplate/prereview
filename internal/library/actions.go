@@ -11,7 +11,7 @@ import (
 )
 
 // Produces values a learning may ask for (they act in M4).
-var ProducesKinds = []string{"instruction", "checker", "judge"}
+var ProducesKinds = []string{"instruction", "checker", "judge", "shortcut"}
 
 // Proposal is what `prereview learn propose` (the agent) submits.
 type Proposal struct {
@@ -23,6 +23,10 @@ type Proposal struct {
 	Produces []string
 	Checker  string // a rule YAML the learning produces (checks.ValidateDrafted)
 	Judge    string // a rubric Markdown the learning produces
+	// ShortcutLabel / ShortcutBody are a composer chip (#204) the learning produces:
+	// the instruction the reviewer keeps typing, as one tap.
+	ShortcutLabel string
+	ShortcutBody  string
 }
 
 // Propose validates p, resolves every evidence ref and appends a proposed
@@ -41,9 +45,15 @@ func Propose(dir string, p Proposal) (Learning, error) {
 			return Learning{}, fmt.Errorf("learn propose: --produces %q: want one of %s", k, strings.Join(ProducesKinds, ", "))
 		}
 	}
-	// No --produces means an instruction; a drafted checker or judge is added on
-	// top, never instead (that's what --produces checker alone says).
-	if len(p.Produces) == 0 && (strings.TrimSpace(p.Checker) != "" || strings.TrimSpace(p.Judge) != "") {
+	// A shortcut needs both its chip label and the text it adds; either one alone is
+	// a half-drafted chip, and --produces shortcut with neither has nothing to add.
+	label, body := strings.TrimSpace(p.ShortcutLabel), strings.TrimSpace(p.ShortcutBody)
+	if (label == "") != (body == "") || (slices.Contains(p.Produces, "shortcut") && label == "") {
+		return Learning{}, errors.New("learn propose: a shortcut needs both --shortcut-label and --shortcut-body")
+	}
+	// No --produces means an instruction; a drafted checker, judge or shortcut is
+	// added on top, never instead (that's what --produces checker alone says).
+	if len(p.Produces) == 0 && (strings.TrimSpace(p.Checker) != "" || strings.TrimSpace(p.Judge) != "" || label != "") {
 		p.Produces = []string{"instruction"}
 	}
 	for _, d := range []struct {
@@ -61,6 +71,9 @@ func Propose(dir string, p Proposal) (Learning, error) {
 			p.Produces = append(p.Produces, d.kind)
 		}
 	}
+	if label != "" && !slices.Contains(p.Produces, "shortcut") {
+		p.Produces = append(p.Produces, "shortcut")
+	}
 	ev := make([]Evidence, 0, len(p.Evidence))
 	for _, ref := range p.Evidence {
 		e, err := Resolve(ref)
@@ -75,7 +88,7 @@ func Propose(dir string, p Proposal) (Learning, error) {
 	}
 	l := Learning{ID: NewID(), Text: text, Scope: scope, Globs: p.Globs, Evidence: ev,
 		Produces: p.Produces, Replaces: p.Replaces, Status: StatusProposed,
-		Checker: trimFile(p.Checker), Judge: trimFile(p.Judge)}
+		Checker: trimFile(p.Checker), Judge: trimFile(p.Judge), ShortcutLabel: label, ShortcutBody: body}
 	err := update(dir, func(have map[string]Learning) ([]Learning, error) {
 		if p.Replaces != "" {
 			if old, ok := have[p.Replaces]; !ok || old.Status == StatusDeleted {

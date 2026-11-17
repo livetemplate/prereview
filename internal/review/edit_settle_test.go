@@ -61,17 +61,20 @@ func newSettleHarness(t *testing.T, settle time.Duration, extra ...string) *sett
 
 	fs := &fakeSession{actions: make(chan string, 1)}
 	stop := make(chan struct{})
-	go func() { // drain: fan-out counts aren't the contract here
+	exited := make(chan struct{})
+	// Drain until the WATCHER has exited, not just until stop: a watcher mid-tick
+	// after stop still broadcasts, and with nobody draining that send blocks forever
+	// (the cleanup below then waits on it forever: a 10-minute CI hang).
+	go func() { // fan-out counts aren't the contract here
 		for {
 			select {
 			case <-fs.actions:
-			case <-stop:
+			case <-exited:
 				return
 			}
 		}
 	}()
 	c.session = fs
-	exited := make(chan struct{})
 	go func() { c.WatchLLMStatus(stop, 10*time.Millisecond); close(exited) }()
 	// Wait for the watcher to return: cleanups run LIFO, so the EditSettle restore
 	// above runs next and would race a watcher still mid-tick.

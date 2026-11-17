@@ -656,6 +656,7 @@
   </header>
   <div class="lib-tabs" role="tablist">
     <form method="POST"><input type="hidden" name="tab" value="learnings"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Learnings</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="shortcuts"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Shortcuts</button></form>
     <form method="POST"><input type="hidden" name="tab" value="skills"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Skills</button></form>
     <form method="POST"><input type="hidden" name="tab" value="checks"><button type="submit" name="setLibraryTab" class="lib-tab is-on" role="tab" aria-selected="true">Checks</button></form>
     <form method="POST"><input type="hidden" name="tab" value="benchmarks"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Benchmarks</button></form>

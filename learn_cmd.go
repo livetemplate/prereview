@@ -51,14 +51,17 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 	fs.Var(&globs, "glob", "optional, repeatable: files the scope covers (docs/**/*.md)")
 	fs.Var(&evidence, "evidence", "repeatable, at least one: <store>:<id> of a comment, suggestion or reply the learning is drawn from (the request lists them)")
 	replaces := fs.String("replaces", "", "optional: the id of an existing learning this one would supersede (a conflict: newer wins once accepted)")
-	produces := fs.String("produces", "", "optional, comma-separated: what it should become — instruction, checker, judge")
+	produces := fs.String("produces", "", "optional, comma-separated: what it should become — instruction, checker, judge, shortcut")
 	checker := fs.String("checker", "", "optional: a file (or - for stdin) with the check rule YAML this lesson becomes (existence, substitution, occurrence or vocab; never command)")
 	judge := fs.String("judge", "", "optional: a file (or - for stdin) with the judge rubric Markdown this lesson becomes (kind: judge frontmatter + the rubric)")
+	shortcutLabel := fs.String("shortcut-label", "", "optional, with --shortcut-body: a comment-box chip this lesson adds, in the reviewer's own words (\"Why is this here?\")")
+	shortcutBody := fs.String("shortcut-body", "", "optional, with --shortcut-label: the comment text the chip fills in")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview learn propose --text \"…\" --evidence <store>:<id> [--evidence …]\n"+
 				"                               [--scope \"…\"] [--glob <pattern>]… [--replaces <id>] [--produces instruction,checker,judge]\n"+
-				"                               [--checker <rule.yml|->] [--judge <rubric.md|->]\n\n"+
+				"                               [--checker <rule.yml|->] [--judge <rubric.md|->]\n"+
+				"                               [--shortcut-label \"…\" --shortcut-body \"…\"]\n\n"+
 				"  Propose one learning drawn from your reviews, answering an extraction request.\n"+
 				"  Every --evidence must name a real record, or nothing is written. The reviewer\n"+
 				"  accepts, edits or rejects it in the Library; nothing takes effect until then.\n\n")
@@ -71,7 +74,8 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 		fs.Usage()
 		return fmt.Errorf("unexpected argument %q (flags only)", fs.Arg(0))
 	}
-	p := library.Proposal{Text: *text, Scope: *scope, Globs: globs, Evidence: evidence, Replaces: *replaces}
+	p := library.Proposal{Text: *text, Scope: *scope, Globs: globs, Evidence: evidence, Replaces: *replaces,
+		ShortcutLabel: *shortcutLabel, ShortcutBody: *shortcutBody}
 	for _, k := range strings.Split(*produces, ",") {
 		if k = strings.TrimSpace(k); k != "" {
 			p.Produces = append(p.Produces, k)
