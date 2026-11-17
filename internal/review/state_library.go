@@ -63,12 +63,12 @@ var (
 	actDelete  = LearnAction{"learningAction", library.ActDelete, "Delete", "outline secondary"}
 )
 
-// LearnEvidence is one cited record on a card.
 // LearnShortcut is the chip a learning adds to the comment box.
 type LearnShortcut struct {
 	Label, Body string
 }
 
+// LearnEvidence is one cited record on a card.
 type LearnEvidence struct {
 	Where, Quote string
 }

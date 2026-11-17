@@ -124,7 +124,6 @@ func TestShortcuts_LearnedAndHidden(t *testing.T) {
 	c := &PrereviewController{LibraryDir: lib}
 	st := PrereviewState{ShowLibrary: true, LibraryTab: libTabShortcuts}
 	c.applyShortcuts(&st)
-	c.applyShortcutsTab(&st)
 	find := func(list []Shortcut, slug string) *Shortcut {
 		for i := range list {
 			if list[i].Slug == slug {

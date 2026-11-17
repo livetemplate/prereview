@@ -52,7 +52,7 @@ func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 		state.LearnStore = filepath.Dir(c.CSVPath)
 	}
 	c.applySkillsTab(state)
-	c.applyShortcutsTab(state)
+	c.applyShortcuts(state) // the chips and the tab: a learning can add a chip
 	c.applyBenchTab(state)
 	state.Bootstrapped = c.LibraryDir == "" || library.Bootstrapped(c.LibraryDir)
 	state.BootStores, state.BootScanned = nil, false
@@ -186,7 +186,6 @@ func (c *PrereviewController) learningsChanged() bool {
 // another's). Dispatched by the watcher to every tab.
 func (c *PrereviewController) LibraryUpdated(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	c.applyLibrary(&state)
-	c.applyShortcuts(&state) // an accepted or removed shortcut learning changes the chips
 	return state, nil
 }
 
@@ -268,7 +267,6 @@ func (c *PrereviewController) SaveLearning(state PrereviewState, ctx *livetempla
 func (c *PrereviewController) libraryWritten(state PrereviewState, changelog string) PrereviewState {
 	c.syncSkills(changelog)
 	c.applyLibrary(&state)
-	c.applyShortcuts(&state) // a shortcut learning accepted or removed changes the chips
 	c.learningsChanged() // this server's tabs are told now, not again on the tick
 	go c.broadcast("LibraryUpdated")
 	return state

@@ -45,9 +45,15 @@ func Propose(dir string, p Proposal) (Learning, error) {
 			return Learning{}, fmt.Errorf("learn propose: --produces %q: want one of %s", k, strings.Join(ProducesKinds, ", "))
 		}
 	}
-	// No --produces means an instruction; a drafted checker or judge is added on
-	// top, never instead (that's what --produces checker alone says).
-	if len(p.Produces) == 0 && (strings.TrimSpace(p.Checker) != "" || strings.TrimSpace(p.Judge) != "") {
+	// A shortcut needs both its chip label and the text it adds; either one alone is
+	// a half-drafted chip, and --produces shortcut with neither has nothing to add.
+	label, body := strings.TrimSpace(p.ShortcutLabel), strings.TrimSpace(p.ShortcutBody)
+	if (label == "") != (body == "") || (slices.Contains(p.Produces, "shortcut") && label == "") {
+		return Learning{}, errors.New("learn propose: a shortcut needs both --shortcut-label and --shortcut-body")
+	}
+	// No --produces means an instruction; a drafted checker, judge or shortcut is
+	// added on top, never instead (that's what --produces checker alone says).
+	if len(p.Produces) == 0 && (strings.TrimSpace(p.Checker) != "" || strings.TrimSpace(p.Judge) != "" || label != "") {
 		p.Produces = []string{"instruction"}
 	}
 	for _, d := range []struct {
@@ -65,16 +71,7 @@ func Propose(dir string, p Proposal) (Learning, error) {
 			p.Produces = append(p.Produces, d.kind)
 		}
 	}
-	// A shortcut needs both its chip label and the text it adds; either one alone is
-	// a half-drafted chip, and --produces shortcut with neither has nothing to add.
-	label, body := strings.TrimSpace(p.ShortcutLabel), strings.TrimSpace(p.ShortcutBody)
-	if (label == "") != (body == "") || (slices.Contains(p.Produces, "shortcut") && label == "") {
-		return Learning{}, errors.New("learn propose: a shortcut needs both --shortcut-label and --shortcut-body")
-	}
 	if label != "" && !slices.Contains(p.Produces, "shortcut") {
-		if len(p.Produces) == 0 {
-			p.Produces = []string{"instruction"}
-		}
 		p.Produces = append(p.Produces, "shortcut")
 	}
 	ev := make([]Evidence, 0, len(p.Evidence))

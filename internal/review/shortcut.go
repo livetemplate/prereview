@@ -4,8 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -31,7 +29,6 @@ type Shortcut struct {
 	Hidden bool
 }
 
-// Shortcut sources.
 const (
 	shortcutBuiltin = "built-in"
 	shortcutYours   = "yours"
@@ -59,10 +56,8 @@ func (c *PrereviewController) allShortcuts() []Shortcut {
 	}
 	for _, p := range LoadShortcuts(c.ShortcutsDir) {
 		source := shortcutBuiltin
-		if c.ShortcutsDir != "" {
-			if _, err := os.Stat(filepath.Join(c.ShortcutsDir, p.Slug+".md")); err == nil {
-				source = shortcutYours
-			}
+		if p.User {
+			source = shortcutYours
 		}
 		add(p.Slug, p.Title, p.Body, source)
 	}
@@ -86,25 +81,22 @@ func unwrapParagraphs(s string) string {
 	return strings.Join(paras, "\n\n")
 }
 
-// applyShortcuts loads the chips for this visit, without the hidden ones. The order
-// is fixed for the visit, so a tap never moves the chips under the reviewer's
-// finger; it shows on the next one.
+// applyShortcuts loads the chips (hidden ones left out) and, while it's open, the
+// Library's Shortcuts tab, from one pass. It runs at Mount and when the Library
+// changes, never on a tap, so a tap doesn't move the chips under the reviewer's
+// finger; new use counts reorder them on the next load.
 func (c *PrereviewController) applyShortcuts(state *PrereviewState) {
-	state.Shortcuts = slices.DeleteFunc(c.allShortcuts(), func(s Shortcut) bool { return s.Hidden })
+	all := c.allShortcuts()
+	state.ShortcutsTab = nil
+	if state.ShowLibrary && state.LibraryOnShortcuts() {
+		state.ShortcutsTab = &ShortcutsTab{Rows: slices.Clone(all)}
+	}
+	state.Shortcuts = slices.DeleteFunc(all, func(s Shortcut) bool { return s.Hidden })
 }
 
 // ShortcutsTab is the Library's Shortcuts tab: every shortcut, hidden ones too.
 type ShortcutsTab struct {
 	Rows []Shortcut
-}
-
-// applyShortcutsTab builds the tab while it's open (nil otherwise, so a closed
-// Library carries none of it).
-func (c *PrereviewController) applyShortcutsTab(state *PrereviewState) {
-	state.ShortcutsTab = nil
-	if state.ShowLibrary && state.LibraryOnShortcuts() {
-		state.ShortcutsTab = &ShortcutsTab{Rows: c.allShortcuts()}
-	}
 }
 
 // HideShortcut / ShowShortcut take a chip out of the comment box or put it back
@@ -125,7 +117,6 @@ func (c *PrereviewController) setShortcutHidden(state PrereviewState, slug strin
 		return state, fmt.Errorf("shortcut: %w", err)
 	}
 	c.applyShortcuts(&state)
-	c.applyShortcutsTab(&state)
 	return state, nil
 }
 

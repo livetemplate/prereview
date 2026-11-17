@@ -477,7 +477,6 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// user's edits to their prompt files show without a relaunch.
 	state.Prompts = LoadPrompts(c.PromptsDir)
 	state.QuizPrompts = LoadQuizPrompts(c.QuizzesDir)
-	c.applyShortcuts(&state)
 	// Loads the quizzes and the reviewer's answers. Grounding is deliberately NOT
 	// done here: CurrentDiff is not loaded until ~100 lines below, so grounding at
 	// this point would compare every cited line against a nil diff and mark the
