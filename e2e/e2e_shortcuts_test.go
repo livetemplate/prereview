@@ -36,10 +36,15 @@ func tapChip(t *testing.T, p *runningPrereview, typed, label, want string, diag 
 	); err != nil || !focused {
 		t.Fatalf("focus and type in the composer (focused=%v): %v%s", focused, err, diag())
 	}
-	var value string
+	// Wait for the remount (a new data-key), not just the text: a second tap on the
+	// same chip adds text that's already there.
+	var value, key string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('.composer').dataset.key`, &key)); err != nil || key == "" {
+		t.Fatalf("read the composer key (%q): %v%s", key, err, diag())
+	}
 	if err := chromedp.Run(ctx,
 		chromedp.Evaluate(`[...document.querySelectorAll('.composer .sc-chip')].find(b => b.textContent.trim() === `+jsStr(label)+`).click()`, nil),
-		chromedp.Poll(`document.querySelector('.composer textarea').value.includes(`+jsStr(want)+`)`, nil, chromedp.WithPollingInterval(50*time.Millisecond)),
+		chromedp.Poll(`(() => { const c = document.querySelector('.composer'); return !!c && c.dataset.key !== `+jsStr(key)+` && c.querySelector('textarea').value.includes(`+jsStr(want)+`) })()`, nil, chromedp.WithPollingInterval(50*time.Millisecond)),
 		chromedp.Value(`.composer textarea`, &value, chromedp.ByQuery),
 	); err != nil {
 		var now string
