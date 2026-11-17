@@ -161,8 +161,9 @@ fully air-gapped, use the **Quick install** script or **Homebrew** (a
 single prebuilt binary, no module fetching).
 
 **Upgrade:** `brew upgrade prereview` · `scoop update prereview` · re-run
-the install script · or `prereview --update` (curl/`go install` binaries
-self-update hourly; disable with `--no-update` / `PREREVIEW_NO_UPDATE=1`).
+the install script · or `prereview --update`. prereview makes no network
+calls unless you ask: set `PREREVIEW_AUTO_UPDATE=1` to have curl and `go
+install` binaries check for a new release on launch (at most hourly).
 
 **Uninstall** (your `.prereview/` comments are never touched):
 `brew uninstall prereview` · `scoop uninstall prereview` ·

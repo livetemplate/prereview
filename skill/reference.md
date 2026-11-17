@@ -32,7 +32,7 @@ this file is the lookup for **what every value means**.
 | `--external` | — | no | Annotate a live local website instead of files: reverse-proxies the URL on a second origin and overlays region annotation. Requires `--out`; ignores `[path]`/`--base`. See [External mode](#external-mode). |
 | `--out` | the review path | with `--external` | Directory to create the store under (its `.prereview/` holds `comments.csv`). Defaults to the review path; required with `--external`. The resolved store is printed as the `STORE` line — that, not this, is the `--out <STORE>` argument the [agent subcommands](#agent-subcommands) take. |
 | `--version` | — | no | Print build version and exit. |
-| `--update` / `--uninstall` | — | no | Download+install the latest release, or remove the binary. prereview also self-updates + re-syncs the installed skill on a normal launch (see `skill_updated` in [Agent mode](#agent-mode)); `PREREVIEW_NO_UPDATE=1` or `--no-update` skips the on-run check. |
+| `--update` / `--uninstall` | — | no | Download+install the latest release, or remove the binary. prereview re-syncs the installed skill on every launch (see `skill_updated` in [Agent mode](#agent-mode)). It updates itself on launch only with `PREREVIEW_AUTO_UPDATE=1`; `PREREVIEW_NO_UPDATE=1` or `--no-update` turns that off. |
 
 ## Agent subcommands
 
@@ -174,7 +174,7 @@ Four event types:
 - **`ready`** (seq 0) — emitted once, after the stdout preamble. Fields:
   `event, seq, ts, repo, csv`, plus optional `paused` and `skill_updated`.
   - `skill_updated:true` means this launch **refreshed the installed Claude Code skill**
-    to match the (possibly self-updated) binary — so the agent's loaded skill is now
+    to match the (possibly upgraded) binary — so the agent's loaded skill is now
     stale. The agent must re-read the skill from its install path
     (`~/.claude/skills/prereview/SKILL.md`) before continuing, and tell the user to
     reload the skill in their agent. (A matching stderr note prints too.)

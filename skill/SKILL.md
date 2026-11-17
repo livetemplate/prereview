@@ -114,8 +114,8 @@ When an `ALT` MagicDNS hostname is present, make **that** the headline link
 Track this as a checklist; run it until you see the `end` event.
 
 1. **Read the `ready` event first.** If `skill_updated:true`, this launch refreshed
-   the installed prereview skill to match a self-updated binary, so **the skill you
-   have loaded is now stale**: re-read `~/.claude/skills/prereview/SKILL.md` before
+   the installed prereview skill to match an upgraded binary, so **the skill you
+   have loaded is now stale**. Re-read `~/.claude/skills/prereview/SKILL.md` before
    continuing, and tell the user to reload the prereview skill in their agent. If
    `paused:true`, the reviewer started with the queue paused (batching).
 2. **Consume the queue** with the one reader — never hand-roll `tail`/`head`:

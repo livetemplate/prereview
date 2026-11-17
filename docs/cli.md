@@ -176,7 +176,7 @@ These do one thing and exit — they don't start the server:
 | `--client <ids>` | With `--install-skill`, the comma-separated agent(s) to install for: any of `claude,codex,gemini,opencode,aider,cursor`. Empty opens the menu. |
 | `--update` | Download and install the latest GitHub release (defers to brew/scoop if one manages the binary). |
 | `--uninstall` | Remove the binary (your `.prereview/` review comments are left untouched; defers to brew/scoop). |
-| `--no-update` | Skip the on-run update check (also via `PREREVIEW_NO_UPDATE=1`). |
+| `--no-update` | Never run the on-launch update check, even with `PREREVIEW_AUTO_UPDATE=1` (also `PREREVIEW_NO_UPDATE=1`). The check is off unless `PREREVIEW_AUTO_UPDATE=1` is set. |
 
 ## Subcommands
 
@@ -369,7 +369,8 @@ second, random port. prereview refuses `--external` with `--public-url`.
 
 | Var | Effect |
 |---|---|
-| `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: skip the on-run update check. |
+| `PREREVIEW_AUTO_UPDATE=1` | Check for a new release on launch (at most hourly) and install it. Off by default, so prereview makes no network calls. Package-manager installs (Homebrew, Scoop) never self-update. |
+| `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: never run the on-launch update check. |
 | `PREREVIEW_PUBLIC_URL` | Same as `--public-url`; the flag wins when both are set. |
 | `PREREVIEW_CHECKS_DIR` | Override the checks rule folder (default `~/.config/prereview/checks`). |
 | `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer, and the default `checks`, `prompts` and `quizzes` folders inside it (default `~/.config/prereview`). |
