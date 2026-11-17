@@ -372,11 +372,13 @@ func annotateRegion(t *testing.T, p *runningPrereview, body string, diag func() 
 	}
 
 	// Type + save → persists and re-pins on the page. The on-page pin appears
-	// immediately; the annotations drawer is collapsed by default.
+	// immediately; the annotations drawer is collapsed by default. Wait for a pin
+	// carrying its comment id: a pin can paint before data-id is filled in, and
+	// callers read that id next.
 	if err := chromedp.Run(p.ctx,
 		chromedp.SendKeys(`.ext-composer textarea`, body, chromedp.ByQuery),
 		chromedp.Click(`.ext-composer button[name="addComment"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.pin-layer .area-overlay`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.pin-layer .area-overlay[data-id]:not([data-id=""])`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("save region comment: %v%s", err, diag())
 	}
