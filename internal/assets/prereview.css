@@ -3029,6 +3029,19 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   color: var(--accent); border-color: var(--accent);
 }
+/* #208 skill notice: in flow above .layout (never sticky or fixed), so it can't
+   cover the bottom prompts or the top-right toast. The refresh nudge's colors. */
+.skill-notice {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;
+  margin: 0.4rem 0.4rem 0; padding: 0.4rem 0.6rem; flex: none;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent); border: 1px solid var(--accent); border-radius: 4px;
+  font-size: 0.8rem;
+}
+.skill-notice ul { margin: 0.2rem 0 0; padding-left: 1.1rem; }
+.skill-notice li { margin: 0; list-style: disc; }
+.skill-notice p { margin: 0.2rem 0 0; }
+.skill-notice code { font-size: 0.75rem; overflow-wrap: anywhere; }
 /* #198 "edits settling" notice: the refresh slot's look, muted (dashed, no
    button) — a status line, not something to act on yet. */
 .edits-settling-prompt {

@@ -132,9 +132,16 @@ func startPrereviewExternal(t *testing.T, binary, target, out string, extraArgs 
 // to the printed STORE line, so readCSV() finds the annotations.
 func bootChromeExternal(t *testing.T, target string, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
 	t.Helper()
+	return bootChromeExternalOut(t, target, t.TempDir(), viewportW, viewportH, extraArgs...)
+}
+
+// bootChromeExternalOut is bootChromeExternal with a caller-chosen --out, so a
+// test can seed what lives beside it (the isolated agent home, the library)
+// before the server starts.
+func bootChromeExternalOut(t *testing.T, target, out string, viewportW, viewportH int, extraArgs ...string) *runningPrereview {
+	t.Helper()
 	chromium := findChromium(t)
 	binary := prereviewBinary(t)
-	out := t.TempDir()
 	url, store, srv, stderr := startPrereviewExternal(t, binary, target, out, extraArgs...)
 
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],

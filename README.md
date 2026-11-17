@@ -178,12 +178,12 @@ prereview --install-skill --client=codex,gemini   # several at once
 With no `--client`, you get an interactive menu (Claude Code, Codex,
 Gemini, opencode, aider, cursor-agent). Then invoke per your agent — for
 Claude Code, `/prereview` or *"review my changes"* (if it reports "unknown
-skill", run `/reload`). The Claude skill auto-refreshes to match the binary
-on the next run after any upgrade — `prereview --update`, `brew upgrade`,
-`scoop update`, or `go install` — so you never re-run `--install-skill` to
-keep it current. Other agents' files are left as-is (re-run
-`--install-skill --client=<id>` to refresh them). Full per-agent details:
-**[docs/integrations.md](docs/integrations.md)**.
+skill", run `/reload`). Every agent's installed files refresh to match the
+binary on the next run after any upgrade — `prereview --update`, `brew
+upgrade`, `scoop update`, or `go install` — so you never re-run
+`--install-skill` to keep them current. A file you edited is left alone, and
+the browser and stderr say so. Full per-agent details:
+**[docs/integrations.md](docs/integrations.md#keeping-the-integration-current)**.
 
 <details>
 <summary>Manual / project-scoped install</summary>

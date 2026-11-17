@@ -39,6 +39,9 @@ var (
 	ErrForeign = errors.New("a file prereview didn't write is already there")
 	// ErrEdited: prereview wrote it, but it has been edited since.
 	ErrEdited = errors.New("edited since prereview wrote it")
+	// ErrNoLibrary: there is no library folder to keep the record in (no config
+	// dir and no $PREREVIEW_LIBRARY_DIR).
+	ErrNoLibrary = errors.New("no library folder to record what prereview wrote (set PREREVIEW_LIBRARY_DIR)")
 )
 
 // Owner is the ownership record, read and written under the library lock.
@@ -51,6 +54,9 @@ type Owner struct {
 // it after: every write and its hash land together, so another server can never
 // read a file before its new hash is recorded (and mistake it for a hand edit).
 func Own(libDir string, fn func(*Owner) error) error {
+	if libDir == "" {
+		return ErrNoLibrary
+	}
 	return editJSON(libDir, OwnedFile, func(h *map[string]string) (bool, error) {
 		if *h == nil {
 			*h = map[string]string{}
@@ -91,6 +97,15 @@ func (o *Owner) WriteIn(base, path string, data []byte) (bool, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || !within(base, path) {
 		return false, errors.New("refusing a path outside " + base + ": " + path)
 	}
+	return o.Update(path, data, 0o644)
+}
+
+// Update writes data at path when the file is absent or still exactly what
+// prereview last wrote, and reports whether it changed anything; mode is a new
+// file's permission. Otherwise ErrForeign (prereview never wrote it) or
+// ErrEdited (edited since). The caller vouches for path; WriteIn and Write are
+// the guarded forms.
+func (o *Owner) Update(path string, data []byte, mode os.FileMode) (bool, error) {
 	if cur, err := os.ReadFile(path); err == nil {
 		if err := o.status(path, cur); err != nil {
 			return false, err
@@ -99,14 +114,7 @@ func (o *Owner) WriteIn(base, path string, data []byte) (bool, error) {
 			return false, nil
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
-	}
-	if err := library.WriteFileAtomic(path, data, 0o644); err != nil {
-		return false, err
-	}
-	o.hashes[path], o.dirty = hash(data), true
-	return true, nil
+	return true, o.Put(path, data, mode)
 }
 
 // Remove deletes a file prereview wrote and nobody changed since (and its own
@@ -137,7 +145,17 @@ func (o *Owner) Reclaim(path string, data []byte) error {
 	if _, ok := o.hashes[path]; !ok {
 		return ErrForeign
 	}
-	if err := library.WriteFileAtomic(path, data, 0o644); err != nil {
+	return o.Put(path, data, 0o644)
+}
+
+// Put writes path whatever is there and records it as prereview's: the explicit
+// install (`--install-skill`), which is also how you discard an edit. Its folder
+// is created.
+func (o *Owner) Put(path string, data []byte, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := library.WriteFileAtomic(path, data, mode); err != nil {
 		return err
 	}
 	o.hashes[path], o.dirty = hash(data), true

@@ -102,3 +102,25 @@
 </div>
 {{end}}
 {{- end -}}
+
+{{define "skillNotice" -}}
+{{- /* #208: what this launch's skill sync did to each installed agent
+     integration. In flow above the layout, so it can never cover the sticky
+     bottom prompts or the top-right toast. Dismiss hides it for the launch. */ -}}
+{{- if .SkillNotice}}
+<div class="skill-notice" role="status">
+  <div class="skill-notice-body">
+    <strong>prereview's agent skill</strong>
+    <ul>
+      {{- range .SkillNotice}}
+      <li><b>{{.Name}}</b>: {{.Status}}{{with .Fix}}. Run <code>{{.}}</code> to replace it with this version's copy.{{end}}</li>
+      {{- end}}
+    </ul>
+    {{if $.SkillReload}}<p>Reload the skill in your agent: a session that's already running still has the old copy.</p>{{end}}
+  </div>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="dismissSkillNotice" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
+  </form>
+</div>
+{{- end}}
+{{- end -}}

@@ -160,6 +160,23 @@ stream. Same comments, same result — just not a single uninterrupted process.
 `prereview --install-skill --client=<id>` writes these for you. The manual
 form is shown so you can see exactly what lands on disk and adapt it.
 
+### Keeping the integration current
+
+Each launch compares the integration files already installed for every agent
+with the copy built into this binary, and rewrites the ones that differ. An
+agent counts as installed only when one of its files below exists; prereview
+never adds an integration you didn't install, even when that agent's folder
+exists for other commands or rules. A file you edited since prereview wrote it
+is left alone. Run `prereview --install-skill --client=<id>` to replace it with
+this binary's copy.
+
+When a launch refreshes or skips a file, it says so in two places: on stderr,
+and in a banner at the top of the review page. An agent that's already running
+keeps the copy it loaded, so reload the skill there. For Claude Code, the
+`ready` event also carries `skill_updated:true`, which tells the agent to
+re-read `~/.claude/skills/prereview/SKILL.md`. prereview records what it wrote
+in `owned.json` in its library folder (`~/.config/prereview/skills/`).
+
 **What the labels mean.** Based on smoke tests run 2026-06-21:
 
 | Label | Meaning |

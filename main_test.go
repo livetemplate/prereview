@@ -34,10 +34,11 @@ func TestReviewPath(t *testing.T) {
 func TestInstallSkill(t *testing.T) {
 	home := t.TempDir()
 
-	path, err := installSkill(home)
+	paths, err := installClient(home, libFor(home), "claude")
 	if err != nil {
-		t.Fatalf("installSkill: %v", err)
+		t.Fatalf("installClient(claude): %v", err)
 	}
+	path := paths[0]
 
 	wantPath := filepath.Join(home, ".claude", "skills", "prereview", "SKILL.md")
 	if path != wantPath {
@@ -71,99 +72,9 @@ func TestInstallSkill(t *testing.T) {
 	}
 
 	// Idempotent: re-running overwrites cleanly (skill upgrade path).
-	if _, err := installSkill(home); err != nil {
-		t.Fatalf("installSkill second run: %v", err)
+	if _, err := installClient(home, libFor(home), "claude"); err != nil {
+		t.Fatalf("installClient(claude) second run: %v", err)
 	}
-}
-
-// TestSyncInstalledSkill covers the auto-refresh contract used by every
-// binary-upgrade path (--update re-exec, brew, scoop, go install): keep an
-// ALREADY-installed skill matching the embedded copy, never create one for
-// a user who opted out.
-func TestSyncInstalledSkill(t *testing.T) {
-	skillPathIn := func(home string) string {
-		return filepath.Join(home, ".claude", "skills", "prereview", "SKILL.md")
-	}
-	refPathIn := func(home string) string {
-		return filepath.Join(home, ".claude", "skills", "prereview", "reference.md")
-	}
-
-	t.Run("not installed → no-op, never creates the skill", func(t *testing.T) {
-		home := t.TempDir()
-		changed, err := syncInstalledSkill(home)
-		if err != nil {
-			t.Fatalf("syncInstalledSkill: %v", err)
-		}
-		if changed {
-			t.Error("changed = true, want false (skill was never installed)")
-		}
-		if _, err := os.Stat(filepath.Join(home, ".claude", "skills", "prereview")); !os.IsNotExist(err) {
-			t.Errorf("skill dir must NOT be created for an opted-out user (err=%v)", err)
-		}
-	})
-
-	t.Run("installed and current → no-op", func(t *testing.T) {
-		home := t.TempDir()
-		if _, err := installSkill(home); err != nil {
-			t.Fatalf("installSkill: %v", err)
-		}
-		changed, err := syncInstalledSkill(home)
-		if err != nil {
-			t.Fatalf("syncInstalledSkill: %v", err)
-		}
-		if changed {
-			t.Error("changed = true, want false (already in sync)")
-		}
-	})
-
-	t.Run("stale SKILL.md → rewritten to embedded copy", func(t *testing.T) {
-		home := t.TempDir()
-		if _, err := installSkill(home); err != nil {
-			t.Fatalf("installSkill: %v", err)
-		}
-		// Simulate a binary upgrade: on-disk skill is from the old version.
-		mustWriteFile(t, skillPathIn(home), []byte("# old skill from a previous prereview version"))
-
-		changed, err := syncInstalledSkill(home)
-		if err != nil {
-			t.Fatalf("syncInstalledSkill: %v", err)
-		}
-		if !changed {
-			t.Fatal("changed = false, want true (SKILL.md was stale)")
-		}
-		got, err := os.ReadFile(skillPathIn(home))
-		if err != nil {
-			t.Fatalf("read SKILL.md: %v", err)
-		}
-		if string(got) != skillMD {
-			t.Error("SKILL.md was not refreshed to the embedded copy")
-		}
-	})
-
-	t.Run("missing reference.md → restored", func(t *testing.T) {
-		home := t.TempDir()
-		if _, err := installSkill(home); err != nil {
-			t.Fatalf("installSkill: %v", err)
-		}
-		// SKILL.md stays current but its companion vanished — sync restores it.
-		if err := os.Remove(refPathIn(home)); err != nil {
-			t.Fatalf("remove reference.md: %v", err)
-		}
-		changed, err := syncInstalledSkill(home)
-		if err != nil {
-			t.Fatalf("syncInstalledSkill: %v", err)
-		}
-		if !changed {
-			t.Fatal("changed = false, want true (reference.md was missing)")
-		}
-		got, err := os.ReadFile(refPathIn(home))
-		if err != nil {
-			t.Fatalf("read reference.md: %v", err)
-		}
-		if string(got) != skillReferenceMD {
-			t.Error("reference.md was not restored to the embedded copy")
-		}
-	})
 }
 
 // TestStaticFallback covers the two contracts staticFallback owns:
@@ -209,67 +120,67 @@ func TestStaticFallback(t *testing.T) {
 	mustWriteFile(t, filepath.Join(root, "index.html"), htmlBody)
 
 	cases := []struct {
-		name         string
-		method       string
-		path         string
-		wantStatus   int
-		wantBody     string // exact body (when served from disk); "" = no body check
-		wantCType    string // prefix match on Content-Type (mime adds charset etc.)
-		wantNextHit  bool   // did next.ServeHTTP get called?
+		name        string
+		method      string
+		path        string
+		wantStatus  int
+		wantBody    string // exact body (when served from disk); "" = no body check
+		wantCType   string // prefix match on Content-Type (mime adds charset etc.)
+		wantNextHit bool   // did next.ServeHTTP get called?
 	}{
 		{
-			name: "served: allowlisted ext, file present",
+			name:   "served: allowlisted ext, file present",
 			method: http.MethodGet, path: "/image.png",
 			wantStatus: 200, wantBody: string(pngBody),
 			wantCType: "image/png",
 		},
 		{
-			name: "served: nested path",
+			name:   "served: nested path",
 			method: http.MethodGet, path: "/mockups/screenshots/dashboard.png",
 			wantStatus: 200, wantBody: string(pngBody),
 			wantCType: "image/png",
 		},
 		{
-			name: "served: uppercase extension (case-insensitive allowlist)",
+			name:   "served: uppercase extension (case-insensitive allowlist)",
 			method: http.MethodGet, path: "/SHOUT.PNG",
 			wantStatus: 200, wantBody: string(pngBody),
 			wantCType: "image/png",
 		},
 		{
-			name: "served: HEAD returns headers, empty body",
+			name:   "served: HEAD returns headers, empty body",
 			method: http.MethodHead, path: "/image.png",
 			wantStatus: 200, wantBody: "", wantCType: "image/png",
 		},
 		{
-			name: "404: allowlisted ext, file missing",
+			name:   "404: allowlisted ext, file missing",
 			method: http.MethodGet, path: "/does-not-exist.png",
 			wantStatus: 404,
 		},
 		{
-			name: "served: .html for iframe preview",
+			name:   "served: .html for iframe preview",
 			method: http.MethodGet, path: "/index.html",
 			wantStatus: 200, wantBody: string(htmlBody),
 			wantCType: "text/html",
 		},
 		{
-			name: "404: .html missing (broken iframe shows blank, not the SPA shell)",
+			name:   "404: .html missing (broken iframe shows blank, not the SPA shell)",
 			method: http.MethodGet, path: "/missing.html",
 			wantStatus: 404,
 		},
 		{
-			name: "404: allowlisted ext, target is a directory",
+			name:   "404: allowlisted ext, target is a directory",
 			method: http.MethodGet, path: "/weird.png",
 			wantStatus: 404,
 		},
 		{
-			name: "404: traversal via ../ escapes root",
+			name:   "404: traversal via ../ escapes root",
 			method: http.MethodGet, path: "/../etc/passwd.png",
 			// path.Clean normalises "/../etc/..." to "/etc/...", which
 			// then misses under root → 404.
 			wantStatus: 404,
 		},
 		{
-			name: "404: URL-encoded traversal (stdlib decodes before us)",
+			name:   "404: URL-encoded traversal (stdlib decodes before us)",
 			method: http.MethodGet, path: "/%2e%2e/etc/passwd.png",
 			wantStatus: 404,
 		},
@@ -279,32 +190,32 @@ func TestStaticFallback(t *testing.T) {
 			// and livetemplate dispatches WS vs HTML by Upgrade header,
 			// not path. So our `cleaned == "/"` short-circuit hands BOTH
 			// flavours to the LiveHandler untouched.
-			name: "fallthrough: GET / (SPA HTML + WS upgrade share this path)",
+			name:   "fallthrough: GET / (SPA HTML + WS upgrade share this path)",
 			method: http.MethodGet, path: "/",
 			wantNextHit: true,
 		},
 		{
-			name: "fallthrough: .git/config (dot-component rejected)",
+			name:   "fallthrough: .git/config (dot-component rejected)",
 			method: http.MethodGet, path: "/.git/config",
 			wantNextHit: true,
 		},
 		{
-			name: "fallthrough: .prereview/evil.png (dot-component fires before ext + existence)",
+			name:   "fallthrough: .prereview/evil.png (dot-component fires before ext + existence)",
 			method: http.MethodGet, path: "/.prereview/evil.png",
 			wantNextHit: true,
 		},
 		{
-			name: "fallthrough: .md (extension not in allowlist)",
+			name:   "fallthrough: .md (extension not in allowlist)",
 			method: http.MethodGet, path: "/README.md",
 			wantNextHit: true,
 		},
 		{
-			name: "fallthrough: no extension",
+			name:   "fallthrough: no extension",
 			method: http.MethodGet, path: "/some/spa/route",
 			wantNextHit: true,
 		},
 		{
-			name: "fallthrough: POST allowlisted-ext (writes never go through us)",
+			name:   "fallthrough: POST allowlisted-ext (writes never go through us)",
 			method: http.MethodPost, path: "/image.png",
 			wantNextHit: true,
 		},
@@ -389,4 +300,3 @@ func mustWriteFile(t *testing.T, path string, body []byte) {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }
-

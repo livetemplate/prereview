@@ -338,7 +338,7 @@
       <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
     </form>{{end}}</span>
 </header>
-<div class="layout layout-external">
+{{template "skillNotice" $}}<div class="layout layout-external">
   <main class="viewer ext-viewer">
     {{template "regionToggle" $}}
     <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
@@ -975,7 +975,7 @@
 
 {{template "moreMenu" $}}
 
-{{template "statusBanners" $}}
+{{template "statusBanners" $}}{{template "skillNotice" $}}
 
 
 <div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" lvt-on:click="closeFiles" aria-label="Close file list"></div>
@@ -1369,6 +1369,20 @@
     </li>{{end}}
   </ul>
 </section>
+=== skillNotice ===
+{{if .SkillNotice}}
+<div class="skill-notice" role="status">
+  <div class="skill-notice-body">
+    <strong>prereview's agent skill</strong>
+    <ul>{{range .SkillNotice}}
+      <li><b>{{.Name}}</b>: {{.Status}}{{with .Fix}}. Run <code>{{.}}</code> to replace it with this version's copy.{{end}}</li>{{end}}
+    </ul>
+    {{if $.SkillReload}}<p>Reload the skill in your agent: a session that's already running still has the old copy.</p>{{end}}
+  </div>
+  <form method="POST" class="toast-dismiss-form">
+    <button type="submit" name="dismissSkillNotice" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
+  </form>
+</div>{{end}}
 === skillsTab ===
 
   <ul class="lib-list">

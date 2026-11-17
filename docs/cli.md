@@ -171,7 +171,7 @@ These do one thing and exit — they don't start the server:
 | Flag | Effect |
 |---|---|
 | `--version` | Print the build version. |
-| `--install-skill` | Install the prereview integration for one or more coding agents and exit. With no `--client`, shows an interactive menu. The Claude Code skill auto-refreshes to match the binary on the next run after any upgrade (`--update`, brew, scoop, `go install`); other agents' files are not auto-refreshed — re-run with `--client=<id>` to update them. See [integrations.md](integrations.md). |
+| `--install-skill` | Install the prereview integration for one or more coding agents and exit. With no `--client`, shows an interactive menu. Every installed agent's files refresh to match the binary on the next run after any upgrade (`--update`, brew, scoop, `go install`); a file you edited is left alone, and re-running with `--client=<id>` replaces it. See [integrations.md](integrations.md#keeping-the-integration-current). |
 | `--client <ids>` | With `--install-skill`, the comma-separated agent(s) to install for: any of `claude,codex,gemini,opencode,aider,cursor`. Empty opens the menu. |
 | `--update` | Download and install the latest GitHub release (defers to brew/scoop if one manages the binary). |
 | `--uninstall` | Remove the binary (your `.prereview/` review comments are left untouched; defers to brew/scoop). |

@@ -27,7 +27,7 @@ import (
 	"github.com/livetemplate/prereview/internal/skills"
 )
 
-func run(repo, base, host string, explicitHost, explicitBase bool, port int, agentMode, skillUpdated bool, out string, replace bool) error {
+func run(repo, base, host string, explicitHost, explicitBase bool, port int, agentMode bool, skillSyncs []skills.ClientSync, out string, replace bool) error {
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -152,6 +152,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 		Version:      version,
 		CSVWriter:    csvWriter,
 		AgentMode:    agentMode,
+		SkillSyncs:   skillSyncs,
 		Emitter:      emitter,
 		ShutdownReq:  shutdownReq,
 	}
@@ -253,7 +254,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, age
 
 	// Emit the `ready` event AFTER the plaintext preamble so the agent's
 	// READY/REPO parse is never interleaved with JSON. No-op when not in agent mode.
-	emitReady(emitter, storeRoot, csvPath, skillUpdated)
+	emitReady(emitter, storeRoot, csvPath, skills.AnyRefreshed(skillSyncs, "claude"))
 
 	// Watch the agent's inbound status file (.prereview/llm-status.json) and
 	// push each change to every open tab. Agent mode only — that's when an
@@ -399,7 +400,7 @@ func serveAndWait(srv *http.Server, ln net.Listener, extra *http.Server, shutdow
 // live local site on its own port (a separate origin so the app's root-relative
 // URLs forward cleanly — see proxy.go) plus the prereview UI that frames it and
 // overlays the region-annotation overlay. Annotations save to <out>/comments.csv.
-func runExternal(externalURL, outDir, host string, explicitHost bool, port int, agentMode, skillUpdated, replace bool) error {
+func runExternal(externalURL, outDir, host string, explicitHost bool, port int, agentMode bool, skillSyncs []skills.ClientSync, replace bool) error {
 	target, err := url.Parse(externalURL)
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
 		return fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
@@ -486,6 +487,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		Version:      version,
 		CSVWriter:    csvWriter,
 		AgentMode:    agentMode,
+		SkillSyncs:   skillSyncs,
 		Emitter:      emitter,
 		ShutdownReq:  shutdownReq,
 	}
@@ -523,7 +525,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	fmt.Printf("STORE %s\n", store)
 	slog.Info("prereview started (external)", "url", uiURL, "proxy", proxyBaseURL, "target", externalURL, "out", absOut, "store", store, "bindHost", bindHost)
 
-	emitReady(emitter, absOut, csvPath, skillUpdated)
+	emitReady(emitter, absOut, csvPath, skills.AnyRefreshed(skillSyncs, "claude"))
 
 	// Watch the agent's inbound status file and push changes to every open tab
 	// (agent mode only). Stops on shutdown.
