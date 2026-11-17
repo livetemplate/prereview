@@ -16,9 +16,9 @@ func hasSlug(ps []Prompt, slug string) bool {
 }
 
 func TestLoadPrompts_BuiltinsAndOverlay(t *testing.T) {
-	// Built-ins only (no user dir): the three shipped prompts are present.
+	// Built-ins only (no user dir): every shipped prompt is present.
 	builtins := LoadPrompts("")
-	for _, s := range []string{"grammar", "prose", "code-review"} {
+	for _, s := range []string{"code-review", "consistency", "grammar", "preamble", "prose"} {
 		if !hasSlug(builtins, s) {
 			t.Errorf("missing built-in prompt %q; got %v", s, builtins)
 		}
