@@ -38,6 +38,13 @@ prereview --install-skill --client=claude        # one-time: install the Claude 
 # then just say  /prereview  in Claude Code — it launches a session, you comment, it applies the fixes
 ```
 
+Or let your agent do the setup. Tell it:
+
+> Read https://raw.githubusercontent.com/livetemplate/prereview/main/docs/agent-setup.md and set up prereview.
+
+It installs the binary and the skill for whichever agent it is
+([docs/agent-setup.md](docs/agent-setup.md)).
+
 ## Features
 
 - **Comprehension quiz** - ask the agent to quiz you on the diff you are about to
