@@ -151,6 +151,8 @@ go install github.com/livetemplate/prereview@latest
 
 Quick-install knobs: `PREREVIEW_INSTALL_DIR=/path`, `PREREVIEW_VERSION=vX.Y.Z` (pin a specific release; omit for latest).
 
+For what prereview reads, writes, connects to and runs, and what it doesn't protect, see [docs/security.md](docs/security.md).
+
 <details>
 <summary>Behind a corporate proxy, upgrading, or uninstalling</summary>
 
