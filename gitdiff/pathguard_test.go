@@ -163,6 +163,11 @@ func TestWritableWithin(t *testing.T) {
 		"in.txt":         ErrLinkTarget,
 		"up/outside.txt": ErrOutsideRoot,
 		"../outside.txt": ErrOutsideRoot,
+		"..":             ErrOutsideRoot,
+		".":              ErrOutsideRoot,
+		"sub/..":         ErrOutsideRoot,
+		"sub/../..":      ErrOutsideRoot,
+		"":               ErrOutsideRoot,
 	} {
 		got, err := WritableWithin(repo, rel)
 		if want == nil {
