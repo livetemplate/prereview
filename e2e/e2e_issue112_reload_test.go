@@ -285,10 +285,12 @@ func TestE2E_Issue112_SensitivityControl(t *testing.T) {
 		t.Fatalf("control setup failed: the reveal never took effect")
 	}
 
-	// Drop the session, then reload.
+	// Drop the session, then load the page again. Clearing cookies drops the
+	// launch token's cookie too, so the reload goes through the printed URL,
+	// which sets a new one; livetemplate's session stays dropped.
 	if err := chromedp.Run(p.ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error { return cdpnetwork.ClearBrowserCookies().Do(ctx) }),
-		chromedp.Reload(),
+		chromedp.Navigate(p.url+"#edited.go"),
 		chromedp.WaitVisible(row+` .line-mark`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("reload after clearing cookies: %v", err)

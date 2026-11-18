@@ -29,8 +29,9 @@ import (
 const libraryReviewFile = "library-review.json"
 
 type libraryReview struct {
-	PID  int `json:"pid"`
-	Port int `json:"port"`
+	PID   int    `json:"pid"`
+	Port  int    `json:"port"`
+	Token string `json:"token,omitempty"` // the child's launch token, from its READY line
 }
 
 // libraryReviewHandler serves /_library-review: it starts (or reuses) a review
@@ -44,14 +45,18 @@ func libraryReviewHandler(libraryDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
-		port, err := ensureLibraryReview(r, libraryDir)
+		child, err := ensureLibraryReview(r, libraryDir)
 		if err != nil {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusConflict)
 			fmt.Fprintf(w, "<!doctype html><meta name=viewport content='width=device-width'><p>Couldn't open a review of the library: %s</p>", html.EscapeString(err.Error()))
 			return
 		}
-		http.Redirect(w, r, (&url.URL{Scheme: "http", Host: net.JoinHostPort(hostOnly(r.Host), strconv.Itoa(port)), Path: "/"}).String(), http.StatusSeeOther)
+		dest := (&url.URL{Scheme: "http", Host: net.JoinHostPort(hostOnly(r.Host), strconv.Itoa(child.Port)), Path: "/"}).String()
+		if child.Token != "" {
+			dest = launchToken{value: child.Token}.url(dest)
+		}
+		http.Redirect(w, r, dest, http.StatusSeeOther)
 	}
 }
 
@@ -117,9 +122,9 @@ func trustedHost(r *http.Request) bool {
 	return ip.IsLoopback() || net.ParseIP(localIP(r)).Equal(ip)
 }
 
-// ensureLibraryReview returns the port of the library review server, starting one
-// when none recorded is alive.
-func ensureLibraryReview(r *http.Request, libraryDir string) (int, error) {
+// ensureLibraryReview returns the library review server's record (its port and
+// launch token), starting one when none recorded is alive.
+func ensureLibraryReview(r *http.Request, libraryDir string) (libraryReview, error) {
 	store := review.LibraryStoreDir(libraryDir)
 	rec := filepath.Join(store, libraryReviewFile)
 	// Reuse only a server that is still the library store's owner: its pid holds
@@ -127,11 +132,11 @@ func ensureLibraryReview(r *http.Request, libraryDir string) (int, error) {
 	var cur libraryReview
 	if b, err := os.ReadFile(rec); err == nil && json.Unmarshal(b, &cur) == nil && cur.Port > 0 && processAlive(cur.PID) {
 		if owner, ok := readServerPID(filepath.Join(store, serverPIDFileName)); ok && owner == cur.PID {
-			return cur.Port, nil
+			return cur, nil
 		}
 	}
 	if err := os.MkdirAll(store, 0o755); err != nil {
-		return 0, err
+		return libraryReview{}, err
 	}
 	bind := localIP(r)
 	if bind == "" {
@@ -139,22 +144,23 @@ func ensureLibraryReview(r *http.Request, libraryDir string) (int, error) {
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		return 0, err
+		return libraryReview{}, err
 	}
 	logf, err := os.OpenFile(filepath.Join(store, "library-review.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return 0, err
+		return libraryReview{}, err
 	}
-	cmd := exec.Command(exe, "--agent", "--host", bind, "--port", "0", libraryDir)
+	// --no-update: the parent already decided about updates for this launch.
+	cmd := exec.Command(exe, "--agent", "--no-update", "--host", bind, "--port", "0", libraryDir)
 	cmd.Stderr = logf
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		logf.Close()
-		return 0, err
+		return libraryReview{}, err
 	}
 	if err := cmd.Start(); err != nil {
 		logf.Close()
-		return 0, err
+		return libraryReview{}, err
 	}
 	go func() {
 		_ = cmd.Wait()
@@ -168,7 +174,7 @@ func ensureLibraryReview(r *http.Request, libraryDir string) (int, error) {
 		}
 	}()
 
-	ready := make(chan int, 1)
+	ready := make(chan libraryReview, 1)
 	go func() {
 		sc := bufio.NewScanner(stdout)
 		sent := false
@@ -176,7 +182,7 @@ func ensureLibraryReview(r *http.Request, libraryDir string) (int, error) {
 			if u, ok := strings.CutPrefix(sc.Text(), "READY "); ok && !sent {
 				if pu, err := url.Parse(strings.TrimSpace(u)); err == nil {
 					if p, err := strconv.Atoi(pu.Port()); err == nil {
-						ready <- p
+						ready <- libraryReview{PID: cmd.Process.Pid, Port: p, Token: pu.Query().Get(tokenParam)}
 						sent = true
 					}
 				}
@@ -188,18 +194,21 @@ func ensureLibraryReview(r *http.Request, libraryDir string) (int, error) {
 		}
 	}()
 	select {
-	case p, ok := <-ready:
+	case child, ok := <-ready:
 		if !ok {
-			return 0, errors.New("it exited before it was ready (see " + filepath.Join(store, "library-review.log") + "); a review of the library may already be running")
+			return libraryReview{}, errors.New("it exited before it was ready (see " + filepath.Join(store, "library-review.log") + "); a review of the library may already be running")
 		}
-		b, _ := json.Marshal(libraryReview{PID: cmd.Process.Pid, Port: p})
-		if err := os.WriteFile(rec, b, 0o644); err != nil {
-			return 0, err
+		b, _ := json.Marshal(child)
+		// 0600: the record holds the child's token. WriteFile keeps an existing
+		// file's mode, so set it too.
+		if err := os.WriteFile(rec, b, 0o600); err != nil {
+			return libraryReview{}, err
 		}
-		return p, nil
+		_ = os.Chmod(rec, 0o600)
+		return child, nil
 	case <-time.After(15 * time.Second):
 		_ = cmd.Process.Kill()
-		return 0, errors.New("it didn't start within 15s")
+		return libraryReview{}, errors.New("it didn't start within 15s")
 	}
 }
 

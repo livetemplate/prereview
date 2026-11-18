@@ -61,15 +61,16 @@ flags, or `prereview help` for the top-level list.
 On startup, prereview prints these lines to stdout, in order:
 
 ```
-READY http://<host>:<port>
-ALT   http://<host>:<port>     (zero or more; only when on a tailnet)
+READY http://<host>:<port>/?token=<token>
+ALT   http://<host>:<port>/?token=<token>     (zero or more; only when on a tailnet)
 PROXY http://<host>:<port>     (external mode only; the proxy origin the UI frames)
 REPO  <absolute review-root directory>
 STORE <absolute store directory>
 ```
 
 `READY` is the **first line** and carries the canonical, always-reachable URL
-(loopback locally; the Tailscale IP on a remote box). It is the only line the skill and
+(loopback locally; the Tailscale IP on a remote box). Its `token` is made fresh at
+each launch, and a page opened without it answers 403, so pass the URL on whole. It is the only line the skill and
 the e2e harness machine-parse — match the literal prefix `READY ` and take the rest.
 Zero or more `ALT` lines follow with additional reachable forms (chiefly the MagicDNS
 hostname); they are purely additive and parsers may ignore them. In external mode one

@@ -60,6 +60,30 @@ const proxyBeaconJS = `<script>(function(){
   [0,250,700,1500,3000].forEach(function(d){setTimeout(nav,d);});
 })();</script>`
 
+// ServerCookiePrefix starts the name of every cookie prereview sets. Cookies
+// ignore ports, so the proxy receives the cookies of every prereview server on
+// its host; none of them is forwarded to the proxied site.
+const ServerCookiePrefix = "prereview-"
+
+// dropServerCookies removes prereview's own cookies from an outgoing request,
+// keeping the proxied site's.
+func dropServerCookies(r *http.Request) {
+	cookies := r.Cookies()
+	kept := make([]string, 0, len(cookies))
+	for _, c := range cookies {
+		if !strings.HasPrefix(c.Name, ServerCookiePrefix) {
+			kept = append(kept, c.String())
+		}
+	}
+	if len(kept) == len(cookies) {
+		return
+	}
+	r.Header.Del("Cookie")
+	if len(kept) > 0 {
+		r.Header.Set("Cookie", strings.Join(kept, "; "))
+	}
+}
+
 // NewExternalProxy builds the reverse proxy that fronts the user's live local
 // server in `--external` mode. It runs on its OWN port (a separate origin from
 // the prereview UI) so the app's root-relative URLs (`/api/…`, `/@vite/client`,
@@ -73,6 +97,7 @@ func NewExternalProxy(target *url.URL) http.Handler {
 	rp := &httputil.ReverseProxy{}
 	rp.Rewrite = func(pr *httputil.ProxyRequest) {
 		pr.SetURL(target)
+		dropServerCookies(pr.Out)
 		// Only document navigations get the beacon injected, so only those
 		// need to come back uncompressed. Asset responses keep their
 		// upstream compression untouched.

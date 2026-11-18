@@ -304,6 +304,11 @@ pass an explicit `--host`. Passing `--host` explicitly is an absolute override
 interface, including any public IP. The first stdout line is `READY <url>`; extra
 `ALT <url>` lines (e.g. the MagicDNS hostname) may follow.
 
+Every printed URL carries `?token=…`, a secret made fresh at each launch. Opening
+it sets a cookie for that server and drops the token from the address bar; a
+request without the cookie or the token gets 403. A restart makes a new token, so
+an open tab needs the new link.
+
 ### Behind a proxy or in a sandbox
 
 A sandbox that runs your agent, such as exe.dev or GitHub Codespaces, usually
@@ -322,8 +327,7 @@ prereview --agent --public-url https://<vm>.exe.xyz:4799
 - **The bind address doesn't change.** It stays `127.0.0.1`, or the Tailscale IP
   on a remote box. If the proxy reaches the machine on its network address
   rather than on loopback, add `--host 0.0.0.0`. Do this only behind a private
-  proxy: prereview has no login, so anyone who reaches the port can drive the
-  review.
+  proxy: anyone who has the printed link can drive the review.
 - **The WebSocket origin check.** A proxy that rewrites the `Host` header, or
   that drops `X-Forwarded-Proto`, fails livetemplate's same-origin check. The
   page then loads but never updates. The server logs `WebSocket upgrade failed …

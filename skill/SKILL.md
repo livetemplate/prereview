@@ -33,8 +33,8 @@ The review path is the **positional argument** (defaults to the current director
 cd <repo>
 prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &
 # stdout:
-#   READY http://127.0.0.1:PORT        (canonical URL; Tailscale IP on a remote box)
-#   ALT   http://host.tailnet.ts.net:PORT   (0+ friendlier equivalents; only on a tailnet)
+#   READY http://127.0.0.1:PORT/?token=…        (canonical URL; Tailscale IP on a remote box)
+#   ALT   http://host.tailnet.ts.net:PORT/?token=…   (0+ friendlier equivalents; only on a tailnet)
 #   REPO  /abs/dir/the/reviewed/files/are/under
 #   STORE /abs/path/to/this/review/s/store   (the --out for every subcommand)
 #   {"event":"ready","seq":0,...}       (events mirror to stdout too; consume with `prereview watch`)
@@ -102,14 +102,18 @@ with friendlier equivalents (notably the MagicDNS hostname). Present the URL as 
 **Markdown link**, never bare text — the user is often on the mobile Claude app,
 where a `[url](url)` link is one tap and a bare URL can't be tapped:
 
-> I've opened a review session — tap to open: **[http://100.x.y.z:PORT](http://100.x.y.z:PORT)**
-> (hostname: [http://host.tailnet.ts.net:PORT](http://host.tailnet.ts.net:PORT))
+> I've opened a review session — tap to open: **[http://100.x.y.z:PORT/?token=…](http://100.x.y.z:PORT/?token=…)**
+> (hostname: [http://host.tailnet.ts.net:PORT/?token=…](http://host.tailnet.ts.net:PORT/?token=…))
 > Just leave comments as you go — I'll pick them up automatically and address them.
 > Hit **⏸ Pause** to batch a few first, **▶ Resume** to release them, and
 > **End session** when you're done.
 
 When an `ALT` MagicDNS hostname is present, make **that** the headline link
 (stable and readable); otherwise use the `READY` URL. Always wrap as `[url](url)`.
+
+Every printed URL ends in `?token=…`, a secret made fresh at each launch. Show the
+URL whole: never shorten it, and never build one from the port, or the page answers
+403. A restart (including `--replace`) makes a new token, so share the new link.
 
 ## The agent loop
 

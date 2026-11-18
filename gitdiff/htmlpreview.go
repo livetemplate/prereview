@@ -5,6 +5,7 @@ import (
 	htmlpkg "html"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/net/html"
 )
@@ -290,7 +291,7 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 			name := string(nameBytes)
 			var attrs []rawAttr
 			if hasAttr {
-				attrs = readAttrs(z)
+				attrs = prefixRootURLs(readAttrs(z))
 			}
 
 			if !selfClosing && !inHead && !inBody && name == "head" {
@@ -367,10 +368,55 @@ func previewBaseHref(currentPath string) string {
 	if i := strings.LastIndex(currentPath, "/"); i >= 0 {
 		dir = currentPath[:i]
 	}
-	if dir == "" {
-		return "/"
+	href := previewFilesBase() + "/"
+	if dir != "" {
+		href += encodePath(dir) + "/"
 	}
-	return "/" + encodePath(dir) + "/"
+	return href
+}
+
+var filesBase atomic.Pointer[string]
+
+// SetPreviewFilesBase sets the path prefix (such as "/_files/<key>") that the
+// HTML preview loads repo files under. The preview iframe is an opaque origin,
+// so the browser sends no cookie with its requests, and the prefix carries a
+// read-only key instead. Call it once at startup, before any diff loads. Unset
+// (as in tests), files load from the server root.
+func SetPreviewFilesBase(prefix string) { filesBase.Store(&prefix) }
+
+func previewFilesBase() string {
+	if p := filesBase.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+// prefixRootURLs moves root-absolute URL attributes ("/img/a.png", and each
+// srcset candidate) under the preview files base, as <base> does for relative
+// ones. Protocol-relative
+// "//host" URLs are another site's and stay as they are. A url() inside a
+// stylesheet is not rewritten.
+func prefixRootURLs(attrs []rawAttr) []rawAttr {
+	base := previewFilesBase()
+	if base == "" {
+		return attrs
+	}
+	root := func(u string) bool { return strings.HasPrefix(u, "/") && !strings.HasPrefix(u, "//") }
+	for i, a := range attrs {
+		switch {
+		case strings.EqualFold(a.key, "srcset"):
+			cands := strings.Split(a.val, ",")
+			for j, c := range cands {
+				if t := strings.TrimLeft(c, " \t\n"); root(t) {
+					cands[j] = c[:len(c)-len(t)] + base + t
+				}
+			}
+			attrs[i].val = strings.Join(cands, ",")
+		case (isURLAttr(a.key) || strings.EqualFold(a.key, "poster")) && root(a.val):
+			attrs[i].val = base + a.val
+		}
+	}
+	return attrs
 }
 
 // readAttrs drains the tokenizer's attribute cursor for the current

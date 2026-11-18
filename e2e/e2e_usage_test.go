@@ -99,7 +99,7 @@ func TestE2E_UsagePage(t *testing.T) {
 	// 3. Navigate straight to /_usage and assert the CURATED guide renders —
 	//    not either decoy. (target=_blank would open a new tab; a direct nav
 	//    asserts the same route without the tab-handling flakiness.)
-	if err := chromedp.Run(p.ctx, chromedp.Navigate(p.url+"/_usage")); err != nil {
+	if err := chromedp.Run(p.ctx, chromedp.Navigate(baseURL(p.url)+"/_usage")); err != nil {
 		t.Fatalf("navigate /_usage: %v%s", err, diag())
 	}
 	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.md-rendered h1`, chromedp.ByQuery)); err != nil {
