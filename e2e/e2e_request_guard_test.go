@@ -98,7 +98,7 @@ func TestE2E_CrossOriginActionBlocked(t *testing.T) {
 	p.waitReady()
 	target := baseURL(p.url) + "/"
 
-	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprintf(w, `<!doctype html><title>waiting</title><script>
 fetch(%q, {method: "POST", mode: "no-cors", credentials: "include",
@@ -106,9 +106,9 @@ fetch(%q, {method: "POST", mode: "no-cors", credentials: "include",
   .then(() => { document.title = "sent"; }, (e) => { document.title = "error " + e; });
 </script>`, target)
 	}))
-	defer evil.Close()
+	defer other.Close()
 
-	if err := chromedp.Run(p.ctx, chromedp.Navigate(evil.URL)); err != nil {
+	if err := chromedp.Run(p.ctx, chromedp.Navigate(other.URL)); err != nil {
 		t.Fatal(err)
 	}
 	waitJSTrue(t, p.ctx, `document.title === "sent"`, 10*time.Second, "the other port's page sent its request")
@@ -127,8 +127,8 @@ fetch(%q, {method: "POST", mode: "no-cors", credentials: "include",
 }
 
 // A repo .html opened by its own URL runs with no scripts: the response's
-// sandbox CSP gives it an opaque origin and no script execution, so it can't
-// drive the review from prereview's origin.
+// sandbox CSP gives it an opaque origin and no script execution, so the
+// review keeps running and its socket count is unchanged.
 func TestE2E_RepoHTMLSandboxed(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureRepo(t), 1200, 800)
 	statuses := wsHandshakes(t, p.ctx)
@@ -137,17 +137,17 @@ func TestE2E_RepoHTMLSandboxed(t *testing.T) {
 	waitUpgraded(t, statuses, "review tab", diag)
 	before := len(statuses())
 
-	probe := `<!doctype html><title>static</title><script>
+	page := `<!doctype html><title>static</title><script>
 document.title = "ran";
 new WebSocket("ws://" + location.host + "/");
 fetch("/", {method: "POST", headers: {"Content-Type": "text/plain"}, body: JSON.stringify({action: "quit"})});
-</script><p>probe</p>`
-	if err := os.WriteFile(filepath.Join(p.repo, "probe.html"), []byte(probe), 0o644); err != nil {
+</script><p>page</p>`
+	if err := os.WriteFile(filepath.Join(p.repo, "scripted.html"), []byte(page), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	var title string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Navigate(baseURL(p.url)+"/probe.html"),
+		chromedp.Navigate(baseURL(p.url)+"/scripted.html"),
 		chromedp.WaitVisible(`p`, chromedp.ByQuery),
 		chromedp.Sleep(1500*time.Millisecond),
 		chromedp.Title(&title),

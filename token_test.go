@@ -55,7 +55,7 @@ func TestLaunchTokenGuard(t *testing.T) {
 		{name: "query token on a POST", method: "POST", target: "/?token=" + tok.value, want: 403},
 		{name: "query token", method: "GET", target: "/?token=" + tok.value, want: 303, location: "/"},
 		{name: "query token keeps the rest", method: "GET", target: "/a/b.html?x=1&token=" + tok.value, want: 303, location: "/a/b.html?x=1"},
-		{name: "query token stays on site", method: "GET", target: "//evil.example/x?token=" + tok.value, want: 303, location: "/evil.example/x"},
+		{name: "query token stays on site", method: "GET", target: "//other.example/x?token=" + tok.value, want: 303, location: "/other.example/x"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := serveCase(t, h, tc)

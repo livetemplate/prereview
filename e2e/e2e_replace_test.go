@@ -60,8 +60,8 @@ func TestE2E_ReplaceConfirmsBeforeStopping(t *testing.T) {
 	sleeperDone := make(chan struct{})
 	go func() { _ = sleeper.Wait(); close(sleeperDone) }()
 	t.Cleanup(func() { _ = sleeper.Process.Kill(); <-sleeperDone })
-	forged, _ := json.Marshal(pidRecord{PID: sleeper.Process.Pid, Addr: rec.Addr})
-	if err := os.WriteFile(filepath.Join(one.store, "server.pid"), forged, 0o644); err != nil {
+	stale, _ := json.Marshal(pidRecord{PID: sleeper.Process.Pid, Addr: rec.Addr})
+	if err := os.WriteFile(filepath.Join(one.store, "server.pid"), stale, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
