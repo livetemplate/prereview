@@ -613,9 +613,10 @@ var staticAllowedExt = map[string]bool{
 // (.git/.prereview/.env), non-allowlisted extension, WebSocket
 // upgrade on `/` — is delegated to next, which is the LiveHandler.
 //
-// Two independent traversal defenses: reject any path segment that
-// begins with `.`, AND verify EvalSymlinks(resolved) stays under
-// EvalSymlinks(root). Either alone is enough; both is belt-and-braces.
+// The dot-segment and extension rules apply to both the URL path and the
+// file it resolves to (servableTarget), and EvalSymlinks(resolved) must stay under
+// EvalSymlinks(root). A link inside the repo passes the URL checks by its own
+// name, so checking the URL alone serves whatever the link points at.
 func staticFallback(root string, next http.Handler) http.Handler {
 	rootResolved, err := filepath.EvalSymlinks(root)
 	if err != nil || rootResolved == "" {
@@ -629,18 +630,14 @@ func staticFallback(root string, next http.Handler) http.Handler {
 		// URL semantics: path.Clean (not filepath.Clean) collapses ".."
 		// and "." in slash-separated paths regardless of OS.
 		cleaned := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
-		if cleaned == "/" || hasDotComponent(cleaned) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if !staticAllowedExt[strings.ToLower(filepath.Ext(cleaned))] {
+		if !servablePath(cleaned) {
 			next.ServeHTTP(w, r)
 			return
 		}
 		// ResolveWithin refuses a path, or a symlink on it, that leaves the
 		// repo; a missing file is a 404 too.
 		resolved, err := gitdiff.ResolveWithin(rootResolved, strings.TrimPrefix(cleaned, "/"))
-		if err != nil {
+		if err != nil || !servableTarget(rootResolved, resolved) {
 			http.NotFound(w, r)
 			return
 		}
@@ -672,6 +669,20 @@ func staticFallback(root string, next http.Handler) http.Handler {
 		// honours Range, and handles If-Modified-Since for 304s.
 		http.ServeContent(w, r, resolved, info.ModTime(), f)
 	})
+}
+
+// servablePath reports whether a slash-rooted repo path may be served: not the
+// root, no dot segment, and an allowlisted extension.
+func servablePath(p string) bool {
+	return p != "/" && !hasDotComponent(p) && staticAllowedExt[strings.ToLower(filepath.Ext(p))]
+}
+
+// servableTarget applies servablePath to the file a request resolved to: a
+// link inside the repo (logo.png → .env) passes the URL check by its own name,
+// so the target must pass it too.
+func servableTarget(rootResolved, resolved string) bool {
+	rel, err := filepath.Rel(rootResolved, resolved)
+	return err == nil && servablePath("/"+filepath.ToSlash(rel))
 }
 
 // hasDotComponent returns true if any segment of cleaned (a slash-rooted

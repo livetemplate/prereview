@@ -135,6 +135,10 @@ func (c *PrereviewController) versionScope() []FileRef {
 		if f.Path == "" || f.Status == "" || strings.HasPrefix(f.Path, ".prereview/") {
 			continue
 		}
+		// A link that leaves the repo is never read: its target isn't under review.
+		if _, err := gitdiff.ResolveWithin(c.RepoPath, f.Path); errors.Is(err, gitdiff.ErrOutsideRoot) {
+			continue
+		}
 		refs = append(refs, FileRef{Path: f.Path, AbsPath: filepath.Join(c.RepoPath, f.Path)})
 	}
 	return refs
@@ -365,7 +369,10 @@ func (c *PrereviewController) RestoreVersion(state PrereviewState, ctx *livetemp
 	// emit — resolve/delete it as part of rolling back if you don't want it redone.)
 
 	// (1) Apply to disk: write the restored bytes, or delete for a tombstone.
-	full := filepath.Join(c.RepoPath, state.SelectedFile)
+	full, perr := gitdiff.WritableWithin(c.RepoPath, state.SelectedFile)
+	if perr != nil {
+		return state, fmt.Errorf("restore version %d: %w", seq, perr)
+	}
 	if errors.Is(err, ErrVersionTombstone) {
 		if rerr := os.Remove(full); rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
 			return state, fmt.Errorf("remove restored file: %w", rerr)
