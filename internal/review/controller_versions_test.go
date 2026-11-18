@@ -1,11 +1,16 @@
 package review
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/gitdiff"
 )
 
 // TestVersionScope_ExcludesPrereviewDir is the load-bearing safety check: the
@@ -111,5 +116,59 @@ func mustWrite(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A file swapped for a link after its checkpoint is not written through:
+// restoring it would change whatever the link points at.
+func TestRestoreVersion_RefusesALink(t *testing.T) {
+	parent := t.TempDir()
+	repo := filepath.Join(parent, "repo")
+	victim := filepath.Join(parent, "victim.txt")
+	mustWrite(t, victim, "untouched")
+	mustWrite(t, filepath.Join(repo, "a.txt"), "checkpointed")
+	s := newTestStore(t)
+	if _, _, err := s.Checkpoint([]FileRef{{Path: "a.txt", AbsPath: filepath.Join(repo, "a.txt")}}, VersionTriggerBaseline, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(repo, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, filepath.Join(repo, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &PrereviewController{RepoPath: repo, NoGit: true, Versions: s}
+	ctx := livetemplate.NewContext(context.TODO(), "restoreVersion", map[string]interface{}{"seq": 0})
+	if _, err := c.RestoreVersion(PrereviewState{SelectedFile: "a.txt"}, ctx); !errors.Is(err, gitdiff.ErrLinkTarget) {
+		t.Fatalf("RestoreVersion err = %v, want %v", err, gitdiff.ErrLinkTarget)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "untouched" {
+		t.Fatalf("the link's target was written: %q", b)
+	}
+}
+
+// A link that leaves the repo is left out of the snapshot scope, so its
+// target is never read into the version store.
+func TestVersionScope_SkipsLinksOutOfRoot(t *testing.T) {
+	parent := t.TempDir()
+	repo := filepath.Join(parent, "repo")
+	mustWrite(t, filepath.Join(parent, "secret.txt"), "outside")
+	mustWrite(t, filepath.Join(repo, "a.txt"), "a")
+	mustWrite(t, filepath.Join(repo, "b.txt"), "b")
+	if err := os.Symlink(filepath.Join(parent, "secret.txt"), filepath.Join(repo, "out.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("b.txt", filepath.Join(repo, "in.txt")); err != nil {
+		t.Fatal(err)
+	}
+	c := &PrereviewController{RepoPath: repo, NoGit: true, Versions: &VersionStore{}}
+	var paths []string
+	for _, r := range c.versionScope() {
+		paths = append(paths, r.Path)
+	}
+	slices.Sort(paths)
+	if want := []string{"a.txt", "b.txt", "in.txt"}; !slices.Equal(paths, want) {
+		t.Fatalf("versionScope = %v, want %v", paths, want)
 	}
 }

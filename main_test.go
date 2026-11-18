@@ -299,6 +299,51 @@ func TestStaticFallbackSymlinkEscape(t *testing.T) {
 	}
 }
 
+// A link inside the repo is served only when its target would be: a dotfile,
+// a file under a dot directory, or a type off the allowlist stays hidden
+// behind an allowlisted name, and a link to a servable file still works.
+func TestStaticFallbackInRootLinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows; prereview e2e is Linux-only")
+	}
+	root := t.TempDir()
+	for name, body := range map[string]string{
+		".env":                    "TOKEN=env-secret",
+		".git/config":             "url = https://user:git-secret@example.com/r.git",
+		".prereview/comments.csv": "id,body\n1,store-secret",
+		"notes.txt":               "txt-secret",
+		"assets/real.png":         "png-bytes",
+	} {
+		mustWriteFile(t, filepath.Join(root, name), []byte(body))
+	}
+	for link, target := range map[string]string{
+		"logo.png":  ".env",
+		"cfg.js":    ".git/config",
+		"page.html": ".prereview/comments.csv",
+		"img.svg":   "notes.txt",
+		"ok.png":    "assets/real.png",
+	} {
+		if err := os.Symlink(target, filepath.Join(root, link)); err != nil {
+			t.Fatalf("symlink: %v", err)
+		}
+	}
+	h := staticFallback(root, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("%s fell through to the page handler", r.URL.Path)
+	}))
+	for _, link := range []string{"/logo.png", "/cfg.js", "/page.html", "/img.svg"} {
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, link, nil))
+		if rr.Code != http.StatusNotFound || strings.Contains(rr.Body.String(), "secret") {
+			t.Errorf("%s: status %d body %q, want 404", link, rr.Code, rr.Body.String())
+		}
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ok.png", nil))
+	if rr.Code != http.StatusOK || rr.Body.String() != "png-bytes" {
+		t.Errorf("/ok.png: status %d body %q, want the linked image", rr.Code, rr.Body.String())
+	}
+}
+
 func mustWriteFile(t *testing.T, path string, body []byte) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

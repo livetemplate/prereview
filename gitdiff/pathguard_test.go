@@ -1,6 +1,7 @@
 package gitdiff
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -125,6 +126,58 @@ func TestLoadDiffPathIsLiteral(t *testing.T) {
 			if strings.Contains(l.Content, "not under review") {
 				t.Fatalf("LoadDiff with a pathspec read a file outside the review root")
 			}
+		}
+	}
+}
+
+// A write lands only on a plain file whose folder is inside the root: a link,
+// even one pointing inside the root, would change the file it points at.
+func TestWritableWithin(t *testing.T) {
+	parent := t.TempDir()
+	repo := filepath.Join(parent, "repo")
+	for _, p := range []string{filepath.Join(repo, "sub", "in.txt"), filepath.Join(parent, "outside.txt")} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for link, target := range map[string]string{
+		"out.txt": filepath.Join(parent, "outside.txt"),
+		"in.txt":  filepath.Join(repo, "sub", "in.txt"),
+		"up":      parent,
+	} {
+		if err := os.Symlink(target, filepath.Join(repo, link)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resolvedRepo, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rel, want := range map[string]error{
+		"sub/in.txt":     nil,
+		"sub/new.txt":    nil,
+		"out.txt":        ErrLinkTarget,
+		"in.txt":         ErrLinkTarget,
+		"up/outside.txt": ErrOutsideRoot,
+		"../outside.txt": ErrOutsideRoot,
+		"..":             ErrOutsideRoot,
+		".":              ErrOutsideRoot,
+		"sub/..":         ErrOutsideRoot,
+		"sub/../..":      ErrOutsideRoot,
+		"":               ErrOutsideRoot,
+	} {
+		got, err := WritableWithin(repo, rel)
+		if want == nil {
+			if err != nil || got != filepath.Join(resolvedRepo, filepath.FromSlash(rel)) {
+				t.Errorf("%s: got %q, %v; want the path under the repo", rel, got, err)
+			}
+			continue
+		}
+		if !errors.Is(err, want) {
+			t.Errorf("%s: err = %v, want %v", rel, err, want)
 		}
 	}
 }

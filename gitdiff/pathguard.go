@@ -3,6 +3,7 @@ package gitdiff
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -35,6 +36,36 @@ func ResolveWithin(root, rel string) (string, error) {
 		return "", fmt.Errorf("%s: %w", rel, ErrOutsideRoot)
 	}
 	return resolved, nil
+}
+
+// ErrLinkTarget reports a write refused because the path is a symlink: writing
+// to it would change whatever file the link points at.
+var ErrLinkTarget = errors.New("path is a symlink")
+
+// WritableWithin returns the absolute path for writing or deleting rel under
+// root. rel's folder must resolve inside root, and rel itself must not be a
+// symlink. A missing file is fine (a restore can recreate it).
+func WritableWithin(root, rel string) (string, error) {
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if base := filepath.Base(clean); base == "." || base == ".." {
+		return "", fmt.Errorf("%s: %w", rel, ErrOutsideRoot)
+	}
+	dir, err := ResolveWithin(root, filepath.Dir(clean))
+	if err != nil {
+		return "", err
+	}
+	rootResolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", err
+	}
+	full := filepath.Join(dir, filepath.Base(clean))
+	if !strings.HasPrefix(full, rootResolved+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s: %w", rel, ErrOutsideRoot)
+	}
+	if fi, err := os.Lstat(full); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("%s: %w", rel, ErrLinkTarget)
+	}
+	return full, nil
 }
 
 // checkWithin is the loaders' guard: a path outside root is an error; one that
