@@ -205,6 +205,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	// falls through to the LiveHandler unchanged.
 	mux.Handle("/", staticFallback(absRepo, tmpl.Handle(controller, livetemplate.AsState(initial))))
 	registerAssetRoutes(mux)
+	mux.HandleFunc(serverPIDRoute, serveServerPID)
 	if controller.LibraryDir != "" {
 		mux.HandleFunc("/_library-review", guardLibraryRoute(libraryReviewHandler(controller.LibraryDir)))
 		mux.HandleFunc("/_library-export", guardLibraryRoute(libraryExportHandler(controller.LibraryDir)))
@@ -218,6 +219,10 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 	actual := ln.Addr().(*net.TCPAddr)
+	if err := recordServerAddr(store, actual); err != nil {
+		ln.Close()
+		return err
+	}
 
 	srv := &http.Server{
 		Handler:           mux,
@@ -506,12 +511,17 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	// site's own assets flow through the proxy origin, not this one.
 	mux.Handle("/", tmpl.Handle(controller, livetemplate.AsState(initial)))
 	registerAssetRoutes(mux)
+	mux.HandleFunc(serverPIDRoute, serveServerPID)
 
 	uiLn, err := net.Listen("tcp", net.JoinHostPort(bindHost, fmt.Sprintf("%d", port)))
 	if err != nil {
 		return fmt.Errorf("listen ui: %w", err)
 	}
 	uiPort := uiLn.Addr().(*net.TCPAddr).Port
+	if err := recordServerAddr(store, uiLn.Addr()); err != nil {
+		uiLn.Close()
+		return err
+	}
 	uiSrv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
 	uiURL := fmt.Sprintf("http://%s:%d", bindHost, uiPort)

@@ -91,7 +91,9 @@ take over:
 prereview --agent --replace "$(pwd)" &
 ```
 
-Comments auto-save, so nothing is lost when the old server is replaced.
+Comments auto-save, so nothing is lost when the old server is replaced. If `--replace`
+says it can't confirm the running server, that server predates this check: ask the
+reviewer to stop it, then relaunch.
 
 ## Tell the user — with a clickable link
 

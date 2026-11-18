@@ -162,7 +162,7 @@ Full event-schema and comment-field docs: [skill/reference.md](../skill/referenc
 | `--external <url>` | — | Annotate a **live local site** instead of files: reverse-proxies `<url>` on a second origin and overlays region annotation. **Requires `--out`**; ignores `[path]` and `--base`. See [External mode](#external-mode---external). |
 | `--out <dir>` | the review path | Store root — the directory under which the store holding `comments.csv` + the event log is created. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The resolved store is printed as the `STORE` stdout line, which is what the [subcommands](#subcommands) take as `--out`. |
 | `--agent` | `false` | Run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`) and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. See [Agent mode](#agent-mode---agent). |
-| `--replace` | `false` | prereview refuses to start a second server for the same store (duplicate servers fight over it). `--replace` stops the running one and takes over. Comments auto-save, so nothing is lost. |
+| `--replace` | `false` | prereview refuses to start a second server for the same store (duplicate servers fight over it). `--replace` stops the running one and takes over. Comments auto-save, so nothing is lost. It stops a server only after that server confirms it is the process named in the store's `server.pid`. A server started by an older prereview can't confirm, so stop that one yourself. |
 | `--skill` / `--stream` | `false` | **Deprecated aliases of `--agent`** — still enable agent mode, print a deprecation warning. Use `--agent`. |
 
 ### Run-and-exit actions
