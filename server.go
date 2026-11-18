@@ -140,6 +140,15 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 		return fmt.Errorf("livetemplate.New: %w", err)
 	}
 
+	// The launch token, and the files key the HTML preview loads repo files
+	// with, exist before the controller: a diff loaded during startup already
+	// carries the files base.
+	token := newLaunchToken()
+	if err := privateOutput(os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "prereview: %v\n", err)
+	}
+	gitdiff.SetPreviewFilesBase(token.filesBase())
+
 	// Quit action signals here so the HTTP server can shut down gracefully
 	// AFTER the framework has rendered the "stopping…" state back to the client.
 	shutdownReq := make(chan struct{}, 1)
@@ -204,7 +213,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	// repo root; everything else (POSTs, WS upgrades, non-asset paths)
 	// falls through to the LiveHandler unchanged.
 	mux.Handle("/", staticFallback(absRepo, tmpl.Handle(controller, livetemplate.AsState(initial))))
-	registerAssetRoutes(mux)
+	registerUsageRoute(mux)
 	if controller.LibraryDir != "" {
 		mux.HandleFunc("/_library-review", guardLibraryRoute(libraryReviewHandler(controller.LibraryDir)))
 		mux.HandleFunc("/_library-export", guardLibraryRoute(libraryExportHandler(controller.LibraryDir)))
@@ -218,9 +227,13 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 	actual := ln.Addr().(*net.TCPAddr)
+	if err := recordServerAddr(store, actual); err != nil {
+		ln.Close()
+		return err
+	}
 
 	srv := &http.Server{
-		Handler:           mux,
+		Handler:           guardedHandler(token, mux, staticFallback(absRepo, http.NotFoundHandler())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -233,16 +246,16 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	// With --public-url (#65) READY is that URL, the one a browser outside the
 	// box can open, and the local bind URL drops to the first ALT line.
 	if publicURL != "" {
-		fmt.Printf("READY %s\n", publicURL)
-		fmt.Printf("ALT %s\n", url)
+		fmt.Printf("READY %s\n", token.url(publicURL))
+		fmt.Printf("ALT %s\n", token.url(url))
 	} else {
-		fmt.Printf("READY %s\n", url)
+		fmt.Printf("READY %s\n", token.url(url))
 	}
 	// ALT lines are additive, human-facing alternatives the harness
 	// ignores by contract: chiefly the MagicDNS hostname, far nicer to
 	// tap on a phone than a 100.x octet string. Same format, one per line.
 	for _, alt := range netaddr.AltURLs(bindHost, tsIP, magicDNS, actual.Port) {
-		fmt.Printf("ALT %s\n", alt)
+		fmt.Printf("ALT %s\n", token.url(alt))
 	}
 	// Print the resolved review directory so the agent can locate the store
 	// under <dir>/.prereview/ even when the path was a single file (RepoPath
@@ -341,9 +354,23 @@ func emitReady(emitter *review.EventStream, storeRoot, csvPath string, skillUpda
 	}
 }
 
-// registerAssetRoutes mounts the static client/font/CSS routes shared by repo
-// mode and external (proxy) mode. The catch-all "/" (the livetemplate SPA) is
-// registered by the caller, since its wrapper differs between modes.
+// guardedHandler is a review server's handler. The embedded assets and
+// serverPIDRoute are open to anyone: the assets are public bytes from the
+// binary, and --replace asks serverPIDRoute before it holds any token. The HTML
+// preview reads repo files under their own key (files is nil when there is no
+// repo). Everything else, page, needs the launch token.
+func guardedHandler(token launchToken, page, files http.Handler) http.Handler {
+	mux := http.NewServeMux()
+	registerAssetRoutes(mux)
+	if files != nil {
+		mux.Handle(filesRoute, token.filesHandler(files))
+	}
+	mux.Handle("/", token.guard(page))
+	return noReferrer(mux)
+}
+
+// registerAssetRoutes mounts the static client/font/CSS routes and
+// serverPIDRoute, shared by repo mode and external (proxy) mode.
 func registerAssetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/livetemplate-client.js", serveBytes("application/javascript", assets.ClientJS()))
 	mux.HandleFunc("/mermaid.min.js", serveBytes("application/javascript", assets.MermaidJS()))
@@ -357,9 +384,13 @@ func registerAssetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/fonts/geist-regular.woff2", serveBytes("font/woff2", assets.GeistRegular()))
 	mux.HandleFunc("/fonts/geist-medium.woff2", serveBytes("font/woff2", assets.GeistMedium()))
 	mux.HandleFunc("/fonts/geist-semibold.woff2", serveBytes("font/woff2", assets.GeistSemiBold()))
-	// The in-app usage guide. An exact pattern outranks the "/" SPA catch-all,
-	// and the extension-less path is never claimed by staticFallback, so a repo
-	// file named usage/usage.md can't shadow it (issue #75).
+	mux.HandleFunc(serverPIDRoute, serveServerPID)
+}
+
+// registerUsageRoute mounts the in-app usage guide. An exact pattern outranks
+// the "/" SPA catch-all, and the extension-less path is never claimed by
+// staticFallback, so a repo file named usage/usage.md can't shadow it (issue #75).
+func registerUsageRoute(mux *http.ServeMux) {
 	mux.HandleFunc("/_usage", serveBytes("text/html; charset=utf-8", usagePage))
 }
 
@@ -462,6 +493,11 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		fmt.Fprintf(os.Stderr, "prereview: %s\n", warn)
 	}
 
+	token := newLaunchToken()
+	if err := privateOutput(os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "prereview: %v\n", err)
+	}
+
 	// The proxy gets its OWN origin (a random port on the same bind host) so
 	// the framed app's root-relative URLs resolve against the proxy root. Bind
 	// it first to learn its port before rendering the UI that iframes it.
@@ -471,7 +507,9 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	}
 	proxyPort := proxyLn.Addr().(*net.TCPAddr).Port
 	proxyBaseURL := fmt.Sprintf("http://%s:%d/", bindHost, proxyPort)
-	proxySrv := &http.Server{Handler: proxy.NewExternalProxy(target), ReadHeaderTimeout: 10 * time.Second}
+	// The proxy forwards the browser's cookies and auth headers to the target,
+	// so it takes the same token: the UI page's cookie covers this port too.
+	proxySrv := &http.Server{Handler: token.guard(proxy.NewExternalProxy(target)), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := proxySrv.Serve(proxyLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("proxy server", "err", err)
@@ -505,19 +543,23 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	// No staticFallback: there is no repo to serve assets from. The live
 	// site's own assets flow through the proxy origin, not this one.
 	mux.Handle("/", tmpl.Handle(controller, livetemplate.AsState(initial)))
-	registerAssetRoutes(mux)
+	registerUsageRoute(mux)
 
 	uiLn, err := net.Listen("tcp", net.JoinHostPort(bindHost, fmt.Sprintf("%d", port)))
 	if err != nil {
 		return fmt.Errorf("listen ui: %w", err)
 	}
 	uiPort := uiLn.Addr().(*net.TCPAddr).Port
-	uiSrv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	if err := recordServerAddr(store, uiLn.Addr()); err != nil {
+		uiLn.Close()
+		return err
+	}
+	uiSrv := &http.Server{Handler: guardedHandler(token, mux, nil), ReadHeaderTimeout: 10 * time.Second}
 
 	uiURL := fmt.Sprintf("http://%s:%d", bindHost, uiPort)
-	fmt.Printf("READY %s\n", uiURL)
+	fmt.Printf("READY %s\n", token.url(uiURL))
 	for _, alt := range netaddr.AltURLs(bindHost, tsIP, magicDNS, uiPort) {
-		fmt.Printf("ALT %s\n", alt)
+		fmt.Printf("ALT %s\n", token.url(alt))
 	}
 	fmt.Printf("PROXY %s\n", proxyBaseURL)
 	// REPO points at the annotation store root so the agent can locate <out>/.prereview/;
@@ -595,16 +637,10 @@ func staticFallback(root string, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		full := filepath.Join(rootResolved, filepath.FromSlash(cleaned))
-		resolved, err := filepath.EvalSymlinks(full)
+		// ResolveWithin refuses a path, or a symlink on it, that leaves the
+		// repo; a missing file is a 404 too.
+		resolved, err := gitdiff.ResolveWithin(rootResolved, strings.TrimPrefix(cleaned, "/"))
 		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		// EvalSymlinks-then-prefix-check defeats symlinks that escape the
-		// repo. Append the separator on both sides so "/repo" doesn't
-		// accept "/repo-evil/foo.png".
-		if !strings.HasPrefix(resolved+string(filepath.Separator), rootResolved+string(filepath.Separator)) {
 			http.NotFound(w, r)
 			return
 		}
@@ -627,6 +663,11 @@ func staticFallback(root string, next http.Handler) http.Handler {
 		// here (images, PDFs, media) — none of these are intended as
 		// downloads in a code-review context.
 		w.Header().Set("Content-Disposition", "inline")
+		// Files from the reviewed tree are content under review, not part of
+		// the app: run them in a sandbox (an opaque origin, no access to
+		// prereview's cookies or socket) and never let a browser guess a type.
+		w.Header().Set("Content-Security-Policy", "sandbox")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// http.ServeContent sets Content-Type via mime.TypeByExtension,
 		// honours Range, and handles If-Modified-Since for 304s.
 		http.ServeContent(w, r, resolved, info.ModTime(), f)

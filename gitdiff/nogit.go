@@ -97,6 +97,9 @@ func ListFilesNoGit(repo, single string) ([]FileEntry, error) {
 // Files over the render cap short-circuit with a Note, exactly like
 // LoadDiff, so a huge file never gets read into the page.
 func LoadDiffNoGit(repo, path string) (*FileDiff, error) {
+	if err := checkWithin(repo, path); err != nil {
+		return nil, err
+	}
 	full := filepath.Join(repo, path)
 	if st, err := os.Stat(full); err == nil && st.Size() > maxRenderableFileBytes {
 		return &FileDiff{

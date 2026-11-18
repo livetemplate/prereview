@@ -108,7 +108,7 @@ func TestE2E_PublicURLBehindProxy(t *testing.T) {
 	proxy := startHostRewritingProxy(t, backend)
 	p := bootChromeAgainstRepo(t, setupFixtureRepo(t), 1200, 800,
 		"--port", strconv.Itoa(backend), "--public-url", proxy)
-	if p.url != proxy {
+	if baseURL(p.url) != strings.TrimSuffix(proxy, "/") || !strings.Contains(p.url, "token=") {
 		t.Fatalf("READY = %q, want the public URL %q", p.url, proxy)
 	}
 	statuses := wsHandshakes(t, p.ctx)
@@ -128,7 +128,7 @@ func TestE2E_PublicURLBehindProxy(t *testing.T) {
 	defer cancel()
 	localStatuses := wsHandshakes(t, local)
 	if err := chromedp.Run(local,
-		chromedp.Navigate(fmt.Sprintf("http://127.0.0.1:%d", backend)),
+		chromedp.Navigate(fmt.Sprintf("http://127.0.0.1:%d/?token=%s", backend, readyToken(p.url))),
 		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("loopback tab: %v%s", err, diag())
@@ -149,7 +149,7 @@ func TestE2E_PublicURLNeededBehindProxy(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureRepo(t), 1200, 800, "--port", strconv.Itoa(backend))
 	diag := captureDiag(t, p)
 	if err := chromedp.Run(p.ctx,
-		chromedp.Navigate(proxy),
+		chromedp.Navigate(strings.TrimSuffix(proxy, "/")+"/?token="+readyToken(p.url)),
 		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("page through the proxy: %v%s", err, diag())

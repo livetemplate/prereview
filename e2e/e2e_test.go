@@ -21,6 +21,8 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -261,6 +263,47 @@ func startPrereviewStdout(t *testing.T, binary, repo string, afterPreamble func(
 		t.Fatalf("prereview never printed READY + STORE\nstderr: %s", stderr.String())
 	}
 	return "", "", nil, nil
+}
+
+// baseURL is a printed READY URL without its launch token or trailing slash: the
+// server's origin, for building other paths once the browser holds the cookie.
+func baseURL(ready string) string {
+	u, err := url.Parse(ready)
+	if err != nil {
+		return ready
+	}
+	u.RawQuery = ""
+	return strings.TrimSuffix(u.String(), "/")
+}
+
+// readyToken is the launch token in a printed READY URL, for opening the same
+// server at an address it didn't print (a proxy in front of it).
+func readyToken(ready string) string {
+	u, err := url.Parse(ready)
+	if err != nil {
+		return ""
+	}
+	return u.Query().Get("token")
+}
+
+// tokenClient is an HTTP client that has opened the READY URL, so its cookie
+// jar holds the launch token's cookie, as a browser's would.
+func tokenClient(t *testing.T, ready string) *http.Client {
+	t.Helper()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &http.Client{Timeout: 5 * time.Second, Jar: jar}
+	resp, err := c.Get(ready)
+	if err != nil {
+		t.Fatalf("open the READY URL: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("READY URL answered %d after the token redirect", resp.StatusCode)
+	}
+	return c
 }
 
 // bytesBuf is an io.Writer collecting bytes with a mutex for safe concurrent
@@ -4291,10 +4334,10 @@ func TestE2E_RelativeImageInMarkdown(t *testing.T) {
 		},
 	}
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := tokenClient(t, p.url)
 	for _, tc := range httpCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := client.Get(p.url + tc.path)
+			resp, err := client.Get(baseURL(p.url) + tc.path)
 			if err != nil {
 				t.Fatalf("GET %s: %v", tc.path, err)
 			}

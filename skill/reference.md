@@ -32,7 +32,7 @@ this file is the lookup for **what every value means**.
 | `--external` | — | no | Annotate a live local website instead of files: reverse-proxies the URL on a second origin and overlays region annotation. Requires `--out`; ignores `[path]`/`--base`. See [External mode](#external-mode). |
 | `--out` | the review path | with `--external` | Directory to create the store under (its `.prereview/` holds `comments.csv`). Defaults to the review path; required with `--external`. The resolved store is printed as the `STORE` line — that, not this, is the `--out <STORE>` argument the [agent subcommands](#agent-subcommands) take. |
 | `--version` | — | no | Print build version and exit. |
-| `--update` / `--uninstall` | — | no | Download+install the latest release, or remove the binary. prereview also self-updates + re-syncs the installed skill on a normal launch (see `skill_updated` in [Agent mode](#agent-mode)); `PREREVIEW_NO_UPDATE=1` or `--no-update` skips the on-run check. |
+| `--update` / `--uninstall` | — | no | Download+install the latest release, or remove the binary. prereview re-syncs the installed skill on every launch (see `skill_updated` in [Agent mode](#agent-mode)). It updates itself on launch only with `PREREVIEW_AUTO_UPDATE=1`; `PREREVIEW_NO_UPDATE=1` or `--no-update` turns that off. |
 
 ## Agent subcommands
 
@@ -61,15 +61,16 @@ flags, or `prereview help` for the top-level list.
 On startup, prereview prints these lines to stdout, in order:
 
 ```
-READY http://<host>:<port>
-ALT   http://<host>:<port>     (zero or more; only when on a tailnet)
+READY http://<host>:<port>/?token=<token>
+ALT   http://<host>:<port>/?token=<token>     (zero or more; only when on a tailnet)
 PROXY http://<host>:<port>     (external mode only; the proxy origin the UI frames)
 REPO  <absolute review-root directory>
 STORE <absolute store directory>
 ```
 
 `READY` is the **first line** and carries the canonical, always-reachable URL
-(loopback locally; the Tailscale IP on a remote box). It is the only line the skill and
+(loopback locally; the Tailscale IP on a remote box). Its `token` is made fresh at
+each launch, and a page opened without it answers 403, so pass the URL on whole. It is the only line the skill and
 the e2e harness machine-parse — match the literal prefix `READY ` and take the rest.
 Zero or more `ALT` lines follow with additional reachable forms (chiefly the MagicDNS
 hostname); they are purely additive and parsers may ignore them. In external mode one
@@ -174,7 +175,7 @@ Four event types:
 - **`ready`** (seq 0) — emitted once, after the stdout preamble. Fields:
   `event, seq, ts, repo, csv`, plus optional `paused` and `skill_updated`.
   - `skill_updated:true` means this launch **refreshed the installed Claude Code skill**
-    to match the (possibly self-updated) binary — so the agent's loaded skill is now
+    to match the (possibly upgraded) binary — so the agent's loaded skill is now
     stale. The agent must re-read the skill from its install path
     (`~/.claude/skills/prereview/SKILL.md`) before continuing, and tell the user to
     reload the skill in their agent. (A matching stderr note prints too.)

@@ -353,3 +353,29 @@ func TestRenderHTMLPreview_DeepNestingIsLinear(t *testing.T) {
 		t.Errorf("outer/innermost ranges missing")
 	}
 }
+
+// Under a files base, the preview's <base> and its root-absolute URLs both load
+// through it; relative, protocol-relative and remote URLs are left alone.
+func TestRenderHTMLPreview_FilesBase(t *testing.T) {
+	SetPreviewFilesBase("/_files/K")
+	defer SetPreviewFilesBase("")
+	src := `<html><head><link rel="stylesheet" href="/site.css"></head><body>` +
+		`<img src="/img/a.png"><img src="b.png"><script src="//cdn.example/x.js"></script>` +
+		`<a href="https://example.com/">x</a><video poster="/p.jpg"></video>` +
+		`<img srcset="/a.png 1x, b.png 2x,/c.png 3x"></body></html>`
+	doc, _ := RenderHTMLPreview([]byte(src), "docs/index.html")
+	for _, want := range []string{
+		`<base href="/_files/K/docs/">`,
+		`href="/_files/K/site.css"`,
+		`src="/_files/K/img/a.png"`,
+		`src="b.png"`,
+		`src="//cdn.example/x.js"`,
+		`href="https://example.com/"`,
+		`poster="/_files/K/p.jpg"`,
+		`srcset="/_files/K/a.png 1x, b.png 2x,/_files/K/c.png 3x"`,
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("preview is missing %s:\n%s", want, doc)
+		}
+	}
+}

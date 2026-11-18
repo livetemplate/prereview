@@ -11,8 +11,8 @@ terminal.
 prereview --version
 ```
 
-If that prints a version, go to step 3. prereview updates itself on launch, so
-an older version is fine. If the command isn't found, go to step 2.
+If that prints a version, go to step 3. If the command isn't found, go to
+step 2.
 
 ## 2. Install the binary
 

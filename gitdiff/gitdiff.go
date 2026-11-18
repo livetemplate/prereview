@@ -217,8 +217,12 @@ func countLines(path string) (int, bool) {
 // Used by the runtime base picker to validate user-typed refs before
 // swapping state.Base. Treats both branch names and commit-ish refs
 // (HEAD~3, abc1234) uniformly via `git rev-parse --verify`.
+//
+// A ref is passed on to later git commands as an argument, so one that starts
+// with "-" is refused outright: git reads it as an option, and no ref name may
+// start with "-" (git check-ref-format).
 func IsValidRef(repo, ref string) bool {
-	if strings.TrimSpace(ref) == "" {
+	if strings.TrimSpace(ref) == "" || strings.HasPrefix(ref, "-") {
 		return false
 	}
 	_, err := runGit(repo, "rev-parse", "--verify", ref)
@@ -393,7 +397,9 @@ func EmptyTreeHash(repo string) (string, error) {
 // runGit executes `git <args...>` in repo and returns stdout. Stderr is
 // folded into the error so callers see the underlying git complaint.
 func runGit(repo string, args ...string) ([]byte, error) {
-	cmd := exec.Command("git", args...)
+	// --literal-pathspecs: every path prereview passes is a file name, never a
+	// pathspec, so ":(top)…" or "*" mean those characters and nothing more.
+	cmd := exec.Command("git", append([]string{"--literal-pathspecs"}, args...)...)
 	cmd.Dir = repo
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

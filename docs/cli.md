@@ -162,7 +162,7 @@ Full event-schema and comment-field docs: [skill/reference.md](../skill/referenc
 | `--external <url>` | — | Annotate a **live local site** instead of files: reverse-proxies `<url>` on a second origin and overlays region annotation. **Requires `--out`**; ignores `[path]` and `--base`. See [External mode](#external-mode---external). |
 | `--out <dir>` | the review path | Store root — the directory under which the store holding `comments.csv` + the event log is created. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The resolved store is printed as the `STORE` stdout line, which is what the [subcommands](#subcommands) take as `--out`. |
 | `--agent` | `false` | Run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`) and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. See [Agent mode](#agent-mode---agent). |
-| `--replace` | `false` | prereview refuses to start a second server for the same store (duplicate servers fight over it). `--replace` stops the running one and takes over. Comments auto-save, so nothing is lost. |
+| `--replace` | `false` | prereview refuses to start a second server for the same store (duplicate servers fight over it). `--replace` stops the running one and takes over. Comments auto-save, so nothing is lost. It stops a server only after that server confirms it is the process named in the store's `server.pid`. A server started by an older prereview can't confirm, so stop that one yourself. |
 | `--skill` / `--stream` | `false` | **Deprecated aliases of `--agent`** — still enable agent mode, print a deprecation warning. Use `--agent`. |
 
 ### Run-and-exit actions
@@ -176,7 +176,7 @@ These do one thing and exit — they don't start the server:
 | `--client <ids>` | With `--install-skill`, the comma-separated agent(s) to install for: any of `claude,codex,gemini,opencode,aider,cursor`. Empty opens the menu. |
 | `--update` | Download and install the latest GitHub release (defers to brew/scoop if one manages the binary). |
 | `--uninstall` | Remove the binary (your `.prereview/` review comments are left untouched; defers to brew/scoop). |
-| `--no-update` | Skip the on-run update check (also via `PREREVIEW_NO_UPDATE=1`). |
+| `--no-update` | Never run the on-launch update check, even with `PREREVIEW_AUTO_UPDATE=1` (also `PREREVIEW_NO_UPDATE=1`). The check is off unless `PREREVIEW_AUTO_UPDATE=1` is set. |
 
 ## Subcommands
 
@@ -304,6 +304,11 @@ pass an explicit `--host`. Passing `--host` explicitly is an absolute override
 interface, including any public IP. The first stdout line is `READY <url>`; extra
 `ALT <url>` lines (e.g. the MagicDNS hostname) may follow.
 
+Every printed URL carries `?token=…`, a secret made fresh at each launch. Opening
+it sets a cookie for that server and drops the token from the address bar; a
+request without the cookie or the token gets 403. A restart makes a new token, so
+an open tab needs the new link.
+
 ### Behind a proxy or in a sandbox
 
 A sandbox that runs your agent, such as exe.dev or GitHub Codespaces, usually
@@ -322,8 +327,7 @@ prereview --agent --public-url https://<vm>.exe.xyz:4799
 - **The bind address doesn't change.** It stays `127.0.0.1`, or the Tailscale IP
   on a remote box. If the proxy reaches the machine on its network address
   rather than on loopback, add `--host 0.0.0.0`. Do this only behind a private
-  proxy: prereview has no login, so anyone who reaches the port can drive the
-  review.
+  proxy: anyone who has the printed link can drive the review.
 - **The WebSocket origin check.** A proxy that rewrites the `Host` header, or
   that drops `X-Forwarded-Proto`, fails livetemplate's same-origin check. The
   page then loads but never updates. The server logs `WebSocket upgrade failed …
@@ -369,7 +373,8 @@ second, random port. prereview refuses `--external` with `--public-url`.
 
 | Var | Effect |
 |---|---|
-| `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: skip the on-run update check. |
+| `PREREVIEW_AUTO_UPDATE=1` | Check for a new release on launch (at most hourly) and install it. Off by default, so prereview makes no network calls. Package-manager installs (Homebrew, Scoop) never self-update. |
+| `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: never run the on-launch update check. |
 | `PREREVIEW_PUBLIC_URL` | Same as `--public-url`; the flag wins when both are set. |
 | `PREREVIEW_CHECKS_DIR` | Override the checks rule folder (default `~/.config/prereview/checks`). |
 | `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer, and the default `checks`, `prompts` and `quizzes` folders inside it (default `~/.config/prereview`). |

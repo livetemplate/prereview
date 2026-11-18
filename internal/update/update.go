@@ -216,14 +216,43 @@ func DetectPackageManager(exePath string) (pm PkgManager, ok bool) {
 	}
 }
 
-// ShouldAutoUpdate is the pure predicate gating the on-run check. It is
-// false for dev builds, when opted out via flag/env, and inside a
-// re-exec'd child (PREREVIEW_UPDATED set) to prevent an update loop.
+// ShouldAutoUpdate is the pure predicate gating the on-run check. The check
+// is opt-in: it runs only with PREREVIEW_AUTO_UPDATE=1, so by default prereview
+// makes no network call at all. It is false for dev builds, when opted out via
+// flag/env (which wins over the opt-in), and inside a re-exec'd child
+// (PREREVIEW_UPDATED set) to prevent an update loop.
 func ShouldAutoUpdate(version string, noUpdateFlag bool) bool {
 	return version != "dev" &&
+		os.Getenv("PREREVIEW_AUTO_UPDATE") == "1" &&
 		!noUpdateFlag &&
 		os.Getenv("PREREVIEW_NO_UPDATE") != "1" &&
 		os.Getenv("PREREVIEW_UPDATED") == ""
+}
+
+// autoUpdateNoticeFile marks that this machine has been told auto-update is
+// now opt-in, so the notice prints once.
+const autoUpdateNoticeFile = "auto-update-notice"
+
+// AutoUpdateNotice returns, once per machine, the line that tells someone who
+// used to get automatic updates how to turn them back on; "" after that, for
+// dev builds, and when updates are already on or explicitly off. It records
+// that the notice was shown under cacheDir/prereview.
+func AutoUpdateNotice(version, cacheDir string, noUpdateFlag bool) string {
+	if version == "dev" || cacheDir == "" || noUpdateFlag ||
+		os.Getenv("PREREVIEW_AUTO_UPDATE") == "1" || os.Getenv("PREREVIEW_NO_UPDATE") == "1" {
+		return ""
+	}
+	marker := filepath.Join(cacheDir, "prereview", autoUpdateNoticeFile)
+	if _, err := os.Stat(marker); err == nil {
+		return ""
+	}
+	if err := os.MkdirAll(filepath.Dir(marker), 0o755); err != nil {
+		return ""
+	}
+	if err := os.WriteFile(marker, nil, 0o644); err != nil {
+		return ""
+	}
+	return "prereview: automatic updates are now off by default, so prereview makes no network calls. Run `prereview --update` to update, or set PREREVIEW_AUTO_UPDATE=1 to update on launch again."
 }
 
 type updateCache struct {

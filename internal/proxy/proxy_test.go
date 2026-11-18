@@ -94,3 +94,27 @@ func TestExternalProxyUnreachableTarget(t *testing.T) {
 		t.Errorf("unreachable target: want 502, got %d", rec.Result().StatusCode)
 	}
 }
+
+// The proxied site gets its own cookies and none of prereview's, whichever
+// prereview server on the host set them.
+func TestExternalProxyDropsServerCookies(t *testing.T) {
+	var got string
+	upstream := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Cookie")
+	}))
+	defer upstream.Close()
+	target, _ := url.Parse(upstream.URL)
+	p := NewExternalProxy(target)
+	for _, tc := range []struct{ name, in, want string }{
+		{"mixed", "session=app; " + ServerCookiePrefix + "aaa=t1; " + ServerCookiePrefix + "bbb=t2; theme=dark", "session=app; theme=dark"},
+		{"only prereview", ServerCookiePrefix + "aaa=t1", ""},
+		{"only the site", "session=app", "session=app"},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/app.js", nil)
+		req.Header.Set("Cookie", tc.in)
+		p.ServeHTTP(httptest.NewRecorder(), req)
+		if got != tc.want {
+			t.Errorf("%s: site got Cookie %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

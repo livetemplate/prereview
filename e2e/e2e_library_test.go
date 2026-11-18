@@ -370,7 +370,7 @@ func TestE2E_LibraryVersions(t *testing.T) {
 		t.Fatalf("Review in prereview (%s → %s): %v%s", href, loc, err, diag())
 	}
 	var loc string
-	if err := chromedp.Run(ctx, chromedp.Location(&loc)); err != nil || strings.HasPrefix(loc, p.url) {
+	if err := chromedp.Run(ctx, chromedp.Location(&loc)); err != nil || strings.HasPrefix(loc, baseURL(p.url)) {
 		t.Fatalf("still on the review (%s, %v)", loc, err)
 	}
 	if err := chromedp.Run(ctx,

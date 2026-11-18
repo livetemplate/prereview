@@ -33,8 +33,8 @@ The review path is the **positional argument** (defaults to the current director
 cd <repo>
 prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &
 # stdout:
-#   READY http://127.0.0.1:PORT        (canonical URL; Tailscale IP on a remote box)
-#   ALT   http://host.tailnet.ts.net:PORT   (0+ friendlier equivalents; only on a tailnet)
+#   READY http://127.0.0.1:PORT/?token=…        (canonical URL; Tailscale IP on a remote box)
+#   ALT   http://host.tailnet.ts.net:PORT/?token=…   (0+ friendlier equivalents; only on a tailnet)
 #   REPO  /abs/dir/the/reviewed/files/are/under
 #   STORE /abs/path/to/this/review/s/store   (the --out for every subcommand)
 #   {"event":"ready","seq":0,...}       (events mirror to stdout too; consume with `prereview watch`)
@@ -91,7 +91,9 @@ take over:
 prereview --agent --replace "$(pwd)" &
 ```
 
-Comments auto-save, so nothing is lost when the old server is replaced.
+Comments auto-save, so nothing is lost when the old server is replaced. If `--replace`
+says it can't confirm the running server, that server predates this check: ask the
+reviewer to stop it, then relaunch.
 
 ## Tell the user — with a clickable link
 
@@ -100,8 +102,8 @@ with friendlier equivalents (notably the MagicDNS hostname). Present the URL as 
 **Markdown link**, never bare text — the user is often on the mobile Claude app,
 where a `[url](url)` link is one tap and a bare URL can't be tapped:
 
-> I've opened a review session — tap to open: **[http://100.x.y.z:PORT](http://100.x.y.z:PORT)**
-> (hostname: [http://host.tailnet.ts.net:PORT](http://host.tailnet.ts.net:PORT))
+> I've opened a review session — tap to open: **[http://100.x.y.z:PORT/?token=…](http://100.x.y.z:PORT/?token=…)**
+> (hostname: [http://host.tailnet.ts.net:PORT/?token=…](http://host.tailnet.ts.net:PORT/?token=…))
 > Just leave comments as you go — I'll pick them up automatically and address them.
 > Hit **⏸ Pause** to batch a few first, **▶ Resume** to release them, and
 > **End session** when you're done.
@@ -109,13 +111,17 @@ where a `[url](url)` link is one tap and a bare URL can't be tapped:
 When an `ALT` MagicDNS hostname is present, make **that** the headline link
 (stable and readable); otherwise use the `READY` URL. Always wrap as `[url](url)`.
 
+Every printed URL ends in `?token=…`, a secret made fresh at each launch. Show the
+URL whole: never shorten it, and never build one from the port, or the page answers
+403. A restart (including `--replace`) makes a new token, so share the new link.
+
 ## The agent loop
 
 Track this as a checklist; run it until you see the `end` event.
 
 1. **Read the `ready` event first.** If `skill_updated:true`, this launch refreshed
-   the installed prereview skill to match a self-updated binary, so **the skill you
-   have loaded is now stale**: re-read `~/.claude/skills/prereview/SKILL.md` before
+   the installed prereview skill to match an upgraded binary, so **the skill you
+   have loaded is now stale**. Re-read `~/.claude/skills/prereview/SKILL.md` before
    continuing, and tell the user to reload the prereview skill in their agent. If
    `paused:true`, the reviewer started with the queue paused (batching).
 2. **Consume the queue** with the one reader — never hand-roll `tail`/`head`:
