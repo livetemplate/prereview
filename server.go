@@ -144,6 +144,9 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	// with, exist before the controller: a diff loaded during startup already
 	// carries the files base.
 	token := newLaunchToken()
+	if err := privateOutput(os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "prereview: %v\n", err)
+	}
 	gitdiff.SetPreviewFilesBase(token.filesBase())
 
 	// Quit action signals here so the HTTP server can shut down gracefully
@@ -491,6 +494,9 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	}
 
 	token := newLaunchToken()
+	if err := privateOutput(os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "prereview: %v\n", err)
+	}
 
 	// The proxy gets its OWN origin (a random port on the same bind host) so
 	// the framed app's root-relative URLs resolve against the proxy root. Bind

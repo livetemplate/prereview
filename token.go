@@ -6,8 +6,10 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/livetemplate/prereview/internal/proxy"
@@ -128,4 +130,20 @@ func noReferrer(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// privateOutput makes f readable by its owner only when it is a regular file:
+// the server's stdout carries the launch token, and an agent's usual
+// `> /tmp/prereview-$$.log` would otherwise leave it world-readable under a
+// default umask. A pipe or terminal is left alone. It reports a file it could
+// not tighten, such as one another user created first.
+func privateOutput(f *os.File) error {
+	st, err := f.Stat()
+	if err != nil || !st.Mode().IsRegular() || st.Mode().Perm()&0o077 == 0 {
+		return nil
+	}
+	if err := f.Chmod(st.Mode().Perm() &^ 0o077); err != nil {
+		return fmt.Errorf("stdout is a file other users can read, and it carries this review's link: %w", err)
+	}
+	return nil
 }

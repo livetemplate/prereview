@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 )
@@ -145,5 +146,32 @@ func TestLaunchTokensDiffer(t *testing.T) {
 	}
 	if len(a.value) != 43 || strings.ContainsAny(a.value, "+/=") {
 		t.Fatalf("token %q is not 32 bytes of base64url", a.value)
+	}
+}
+
+// A world-readable stdout file becomes owner-only; a pipe is left alone.
+func TestPrivateOutput(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := f.Chmod(0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := privateOutput(f); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := f.Stat(); st.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v, want 0600", st.Mode().Perm())
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	defer w.Close()
+	if err := privateOutput(w); err != nil {
+		t.Fatalf("pipe: %v", err)
 	}
 }
