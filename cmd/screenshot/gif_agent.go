@@ -16,13 +16,11 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/livetemplate/prereview/internal/library"
+	"github.com/livetemplate/prereview/internal/review"
 )
 
-// The four agent-loop flows (checks, learning, quiz, alternatives). Each runs on
-// its own demo repo, server and per-user folders (capture-gifs.sh), because
-// each writes state a later capture would show: a judge file, accepted
-// learnings, shortcut taps, installed skills. The agent's side is the real
-// binary, played by agentOut, as in the versions/thread flows.
+// The four agent-loop flows (checks, learning, quiz, alternatives). The agent's
+// side is the real binary, played by agentOut, as in the versions/thread flows.
 
 // agentOut runs the prereview binary as the coding agent, with optional stdin,
 // and returns its stdout.
@@ -37,56 +35,35 @@ func agentOut(bin, stdin string, args ...string) (string, error) {
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("%s %v: %w\n%s%s", filepath.Base(bin), args, err, out.String(), errb.String())
 	}
-	log.Printf("[gif] %s %v", filepath.Base(bin), args)
+	log.Printf("[gif] %s %v → %s", filepath.Base(bin), args, bytes.TrimSpace(out.Bytes()))
 	return out.String(), nil
 }
 
 // agentComments is the review's actionable comments, as the agent reads them.
-func agentComments(bin, repo string) ([]map[string]any, error) {
+func agentComments(bin, repo string) ([]review.StreamComment, error) {
 	out, err := agentOut(bin, "", "comments", "--json", "--out", repo)
 	if err != nil {
 		return nil, err
 	}
-	var list []map[string]any
-	if json.Unmarshal([]byte(out), &list) == nil {
-		return list, nil
-	}
-	var wrapped struct {
-		Comments []map[string]any `json:"comments"`
-	}
-	if err := json.Unmarshal([]byte(out), &wrapped); err != nil {
+	var list []review.StreamComment
+	if err := json.Unmarshal([]byte(out), &list); err != nil {
 		return nil, fmt.Errorf("comments --json: %w", err)
 	}
-	return wrapped.Comments, nil
+	return list, nil
 }
 
 // requestComment is the open request prereview queued for the agent.
-func requestComment(bin, repo, kind string) (map[string]any, error) {
+func requestComment(bin, repo, kind string) (review.StreamComment, error) {
 	cs, err := agentComments(bin, repo)
 	if err != nil {
-		return nil, err
+		return review.StreamComment{}, err
 	}
 	for _, c := range cs {
-		if c["request"] == kind {
+		if c.Request == kind {
 			return c, nil
 		}
 	}
-	return nil, fmt.Errorf("no %s request among %d comments", kind, len(cs))
-}
-
-// waitFor polls a JS expression until it is truthy.
-func waitFor(js string, timeout time.Duration) chromedp.Action {
-	return chromedp.Poll(js, nil, chromedp.WithPollingTimeout(timeout), chromedp.WithPollingInterval(150*time.Millisecond))
-}
-
-// scrollTo centres the first element matching sel.
-func scrollTo(sel string) chromedp.Action {
-	return chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q)?.scrollIntoView({block:'center'})`, sel), nil)
-}
-
-// clickByText clicks the first element matching sel whose text contains text.
-func clickByText(sel, text string) chromedp.Action {
-	return chromedp.Evaluate(fmt.Sprintf(`(()=>{const b=[...document.querySelectorAll(%q)].find(e=>e.textContent.includes(%q));if(b)b.click();return !!b;})()`, sel, text), nil)
+	return review.StreamComment{}, fmt.Errorf("no %s request among %d comments", kind, len(cs))
 }
 
 // clearFlash dismisses the confirmation toast (it clears itself after 3s, but
@@ -94,39 +71,53 @@ func clickByText(sel, text string) chromedp.Action {
 func clearFlash() chromedp.Action {
 	return chromedp.Tasks{
 		clickJS(`.flash-toast button[name="clearFlash"]`),
-		waitFor(`!document.querySelector('.flash-toast')`, 5*time.Second),
+		chromedp.WaitNotPresent(`.flash-toast`, chromedp.ByQuery),
 	}
 }
 
 // savedCommentID is the id of the comment card just saved.
 func savedCommentID(ctx context.Context) string {
 	var id string
-	step(ctx, waitFor(`!!document.querySelector('.inline-comment input[name="id"]')`, 10*time.Second),
-		chromedp.Evaluate(`document.querySelector('.inline-comment input[name="id"]').value`, &id))
+	step(ctx, chromedp.Value(`.inline-comment input[name="id"]`, &id, chromedp.ByQuery))
 	return id
 }
 
 var judgeHashes = regexp.MustCompile(`--content-hash (\S+) --rubric-hash (\S+)`)
 
+// readerFirstJudge is the judge the checks flow runs.
+const readerFirstJudge = "---\nkind: judge\nname: Reader first\ncategory: Reader-first\n---\nDoes the text lead with what the reader must do?\n"
+
 // gifChecks — prose checks and judges (#234/#237): a filler word is flagged on
 // its line, the Checks page lists the check, Run judges asks the agent, and its
-// verdict lands on the judge's card. The repo's guide.md carries one appended
-// "very", and the reader-first judge sits in the checks folder (capture-gifs.sh).
+// verdict lands on the judge's card.
 func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 	withCtx(allocCtx, "gif:checks", func(ctx context.Context) error {
 		rec := &gifRec{}
+		// The judge, in the checks folder (read when the page needs it). The
+		// filler word in guide.md is added before the server starts
+		// (capture-gifs.sh): a reviewed file changing under the server would
+		// show the "changing on disk" notice in every frame.
+		dir := os.Getenv("PREREVIEW_CHECKS_DIR")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, "reader-first.md"), []byte(readerFirstJudge), 0o644); err != nil {
+			return err
+		}
 		if err := chromedp.Run(ctx, base(url, "guide.md", 1280, 800)...); err != nil {
 			return err
 		}
 		step(ctx, chromedp.WaitVisible(`.ck-strip.is-idle`, chromedp.ByQuery), chromedp.Sleep(200*time.Millisecond))
+		step(ctx, settled())
 		check(rec.capture(ctx, 150)) // the doc, with the checks bar
 
 		step(ctx,
 			clickByText(`.ck-strip.is-idle .ck-strip-pick button`, "Filler"),
-			waitFor(`!!document.querySelector('.code mark.check-finding')`, 10*time.Second),
+			chromedp.WaitReady(`.code mark.check-finding`, chromedp.ByQuery),
 			scrollTo(`.code mark.check-finding`),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 200)) // the finding on its line
 
 		step(ctx,
@@ -136,6 +127,7 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 			chromedp.WaitVisible(`.ckp-row[data-key="ckp-row-filler-intensifiers"]`, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 180)) // the Checks page
 
 		step(ctx,
@@ -145,13 +137,14 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 			chromedp.WaitVisible(`.ck-strip .ck-waiting`, chromedp.ByQuery),
 			chromedp.Sleep(200*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 140)) // asked the agent
 
 		req, err := requestComment(bin, repo, "judge")
 		if err != nil {
 			return err
 		}
-		m := judgeHashes.FindStringSubmatch(fmt.Sprint(req["body"]))
+		m := judgeHashes.FindStringSubmatch(req.Body)
 		if m == nil {
 			return fmt.Errorf("the judge request has no hashes")
 		}
@@ -169,6 +162,7 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 			scrollTo(`.jv-card`),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 280)) // the judge's verdict and critique
 		return rec.encode(filepath.Join(outDir, "checks.gif"))
 	})
@@ -176,12 +170,17 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 
 // gifLearning — learning from your reviews (#238/#260): a comment, a background
 // learning job the helper agent answers, the notice in the review, and the
-// skill it became, with the agents told to use it. The job is queued directly,
-// as the server does after a review with enough comments in it.
+// skill it became, with the agents told to use it. The job is queued directly:
+// the server queues one when the agent goes idle after five or more new
+// reviewer signals (comments, replies, decisions), which no frame shows.
 func gifLearning(allocCtx context.Context, url, repo, bin, outDir string) {
 	withCtx(allocCtx, "gif:learning", func(ctx context.Context) error {
 		rec := &gifRec{}
 		store := filepath.Join(repo, ".prereview")
+		// A skills folder, so Claude Code counts as set up on the Skills tab.
+		if err := os.MkdirAll(filepath.Join(os.Getenv("PREREVIEW_HOME"), ".claude", "skills"), 0o755); err != nil {
+			return err
+		}
 		if err := chromedp.Run(ctx, base(url, "guide.md:L12", 1280, 800)...); err != nil {
 			return err
 		}
@@ -193,6 +192,7 @@ func gifLearning(allocCtx context.Context, url, repo, bin, outDir string) {
 		)
 		cid := savedCommentID(ctx)
 		step(ctx, chromedp.Sleep(300*time.Millisecond))
+		step(ctx, settled())
 		check(rec.capture(ctx, 150)) // the reviewer's comment
 
 		if _, _, err := library.QueueJob(library.Dir(), library.Job{Stores: []string{store}, AutoAccept: true, Server: store}, false); err != nil {
@@ -212,6 +212,7 @@ func gifLearning(allocCtx context.Context, url, repo, bin, outDir string) {
 			return err
 		}
 		step(ctx, chromedp.WaitVisible(`.learn-toast .toast-msg`, chromedp.ByQuery), chromedp.Sleep(300*time.Millisecond))
+		step(ctx, settled())
 		check(rec.capture(ctx, 220)) // the notice, with Undo
 
 		step(ctx,
@@ -219,6 +220,7 @@ func gifLearning(allocCtx context.Context, url, repo, bin, outDir string) {
 			chromedp.WaitVisible(`.lib-card`, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 180)) // the learning, accepted
 
 		step(ctx,
@@ -227,6 +229,7 @@ func gifLearning(allocCtx context.Context, url, repo, bin, outDir string) {
 			chromedp.WaitVisible(`.lib-pointers .lc-agents`, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 280)) // the skill, and the agents told to use it
 		return rec.encode(filepath.Join(outDir, "learning.gif"))
 	})
@@ -247,12 +250,14 @@ func gifQuiz(allocCtx context.Context, url, repo, bin, outDir string) {
 		if err := chromedp.Run(ctx, base(url, "payment.go", 1280, 800)...); err != nil {
 			return err
 		}
+		step(ctx, settled())
 		check(rec.capture(ctx, 120)) // the diff
 		step(ctx,
 			chromedp.Click(`button[name="requestQuiz"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.quiz-trigger.is-pending`, chromedp.ByQuery),
 			chromedp.Sleep(200*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 130)) // quiz requested
 
 		req, err := requestComment(bin, repo, "quiz")
@@ -262,24 +267,26 @@ func gifQuiz(allocCtx context.Context, url, repo, bin, outDir string) {
 		if _, err := agentOut(bin, quizDemo, "quiz", "--out", repo, "--file", "-"); err != nil {
 			return err
 		}
-		if _, err := agentOut(bin, "", "done", "--out", repo, fmt.Sprint(req["id"])); err != nil {
+		if _, err := agentOut(bin, "", "done", "--out", repo, req.ID); err != nil {
 			return err
 		}
 		q1 := `.quiz-card[data-key='quiz-q1']`
 		step(ctx,
 			clearFlash(),
-			waitFor(`!!document.querySelector("`+q1+`")`, 15*time.Second),
+			chromedp.WaitReady(q1, chromedp.ByQuery),
 			scrollTo(q1),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 220)) // questions on the lines they ask about
 
 		step(ctx,
 			clickJS(q1+` .quiz-options li:nth-child(2) button[name='answerQuestion']`),
-			waitFor(`!!document.querySelector("`+q1+` .quiz-why")`, 10*time.Second),
+			chromedp.WaitReady(q1+` .quiz-why`, chromedp.ByQuery),
 			scrollTo(q1),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 280)) // answered, with the explanation
 		return rec.encode(filepath.Join(outDir, "quiz.gif"))
 	})
@@ -324,14 +331,16 @@ func gifAlternatives(allocCtx context.Context, url, repo, bin, outDir string) {
 		if !found {
 			return fmt.Errorf("the phrase isn't in guide.md")
 		}
+		step(ctx, settled())
 		check(rec.capture(ctx, 130)) // a phrase selected
 		step(ctx,
 			clickJS(`[data-lvt-text-select-button]`),
 			chromedp.WaitVisible(`.composer .sc-chip`, chromedp.ByQuery),
 			clickByText(`.composer .sc-chip`, "Make this shorter"),
-			waitFor(`(document.querySelector('.composer textarea')||{}).value?.length > 0`, 10*time.Second),
+			chromedp.Poll(`(document.querySelector('.composer textarea')||{}).value?.length > 0`, nil, chromedp.WithPollingTimeout(10*time.Second)),
 			chromedp.Sleep(250*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 160)) // a shortcut chip filled the comment
 		step(ctx, clickJS(saveBtn))
 		cid := savedCommentID(ctx)
@@ -351,22 +360,25 @@ func gifAlternatives(allocCtx context.Context, url, repo, bin, outDir string) {
 		}
 		a, b := `.inline-suggestion[data-key="sg-`+cid+`-a"]`, `.inline-suggestion[data-key="sg-`+cid+`-b"]`
 		step(ctx,
-			waitFor(`!!document.querySelector('`+a+`') && !!document.querySelector('`+b+`')`, 15*time.Second),
+			chromedp.WaitReady(a, chromedp.ByQuery),
+			chromedp.WaitReady(b, chromedp.ByQuery),
 			scrollTo(a),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 240)) // two alternatives, one to pick
 
 		// The decided cards fold away, so the pick is shown where it now waits:
 		// the Queue, accepted and awaiting the agent.
 		step(ctx,
 			clickJS(b+` button[name="acceptSuggestion"]`),
-			waitFor(`!!document.querySelector('`+b+`.is-decided.sg-accept')`, 10*time.Second),
+			chromedp.WaitReady(b+`.is-decided.sg-accept`, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 			chromedp.Click(`.queue-trigger`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.queue-awaiting`, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 		)
+		step(ctx, settled())
 		check(rec.capture(ctx, 280)) // picked one: accepted, waiting for the agent
 		return rec.encode(filepath.Join(outDir, "alternatives.gif"))
 	})

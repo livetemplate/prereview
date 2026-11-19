@@ -72,61 +72,21 @@ done
 echo "› capturing gif:hero"
 "$shot" --gif hero --url "$url" --repo "$demo" --out docs
 
-# ---- versions / thread : each on its OWN throwaway demo-repo server ----------
-# These flows drive agent-side subcommands (status/reply) that mutate the store —
-# recorded versions, agent replies, edited files. A fresh repo + server PER FLOW
-# keeps that state out of the flows above (whose captures assume a pristine tree
-# and no status pill) AND out of each other (versions edits payment.go; thread
-# comments on the retry loop and needs it un-edited). The Go flow gets the binary
-# via --bin so it can invoke `prereview status`/`reply` itself.
-for flow in versions thread; do
-	echo "› creating demo repo for gif:$flow"
-	rm -rf "$demo2"
-	bash cmd/screenshot/demo-repo.sh "$demo2" "$(pwd)/e2e/testdata/areacomments/diagram.png"
-
-	echo "› starting server for gif:$flow"
-	: >"$log2"
-	"$bin" --agent --port 0 --host 127.0.0.1 "$demo2" >"$log2" 2>&1 &
-	srv2=$!
-	url2=$(wait_ready "$log2")
-	[ -n "$url2" ] || { echo "server for gif:$flow failed:"; cat "$log2"; exit 1; }
-	start_watch "$demo2"
-
-	echo "› capturing gif:$flow"
-	"$shot" --gif "$flow" --url "$url2" --repo "$demo2" --bin "$bin" --out docs
-
-	stop_watch
-	kill "$srv2" 2>/dev/null || true
-	srv2=""
-done
-
-# ---- the agent-loop flows: each on its own repo, server and per-user folders --
-# checks writes a judge, learning accepts a learning and installs skills,
-# alternatives records shortcut taps: on shared folders each would show up in the
-# captures after it.
-for flow in checks learning quiz alternatives; do
+# ---- the agent flows: each on its OWN repo, server and per-user folders -----
+# These drive the agent-side subcommands and write state: versions edits
+# payment.go and records versions; thread replies; checks adds a judge; learning
+# accepts a learning and installs skills; alternatives records shortcut taps. A
+# fresh repo, server and set of folders per flow keeps each out of the captures
+# above and out of each other. The flow gets the binary via --bin.
+for flow in versions thread checks learning quiz alternatives; do
 	echo "› creating demo repo and folders for gif:$flow"
 	rm -rf "$demo2"
 	bash cmd/screenshot/demo-repo.sh "$demo2" "$(pwd)/e2e/testdata/areacomments/diagram.png"
 	isolate_under "$flow"
 	"$shot" -skip-first-launch
-	case "$flow" in
-	checks)
-		printf '\nRetries are very cheap.\n' >>"$demo2/guide.md" # one filler word for the checks bar
-		mkdir -p "$PREREVIEW_CHECKS_DIR"
-		cat >"$PREREVIEW_CHECKS_DIR/reader-first.md" <<'MD'
----
-kind: judge
-name: Reader first
-category: Reader-first
----
-Does the text lead with what the reader must do?
-MD
-		;;
-	learning)
-		mkdir -p "$PREREVIEW_HOME/.claude/skills" # so Claude Code counts as set up
-		;;
-	esac
+	# The checks flow's one filler word, written before the server starts so the
+	# change isn't reported as an edit on disk.
+	[ "$flow" = checks ] && printf '\nRetries are very cheap.\n' >>"$demo2/guide.md"
 
 	echo "› starting server for gif:$flow"
 	: >"$log2"

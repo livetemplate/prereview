@@ -26,7 +26,6 @@ import (
 	"image/png"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -179,14 +178,8 @@ func runGif(allocCtx context.Context, url, name, repo, bin, outDir string) {
 // a swallowed `reply`/`status` error produces a GIF missing its payload, so the
 // caller aborts the flow rather than encode a misleading recording.
 func agentRun(bin string, args ...string) error {
-	cmd := exec.Command(bin, args...)
-	cmd.Env = append(os.Environ(), "PREREVIEW_NO_UPDATE=1")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s %v: %w\n%s", filepath.Base(bin), args, err, out)
-	}
-	log.Printf("[gif] %s %v → %s", filepath.Base(bin), args, bytes.TrimSpace(out))
-	return nil
+	_, err := agentOut(bin, "", args...)
+	return err
 }
 
 // backoffFixedPayment is the scripted agent edit for the versions/thread flows: it
@@ -400,7 +393,7 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 		chromedp.Navigate(navURL(url, "payment.go:L13")),
 		chromedp.Sleep(700*time.Millisecond),
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.composer')?.scrollIntoView({block:'center'})`, nil),
+		scrollTo(`.composer`),
 		chromedp.Sleep(150*time.Millisecond),
 	)
 	check(rec.captureComposite(bctx, tctx, 80)) // empty composer
@@ -584,7 +577,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		chromedp.Navigate(navURL(url, "payment.go:L14")),
 		chromedp.Sleep(700*time.Millisecond),
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.composer')?.scrollIntoView({block:'center'})`, nil),
+		scrollTo(`.composer`),
 		chromedp.Sleep(150*time.Millisecond),
 	)
 	check(rec.captureComposite(bctx, tctx, 80)) // empty composer
@@ -676,7 +669,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		chromedp.Sleep(150*time.Millisecond),
 		chromedp.Navigate(navURL(url, "payment.go")),
 		chromedp.WaitVisible(`.inline-suggestion`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		scrollTo(`.inline-suggestion`),
 		chromedp.Sleep(300*time.Millisecond),
 	)
 	check(rec.captureComposite(bctx, tctx, 220)) // the before→after suggestion box, agent waiting
@@ -685,7 +678,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		chromedp.Click(`.inline-suggestion button[name="acceptSuggestion"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-suggestion.is-decided.sg-accept`, chromedp.ByQuery),
 		chromedp.Sleep(300*time.Millisecond),
-		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		scrollTo(`.inline-suggestion`),
 		chromedp.Sleep(150*time.Millisecond),
 	)
 	check(rec.captureComposite(bctx, tctx, 300)) // accepted — the reverse loop closed, held longest
@@ -891,7 +884,7 @@ func gifSuggestion(allocCtx context.Context, url, outDir string) {
 	}
 	if err := chromedp.Run(bctx,
 		chromedp.WaitVisible(`.inline-suggestion`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		scrollTo(`.inline-suggestion`),
 		chromedp.Sleep(300*time.Millisecond),
 	); err != nil {
 		fail("[gif:suggestion] await box: %v", err)
@@ -910,7 +903,7 @@ func gifSuggestion(allocCtx context.Context, url, outDir string) {
 		clickJS(`.inline-suggestion button[name="acceptSuggestion"]`),
 		chromedp.Poll(`!!document.querySelector('.inline-suggestion.is-decided.sg-accept')`, nil, chromedp.WithPollingTimeout(10*time.Second)),
 		chromedp.Sleep(300*time.Millisecond),
-		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
+		scrollTo(`.inline-suggestion`),
 		chromedp.Sleep(200*time.Millisecond),
 	)
 
@@ -958,7 +951,7 @@ func gifSearch(allocCtx context.Context, url, outDir string) {
 		step(ctx,
 			chromedp.Click(`.search-hit`, chromedp.ByQuery),
 			chromedp.Sleep(700*time.Millisecond),
-			chromedp.Evaluate(`document.querySelector('.line.is-cursor')?.scrollIntoView({block:'center'})`, nil),
+			scrollTo(`.line.is-cursor`),
 			chromedp.Sleep(200*time.Millisecond),
 		)
 		check(rec.capture(ctx, 220)) // landed on the match

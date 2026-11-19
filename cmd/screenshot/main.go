@@ -170,7 +170,7 @@ func main() {
 			chromedp.SendKeys(`.composer textarea`, "test comment", chromedp.ByQuery),
 			chromedp.Sleep(200 * time.Millisecond),
 			// scroll composer into view
-			chromedp.Evaluate(`document.querySelector('.composer')?.scrollIntoView({block:'center'})`, nil),
+			scrollTo(`.composer`),
 			chromedp.Sleep(200 * time.Millisecond),
 		}},
 		{"iphone-drawer-with-selection", 375, 812, []chromedp.Action{
@@ -427,10 +427,27 @@ func typeComposer(body string) chromedp.Action {
 			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
 			chromedp.Sleep(250*time.Millisecond),
-			chromedp.Evaluate(`document.querySelector('.composer')?.scrollIntoView({block:'center'})`, nil),
+			scrollTo(`.composer`),
 			chromedp.Sleep(150*time.Millisecond),
 		)
 	})
+}
+
+// settled waits until the page has no running animations, so a frame doesn't
+// catch a card mid-fade (lvt-fx:animate="fade" on new cards).
+func settled() chromedp.Action {
+	return chromedp.Poll(`document.getAnimations().every(a => a.playState !== 'running')`, nil,
+		chromedp.WithPollingTimeout(5*time.Second))
+}
+
+// scrollTo centres the first element matching sel.
+func scrollTo(sel string) chromedp.Action {
+	return chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q)?.scrollIntoView({block:'center'})`, sel), nil)
+}
+
+// clickByText clicks the first element matching sel whose text contains text.
+func clickByText(sel, text string) chromedp.Action {
+	return chromedp.Evaluate(fmt.Sprintf(`[...document.querySelectorAll(%q)].find(e=>e.textContent.includes(%q))?.click()`, sel, text), nil)
 }
 
 func clickJS(sel string) chromedp.Action {
