@@ -17,6 +17,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.." # repo root
 
 bin=$(mktemp -u /tmp/prereview-gif.XXXXXX)
+shot=$(mktemp -u /tmp/prereview-gifshot.XXXXXX)
 demo=$(mktemp -d /tmp/prereview-gifdemo.XXXXXX)
 demo2=$(mktemp -d /tmp/prereview-gifdemo2.XXXXXX)
 extout=$(mktemp -d /tmp/prereview-gifext.XXXXXX)
@@ -24,27 +25,20 @@ log=$(mktemp /tmp/prereview-gif-log.XXXXXX)
 log2=$(mktemp /tmp/prereview-gif-log2.XXXXXX)
 sitelog=$(mktemp /tmp/prereview-site-log.XXXXXX)
 extlog=$(mktemp /tmp/prereview-extui-log.XXXXXX)
-# Every per-user path in a fresh temp folder (cmd/screenshot/capture-env.sh): the
-# captures start from default prefs and an empty library, the themes flow's
-# scheme changes stay out of the real config, and the learning flow's skill
-# installs never touch the real ~/.claude.
+# Isolated per-user paths, the stand-in agent and wait_ready: see capture-env.sh.
 source cmd/screenshot/capture-env.sh
 srv=""; srv2=""; site=""; ext=""
 cleanup() {
 	stop_watch
 	for p in "$srv" "$srv2" "$site" "$ext"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
-	rm -rf "$demo" "$demo2" "$extout" "$bin" "$log" "$log2" "$sitelog" "$extlog" "$iso"
+	rm -rf "$demo" "$demo2" "$extout" "$bin" "$shot" "$log" "$log2" "$sitelog" "$extlog" "$iso"
 }
 trap cleanup EXIT
 
-wait_ready() { # <logfile> -> echoes the READY url
-	local f="$1"
-	for _ in $(seq 1 40); do grep -q '^READY ' "$f" && break; sleep 0.3; done
-	grep -m1 '^READY ' "$f" | awk '{print $2}'
-}
-
-echo "› building prereview"
+echo "› building prereview and the capture tool"
 GOWORK=off go build -o "$bin" .
+GOWORK=off go build -o "$shot" ./cmd/screenshot
+"$shot" -skip-first-launch
 
 # ---- hero / image / markdown : one skill-mode demo-repo server ---------------
 echo "› creating demo repo"
@@ -56,7 +50,6 @@ srv=$!
 url=$(wait_ready "$log")
 [ -n "$url" ] || { echo "server failed:"; cat "$log"; exit 1; }
 start_watch "$demo"
-prepare "$url"
 
 # Seed a suggestion (agent → user, issue #98) for the suggestion flow: the
 # `suggest` subcommand appends to .prereview/suggestions.jsonl, which the server
@@ -73,11 +66,11 @@ JSON
 # (no stray comment) in that capture.
 for flow in image suggestion search themes markdown; do
 	echo "› capturing gif:$flow"
-	GOWORK=off go run ./cmd/screenshot --gif "$flow" --url "$url" --out docs
+	"$shot" --gif "$flow" --url "$url" --out docs
 done
 
 echo "› capturing gif:hero"
-GOWORK=off go run ./cmd/screenshot --gif hero --url "$url" --repo "$demo" --out docs
+"$shot" --gif hero --url "$url" --repo "$demo" --out docs
 
 # ---- versions / thread : each on its OWN throwaway demo-repo server ----------
 # These flows drive agent-side subcommands (status/reply) that mutate the store —
@@ -98,10 +91,9 @@ for flow in versions thread; do
 	url2=$(wait_ready "$log2")
 	[ -n "$url2" ] || { echo "server for gif:$flow failed:"; cat "$log2"; exit 1; }
 	start_watch "$demo2"
-	prepare "$url2"
 
 	echo "› capturing gif:$flow"
-	GOWORK=off go run ./cmd/screenshot --gif "$flow" --url "$url2" --repo "$demo2" --bin "$bin" --out docs
+	"$shot" --gif "$flow" --url "$url2" --repo "$demo2" --bin "$bin" --out docs
 
 	stop_watch
 	kill "$srv2" 2>/dev/null || true
@@ -120,8 +112,9 @@ echo "› starting prereview --external"
 ext=$!
 exturl=$(wait_ready "$extlog")
 [ -n "$exturl" ] || { echo "external UI failed:"; cat "$extlog"; exit 1; }
+start_watch "$extout"
 
 echo "› capturing gif:external"
-GOWORK=off go run ./cmd/screenshot --gif external --url "$exturl" --out docs
+"$shot" --gif external --url "$exturl" --out docs
 
-echo "› done → docs/*.gif"
+echo "› done → docs/*.gif (look at every frame: go run ./cmd/screenshot -dump docs/<name>.gif -out <dir>)"

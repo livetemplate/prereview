@@ -24,7 +24,7 @@ start_watch() { # <out>
 	(
 		since=-1
 		while :; do
-			s=$("$bin" watch --out "$1" --since "$since" 2>/dev/null | grep -o '"seq":[0-9]*' | tail -1 | cut -d: -f2) || true
+			s=$("$bin" watch --out "$1" --since "$since" 2>/dev/null | grep -o '"seq":[0-9]*' | tail -1 | cut -d: -f2) || sleep 1
 			[ -n "$s" ] && since=$s
 			sleep 0.2
 		done
@@ -40,9 +40,8 @@ stop_watch() {
 	watcher=""
 }
 
-# Answers the first-launch card ("Not now") if the review shows it: the
-# library is fresh, so a later server sees an earlier one's review as a past
-# review and would offer to learn from it in every frame.
-prepare() { # <url>
-	GOWORK=off go run ./cmd/screenshot --prepare --url "$1"
+wait_ready() { # <logfile> -> echoes the READY url
+	local f="$1"
+	for _ in $(seq 1 40); do grep -q '^READY ' "$f" && break; sleep 0.3; done
+	grep -m1 '^READY ' "$f" | awk '{print $2}'
 }

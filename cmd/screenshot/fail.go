@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -27,17 +26,21 @@ func fail(format string, args ...any) {
 // step runs actions and records a failure at the caller's file:line.
 func step(ctx context.Context, actions ...chromedp.Action) error {
 	err := chromedp.Run(ctx, actions...)
-	if err != nil {
-		_, file, line, _ := runtime.Caller(1)
-		fail("%s:%d: %v", filepath.Base(file), line, err)
-	}
+	failAt(2, err)
 	return err
 }
 
-// optional runs actions whose failure is expected and harmless (closing a menu
-// that may not be open), so it is not counted.
-func optional(ctx context.Context, actions ...chromedp.Action) {
-	_ = chromedp.Run(ctx, actions...)
+// check records err, if any, at the caller's file:line. For the frame grabs
+// and terminal renders whose errors the flows don't otherwise look at.
+func check(err error) {
+	failAt(2, err)
+}
+
+func failAt(skip int, err error) {
+	if err != nil {
+		_, file, line, _ := runtime.Caller(skip)
+		fail("%s:%d: %v", filepath.Base(file), line, err)
+	}
 }
 
 // exitOnFailure ends the run with status 1 when any step failed.
@@ -46,31 +49,4 @@ func exitOnFailure() {
 		log.Printf("%d capture step(s) failed", len(failures))
 		os.Exit(1)
 	}
-}
-
-// prepareReview answers the first-launch card with Not now if the review shows
-// it. The capture's library is fresh, so a later server finds an earlier one's
-// review and offers to learn from it; the answer lands in the shared library,
-// so every later server skips the card. The scan runs after load, so this waits
-// a few seconds for the card before deciding there is none.
-func prepareReview(allocCtx context.Context, url string) {
-	withCtx(allocCtx, "prepare", func(ctx context.Context) error {
-		if step(ctx,
-			chromedp.EmulateViewport(1200, 800),
-			chromedp.Navigate(url),
-			chromedp.WaitVisible(`body`, chromedp.ByQuery),
-		) != nil {
-			return nil
-		}
-		var shown bool
-		optional(ctx, chromedp.Poll(`!!document.querySelector('button[name="dismissPastReviews"]')`, &shown,
-			chromedp.WithPollingTimeout(5*time.Second), chromedp.WithPollingInterval(200*time.Millisecond)))
-		if shown {
-			_ = step(ctx,
-				chromedp.Click(`button[name="dismissPastReviews"]`, chromedp.ByQuery),
-				chromedp.WaitNotPresent(`button[name="dismissPastReviews"]`, chromedp.ByQuery),
-			)
-		}
-		return nil
-	})
 }

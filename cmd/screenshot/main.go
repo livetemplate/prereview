@@ -19,6 +19,8 @@ import (
 
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
+
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 func main() {
@@ -30,9 +32,19 @@ func main() {
 	repo := flag.String("repo", "", "demo repo working tree (the hero flow edits payment.go here to show Claude's fix)")
 	bin := flag.String("bin", "", "prereview binary, for flows that drive agent-side subcommands (status/reply) — versions/thread")
 	dump := flag.String("dump", "", "decode this GIF's frames to PNGs in --out, then exit (no browser)")
-	prepareOnly := flag.Bool("prepare", false, "answer the review's first-launch card (Not now) if it shows, then exit")
+	skipFirstLaunch := flag.Bool("skip-first-launch", false, "answer the first-launch offer (Not now) in $PREREVIEW_LIBRARY_DIR, then exit (no browser)")
 	flag.Parse()
 	defer exitOnFailure()
+
+	// The capture's library is fresh, so a later demo server would find an
+	// earlier one's review in the shared session list and show "Learn from your
+	// past reviews" in every frame. The answer is what Not now writes.
+	if *skipFirstLaunch {
+		if err := library.MarkBootstrapped(library.Dir(), "dismissed"); err != nil {
+			log.Fatalf("skip first launch: %v", err)
+		}
+		return
+	}
 
 	if *dump != "" {
 		if err := dumpGIF(*dump, *outDir); err != nil {
@@ -58,11 +70,6 @@ func main() {
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOpts...)
 	defer allocCancel()
-
-	if *prepareOnly {
-		prepareReview(allocCtx, *url)
-		return
-	}
 
 	if *readme {
 		runReadmeShots(allocCtx, *url, *outDir)
