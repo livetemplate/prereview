@@ -374,7 +374,7 @@ type QueueItem struct {
 	Kind  string // queueKindComment | queueKindSuggestion
 	File  string
 	Line  int    // new-side line (0 for file/region/area comments)
-	Body  string // the comment text / suggestion note, shown truncated by CSS
+	Body  string // the comment text (a request's summary) / suggestion note, shown truncated by CSS
 	State string // queueDraft | queueQueued | queueBlocked | queueAnswered | queueDone
 }
 
@@ -392,7 +392,7 @@ func (s PrereviewState) QueueItems() []QueueItem {
 	add := func(item QueueItem) { buckets[item.State] = append(buckets[item.State], item) }
 	awaiting := s.AwaitingAgent()
 	for _, c := range s.queueComments() {
-		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Body, State: reopenIfReplied(c.QueueState(), c.ID, awaiting)})
+		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Headline(), State: reopenIfReplied(c.QueueState(), c.ID, awaiting)})
 	}
 	for _, sg := range s.queueSuggestions() {
 		st := reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting)

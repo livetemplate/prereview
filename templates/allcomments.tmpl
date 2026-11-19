@@ -29,7 +29,7 @@
             {{- if .Processed}} {{template "processedBadge"}}{{end}}
             {{- if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end -}}
           </div>
-          <div class="ac-body">{{.Body}}</div>
+          <div class="ac-body">{{.Headline}}</div>
         </button>
       </form>
       {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}

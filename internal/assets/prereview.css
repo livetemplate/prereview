@@ -2916,6 +2916,17 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   font-weight: 600;
 }
 .inline-comment .body { white-space: pre-wrap; word-break: break-word; }
+/* A request prereview queued (judges, benchmark, quiz): one line, the prompt
+   written for the agent behind Read more. Pico already hides the native marker;
+   its chevron (summary::after) gives way to the text label, which CSS swaps when
+   the details opens. */
+.inline-comment .req-prompt { margin: 0; }
+.inline-comment .req-prompt > summary { line-height: inherit; }
+.inline-comment .req-prompt > summary::after { display: none; }
+.inline-comment .req-prompt[open] > summary { margin-bottom: 0.3rem; }
+.inline-comment .req-prompt .req-more { color: var(--pico-primary); font-size: 0.85em; white-space: nowrap; }
+.inline-comment .req-prompt .req-more::after { content: "Read more"; }
+.inline-comment .req-prompt[open] .req-more::after { content: "Show less"; }
 .inline-comment .ic-actions { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
 .inline-comment .ic-actions button {
   padding: 0.15rem 0.5rem; font-size: 0.72rem; margin: 0;

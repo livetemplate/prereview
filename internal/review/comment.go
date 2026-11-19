@@ -1,9 +1,12 @@
 package review
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/livetemplate/prereview/csv"
 )
 
 // Area is the rectangle for a kind=area comment, expressed as 0..1
@@ -174,6 +177,24 @@ func (c Comment) Snippet() string {
 	}
 	return ""
 }
+
+// requestSummaries are the one-line labels a request comment shows in place of
+// its body, which is the full prompt written for the agent.
+var requestSummaries = map[string]string{
+	csv.RequestJudge:      "Asked your agent to run this file's judges",
+	csv.RequestBenchmark:  "Asked your agent to run a benchmark's judges",
+	csv.RequestQuiz:       "Asked your agent for a quiz on this file",
+	csv.RequestExtraction: "Asked your agent to read past reviews",
+}
+
+// RequestSummary is the one line a request comment shows, with its prompt
+// behind "Read more"; "" for the reviewer's own comments (and an unknown
+// request kind), which show their body as written.
+func (c Comment) RequestSummary() string { return requestSummaries[c.Request] }
+
+// Headline is what a one-line listing of comments shows (All comments, the
+// Queue): a request's summary, otherwise the comment's text.
+func (c Comment) Headline() string { return cmp.Or(c.RequestSummary(), c.Body) }
 
 // AnchorOutdated reports that re-location could not confidently place
 // the comment — its line numbers no longer point at the intended

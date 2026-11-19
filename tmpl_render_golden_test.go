@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
@@ -336,6 +337,19 @@ func renderFixtures() []renderFixture {
 	allComments.Comments = []review.Comment{
 		{ID: "c1", File: "app.go", Body: "fix this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
 	}
+
+	// a request prereview queued (Run judges): one summary line on its card, the
+	// prompt behind Read more; All comments and the Queue row show the summary
+	// alone. A reviewer's file comment beside it renders as it always has.
+	requestCard := goBase()
+	requestCard.AgentMode = true
+	requestCard.Comments = []review.Comment{
+		{ID: "r1", File: "app.go", Body: "Judge `app.go` against 1 rubric(s). For each one, read the whole file.", Kind: "file", Request: csv.RequestJudge},
+		{ID: "c1", File: "app.go", Body: "split this file", Kind: "file"},
+	}
+	requestAll := goBase()
+	requestAll.ShowAllComments = true
+	requestAll.Comments = requestCard.Comments
 
 	// quiz view (#191) — one question of each interesting kind: answered-correct,
 	// unanswered, an UNGROUNDED anchor (cited a line the diff doesn't have), and an
@@ -786,6 +800,8 @@ func renderFixtures() []renderFixture {
 		{"binary-audio", binary("sound.mp3")},
 		{"binary-fallback", binary("archive.zip")},
 		{"all-comments", allComments},
+		{"request-readmore", requestCard},
+		{"request-all-comments", requestAll},
 		{"quiz", quiz},
 		{"quiz-empty", quizEmpty},
 		{"quiz-inline", quizInline},
