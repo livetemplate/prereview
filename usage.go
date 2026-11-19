@@ -4,6 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 	"html/template"
+	"sync"
 
 	"github.com/livetemplate/prereview/gitdiff"
 )
@@ -17,9 +18,11 @@ import (
 //go:embed docs/usage.md
 var usageMD string
 
-// usagePage is the fully-rendered /_usage HTML, built once at startup. The doc
-// is embedded and immutable, so there's nothing to recompute per request.
-var usagePage = buildUsagePage()
+// usagePage is the fully-rendered /_usage HTML, built once when the server
+// registers it (not at package init, which every CLI verb, the per-edit
+// `hook check` included, would pay). The doc is embedded and immutable, so
+// there's nothing to recompute per request.
+var usagePage = sync.OnceValue(buildUsagePage)
 
 // usageShell wraps the rendered Markdown in a standalone, themed page. It
 // mirrors the SPA's head (same pico/syntax/prereview stylesheets) and the

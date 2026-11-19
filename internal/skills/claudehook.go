@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/livetemplate/prereview/internal/library"
@@ -29,10 +30,8 @@ const HookCommand = "command -v prereview >/dev/null 2>&1 || exit 0; " + HookMar
 // hookTimeout is the entry's timeout, in seconds.
 const hookTimeout = 30
 
-// ClaudeSettings is Claude Code's settings file, relative to the agent home.
-const ClaudeSettings = ".claude/settings.json"
-
-const hookKey = "#prereview-hook" // the ownership-record key suffix
+// claudeSettings is Claude Code's settings file, relative to the agent home.
+const claudeSettings = ".claude/settings.json"
 
 // errSettingsShape: settings.json isn't the shape prereview expects; nothing is written.
 var errSettingsShape = errors.New("not the JSON shape prereview expects, so it was left alone")
@@ -123,11 +122,9 @@ func find(ms []member, key string) int {
 	return -1
 }
 
-// hookEntryJSON is the entry prereview writes, compact.
-func hookEntryJSON() []byte {
-	return marshalNoEscape(hookEntry{Matcher: "Write|Edit|MultiEdit",
-		Hooks: []hookCmd{{Type: "command", Command: HookCommand, Timeout: hookTimeout}}})
-}
+// hookEntry is the entry prereview writes, compact.
+var hookEntryJSON = string(marshalNoEscape(hookEntry{Matcher: "Write|Edit|MultiEdit",
+	Hooks: []hookCmd{{Type: "command", Command: HookCommand, Timeout: hookTimeout}}}))
 
 func compact(raw []byte) string {
 	var b bytes.Buffer
@@ -156,15 +153,15 @@ func isOurs(raw json.RawMessage) bool {
 // it (!on), and reports whether the file changed. An entry edited since
 // prereview wrote it is left (ErrEdited).
 func (o *Owner) writeHook(path string, on bool) (bool, error) {
-	key := path + hookKey
+	reg := o.Region(path, "prereview-hook")
+	want := ""
+	if on {
+		want = hookEntryJSON
+	}
 	cur, err := os.ReadFile(path)
 	existed := err == nil
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		if !on {
-			o.record(key, "")
-			return false, nil
-		}
 		cur = []byte("{}")
 	case err != nil:
 		return false, err
@@ -187,21 +184,14 @@ func (o *Owner) writeHook(path string, on bool) (bool, error) {
 			return false, errSettingsShape
 		}
 	}
-	ours := -1
-	for i, e := range post {
-		if isOurs(e) {
-			ours = i
-			break
-		}
-	}
-	want := string(hookEntryJSON())
+	ours := slices.IndexFunc(post, isOurs)
 	if ours >= 0 {
 		have := compact(post[ours])
-		if rec, ok := o.hashes[key]; ok && rec != hash([]byte(have)) && have != want {
+		if have != hookEntryJSON && reg.Edited([]byte(have)) {
 			return false, ErrEdited
 		}
-		if on && have == want {
-			o.record(key, want)
+		if have == want {
+			reg.Set(want)
 			return false, nil
 		}
 	}
@@ -211,18 +201,18 @@ func (o *Owner) writeHook(path string, on bool) (bool, error) {
 	case on:
 		post = append(post, json.RawMessage(want))
 	case ours < 0:
-		o.record(key, "")
+		reg.Set("")
 		return false, nil
 	default:
-		post = append(post[:ours], post[ours+1:]...)
+		post = slices.Delete(post, ours, ours+1)
 	}
 
 	// Put the members back where they were; drop what removing ours emptied.
-	set := func(ms []member, i int, k string, v []byte, keep bool) []member {
+	set := func(ms []member, i int, k string, v []byte) []member {
 		switch {
-		case !keep && i >= 0:
-			return append(ms[:i], ms[i+1:]...)
-		case !keep:
+		case len(v) <= 2 && i >= 0: // [] or {}
+			return slices.Delete(ms, i, i+1)
+		case len(v) <= 2:
 			return ms
 		case i >= 0:
 			ms[i].Val = v
@@ -230,52 +220,32 @@ func (o *Owner) writeHook(path string, on bool) (bool, error) {
 		}
 		return append(ms, member{k, v})
 	}
-	var postJSON bytes.Buffer
-	postJSON.WriteByte('[')
-	for i, e := range post {
-		if i > 0 {
-			postJSON.WriteByte(',')
-		}
-		postJSON.Write(e)
-	}
-	postJSON.WriteByte(']')
-	hooks = set(hooks, pi, "PostToolUse", postJSON.Bytes(), len(post) > 0)
-	top = set(top, hi, "hooks", encodeObject(hooks), len(hooks) > 0)
+	hooks = set(hooks, pi, "PostToolUse", marshalNoEscape(post))
+	top = set(top, hi, "hooks", encodeObject(hooks))
 
 	var out bytes.Buffer
-	if err := json.Indent(&out, []byte(compact(encodeObject(top))), "", "  "); err != nil {
+	if err := json.Indent(&out, encodeObject(top), "", "  "); err != nil {
 		return false, fmt.Errorf("rebuilding %s: %w", path, err)
 	}
 	out.WriteByte('\n')
-	if !json.Valid(out.Bytes()) {
-		return false, fmt.Errorf("rebuilding %s gave invalid JSON; left alone", path)
-	}
-	mode := os.FileMode(0o644)
-	if existed {
-		if fi, err := os.Stat(path); err == nil {
-			mode = fi.Mode().Perm()
-		}
-		if err := library.WriteFileAtomic(path+".prereview-bak", cur, mode); err != nil {
+	if existed { // settings can hold tokens: the copy is yours alone
+		if err := library.WriteFileAtomic(path+".prereview-bak", cur, 0o600); err != nil {
 			return false, err
 		}
 	}
-	if err := library.WriteFileAtomic(path, out.Bytes(), mode); err != nil {
+	if err := library.WriteFileAtomic(path, out.Bytes(), 0o644); err != nil {
 		return false, err
 	}
-	if on {
-		o.record(key, want)
-	} else {
-		o.record(key, "")
-	}
+	reg.Set(want)
 	return true, nil
 }
 
 // syncHook adds (on) or removes the hook in Claude Code's settings, when Claude
 // Code is set up here (~/.claude exists).
 func syncHook(o *Owner, home string, on bool) (*PointerReport, []string, error) {
-	path := filepath.Join(home, filepath.FromSlash(ClaudeSettings))
+	path := filepath.Join(home, filepath.FromSlash(claudeSettings))
 	r := &PointerReport{Label: "Claude Code checks after each edit", Path: path}
-	if fi, err := os.Stat(filepath.Dir(path)); err != nil || !fi.IsDir() {
+	if !isDir(filepath.Dir(path)) {
 		if !on {
 			return nil, nil, nil
 		}

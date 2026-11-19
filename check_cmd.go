@@ -90,10 +90,14 @@ type checkRun struct {
 	trustVale bool
 }
 
+// A turned-off rule is dropped before anything runs (a command check would
+// otherwise start its process only to be discarded); Vale's results are
+// filtered after, since Vale reports its own rule IDs.
 func newCheckRun(repo string) checkRun {
 	disabled, trustVale := review.CheckPrefs(uiPrefsPath(), repo)
-	return checkRun{repo: repo, lib: checks.Load(checks.UserDirs(userChecksDir(), skills.LearnedChecksDir(library.Dir()))...),
-		disabled: disabled, trustVale: trustVale}
+	lib := checks.Load(checks.UserDirs(userChecksDir(), skills.LearnedChecksDir(library.Dir()))...)
+	lib.Rules = slices.DeleteFunc(lib.Rules, func(r *checks.Rule) bool { return slices.Contains(disabled, r.ID) })
+	return checkRun{repo: repo, lib: lib, disabled: disabled, trustVale: trustVale}
 }
 
 // file runs the checks on one file (path relative to the cwd, or absolute).
@@ -106,19 +110,24 @@ func (c checkRun) file(path string) ([]checks.Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	return c.lines(abs, lines), nil
+}
+
+// lines runs the checks on a file's lines, already read.
+func (c checkRun) lines(abs string, lines []string) []checks.Result {
 	var kept []checks.Result
-	for _, r := range c.lib.RunAll(context.Background(), c.repo, c.rel(abs), lines, c.trustVale) {
+	for _, r := range c.lib.RunAll(context.Background(), c.repo, checkRel(c.repo, abs), lines, c.trustVale) {
 		if !slices.Contains(c.disabled, r.ID) {
 			kept = append(kept, r)
 		}
 	}
-	return kept, nil
+	return kept
 }
 
-// rel is abs as the checks' globs match it: repo-relative, or the bare name
-// for a file outside the repo.
-func (c checkRun) rel(abs string) string {
-	rel, err := filepath.Rel(c.repo, abs)
+// checkRel is abs as the checks' globs match it: relative to repo, or the bare
+// name for a file outside it.
+func checkRel(repo, abs string) string {
+	rel, err := filepath.Rel(repo, abs)
 	if err != nil || strings.HasPrefix(rel, "..") {
 		rel = filepath.Base(abs)
 	}

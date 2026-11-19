@@ -78,3 +78,22 @@ func TestHookCheck(t *testing.T) {
 		t.Fatal("an unknown hook verb was accepted")
 	}
 }
+
+// TestEditedLines: every place the new text stands counts, a multi-line new
+// text covers each of its lines, and a Write covers the whole file.
+func TestEditedLines(t *testing.T) {
+	var in hookInput
+	in.ToolInput.NewString = "a b"
+	content := "a b\nc\na b\nd\ne\na b\n"
+	if _, got := editedLines(in, content); len(got) != 3 || !got[1] || !got[3] || !got[6] {
+		t.Fatalf("repeated: %v, want lines 1, 3, 6", got)
+	}
+	in.ToolInput.NewString = "c\na b\n"
+	if _, got := editedLines(in, content); len(got) != 2 || !got[2] || !got[3] {
+		t.Fatalf("multi-line: %v, want lines 2, 3", got)
+	}
+	in.ToolName = "Write"
+	if all, _ := editedLines(in, content); !all {
+		t.Fatal("a Write isn't the whole file")
+	}
+}

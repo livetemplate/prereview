@@ -20,28 +20,28 @@ import (
 
 // Memory is an agent's global memory file: read at the start of every session.
 type Memory struct {
-	ID, Label string
-	Dir       string // relative to the agent home; never created
-	File      string // relative to the agent home
-	// Existing: only add the block to a file that's already there. opencode
-	// reads ~/.claude/CLAUDE.md only while its own AGENTS.md is absent, so
-	// creating one would hide your CLAUDE.md from it.
-	Existing bool
+	Label string
+	File  string // relative to the agent home
+	// SetUp is the path (relative to the agent home) whose existence means the
+	// agent is set up here: its folder, which prereview never creates. For
+	// opencode it is the file itself: opencode reads ~/.claude/CLAUDE.md only
+	// while its own AGENTS.md is absent, so creating one would hide your
+	// CLAUDE.md from it.
+	SetUp string
 }
 
 // Memories are the memory files prereview adds its block to.
 var Memories = []Memory{
-	{ID: "claude", Label: "Claude Code", Dir: ".claude", File: ".claude/CLAUDE.md"},
-	{ID: "codex", Label: "Codex", Dir: ".codex", File: ".codex/AGENTS.md"},
-	{ID: "gemini", Label: "Gemini CLI", Dir: ".gemini", File: ".gemini/GEMINI.md"},
-	{ID: "opencode", Label: "opencode", Dir: ".config/opencode", File: ".config/opencode/AGENTS.md", Existing: true},
+	{Label: "Claude Code", File: ".claude/CLAUDE.md", SetUp: ".claude"},
+	{Label: "Codex", File: ".codex/AGENTS.md", SetUp: ".codex"},
+	{Label: "Gemini CLI", File: ".gemini/GEMINI.md", SetUp: ".gemini"},
+	{Label: "opencode", File: ".config/opencode/AGENTS.md", SetUp: ".config/opencode/AGENTS.md"},
 }
 
 // The block's markers. Everything outside them is yours and never touched.
 const (
 	blockStart = "<!-- prereview:learned-skills -->"
 	blockEnd   = "<!-- /prereview:learned-skills -->"
-	blockKey   = "#learned-skills" // the ownership-record key suffix
 )
 
 // MemoryBlock is the block that tells an agent to use the generated skills.
@@ -91,27 +91,17 @@ func findBlock(data []byte) (start, end int, ok bool) {
 }
 
 // writeBlock puts block in the memory file at path, or removes it when block
-// is "". It reports whether the file changed. A block edited since prereview
-// wrote it is left (ErrEdited); a block with no record (an earlier install, a
-// lost record) carries prereview's own markers, so it is taken over.
-func (o *Owner) writeBlock(path, block string, mustExist bool) (bool, error) {
-	key := path + blockKey
+// is "", and reports whether the file changed. A block edited since prereview
+// wrote it is left (ErrEdited).
+func (o *Owner) writeBlock(path, block string) (bool, error) {
+	reg := o.Region(path, "learned-skills")
 	cur, err := os.ReadFile(path)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		if block == "" || mustExist {
-			o.record(key, "")
-			return false, nil
-		}
-		cur = nil
-	case err != nil:
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, err
 	}
 	start, end, found := findBlock(cur)
-	if found {
-		if want, ok := o.hashes[key]; ok && want != hash(cur[start:end]) {
-			return false, ErrEdited
-		}
+	if found && reg.Edited(cur[start:end]) {
+		return false, ErrEdited
 	}
 	var next []byte
 	switch {
@@ -125,46 +115,39 @@ func (o *Owner) writeBlock(path, block string, mustExist bool) (bool, error) {
 	case found:
 		next = append(append(append([]byte{}, cur[:start]...), block...), cur[end:]...)
 	case block == "":
-		o.record(key, "")
+		reg.Set("")
 		return false, nil
+	case len(cur) > 0:
+		next = append(append(bytes.TrimRight(cur, "\n"), '\n', '\n'), block...)
 	default:
-		next = append([]byte{}, cur...)
-		if len(next) > 0 {
-			next = append(bytes.TrimRight(next, "\n"), '\n', '\n')
-		}
-		next = append(next, block...)
+		next = []byte(block)
 	}
-	o.record(key, block)
-	if bytes.Equal(next, cur) {
+	reg.Set(block)
+	switch {
+	case bytes.Equal(next, cur):
 		return false, nil
-	}
-	if len(bytes.TrimSpace(next)) == 0 { // nothing but the block was there
+	case len(bytes.TrimSpace(next)) == 0: // nothing but the block was there
 		return true, os.Remove(path)
 	}
-	mode := os.FileMode(0o644)
-	if fi, err := os.Stat(path); err == nil {
-		mode = fi.Mode().Perm()
-	}
-	return true, library.WriteFileAtomic(path, next, mode)
+	return true, library.WriteFileAtomic(path, next, 0o644)
 }
 
 // syncMemories writes block (or removes it, when "") in every agent's memory
-// file whose folder exists.
+// file, where the agent is set up.
 func syncMemories(o *Owner, home, block string) ([]PointerReport, []string, error) {
 	var reps []PointerReport
 	var changed []string
 	for _, m := range Memories {
 		path := filepath.Join(home, filepath.FromSlash(m.File))
-		r := PointerReport{Label: m.Label, Path: path}
-		if fi, err := os.Stat(filepath.Join(home, filepath.FromSlash(m.Dir))); err != nil || !fi.IsDir() {
-			r.State = NotSetUp
-			if block == "" {
-				continue
+		r := PointerReport{Label: m.Label + " memory", Path: path}
+		if _, err := os.Stat(filepath.Join(home, filepath.FromSlash(m.SetUp))); err != nil {
+			if block != "" {
+				r.State = NotSetUp
+				reps = append(reps, r)
 			}
-			reps = append(reps, r)
 			continue
 		}
-		ch, err := o.writeBlock(path, block, m.Existing)
+		ch, err := o.writeBlock(path, block)
 		switch {
 		case errors.Is(err, ErrEdited):
 			r.State = EditedThere
@@ -172,8 +155,6 @@ func syncMemories(o *Owner, home, block string) ([]PointerReport, []string, erro
 			return nil, nil, fmt.Errorf("%s: %w", path, err)
 		case block == "":
 			r.State = Off
-		case m.Existing && !fileExists(path):
-			r.State = NotSetUp
 		default:
 			r.State = Added
 		}
@@ -183,24 +164,4 @@ func syncMemories(o *Owner, home, block string) ([]PointerReport, []string, erro
 		reps = append(reps, r)
 	}
 	return reps, changed, nil
-}
-
-// record sets the ownership hash for a region key ("" forgets it), marking the
-// record dirty only when that changes it.
-func (o *Owner) record(key, data string) {
-	old, had := o.hashes[key]
-	switch {
-	case data == "" && had:
-		delete(o.hashes, key)
-	case data == "" || (had && old == hash([]byte(data))):
-		return
-	default:
-		o.hashes[key] = hash([]byte(data))
-	}
-	o.dirty = true
-}
-
-func fileExists(p string) bool {
-	_, err := os.Stat(p)
-	return err == nil
 }

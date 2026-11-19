@@ -42,20 +42,13 @@ func TestMemoryBlock(t *testing.T) {
 
 	// A missing file is created with the block alone; removing it removes the file.
 	fresh := filepath.Join(dir, "fresh.md")
-	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(fresh, block, false); return err })
+	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(fresh, block); return err })
 	if got := readFile(t, fresh); got != block {
 		t.Fatalf("fresh file = %q", got)
 	}
-	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(fresh, "", false); return err })
+	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(fresh, ""); return err })
 	if _, err := os.Stat(fresh); !os.IsNotExist(err) {
 		t.Fatal("removing the only block left the file")
-	}
-
-	// mustExist: a missing file stays missing.
-	opt := filepath.Join(dir, "opencode.md")
-	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(opt, block, true); return err })
-	if _, err := os.Stat(opt); !os.IsNotExist(err) {
-		t.Fatal("created a memory file that must already exist")
 	}
 
 	// Your text around the block is never touched.
@@ -65,14 +58,14 @@ func TestMemoryBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	var changed bool
-	own(t, lib, func(o *Owner) (err error) { changed, err = o.writeBlock(p, block, false); return })
+	own(t, lib, func(o *Owner) (err error) { changed, err = o.writeBlock(p, block); return })
 	if got := readFile(t, p); !changed || got != mine+"\n"+block {
 		t.Fatalf("added: changed=%v\n%s", changed, got)
 	}
 	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
 		t.Fatalf("mode = %v, want the file's own 0600", fi.Mode().Perm())
 	}
-	own(t, lib, func(o *Owner) (err error) { changed, err = o.writeBlock(p, block, false); return })
+	own(t, lib, func(o *Owner) (err error) { changed, err = o.writeBlock(p, block); return })
 	if changed {
 		t.Fatal("writing the same block again changed the file")
 	}
@@ -82,7 +75,7 @@ func TestMemoryBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	newer := MemoryBlock(gen[:1])
-	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(p, newer, false); return err })
+	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(p, newer); return err })
 	if got := readFile(t, p); got != mine+"\n"+newer+"\n- after\n" {
 		t.Fatalf("updated:\n%s", got)
 	}
@@ -92,7 +85,7 @@ func TestMemoryBlock(t *testing.T) {
 	if err := os.WriteFile(p, []byte(edited), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Own(lib, func(o *Owner) error { _, err := o.writeBlock(p, block, false); return err }); !errors.Is(err, ErrEdited) {
+	if err := Own(lib, func(o *Owner) error { _, err := o.writeBlock(p, block); return err }); !errors.Is(err, ErrEdited) {
 		t.Fatalf("edited block: err = %v, want ErrEdited", err)
 	}
 	if readFile(t, p) != edited {
@@ -103,7 +96,7 @@ func TestMemoryBlock(t *testing.T) {
 	if err := os.WriteFile(p, []byte(mine+"\n"+newer+"\n- after\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(p, "", false); return err })
+	own(t, lib, func(o *Owner) error { _, err := o.writeBlock(p, ""); return err })
 	if got := readFile(t, p); got != mine+"\n- after\n" {
 		t.Fatalf("removed:\n%q", got)
 	}
@@ -277,14 +270,14 @@ func TestSync_AgentPointers(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".gemini")); !os.IsNotExist(err) {
 		t.Fatal("created an agent's folder")
 	}
-	if !strings.Contains(readFile(t, filepath.Join(home, ClaudeSettings)), HookCommand) {
+	if !strings.Contains(readFile(t, filepath.Join(home, claudeSettings)), HookCommand) {
 		t.Fatal("the hook wasn't added")
 	}
 	states := map[string]string{}
 	for _, r := range rep.Pointers {
 		states[r.Label] = r.State
 	}
-	want := map[string]string{"Claude Code": Added, "Codex": Added, "Gemini CLI": NotSetUp, "opencode": NotSetUp, "Claude Code checks after each edit": Added}
+	want := map[string]string{"Claude Code memory": Added, "Codex memory": Added, "Gemini CLI memory": NotSetUp, "opencode memory": NotSetUp, "Claude Code checks after each edit": Added}
 	if !reflect.DeepEqual(states, want) {
 		t.Fatalf("pointers %v, want %v", states, want)
 	}
@@ -298,7 +291,7 @@ func TestSync_AgentPointers(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".codex/AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatal("switched off, the AGENTS.md that held only the block is still there")
 	}
-	if strings.Contains(readFile(t, filepath.Join(home, ClaudeSettings)), HookMarker) {
+	if strings.Contains(readFile(t, filepath.Join(home, claudeSettings)), HookMarker) {
 		t.Fatal("switched off, the hook is still there")
 	}
 
@@ -308,7 +301,7 @@ func TestSync_AgentPointers(t *testing.T) {
 	if _, err := Sync(env, nil); err != nil { // the last learning undone
 		t.Fatal(err)
 	}
-	if readFile(t, claudeMD) != mine || strings.Contains(readFile(t, filepath.Join(home, ClaudeSettings)), HookMarker) {
+	if readFile(t, claudeMD) != mine || strings.Contains(readFile(t, filepath.Join(home, claudeSettings)), HookMarker) {
 		t.Fatal("with no skills left, the block or the hook stayed")
 	}
 }

@@ -21,11 +21,10 @@ type hookInput struct {
 	Cwd       string `json:"cwd"`
 	ToolName  string `json:"tool_name"`
 	ToolInput struct {
-		FilePath   string  `json:"file_path"`
-		Content    *string `json:"content"` // Write
-		NewString  string  `json:"new_string"`
-		ReplaceAll bool    `json:"replace_all"`
-		Edits      []struct {
+		FilePath  string  `json:"file_path"`
+		Content   *string `json:"content"` // Write
+		NewString string  `json:"new_string"`
+		Edits     []struct {
 			NewString string `json:"new_string"`
 		} `json:"edits"` // MultiEdit
 	} `json:"tool_input"`
@@ -58,24 +57,20 @@ func runHook(args []string, stdin io.Reader, stderr io.Writer) error {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(repo, path)
 	}
-	run := newCheckRun(repo)
-	if !checks.IsProse(run.rel(path)) {
+	// Most edits are code: decide before loading the checks library.
+	if !checks.IsProse(checkRel(repo, path)) {
 		return nil
 	}
-	content, err := os.ReadFile(path)
+	fileLines, err := checks.ReadLines(path)
 	if err != nil {
-		return nil // gone since the edit: nothing to check
+		return nil // gone since the edit, or not text: nothing to check
 	}
-	all, lines := editedLines(in, string(content))
+	all, lines := editedLines(in, strings.Join(fileLines, "\n")+"\n")
 	if !all && len(lines) == 0 {
 		return nil // a deletion: no new words
 	}
-	results, err := run.file(path)
-	if err != nil {
-		return err
-	}
 	var out []string
-	for _, r := range results {
+	for _, r := range newCheckRun(repo).lines(path, fileLines) {
 		if r.Status != checks.StatusFail {
 			continue
 		}
@@ -109,13 +104,15 @@ func editedLines(in hookInput, content string) (all bool, lines map[int]bool) {
 			continue
 		}
 		span := strings.Count(strings.TrimSuffix(ns, "\n"), "\n")
+		line, counted := 1, 0 // the line at byte counted
 		for off := 0; ; {
 			i := strings.Index(content[off:], ns)
 			if i < 0 {
 				break
 			}
-			start := strings.Count(content[:off+i], "\n") + 1
-			for l := start; l <= start+span; l++ {
+			line += strings.Count(content[counted:off+i], "\n")
+			counted = off + i
+			for l := line; l <= line+span; l++ {
 				lines[l] = true
 			}
 			off += i + len(ns)

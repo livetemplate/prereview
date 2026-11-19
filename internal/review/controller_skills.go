@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
-	"path/filepath"
 	"slices"
 
 	"github.com/livetemplate/livetemplate"
@@ -136,11 +135,7 @@ func (c *PrereviewController) applySkillsTab(state *PrereviewState) {
 	rep := c.lastSkillReport()
 	tab := &SkillsTab{PointersOff: state.AgentPointersOff}
 	for _, p := range rep.Pointers {
-		label := p.Label
-		if p.Path != filepath.Join(env.Home, filepath.FromSlash(skills.ClaudeSettings)) {
-			label += " memory"
-		}
-		tab.Pointers = append(tab.Pointers, SkillInstall{Label: label, State: p.State, Where: library.HomeLabel(env.Home, p.Path), OK: p.State == skills.Added})
+		tab.Pointers = append(tab.Pointers, SkillInstall{Label: p.Label, State: p.State, Where: library.HomeLabel(env.Home, p.Path), OK: p.State == skills.Added})
 	}
 	for _, s := range rep.Skills {
 		card := SkillCard{ID: s.ID, Name: s.Name, Scope: s.Scope, Source: s.Source, SourceRel: library.HomeLabel(env.Home, s.Source),

@@ -1,7 +1,8 @@
 // Package skills turns accepted learnings into prereview-owned agent skills
 // and checks (checks M4), installs them where each agent loads skills, and
 // imports the skills you already have — by reference: prereview never writes a
-// file it didn't create.
+// file it didn't create, except for one marked region it owns inside a file of
+// yours (a memory-file block, a settings hook entry: see Region).
 package skills
 
 import (
@@ -85,7 +86,7 @@ func (o *Owner) status(path string, cur []byte) error {
 // skill folder inside it), and the file is absent or still exactly what
 // prereview last wrote. It reports whether it changed anything.
 func (o *Owner) Write(root, path string, data []byte) (bool, error) {
-	if fi, err := os.Stat(root); err != nil || !fi.IsDir() {
+	if !isDir(root) {
 		return false, ErrNoRoot
 	}
 	return o.WriteIn(root, path, data)
@@ -160,6 +161,47 @@ func (o *Owner) Put(path string, data []byte, mode os.FileMode) error {
 	}
 	o.hashes[path], o.dirty = hash(data), true
 	return nil
+}
+
+// Region is a part of a file you own that prereview writes: a block in an
+// agent's memory file, prereview's entry in Claude Code's settings. Its hash is
+// recorded under "<path>#<name>", which no file path can be, so the sweep for
+// files never touches it. Unlike a file, a region with no record is taken
+// over: it is found by prereview's own marker, so it is prereview's.
+func (o *Owner) Region(path, name string) Region { return Region{o, path + "#" + name} }
+
+// Region is one owned region (Owner.Region).
+type Region struct {
+	o   *Owner
+	key string
+}
+
+// Edited reports whether the region's current bytes differ from what prereview
+// last wrote there (false with no record: a region is taken over).
+func (r Region) Edited(cur []byte) bool {
+	want, ok := r.o.hashes[r.key]
+	return ok && want != hash(cur)
+}
+
+// Set records data as the region's bytes; "" forgets the region. The record is
+// marked for saving only when this changes it.
+func (r Region) Set(data string) {
+	old, had := r.o.hashes[r.key]
+	switch {
+	case data == "" && had:
+		delete(r.o.hashes, r.key)
+	case data == "" || (had && old == hash([]byte(data))):
+		return
+	default:
+		r.o.hashes[r.key] = hash([]byte(data))
+	}
+	r.o.dirty = true
+}
+
+// isDir reports whether dir exists and is a folder: an agent is set up here.
+func isDir(dir string) bool {
+	fi, err := os.Stat(dir)
+	return err == nil && fi.IsDir()
 }
 
 func hash(b []byte) string {
