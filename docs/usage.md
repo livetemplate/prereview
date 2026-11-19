@@ -280,9 +280,11 @@ restore is itself a new version, so you can undo it the same way).
 ## Learnings
 
 The **Library** opens on **Learnings**: lessons your coding agent drew from your
-reviews, waiting for you to accept. prereview never calls a model; the agent
-proposes, and nothing takes effect until you accept. The toolbar's Library button
-shows how many are waiting.
+reviews. prereview never calls a model; the agent proposes them. With **Accept
+automatically** on (below) they're in your skills as they arrive, and Learnings
+opens on **Accepted**, where they are ("added for you"). When something waits for
+your Accept (an import, or everything with the switch off), it opens on
+**Proposed** instead, and the toolbar's Library button counts it.
 
 - Each card says where the lesson applies (its **scope**, e.g. "Technical docs")
   and cites the **evidence**: the comments, replies and accept/reject decisions it

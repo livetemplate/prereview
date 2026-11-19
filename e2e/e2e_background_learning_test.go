@@ -152,20 +152,6 @@ func TestE2E_BackgroundLearning(t *testing.T) {
 		return strings.Contains(s, "- Cut filler words. <!-- learning "+ids[0]+" -->") && strings.Contains(s, "- Lead with the point.")
 	}, "the accepted learnings didn't reach the skill")
 
-	// Opening the Library hides the notice but doesn't count as seeing it:
-	// Learnings opens on the proposed ones, where these aren't.
-	if err := chromedp.Run(ctxA,
-		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
-		chromedp.WaitNotPresent(`.learn-toast`, chromedp.ByQuery),
-		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.learn-toast`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("opening and closing the Library: %v%s", err, diagA())
-	}
-	if n := countSel(t, b, `.learn-toast`); n != 1 {
-		t.Fatalf("opening the Library in one review cleared the notice in another%s", diagB())
-	}
-
 	// Undo in one review: both rejected, the notice gone everywhere, the skill lines out.
 	if err := chromedp.Run(ctxA,
 		chromedp.Click(`.learn-toast button[name="undoLearned"]`, chromedp.ByQuery),
@@ -197,4 +183,39 @@ func TestE2E_BackgroundLearning(t *testing.T) {
 		t.Errorf("the notice came back after a reload%s", diagA())
 	}
 	noHorizontalScroll(t, b, diagB)
+
+	// A second job, nothing proposed: opening the Library lands on Accepted, where
+	// the new learning is ("added for you", no empty Proposed chip), which counts
+	// as seeing it in every review.
+	j2, _, err := library.QueueJob(libraryDirFor(repoA), library.Job{Stores: []string{store}, AutoAccept: true, Server: store}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	learnCLI(t, a, "wait", "--timeout", "0")
+	o := learnCLI(t, a, "propose", "--job", j2.ID, "--text", "Prefer plain words.", "--evidence", store+":c2")
+	id3 := strings.Fields(o)[1]
+	learnCLI(t, a, "finish", j2.ID)
+	ctxB2, cancelB2 := within(b, 20*time.Second)
+	defer cancelB2()
+	if err := chromedp.Run(ctxB2,
+		chromedp.WaitVisible(`.learn-toast`, chromedp.ByQuery),
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(learnCard(id3), chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("opening the Library on a new learning: %v%s", err, diagB())
+	}
+	if got := textOf(t, b, learnCard(id3)); !strings.Contains(got, "added for you") {
+		t.Errorf("the card doesn't say it was added for you: %q%s", got, diagB())
+	}
+	if n := countSel(t, b, learnChip("proposed")); n != 0 {
+		t.Errorf("an empty Proposed chip shows%s", diagB())
+	}
+	if got := textOf(t, b, `.lib-chip.is-on`); !strings.HasPrefix(got, "Accepted") {
+		t.Errorf("Learnings opened on %q, want Accepted%s", got, diagB())
+	}
+	ctxA2, cancelA2 := within(a, 20*time.Second)
+	defer cancelA2()
+	if err := chromedp.Run(ctxA2, chromedp.WaitNotPresent(`.learn-toast`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("seeing it in one review didn't clear the notice in the other: %v%s", err, diagA())
+	}
 }

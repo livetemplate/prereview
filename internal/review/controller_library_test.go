@@ -99,8 +99,9 @@ func TestReadPastReviews_NoFileOpen(t *testing.T) {
 
 // TestLearnAdded: a learning accepted on arrival shows in the notice (and the
 // badge) until one of its buttons marks it seen, in any tab; Undo rejects what
-// it names; opening the Library hides the notice without marking it seen
-// (Learnings opens on the proposed ones), and building state never marks it.
+// it names; opening the Library marks them seen when it lands on them (Accepted,
+// nothing proposed), not while something proposed comes first; building state
+// never marks them.
 func TestLearnAdded(t *testing.T) {
 	c := checksController(t)
 	c.LibraryDir = t.TempDir()
@@ -153,13 +154,30 @@ func TestLearnAdded(t *testing.T) {
 		}
 	}
 
+	// Something proposed waits: the Library opens on it, so the added one isn't shown.
+	waiting, err := library.Propose(c.LibraryDir, library.Proposal{Text: "Shorter titles.", Evidence: []string{store + ":c1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	learn("Prefer plain words.")
 	got, _ = c.ToggleLibrary(PrereviewState{}, checksCtx("ToggleLibrary", nil))
-	if !got.ShowLibrary || len(got.LearnAdded) != 0 {
-		t.Fatalf("on Learnings the notice should hide: library %v notice %+v", got.ShowLibrary, got.LearnAdded)
+	if !got.ShowLibrary || len(got.LearnAdded) != 0 || got.LearnPage().Chips[0].Value != library.StatusProposed || !got.LearnPage().Chips[0].On {
+		t.Fatalf("with a proposal waiting, Learnings opens on Proposed with no notice: %+v", got.LearnPage().Chips)
 	}
 	if got, _ = c.ToggleLibrary(got, checksCtx("ToggleLibrary", nil)); got.ShowLibrary || len(got.LearnAdded) != 1 {
 		t.Fatalf("leaving the Library must bring the unseen notice back: %+v", got.LearnAdded)
+	}
+	// Nothing proposed: it opens on Accepted, where the added one is — seen.
+	if err := library.Act(c.LibraryDir, waiting.ID, library.ActReject); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = c.ToggleLibrary(PrereviewState{}, checksCtx("ToggleLibrary", nil))
+	page := got.LearnPage()
+	if page.Chips[0].Value != library.StatusAccepted || !page.Chips[0].On || len(page.Cards) == 0 {
+		t.Fatalf("with nothing proposed, Learnings opens on Accepted (no Proposed chip): %+v", page.Chips)
+	}
+	if got, _ = c.ToggleLibrary(got, checksCtx("ToggleLibrary", nil)); len(got.LearnAdded) != 0 {
+		t.Fatalf("landing on the added learnings didn't mark them seen: %+v", got.LearnAdded)
 	}
 	got, _ = c.ReviewLearned(PrereviewState{}, checksCtx("ReviewLearned", nil))
 	if !got.ShowLibrary || got.LearnStatus != library.StatusAccepted || len(addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))) != 0 {
@@ -206,5 +224,37 @@ func TestToggleAutoAccept(t *testing.T) {
 	}
 	if got, _ = c.ToggleAutoAccept(got, checksCtx("ToggleAutoAccept", nil)); got.AutoAcceptOff || loadUIPrefs(c.UIPrefsPath).AutoAcceptOff {
 		t.Fatal("turning it back on didn't persist")
+	}
+}
+
+// TestLearningsLanding: with nothing waiting the Learnings tab opens on
+// Accepted (and hides the empty Proposed chip); a proposal arriving while you
+// look switches it to Proposed, and accepting that last one keeps you there.
+func TestLearningsLanding(t *testing.T) {
+	c := checksController(t)
+	c.LibraryDir = t.TempDir()
+	store := filepath.Dir(c.CSVPath)
+	if err := c.CSVWriter.Write([]csv.Row{{ID: "c1", File: "doc.md", FromLine: 1, ToLine: 1, Body: "tighten", CreatedAt: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := c.ToggleLibrary(PrereviewState{}, checksCtx("ToggleLibrary", nil))
+	page := st.LearnPage()
+	if page.Chips[0].Value != library.StatusAccepted || !page.Chips[0].On {
+		t.Fatalf("empty library opened on %+v, want Accepted with no Proposed chip", page.Chips)
+	}
+	l, err := library.Propose(c.LibraryDir, library.Proposal{Text: "Shorter titles.", Evidence: []string{store + ":c1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ = c.LibraryUpdated(st, checksCtx("LibraryUpdated", nil))
+	if st.LearnStatus != library.StatusProposed || len(st.LearnPage().Cards) != 1 {
+		t.Fatalf("a proposal arriving didn't switch to Proposed: %q", st.LearnStatus)
+	}
+	st, err = c.LearningAction(st, checksCtx("LearningAction", map[string]any{"id": l.ID, "act": library.ActAccept}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := st.LearnPage(); st.LearnStatus != library.StatusProposed || len(p.Cards) != 0 || p.Empty == "" {
+		t.Fatalf("after accepting the last one: status %q, %d cards, empty %q; want Proposed, none, Nothing waiting", st.LearnStatus, len(p.Cards), p.Empty)
 	}
 }

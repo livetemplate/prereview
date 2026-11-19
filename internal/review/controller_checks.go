@@ -641,6 +641,7 @@ func (c *PrereviewController) ToggleLibrary(state PrereviewState, ctx *livetempl
 	if state.ShowLibrary {
 		state.ChecksFile = ""
 	}
+	c.openLearnings(&state)
 	c.applyLibrary(&state)
 	c.applyReviewChecks(&state) // runs while open on the Checks tab; clears otherwise
 	return state, nil

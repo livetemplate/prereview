@@ -39,9 +39,8 @@ func (c *PrereviewController) learnings() []library.Learning {
 // applyLibrary refreshes what the Library shows: the toolbar badge and the
 // added-learnings notice (always) and, while the Learnings tab is open, the
 // learnings themselves (a closed Library carries none, so every action's state
-// clone stays small). It only reads: the notice is marked seen by its own
-// buttons (Review, Undo, close), never by opening the Library — Learnings opens
-// on the proposed ones, so that would clear it without showing them.
+// clone stays small). It only reads: the notice is marked seen by its buttons
+// and by the actions that show the added learnings (seeIfShown).
 func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 	ls := c.learnings()
 	onLearnings := state.ShowLibrary && state.libraryTab() == libTabLearnings
@@ -60,6 +59,7 @@ func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 	if onLearnings {
 		state.Learnings = ls
 		state.LearnStore = filepath.Dir(c.CSVPath)
+		pinLearnStatus(state, ls) // a proposal arriving while you look
 	}
 	c.applySkillsTab(state)
 	c.applyShortcuts(state) // the chips and the tab: a learning can add a chip
@@ -85,7 +85,7 @@ func addedSince(ls []library.Learning, seen string) []LearnedRef {
 }
 
 // seeLearnings records that you've seen the learnings added for you (in every
-// review on this machine), when there are any. Called by the notice's buttons.
+// review on this machine), when there are any.
 func (c *PrereviewController) seeLearnings() {
 	if c.LibraryDir == "" || len(addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))) == 0 {
 		return
@@ -97,6 +97,35 @@ func (c *PrereviewController) seeLearnings() {
 	go c.broadcast("LibraryUpdated")
 }
 
+// openLearnings resets the Learnings tab to its default chip when it opens:
+// Accepted until something waits for you, then Proposed (pinLearnStatus).
+func (c *PrereviewController) openLearnings(state *PrereviewState) {
+	if state.ShowLibrary && state.libraryTab() == libTabLearnings {
+		state.LearnStatus = ""
+		pinLearnStatus(state, c.learnings())
+		c.seeIfShown(*state)
+	}
+}
+
+// pinLearnStatus fixes the default chip on Proposed once something waits, so
+// accepting the last proposal leaves you on Proposed ("Nothing waiting")
+// instead of jumping to Accepted under your finger.
+func pinLearnStatus(state *PrereviewState, ls []library.Learning) {
+	if state.LearnStatus == "" && learnStatusFor("", ls) == library.StatusProposed {
+		state.LearnStatus = library.StatusProposed
+	}
+}
+
+// seeIfShown marks the added learnings seen when the Learnings tab now shows
+// them: the Accepted chip, every scope. It lands there when nothing is
+// proposed; while something is, it opens on Proposed and the notice stays.
+func (c *PrereviewController) seeIfShown(state PrereviewState) {
+	if state.ShowLibrary && state.libraryTab() == libTabLearnings && state.LearnScope == "" &&
+		learnStatusFor(state.LearnStatus, c.learnings()) == library.StatusAccepted {
+		c.seeLearnings()
+	}
+}
+
 // DismissLearned closes the added-learnings notice (in every tab).
 func (c *PrereviewController) DismissLearned(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	c.seeLearnings()
@@ -106,9 +135,9 @@ func (c *PrereviewController) DismissLearned(state PrereviewState, ctx *livetemp
 
 // ReviewLearned opens Library → Learnings on the accepted ones.
 func (c *PrereviewController) ReviewLearned(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	c.seeLearnings()
 	closeFullViews(&state)
 	state.ShowLibrary, state.LibraryTab, state.LearnStatus, state.LearnScope = true, libTabLearnings, library.StatusAccepted, ""
+	c.seeIfShown(state)
 	c.applyLibrary(&state)
 	return state, nil
 }
@@ -358,6 +387,9 @@ func (c *PrereviewController) SetLibraryTab(state PrereviewState, ctx *livetempl
 		return state, fmt.Errorf("library: unknown tab %q", tab)
 	}
 	state.LibraryTab = tab
+	if tab == libTabLearnings {
+		c.openLearnings(&state)
+	}
 	c.applyLibrary(&state)
 	c.applyReviewChecks(&state)
 	return state, nil
@@ -374,6 +406,7 @@ func (c *PrereviewController) SetLearnFilter(state PrereviewState, ctx *livetemp
 		return state, fmt.Errorf("learnings filter: unknown status %q", v)
 	}
 	state.LearnStatus = v
+	c.seeIfShown(state)
 	return state, nil
 }
 

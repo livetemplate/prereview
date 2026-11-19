@@ -90,15 +90,25 @@ func (s PrereviewState) LibraryOnBenchmarks() bool {
 	return s.libraryTab() == libTabBenchmarks
 }
 
+// learnStatusFor is the status chip the Learnings tab shows: the one you
+// picked, else Proposed while something waits for you, else Accepted (with
+// auto-accept on, where what's new is).
+func learnStatusFor(picked string, ls []library.Learning) string {
+	if picked != "" {
+		return picked
+	}
+	if slices.ContainsFunc(ls, func(l library.Learning) bool { return l.Status == library.StatusProposed }) {
+		return library.StatusProposed
+	}
+	return library.StatusAccepted
+}
+
 // LearnPage builds the Learnings tab, or nil when it isn't showing.
 func (s PrereviewState) LearnPage() *LearnPage {
 	if !s.ShowLibrary || !s.LibraryOnLearnings() {
 		return nil
 	}
-	status := s.LearnStatus
-	if status == "" {
-		status = library.StatusProposed
-	}
+	status := learnStatusFor(s.LearnStatus, s.Learnings)
 	p := &LearnPage{Scope: s.LearnScope}
 	counts := map[string]int{}
 	scopes := map[string]bool{}
@@ -109,6 +119,9 @@ func (s PrereviewState) LearnPage() *LearnPage {
 		byID[l.ID] = l
 	}
 	for _, st := range learnStatuses {
+		if st.status == library.StatusProposed && counts[st.status] == 0 && status != st.status {
+			continue // nothing waiting: with auto-accept on, the usual case
+		}
 		p.Chips = append(p.Chips, CheckChip{Value: st.status, Label: st.label, Count: counts[st.status], On: st.status == status})
 	}
 	names := make([]string, 0, len(scopes))
@@ -128,7 +141,10 @@ func (s PrereviewState) LearnPage() *LearnPage {
 	if len(p.Cards) == 0 {
 		switch {
 		case len(s.Learnings) == 0:
-			p.Empty = "No learnings yet. When your agent reads your reviews, it proposes what it learned here for you to accept."
+			p.Empty = "No learnings yet. When your agent reads your reviews, " + map[bool]string{
+				true:  "it proposes what it learned here for you to accept.",
+				false: "what it learns shows here, already in your skills.",
+			}[s.AutoAcceptOff]
 		case status == library.StatusProposed:
 			p.Empty = "Nothing waiting: every proposed learning has been accepted or rejected."
 		default:
@@ -150,6 +166,9 @@ func (s PrereviewState) learnCard(l library.Learning, byID map[string]library.Le
 	case library.StatusAccepted:
 		c.Pill, c.Actions = "pass", []LearnAction{actEdit, actDelete}
 		c.Meta = "accepted " + shortDate(l.UpdatedAt)
+		if l.Auto {
+			c.Meta = "added for you " + shortDate(l.CreatedAt)
+		}
 	case library.StatusRejected:
 		c.Pill, c.Actions = "muted", []LearnAction{actAccept, actDelete}
 		c.Meta = "rejected " + shortDate(l.UpdatedAt)
