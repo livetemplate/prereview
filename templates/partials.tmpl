@@ -512,8 +512,10 @@
 >
   {{- /* line span · resolved badge */ -}}
   <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}</span></header>
-  {{- /* comment text */ -}}
-  <div class="body">{{.Body}}</div>
+  {{- /* comment text; a request prereview queued shows one line, its prompt
+         (written for the agent) behind Read more. lvt-ignore-attrs keeps an open
+         one open across live updates. */ -}}
+  {{if .RequestSummary}}<details class="req-prompt" lvt-ignore-attrs><summary><span class="req-summary">{{.RequestSummary}}</span> <span class="req-more"></span></summary><div class="body">{{.Body}}</div></details>{{else}}<div class="body">{{.Body}}</div>{{end}}
   {{- /* #149 conversation thread + reviewer reply — the same pair commentCardFull
          renders. A file/area comment has no line anchor, but its thread is keyed by
          comment ID like any other, so the agent's "what I did" replies and the

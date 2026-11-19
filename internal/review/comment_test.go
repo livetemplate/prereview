@@ -1,6 +1,10 @@
 package review
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/livetemplate/prereview/csv"
+)
 
 func TestComment_LineSpan(t *testing.T) {
 	cases := []struct {
@@ -41,5 +45,21 @@ func TestComment_KindPredicates(t *testing.T) {
 	line := Comment{Kind: commentKindLine, FromLine: 1, ToLine: 1}
 	if line.IsTextLevel() {
 		t.Error("IsTextLevel() = true for kind=line")
+	}
+}
+
+// TestRequestSummary: each request kind prereview queues has a summary line; a
+// reviewer's comment and an unknown kind have none, so they show their text.
+func TestRequestSummary(t *testing.T) {
+	for _, req := range []string{csv.RequestJudge, csv.RequestBenchmark, csv.RequestQuiz, csv.RequestExtraction} {
+		c := Comment{Request: req, Body: "the prompt"}
+		if c.RequestSummary() == "" || c.Headline() != c.RequestSummary() {
+			t.Errorf("Request %q: summary %q, headline %q", req, c.RequestSummary(), c.Headline())
+		}
+	}
+	for _, req := range []string{"future-kind", ""} {
+		if c := (Comment{Request: req, Body: "mine"}); c.RequestSummary() != "" || c.Headline() != "mine" {
+			t.Errorf("Request %q: summary %q, headline %q, want none and the text", req, c.RequestSummary(), c.Headline())
+		}
 	}
 }

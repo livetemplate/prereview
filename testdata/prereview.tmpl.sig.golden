@@ -14,7 +14,7 @@
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
           <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}</div>
-          <div class="ac-body">{{.Body}}</div>
+          <div class="ac-body">{{.Headline}}</div>
         </button>
       </form>
       {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
@@ -267,7 +267,7 @@
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialog" .}}</div></div>
 === commentCardSimple ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}"lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}</span></header><div class="body">{{.Body}}</div>{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}<div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}"lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}</span></header>{{if .RequestSummary}}<details class="req-prompt" lvt-ignore-attrs><summary><span class="req-summary">{{.RequestSummary}}</span> <span class="req-more"></span></summary><div class="body">{{.Body}}</div></details>{{else}}<div class="body">{{.Body}}</div>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>

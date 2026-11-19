@@ -243,6 +243,9 @@ Pass when the first paragraph says what changes for the reader.
 - **Run judges** in the file bar asks your agent to judge the open file against every
   judge that applies. Verdicts appear live: pass or fail with a critique, and
   **Show in file** when the critique quotes a passage.
+- The request shows on the file as one line, such as "Asked your agent to run this
+  file's judges". **Read more** opens the prompt your agent received. A benchmark
+  run and **Quiz me** show their requests the same way.
 - A failing judge joins the bar's list (tagged *judge*). Pick it to see its critique,
   queue it as a comment, or answer **Agree** / **Disagree**. Your answers are how a
   judge earns trust; the Checks page shows how often each one agrees with you.
