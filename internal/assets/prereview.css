@@ -1903,8 +1903,8 @@ header.file-head .file-head-comment button svg { display: block; }
    unrendered rows so the scrollbar doesn't jitter as content-
    visibility kicks in.
 
-   IMPORTANT: rows that hold the composer or ANY annotation (comment,
-   suggestion, quiz question — `.has-line-marks`) are excluded.
+   IMPORTANT: rows that hold the composer, ANY annotation (comment,
+   suggestion, quiz question — `.has-line-marks`) or a finding card are excluded.
    content-visibility: auto skips rendering their contents when
    off-screen, which makes the composer's textarea and the cards' action
    buttons unfocusable until scrolled in; and its paint containment clips
@@ -2121,7 +2121,7 @@ header.file-head .file-head-comment button svg { display: block; }
   font-size: 0.7rem; color: var(--pico-muted-color);
   font-family: var(--jbm); letter-spacing: 0.04em;
 }
-.code .line-row:not(:has(.composer)):not(.has-line-marks) {
+.code .line-row:not(:has(.composer)):not(.has-line-marks):not(:has(.finding-card)) {
   content-visibility: auto;
   contain-intrinsic-size: auto 16px;
 }
@@ -3317,7 +3317,16 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      as the content-visibility rule so composer / inline-comment rows keep
      their auto width (max-content on a row holding a textarea would size to
      the unwrapped draft text). Guarded by TestE2E_LongLineDesktopScrolls. */
-  .code .line-row:not(:has(.composer)):not(.has-line-marks) { width: max-content; min-width: 100%; }
+  .code .line-row:not(:has(.composer)):not(.has-line-marks):not(:has(.finding-card)) { width: max-content; min-width: 100%; }
+  /* A finding card's row keeps its auto width, as a comment's does: on a
+     max-content row the card stretched to the line's full width and its buttons
+     landed off-screen. Prose goes further and wraps on desktop too
+     (PrereviewState.WrapLines): a Markdown or text line is a sentence or a
+     paragraph, which is read, not scanned sideways. */
+  .code.wrap-lines { overflow-x: hidden; }
+  .code.wrap-lines .content { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .code.wrap-lines .line,
+  .code.wrap-lines .line-row:not(:has(.composer)):not(.has-line-marks):not(:has(.finding-card)) { width: auto; }
   /* The rendered-Markdown reading surface is the primary desktop view
      (proposal docs). Keep it at the 16px desktop base (1rem): the earlier
      1.25rem (20px) bump read as too big on wide monitors — users were
@@ -4000,17 +4009,20 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
   text-decoration: underline wavy var(--mark); text-underline-offset: 3px;
 }
 .code .content mark.comment-span.check-finding { background: var(--pr-sel-bg); }
+/* The check's name and the buttons share the first row, buttons pinned right;
+   the message wraps below. So "Queue as comment" is in the same place on every
+   card, whatever the message or screen width. */
 .finding-card {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.3rem 0.6rem;
   margin: 0.35rem 0.4rem; padding: 0.4rem 0.7rem;
   background: var(--pr-comment-bg); border: 1px dashed var(--pr-comment-bd);
   border-left: 3px solid var(--mark); border-radius: var(--radius-md);
   font-family: var(--sans); font-size: 0.8rem; line-height: 1.45;
 }
-.finding-check { font-weight: 700; color: var(--mark); }
-.finding-msg { color: var(--pico-color); flex: 1 1 12rem; }
+.finding-check { font-weight: 700; color: var(--mark); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finding-msg { color: var(--pico-color); grid-column: 1 / -1; }
 .finding-queue { margin: 0; }
-.finding-actions { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+.finding-actions { display: inline-flex; gap: 0.3rem; grid-row: 1; grid-column: 2; }
 .ckp-dismissed { display: inline; margin: 0 0 0 0.5rem; }
 .ck-strip-hidden { margin: 0; }
 .finding-queue button { margin: 0; padding: 0.1rem 0.55rem; min-height: 0; font-size: 0.75rem; }

@@ -12,6 +12,7 @@
     {{- if eq .Note "file added"}} pure-add
     {{- else if eq .Note "file deleted"}} pure-del{{end}}
     {{- if $.FileView}} file-view{{end -}}
+    {{- if $.WrapLines}} wrap-lines{{end -}}
     "
        data-key="code-{{.Path}}"
        data-path="{{.Path}}"
