@@ -8,11 +8,16 @@
 #
 # Sets $iso; the caller removes it in its cleanup trap, and calls stop_watch.
 iso=$(mktemp -d /tmp/prereview-capture-home.XXXXXX)
-export PREREVIEW_LIBRARY_DIR="$iso/library"   # learnings, jobs, the first-launch answer
-export PREREVIEW_UI_PREFS_PATH="$iso/ui-prefs.json" # scheme, mode, view: captures start from defaults
-export PREREVIEW_HOME="$iso/home"             # where agent skills and memory files are written
-export PREREVIEW_SCAN_HOME="$iso/scan"        # where past reviews are looked for
-export PREREVIEW_CHECKS_DIR="$iso/checks"     # the user's own checks
+isolate_under() { # <name>: a fresh set of per-user folders under $iso/<name>
+	# The library sits in the agent home, as it does by default, so pages that
+	# show its paths show ~/.config/prereview/…, not a temp folder.
+	export PREREVIEW_LIBRARY_DIR="$iso/$1/home/.config/prereview" # learnings, jobs, the first-launch answer
+	export PREREVIEW_UI_PREFS_PATH="$iso/$1/ui-prefs.json" # scheme, mode, view: captures start from defaults
+	export PREREVIEW_HOME="$iso/$1/home"                # where agent skills and memory files are written
+	export PREREVIEW_SCAN_HOME="$iso/$1/scan"           # where past reviews are looked for
+	export PREREVIEW_CHECKS_DIR="$iso/$1/checks"        # the user's own checks
+}
+isolate_under base
 export PREREVIEW_NO_UPDATE=1
 watcher=""
 

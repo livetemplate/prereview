@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Regenerate the animated README GIFs in docs/. Builds prereview, then records
-# nine scripted flows with chromedp and encodes them as pure-Go GIFs (no
+# thirteen scripted flows with chromedp and encodes them as pure-Go GIFs (no
 # ffmpeg/gifsicle). One command so the GIFs never drift:
 #
 #   make gifs
@@ -99,6 +99,51 @@ for flow in versions thread; do
 	kill "$srv2" 2>/dev/null || true
 	srv2=""
 done
+
+# ---- the agent-loop flows: each on its own repo, server and per-user folders --
+# checks writes a judge, learning accepts a learning and installs skills,
+# alternatives records shortcut taps: on shared folders each would show up in the
+# captures after it.
+for flow in checks learning quiz alternatives; do
+	echo "› creating demo repo and folders for gif:$flow"
+	rm -rf "$demo2"
+	bash cmd/screenshot/demo-repo.sh "$demo2" "$(pwd)/e2e/testdata/areacomments/diagram.png"
+	isolate_under "$flow"
+	"$shot" -skip-first-launch
+	case "$flow" in
+	checks)
+		printf '\nRetries are very cheap.\n' >>"$demo2/guide.md" # one filler word for the checks bar
+		mkdir -p "$PREREVIEW_CHECKS_DIR"
+		cat >"$PREREVIEW_CHECKS_DIR/reader-first.md" <<'MD'
+---
+kind: judge
+name: Reader first
+category: Reader-first
+---
+Does the text lead with what the reader must do?
+MD
+		;;
+	learning)
+		mkdir -p "$PREREVIEW_HOME/.claude/skills" # so Claude Code counts as set up
+		;;
+	esac
+
+	echo "› starting server for gif:$flow"
+	: >"$log2"
+	"$bin" --agent --port 0 --host 127.0.0.1 "$demo2" >"$log2" 2>&1 &
+	srv2=$!
+	url2=$(wait_ready "$log2")
+	[ -n "$url2" ] || { echo "server for gif:$flow failed:"; cat "$log2"; exit 1; }
+	start_watch "$demo2"
+
+	echo "› capturing gif:$flow"
+	"$shot" --gif "$flow" --url "$url2" --repo "$demo2" --bin "$bin" --out docs
+
+	stop_watch
+	kill "$srv2" 2>/dev/null || true
+	srv2=""
+done
+isolate_under base
 
 # ---- external : demo static site proxied by prereview --external ------------
 echo "› starting demo site"

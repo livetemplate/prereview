@@ -161,8 +161,16 @@ func runGif(allocCtx context.Context, url, name, repo, bin, outDir string) {
 		gifVersions(allocCtx, url, repo, bin, outDir)
 	case "thread":
 		gifThread(allocCtx, url, repo, bin, outDir)
+	case "checks":
+		gifChecks(allocCtx, url, repo, bin, outDir)
+	case "learning":
+		gifLearning(allocCtx, url, repo, bin, outDir)
+	case "quiz":
+		gifQuiz(allocCtx, url, repo, bin, outDir)
+	case "alternatives":
+		gifAlternatives(allocCtx, url, repo, bin, outDir)
 	default:
-		log.Fatalf("unknown gif flow %q (have: hero|image|markdown|external|suggestion|search|themes|versions|thread)", name)
+		log.Fatalf("unknown gif flow %q (have: hero|image|markdown|external|suggestion|search|themes|versions|thread|checks|learning|quiz|alternatives)", name)
 	}
 }
 
