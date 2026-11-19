@@ -319,36 +319,21 @@ func main() {
 const saveBtn = `button.save-btn[name="addComment"]`
 
 func runReadmeShots(allocCtx context.Context, url, outDir string) {
-	// 1) Seed comments that later shots read back from the CSV. Order matters:
-	//    all-comments / file / image shots depend on these existing.
+	// 1) Seed the comments the phone shot shows on payment.go: a line comment
+	//    and a file comment, made through the real UI.
 	seedLineComment(allocCtx, url, "payment.go:L13-L16",
 		"Retry loop has no backoff or ctx — a failing gateway gets hammered.")
 	seedFileComment(allocCtx, url, "payment.go",
 		"Add a package doc comment summarizing the charge → gateway → refund flow.")
-	seedAreaComment(allocCtx, url, "architecture.png",
-		"This box overlaps the gateway lane — tighten the spacing.")
 
-	// 2) Capture. review-mobile shows the live composing flow (unsaved draft);
-	//    the rest read the seeded comments. The desktop hero, image-area, and
-	//    markdown-block flows are now animated GIFs (see `make gifs`), so they
-	//    are intentionally NOT captured here as stills.
+	// 2) Capture. review-mobile shows the live composing flow (an unsaved
+	//    draft). Every other README image is an animated GIF (`make gifs`).
 	shots := []struct {
 		name  string
 		w, h  int
 		frag  string
 		setup []chromedp.Action
 	}{
-		{"file-comment", 1280, 800, "payment.go", nil},
-		{"all-comments", 1280, 800, "", []chromedp.Action{
-			clickJS(`button[name="toggleCommentList"]`),
-			chromedp.Sleep(400 * time.Millisecond),
-			// "All comments" now lives inside the View ▾ dropdown, so a click on it
-			// bubbles to the dropdown's toggleClass handler and pops the menu open —
-			// close it again so the shot shows the clean all-comments list, not a
-			// menu overlapping the first card.
-			chromedp.Evaluate(`document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`, nil),
-			chromedp.Sleep(300 * time.Millisecond),
-		}},
 		{"review-mobile", 390, 844, "payment.go:L18", []chromedp.Action{
 			typeComposer("Surface the gateway's real error here, not a generic string."),
 		}},
@@ -405,32 +390,6 @@ func seedFileComment(allocCtx context.Context, url, frag, body string) {
 		acts := base(url, frag, 1280, 800)
 		acts = append(acts,
 			chromedp.Click(`button[name="openFileComment"]`, chromedp.ByQuery),
-			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
-			chromedp.Sleep(150*time.Millisecond),
-			chromedp.Click(saveBtn, chromedp.ByQuery),
-			chromedp.Sleep(600*time.Millisecond),
-		)
-		return chromedp.Run(ctx, acts...)
-	})
-}
-
-func seedAreaComment(allocCtx context.Context, url, frag, body string) {
-	withCtx(allocCtx, "seed-area:"+frag, func(ctx context.Context) error {
-		imgSel := `img[src*="` + frag + `"]`
-		var r struct{ X, Y, W, H float64 }
-		acts := base(url, frag, 1280, 800)
-		acts = append(acts,
-			chromedp.WaitVisible(imgSel, chromedp.ByQuery),
-			chromedp.Sleep(300*time.Millisecond),
-			// #57: image area-select is gated behind the region toggle (images
-			// pinch-zoom by default), so arm it before the drag can capture.
-			chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
-			chromedp.WaitVisible(`.image-with-areas.is-armed`, chromedp.ByQuery),
-			chromedp.Evaluate(`(()=>{const im=document.querySelector('`+imgSel+`');const b=im.getBoundingClientRect();return {X:b.x,Y:b.y,W:b.width,H:b.height};})()`, &r),
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				return mouseDrag(ctx, r.X+r.W*0.15, r.Y+r.H*0.15, r.X+r.W*0.62, r.Y+r.H*0.58)
-			}),
 			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
 			chromedp.Sleep(150*time.Millisecond),

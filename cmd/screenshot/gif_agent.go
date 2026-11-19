@@ -357,14 +357,17 @@ func gifAlternatives(allocCtx context.Context, url, repo, bin, outDir string) {
 		)
 		check(rec.capture(ctx, 240)) // two alternatives, one to pick
 
+		// The decided cards fold away, so the pick is shown where it now waits:
+		// the Queue, accepted and awaiting the agent.
 		step(ctx,
 			clickJS(b+` button[name="acceptSuggestion"]`),
 			waitFor(`!!document.querySelector('`+b+`.is-decided.sg-accept')`, 10*time.Second),
 			chromedp.Sleep(300*time.Millisecond),
-			scrollTo(b),
-			chromedp.Sleep(200*time.Millisecond),
+			chromedp.Click(`.queue-trigger`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.queue-awaiting`, chromedp.ByQuery),
+			chromedp.Sleep(300*time.Millisecond),
 		)
-		check(rec.capture(ctx, 280)) // picked one; the other is set aside
+		check(rec.capture(ctx, 280)) // picked one: accepted, waiting for the agent
 		return rec.encode(filepath.Join(outDir, "alternatives.gif"))
 	})
 }
