@@ -39,13 +39,14 @@ func (c *PrereviewController) learnings() []library.Learning {
 // applyLibrary refreshes what the Library shows: the toolbar badge and the
 // added-learnings notice (always) and, while the Learnings tab is open, the
 // learnings themselves (a closed Library carries none, so every action's state
-// clone stays small). It only reads: seeing the learnings is recorded by the
-// actions that open or leave the Learnings tab.
+// clone stays small). It only reads: the notice is marked seen by its own
+// buttons (Review, Undo, close), never by opening the Library — Learnings opens
+// on the proposed ones, so that would clear it without showing them.
 func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 	ls := c.learnings()
 	onLearnings := state.ShowLibrary && state.libraryTab() == libTabLearnings
 	state.LearnAdded = nil
-	if !onLearnings && c.LibraryDir != "" { // while you're looking at them, no notice
+	if !onLearnings && c.LibraryDir != "" { // hidden while Learnings shows, back after
 		state.LearnAdded = addedSince(ls, library.LearnSeenAt(c.LibraryDir))
 	}
 	state.LearnNew = len(state.LearnAdded)
@@ -84,8 +85,7 @@ func addedSince(ls []library.Learning, seen string) []LearnedRef {
 }
 
 // seeLearnings records that you've seen the learnings added for you (in every
-// review on this machine), when there are any. Called by the actions that open
-// or leave the Learnings tab, and by the notice's own buttons.
+// review on this machine), when there are any. Called by the notice's buttons.
 func (c *PrereviewController) seeLearnings() {
 	if c.LibraryDir == "" || len(addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))) == 0 {
 		return
@@ -356,9 +356,6 @@ func (c *PrereviewController) SetLibraryTab(state PrereviewState, ctx *livetempl
 	tab := ctx.GetString("tab")
 	if !slices.Contains([]string{libTabLearnings, libTabShortcuts, libTabSkills, libTabChecks, libTabBenchmarks}, tab) {
 		return state, fmt.Errorf("library: unknown tab %q", tab)
-	}
-	if tab == libTabLearnings || state.libraryTab() == libTabLearnings {
-		c.seeLearnings() // you're opening them, or have just looked at them
 	}
 	state.LibraryTab = tab
 	c.applyLibrary(&state)

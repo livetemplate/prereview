@@ -98,8 +98,9 @@ func TestReadPastReviews_NoFileOpen(t *testing.T) {
 }
 
 // TestLearnAdded: a learning accepted on arrival shows in the notice (and the
-// badge) until it's seen — closed, or the Learnings tab opened — in any tab;
-// Undo rejects what it names; building a tab's state never marks them seen.
+// badge) until one of its buttons marks it seen, in any tab; Undo rejects what
+// it names; opening the Library hides the notice without marking it seen
+// (Learnings opens on the proposed ones), and building state never marks it.
 func TestLearnAdded(t *testing.T) {
 	c := checksController(t)
 	c.LibraryDir = t.TempDir()
@@ -153,12 +154,13 @@ func TestLearnAdded(t *testing.T) {
 	}
 
 	learn("Prefer plain words.")
-	lib := PrereviewState{ShowLibrary: true, LibraryTab: libTabChecks}
-	got, _ = c.SetLibraryTab(lib, checksCtx("SetLibraryTab", map[string]any{"tab": libTabLearnings}))
-	if len(got.LearnAdded) != 0 || len(addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))) != 0 {
-		t.Fatal("opening Learnings didn't mark the added learnings seen")
+	got, _ = c.ToggleLibrary(PrereviewState{}, checksCtx("ToggleLibrary", nil))
+	if !got.ShowLibrary || len(got.LearnAdded) != 0 {
+		t.Fatalf("on Learnings the notice should hide: library %v notice %+v", got.ShowLibrary, got.LearnAdded)
 	}
-	learn("Cut the hedges.")
+	if got, _ = c.ToggleLibrary(got, checksCtx("ToggleLibrary", nil)); got.ShowLibrary || len(got.LearnAdded) != 1 {
+		t.Fatalf("leaving the Library must bring the unseen notice back: %+v", got.LearnAdded)
+	}
 	got, _ = c.ReviewLearned(PrereviewState{}, checksCtx("ReviewLearned", nil))
 	if !got.ShowLibrary || got.LearnStatus != library.StatusAccepted || len(addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))) != 0 {
 		t.Fatalf("Review: library %v status %q", got.ShowLibrary, got.LearnStatus)

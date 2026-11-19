@@ -118,8 +118,8 @@ URL whole: never shorten it, and never build one from the port, or the page answ
 ## Start the background learner
 
 Right after you share the link, start **one background sub-agent** that learns
-from the reviewer's comments while you work (in Claude Code, the Agent tool with
-`run_in_background`). It keeps learning off your queue: you never see its jobs,
+from the reviewer's comments while you work (in Claude Code, a sub-agent from
+the Agent tool, which runs in the background). It keeps learning off your queue: you never see its jobs,
 and nothing lands on the file the reviewer is reading. Give it this loop, with
 your STORE:
 

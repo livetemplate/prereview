@@ -152,6 +152,20 @@ func TestE2E_BackgroundLearning(t *testing.T) {
 		return strings.Contains(s, "- Cut filler words. <!-- learning "+ids[0]+" -->") && strings.Contains(s, "- Lead with the point.")
 	}, "the accepted learnings didn't reach the skill")
 
+	// Opening the Library hides the notice but doesn't count as seeing it:
+	// Learnings opens on the proposed ones, where these aren't.
+	if err := chromedp.Run(ctxA,
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.learn-toast`, chromedp.ByQuery),
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.learn-toast`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("opening and closing the Library: %v%s", err, diagA())
+	}
+	if n := countSel(t, b, `.learn-toast`); n != 1 {
+		t.Fatalf("opening the Library in one review cleared the notice in another%s", diagB())
+	}
+
 	// Undo in one review: both rejected, the notice gone everywhere, the skill lines out.
 	if err := chromedp.Run(ctxA,
 		chromedp.Click(`.learn-toast button[name="undoLearned"]`, chromedp.ByQuery),

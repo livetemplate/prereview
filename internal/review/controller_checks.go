@@ -636,9 +636,6 @@ func checkKey(path string, lines []string, libHash string) string {
 // ToggleLibrary opens or closes the Library (the toolbar button), on the Checks
 // tab across every file.
 func (c *PrereviewController) ToggleLibrary(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	if state.libraryTab() == libTabLearnings {
-		c.seeLearnings() // opening the Learnings tab, or leaving it
-	}
 	toggleFullView(&state, &state.ShowLibrary)
 	state.MoreMenuOpen = false
 	if state.ShowLibrary {
