@@ -24,17 +24,16 @@ log=$(mktemp /tmp/prereview-gif-log.XXXXXX)
 log2=$(mktemp /tmp/prereview-gif-log2.XXXXXX)
 sitelog=$(mktemp /tmp/prereview-site-log.XXXXXX)
 extlog=$(mktemp /tmp/prereview-extui-log.XXXXXX)
-# Isolate the per-USER view prefs so captures are deterministic (default
-# scheme/mode, rendered — not raw — Markdown) regardless of the developer's real
-# ~/.config/prereview/ui-prefs.json, and so the themes flow's scheme changes
-# don't pollute it. Same trick the e2e suite uses (prefsIsolatedEnv). A -u path
-# doesn't exist yet, so the server starts from clean defaults and writes here.
-prefs=$(mktemp -u /tmp/prereview-gifprefs.XXXXXX)
-export PREREVIEW_UI_PREFS_PATH="$prefs"
+# Every per-user path in a fresh temp folder (cmd/screenshot/capture-env.sh): the
+# captures start from default prefs and an empty library, the themes flow's
+# scheme changes stay out of the real config, and the learning flow's skill
+# installs never touch the real ~/.claude.
+source cmd/screenshot/capture-env.sh
 srv=""; srv2=""; site=""; ext=""
 cleanup() {
+	stop_watch
 	for p in "$srv" "$srv2" "$site" "$ext"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
-	rm -rf "$demo" "$demo2" "$extout" "$bin" "$log" "$log2" "$sitelog" "$extlog" "$prefs"
+	rm -rf "$demo" "$demo2" "$extout" "$bin" "$log" "$log2" "$sitelog" "$extlog" "$iso"
 }
 trap cleanup EXIT
 
@@ -52,10 +51,12 @@ echo "› creating demo repo"
 bash cmd/screenshot/demo-repo.sh "$demo" "$(pwd)/e2e/testdata/areacomments/diagram.png"
 
 echo "› starting demo-repo server"
-PREREVIEW_NO_UPDATE=1 "$bin" --agent --port 0 --host 127.0.0.1 "$demo" >"$log" 2>&1 &
+"$bin" --agent --port 0 --host 127.0.0.1 "$demo" >"$log" 2>&1 &
 srv=$!
 url=$(wait_ready "$log")
 [ -n "$url" ] || { echo "server failed:"; cat "$log"; exit 1; }
+start_watch "$demo"
+prepare "$url"
 
 # Seed a suggestion (agent → user, issue #98) for the suggestion flow: the
 # `suggest` subcommand appends to .prereview/suggestions.jsonl, which the server
@@ -92,14 +93,17 @@ for flow in versions thread; do
 
 	echo "› starting server for gif:$flow"
 	: >"$log2"
-	PREREVIEW_NO_UPDATE=1 "$bin" --agent --port 0 --host 127.0.0.1 "$demo2" >"$log2" 2>&1 &
+	"$bin" --agent --port 0 --host 127.0.0.1 "$demo2" >"$log2" 2>&1 &
 	srv2=$!
 	url2=$(wait_ready "$log2")
 	[ -n "$url2" ] || { echo "server for gif:$flow failed:"; cat "$log2"; exit 1; }
+	start_watch "$demo2"
+	prepare "$url2"
 
 	echo "› capturing gif:$flow"
 	GOWORK=off go run ./cmd/screenshot --gif "$flow" --url "$url2" --repo "$demo2" --bin "$bin" --out docs
 
+	stop_watch
 	kill "$srv2" 2>/dev/null || true
 	srv2=""
 done
@@ -112,7 +116,7 @@ siteurl=$(wait_ready "$sitelog")
 [ -n "$siteurl" ] || { echo "demo site failed:"; cat "$sitelog"; exit 1; }
 
 echo "› starting prereview --external"
-PREREVIEW_NO_UPDATE=1 "$bin" --external "$siteurl" --out "$extout" --agent --port 0 --host 127.0.0.1 >"$extlog" 2>&1 &
+"$bin" --external "$siteurl" --out "$extout" --agent --port 0 --host 127.0.0.1 >"$extlog" 2>&1 &
 ext=$!
 exturl=$(wait_ready "$extlog")
 [ -n "$exturl" ] || { echo "external UI failed:"; cat "$extlog"; exit 1; }

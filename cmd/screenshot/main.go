@@ -30,7 +30,9 @@ func main() {
 	repo := flag.String("repo", "", "demo repo working tree (the hero flow edits payment.go here to show Claude's fix)")
 	bin := flag.String("bin", "", "prereview binary, for flows that drive agent-side subcommands (status/reply) — versions/thread")
 	dump := flag.String("dump", "", "decode this GIF's frames to PNGs in --out, then exit (no browser)")
+	prepareOnly := flag.Bool("prepare", false, "answer the review's first-launch card (Not now) if it shows, then exit")
 	flag.Parse()
+	defer exitOnFailure()
 
 	if *dump != "" {
 		if err := dumpGIF(*dump, *outDir); err != nil {
@@ -56,6 +58,11 @@ func main() {
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOpts...)
 	defer allocCancel()
+
+	if *prepareOnly {
+		prepareReview(allocCtx, *url)
+		return
+	}
 
 	if *readme {
 		runReadmeShots(allocCtx, *url, *outDir)
@@ -277,14 +284,14 @@ func main() {
 		actions = append(actions, chromedp.CaptureScreenshot(&buf))
 
 		if err := chromedp.Run(shotCtx, actions...); err != nil {
-			log.Printf("[%s] failed: %v", s.name, err)
+			fail("[%s] failed: %v", s.name, err)
 			shotTCancel()
 			shotCancel()
 			continue
 		}
 		path := filepath.Join(*outDir, s.name+".png")
 		if err := os.WriteFile(path, buf, 0o644); err != nil {
-			log.Printf("[%s] write: %v", s.name, err)
+			fail("[%s] write: %v", s.name, err)
 		} else {
 			fmt.Printf("wrote %s (%d bytes)\n", path, len(buf))
 		}
@@ -368,7 +375,7 @@ func withCtx(allocCtx context.Context, label string, fn func(context.Context) er
 	ctx, tcancel := context.WithTimeout(ctx, 45*time.Second)
 	defer tcancel()
 	if err := fn(ctx); err != nil {
-		log.Printf("[%s] %v", label, err)
+		fail("[%s] %v", label, err)
 	}
 }
 

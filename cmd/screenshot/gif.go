@@ -232,7 +232,7 @@ func Refund(orderID string) error {
 // fresh demo-repo server so the seeded state never bleeds into the other GIFs.
 func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
 	if bin == "" || repo == "" {
-		log.Printf("[gif:versions] needs --bin and --repo")
+		fail("[gif:versions] needs --bin and --repo")
 		return
 	}
 
@@ -242,17 +242,17 @@ func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
 	// single 750ms window the watcher only ever sees "done" (no working→done edge)
 	// and never checkpoints, so sleep >1 interval between them.
 	if err := agentRun(bin, "status", "--out", repo, "working", "Reworking the charge retry loop"); err != nil {
-		log.Printf("[gif:versions] %v", err)
+		fail("[gif:versions] %v", err)
 		return
 	}
 	time.Sleep(1200 * time.Millisecond)
 	if err := os.WriteFile(filepath.Join(repo, "payment.go"), []byte(backoffFixedPayment), 0o644); err != nil {
-		log.Printf("[gif:versions] write payment.go: %v", err)
+		fail("[gif:versions] write payment.go: %v", err)
 		return
 	}
 	const changelog = "Add exponential backoff and a 5s context deadline to the retry loop so a stalled gateway can't hammer or hang a charge."
 	if err := agentRun(bin, "status", "--out", repo, "done", changelog); err != nil {
-		log.Printf("[gif:versions] %v", err)
+		fail("[gif:versions] %v", err)
 		return
 	}
 	// Let the checkpoint land (watcher polls every 750ms) before the browser mounts,
@@ -282,15 +282,15 @@ func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
 		{"✓ Done — recorded version 2", "bullet"},
 	}
 	if err := chromedp.Run(tctx, chromedp.EmulateViewport(termW, termH)); err != nil {
-		log.Printf("[gif:versions] term viewport: %v", err)
+		fail("[gif:versions] term viewport: %v", err)
 		return
 	}
 	if err := termInit(tctx); err != nil {
-		log.Printf("[gif:versions] term init: %v", err)
+		fail("[gif:versions] term init: %v", err)
 		return
 	}
 	if err := termRender(tctx, term); err != nil {
-		log.Printf("[gif:versions] term render: %v", err)
+		fail("[gif:versions] term render: %v", err)
 		return
 	}
 
@@ -300,43 +300,43 @@ func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
 	// hash nav would show "1 · Original"; a click routes through selectFile →
 	// applyVersionList and shows both versions. Poll for the count to reach 2.
 	if err := chromedp.Run(bctx, base(url, "", 1280, 800)...); err != nil {
-		log.Printf("[gif:versions] open review: %v", err)
+		fail("[gif:versions] open review: %v", err)
 		return
 	}
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Evaluate(`[...document.querySelectorAll('button[name="selectFile"]')].find(b=>/payment\.go/.test(b.textContent))?.click()`, nil),
 		chromedp.Sleep(400*time.Millisecond),
 	)
 	if err := chromedp.Run(bctx, chromedp.Poll(`document.querySelector('.versions-count')?.textContent==='2'`, nil, chromedp.WithPollingTimeout(10*time.Second))); err != nil {
-		log.Printf("[gif:versions] versions-count never reached 2: %v", err)
+		fail("[gif:versions] versions-count never reached 2: %v", err)
 		return
 	}
 	_ = rec.captureComposite(bctx, tctx, 160) // the diff, Versions chip shows 2
 
 	// Open the Versions panel (client-only lvt-el toggle).
-	_ = chromedp.Run(bctx, clickJS(`.versions-dropdown .versions-trigger`), chromedp.Sleep(500*time.Millisecond))
+	step(bctx, clickJS(`.versions-dropdown .versions-trigger`), chromedp.Sleep(500*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 150) // panel: Agent edit (current) + Original
 
 	// Expand the top row (Agent edit, current) → reveals the AI changelog.
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Evaluate(`document.querySelector('.version-row .version-summary-toggle')?.click()`, nil),
 		chromedp.Sleep(450*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 240) // changelog visible
 
 	// Expand the Original (baseline) row — it's non-current, so it carries the
 	// Diff/Restore actions — and diff it against the current file.
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Evaluate(`document.querySelectorAll('.version-row .version-summary-toggle')[1]?.click()`, nil),
 		chromedp.Sleep(400*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 160) // baseline row: View / Diff / Restore
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		clickJS(`.version-row:last-child button[name="diffVersion"]`),
 		chromedp.Poll(`!!document.querySelector('.version-view-banner')`, nil, chromedp.WithPollingTimeout(10*time.Second)),
 		chromedp.Sleep(500*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 320) // payoff: the read-only version diff
 
 	if err := rec.encode(filepath.Join(outDir, "versions.gif")); err != nil {
-		log.Printf("[gif:versions] encode: %v", err)
+		fail("[gif:versions] encode: %v", err)
 	}
 }
 
@@ -347,7 +347,7 @@ func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
 // retry-loop working tree), so the "no backoff or ctx" comment lands naturally.
 func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 	if bin == "" || repo == "" {
-		log.Printf("[gif:thread] needs --bin and --repo")
+		fail("[gif:thread] needs --bin and --repo")
 		return
 	}
 
@@ -371,24 +371,24 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 		{"watching the queue…", "dim"},
 	}
 	if err := chromedp.Run(tctx, chromedp.EmulateViewport(termW, termH)); err != nil {
-		log.Printf("[gif:thread] term viewport: %v", err)
+		fail("[gif:thread] term viewport: %v", err)
 		return
 	}
 	if err := termInit(tctx); err != nil {
-		log.Printf("[gif:thread] term init: %v", err)
+		fail("[gif:thread] term init: %v", err)
 		return
 	}
 	if err := termRender(tctx, idle); err != nil {
-		log.Printf("[gif:thread] term render: %v", err)
+		fail("[gif:thread] term render: %v", err)
 		return
 	}
 
 	// Browser: comment on the retry loop (L13 in the working tree).
 	if err := chromedp.Run(bctx, base(url, "payment.go", 1280, 800)...); err != nil {
-		log.Printf("[gif:thread] open payment.go: %v", err)
+		fail("[gif:thread] open payment.go: %v", err)
 		return
 	}
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Navigate(navURL(url, "payment.go:L13")),
 		chromedp.Sleep(700*time.Millisecond),
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
@@ -396,16 +396,16 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 		chromedp.Sleep(150*time.Millisecond),
 	)
 	_ = rec.captureComposite(bctx, tctx, 80) // empty composer
-	_ = chromedp.Run(bctx, chromedp.SendKeys(`.composer textarea`, "This retry loop has no backoff or ctx — a failing gateway gets hammered.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+	step(bctx, chromedp.SendKeys(`.composer textarea`, "This retry loop has no backoff or ctx — a failing gateway gets hammered.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 140) // typed
-	_ = chromedp.Run(bctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(700*time.Millisecond))
+	step(bctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(700*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 150) // comment saved
 
 	// Read the new comment's id from its card (the delete/reply forms carry it).
 	var id string
-	_ = chromedp.Run(bctx, chromedp.Evaluate(`document.querySelector('.inline-comment input[name="id"]')?.value||''`, &id))
+	step(bctx, chromedp.Evaluate(`document.querySelector('.inline-comment input[name="id"]')?.value||''`, &id))
 	if id == "" {
-		log.Printf("[gif:thread] could not read comment id from the saved card")
+		fail("[gif:thread] could not read comment id from the saved card")
 		return
 	}
 
@@ -425,7 +425,7 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 	// both coherent with the visible code and the more realistic interaction.
 	const reply = "Good catch — I can add exponential backoff. Want a context deadline too, or keep it unbounded?"
 	if err := agentRun(bin, "reply", "--body", reply, "--out", repo, id); err != nil {
-		log.Printf("[gif:thread] %v", err)
+		fail("[gif:thread] %v", err)
 		return
 	}
 	replied := append(recv[:len(recv):len(recv)],
@@ -437,7 +437,7 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 	// Browser: reload so Mount re-reads agent-replies.jsonl — the agent's reply now
 	// shows in the thread. Navigate to the bare file (no line hash) so no fresh
 	// composer opens over the card; poll for the agent entry, then scroll to it.
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Navigate("about:blank"),
 		chromedp.Sleep(150*time.Millisecond),
 		chromedp.Navigate(navURL(url, "payment.go")),
@@ -449,16 +449,16 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 	_ = rec.captureComposite(bctx, tctx, 240) // the agent's reply in the thread
 
 	// Reviewer replies back inline.
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		clickJS(`.inline-comment button[name="openReply"]`),
 		chromedp.WaitVisible(`.reply-form textarea`, chromedp.ByQuery),
 		chromedp.Evaluate(scrollCommentJS, nil),
 		chromedp.Sleep(150*time.Millisecond),
 	)
 	_ = rec.captureComposite(bctx, tctx, 90) // reply form open
-	_ = chromedp.Run(bctx, chromedp.SendKeys(`.reply-form textarea`, "Add a ctx deadline too — cap at 5s total.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+	step(bctx, chromedp.SendKeys(`.reply-form textarea`, "Add a ctx deadline too — cap at 5s total.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 150) // typed
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		clickJS(`.reply-form button[name="postReply"]`),
 		chromedp.Sleep(700*time.Millisecond),
 		chromedp.Evaluate(scrollCommentJS, nil),
@@ -472,7 +472,7 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 	_ = rec.captureComposite(bctx, tctx, 320) // the two-way thread, held longest
 
 	if err := rec.encode(filepath.Join(outDir, "thread.gif")); err != nil {
-		log.Printf("[gif:thread] encode: %v", err)
+		fail("[gif:thread] encode: %v", err)
 	}
 }
 
@@ -546,21 +546,21 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		{"watching the queue…", "dim"},
 	}
 	if err := chromedp.Run(tctx, chromedp.EmulateViewport(termW, termH)); err != nil {
-		log.Printf("[gif:hero] term viewport: %v", err)
+		fail("[gif:hero] term viewport: %v", err)
 		return
 	}
 	if err := termInit(tctx); err != nil {
-		log.Printf("[gif:hero] term init: %v", err)
+		fail("[gif:hero] term init: %v", err)
 		return
 	}
 	if err := termRender(tctx, idle); err != nil {
-		log.Printf("[gif:hero] term render: %v", err)
+		fail("[gif:hero] term render: %v", err)
 		return
 	}
 
 	// Browser: open payment.go's diff.
 	if err := chromedp.Run(bctx, base(url, "payment.go", 1280, 800)...); err != nil {
-		log.Printf("[gif:hero] open diff: %v", err)
+		fail("[gif:hero] open diff: %v", err)
 		return
 	}
 	_ = rec.captureComposite(bctx, tctx, 130) // diff open, terminal idle
@@ -572,7 +572,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	// before and after the fix, so it re-anchors as "moved" and stays inline —
 	// letting the human resolve it visibly. It's also exactly what the comment is
 	// about ("surface the gateway's real error here").
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Navigate(navURL(url, "payment.go:L14")),
 		chromedp.Sleep(700*time.Millisecond),
 		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
@@ -582,14 +582,14 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	_ = rec.captureComposite(bctx, tctx, 80) // empty composer
 
 	// Type the comment in two chunks for a "typing" feel.
-	_ = chromedp.Run(bctx, chromedp.SendKeys(`.composer textarea`, "Surface the gateway's real error ", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+	step(bctx, chromedp.SendKeys(`.composer textarea`, "Surface the gateway's real error ", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 45)
-	_ = chromedp.Run(bctx, chromedp.SendKeys(`.composer textarea`, "here, not a generic string.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+	step(bctx, chromedp.SendKeys(`.composer textarea`, "here, not a generic string.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 140) // full comment
 
 	// Save → the comment becomes an inline card and, in agent mode, is
 	// automatically streamed to the agent's queue (no explicit hand-off click).
-	_ = chromedp.Run(bctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(600*time.Millisecond))
+	step(bctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(600*time.Millisecond))
 	_ = rec.captureComposite(bctx, tctx, 110)
 	_ = rec.captureComposite(bctx, tctx, 150) // terminal still idle (event arriving)
 
@@ -615,7 +615,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 
 	// Apply the scripted edit on disk (no CSV surgery — Claude doesn't resolve).
 	if err := applyHeroFix(repo); err != nil {
-		log.Printf("[gif:hero] apply fix: %v", err)
+		fail("[gif:hero] apply fix: %v", err)
 		return
 	}
 	done := append(edit[:len(edit):len(edit)],
@@ -628,7 +628,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	// Browser: force a real reload (bounce via about:blank — a same-document
 	// hash change would NOT re-Mount) so Mount re-reads the file; the diff cache
 	// busts on the new mtime and the fixed line now shows in the diff.
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Navigate("about:blank"),
 		chromedp.Sleep(150*time.Millisecond),
 		chromedp.Navigate(navURL(url, "payment.go")),
@@ -643,7 +643,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	// resolved comments so the struck-through card stays visible (resolved rows
 	// are filtered from the diff by default — CommentsByEndLine honors
 	// ShowResolved). Settle, then scroll the resolved card into view.
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Evaluate(`(()=>{const b=document.querySelector('.inline-comment button[name="toggleResolved"]')||document.querySelector('button[name="toggleResolved"]');if(b)b.click();})()`, nil),
 		chromedp.Sleep(700*time.Millisecond),
 		chromedp.Evaluate(`(()=>{const b=document.querySelector('button[name="toggleShowResolved"]');if(b)b.click();})()`, nil),
@@ -663,7 +663,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		termLine{"  note the retry behaviour in the doc comment", "dim"},
 	)
 	_ = termRender(tctx, propose)
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Navigate("about:blank"),
 		chromedp.Sleep(150*time.Millisecond),
 		chromedp.Navigate(navURL(url, "payment.go")),
@@ -673,7 +673,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	)
 	_ = rec.captureComposite(bctx, tctx, 220) // the before→after suggestion box, agent waiting
 
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		chromedp.Click(`.inline-suggestion button[name="acceptSuggestion"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.inline-suggestion.is-decided.sg-accept`, chromedp.ByQuery),
 		chromedp.Sleep(300*time.Millisecond),
@@ -683,7 +683,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	_ = rec.captureComposite(bctx, tctx, 300) // accepted — the reverse loop closed, held longest
 
 	if err := rec.encode(filepath.Join(outDir, "hero.gif")); err != nil {
-		log.Printf("[gif:hero] encode: %v", err)
+		fail("[gif:hero] encode: %v", err)
 	}
 }
 
@@ -731,20 +731,20 @@ func gifImage(allocCtx context.Context, url, outDir string) {
 		_ = rec.capture(ctx, 130) // the image, before annotation (examine/zoom mode)
 		// #57: arm the region toggle — images pinch-zoom by default, so capture
 		// the gesture only after switching to comment mode.
-		_ = chromedp.Run(ctx,
+		step(ctx,
 			chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.image-with-areas.is-armed`, chromedp.ByQuery),
 			chromedp.Sleep(200*time.Millisecond),
 		)
 		_ = rec.capture(ctx, 80) // armed — "Select a region to comment" engaged
 		// Drag a rectangle → pending box + composer.
-		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		step(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 			return mouseDrag(ctx, r.X+r.W*0.15, r.Y+r.H*0.15, r.X+r.W*0.62, r.Y+r.H*0.58)
 		}), chromedp.Sleep(250*time.Millisecond))
 		_ = rec.capture(ctx, 110) // box drawn, composer open
-		_ = chromedp.Run(ctx, chromedp.SendKeys(`.composer textarea`, "This box overlaps the gateway lane — tighten the spacing.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+		step(ctx, chromedp.SendKeys(`.composer textarea`, "This box overlaps the gateway lane — tighten the spacing.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
 		_ = rec.capture(ctx, 140) // typed
-		_ = chromedp.Run(ctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(600*time.Millisecond))
+		step(ctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(600*time.Millisecond))
 		_ = rec.capture(ctx, 190) // saved area comment
 		return rec.encode(filepath.Join(outDir, "image-area.gif"))
 	})
@@ -764,15 +764,15 @@ func gifMarkdown(allocCtx context.Context, url, outDir string) {
 		_ = rec.capture(ctx, 140) // the rendered doc
 		// Click the "A charge validates…" paragraph block → selectBlock opens
 		// the composer anchored to that block's source lines.
-		_ = chromedp.Run(ctx,
+		step(ctx,
 			chromedp.Evaluate(`(()=>{const els=[...document.querySelectorAll('.md-block .md-rendered')];const t=els.find(e=>/validates the amount/.test(e.textContent))||els[1];t.scrollIntoView({block:'center'});t.click();})()`, nil),
 			chromedp.Sleep(500*time.Millisecond),
 			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 		)
 		_ = rec.capture(ctx, 110) // block selected, composer open
-		_ = chromedp.Run(ctx, chromedp.SendKeys(`.composer textarea`, "Say which gateway errors are retryable here.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+		step(ctx, chromedp.SendKeys(`.composer textarea`, "Say which gateway errors are retryable here.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
 		_ = rec.capture(ctx, 140) // typed
-		_ = chromedp.Run(ctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(600*time.Millisecond))
+		step(ctx, chromedp.Click(saveBtn, chromedp.ByQuery), chromedp.Sleep(600*time.Millisecond))
 		_ = rec.capture(ctx, 190) // comment anchored under the block
 		return rec.encode(filepath.Join(outDir, "markdown-block.gif"))
 	})
@@ -817,15 +817,15 @@ func gifExternal(allocCtx context.Context, url, outDir string) {
 		y1 := ov.Y + ov.Height*0.32
 		x2 := ov.X + ov.Width*0.66
 		y2 := ov.Y + ov.Height*0.46
-		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		step(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 			return mouseDrag(ctx, x1, y1, x2, y2)
 		}), chromedp.Sleep(300*time.Millisecond), chromedp.WaitVisible(`.ext-composer textarea`, chromedp.ByQuery))
 		_ = rec.capture(ctx, 110) // box drawn, composer open
 
-		_ = chromedp.Run(ctx, chromedp.SendKeys(`.ext-composer textarea`, "CTA is too low-contrast — darken it for AA.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
+		step(ctx, chromedp.SendKeys(`.ext-composer textarea`, "CTA is too low-contrast — darken it for AA.", chromedp.ByQuery), chromedp.Sleep(150*time.Millisecond))
 		_ = rec.capture(ctx, 140) // typed
 
-		_ = chromedp.Run(ctx,
+		step(ctx,
 			chromedp.Click(`.ext-composer button[name="addComment"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.pin-layer .area-overlay`, chromedp.ByQuery),
 			chromedp.Sleep(400*time.Millisecond),
@@ -864,21 +864,21 @@ func gifSuggestion(allocCtx context.Context, url, outDir string) {
 		{"waiting for your decision…", "dim"},
 	}
 	if err := chromedp.Run(tctx, chromedp.EmulateViewport(termW, termH)); err != nil {
-		log.Printf("[gif:suggestion] term viewport: %v", err)
+		fail("[gif:suggestion] term viewport: %v", err)
 		return
 	}
 	if err := termInit(tctx); err != nil {
-		log.Printf("[gif:suggestion] term init: %v", err)
+		fail("[gif:suggestion] term init: %v", err)
 		return
 	}
 	if err := termRender(tctx, proposed); err != nil {
-		log.Printf("[gif:suggestion] term render: %v", err)
+		fail("[gif:suggestion] term render: %v", err)
 		return
 	}
 
 	// Browser: open guide.md (rendered), where the suggestion box renders inline.
 	if err := chromedp.Run(bctx, base(url, "guide.md", 1280, 800)...); err != nil {
-		log.Printf("[gif:suggestion] open guide.md: %v", err)
+		fail("[gif:suggestion] open guide.md: %v", err)
 		return
 	}
 	if err := chromedp.Run(bctx,
@@ -886,7 +886,7 @@ func gifSuggestion(allocCtx context.Context, url, outDir string) {
 		chromedp.Evaluate(`document.querySelector('.inline-suggestion')?.scrollIntoView({block:'center'})`, nil),
 		chromedp.Sleep(300*time.Millisecond),
 	); err != nil {
-		log.Printf("[gif:suggestion] await box: %v", err)
+		fail("[gif:suggestion] await box: %v", err)
 		return
 	}
 	_ = rec.captureComposite(bctx, tctx, 220) // the before→after box, agent waiting
@@ -898,7 +898,7 @@ func gifSuggestion(allocCtx context.Context, url, outDir string) {
 	// re-render shifts the box out of the viewport, so a WaitVisible would block
 	// until the context deadline and drop this frame. Poll for existence, then
 	// scroll it back into view for the capture.
-	_ = chromedp.Run(bctx,
+	step(bctx,
 		clickJS(`.inline-suggestion button[name="acceptSuggestion"]`),
 		chromedp.Poll(`!!document.querySelector('.inline-suggestion.is-decided.sg-accept')`, nil, chromedp.WithPollingTimeout(10*time.Second)),
 		chromedp.Sleep(300*time.Millisecond),
@@ -916,7 +916,7 @@ func gifSuggestion(allocCtx context.Context, url, outDir string) {
 	_ = rec.captureComposite(bctx, tctx, 260) // accepted, held longest
 
 	if err := rec.encode(filepath.Join(outDir, "suggestion.gif")); err != nil {
-		log.Printf("[gif:suggestion] encode: %v", err)
+		fail("[gif:suggestion] encode: %v", err)
 	}
 }
 
@@ -940,14 +940,14 @@ func gifSearch(allocCtx context.Context, url, outDir string) {
 		}
 		_ = rec.capture(ctx, 90) // empty palette
 		// Type a query that matches across files → results stream in.
-		_ = chromedp.Run(ctx,
+		step(ctx,
 			chromedp.SendKeys(`.search-modal input[name="q"]`, "gateway", chromedp.ByQuery),
 			chromedp.WaitVisible(`.search-hit`, chromedp.ByQuery),
 			chromedp.Sleep(400*time.Millisecond),
 		)
 		_ = rec.capture(ctx, 200) // results with highlighted matches
 		// Jump to the first hit → the file opens at the matched line.
-		_ = chromedp.Run(ctx,
+		step(ctx,
 			chromedp.Click(`.search-hit`, chromedp.ByQuery),
 			chromedp.Sleep(700*time.Millisecond),
 			chromedp.Evaluate(`document.querySelector('.line.is-cursor')?.scrollIntoView({block:'center'})`, nil),
@@ -966,7 +966,7 @@ func gifThemes(allocCtx context.Context, url, outDir string) {
 		if err := chromedp.Run(ctx, base(url, "payment.go", 1280, 800)...); err != nil {
 			return err
 		}
-		_ = chromedp.Run(ctx, chromedp.WaitVisible(`.code`, chromedp.ByQuery), chromedp.Sleep(200*time.Millisecond))
+		step(ctx, chromedp.WaitVisible(`.code`, chromedp.ByQuery), chromedp.Sleep(200*time.Millisecond))
 		_ = rec.capture(ctx, 180) // Solarized (default)
 		// The scheme/mode buttons live in the desktop "View ▾" dropdown, so a
 		// chromedp.Click would block on visibility — clickJS fires the DOM click
@@ -976,13 +976,13 @@ func gifThemes(allocCtx context.Context, url, outDir string) {
 		const closeMenu = `document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`
 		// Cycle the scheme twice: Gruvbox, then Catppuccin.
 		for range 2 {
-			_ = chromedp.Run(ctx, clickJS(`button[name="cycleScheme"]`), chromedp.Sleep(500*time.Millisecond),
+			step(ctx, clickJS(`button[name="cycleScheme"]`), chromedp.Sleep(500*time.Millisecond),
 				chromedp.Evaluate(closeMenu, nil), chromedp.Sleep(150*time.Millisecond))
 			_ = rec.capture(ctx, 180)
 		}
 		// Flip the mode to Dark on the current scheme. The default is System and the
 		// cycle is System → Light → Dark, so it takes TWO clicks to land on Dark.
-		_ = chromedp.Run(ctx,
+		step(ctx,
 			clickJS(`button[name="cycleTheme"]`), chromedp.Sleep(300*time.Millisecond),
 			clickJS(`button[name="cycleTheme"]`), chromedp.Sleep(500*time.Millisecond),
 			chromedp.Evaluate(closeMenu, nil), chromedp.Sleep(150*time.Millisecond))

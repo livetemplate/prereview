@@ -13,15 +13,14 @@ cd "$(dirname "$0")/../.." # repo root
 bin=$(mktemp -u /tmp/prereview-shot.XXXXXX)
 demo=$(mktemp -d /tmp/prereview-demo.XXXXXX)
 log=$(mktemp /tmp/prereview-shot-log.XXXXXX)
-# Isolate the per-user view prefs so shots use the default scheme/mode and
-# rendered (not raw) Markdown regardless of the developer's real config (same as
-# the e2e suite / the gif script).
-prefs=$(mktemp -u /tmp/prereview-shotprefs.XXXXXX)
-export PREREVIEW_UI_PREFS_PATH="$prefs"
+# Every per-user path in a fresh temp folder: default scheme/mode, rendered
+# Markdown, and nothing read from or written to the developer's real config.
+source cmd/screenshot/capture-env.sh
 srv=""
 cleanup() {
+	stop_watch
 	[ -n "$srv" ] && kill "$srv" 2>/dev/null || true
-	rm -rf "$demo" "$bin" "$log" "$prefs"
+	rm -rf "$demo" "$bin" "$log" "$iso"
 }
 trap cleanup EXIT
 
@@ -32,7 +31,7 @@ echo "› creating demo repo"
 bash cmd/screenshot/demo-repo.sh "$demo" "$(pwd)/e2e/testdata/areacomments/diagram.png"
 
 echo "› starting server"
-PREREVIEW_NO_UPDATE=1 "$bin" --agent --port 0 --host 127.0.0.1 "$demo" >"$log" 2>&1 &
+"$bin" --agent --port 0 --host 127.0.0.1 "$demo" >"$log" 2>&1 &
 srv=$!
 for _ in $(seq 1 30); do
 	grep -q '^READY ' "$log" && break
@@ -44,6 +43,9 @@ url=$(grep -m1 '^READY ' "$log" | awk '{print $2}')
 	cat "$log"
 	exit 1
 }
+
+start_watch "$demo"
+prepare "$url"
 
 echo "› capturing from $url"
 GOWORK=off go run ./cmd/screenshot --readme --url "$url" --out docs
