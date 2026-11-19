@@ -74,10 +74,13 @@ type Learning struct {
 	ShortcutBody  string `json:"shortcut_body,omitempty"`
 	Replaces      string `json:"replaces,omitempty"` // the older learning this one would supersede
 	Status        string `json:"status"`
-	SupersededBy  string `json:"superseded_by,omitempty"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
-	Machine       string `json:"machine"`
+	// Auto marks a learning accepted on arrival: proposed for a learning job
+	// queued with auto-accept on, never by a click.
+	Auto         bool   `json:"auto,omitempty"`
+	SupersededBy string `json:"superseded_by,omitempty"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	Machine      string `json:"machine"`
 }
 
 // NewestEvidence is the newest evidence timestamp — the order conflicts follow

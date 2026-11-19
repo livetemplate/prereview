@@ -227,15 +227,28 @@ func clip(s string, n int) string {
 	return string(r[:n-1]) + "…"
 }
 
+// LearnedRef is one learning the notice names.
+type LearnedRef struct{ ID, Text string }
+
+// LearnAddedLabel is the notice's text: the learning itself when there is one.
+func (s PrereviewState) LearnAddedLabel() string {
+	if len(s.LearnAdded) == 1 {
+		return "Learned “" + clip(s.LearnAdded[0].Text, 80) + "”"
+	}
+	return fmt.Sprintf("%d learnings added", len(s.LearnAdded))
+}
+
 // BootCard is the first-launch offer to learn from past reviews, or the
 // progress once your agent is reading them.
 type BootCard struct {
-	Reading  bool // an extraction request is open
-	Scanning bool // the scan hasn't finished
-	Stores   []BootStore
-	Picked   int
-	CanRead  bool // an agent is attached
-	Waiting  int  // learnings proposed and waiting for you
+	Reading    bool // a learning job is open (or a pre-job extraction request)
+	Stalled    bool // the job waits with no learner running
+	Scanning   bool // the scan hasn't finished
+	Stores     []BootStore
+	Picked     int
+	CanRead    bool // an agent is attached
+	AutoAccept bool // what's learned goes straight into your skills
+	Waiting    int  // learnings proposed and waiting for you
 }
 
 // BootStore is one past review in the offer.
@@ -263,8 +276,8 @@ func (s PrereviewState) LibraryBootCard() *BootCard {
 }
 
 func (s PrereviewState) bootCard(offer bool) *BootCard {
-	if s.extractionOpen() {
-		return &BootCard{Reading: true, Waiting: s.LearnNew}
+	if s.LearnReading || s.extractionOpen() {
+		return &BootCard{Reading: true, Stalled: s.LearnStalled, Waiting: s.LearnNew}
 	}
 	if !offer {
 		return nil
@@ -278,7 +291,7 @@ func (s PrereviewState) bootCard(offer bool) *BootCard {
 	if len(s.BootStores) == 0 && !s.BootOpen {
 		return nil // nothing to learn from yet
 	}
-	c := &BootCard{CanRead: s.AgentMode}
+	c := &BootCard{CanRead: s.AgentMode, AutoAccept: !s.AutoAcceptOff}
 	for _, st := range s.BootStores {
 		b := BootStore{Store: st.Store, Label: st.Label, Counts: storeCounts(st), Picked: !slices.Contains(s.BootSkip, st.Store)}
 		if b.Picked {
@@ -300,7 +313,8 @@ func (s PrereviewState) pickedBootStores() []string {
 	return out
 }
 
-// extractionOpen reports an extraction request the agent hasn't finished.
+// extractionOpen reports an extraction request comment the agent hasn't
+// finished: one queued before learning moved to background jobs.
 func (s PrereviewState) extractionOpen() bool {
 	for _, c := range s.Comments {
 		if c.Request == csv.RequestExtraction && !c.Resolved && !c.Processed {

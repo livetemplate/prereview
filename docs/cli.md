@@ -257,17 +257,25 @@ prereview check     [--json] <file>...
   benchmark run, `--bench <id> --run <run> --case <case>` replaces `--out`/`--file`:
   the verdict goes to the benchmark's `runs.jsonl`, checked against the run's pinned
   case and rubric hashes.
-- **`prereview learn propose`** — the coding agent's answer to a "Read past reviews"
-  request (or a "Learn after each review" one): `prereview learn propose --text "…"
+- **`prereview learn wait`** — the background learner's loop step. `prereview learn
+  wait [--out <STORE>] [--timeout 9m]` claims the next **learning job** ("Learn after
+  each review", or "Read past reviews") and prints `job <id>`, a blank line and the
+  job. It prints `idle` at the timeout, or `stop` once the review `--out` names has
+  ended. While it waits, the review knows a learner is running. **`prereview learn
+  finish <id>`** closes a job.
+- **`prereview learn propose`** — the learner's answer to a job:
+  `prereview learn propose --job <id> --text "…"
   --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <pattern>]…
   [--replaces <id>] [--produces instruction,checker,judge] [--checker <rule.yml|->]
   [--judge <rubric.md|->]`, one call per lesson. `--checker`/`--judge` attach a
   drafted rule or rubric (validated; never a command check) that lands in your
   checks folder when the lesson is accepted.
-  Every `--evidence` must name a real record in that store (a comment id, a
-  suggestion id, or a thread reply as `<target_id>@<at>`), or nothing is written. The
-  lesson is appended to `~/.config/prereview/learnings.jsonl` as *proposed*; the
-  reviewer accepts it in Library → Learnings. **`prereview learn list [--status s]
+  Every `--evidence` must name a real record in one of the job's stores (a comment
+  id, a suggestion id, or a thread reply as `<target_id>@<at>`), or nothing is
+  written. The lesson is appended to `~/.config/prereview/learnings.jsonl`:
+  *accepted* when the job was queued with "Accept automatically" on (the reviewer is
+  told and can undo it), otherwise *proposed*, waiting in Library → Learnings.
+  Without `--job` it is always proposed. **`prereview learn list [--status s]
   [--json]`** prints the library.
 - **`prereview check`** — run the review's [checks](usage.md#checks) on files
   from the terminal: the built-in prose rules, your `~/.config/prereview/checks/`
@@ -413,8 +421,9 @@ id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kin
 `from_col`/`to_col` rune offsets), `file`, `area` (an image rectangle, `area`
 holds `{x,y,w,h}` fractions), or `region` (a live-site rectangle from `--external`,
 anchored to `url`). `hidden` and `enqueued` are reviewer/queue view flags; `request`
-marks a row prereview queued as a request to the agent (`extraction`, `judge`,
-`benchmark`, `quiz`), empty for the reviewer's own comments. See
+marks a row prereview queued as a request to the agent (`judge`, `benchmark`,
+`quiz`; `extraction` on rows from before learning moved to background jobs),
+empty for the reviewer's own comments. See
 [skill/reference.md](../skill/reference.md#csv-schema) for the full column docs.
 
 Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the

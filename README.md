@@ -420,7 +420,7 @@ id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kin
 `from_col`/`to_col`), `file`, `area`, or `region` (a live-site rectangle
 from `--external`, anchored to a `url`); `area` carries the rectangle as
 `{x,y,w,h}` fractions; `request` is set on the rows prereview itself queued
-as a request to the agent (`extraction`, `judge`, `benchmark`, `quiz`). See [skill/reference.md](skill/reference.md) for the
+as a request to the agent (`judge`, `benchmark`, `quiz`; `extraction` on older rows). See [skill/reference.md](skill/reference.md) for the
 full column docs.
 
 For a single-file review the store is per file, under the parent directory's

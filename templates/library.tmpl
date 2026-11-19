@@ -94,6 +94,7 @@
   <div class="lib-filters">
     {{range .Chips}}<form method="POST"><input type="hidden" name="status" value="{{.Value}}"><button type="submit" name="setLearnFilter" class="lib-chip{{if .On}} is-on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}} {{.Count}}</button></form>
     {{end}}<form method="POST" class="lib-auto-form"><button type="submit" name="toggleAutoLearn" class="lib-auto" role="switch" aria-checked="{{if $.AutoLearnOff}}false{{else}}true{{end}}" title="When your agent goes idle and a review has 5 or more new comments, replies or decisions, ask it to learn from them"><span class="ck-switch{{if $.AutoLearnOff}} off{{end}}" aria-hidden="true"></span>Learn after each review</button></form>
+    <form method="POST" class="lib-auto-form"><button type="submit" name="toggleAutoAccept" class="lib-auto" role="switch" aria-checked="{{if $.AutoAcceptOff}}false{{else}}true{{end}}" title="Add what your agent learns straight to your skills (you're told, and can undo it), instead of waiting for you to accept each one"><span class="ck-switch{{if $.AutoAcceptOff}} off{{end}}" aria-hidden="true"></span>Accept automatically</button></form>
     {{if .Scopes}}<form method="POST" class="lib-scope-form">
       <select name="scope" aria-label="Scope" lvt-on:change="setLearnFilter">
         <option value=""{{if eq .Scope ""}} selected{{end}}>All scopes</option>
@@ -215,7 +216,8 @@
     {{if .Reading}}
     <h2>Reading past reviews…</h2>
     <div class="boot-progress" aria-hidden="true"><span></span></div>
-    <p>Your agent is reading them{{if .Waiting}} · {{.Waiting}} learning{{if ne .Waiting 1}}s{{end}} waiting in Library → Learnings{{end}}. You can keep reviewing; new learnings appear there as they're proposed.</p>
+    {{if .Stalled}}<p>Waiting for your agent's learner. It starts one in the background when it launches the review; if it didn't, ask it to start it (<code>prereview learn wait</code>).</p>
+    {{else}}<p>Your agent is reading them in the background{{if .Waiting}} · {{.Waiting}} learning{{if ne .Waiting 1}}s{{end}} waiting in Library → Learnings{{end}}. You can keep reviewing; you'll be told when learnings are added.</p>{{end}}
     {{else if .Scanning}}
     <h2>Looking for past reviews…</h2>
     <div class="boot-progress" aria-hidden="true"><span></span></div>
@@ -224,7 +226,7 @@
     <p>No review on this machine has comments yet. Learnings come from what you say in reviews.</p>
     {{else}}
     <h2>Learn from your past reviews</h2>
-    <p>prereview found {{len .Stores}} review{{if ne (len .Stores) 1}}s{{end}} with comments on this machine. Your agent can read the comments, replies and accept/reject decisions in the ones you tick and propose learnings for you to accept. Nothing is read until you ask, and nothing takes effect until you accept.</p>
+    <p>prereview found {{len .Stores}} review{{if ne (len .Stores) 1}}s{{end}} with comments on this machine. Your agent can read the comments, replies and accept/reject decisions in the ones you tick, in the background, and {{if .AutoAccept}}add what it learns to your skills: you're told each time, and can undo it{{else}}propose learnings for you to accept: nothing takes effect until you do{{end}}. Nothing is read until you ask.</p>
     <ul class="boot-list">
       {{range .Stores}}<li data-key="boot-{{.Store}}"><form method="POST"><input type="hidden" name="store" value="{{.Store}}"><button type="submit" name="toggleBootStore" class="boot-item" role="checkbox" aria-checked="{{if .Picked}}true{{else}}false{{end}}" title="{{.Store}}"><span class="boot-box" aria-hidden="true">{{if .Picked}}✓{{end}}</span><span class="bp">{{.Label}}</span><span class="bc">{{.Counts}}</span></button></form></li>
       {{end}}

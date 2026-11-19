@@ -554,6 +554,7 @@
 
 
 
+
 <div
   class="drawer-backdrop"
   lvt-on:click="closeFiles"
@@ -706,7 +707,7 @@
   <section class="boot" data-key="boot" aria-label="Learn from your past reviews">
     
     <h2>Learn from your past reviews</h2>
-    <p>prereview found 2 reviews with comments on this machine. Your agent can read the comments, replies and accept/reject decisions in the ones you tick and propose learnings for you to accept. Nothing is read until you ask, and nothing takes effect until you accept.</p>
+    <p>prereview found 2 reviews with comments on this machine. Your agent can read the comments, replies and accept/reject decisions in the ones you tick, in the background, and add what it learns to your skills: you're told each time, and can undo it. Nothing is read until you ask.</p>
     <ul class="boot-list">
       <li data-key="boot-/home/u/notes/.prereview"><form method="POST"><input type="hidden" name="store" value="/home/u/notes/.prereview"><button type="submit" name="toggleBootStore" class="boot-item" role="checkbox" aria-checked="true" title="/home/u/notes/.prereview"><span class="boot-box" aria-hidden="true">✓</span><span class="bp">~/notes</span><span class="bc">16 comments · 6 suggestions · 3 versions</span></button></form></li>
       <li data-key="boot-/home/u/code/app/.prereview"><form method="POST"><input type="hidden" name="store" value="/home/u/code/app/.prereview"><button type="submit" name="toggleBootStore" class="boot-item" role="checkbox" aria-checked="false" title="/home/u/code/app/.prereview"><span class="boot-box" aria-hidden="true"></span><span class="bp">~/code/app</span><span class="bc">1 comment</span></button></form></li>

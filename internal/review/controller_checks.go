@@ -172,6 +172,7 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 	c.checkpointLibrary(VersionTriggerFileEdit, "") // edits made while no server ran
 	c.syncSkills("")                                // bring generated skills in line after an upgrade
 	c.learningsChanged()                            // the baseline: only later writes fan out
+	c.autoChangelog()                               // …and only later auto-accepted learnings are named
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
@@ -190,7 +191,7 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 				c.broadcast("BenchmarksUpdated")
 			}
 			if c.learningsChanged() { // any server's write to the shared library
-				c.syncSkills("") // idempotent: a no-op when the writer already synced
+				c.syncSkills(c.autoChangelog()) // idempotent: a no-op when the writer already synced
 				c.broadcast("LibraryUpdated")
 			}
 		}

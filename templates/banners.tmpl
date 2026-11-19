@@ -95,6 +95,29 @@
   </form>
 </div>
 {{end}}
+{{if .LearnAdded}}
+<div
+  class="toast learn-toast{{if .Flash}} below-flash{{end}}"
+  role="status"
+  aria-live="polite"
+>
+  <span class="toast-msg">{{.LearnAddedLabel}}</span>
+  <span class="toast-actions">
+    <form method="POST"><button type="submit" name="reviewLearned" class="outline">Review</button></form>
+    <form method="POST"><button type="submit" name="undoLearned" class="outline secondary" title="Remove {{if eq (len .LearnAdded) 1}}it{{else}}them{{end}} from your skills">Undo</button></form>
+    <form method="POST" class="toast-dismiss-form">
+      <button
+        type="submit"
+        name="dismissLearned"
+        class="toast-dismiss"
+        aria-label="Dismiss"
+      >
+        {{template "iconClose14"}}
+      </button>
+    </form>
+  </span>
+</div>
+{{end}}
 {{if and .AgentMode (eq .LLMState "working")}}
 <div class="toast llm-working" role="status" aria-live="polite">
   <span class="llm-spinner" aria-hidden="true"></span>

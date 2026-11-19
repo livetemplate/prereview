@@ -299,12 +299,19 @@ shows how many are waiting.
   used it, and **Hide** takes one out of the comment box without deleting it.
 - **Learn after each review** (on by default): when your agent goes idle and the
   review holds five or more new comments, replies or decisions since it last read
-  it, prereview asks the agent to read them and propose lessons. Turn it off on the
-  Learnings tab.
+  it, prereview hands them to your agent's **background learner**, a helper agent
+  it starts with the review. The request never lands on a file and doesn't
+  interrupt the agent doing your edits. Turn it off on the Learnings tab.
+- **Accept automatically** (on by default): what the learner finds goes straight
+  into your skills. A notice in every open review says so ("2 learnings added",
+  or the learning itself) and stays until you close it. **Review** opens them;
+  **Undo** rejects them, so they leave your skills and the learner won't propose
+  them again. Turn it off on the Learnings tab and each waits for your Accept.
+  Learnings you import always wait.
 - **Read past reviews**: the first time you run this version, prereview looks for
   past reviews under your home folder (skipping dependency, VCS and cache folders)
-  and lists the ones with comments, ticked. **Read with my agent** asks your agent
-  to read exactly the ticked ones; untick any you'd rather keep out. **Not now**
+  and lists the ones with comments, ticked. **Read with my agent** has the
+  background learner read exactly the ticked ones; untick any you'd rather keep out. **Not now**
   hides the offer on this machine; the Learnings tab's **Read past reviews** brings
   it back. Reading needs an agent (`prereview --agent`).
 - **Several reviews at once** share one library: accept a lesson in one and every

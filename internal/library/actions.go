@@ -27,6 +27,10 @@ type Proposal struct {
 	// the instruction the reviewer keeps typing, as one tap.
 	ShortcutLabel string
 	ShortcutBody  string
+	// Job is the learning job this answers (`--job`). Its evidence must come from
+	// the stores the job names, and a job queued with auto-accept makes the
+	// learning accepted on arrival. Without one, a learning arrives proposed.
+	Job string
 }
 
 // Propose validates p, resolves every evidence ref and appends a proposed
@@ -90,12 +94,32 @@ func Propose(dir string, p Proposal) (Learning, error) {
 		Produces: p.Produces, Replaces: p.Replaces, Status: StatusProposed,
 		Checker: trimFile(p.Checker), Judge: trimFile(p.Judge), ShortcutLabel: label, ShortcutBody: body}
 	err := update(dir, func(have map[string]Learning) ([]Learning, error) {
-		if p.Replaces != "" {
-			if old, ok := have[p.Replaces]; !ok || old.Status == StatusDeleted {
-				return nil, fmt.Errorf("learn propose: --replaces %s: no such learning", p.Replaces)
+		old, hasOld := have[p.Replaces]
+		if p.Replaces != "" && (!hasOld || old.Status == StatusDeleted) {
+			return nil, fmt.Errorf("learn propose: --replaces %s: no such learning", p.Replaces)
+		}
+		if p.Job == "" {
+			return []Learning{l}, nil
+		}
+		j, ok := jobByID(dir, p.Job) // the library lock is held: read, don't lock
+		if !ok || j.Op == JobDone {
+			return nil, fmt.Errorf("learn propose: --job %s: no open learning job", p.Job)
+		}
+		for _, e := range ev {
+			if !slices.ContainsFunc(j.Stores, func(s string) bool { a, _ := filepath.Abs(s); return a == e.Store }) {
+				return nil, fmt.Errorf("learn propose: --evidence %s:%s: not a store job %s asks you to read", e.Store, e.ID, p.Job)
 			}
 		}
-		return []Learning{l}, nil
+		if !j.AutoAccept {
+			return []Learning{l}, nil
+		}
+		l.Status, l.Auto = StatusAccepted, true // accepted as Act's accept would
+		out := []Learning{l}
+		if hasOld && old.Status == StatusAccepted {
+			old.Status, old.SupersededBy = StatusSuperseded, l.ID
+			out = append(out, old)
+		}
+		return out, nil
 	})
 	return l, err
 }

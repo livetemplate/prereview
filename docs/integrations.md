@@ -45,9 +45,9 @@ complete list of still-actionable comments. `kind` is `line` (default), `text` (
 character range within a line; `from_col`/`to_col` are the 0-based rune offsets),
 `file`, `area` (an image rectangle, `area` column holds `{x,y,w,h}` fractions), or
 `region` (a live-site rectangle anchored to `url`). `hidden` and `enqueued` are
-reviewer/queue view flags — ignore them. `request` is set (`extraction`, `judge`,
-`benchmark`, `quiz`) when prereview, not the reviewer, queued the row as a request
-to you; its body says exactly what to do. Older CSVs may have fewer trailing
+reviewer/queue view flags — ignore them. `request` is set (`judge`, `benchmark`,
+`quiz`; `extraction` on older rows) when prereview, not the reviewer, queued the
+row as a request to you; its body says exactly what to do. Older CSVs may have fewer trailing
 columns; index by position and default missing ones to empty. Full column docs:
 [skill/reference.md](../skill/reference.md#csv-schema).
 

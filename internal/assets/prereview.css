@@ -3190,6 +3190,18 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 @keyframes llm-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .llm-spinner { animation: none; } }
+/* Learnings added for you (a background learning job with auto-accept on): the
+   top-right slot like any toast, but it stays until you close it, so it moves
+   down while a flash shows. Accent colour: news, not a confirmation. */
+.toast.learn-toast {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent); border-color: var(--accent);
+}
+.toast.learn-toast.below-flash { top: calc(var(--pr-bar-h) + 3.2rem); }
+.toast.learn-toast form { margin: 0; }
+.toast.learn-toast .toast-actions button:not(.toast-dismiss) {
+  margin: 0; padding: 0.15rem 0.55rem; min-height: 0; font-size: 0.78rem;
+}
 .toast .toast-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .toast .toast-msg code { font-size: 0.75rem; background: rgba(255,255,255,.5); padding: 0 0.25rem; border-radius: 3px; }
 .toast-dismiss-form { margin: 0; }
