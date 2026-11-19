@@ -191,6 +191,16 @@ func TestE2E_QueueScopeSwitch(t *testing.T) {
 		t.Errorf("the queue must ADVERTISE the work it hides: 'on other files' count = %q, want 1%s",
 			hidden, diag())
 	}
+	// The selected option's label is readable: it sits inside a <button>, where Pico
+	// redefines --pico-color as the button-label colour, which matches the pill's
+	// own background, so the label once vanished (white on white).
+	var cols []string
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(()=>{const s=getComputedStyle(document.querySelector('.queue-scope-opt.is-on'));return [s.color, s.backgroundColor];})()`, &cols)); err != nil || len(cols) != 2 {
+		t.Fatalf("read the scope option's colours: %v %v%s", err, cols, diag())
+	}
+	if cols[0] == cols[1] {
+		t.Errorf("the selected scope option's label is invisible: color %s on background %s%s", cols[0], cols[1], diag())
+	}
 
 	// Flip to ALL FILES → the other file's work appears.
 	//
