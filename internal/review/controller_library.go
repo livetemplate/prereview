@@ -36,19 +36,18 @@ func (c *PrereviewController) learnings() []library.Learning {
 	return c.learnCache
 }
 
-// applyLibrary refreshes what the Library shows: the toolbar badge (always) and,
-// while the Learnings tab is open, the learnings themselves (a closed Library
-// carries none, so every action's state clone stays small).
+// applyLibrary refreshes what the Library shows: the toolbar badge and the
+// added-learnings notice (always) and, while the Learnings tab is open, the
+// learnings themselves (a closed Library carries none, so every action's state
+// clone stays small). It only reads: seeing the learnings is recorded by the
+// actions that open or leave the Learnings tab.
 func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 	ls := c.learnings()
-	// Seen-at is re-read, not taken from this tab's state: closing the notice in
-	// any tab (or review) clears it everywhere, and a later savePrefs from this
-	// tab must not write an older value back.
-	state.LearnSeenAt = max(state.LearnSeenAt, loadUIPrefs(c.UIPrefsPath).LearnSeenAt)
-	if state.ShowLibrary && state.libraryTab() == libTabLearnings && len(addedSince(ls, state.LearnSeenAt)) > 0 {
-		state.LearnSeenAt = c.markLearnSeen() // you're looking at them
+	onLearnings := state.ShowLibrary && state.libraryTab() == libTabLearnings
+	state.LearnAdded = nil
+	if !onLearnings && c.LibraryDir != "" { // while you're looking at them, no notice
+		state.LearnAdded = addedSince(ls, library.LearnSeenAt(c.LibraryDir))
 	}
-	state.LearnAdded = addedSince(ls, state.LearnSeenAt)
 	state.LearnNew = len(state.LearnAdded)
 	for _, l := range ls {
 		if l.Status == library.StatusProposed {
@@ -57,7 +56,7 @@ func (c *PrereviewController) applyLibrary(state *PrereviewState) {
 	}
 	state.LearnReading, state.LearnStalled = c.learnJob()
 	state.Learnings = nil
-	if state.ShowLibrary && state.libraryTab() == libTabLearnings {
+	if onLearnings {
 		state.Learnings = ls
 		state.LearnStore = filepath.Dir(c.CSVPath)
 	}
@@ -78,55 +77,60 @@ func addedSince(ls []library.Learning, seen string) []LearnedRef {
 	var out []LearnedRef
 	for _, l := range ls {
 		if l.Auto && l.Status == library.StatusAccepted && l.CreatedAt > seen {
-			out = append(out, LearnedRef{ID: l.ID, Text: l.Text})
+			out = append(out, LearnedRef{ID: l.ID, Text: l.Text, At: l.CreatedAt})
 		}
 	}
 	return out
 }
 
-// markLearnSeen records that you've seen the added learnings (now), writing only
-// that field so another tab's prefs aren't overwritten, and returns it.
-func (c *PrereviewController) markLearnSeen() string {
-	now := library.Now()
-	p := loadUIPrefs(c.UIPrefsPath)
-	p.LearnSeenAt = now
-	if err := saveUIPrefs(c.UIPrefsPath, p); err != nil {
+// seeLearnings records that you've seen the learnings added for you (in every
+// review on this machine), when there are any. Called by the actions that open
+// or leave the Learnings tab, and by the notice's own buttons.
+func (c *PrereviewController) seeLearnings() {
+	if c.LibraryDir == "" || len(addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))) == 0 {
+		return
+	}
+	if _, err := library.MarkLearnSeen(c.LibraryDir); err != nil {
 		slog.Warn("learn seen", "err", err)
 	}
-	return now
+	c.learnViewChanged() // this server's tabs are told now, not again on the tick
+	go c.broadcast("LibraryUpdated")
 }
 
 // DismissLearned closes the added-learnings notice (in every tab).
 func (c *PrereviewController) DismissLearned(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.LearnSeenAt = c.markLearnSeen()
+	c.seeLearnings()
 	c.applyLibrary(&state)
 	return state, nil
 }
 
-// ReviewLearned opens Library → Learnings on the accepted ones (which marks the
-// notice seen).
+// ReviewLearned opens Library → Learnings on the accepted ones.
 func (c *PrereviewController) ReviewLearned(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	c.seeLearnings()
 	closeFullViews(&state)
 	state.ShowLibrary, state.LibraryTab, state.LearnStatus, state.LearnScope = true, libTabLearnings, library.StatusAccepted, ""
 	c.applyLibrary(&state)
 	return state, nil
 }
 
-// UndoLearned rejects every learning the notice names: each leaves your skills,
-// and a learning job won't propose it again (the prompt lists rejected ones).
+// UndoLearned rejects every learning the notice names, in one write: each
+// leaves your skills (anything one replaced comes back), and a learning job
+// won't propose it again (the prompt lists rejected ones).
 func (c *PrereviewController) UndoLearned(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	if c.LibraryDir == "" {
 		return state, fmt.Errorf("no library folder")
 	}
-	added := addedSince(c.learnings(), loadUIPrefs(c.UIPrefsPath).LearnSeenAt)
-	for _, l := range added {
-		if err := library.Act(c.LibraryDir, l.ID, library.ActReject); err != nil {
-			return state, err
-		}
+	added := addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))
+	ids := make([]string, len(added))
+	for i, l := range added {
+		ids[i] = l.ID
 	}
-	state.LearnSeenAt = c.markLearnSeen()
+	if err := library.Undo(c.LibraryDir, ids); err != nil {
+		return state, err
+	}
+	c.seeLearnings()
 	state.Flash = fmt.Sprintf("Undid %d learning%s", len(added), plural(len(added)))
-	return c.libraryWritten(state, fmt.Sprintf("Undid %d learning%s added automatically", len(added), plural(len(added)))), nil
+	return c.libraryWritten(state, "Undid "+learnedLabel(added)), nil
 }
 
 // autoChangelog names the learnings accepted on arrival since the watcher last
@@ -137,24 +141,15 @@ func (c *PrereviewController) autoChangelog() string {
 	ls := c.learnings()
 	c.learnMu.Lock()
 	defer c.learnMu.Unlock()
-	first := c.autoKnown == nil
-	if first {
-		c.autoKnown = map[string]bool{}
+	fresh := addedSince(ls, c.autoMark)
+	for _, l := range fresh {
+		c.autoMark = max(c.autoMark, l.At)
 	}
-	var fresh []string
-	for _, l := range ls {
-		if l.Auto && l.Status == library.StatusAccepted && !c.autoKnown[l.ID] {
-			c.autoKnown[l.ID] = true
-			fresh = append(fresh, l.Text)
-		}
-	}
-	switch {
-	case first || len(fresh) == 0:
+	if first := !c.autoMarked; first || len(fresh) == 0 {
+		c.autoMarked = true
 		return ""
-	case len(fresh) == 1:
-		return "Learned “" + clip(fresh[0], 80) + "”"
 	}
-	return fmt.Sprintf("Learned %d things from your reviews", len(fresh))
+	return learnedLabel(fresh)
 }
 
 // ToggleAutoAccept turns "Accept automatically" on or off (a per-user
@@ -165,23 +160,13 @@ func (c *PrereviewController) ToggleAutoAccept(state PrereviewState, ctx *livete
 	return state, nil
 }
 
-// libraryFingerprint is what the watcher compares: the learnings log, the
-// first-launch marker (answering the offer in one review hides it in the
-// others), the learning jobs (the boot card shows one being read) and the
-// skills' inputs (so another server's Create skill or Import,
-// or your edit to a skill, syncs here too).
+// libraryFingerprint is what the watcher compares before a skills sync: the
+// learnings log, the first-launch marker (answering the offer in one review
+// hides it in the others) and the skills' inputs (so another server's Create
+// skill or Import, or your edit to a skill, syncs here too).
 func (c *PrereviewController) libraryFingerprint() string {
 	fp := statusFingerprint(filepath.Join(c.LibraryDir, library.LearningsFile)) + "|" +
-		statusFingerprint(filepath.Join(c.LibraryDir, library.BootstrapFile)) + "|" +
-		statusFingerprint(filepath.Join(c.LibraryDir, library.LearnJobsFile))
-	// A job that starts waiting with no learner changes what the tabs show with no
-	// file changing (the learner's heartbeat itself is not an input: it moves
-	// every second).
-	if _, stalled := c.learnJob(); stalled {
-		fp += "|stalled"
-	}
-	// Closing the notice in another review clears it here too.
-	fp += "|seen=" + loadUIPrefs(c.UIPrefsPath).LearnSeenAt
+		statusFingerprint(filepath.Join(c.LibraryDir, library.BootstrapFile))
 	// Every other input of a skills sync: created skills, imports, and the skill
 	// sources you might edit in your editor.
 	inputs, _ := filepath.Glob(filepath.Join(c.LibraryDir, "skills", "*.json"))
@@ -192,6 +177,38 @@ func (c *PrereviewController) libraryFingerprint() string {
 		}
 	}
 	return fp
+}
+
+// learnViewChanged reports whether what the tabs show from the library but no
+// skills sync depends on moved since the watcher last looked: the learning jobs
+// (a job being read), one starting to wait with no learner (no file changes for
+// that: the learner's heartbeat moves every second), and the notice being seen
+// in any review.
+func (c *PrereviewController) learnViewChanged() bool {
+	if c.LibraryDir == "" {
+		return false
+	}
+	_, stalled := c.learnJob()
+	key := fmt.Sprint(statusFingerprint(filepath.Join(c.LibraryDir, library.LearnJobsFile)), "|",
+		statusFingerprint(filepath.Join(c.LibraryDir, library.LearnSeenFile)), "|", stalled)
+	c.learnMu.Lock()
+	defer c.learnMu.Unlock()
+	if key == c.learnViewKey {
+		return false
+	}
+	c.learnViewKey = key
+	return true
+}
+
+// openJobs is the open learning jobs, re-read only when the log changes.
+func (c *PrereviewController) openJobs() []library.Job {
+	fp := statusFingerprint(filepath.Join(c.LibraryDir, library.LearnJobsFile))
+	c.learnMu.Lock()
+	defer c.learnMu.Unlock()
+	if fp != c.jobsFP || !c.jobsLoaded {
+		c.jobsCache, c.jobsFP, c.jobsLoaded = library.OpenJobs(c.LibraryDir), fp, true
+	}
+	return c.jobsCache
 }
 
 // ScanPastReviews looks for review stores on this machine (the first-launch
@@ -246,7 +263,11 @@ func (c *PrereviewController) ReadPastReviews(state PrereviewState, ctx *livetem
 	if len(picked) == 0 {
 		return state, fmt.Errorf("read past reviews: no review ticked")
 	}
-	if _, err := c.queueLearnJob(picked, !state.AutoAcceptOff, false); err != nil {
+	signals := map[string]int{}
+	for _, st := range picked {
+		signals[st] = library.ReviewerSignals(st)
+	}
+	if _, err := c.queueLearnJob(picked, signals, !state.AutoAcceptOff, false); err != nil {
 		return state, err
 	}
 	if err := library.MarkBootstrapped(c.LibraryDir, "read"); err != nil {
@@ -258,15 +279,12 @@ func (c *PrereviewController) ReadPastReviews(state PrereviewState, ctx *livetem
 }
 
 // queueLearnJob hands stores to the background learner as one job, recording
-// each store's signal count so auto-learn waits for AutoLearnMinSignals more.
-// With onlyIfIdle, nothing is queued (false) while an open job covers them.
-func (c *PrereviewController) queueLearnJob(stores []string, autoAccept, onlyIfIdle bool) (bool, error) {
-	signals := map[string]int{}
-	for _, s := range stores {
-		signals[s] = library.ReviewerSignals(s)
-	}
+// each store's signal count (signals) so auto-learn waits for
+// AutoLearnMinSignals more. With onlyIfIdle, nothing is queued (false) while an
+// open job covers them.
+func (c *PrereviewController) queueLearnJob(stores []string, signals map[string]int, autoAccept, onlyIfIdle bool) (bool, error) {
 	_, ok, err := library.QueueJob(c.LibraryDir, library.Job{Stores: stores, AutoAccept: autoAccept,
-		Signals: signals, Server: filepath.Dir(c.CSVPath)}, onlyIfIdle)
+		Server: filepath.Dir(c.CSVPath)}, onlyIfIdle)
 	if err != nil || !ok {
 		return false, err
 	}
@@ -286,12 +304,12 @@ func (c *PrereviewController) learnJob() (open, stalled bool) {
 		return false, false
 	}
 	store := filepath.Dir(c.CSVPath)
-	for _, j := range library.OpenJobs(c.LibraryDir) {
+	for _, j := range c.openJobs() {
 		if j.Server != store {
 			continue
 		}
 		open = true
-		if at, err := time.Parse(time.RFC3339Nano, j.QueuedAt); j.Op == library.JobQueued && err == nil && time.Since(at) > library.LearnerStale {
+		if at, err := time.Parse(time.RFC3339Nano, j.At); j.Op == library.JobQueued && err == nil && time.Since(at) > library.LearnerStale {
 			stalled = !library.LearnerAlive(c.LibraryDir)
 		}
 	}
@@ -338,6 +356,9 @@ func (c *PrereviewController) SetLibraryTab(state PrereviewState, ctx *livetempl
 	tab := ctx.GetString("tab")
 	if !slices.Contains([]string{libTabLearnings, libTabShortcuts, libTabSkills, libTabChecks, libTabBenchmarks}, tab) {
 		return state, fmt.Errorf("library: unknown tab %q", tab)
+	}
+	if tab == libTabLearnings || state.libraryTab() == libTabLearnings {
+		c.seeLearnings() // you're opening them, or have just looked at them
 	}
 	state.LibraryTab = tab
 	c.applyLibrary(&state)
@@ -412,6 +433,7 @@ func (c *PrereviewController) libraryWritten(state PrereviewState, changelog str
 	c.syncSkills(changelog)
 	c.applyLibrary(&state)
 	c.learningsChanged() // this server's tabs are told now, not again on the tick
+	c.learnViewChanged()
 	go c.broadcast("LibraryUpdated")
 	return state
 }
@@ -434,15 +456,19 @@ func (c *PrereviewController) maybeAutoLearn() {
 		return
 	}
 	store := filepath.Dir(c.CSVPath)
-	if library.ReviewerSignals(store)-library.LastExtractions(c.LibraryDir)[store].Signals < AutoLearnMinSignals {
+	if slices.ContainsFunc(c.openJobs(), func(j library.Job) bool { return slices.Contains(j.Stores, store) }) {
+		return // an open job already reads this review
+	}
+	n := library.ReviewerSignals(store)
+	if n-library.LastExtractions(c.LibraryDir)[store].Signals < AutoLearnMinSignals {
 		return
 	}
-	queued, err := c.queueLearnJob([]string{store}, !prefs.AutoAcceptOff, true)
+	queued, err := c.queueLearnJob([]string{store}, map[string]int{store: n}, !prefs.AutoAcceptOff, true)
 	if err != nil {
 		slog.Warn("auto-learn", "err", err)
 	}
 	if queued {
-		c.learningsChanged() // this server's tabs are told now, not again on the tick
+		c.learnViewChanged() // this server's tabs are told now, not again on the tick
 		c.broadcast("LibraryUpdated")
 	}
 }

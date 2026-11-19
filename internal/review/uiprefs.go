@@ -60,9 +60,6 @@ type UIPrefs struct {
 	// AutoAcceptOff turns off "Accept automatically": a learning job's
 	// learnings then wait for you in Library → Learnings. On by default.
 	AutoAcceptOff bool `json:"auto_accept_off,omitempty"`
-	// LearnSeenAt is when you last saw the learnings added for you (closed the
-	// notice or opened Learnings): newer auto-accepted ones are announced.
-	LearnSeenAt string `json:"learn_seen_at,omitempty"`
 }
 
 // uiPrefsMu serialises writes to the prefs file — multiple tabs (sharing one
@@ -153,7 +150,6 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.TrustedVale = p.TrustedVale
 	state.AutoLearnOff = p.AutoLearnOff
 	state.AutoAcceptOff = p.AutoAcceptOff
-	state.LearnSeenAt = p.LearnSeenAt
 }
 
 // savePrefs persists the current view-style preferences to the per-user prefs
@@ -180,9 +176,6 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		TrustedVale:    state.TrustedVale,
 		AutoLearnOff:   state.AutoLearnOff,
 		AutoAcceptOff:  state.AutoAcceptOff,
-		// The newer of this tab's and the file's: a tab that hasn't re-read the
-		// prefs since another closed the notice must not bring it back.
-		LearnSeenAt: max(state.LearnSeenAt, loadUIPrefs(c.UIPrefsPath).LearnSeenAt),
 	}); err != nil {
 		slog.Warn("savePrefs", "err", err)
 	}

@@ -228,14 +228,18 @@ func clip(s string, n int) string {
 }
 
 // LearnedRef is one learning the notice names.
-type LearnedRef struct{ ID, Text string }
+type LearnedRef struct{ ID, Text, At string }
 
 // LearnAddedLabel is the notice's text: the learning itself when there is one.
-func (s PrereviewState) LearnAddedLabel() string {
-	if len(s.LearnAdded) == 1 {
-		return "Learned “" + clip(s.LearnAdded[0].Text, 80) + "”"
+func (s PrereviewState) LearnAddedLabel() string { return learnedLabel(s.LearnAdded) }
+
+// learnedLabel names learnings added for you: the notice, and the library
+// version they cause.
+func learnedLabel(ls []LearnedRef) string {
+	if len(ls) == 1 {
+		return "Learned “" + clip(ls[0].Text, 80) + "”"
 	}
-	return fmt.Sprintf("%d learnings added", len(s.LearnAdded))
+	return fmt.Sprintf("%d learnings added", len(ls))
 }
 
 // BootCard is the first-launch offer to learn from past reviews, or the

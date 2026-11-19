@@ -121,13 +121,12 @@ type PrereviewState struct {
 	BootOpen      bool                `json:"boot_open"`
 	AutoLearnOff  bool                `json:"auto_learn_off"`  // ui-prefs: "Learn after each review" off
 	AutoAcceptOff bool                `json:"auto_accept_off"` // ui-prefs: "Accept automatically" off
-	LearnSeenAt   string              `json:"learn_seen_at"`   // ui-prefs: when the added-learnings notice was last seen
 	// LearnReading: this review has a learning job open (the background learner
 	// is reading, or will). LearnStalled: it has waited with no learner running.
 	LearnReading bool `json:"learn_reading"`
 	LearnStalled bool `json:"learn_stalled"`
 	// LearnAdded is the learnings accepted for you (a learning job with
-	// auto-accept on) since LearnSeenAt: the notice in every tab, until closed.
+	// auto-accept on) since you last saw them: the notice in every tab, until closed.
 	LearnAdded []LearnedRef `json:"learn_added"`
 
 	// Artifact versioning (#90). Versions is the selected file's version

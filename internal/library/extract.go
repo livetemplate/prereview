@@ -87,10 +87,9 @@ const maxPromptLearnings = 60
 // job's id.
 func ExtractionPrompt(j Job, existing []Learning) string {
 	var b strings.Builder
-	stores := j.Stores
-	fmt.Fprintf(&b, "Learning job `%s`: read past reviews and propose learnings from %d review store%s. Read the reviewer's signals in each store below, work out what they keep asking for, and propose each lesson with `prereview learn propose --job %s`. Read only these stores and never change them; do **not** edit files, comment or propose suggestions for this job. When you're done, run `prereview learn finish %s`.\n\n", j.ID, len(stores), plural(len(stores)), j.ID, j.ID)
+	fmt.Fprintf(&b, "Learning job `%s`: read past reviews and propose learnings from %d review store%s. Read the reviewer's signals in each store below, work out what they keep asking for, and propose each lesson with `prereview learn propose --job %s`. Read only these stores and never change them; do **not** edit files, comment or propose suggestions for this job. When you're done, run `prereview learn finish %s`.\n\n", j.ID, len(j.Stores), plural(len(j.Stores)), j.ID, j.ID)
 	b.WriteString("Stores:\n")
-	for _, s := range stores {
+	for _, s := range j.Stores {
 		if safePath(s) {
 			fmt.Fprintf(&b, "- `%s`\n", s)
 		}

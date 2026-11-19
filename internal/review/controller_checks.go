@@ -172,7 +172,8 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 	c.checkpointLibrary(VersionTriggerFileEdit, "") // edits made while no server ran
 	c.syncSkills("")                                // bring generated skills in line after an upgrade
 	c.learningsChanged()                            // the baseline: only later writes fan out
-	c.autoChangelog()                               // …and only later auto-accepted learnings are named
+	c.learnViewChanged()
+	c.autoChangelog() // …and only later auto-accepted learnings are named
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
@@ -190,8 +191,11 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 			if c.benchChanged() { // a benchmark result (the agent's) or an edited benchmark.yml
 				c.broadcast("BenchmarksUpdated")
 			}
-			if c.learningsChanged() { // any server's write to the shared library
+			lib, view := c.learningsChanged(), c.learnViewChanged() // any server's write to the shared library
+			if lib {
 				c.syncSkills(c.autoChangelog()) // idempotent: a no-op when the writer already synced
+			}
+			if lib || view {
 				c.broadcast("LibraryUpdated")
 			}
 		}
@@ -632,6 +636,9 @@ func checkKey(path string, lines []string, libHash string) string {
 // ToggleLibrary opens or closes the Library (the toolbar button), on the Checks
 // tab across every file.
 func (c *PrereviewController) ToggleLibrary(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if state.libraryTab() == libTabLearnings {
+		c.seeLearnings() // opening the Learnings tab, or leaving it
+	}
 	toggleFullView(&state, &state.ShowLibrary)
 	state.MoreMenuOpen = false
 	if state.ShowLibrary {

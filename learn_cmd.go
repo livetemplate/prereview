@@ -65,7 +65,7 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 	judge := fs.String("judge", "", "optional: a file (or - for stdin) with the judge rubric Markdown this lesson becomes (kind: judge frontmatter + the rubric)")
 	shortcutLabel := fs.String("shortcut-label", "", "optional, with --shortcut-body: a comment-box chip this lesson adds, in the reviewer's own words (\"Why is this here?\")")
 	shortcutBody := fs.String("shortcut-body", "", "optional, with --shortcut-label: the comment text the chip fills in")
-	job := fs.String("job", "", "the learning job this answers (from `prereview learn wait`); its evidence must come from the job's stores")
+	job := fs.String("job", "", "the `id` of the learning job this answers (printed by prereview learn wait); its evidence must come from the job's stores")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview learn propose --job <id> --text \"…\" --evidence <store>:<id> [--evidence …]\n"+
@@ -155,8 +155,8 @@ var learnWaitPoll = time.Second
 // --out has ended. While it waits, the review shows a learner as running.
 func runLearnWait(dir string, args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("learn wait", flag.ContinueOnError)
-	out := fs.String("out", "", "optional: the review's STORE; once that review ends, print `stop` (your cue to exit the loop)")
-	timeout := fs.Duration("timeout", 9*time.Minute, "print `idle` after this long with no job (keep it under your shell's command timeout); 0 checks once")
+	out := fs.String("out", "", "optional: the review's STORE; once that review ends, print \"stop\" (your cue to exit the loop)")
+	timeout := fs.Duration("timeout", 9*time.Minute, "print \"idle\" after this long with no job (keep it under your shell's command timeout); 0 checks once")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview learn wait [--out <STORE>] [--timeout 9m]\n\n"+
@@ -179,6 +179,9 @@ func runLearnWait(dir string, args []string, stdout io.Writer) error {
 	}
 	deadline := time.Now().Add(*timeout)
 	warned := false
+	jobsPath := filepath.Join(dir, library.LearnJobsFile)
+	var lastFP string
+	var lastTry time.Time
 	for {
 		if err := library.TouchLearner(dir); err != nil && !warned {
 			fmt.Fprintln(os.Stderr, "prereview learn wait: can't mark the learner running:", err)
@@ -188,13 +191,18 @@ func runLearnWait(dir string, args []string, stdout io.Writer) error {
 			fmt.Fprintln(stdout, "stop")
 			return nil
 		}
-		j, ok, err := library.ClaimJob(dir)
-		if err != nil {
-			return err
-		}
-		if ok {
-			fmt.Fprintf(stdout, "job %s\n\n%s", j.ID, library.ExtractionPrompt(j, library.LoadLearnings(dir)))
-			return nil
+		// Claiming takes the library lock every server writes under, so only try
+		// when the job log changed, or a claim may have expired since the last try.
+		if fp := fileFingerprint(jobsPath); fp != lastFP || time.Since(lastTry) >= claimRetry {
+			lastFP, lastTry = fp, time.Now()
+			j, ok, err := library.ClaimJob(dir)
+			if err != nil {
+				return err
+			}
+			if ok {
+				fmt.Fprintf(stdout, "job %s\n\n%s", j.ID, library.ExtractionPrompt(j, library.LoadLearnings(dir)))
+				return nil
+			}
 		}
 		if !time.Now().Before(deadline) {
 			fmt.Fprintln(stdout, "idle")
@@ -204,16 +212,30 @@ func runLearnWait(dir string, args []string, stdout io.Writer) error {
 	}
 }
 
+// claimRetry is how often `learn wait` retries a claim with no change to the
+// job log: often enough to pick up an expired claim (library.JobClaimTTL).
+const claimRetry = 30 * time.Second
+
+// fileFingerprint is a file's size and mtime ("" when it's missing).
+func fileFingerprint(path string) string {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprint(fi.Size(), fi.ModTime().UnixNano())
+}
+
 // streamEnded reports whether a review's event log ends with `end`. The server
-// clears the log at launch and nothing follows `end`, so its last line decides;
-// a missing log (not started yet, or no --agent) hasn't ended.
+// clears the log at launch and nothing follows `end` (a short line), so the last
+// line of a small tail decides; a missing log (not started yet, or no --agent)
+// hasn't ended.
 func streamEnded(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
 		return false
 	}
 	defer f.Close()
-	const tail = 64 << 10
+	const tail = 4 << 10
 	if fi, err := f.Stat(); err == nil && fi.Size() > tail {
 		if _, err := f.Seek(fi.Size()-tail, io.SeekStart); err != nil {
 			return false
@@ -223,8 +245,8 @@ func streamEnded(path string) bool {
 	if err != nil {
 		return false
 	}
-	lines := bytes.Split(bytes.TrimRight(b, "\n"), []byte("\n"))
-	ev, ok := peekEvent(lines[len(lines)-1])
+	b = bytes.TrimRight(b, "\n")
+	ev, ok := peekEvent(b[bytes.LastIndexByte(b, '\n')+1:])
 	return ok && ev.Event == "end"
 }
 

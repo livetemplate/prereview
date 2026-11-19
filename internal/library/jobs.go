@@ -21,6 +21,9 @@ const (
 	// LearnerFile is touched by a waiting learner, so a review can tell whether
 	// one is running (its mtime, not a process check: that works on Windows too).
 	LearnerFile = "learner.json"
+	// LearnSeenFile records when you last saw the learnings added for you, for
+	// every review on this machine (like BootstrapFile).
+	LearnSeenFile = "learn-seen.json"
 )
 
 // Job states.
@@ -35,20 +38,19 @@ const (
 // take it.
 const JobClaimTTL = 30 * time.Minute
 
-// LearnerStale is how long after a learner's last touch it counts as gone.
-const LearnerStale = 30 * time.Second
+// LearnerStale is how long after a learner's last touch it counts as gone (a
+// var so tests can reach the stalled state without waiting it out).
+var LearnerStale = 30 * time.Second
 
 // Job is one learning job record.
 type Job struct {
-	ID         string         `json:"id"`
-	Op         string         `json:"op"` // queued | claimed | done
-	Stores     []string       `json:"stores,omitempty"`
-	AutoAccept bool           `json:"auto_accept,omitempty"` // fixed when queued, from the reviewer's pref
-	Signals    map[string]int `json:"signals,omitempty"`     // each store's signal count when queued
-	Server     string         `json:"server,omitempty"`      // the store of the review that queued it
-	QueuedAt   string         `json:"queued_at,omitempty"`
-	At         string         `json:"at"`
-	Machine    string         `json:"machine"`
+	ID         string   `json:"id"`
+	Op         string   `json:"op"` // queued | claimed | done
+	Stores     []string `json:"stores,omitempty"`
+	AutoAccept bool     `json:"auto_accept,omitempty"` // fixed when queued, from the reviewer's pref
+	Server     string   `json:"server,omitempty"`      // the store of the review that queued it
+	At         string   `json:"at"`                    // when Op happened (a queued job's: when it was queued)
+	Machine    string   `json:"machine"`
 }
 
 // jobs folds the log into the latest record per id, in first-queued order.
@@ -103,7 +105,6 @@ func QueueJob(dir string, j Job, onlyIfIdle bool) (Job, bool, error) {
 		return Job{}, false, nil
 	}
 	j.ID, j.Op, j.At, j.Machine = "j"+NewID()[1:], JobQueued, Now(), Machine()
-	j.QueuedAt = j.At
 	return j, true, Append(filepath.Join(dir, LearnJobsFile), j)
 }
 
@@ -141,7 +142,7 @@ func FinishJob(dir, id string) error {
 		return err
 	}
 	defer unlock()
-	j, ok := jobByID(dir, id)
+	j, ok := JobByID(dir, id)
 	switch {
 	case !ok:
 		return fmt.Errorf("learning job %s: not found", id)
@@ -152,10 +153,9 @@ func FinishJob(dir, id string) error {
 	return Append(filepath.Join(dir, LearnJobsFile), j)
 }
 
-// JobByID is a job's current record.
-func JobByID(dir, id string) (Job, bool) { return jobByID(dir, id) }
-
-func jobByID(dir, id string) (Job, bool) {
+// JobByID is a job's current record. It doesn't lock: callers that write
+// (FinishJob, Propose) already hold the library lock.
+func JobByID(dir, id string) (Job, bool) {
 	for _, j := range jobs(dir) {
 		if j.ID == id {
 			return j, true
@@ -185,8 +185,34 @@ func TouchLearner(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	b, _ := json.Marshal(map[string]string{"machine": Machine()})
-	return os.WriteFile(p, append(b, '\n'), 0o644)
+	return os.WriteFile(p, nil, 0o644) // only its mtime is read
+}
+
+// LearnSeenAt is when you last saw the learnings added for you ("" never).
+func LearnSeenAt(dir string) string {
+	var v struct {
+		At string `json:"at"`
+	}
+	b, err := os.ReadFile(filepath.Join(dir, LearnSeenFile))
+	if err != nil || json.Unmarshal(b, &v) != nil {
+		return ""
+	}
+	return v.At
+}
+
+// MarkLearnSeen records that you've seen them now, and returns that time.
+func MarkLearnSeen(dir string) (string, error) {
+	if dir == "" {
+		return "", errors.New("no library folder")
+	}
+	unlock, err := lockLibrary(dir)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	now := Now()
+	b, _ := json.Marshal(map[string]string{"at": now, "machine": Machine()})
+	return now, WriteFileAtomic(filepath.Join(dir, LearnSeenFile), append(b, '\n'), 0o644)
 }
 
 // LearnerAlive reports whether a learner touched the library within LearnerStale.

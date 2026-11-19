@@ -27,7 +27,7 @@ func TestLearnJobs(t *testing.T) {
 	}
 
 	c, ok, err := ClaimJob(dir)
-	if err != nil || !ok || c.ID != q.ID || c.Op != JobClaimed || !c.AutoAccept || c.QueuedAt != q.QueuedAt {
+	if err != nil || !ok || c.ID != q.ID || c.Op != JobClaimed || !c.AutoAccept || c.Stores[0] != "/a/.prereview" {
 		t.Fatalf("claim took %+v (%v %v), want the oldest job %s with its fields", c, ok, err, q.ID)
 	}
 	second, ok, _ := ClaimJob(dir)
@@ -119,5 +119,47 @@ func TestLearnerAlive(t *testing.T) {
 	must(t, os.Chtimes(filepath.Join(dir, LearnerFile), old, old))
 	if LearnerAlive(dir) {
 		t.Fatal("alive after the learner went quiet")
+	}
+}
+
+// TestUndo: undoing an auto-accepted replacement rejects it and puts the
+// learning it superseded back in effect, in one write.
+func TestUndo(t *testing.T) {
+	dir, store := t.TempDir(), seedStore(t, t.TempDir())
+	old, err := Propose(dir, Proposal{Text: "Cut filler.", Evidence: []string{store + ":c1"}})
+	must(t, err)
+	must(t, Act(dir, old.ID, ActAccept))
+	j, _, err := QueueJob(dir, Job{Stores: []string{store}, AutoAccept: true}, false)
+	must(t, err)
+	repl, err := Propose(dir, Proposal{Text: "Cut filler words.", Replaces: old.ID, Evidence: []string{store + ":c1"}, Job: j.ID})
+	must(t, err)
+	plain, err := Propose(dir, Proposal{Text: "Lead with the point.", Evidence: []string{store + ":c1"}, Job: j.ID})
+	must(t, err)
+
+	must(t, Undo(dir, []string{repl.ID, plain.ID}))
+	got := map[string]Learning{}
+	for _, l := range LoadLearnings(dir) {
+		got[l.ID] = l
+	}
+	if got[repl.ID].Status != StatusRejected || got[plain.ID].Status != StatusRejected {
+		t.Fatalf("undone: %s, %s; want both rejected", got[repl.ID].Status, got[plain.ID].Status)
+	}
+	if o := got[old.ID]; o.Status != StatusAccepted || o.SupersededBy != "" {
+		t.Fatalf("the learning the undone one replaced is %s (by %q), want accepted again", o.Status, o.SupersededBy)
+	}
+	if err := Undo(dir, []string{"lnope"}); err == nil {
+		t.Fatal("undid a learning that doesn't exist")
+	}
+}
+
+func TestLearnSeen(t *testing.T) {
+	dir := t.TempDir()
+	if LearnSeenAt(dir) != "" {
+		t.Fatal("seen before anything was marked")
+	}
+	at, err := MarkLearnSeen(dir)
+	must(t, err)
+	if got := LearnSeenAt(dir); got != at || at == "" {
+		t.Fatalf("seen = %q, want %q", got, at)
 	}
 }

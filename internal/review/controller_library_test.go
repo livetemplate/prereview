@@ -98,8 +98,8 @@ func TestReadPastReviews_NoFileOpen(t *testing.T) {
 }
 
 // TestLearnAdded: a learning accepted on arrival shows in the notice (and the
-// badge) until it's closed; a tab that hasn't re-read the prefs can't bring it
-// back; Undo rejects what it names; opening Learnings counts as seeing them.
+// badge) until it's seen — closed, or the Learnings tab opened — in any tab;
+// Undo rejects what it names; building a tab's state never marks them seen.
 func TestLearnAdded(t *testing.T) {
 	c := checksController(t)
 	c.LibraryDir = t.TempDir()
@@ -109,6 +109,7 @@ func TestLearnAdded(t *testing.T) {
 	}
 	learn := func(text string) string {
 		t.Helper()
+		time.Sleep(2 * time.Millisecond) // created after any earlier seen time
 		j, _, err := library.QueueJob(c.LibraryDir, library.Job{Stores: []string{store}, AutoAccept: true}, false)
 		if err != nil {
 			t.Fatal(err)
@@ -120,26 +121,24 @@ func TestLearnAdded(t *testing.T) {
 		return l.ID
 	}
 	id := learn("Cut filler words.")
-	var stale PrereviewState
-	c.applyLibrary(&stale)
-	if len(stale.LearnAdded) != 1 || stale.LearnAdded[0].ID != id || stale.LearnNew != 1 || stale.LearnAddedLabel() != "Learned “Cut filler words.”" {
-		t.Fatalf("notice = %+v badge %d label %q", stale.LearnAdded, stale.LearnNew, stale.LearnAddedLabel())
+	var st PrereviewState
+	c.applyLibrary(&st)
+	if len(st.LearnAdded) != 1 || st.LearnAdded[0].ID != id || st.LearnNew != 1 || st.LearnAddedLabel() != "Learned “Cut filler words.”" {
+		t.Fatalf("notice = %+v badge %d label %q", st.LearnAdded, st.LearnNew, st.LearnAddedLabel())
 	}
-
-	var other PrereviewState
-	c.applyLibrary(&other)
-	if got, _ := c.DismissLearned(other, checksCtx("DismissLearned", nil)); len(got.LearnAdded) != 0 || got.LearnNew != 0 {
+	if c.applyLibrary(&st); len(st.LearnAdded) != 1 {
+		t.Fatal("building the state marked the notice seen")
+	}
+	if got, _ := c.DismissLearned(st, checksCtx("DismissLearned", nil)); len(got.LearnAdded) != 0 || got.LearnNew != 0 {
 		t.Fatalf("dismissed, still %+v", got.LearnAdded)
 	}
-	c.savePrefs(stale) // a toggle in the tab that still shows the notice
-	if c.applyLibrary(&stale); len(stale.LearnAdded) != 0 {
-		t.Fatal("a stale tab's prefs save brought the notice back")
+	var other PrereviewState // another tab: its next render agrees
+	if c.applyLibrary(&other); len(other.LearnAdded) != 0 {
+		t.Fatal("another tab still shows a dismissed notice")
 	}
 
-	time.Sleep(2 * time.Millisecond) // a later learning sorts after the seen time
-	id2 := learn("Lead with the point.")
-	id3 := learn("Say it once.")
-	var st PrereviewState
+	learn("Lead with the point.")
+	learn("Say it once.")
 	if c.applyLibrary(&st); len(st.LearnAdded) != 2 || st.LearnAddedLabel() != "2 learnings added" {
 		t.Fatalf("notice = %+v", st.LearnAdded)
 	}
@@ -148,16 +147,51 @@ func TestLearnAdded(t *testing.T) {
 		t.Fatalf("undo: %v, notice %+v", err, got.LearnAdded)
 	}
 	for _, l := range library.LoadLearnings(c.LibraryDir) {
-		if want := map[string]string{id: library.StatusAccepted, id2: library.StatusRejected, id3: library.StatusRejected}[l.ID]; l.Status != want {
+		if want := map[bool]string{true: library.StatusAccepted, false: library.StatusRejected}[l.ID == id]; l.Status != want {
 			t.Errorf("%s (%s) is %s, want %s", l.ID, l.Text, l.Status, want)
 		}
 	}
 
-	time.Sleep(2 * time.Millisecond)
 	learn("Prefer plain words.")
+	lib := PrereviewState{ShowLibrary: true, LibraryTab: libTabChecks}
+	got, _ = c.SetLibraryTab(lib, checksCtx("SetLibraryTab", map[string]any{"tab": libTabLearnings}))
+	if len(got.LearnAdded) != 0 || len(addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))) != 0 {
+		t.Fatal("opening Learnings didn't mark the added learnings seen")
+	}
+	learn("Cut the hedges.")
 	got, _ = c.ReviewLearned(PrereviewState{}, checksCtx("ReviewLearned", nil))
-	if !got.ShowLibrary || got.LearnStatus != library.StatusAccepted || len(got.LearnAdded) != 0 {
-		t.Fatalf("Review: library %v status %q notice %+v", got.ShowLibrary, got.LearnStatus, got.LearnAdded)
+	if !got.ShowLibrary || got.LearnStatus != library.StatusAccepted || len(addedSince(c.learnings(), library.LearnSeenAt(c.LibraryDir))) != 0 {
+		t.Fatalf("Review: library %v status %q", got.ShowLibrary, got.LearnStatus)
+	}
+}
+
+// TestLearnJobStalled: a job queued for this review shows as stalled once it
+// has waited past LearnerStale with no learner running, and not while one is.
+func TestLearnJobStalled(t *testing.T) {
+	c := checksController(t)
+	c.LibraryDir = t.TempDir()
+	old := library.LearnerStale
+	library.LearnerStale = 20 * time.Millisecond
+	t.Cleanup(func() { library.LearnerStale = old })
+	if _, _, err := library.QueueJob(c.LibraryDir, library.Job{Stores: []string{"/x/.prereview"}, Server: filepath.Dir(c.CSVPath)}, false); err != nil {
+		t.Fatal(err)
+	}
+	if open, stalled := c.learnJob(); !open || stalled {
+		t.Fatalf("fresh job: open %v stalled %v, want open and not stalled", open, stalled)
+	}
+	c.learnViewChanged() // baseline
+	time.Sleep(40 * time.Millisecond)
+	if open, stalled := c.learnJob(); !open || !stalled {
+		t.Fatalf("waited with no learner: open %v stalled %v", open, stalled)
+	}
+	if !c.learnViewChanged() {
+		t.Fatal("the tabs aren't told when a job stalls")
+	}
+	if err := library.TouchLearner(c.LibraryDir); err != nil {
+		t.Fatal(err)
+	}
+	if _, stalled := c.learnJob(); stalled {
+		t.Fatal("stalled with a learner running")
 	}
 }
 
