@@ -342,6 +342,23 @@ shows them:
   `~/.codex/skills`, and `~/.cursor/rules` (as a Cursor rule). An agent whose folder
   doesn't exist is skipped — prereview never creates it. Each card says where the
   skill is installed, or why not.
+- **Agents are told to use them.** An agent loads a skill only when it decides the
+  task matches the skill's description, so it could write a doc without yours. While
+  you have a learned skill, prereview adds a short block to each agent's memory file,
+  the one it reads at the start of every session: `~/.claude/CLAUDE.md`,
+  `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, and `~/.config/opencode/AGENTS.md` if
+  you already have one. The block names your skills and says to load the matching one
+  before writing prose, then run `prereview check`. It sits between
+  `<!-- prereview:learned-skills -->` markers; your text around it is never touched,
+  and if you edit inside it, prereview leaves it alone.
+- **Claude Code also checks each edit.** prereview adds one hook to
+  `~/.claude/settings.json` that runs `prereview hook check` after every Write or Edit.
+  For a prose file, it runs your checks and shows Claude the findings on the lines it
+  just wrote. Your other settings and hooks keep their values and order, and the
+  previous file is kept as `settings.json.prereview-bak`.
+- The tab's **Tell agents to use these skills** switch removes the block and the hook
+  (and puts them back), and its pills say where each went. Both also go away when you
+  have no learned skills left.
 - **Edit the learnings, not the skill.** If you do edit a skill's `SKILL.md`,
   prereview stops regenerating it (its installs follow your edit) until you choose
   **Regenerate from learnings**. Every regeneration is a version: the card's history

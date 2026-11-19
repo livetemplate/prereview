@@ -49,36 +49,20 @@ func runCheck(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	lib := checks.Load(checks.UserDirs(userChecksDir(), skills.LearnedChecksDir(library.Dir()))...)
-	disabled, trustVale := review.CheckPrefs(uiPrefsPath(), repo)
-
+	run := newCheckRun(repo)
 	var reports []review.PathChecks // the same shape the Checks page reads
 	failed := false
 	for _, arg := range fs.Args() {
-		abs, err := filepath.Abs(arg)
+		results, err := run.file(arg)
 		if err != nil {
 			return err
 		}
-		lines, err := checks.ReadLines(abs)
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(repo, abs)
-		if err != nil || strings.HasPrefix(rel, "..") {
-			rel = filepath.Base(abs) // outside cwd: match globs on the name alone
-		}
-		rel = filepath.ToSlash(rel)
-		var kept []checks.Result
-		for _, r := range lib.RunAll(context.Background(), repo, rel, lines, trustVale) {
-			if slices.Contains(disabled, r.ID) {
-				continue
-			}
+		for _, r := range results {
 			if r.Status != checks.StatusPass {
 				failed = true
 			}
-			kept = append(kept, r)
 		}
-		reports = append(reports, review.PathChecks{Path: arg, Results: kept})
+		reports = append(reports, review.PathChecks{Path: arg, Results: results})
 	}
 
 	if *asJSON {
@@ -94,6 +78,51 @@ func runCheck(args []string, stdout io.Writer) error {
 		return errChecksFailed
 	}
 	return nil
+}
+
+// checkRun is the checks `prereview check` runs in a repo: built-ins, your
+// checks folder and learned checks, the repo's Vale config when trusted, minus
+// the checks turned off on the Checks page.
+type checkRun struct {
+	repo      string
+	lib       *checks.Library
+	disabled  []string
+	trustVale bool
+}
+
+func newCheckRun(repo string) checkRun {
+	disabled, trustVale := review.CheckPrefs(uiPrefsPath(), repo)
+	return checkRun{repo: repo, lib: checks.Load(checks.UserDirs(userChecksDir(), skills.LearnedChecksDir(library.Dir()))...),
+		disabled: disabled, trustVale: trustVale}
+}
+
+// file runs the checks on one file (path relative to the cwd, or absolute).
+func (c checkRun) file(path string) ([]checks.Result, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := checks.ReadLines(abs)
+	if err != nil {
+		return nil, err
+	}
+	var kept []checks.Result
+	for _, r := range c.lib.RunAll(context.Background(), c.repo, c.rel(abs), lines, c.trustVale) {
+		if !slices.Contains(c.disabled, r.ID) {
+			kept = append(kept, r)
+		}
+	}
+	return kept, nil
+}
+
+// rel is abs as the checks' globs match it: repo-relative, or the bare name
+// for a file outside the repo.
+func (c checkRun) rel(abs string) string {
+	rel, err := filepath.Rel(c.repo, abs)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		rel = filepath.Base(abs)
+	}
+	return filepath.ToSlash(rel)
 }
 
 func printCheckReports(w io.Writer, reports []review.PathChecks) {

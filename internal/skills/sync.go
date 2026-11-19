@@ -42,6 +42,9 @@ func (t Target) Path(home, id string) string {
 type Env struct {
 	LibDir string // the per-user library (skill sources, defs, ownership)
 	Home   string // the agent home (AgentHome)
+	// NoPointers: you turned off "Tell agents to use these skills", so no
+	// memory block or hook is written (and any there are removed).
+	NoPointers bool
 }
 
 // SourcePath is a generated skill's source in the library.
@@ -116,7 +119,10 @@ type ImportReport struct {
 type Report struct {
 	Skills  []SkillReport
 	Imports []ImportReport
-	Changed []string // paths written or removed
+	// Pointers are the memory blocks and the hook that tell agents to use the
+	// skills (memory.go, claudehook.go).
+	Pointers []PointerReport
+	Changed  []string // paths written or removed
 }
 
 // defsFile holds the scope skills you created and the scope proposals you
@@ -221,6 +227,23 @@ func Sync(env Env, ls []library.Learning) (Report, error) {
 				return err
 			}
 		}
+		block := ""
+		if !env.NoPointers && len(gen) > 0 {
+			block = MemoryBlock(gen)
+		}
+		mems, changed, err := syncMemories(o, env.Home, block)
+		if err != nil {
+			return err
+		}
+		rep.Pointers, rep.Changed = append(rep.Pointers, mems...), append(rep.Changed, changed...)
+		hook, changed, err := syncHook(o, env.Home, block != "")
+		if err != nil {
+			return err
+		}
+		if hook != nil {
+			rep.Pointers = append(rep.Pointers, *hook)
+		}
+		rep.Changed = append(rep.Changed, changed...)
 		for p := range o.hashes { // what nothing asks for any more
 			if want[p] || !env.generated(p) {
 				continue

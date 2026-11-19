@@ -121,6 +121,8 @@ type PrereviewState struct {
 	BootOpen      bool                `json:"boot_open"`
 	AutoLearnOff  bool                `json:"auto_learn_off"`  // ui-prefs: "Learn after each review" off
 	AutoAcceptOff bool                `json:"auto_accept_off"` // ui-prefs: "Accept automatically" off
+	// AgentPointersOff: ui-prefs, "Tell agents to use these skills" off.
+	AgentPointersOff bool `json:"agent_pointers_off"`
 	// LearnReading: this review has a learning job open (the background learner
 	// is reading, or will). LearnStalled: it has waited with no learner running.
 	LearnReading bool `json:"learn_reading"`

@@ -289,6 +289,11 @@ prereview check     [--json] <file>...
   before `prereview done`. `--json` prints every check's result per file. Checks
   you turned off on the Checks page are skipped. Takes no `--out`: it reads files, not a
   review's store.
+- **`prereview hook check`** — the command of the Claude Code hook prereview adds
+  while you have learned skills ([Skills](usage.md#skills)). It reads the hook's input
+  on stdin and, for a prose file, runs the same checks as `prereview check`. It
+  reports only the findings on the lines the edit wrote (the whole file for a Write)
+  and exits `2`, which shows them to Claude. It exits `0` for anything else.
 
 ## Composing flags
 

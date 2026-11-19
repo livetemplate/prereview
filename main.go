@@ -217,6 +217,13 @@ func main() {
 		return
 	}
 
+	// `prereview hook check` — the Claude Code hook's command: check the lines an
+	// edit wrote in a prose file (stdin is the hook input; exit 2 = findings).
+	if len(os.Args) > 1 && os.Args[1] == "hook" {
+		hookMain(os.Args[2:])
+		return
+	}
+
 	// `prereview comments [--out <dir>] [--json] [--all]` — enumerate the review's
 	// comments from a stable interface (feeds `prereview done`). A bare
 	// positional verb like the others, so intercept it before flag parsing.

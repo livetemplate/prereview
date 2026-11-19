@@ -3813,6 +3813,10 @@ button.lib-auto {
 .ck-switch.off { background: var(--border-strong); }
 .ck-switch.off::after { right: auto; left: 2px; }
 .lib-boot-form .ck-link { font-size: 0.78rem; }
+/* The Skills tab's "Tell agents to use these skills" switch and where it wrote. */
+.lib-pointers { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.5rem; margin: 0.2rem 0.5rem 0.4rem; }
+.lib-pointers .lib-auto-form { margin: 0 !important; }
+.lib-pointers .lc-agents { margin: 0; }
 
 /* First launch (M3): learn from past reviews. */
 .boot {

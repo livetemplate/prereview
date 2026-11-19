@@ -585,7 +585,9 @@ prereview learn finish j1a2b3c4d5e6
   skill prereview generates (`learned-writing`, or one per scope the reviewer gave
   its own skill), installed for every agent set up on the machine. With it off,
   each waits for them in Library → Learnings. Don't edit
-  a `learned-*` skill: an edit there stops prereview updating it.
+  a `learned-*` skill: an edit there stops prereview updating it. prereview
+  also adds a block naming these skills to your memory file (`~/.claude/CLAUDE.md`
+  and the like), which is why you load them before writing prose.
 - Prefer a few general lessons over many narrow ones. Then `learn finish` the job.
 
 A review started before this version may still hold an `"request":"extraction"`

@@ -700,6 +700,8 @@ func renderFixtures() []renderFixture {
 	skillsTab := repoBase()
 	skillsTab.ShowLibrary, skillsTab.LibraryTab = true, "skills"
 	skillsTab.SkillsTab = &review.SkillsTab{
+		Pointers: []review.SkillInstall{{Label: "Claude Code memory", State: "added", Where: "~/.claude/CLAUDE.md", OK: true},
+			{Label: "Codex memory", State: "edited there — not updated", Where: "~/.codex/AGENTS.md"}},
 		Proposals: []skills.Proposal{{Scope: "Technical docs", Count: 5}},
 		Cards: []review.SkillCard{{ID: "learned-writing", Name: "Writing", Scope: "Writing (all documents)",
 			Source: "/home/u/.config/prereview/skills/learned-writing/SKILL.md", SourceRel: "~/.config/prereview/skills/learned-writing/SKILL.md",

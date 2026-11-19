@@ -60,6 +60,9 @@ type UIPrefs struct {
 	// AutoAcceptOff turns off "Accept automatically": a learning job's
 	// learnings then wait for you in Library → Learnings. On by default.
 	AutoAcceptOff bool `json:"auto_accept_off,omitempty"`
+	// AgentPointersOff turns off "Tell agents to use these skills": no block in
+	// the agents' memory files and no Claude Code hook. On by default.
+	AgentPointersOff bool `json:"agent_pointers_off,omitempty"`
 }
 
 // uiPrefsMu serialises writes to the prefs file — multiple tabs (sharing one
@@ -150,6 +153,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.TrustedVale = p.TrustedVale
 	state.AutoLearnOff = p.AutoLearnOff
 	state.AutoAcceptOff = p.AutoAcceptOff
+	state.AgentPointersOff = p.AgentPointersOff
 }
 
 // savePrefs persists the current view-style preferences to the per-user prefs
@@ -176,6 +180,8 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		TrustedVale:    state.TrustedVale,
 		AutoLearnOff:   state.AutoLearnOff,
 		AutoAcceptOff:  state.AutoAcceptOff,
+
+		AgentPointersOff: state.AgentPointersOff,
 	}); err != nil {
 		slog.Warn("savePrefs", "err", err)
 	}

@@ -257,6 +257,10 @@
      where each is installed, its history, and scopes worth a skill of their own.
      Called with the SkillsTab as `.`. */}}
 {{define "skillsTab"}}
+  {{if .Cards}}<div class="lib-pointers">
+    <form method="POST" class="lib-auto-form"><button type="submit" name="toggleAgentPointers" class="lib-auto" role="switch" aria-checked="{{if .PointersOff}}false{{else}}true{{end}}" title="Add a short note to each agent's memory file saying to load these skills before writing prose, and have Claude Code run prereview check after each doc edit"><span class="ck-switch{{if .PointersOff}} off{{end}}" aria-hidden="true"></span>Tell agents to use these skills</button></form>
+    {{if .Pointers}}<div class="lc-agents">{{range .Pointers}}<span class="ck-pill {{if .OK}}ck-pass{{else}}ck-muted{{end}}" title="{{.Where}}: {{.State}}">{{.Label}}{{if .OK}} ✓{{else}} — {{.State}}{{end}}</span>{{end}}</div>{{end}}
+  </div>{{end}}
   <ul class="lib-list">
     {{range .Proposals}}<li class="lib-card is-proposed" data-key="skill-proposal-{{.Scope}}">
       <header><span class="ck-pill ck-new">proposed</span><span>{{.Count}} accepted learnings share the scope “{{.Scope}}”</span></header>
