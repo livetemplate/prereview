@@ -12,7 +12,7 @@ import (
 	"github.com/livetemplate/prereview/internal/checks"
 )
 
-// errHookFindings makes `prereview hook check` exit 2: Claude Code shows a
+// errHookFindings makes `prereview check --hook` exit 2: Claude Code shows a
 // PostToolUse hook's stderr to the agent only on exit 2 (the edit already ran).
 var errHookFindings = errors.New("findings on the edited lines")
 
@@ -30,15 +30,17 @@ type hookInput struct {
 	} `json:"tool_input"`
 }
 
-// runHook implements `prereview hook check`, the command of the Claude Code hook
+// runHook implements `prereview check --hook`, the command of the Claude Code hook
 // prereview adds while you have learned skills (internal/skills/claudehook.go).
 // It reads the hook input on stdin and, for a prose file, runs the same checks
 // as `prereview check`, reporting only the findings on the lines the edit wrote,
 // so the agent fixes its own words, not the file's older ones.
-func runHook(args []string, stdin io.Reader, stderr io.Writer) error {
-	if len(args) != 1 || args[0] != "check" {
-		return errors.New("usage: prereview hook check (reads a Claude Code PostToolUse hook's input on stdin)")
-	}
+//
+// It's a flag on `check`, not a verb of its own, because the hook calls
+// whichever prereview is on PATH, which can be older than the one that wrote
+// the hook: an older binary rejects the unknown flag at once, where it would
+// read an unknown verb as a folder to review and start a server.
+func runHook(stdin io.Reader, stderr io.Writer) error {
 	var in hookInput
 	if err := json.NewDecoder(stdin).Decode(&in); err != nil {
 		return fmt.Errorf("reading the hook input: %w", err)
@@ -129,17 +131,4 @@ func touches(lines map[int]bool, f checks.Finding) bool {
 		}
 	}
 	return false
-}
-
-// hookMain is the `prereview hook` entry (from main): exit 2 with findings (the
-// agent reads them), 1 on an error (shown to you, never blocks the edit).
-func hookMain(args []string) {
-	err := runHook(args, os.Stdin, os.Stderr)
-	switch {
-	case errors.Is(err, errHookFindings):
-		os.Exit(2)
-	case err != nil:
-		fmt.Fprintln(os.Stderr, "prereview hook:", err)
-		os.Exit(1)
-	}
 }

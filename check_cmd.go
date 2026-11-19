@@ -30,6 +30,7 @@ var errChecksFailed = errors.New("checks failed")
 func runCheck(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("check", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "print the results as JSON (one entry per file, every check with its findings)")
+	hook := fs.Bool("hook", false, "run as Claude Code's PostToolUse hook: read the hook input on stdin, check the lines the edit wrote, exit 2 with findings")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview check [--json] <file>...\n\n"+
@@ -40,6 +41,9 @@ func runCheck(args []string, stdout io.Writer) error {
 	}
 	if err := parseInterspersed(fs, args); err != nil {
 		return err
+	}
+	if *hook {
+		return runHook(os.Stdin, os.Stderr)
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()

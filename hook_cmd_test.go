@@ -32,7 +32,7 @@ func TestHookCheck(t *testing.T) {
 		t.Helper()
 		b, _ := json.Marshal(map[string]any{"cwd": repo, "tool_name": tool, "tool_input": input})
 		var stderr bytes.Buffer
-		err := runHook([]string{"check"}, bytes.NewReader(b), &stderr)
+		err := runHook(bytes.NewReader(b), &stderr)
 		if err != nil && !errors.Is(err, errHookFindings) {
 			t.Fatalf("%s: %v", tool, err)
 		}
@@ -74,8 +74,8 @@ func TestHookCheck(t *testing.T) {
 	if got := strings.Join(lines(out), ","); got != "3,7" {
 		t.Fatalf("write: want lines 3 and 7, got %s\n%s", got, out)
 	}
-	if err := runHook([]string{"nope"}, strings.NewReader("{}"), &bytes.Buffer{}); err == nil {
-		t.Fatal("an unknown hook verb was accepted")
+	if err := runHook(strings.NewReader("not json"), &bytes.Buffer{}); err == nil || errors.Is(err, errHookFindings) {
+		t.Fatalf("bad hook input: err = %v, want a plain error (exit 1, never 2)", err)
 	}
 }
 

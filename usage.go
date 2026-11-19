@@ -20,7 +20,7 @@ var usageMD string
 
 // usagePage is the fully-rendered /_usage HTML, built once when the server
 // registers it (not at package init, which every CLI verb, the per-edit
-// `hook check` included, would pay). The doc is embedded and immutable, so
+// `check --hook` included, would pay). The doc is embedded and immutable, so
 // there's nothing to recompute per request.
 var usagePage = sync.OnceValue(buildUsagePage)
 

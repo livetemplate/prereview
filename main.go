@@ -209,18 +209,14 @@ func main() {
 	// printed findings are the message, so a failure adds no error line.
 	if len(os.Args) > 1 && os.Args[1] == "check" {
 		if err := runCheck(os.Args[2:], os.Stdout); err != nil {
+			if errors.Is(err, errHookFindings) {
+				os.Exit(2) // the hook: Claude reads stderr only on exit 2
+			}
 			if !errors.Is(err, errChecksFailed) {
 				fmt.Fprintln(os.Stderr, "prereview check:", err)
 			}
 			os.Exit(1)
 		}
-		return
-	}
-
-	// `prereview hook check` — the Claude Code hook's command: check the lines an
-	// edit wrote in a prose file (stdin is the hook input; exit 2 = findings).
-	if len(os.Args) > 1 && os.Args[1] == "hook" {
-		hookMain(os.Args[2:])
 		return
 	}
 

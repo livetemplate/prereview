@@ -14,13 +14,13 @@ import (
 )
 
 // The Claude Code hook: one PostToolUse entry in ~/.claude/settings.json that
-// runs `prereview hook check` after every Write or Edit, so the checks reach the
+// runs `prereview check --hook` after every Write or Edit, so the checks reach the
 // agent whether or not it loaded a learned skill. settings.json is yours: only
 // that entry is ever added, changed or removed, every other key keeps its value
 // and its place, and the previous bytes are kept beside it.
 
 // HookMarker identifies prereview's entry among your hooks.
-const HookMarker = "prereview hook check"
+const HookMarker = "prereview check --hook"
 
 // HookCommand is the entry's command. A missing prereview (uninstalled, not on
 // PATH) exits 0, so it never fails your edits; `|| true` would also swallow

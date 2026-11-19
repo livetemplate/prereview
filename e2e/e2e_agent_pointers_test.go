@@ -65,7 +65,7 @@ func TestE2E_SkillsAgentPointers(t *testing.T) {
 	if !strings.HasPrefix(md, mine+"\n<!-- prereview:learned-skills -->") || !strings.Contains(md, "`learned-writing`") {
 		t.Errorf("CLAUDE.md:\n%s", md)
 	}
-	if s := read(settingsPath); !strings.Contains(s, "prereview hook check") || !strings.Contains(s, "my-stop-hook") || !strings.Contains(s, `"effortLevel": "high"`) {
+	if s := read(settingsPath); !strings.Contains(s, "prereview check --hook") || !strings.Contains(s, "my-stop-hook") || !strings.Contains(s, `"effortLevel": "high"`) {
 		t.Errorf("settings.json:\n%s", s)
 	}
 
@@ -80,7 +80,7 @@ func TestE2E_SkillsAgentPointers(t *testing.T) {
 		t.Errorf("switched off, CLAUDE.md = %q, want your text exactly%s", got, diag())
 	}
 	s := read(settingsPath)
-	if strings.Contains(s, "prereview hook check") || !strings.Contains(s, "my-stop-hook") {
+	if strings.Contains(s, "prereview check --hook") || !strings.Contains(s, "my-stop-hook") {
 		t.Errorf("switched off, settings.json:\n%s", s)
 	}
 	if got := textOf(t, p, pills); strings.Contains(got, "✓") {
@@ -93,7 +93,7 @@ func TestE2E_SkillsAgentPointers(t *testing.T) {
 	); err != nil {
 		t.Fatalf("switch on: %v%s", err, diag())
 	}
-	if !strings.Contains(read(claudeMD), "<!-- prereview:learned-skills -->") || !strings.Contains(read(settingsPath), "prereview hook check") {
+	if !strings.Contains(read(claudeMD), "<!-- prereview:learned-skills -->") || !strings.Contains(read(settingsPath), "prereview check --hook") {
 		t.Errorf("switched back on, the block or the hook didn't return%s", diag())
 	}
 	noHorizontalScroll(t, p, diag)

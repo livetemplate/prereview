@@ -352,7 +352,7 @@ shows them:
   `<!-- prereview:learned-skills -->` markers; your text around it is never touched,
   and if you edit inside it, prereview leaves it alone.
 - **Claude Code also checks each edit.** prereview adds one hook to
-  `~/.claude/settings.json` that runs `prereview hook check` after every Write or Edit.
+  `~/.claude/settings.json` that runs `prereview check --hook` after every Write or Edit.
   For a prose file, it runs your checks and shows Claude the findings on the lines it
   just wrote. Your other settings and hooks keep their values and order, and the
   previous file is kept as `settings.json.prereview-bak`.
