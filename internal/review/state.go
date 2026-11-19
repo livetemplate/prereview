@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
+	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/skills"
 )
@@ -969,6 +970,13 @@ const diffContextLines = 3
 // IsMarkdown reports whether the selected file is Markdown.
 func (s PrereviewState) IsMarkdown() bool {
 	return s.CurrentDiff != nil && gitdiff.IsMarkdownPath(s.CurrentDiff.Path)
+}
+
+// WrapLines reports whether the selected file's lines wrap on every screen size:
+// prose, where a line is a sentence or a paragraph. Code still scrolls sideways
+// on desktop.
+func (s PrereviewState) WrapLines() bool {
+	return s.CurrentDiff != nil && checks.IsProse(s.CurrentDiff.Path)
 }
 
 // IsHTML reports whether the selected file is an HTML file (.html/.htm).

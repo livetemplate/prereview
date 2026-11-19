@@ -742,7 +742,7 @@
   
   
   
-  <div class="code"
+  <div class="code wrap-lines"
        data-key="code-notes.txt"
        data-path="notes.txt"
        lvt-fx:scroll="reset-on:data-path"

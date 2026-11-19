@@ -416,3 +416,12 @@ func TestJudgePrompt(t *testing.T) {
 		}
 	}
 }
+
+// IsProse is the default file set: the lines that wrap on desktop too.
+func TestIsProse(t *testing.T) {
+	for p, want := range map[string]bool{"notes.md": true, "docs/guide.rst": true, "README.txt": true, "main.go": false, "web/app.ts": false} {
+		if got := IsProse(p); got != want {
+			t.Errorf("IsProse(%q) = %v, want %v", p, got, want)
+		}
+	}
+}

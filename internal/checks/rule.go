@@ -124,6 +124,9 @@ func ruleID(name string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(name, ".yml"), ".yaml"), ".md")
 }
 
+// IsProse reports whether rel is a prose file: one a rule with no `files:` checks.
+func IsProse(rel string) bool { return (&Rule{}).Applies(rel) }
+
 // Applies reports whether the rule checks the file at rel (a slash path). A glob
 // without a slash matches the base name; one with a slash matches the whole path.
 func (r *Rule) Applies(rel string) bool {
