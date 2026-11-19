@@ -29,7 +29,15 @@ func main() {
 	gifFlow := flag.String("gif", "", "capture a single animated GIF flow (hero); needs a demo-repo server")
 	repo := flag.String("repo", "", "demo repo working tree (the hero flow edits payment.go here to show Claude's fix)")
 	bin := flag.String("bin", "", "prereview binary, for flows that drive agent-side subcommands (status/reply) — versions/thread")
+	dump := flag.String("dump", "", "decode this GIF's frames to PNGs in --out, then exit (no browser)")
 	flag.Parse()
+
+	if *dump != "" {
+		if err := dumpGIF(*dump, *outDir); err != nil {
+			log.Fatalf("dump: %v", err)
+		}
+		return
+	}
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
 		log.Fatalf("mkdir: %v", err)
