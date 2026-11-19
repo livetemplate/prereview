@@ -90,15 +90,25 @@ func (s PrereviewState) LibraryOnBenchmarks() bool {
 	return s.libraryTab() == libTabBenchmarks
 }
 
+// learnStatusFor is the status chip the Learnings tab shows: the one you
+// picked, else Proposed while something waits for you, else Accepted (with
+// auto-accept on, where what's new is).
+func learnStatusFor(picked string, ls []library.Learning) string {
+	if picked != "" {
+		return picked
+	}
+	if slices.ContainsFunc(ls, func(l library.Learning) bool { return l.Status == library.StatusProposed }) {
+		return library.StatusProposed
+	}
+	return library.StatusAccepted
+}
+
 // LearnPage builds the Learnings tab, or nil when it isn't showing.
 func (s PrereviewState) LearnPage() *LearnPage {
 	if !s.ShowLibrary || !s.LibraryOnLearnings() {
 		return nil
 	}
-	status := s.LearnStatus
-	if status == "" {
-		status = library.StatusProposed
-	}
+	status := learnStatusFor(s.LearnStatus, s.Learnings)
 	p := &LearnPage{Scope: s.LearnScope}
 	counts := map[string]int{}
 	scopes := map[string]bool{}
@@ -109,6 +119,9 @@ func (s PrereviewState) LearnPage() *LearnPage {
 		byID[l.ID] = l
 	}
 	for _, st := range learnStatuses {
+		if st.status == library.StatusProposed && counts[st.status] == 0 && status != st.status {
+			continue // nothing waiting: with auto-accept on, the usual case
+		}
 		p.Chips = append(p.Chips, CheckChip{Value: st.status, Label: st.label, Count: counts[st.status], On: st.status == status})
 	}
 	names := make([]string, 0, len(scopes))
@@ -128,7 +141,10 @@ func (s PrereviewState) LearnPage() *LearnPage {
 	if len(p.Cards) == 0 {
 		switch {
 		case len(s.Learnings) == 0:
-			p.Empty = "No learnings yet. When your agent reads your reviews, it proposes what it learned here for you to accept."
+			p.Empty = "No learnings yet. When your agent reads your reviews, " + map[bool]string{
+				true:  "it proposes what it learned here for you to accept.",
+				false: "what it learns shows here, already in your skills.",
+			}[s.AutoAcceptOff]
 		case status == library.StatusProposed:
 			p.Empty = "Nothing waiting: every proposed learning has been accepted or rejected."
 		default:
@@ -150,6 +166,9 @@ func (s PrereviewState) learnCard(l library.Learning, byID map[string]library.Le
 	case library.StatusAccepted:
 		c.Pill, c.Actions = "pass", []LearnAction{actEdit, actDelete}
 		c.Meta = "accepted " + shortDate(l.UpdatedAt)
+		if l.Auto {
+			c.Meta = "added for you " + shortDate(l.CreatedAt)
+		}
 	case library.StatusRejected:
 		c.Pill, c.Actions = "muted", []LearnAction{actAccept, actDelete}
 		c.Meta = "rejected " + shortDate(l.UpdatedAt)
@@ -227,15 +246,32 @@ func clip(s string, n int) string {
 	return string(r[:n-1]) + "…"
 }
 
+// LearnedRef is one learning the notice names.
+type LearnedRef struct{ ID, Text, At string }
+
+// LearnAddedLabel is the notice's text: the learning itself when there is one.
+func (s PrereviewState) LearnAddedLabel() string { return learnedLabel(s.LearnAdded) }
+
+// learnedLabel names learnings added for you: the notice, and the library
+// version they cause.
+func learnedLabel(ls []LearnedRef) string {
+	if len(ls) == 1 {
+		return "Learned “" + clip(ls[0].Text, 80) + "”"
+	}
+	return fmt.Sprintf("%d learnings added", len(ls))
+}
+
 // BootCard is the first-launch offer to learn from past reviews, or the
 // progress once your agent is reading them.
 type BootCard struct {
-	Reading  bool // an extraction request is open
-	Scanning bool // the scan hasn't finished
-	Stores   []BootStore
-	Picked   int
-	CanRead  bool // an agent is attached
-	Waiting  int  // learnings proposed and waiting for you
+	Reading    bool // a learning job is open (or a pre-job extraction request)
+	Stalled    bool // the job waits with no learner running
+	Scanning   bool // the scan hasn't finished
+	Stores     []BootStore
+	Picked     int
+	CanRead    bool // an agent is attached
+	AutoAccept bool // what's learned goes straight into your skills
+	Waiting    int  // learnings proposed and waiting for you
 }
 
 // BootStore is one past review in the offer.
@@ -263,8 +299,8 @@ func (s PrereviewState) LibraryBootCard() *BootCard {
 }
 
 func (s PrereviewState) bootCard(offer bool) *BootCard {
-	if s.extractionOpen() {
-		return &BootCard{Reading: true, Waiting: s.LearnNew}
+	if s.LearnReading || s.extractionOpen() {
+		return &BootCard{Reading: true, Stalled: s.LearnStalled, Waiting: s.LearnNew}
 	}
 	if !offer {
 		return nil
@@ -278,7 +314,7 @@ func (s PrereviewState) bootCard(offer bool) *BootCard {
 	if len(s.BootStores) == 0 && !s.BootOpen {
 		return nil // nothing to learn from yet
 	}
-	c := &BootCard{CanRead: s.AgentMode}
+	c := &BootCard{CanRead: s.AgentMode, AutoAccept: !s.AutoAcceptOff}
 	for _, st := range s.BootStores {
 		b := BootStore{Store: st.Store, Label: st.Label, Counts: storeCounts(st), Picked: !slices.Contains(s.BootSkip, st.Store)}
 		if b.Picked {
@@ -300,7 +336,8 @@ func (s PrereviewState) pickedBootStores() []string {
 	return out
 }
 
-// extractionOpen reports an extraction request the agent hasn't finished.
+// extractionOpen reports an extraction request comment the agent hasn't
+// finished: one queued before learning moved to background jobs.
 func (s PrereviewState) extractionOpen() bool {
 	for _, c := range s.Comments {
 		if c.Request == csv.RequestExtraction && !c.Resolved && !c.Processed {

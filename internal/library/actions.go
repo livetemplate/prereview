@@ -27,6 +27,10 @@ type Proposal struct {
 	// the instruction the reviewer keeps typing, as one tap.
 	ShortcutLabel string
 	ShortcutBody  string
+	// Job is the learning job this answers (`--job`). Its evidence must come from
+	// the stores the job names, and a job queued with auto-accept makes the
+	// learning accepted on arrival. Without one, a learning arrives proposed.
+	Job string
 }
 
 // Propose validates p, resolves every evidence ref and appends a proposed
@@ -90,14 +94,63 @@ func Propose(dir string, p Proposal) (Learning, error) {
 		Produces: p.Produces, Replaces: p.Replaces, Status: StatusProposed,
 		Checker: trimFile(p.Checker), Judge: trimFile(p.Judge), ShortcutLabel: label, ShortcutBody: body}
 	err := update(dir, func(have map[string]Learning) ([]Learning, error) {
-		if p.Replaces != "" {
-			if old, ok := have[p.Replaces]; !ok || old.Status == StatusDeleted {
-				return nil, fmt.Errorf("learn propose: --replaces %s: no such learning", p.Replaces)
+		if old, ok := have[p.Replaces]; p.Replaces != "" && (!ok || old.Status == StatusDeleted) {
+			return nil, fmt.Errorf("learn propose: --replaces %s: no such learning", p.Replaces)
+		}
+		if p.Job == "" {
+			return []Learning{l}, nil
+		}
+		j, ok := JobByID(dir, p.Job)
+		if !ok || j.Op == JobDone {
+			return nil, fmt.Errorf("learn propose: --job %s: no open learning job", p.Job)
+		}
+		for _, e := range ev {
+			if !slices.ContainsFunc(j.Stores, func(s string) bool { a, _ := filepath.Abs(s); return a == e.Store }) {
+				return nil, fmt.Errorf("learn propose: --evidence %s:%s: not a store job %s asks you to read", e.Store, e.ID, p.Job)
 			}
 		}
-		return []Learning{l}, nil
+		if !j.AutoAccept {
+			return []Learning{l}, nil
+		}
+		l.Auto = true
+		out := accept(have, &l)
+		return out, nil
 	})
 	return l, err
+}
+
+// accept makes l accepted and, when it replaces an accepted learning,
+// supersedes that one by it (newer wins): the records to append.
+func accept(have map[string]Learning, l *Learning) []Learning {
+	l.Status, l.SupersededBy = StatusAccepted, ""
+	out := []Learning{*l}
+	if old, ok := have[l.Replaces]; ok && old.Status == StatusAccepted {
+		old.Status, old.SupersededBy = StatusSuperseded, l.ID
+		out = append(out, old)
+	}
+	return out
+}
+
+// Undo rejects the learnings ids name in one write, and puts back in effect
+// each accepted learning one of them had superseded (an undone replacement
+// must not take the older lesson out of your skills with it).
+func Undo(dir string, ids []string) error {
+	return update(dir, func(have map[string]Learning) ([]Learning, error) {
+		var out []Learning
+		for _, id := range ids {
+			l, ok := have[id]
+			if !ok || l.Status == StatusDeleted {
+				return nil, fmt.Errorf("learning %s: not found", id)
+			}
+			l.Status = StatusRejected
+			out = append(out, l)
+			if old, ok := have[l.Replaces]; ok && old.Status == StatusSuperseded && old.SupersededBy == l.ID {
+				old.Status, old.SupersededBy = StatusAccepted, ""
+				out = append(out, old)
+			}
+		}
+		return out, nil
+	})
 }
 
 // Card actions.
@@ -123,13 +176,7 @@ func Act(dir, id, action string) error {
 		}
 		switch action {
 		case ActAccept:
-			l.Status, l.SupersededBy = StatusAccepted, ""
-			out := []Learning{l}
-			if old, ok := have[l.Replaces]; ok && old.Status == StatusAccepted {
-				old.Status, old.SupersededBy = StatusSuperseded, l.ID
-				out = append(out, old)
-			}
-			return out, nil
+			return accept(have, &l), nil
 		case ActReject:
 			l.Status = StatusRejected
 		case ActDelete:

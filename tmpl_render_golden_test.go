@@ -8,10 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/livetemplate/livetemplate"
-	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
@@ -702,6 +700,8 @@ func renderFixtures() []renderFixture {
 	skillsTab := repoBase()
 	skillsTab.ShowLibrary, skillsTab.LibraryTab = true, "skills"
 	skillsTab.SkillsTab = &review.SkillsTab{
+		Pointers: []review.SkillInstall{{Label: "Claude Code memory", State: "added", Where: "~/.claude/CLAUDE.md", OK: true},
+			{Label: "Codex memory", State: "edited there — not updated", Where: "~/.codex/AGENTS.md"}},
 		Proposals: []skills.Proposal{{Scope: "Technical docs", Count: 5}},
 		Cards: []review.SkillCard{{ID: "learned-writing", Name: "Writing", Scope: "Writing (all documents)",
 			Source: "/home/u/.config/prereview/skills/learned-writing/SKILL.md", SourceRel: "~/.config/prereview/skills/learned-writing/SKILL.md",
@@ -730,8 +730,12 @@ func renderFixtures() []renderFixture {
 	bootReading := goBase()
 	bootReading.Bootstrapped = true
 	bootReading.LearnNew = 3
-	bootReading.Comments = append(bootReading.Comments, review.Comment{ID: "x1", File: bootReading.SelectedFile, Kind: "file", Request: csv.RequestExtraction,
-		Body: library.ExtractionPrompt([]string{"/home/u/notes/.prereview"}, nil), Created: time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)})
+	bootReading.LearnReading = true // a learning job, not a comment: nothing on the file
+	bootStalled := bootReading
+	bootStalled.LearnStalled = true
+	learnAdded := goBase() // the background learner added two learnings for you
+	learnAdded.LearnAdded = []review.LearnedRef{{ID: "l1", Text: "Cut filler words."}, {ID: "l2", Text: "Lead with the point."}}
+	learnAdded.LearnNew = 2
 
 	// checks M5: the Benchmarks tab — a benchmark with its score over 3 runs, the
 	// latest run's matrix (a judge still waiting, an errored checker), a run that
@@ -818,6 +822,8 @@ func renderFixtures() []renderFixture {
 		{"library-benchmarks", benchTab},
 		{"boot-offer", boot},
 		{"boot-reading", bootReading},
+		{"boot-stalled", bootStalled},
+		{"learn-added", learnAdded},
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},

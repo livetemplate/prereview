@@ -70,7 +70,20 @@ func TestBootCard_WhenItShows(t *testing.T) {
 	if s.BootCard() != nil {
 		t.Fatal("offered again after it was answered")
 	}
-	s.Comments = []Comment{{ID: "x", Kind: commentKindFile, Request: csv.RequestExtraction, Body: library.ExtractionPrompt([]string{"/h/a/.prereview"}, nil)}}
+	s.LearnReading = true
+	if c := s.BootCard(); c == nil || !c.Reading || c.Stalled {
+		t.Fatalf("an open learning job shows progress: %+v", c)
+	}
+	s.LearnStalled = true
+	if c := s.BootCard(); c == nil || !c.Stalled {
+		t.Fatalf("a job with no learner says so: %+v", c)
+	}
+	s.LearnReading, s.LearnStalled = false, false
+	if s.BootCard() != nil {
+		t.Fatal("progress kept showing after the job finished")
+	}
+	// A request comment queued before learning moved to jobs still shows progress.
+	s.Comments = []Comment{{ID: "x", Kind: commentKindFile, Request: csv.RequestExtraction, Body: "Read past reviews…"}}
 	if c := s.BootCard(); c == nil || !c.Reading {
 		t.Fatalf("an open extraction request shows progress: %+v", c)
 	}

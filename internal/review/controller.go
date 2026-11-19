@@ -183,15 +183,22 @@ type PrereviewController struct {
 	learnMu      sync.Mutex
 	learnFP      string
 	learnWatchFP string
+	// autoMark is the newest auto-accepted learning the watcher has named (once
+	// autoMarked, after its first look), so the library version a learner's
+	// write causes names the new ones.
+	autoMark   string
+	autoMarked bool
+	// The open learning jobs, cached by the log's fingerprint, and what the
+	// watcher last saw of the job and notice state (learnViewChanged).
+	jobsCache    []library.Job
+	jobsFP       string
+	jobsLoaded   bool
+	learnViewKey string
 	learnCache   []library.Learning
 	// The first-launch scan's result (ScanPastReviews), shared by every tab.
 	bootMu      sync.Mutex
 	bootScanned bool
 	bootStores  []library.StoreInfo
-	// autoLearn is this review's reviewer-signal count when the idle agent should
-	// be asked to learn from it (maybeAutoLearn), 0 otherwise; the first tab that
-	// can queue the request claims it (AutoLearn).
-	autoLearn atomic.Int64
 	// bootScanning: a past-review scan is running (ScanPastReviews).
 	bootScanning atomic.Bool
 	// The library's version store (rule-file history), opened on first use.

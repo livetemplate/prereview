@@ -172,6 +172,8 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 	c.checkpointLibrary(VersionTriggerFileEdit, "") // edits made while no server ran
 	c.syncSkills("")                                // bring generated skills in line after an upgrade
 	c.learningsChanged()                            // the baseline: only later writes fan out
+	c.learnViewChanged()
+	c.autoChangelog() // …and only later auto-accepted learnings are named
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
@@ -189,8 +191,11 @@ func (c *PrereviewController) WatchChecks(stop <-chan struct{}, poll time.Durati
 			if c.benchChanged() { // a benchmark result (the agent's) or an edited benchmark.yml
 				c.broadcast("BenchmarksUpdated")
 			}
-			if c.learningsChanged() { // any server's write to the shared library
-				c.syncSkills("") // idempotent: a no-op when the writer already synced
+			lib, view := c.learningsChanged(), c.learnViewChanged() // any server's write to the shared library
+			if lib {
+				c.syncSkills(c.autoChangelog()) // idempotent: a no-op when the writer already synced
+			}
+			if lib || view {
 				c.broadcast("LibraryUpdated")
 			}
 		}
@@ -636,6 +641,7 @@ func (c *PrereviewController) ToggleLibrary(state PrereviewState, ctx *livetempl
 	if state.ShowLibrary {
 		state.ChecksFile = ""
 	}
+	c.openLearnings(&state)
 	c.applyLibrary(&state)
 	c.applyReviewChecks(&state) // runs while open on the Checks tab; clears otherwise
 	return state, nil

@@ -280,9 +280,11 @@ restore is itself a new version, so you can undo it the same way).
 ## Learnings
 
 The **Library** opens on **Learnings**: lessons your coding agent drew from your
-reviews, waiting for you to accept. prereview never calls a model; the agent
-proposes, and nothing takes effect until you accept. The toolbar's Library button
-shows how many are waiting.
+reviews. prereview never calls a model; the agent proposes them. With **Accept
+automatically** on (below) they're in your skills as they arrive, and Learnings
+opens on **Accepted**, where they are ("added for you"). When something waits for
+your Accept (an import, or everything with the switch off), it opens on
+**Proposed** instead, and the toolbar's Library button counts it.
 
 - Each card says where the lesson applies (its **scope**, e.g. "Technical docs")
   and cites the **evidence**: the comments, replies and accept/reject decisions it
@@ -299,12 +301,19 @@ shows how many are waiting.
   used it, and **Hide** takes one out of the comment box without deleting it.
 - **Learn after each review** (on by default): when your agent goes idle and the
   review holds five or more new comments, replies or decisions since it last read
-  it, prereview asks the agent to read them and propose lessons. Turn it off on the
-  Learnings tab.
+  it, prereview hands them to your agent's **background learner**, a helper agent
+  it starts with the review. The request never lands on a file and doesn't
+  interrupt the agent doing your edits. Turn it off on the Learnings tab.
+- **Accept automatically** (on by default): what the learner finds goes straight
+  into your skills. A notice in every open review says so ("2 learnings added",
+  or the learning itself) and stays until you close it. **Review** opens them;
+  **Undo** rejects them, so they leave your skills and the learner won't propose
+  them again. Turn it off on the Learnings tab and each waits for your Accept.
+  Learnings you import always wait.
 - **Read past reviews**: the first time you run this version, prereview looks for
   past reviews under your home folder (skipping dependency, VCS and cache folders)
-  and lists the ones with comments, ticked. **Read with my agent** asks your agent
-  to read exactly the ticked ones; untick any you'd rather keep out. **Not now**
+  and lists the ones with comments, ticked. **Read with my agent** has the
+  background learner read exactly the ticked ones; untick any you'd rather keep out. **Not now**
   hides the offer on this machine; the Learnings tab's **Read past reviews** brings
   it back. Reading needs an agent (`prereview --agent`).
 - **Several reviews at once** share one library: accept a lesson in one and every
@@ -333,6 +342,23 @@ shows them:
   `~/.codex/skills`, and `~/.cursor/rules` (as a Cursor rule). An agent whose folder
   doesn't exist is skipped — prereview never creates it. Each card says where the
   skill is installed, or why not.
+- **Agents are told to use them.** An agent loads a skill only when it decides the
+  task matches the skill's description, so it could write a doc without yours. While
+  you have a learned skill, prereview adds a short block to each agent's memory file,
+  the one it reads at the start of every session: `~/.claude/CLAUDE.md`,
+  `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, and `~/.config/opencode/AGENTS.md` if
+  you already have one. The block names your skills and says to load the matching one
+  before writing prose, then run `prereview check`. It sits between
+  `<!-- prereview:learned-skills -->` markers; your text around it is never touched,
+  and if you edit inside it, prereview leaves it alone.
+- **Claude Code also checks each edit.** prereview adds one hook to
+  `~/.claude/settings.json` that runs `prereview check --hook` after every Write or Edit.
+  For a prose file, it runs your checks and shows Claude the findings on the lines it
+  just wrote. Your other settings and hooks keep their values and order, and the
+  previous file is kept as `settings.json.prereview-bak`.
+- The tab's **Tell agents to use these skills** switch removes the block and the hook
+  (and puts them back), and its pills say where each went. Both also go away when you
+  have no learned skills left.
 - **Edit the learnings, not the skill.** If you do edit a skill's `SKILL.md`,
   prereview stops regenerating it (its installs follow your edit) until you choose
   **Regenerate from learnings**. Every regeneration is a version: the card's history

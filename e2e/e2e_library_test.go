@@ -43,7 +43,7 @@ func learnPropose(t *testing.T, p *runningPrereview, args ...string) string {
 	if err != nil {
 		t.Fatalf("prereview learn propose: %v: %s", err, out)
 	}
-	m := regexp.MustCompile(`proposed (l[0-9a-f]+)`).FindSubmatch(out)
+	m := regexp.MustCompile(`(?:proposed|accepted) (l[0-9a-f]+)`).FindSubmatch(out)
 	if m == nil {
 		t.Fatalf("no id in %q", out)
 	}
@@ -216,9 +216,10 @@ func TestE2E_LibraryLiveAcrossSessions(t *testing.T) {
 
 // TestE2E_FirstLaunch: on a machine that hasn't answered the offer, the review
 // lists the past reviews found under $HOME (here a seeded fake home), each
-// ticked; "Read with my agent" queues ONE extraction request naming exactly the
-// ticked stores. The agent then answers it as written — citing a thread reply by
-// the request's `<target_id>@<at>` format — and the learning shows in the Library.
+// ticked; "Read with my agent" queues ONE learning job naming exactly the ticked
+// stores (no comment). The background learner then answers it as written —
+// citing a thread reply by the job's `<target_id>@<at>` format — and the
+// learning, accepted on arrival, is announced and shows in the Library.
 func TestE2E_FirstLaunch(t *testing.T) {
 	const w, h = 390, 844
 	repo := setupFixtureRepoChecks(t, "notes.md")
@@ -264,37 +265,42 @@ func TestE2E_FirstLaunch(t *testing.T) {
 		t.Fatalf("Read with my agent: %v%s", err, diag())
 	}
 
+	// The read is a learning job for the background learner: nothing on the file.
 	rows, err := csv.Read(filepath.Join(p.store, "comments.csv"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var requests []string
 	for _, r := range rows {
-		if r.Request == csv.RequestExtraction {
-			requests = append(requests, r.Body)
+		if r.IsRequest() {
+			t.Fatalf("queued a request comment (%s); a learning job is not a comment%s", r.Request, diag())
 		}
 	}
-	if len(requests) != 1 {
-		t.Fatalf("queued %d extraction requests, want 1%s", len(requests), diag())
+	out := learnCLI(t, p, "wait", "--timeout", "0")
+	head, req, _ := strings.Cut(out, "\n\n")
+	job := strings.TrimPrefix(head, "job ")
+	if job == head {
+		t.Fatalf("no learning job to claim: %q%s", out, diag())
 	}
-	req := requests[0]
 	if !strings.Contains(req, "`"+notes+"`") || !strings.Contains(req, "`"+app+"`") || strings.Contains(req, private) {
-		t.Fatalf("the request must name exactly the ticked stores:\n%s", req)
+		t.Fatalf("the job must name exactly the ticked stores:\n%s", req)
 	}
-	if !strings.Contains(req, "<target_id>@<at>") || !strings.Contains(req, "prereview learn propose") {
-		t.Fatalf("the request doesn't say how to cite a reply or what to run:\n%s", req)
+	if !strings.Contains(req, "<target_id>@<at>") || !strings.Contains(req, "prereview learn propose --job "+job) {
+		t.Fatalf("the job doesn't say how to cite a reply or what to run:\n%s", req)
 	}
 
-	// The agent answers as the request says.
-	id := learnPropose(t, p, "--text", "Cut filler words.", "--evidence", notes+":c1",
+	// The learner answers as the job says; with auto-accept on (the default) the
+	// learning is accepted on arrival and announced.
+	id := learnPropose(t, p, "--job", job, "--text", "Cut filler words.", "--evidence", notes+":c1",
 		"--evidence", fmt.Sprintf("%s:c1@%d", notes, replyAt))
+	learnCLI(t, p, "finish", job)
 	if err := chromedp.Run(ctx,
-		chromedp.WaitVisible(`.boot[aria-label="Reading past reviews"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.learn-toast`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.library-trigger .lib-badge`, chromedp.ByQuery),
-		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(learnCard(id)+`.is-proposed`, chromedp.ByQuery),
+		chromedp.Click(`.learn-toast button[name="reviewLearned"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(learnCard(id)+`.is-accepted`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.learn-toast`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("the agent's learning didn't show: %v%s", err, diag())
+		t.Fatalf("the learner's learning didn't show: %v%s", err, diag())
 	}
 	if got := textOf(t, p, learnCard(id)+` .lc-evidence`); !strings.Contains(got, "still filler") {
 		t.Errorf("the reply evidence didn't resolve: %q%s", got, diag())

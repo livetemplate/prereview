@@ -11,7 +11,7 @@ import (
 // (TestE2E_UsagePage) covers live rendering; this is the fast guard so a
 // regression in the shell or the embed doesn't depend on chromium to surface.
 func TestUsagePageShell(t *testing.T) {
-	got := string(usagePage)
+	got := string(usagePage())
 
 	// Themed by the same .theme-root tokens as the rest of the app.
 	if !strings.Contains(got, `class="theme-root" data-scheme=`) {

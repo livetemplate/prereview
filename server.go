@@ -391,7 +391,7 @@ func registerAssetRoutes(mux *http.ServeMux) {
 // the "/" SPA catch-all, and the extension-less path is never claimed by
 // staticFallback, so a repo file named usage/usage.md can't shadow it (issue #75).
 func registerUsageRoute(mux *http.ServeMux) {
-	mux.HandleFunc("/_usage", serveBytes("text/html; charset=utf-8", usagePage))
+	mux.HandleFunc("/_usage", serveBytes("text/html; charset=utf-8", usagePage()))
 }
 
 // serveAndWait runs the UI server (and an optional secondary server, e.g. the

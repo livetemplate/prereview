@@ -43,6 +43,9 @@ func (c *PrereviewController) syncSkills(changelog string) {
 	if !ok {
 		return
 	}
+	// The switch is a per-user pref, read at each sync so every server follows
+	// the one you flipped.
+	env.NoPointers = loadUIPrefs(c.UIPrefsPath).AgentPointersOff
 	c.syncMu.Lock()
 	defer c.syncMu.Unlock()
 	rep, err := skills.Sync(env, c.learnings())
@@ -73,11 +76,15 @@ const libTabSkills = "skills"
 // SkillsTab is the Library's Skills tab: your generated skills, the scopes
 // worth a skill of their own, and (M4b) the skills you already have.
 type SkillsTab struct {
-	Cards     []SkillCard
-	Proposals []skills.Proposal
-	Imported  []ImportedCard
-	Found     []FoundSkill
-	Empty     string
+	// Pointers tell agents to use the skills: the memory blocks and the Claude
+	// Code hook, with the switch that turns them off.
+	Pointers    []SkillInstall
+	PointersOff bool
+	Cards       []SkillCard
+	Proposals   []skills.Proposal
+	Imported    []ImportedCard
+	Found       []FoundSkill
+	Empty       string
 }
 
 // ImportedCard is a skill you imported (read by reference, never written).
@@ -113,6 +120,7 @@ type SkillCard struct {
 // SkillInstall is one agent's copy of a skill.
 type SkillInstall struct {
 	Label, State string
+	Where        string // the file, for a pointer (~/…)
 	OK           bool
 }
 
@@ -124,8 +132,11 @@ func (c *PrereviewController) applySkillsTab(state *PrereviewState) {
 	if !state.ShowLibrary || state.libraryTab() != libTabSkills || !ok {
 		return
 	}
-	tab := &SkillsTab{}
 	rep := c.lastSkillReport()
+	tab := &SkillsTab{PointersOff: state.AgentPointersOff}
+	for _, p := range rep.Pointers {
+		tab.Pointers = append(tab.Pointers, SkillInstall{Label: p.Label, State: p.State, Where: library.HomeLabel(env.Home, p.Path), OK: p.State == skills.Added})
+	}
 	for _, s := range rep.Skills {
 		card := SkillCard{ID: s.ID, Name: s.Name, Scope: s.Scope, Source: s.Source, SourceRel: library.HomeLabel(env.Home, s.Source),
 			EditorURL: editorURL(state.Editor, state.EditorTemplate, state.EditorSSHHost, s.Source, 1),
@@ -169,6 +180,16 @@ func (c *PrereviewController) applySkillsTab(state *PrereviewState) {
 		tab.Empty = "No skills yet. Accept a learning and it becomes a line in your Writing skill, installed for every agent set up on this machine."
 	}
 	state.SkillsTab = tab
+}
+
+// ToggleAgentPointers turns "Tell agents to use these skills" on or off, and
+// syncs at once so the memory blocks and the hook follow the switch.
+func (c *PrereviewController) ToggleAgentPointers(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.AgentPointersOff = !state.AgentPointersOff
+	c.savePrefs(state)
+	c.syncSkills("")
+	c.applySkillsTab(&state)
+	return state, nil
 }
 
 // ExpandSkill shows (again hides) one skill's version history.

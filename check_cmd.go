@@ -30,6 +30,7 @@ var errChecksFailed = errors.New("checks failed")
 func runCheck(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("check", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "print the results as JSON (one entry per file, every check with its findings)")
+	hook := fs.Bool("hook", false, "run as Claude Code's PostToolUse hook: read the hook input on stdin, check the lines the edit wrote, exit 2 with findings")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview check [--json] <file>...\n\n"+
@@ -41,6 +42,9 @@ func runCheck(args []string, stdout io.Writer) error {
 	if err := parseInterspersed(fs, args); err != nil {
 		return err
 	}
+	if *hook {
+		return runHook(os.Stdin, os.Stderr)
+	}
 	if fs.NArg() == 0 {
 		fs.Usage()
 		return fmt.Errorf("missing file")
@@ -49,36 +53,20 @@ func runCheck(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	lib := checks.Load(checks.UserDirs(userChecksDir(), skills.LearnedChecksDir(library.Dir()))...)
-	disabled, trustVale := review.CheckPrefs(uiPrefsPath(), repo)
-
+	run := newCheckRun(repo)
 	var reports []review.PathChecks // the same shape the Checks page reads
 	failed := false
 	for _, arg := range fs.Args() {
-		abs, err := filepath.Abs(arg)
+		results, err := run.file(arg)
 		if err != nil {
 			return err
 		}
-		lines, err := checks.ReadLines(abs)
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(repo, abs)
-		if err != nil || strings.HasPrefix(rel, "..") {
-			rel = filepath.Base(abs) // outside cwd: match globs on the name alone
-		}
-		rel = filepath.ToSlash(rel)
-		var kept []checks.Result
-		for _, r := range lib.RunAll(context.Background(), repo, rel, lines, trustVale) {
-			if slices.Contains(disabled, r.ID) {
-				continue
-			}
+		for _, r := range results {
 			if r.Status != checks.StatusPass {
 				failed = true
 			}
-			kept = append(kept, r)
 		}
-		reports = append(reports, review.PathChecks{Path: arg, Results: kept})
+		reports = append(reports, review.PathChecks{Path: arg, Results: results})
 	}
 
 	if *asJSON {
@@ -94,6 +82,60 @@ func runCheck(args []string, stdout io.Writer) error {
 		return errChecksFailed
 	}
 	return nil
+}
+
+// checkRun is the checks `prereview check` runs in a repo: built-ins, your
+// checks folder and learned checks, the repo's Vale config when trusted, minus
+// the checks turned off on the Checks page.
+type checkRun struct {
+	repo      string
+	lib       *checks.Library
+	disabled  []string
+	trustVale bool
+}
+
+// A turned-off rule is dropped before anything runs (a command check would
+// otherwise start its process only to be discarded); Vale's results are
+// filtered after, since Vale reports its own rule IDs.
+func newCheckRun(repo string) checkRun {
+	disabled, trustVale := review.CheckPrefs(uiPrefsPath(), repo)
+	lib := checks.Load(checks.UserDirs(userChecksDir(), skills.LearnedChecksDir(library.Dir()))...)
+	lib.Rules = slices.DeleteFunc(lib.Rules, func(r *checks.Rule) bool { return slices.Contains(disabled, r.ID) })
+	return checkRun{repo: repo, lib: lib, disabled: disabled, trustVale: trustVale}
+}
+
+// file runs the checks on one file (path relative to the cwd, or absolute).
+func (c checkRun) file(path string) ([]checks.Result, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := checks.ReadLines(abs)
+	if err != nil {
+		return nil, err
+	}
+	return c.lines(abs, lines), nil
+}
+
+// lines runs the checks on a file's lines, already read.
+func (c checkRun) lines(abs string, lines []string) []checks.Result {
+	var kept []checks.Result
+	for _, r := range c.lib.RunAll(context.Background(), c.repo, checkRel(c.repo, abs), lines, c.trustVale) {
+		if !slices.Contains(c.disabled, r.ID) {
+			kept = append(kept, r)
+		}
+	}
+	return kept
+}
+
+// checkRel is abs as the checks' globs match it: relative to repo, or the bare
+// name for a file outside it.
+func checkRel(repo, abs string) string {
+	rel, err := filepath.Rel(repo, abs)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		rel = filepath.Base(abs)
+	}
+	return filepath.ToSlash(rel)
 }
 
 func printCheckReports(w io.Writer, reports []review.PathChecks) {
