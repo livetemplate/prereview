@@ -263,11 +263,15 @@ prereview check     [--json] <file>...
   job. It prints `idle` at the timeout, or `stop` once the review `--out` names has
   ended. While it waits, the review knows a learner is running. **`prereview learn
   finish <id>`** closes a job.
-- **`prereview learn propose`** — the learner's answer to a job:
-  `prereview learn propose --job <id> --text "…"
-  --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <pattern>]…
-  [--replaces <id>] [--produces instruction,checker,judge] [--checker <rule.yml|->]
-  [--judge <rubric.md|->]`, one call per lesson. `--checker`/`--judge` attach a
+- **`prereview learn propose`** — the learner's answer to a job, one call per lesson:
+
+  ```
+  prereview learn propose --job <id> --text "…" --evidence <store>:<id> [--evidence …]
+    [--scope "…"] [--glob <pattern>]… [--replaces <id>]
+    [--produces instruction,checker,judge] [--checker <rule.yml|->] [--judge <rubric.md|->]
+  ```
+
+  `--checker`/`--judge` attach a
   drafted rule or rubric (validated; never a command check) that lands in your
   checks folder when the lesson is accepted.
   Every `--evidence` must name a real record in one of the job's stores (a comment
