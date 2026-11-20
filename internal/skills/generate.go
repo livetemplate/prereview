@@ -2,10 +2,11 @@ package skills
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
 )
 
@@ -49,9 +50,24 @@ func (c Check) File() string {
 	return c.ID + ".yml"
 }
 
-// Def is a skill you created for a scope (the Skills tab's "Create skill").
+// Def is a skill for a scope: one you created (the Skills tab's "Create
+// skill"), or a built-in one for the agent's own text (agentTextDefs).
 type Def struct {
 	ID, Name, Scope string
+	Use             string `json:"-"` // a built-in's "use when" (library.AgentText.Use)
+}
+
+// agentTextDefs is defs plus, after them, a built-in skill per kind of agent
+// text whose scope has none, so a lesson about replies never applies to every
+// doc through Writing. A built-in is generated only once a lesson has its scope.
+func agentTextDefs(defs []Def) []Def {
+	out := slices.Clone(defs)
+	for _, a := range library.AgentTexts {
+		if !slices.ContainsFunc(defs, func(d Def) bool { return d.Scope == a.Scope }) {
+			out = append(out, Def{ID: SlugID(a.Scope), Name: a.Scope, Scope: a.Scope, Use: a.Use})
+		}
+	}
+	return out
 }
 
 // ProposeAt is how many accepted learnings must share a scope with no skill of
@@ -65,21 +81,10 @@ func Generate(ls []library.Learning, defs []Def) []Skill {
 	byScope := map[string]*Skill{}
 	writing := &Skill{ID: WritingID, Name: "Writing", Scope: library.DefaultScope}
 	var out []*Skill
-	for _, d := range defs {
-		s := &Skill{ID: d.ID, Name: d.Name, Scope: d.Scope, Extends: WritingID}
+	for _, d := range agentTextDefs(defs) {
+		s := &Skill{ID: d.ID, Name: d.Name, Scope: d.Scope, Extends: WritingID, Use: d.Use}
 		byScope[d.Scope] = s
 		out = append(out, s)
-	}
-	// The agent's own text gets a skill per kind from its first lesson, so a
-	// lesson about replies never applies to every doc through Writing.
-	var agentText []*Skill
-	for _, a := range library.AgentTexts {
-		if byScope[a.Scope] != nil {
-			continue // you created a skill for it yourself
-		}
-		s := &Skill{ID: SlugID(a.Scope), Name: a.Scope, Scope: a.Scope, Extends: WritingID, Use: a.Use}
-		byScope[a.Scope] = s
-		agentText = append(agentText, s)
 	}
 	for _, l := range accepted(ls) {
 		s := byScope[l.Scope]
@@ -100,11 +105,8 @@ func Generate(ls []library.Learning, defs []Def) []Skill {
 			s.Checks = append(s.Checks, c)
 		}
 	}
-	for _, s := range agentText {
-		if len(s.Lines)+len(s.Checks) > 0 {
-			out = append(out, s)
-		}
-	}
+	builtins := slices.DeleteFunc(out[len(defs):], func(s *Skill) bool { return len(s.Lines)+len(s.Checks) == 0 })
+	out = append(out[:len(defs)], builtins...)
 	if len(writing.Lines)+len(writing.Checks) > 0 {
 		out = append([]*Skill{writing}, out...)
 	}
@@ -137,8 +139,27 @@ func WriteWith(gen []Skill) map[string][]string {
 	return out
 }
 
+// InputsStamp changes whenever what Current reads does: the learnings, the
+// skills you created and the skills you imported.
+func InputsStamp(lib string) string {
+	var b strings.Builder
+	for _, p := range []string{filepath.Join(lib, library.LearningsFile), filepath.Join(lib, "skills", defsFile), filepath.Join(lib, "skills", importsFile)} {
+		if fi, err := os.Stat(p); err == nil {
+			fmt.Fprintf(&b, "%d-%d|", fi.ModTime().UnixNano(), fi.Size())
+		} else {
+			b.WriteString("-|")
+		}
+	}
+	return b.String()
+}
+
 // Current is the skills the library's learnings make now (what Sync writes).
 func Current(lib string, ls []library.Learning) []Skill { return generate(lib, ls, Imports(lib)) }
+
+// WriteWithFor is WriteWith over the skills lib's learnings make now.
+func WriteWithFor(lib string) map[string][]string {
+	return WriteWith(Current(lib, library.LoadLearnings(lib)))
+}
 
 // Proposal is a scope with enough accepted learnings for a skill of its own.
 type Proposal struct {
@@ -186,23 +207,23 @@ func producesInstruction(l library.Learning) bool {
 	return len(l.Produces) == 0 || slices.Contains(l.Produces, "instruction")
 }
 
-// drafted is the learning's checker or judge, when it carries a valid one
-// (re-validated here: an imported learning never went through learn propose).
+// drafted is the learning's checker or judge, when it carries a valid one,
+// scoped to where the lesson applies (library.ScopeCheck). Re-validated here:
+// an imported or edited learning never went through learn propose.
 func drafted(l library.Learning, judge bool) (Check, bool) {
 	body := l.Checker
 	if judge {
 		body = l.Judge
 	}
-	if strings.TrimSpace(body) == "" || checks.ValidateDrafted([]byte(body), judge) != nil { // gates every way a learning arrives
+	if strings.TrimSpace(body) == "" {
 		return Check{}, false
 	}
-	c := Check{LearningID: l.ID, ID: IDPrefix + l.ID, Judge: judge, Body: body}
-	if judge {
-		c.Name = checks.ParseJudge(c.ID, checks.SourceUser, "", []byte(body)).Name
-	} else {
-		c.Name = checks.ParseRule(c.ID, checks.SourceUser, "", []byte(body)).Name
+	id := IDPrefix + l.ID
+	scoped, r, err := library.ScopeCheck(id, l.Scope, l.Globs, body, judge)
+	if err != nil {
+		return Check{}, false
 	}
-	return c, true
+	return Check{LearningID: l.ID, ID: id, Name: r.Name, Judge: judge, Body: scoped}, true
 }
 
 // SlugID is a scope's skill ID: "Technical docs" → "learned-technical-docs".

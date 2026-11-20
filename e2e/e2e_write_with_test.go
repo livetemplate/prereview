@@ -12,8 +12,18 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 )
+
+// lastWriteWith is the newest snapshot's write_with.
+func lastWriteWith(evs []review.StreamEvent) map[string][]string {
+	snaps := handoffEvents(evs)
+	if len(snaps) == 0 {
+		return nil
+	}
+	return snaps[len(snaps)-1].WriteWith
+}
 
 // TestE2E_WriteWithMidReview: a lesson about the agent's replies, accepted in the
 // Library while the review runs, becomes the learned-agent-replies skill, and the
@@ -37,17 +47,10 @@ func TestE2E_WriteWithMidReview(t *testing.T) {
 	diag := captureDiag(t, p)
 	p.waitReady()
 	events := func() string { b, _ := os.ReadFile(filepath.Join(p.store, "events.jsonl")); return string(b) }
-	replySkills := func(evs []review.StreamEvent) []string {
-		snaps := handoffEvents(evs)
-		if len(snaps) == 0 {
-			return nil
-		}
-		return snaps[len(snaps)-1].WriteWith["reply"]
-	}
 
 	addLineComment(t, p, 2, 2, "first comment")
 	waitEvents(t, "events.jsonl", events, func(evs []review.StreamEvent) bool { return len(handoffEvents(evs)) > 0 }, "a first snapshot", diag)
-	if got := replySkills(parseStreamEvents(events())); got != nil {
+	if got := lastWriteWith(parseStreamEvents(events()))["reply"]; got != nil {
 		t.Fatalf("write_with.reply = %v before any lesson, want none", got)
 	}
 
@@ -75,6 +78,38 @@ func TestE2E_WriteWithMidReview(t *testing.T) {
 
 	addLineComment(t, p, 3, 3, "second comment")
 	waitEvents(t, "events.jsonl", events, func(evs []review.StreamEvent) bool {
-		return slices.Equal(replySkills(evs), []string{"learned-agent-replies"})
+		return slices.Equal(lastWriteWith(evs)["reply"], []string{"learned-agent-replies"})
 	}, "a snapshot naming learned-agent-replies for replies", diag)
+}
+
+// TestE2E_ExternalWriteWith: a live-site review (--external) has no Library of
+// its own, yet its snapshots name the skills to write the agent's text with,
+// read from the per-user library, including a lesson accepted while it runs.
+func TestE2E_ExternalWriteWith(t *testing.T) {
+	app := newLiveApp(t)
+	out := t.TempDir()
+	learnings := filepath.Join(libraryDirFor(out), library.LearningsFile)
+	accept := func(id, scope string) {
+		t.Helper()
+		l := library.Learning{ID: id, Text: "One line.", Scope: scope, Status: library.StatusAccepted,
+			CreatedAt: library.Now(), UpdatedAt: library.Now(), Machine: library.Machine()}
+		if err := library.Append(learnings, l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	accept("l1", "Agent replies")
+	p := bootChromeExternalOut(t, app.srv.URL, out, 1200, 900, "--agent")
+	diag := captureDiag(t, p)
+	events := func() string { b, _ := os.ReadFile(filepath.Join(p.store, "events.jsonl")); return string(b) }
+
+	annotateRegion(t, p, "CTA too low contrast", diag)
+	waitEvents(t, "events.jsonl", events, func(evs []review.StreamEvent) bool {
+		return slices.Equal(lastWriteWith(evs)["reply"], []string{"learned-agent-replies"})
+	}, "an external snapshot naming learned-agent-replies", diag)
+
+	accept("l2", "Suggestions") // accepted elsewhere while this review runs
+	annotateRegion(t, p, "Heading too small", diag)
+	waitEvents(t, "events.jsonl", events, func(evs []review.StreamEvent) bool {
+		return slices.Equal(lastWriteWith(evs)["suggestion"], []string{"learned-suggestions"})
+	}, "the next snapshot naming learned-suggestions", diag)
 }

@@ -1,6 +1,7 @@
 package review
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"html/template"
@@ -53,12 +54,8 @@ func (c *PrereviewController) syncSkills(changelog string) {
 		slog.Warn("skills sync", "err", err)
 		return
 	}
-	gen := make([]skills.Skill, 0, len(rep.Skills))
-	for _, s := range rep.Skills {
-		gen = append(gen, s.Skill)
-	}
 	c.reportMu.Lock()
-	c.skillReport, c.writeWith = rep, skills.WriteWith(gen)
+	c.skillReport = rep
 	c.reportMu.Unlock()
 	checksChanged := c.reloadChecksIfChanged()
 	c.checkpointLibrary(VersionTriggerLearning, changelog)
@@ -75,11 +72,20 @@ func (c *PrereviewController) lastSkillReport() skills.Report {
 }
 
 // WriteWith is, per kind of agent text, the generated skills to load before
-// writing it, as of the latest sync: every snapshot carries it, so a skill the
-// background learner adds mid-review reaches the agent in the next one.
+// writing it. Every snapshot carries it, so a skill the background learner adds
+// mid-review reaches the agent in the next one; it's re-read only when the
+// learnings or skill records change. A review with no library of its own
+// (--external) reads SkillsLibDir.
 func (c *PrereviewController) WriteWith() map[string][]string {
+	lib := cmp.Or(c.LibraryDir, c.SkillsLibDir)
+	if lib == "" {
+		return nil
+	}
 	c.reportMu.Lock()
 	defer c.reportMu.Unlock()
+	if st := skills.InputsStamp(lib); st != c.writeWithStamp {
+		c.writeWithStamp, c.writeWith = st, skills.WriteWithFor(lib)
+	}
 	return c.writeWith
 }
 

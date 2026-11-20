@@ -90,7 +90,7 @@ func checkAgentText(w io.Writer, t library.AgentText, pieces []agentPiece) {
 		if lib == "" {
 			return nil
 		}
-		return skills.WriteWith(skills.Current(lib, library.LoadLearnings(lib)))[t.Kind]
+		return skills.WriteWithFor(lib)[t.Kind]
 	})
 }
 

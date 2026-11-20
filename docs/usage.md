@@ -383,7 +383,9 @@ shows them:
 - Every accepted learning becomes one line of a skill prereview writes for you:
   `learned-writing`, or a skill of its own for a scope (when five accepted learnings
   share one, the tab offers **Create skill**). The checkers and judges learnings
-  carry go into your checks folder as `learned-…` checks.
+  carry go into your checks folder as `learned-…` checks. Each runs only where its
+  lesson applies: its glob (a lesson for `docs/**` checks only those files), or the
+  agent's replies, suggestions or quiz questions for a lesson about those.
 - The skill is **installed for every agent set up on this machine**:
   `~/.claude/skills` (Claude Code), `~/.agents/skills` (Codex, Gemini CLI, opencode),
   `~/.codex/skills`, and `~/.cursor/rules` (as a Cursor rule). An agent whose folder

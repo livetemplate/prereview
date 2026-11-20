@@ -280,7 +280,9 @@ prereview check     [--json] <file>...
 
   `--checker`/`--judge` attach a
   drafted rule or rubric (validated; never a command check) that lands in your
-  checks folder when the lesson is accepted.
+  checks folder when the lesson is accepted. A check with no `files:` runs on the
+  lesson's `--glob`, and a lesson about the agent's replies, suggestions or quiz
+  questions scopes its checks to that text.
   Every `--evidence` must name one of the reviewer's signals in one of the job's
   stores, or nothing is written. A signal is a comment id, the reviewer's thread
   reply as `<target_id>@<at>`, or the id of a suggestion they accepted or rejected. The

@@ -22,3 +22,13 @@ var (
 
 // AgentTexts are every kind, in the order the prompt and the docs list them.
 var AgentTexts = []AgentText{ReplyText, SuggestionText, QuizText}
+
+// AgentTextFor is the kind a lesson scoped to scope is about, if any.
+func AgentTextFor(scope string) (AgentText, bool) {
+	for _, a := range AgentTexts {
+		if a.Scope == scope {
+			return a, true
+		}
+	}
+	return AgentText{}, false
+}

@@ -460,7 +460,7 @@ func TestExtractionPrompt(t *testing.T) {
 	if strings.Contains(p, "quiz-answers") {
 		t.Errorf("the prompt lists the quiz answers:\n%s", p)
 	}
-	for _, want := range []string{"`--scope \"Agent replies\" --glob reply.md`", "`--scope \"Suggestions\" --glob suggestion.md`", "`--scope \"Quiz questions\" --glob quiz.md`", "`files: [reply.md]`"} {
+	for _, want := range []string{"`--scope \"Agent replies\" --glob reply.md`", "`--scope \"Suggestions\" --glob suggestion.md`", "`--scope \"Quiz questions\" --glob quiz.md`", "scoped to the same files as its lesson's `--glob`"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks the scope for agent text %s:\n%s", want, p)
 		}
@@ -614,26 +614,25 @@ func TestPropose_Shortcut(t *testing.T) {
 	}
 }
 
-// TestPropose_AgentTextChecksNameTheirFile: a lesson about the agent's own text
-// may carry a checker or judge only if its `files:` names that kind's file; one
-// without would run on every document, which is what the scope exists to stop.
-func TestPropose_AgentTextChecksNameTheirFile(t *testing.T) {
+// TestPropose_AgentTextCheckScope: a lesson about the agent's own text may carry
+// a checker or judge with no `files:` (generation scopes it to the kind's file),
+// but not one whose `files:` leave that file out.
+func TestPropose_AgentTextCheckScope(t *testing.T) {
 	dir, store := t.TempDir(), seedStore(t, t.TempDir())
 	const unscoped = "extends: existence\nname: No refactored\nmessage: Say what changed.\ntokens: [refactored]\n"
 	const judge = "---\nkind: judge\nname: One line\n---\nIs the reply one line?\n"
-	for _, c := range []struct{ checker, judge string }{{unscoped, ""}, {"", judge}} {
-		_, err := Propose(dir, Proposal{Text: "Say what you changed.", Scope: "Agent replies", Evidence: []string{store + ":c1"},
-			Checker: c.checker, Judge: c.judge})
-		if err == nil || !strings.Contains(err.Error(), "files: [reply.md]") {
-			t.Errorf("an agent-reply lesson with an unscoped check: %v, want a refusal naming files: [reply.md]", err)
-		}
+	propose := func(scope, checker, judge string) error {
+		_, err := Propose(dir, Proposal{Text: "Say what you changed.", Scope: scope, Evidence: []string{store + ":c1"}, Checker: checker, Judge: judge})
+		return err
 	}
-	scoped := strings.Replace(unscoped, "tokens:", "files: [reply.md]\ntokens:", 1)
-	if _, err := Propose(dir, Proposal{Text: "Say what you changed.", Scope: "Agent replies", Evidence: []string{store + ":c1"}, Checker: scoped}); err != nil {
-		t.Fatalf("a scoped checker was refused: %v", err)
+	if err := propose("Agent replies", unscoped, judge); err != nil {
+		t.Fatalf("unscoped checks on an agent-reply lesson were refused: %v", err)
 	}
-	// Other scopes keep today's rule: no files: means the default prose globs.
-	if _, err := Propose(dir, Proposal{Text: "Cut filler.", Scope: "Technical docs", Evidence: []string{store + ":c1"}, Checker: unscoped}); err != nil {
-		t.Fatalf("an ordinary lesson's checker was refused: %v", err)
+	docs := strings.Replace(unscoped, "tokens:", "files: [\"*.md\"]\ntokens:", 1)
+	if err := propose("Agent replies", docs, ""); err == nil || !strings.Contains(err.Error(), "reply.md") {
+		t.Errorf("a reply lesson's check scoped to *.md: %v, want a refusal naming reply.md", err)
+	}
+	if err := propose("Technical docs", docs, ""); err != nil {
+		t.Errorf("an ordinary lesson's scoped checker was refused: %v", err)
 	}
 }

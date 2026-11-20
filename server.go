@@ -523,6 +523,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		TargetURL:    externalURL,
 		CSVPath:      csvPath,
 		UIPrefsPath:  uiPrefsPath(),
+		SkillsLibDir: library.Dir(), // only for the snapshot's write_with
 		Version:      version,
 		CSVWriter:    csvWriter,
 		AgentMode:    agentMode,

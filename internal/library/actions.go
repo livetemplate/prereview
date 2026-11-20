@@ -68,11 +68,8 @@ func Propose(dir string, p Proposal) (Learning, error) {
 		if strings.TrimSpace(d.body) == "" {
 			continue
 		}
-		if err := checks.ValidateDrafted([]byte(d.body), d.judge); err != nil {
+		if _, _, err := ScopeCheck("drafted", p.Scope, p.Globs, d.body, d.judge); err != nil {
 			return Learning{}, fmt.Errorf("learn propose: %w", err)
-		}
-		if err := agentTextScoped(p.Scope, d.body, d.judge); err != nil {
-			return Learning{}, err
 		}
 		if !slices.Contains(p.Produces, d.kind) {
 			p.Produces = append(p.Produces, d.kind)
@@ -255,21 +252,28 @@ func trimFile(s string) string {
 	return s + "\n"
 }
 
-// agentTextScoped refuses a checker or judge on a lesson about the agent's own
-// text (AgentTexts) unless its `files:` names that kind's file: without it, the
-// check would run on every document, the thing the scope exists to stop.
-func agentTextScoped(scope, body string, judge bool) error {
-	for _, a := range AgentTexts {
-		if a.Scope != scope {
-			continue
-		}
-		r := checks.ParseRule("draft", checks.SourceLearned, "", []byte(body))
-		if judge {
-			r = checks.ParseJudge("draft", checks.SourceLearned, "", []byte(body))
-		}
-		if !slices.Contains(r.Files, a.File) {
-			return fmt.Errorf("learn propose: a %q lesson's checker or judge must set `files: [%s]`, or it runs on every document", scope, a.File)
-		}
+// ScopeCheck validates a lesson's drafted checker or judge (checks.ParseDrafted,
+// as id) and scopes it to where the lesson applies: one that sets no `files:`
+// gets the lesson's globs, or on a lesson about the agent's own text
+// (AgentTexts) that kind's file. A check on such a lesson whose `files:` leave
+// the kind's file out is refused: it could run on every document. learn propose
+// and skill generation both go through here, so the rule is the same for a
+// proposed, imported or edited lesson.
+func ScopeCheck(id, scope string, globs []string, body string, judge bool) (string, *checks.Rule, error) {
+	r, err := checks.ParseDrafted(id, []byte(body), judge)
+	if err != nil {
+		return "", nil, err
 	}
-	return nil
+	a, agentText := AgentTextFor(scope)
+	if agentText {
+		globs = []string{a.File}
+	}
+	switch {
+	case len(r.Files) == 0 && len(globs) > 0:
+		r.Files = globs
+		return checks.WithFiles(body, judge, globs), r, nil
+	case agentText && !slices.Contains(r.Files, a.File):
+		return "", nil, fmt.Errorf("a %q lesson's checker or judge must apply to `%s`: drop its `files:` (prereview scopes it) or include %s", scope, a.File, a.File)
+	}
+	return body, r, nil
 }

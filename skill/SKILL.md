@@ -593,7 +593,9 @@ prereview learn finish j1a2b3c4d5e6
   (`tokens: [...]`), `substitution` (`swap: {bad: good}`), `occurrence` or
   `vocab`, plus `name` and `message`, never `extends: command` (refused). One that
   takes judgment gets `--judge rubric.md`: `---` / `kind: judge` / `name: …` /
-  `---`, then one yes/no rubric question. Both are validated before anything is
+  `---`, then one yes/no rubric question. Leave out `files:`: a check runs where
+  its lesson's `--glob` says (on a lesson about your own text, on that text).
+  Both are validated before anything is
   written.
 - With "Accept automatically" on (the default), a lesson is accepted as you
   propose it, and the reviewer is told and can undo it. It becomes a line in a

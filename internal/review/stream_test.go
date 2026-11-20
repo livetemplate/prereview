@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // fixedTS is a deterministic timestamp for stream tests.
@@ -365,5 +367,24 @@ func TestEmitSnapshot_WriteWith(t *testing.T) {
 	}
 	if !bytes.Contains(lines[1], []byte(`"write_with":{"reply":["learned-writing","learned-agent-replies"]}`)) {
 		t.Fatalf("snapshot lacks write_with:\n%s", lines[1])
+	}
+}
+
+// TestWriteWith_External: a review with no library of its own (--external)
+// reads the skills to write with from the per-user library, and picks up a
+// lesson accepted while it runs.
+func TestWriteWith_External(t *testing.T) {
+	lib := t.TempDir()
+	c := &PrereviewController{SkillsLibDir: lib}
+	if ww := c.WriteWith(); ww != nil {
+		t.Fatalf("no learnings gave %v", ww)
+	}
+	l := library.Learning{ID: "l1", Text: "One line.", Scope: "Agent replies", Status: library.StatusAccepted,
+		CreatedAt: "2026-11-01T00:00:00Z", UpdatedAt: "2026-11-01T00:00:00Z", Machine: "m"}
+	if err := library.Append(filepath.Join(lib, library.LearningsFile), l); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.WriteWith()["reply"]; len(got) != 1 || got[0] != "learned-agent-replies" {
+		t.Fatalf("write_with.reply = %v, want learned-agent-replies", got)
 	}
 }

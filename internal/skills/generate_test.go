@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/livetemplate/prereview/internal/checks"
 	"github.com/livetemplate/prereview/internal/library"
 )
 
@@ -173,5 +174,47 @@ func TestGenerate_AgentTextSkills(t *testing.T) {
 		acc("a3", "x", "Suggestions", "2026-11-01T00:00:02Z"), acc("a4", "x", "Suggestions", "2026-11-01T00:00:03Z"),
 		acc("a5", "x", "Suggestions", "2026-11-01T00:00:04Z")}) {
 		t.Errorf("proposed a skill for the built-in scope %q", p.Scope)
+	}
+}
+
+// TestGenerate_GlobsReachChecks: a drafted check with no `files:` is scoped to
+// its lesson's globs; one on an agent-text lesson (as an import or an Edit can
+// bring, never having passed learn propose) is scoped to the kind's file, and
+// one whose `files:` leave that file out isn't generated at all.
+func TestGenerate_GlobsReachChecks(t *testing.T) {
+	const rule = "extends: existence\nname: No basically\nmessage: Cut it.\ntokens: [basically]\n"
+	const judge = "---\nkind: judge\nname: One line\n---\nIs it one line?\n"
+	docs := acc("l1", "Cut filler.", "Technical docs", "2026-11-01T00:00:00Z")
+	docs.Globs, docs.Checker, docs.Judge = []string{"docs/**"}, rule, judge
+	reply := acc("l2", "One line.", "Agent replies", "2026-11-02T00:00:00Z")
+	reply.Checker, reply.Judge = rule, judge
+	wide := acc("l3", "Short.", "Agent replies", "2026-11-03T00:00:00Z")
+	wide.Checker = strings.Replace(rule, "tokens:", "files: [\"*.md\"]\ntokens:", 1)
+	plain := acc("l4", "Plain.", library.DefaultScope, "2026-11-04T00:00:00Z")
+	plain.Checker = rule
+	empty := acc("l5", "Short.", "Quiz questions", "2026-11-05T00:00:00Z")
+	empty.Checker = rule + "files: []\n" // explicitly empty: still every prose file, so scoped
+
+	files := map[string][]string{}
+	for _, s := range Generate([]library.Learning{docs, reply, wide, plain, empty}, nil) {
+		for _, c := range s.Checks {
+			parse := checks.ParseRule
+			if c.Judge {
+				parse = checks.ParseJudge
+			}
+			files[c.File()] = parse(c.ID, checks.SourceLearned, "", []byte(c.Body)).Files
+		}
+	}
+	for f, want := range map[string][]string{
+		"learned-l1.yml": {"docs/**"}, "learned-l1.md": {"docs/**"},
+		"learned-l2.yml": {"reply.md"}, "learned-l2.md": {"reply.md"},
+		"learned-l4.yml": nil, "learned-l5.yml": {"quiz.md"},
+	} {
+		if got, ok := files[f]; !ok || !slices.Equal(got, want) {
+			t.Errorf("%s files = %v (generated %v), want %v", f, got, ok, want)
+		}
+	}
+	if _, ok := files["learned-l3.yml"]; ok {
+		t.Errorf("a reply lesson's check scoped to *.md was generated: %v", files)
 	}
 }
