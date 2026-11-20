@@ -16,6 +16,24 @@ Run `prereview` in a repo, or point it at any file or folder, and it opens a web
 Each comment is saved to `.prereview/comments.csv` and sent to your agent as soon
 as you save it. Nothing is committed, and nothing leaves your machine.
 
+## Use cases
+
+- **Review a change before you commit.** Comment on the diff your agent wrote, and
+  it fixes the lines you flagged. Review the working tree, a branch against `main`,
+  or the last few commits.
+- **Review a plan before the agent builds it.** Open the agent's plan file, comment
+  on the steps you disagree with, and the agent revises the plan before it writes
+  any code.
+- **Edit docs and other prose.** Read a README or a design doc as GitHub renders it,
+  comment on a block or a single phrase, and let the prose checks flag filler as
+  you read.
+- **Check a UI.** Drag a box on a screenshot, a diagram or your running dev site,
+  and say what is wrong in that spot.
+- **Understand a change you didn't write.** Quiz yourself on the diff, or ask the
+  agent a question in a comment thread.
+- **Teach the agent your preferences.** Your comments become lessons and then
+  skills, so you don't have to make the same comment twice.
+
 ## Get started
 
 ```bash
