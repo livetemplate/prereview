@@ -482,6 +482,12 @@ type CheckStrip struct {
 	Calibrated bool              // that judge counts (else advisory)
 	Hidden     int               // the picked check's cards you hid this session
 
+	// The idle bar is one summary line ("8 failing · 3 checks · 5 judges")
+	// until Open, when it lists Failing.
+	Open          bool
+	FailingChecks int
+	FailingJudges int
+
 	// Judges on this file (idle bar).
 	JudgesRun     int  // enabled judges that apply: "Run judges (n)"
 	JudgesStale   int  // of those, verdicts from an older file/rubric: "Re-run judges (n stale)"
@@ -537,7 +543,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 		}
 		return st
 	}
-	st := &CheckStrip{NeedsAgent: !s.AgentMode}
+	st := &CheckStrip{NeedsAgent: !s.AgentMode, Open: s.CheckStripOpen}
 	asked := s.openJudgeRequest()
 	unanswered := 0
 	for _, r := range s.Checks.Results {
@@ -547,6 +553,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 		if r.Type != checks.TypeJudge {
 			if r.Status == checks.StatusFail && len(r.Findings) > 0 {
 				st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Count: len(r.Findings)})
+				st.FailingChecks++
 			}
 			continue
 		}
@@ -557,6 +564,7 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 		switch r.Status {
 		case checks.StatusFail:
 			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Judge: true, Advisory: r.Advisory})
+			st.FailingJudges++
 		case checks.StatusStale:
 			st.JudgesStale++
 		}

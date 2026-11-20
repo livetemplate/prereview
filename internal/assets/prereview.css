@@ -3675,6 +3675,9 @@ header.file-head .file-head-checks { margin: 0; }
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--accent); color: var(--pico-primary-inverse); font-size: 0.68rem; font-weight: 700;
 }
+/* A learning job waits with no learner running: the Queue's stalled dot (#194),
+   since the progress card is on the Learnings tab only. */
+.library-trigger .agent-dot { margin-right: 0; flex: none; }
 .library-trigger.is-on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .library-trigger svg { display: block; }
 /* Icon-only below 1400px: with the agent's Queue beside it, the labelled button
@@ -4009,6 +4012,13 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
 /* The stepper stays in view while ‹ › scroll the file to each finding. */
 .ck-strip:not(.is-idle) { position: sticky; top: 0; z-index: 6; box-shadow: var(--shadow-sm); } /* like .ann-nav */
 .ck-strip form { margin: 0; }
+/* The idle bar is role=group, and Pico styles a group as a full-width button
+   bar: width: 100% (which, with the bar's side margins, overflowed a phone) and
+   [role=group] > * { flex: 1 1 auto } (which spread its three items across the
+   row). Keep the bar inside its margins and its items side by side. */
+.ck-strip { width: auto; }
+.ck-strip > * { flex: 0 0 auto; }
+.ck-strip.is-idle .ck-strip-all { margin-left: 0 !important; }
 .ck-strip-name { color: var(--text-strong); }
 .ck-strip-pos { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .ck-strip-nav { display: inline-flex; align-items: center; gap: 0.4rem; }
@@ -4016,6 +4026,16 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
 .ck-strip button.outline { margin: 0; padding: 0 0.55rem; min-height: 26px; width: auto; font-size: 0.85rem; }
 .ck-strip-pick button.outline { font-size: 0.8rem; color: var(--text); border-color: color-mix(in srgb, var(--pr-del) 45%, var(--border)); }
 .ck-strip-n { color: var(--pr-del); font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 0.25rem; }
+/* The idle bar is one summary line; its toggle, a button in the failing pills'
+   red, opens the pills on a row below (the chevron flips while open). */
+.ck-strip button.outline.ck-strip-sum {
+  display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; color: var(--text);
+  border-color: color-mix(in srgb, var(--pr-del) 45%, var(--border));
+}
+.ck-strip button.ck-strip-sum:hover { background: color-mix(in srgb, var(--pr-del) 8%, transparent); }
+.ck-strip-sum svg { flex: none; transition: transform 0.15s; }
+.ck-strip-sum[aria-expanded="true"] svg { transform: rotate(180deg); }
+.ck-strip-list { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; }
 .ck-strip-all { margin-left: auto !important; }
 .ck-strip-close { margin-left: 0.2rem !important; }
 /* Phone: the stepper is one row — the name truncates first, "1/8" replaces the

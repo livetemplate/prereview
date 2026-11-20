@@ -89,10 +89,11 @@ func TestE2E_LearningProducesSkillAndCheck(t *testing.T) {
 		t.Errorf("skill counts = %q%s", got, diag())
 	}
 
-	// The checker runs: the file's bar lists it as failing.
+	// The checker runs: the file's bar lists it as failing (once opened).
 	if err := chromedp.Run(ctx,
 		chromedp.Click(`.lib-back button`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.ck-strip`, chromedp.ByQuery),
+		openCheckStrip(),
 	); err != nil {
 		t.Fatalf("back to the file: %v%s", err, diag())
 	}

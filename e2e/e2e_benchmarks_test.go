@@ -155,7 +155,7 @@ func TestE2E_JudgeCalibration(t *testing.T) {
 	}
 	playJudge(t, p, repo, onlyComment(t, p).Body, "--file", "notes.md", "--judge", "reader-first", "--verdict", "fail",
 		"--critique", "Buries what the reader must do.", "--model", "test-model")
-	if err := chromedp.Run(ctx, chromedp.WaitVisible(`.ck-strip .ck-strip-pick button.is-judge`, chromedp.ByQuery)); err != nil {
+	if err := chromedp.Run(ctx, openCheckStrip(), chromedp.WaitVisible(`.ck-strip .ck-strip-pick button.is-judge`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("the verdict didn't render: %v%s", err, diag())
 	}
 	if got := textOf(t, p, `.checks-trigger .checks-count`); got != "2/4" {

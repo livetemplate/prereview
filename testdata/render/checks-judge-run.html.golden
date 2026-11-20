@@ -718,10 +718,17 @@
   
   <div class="ck-strip is-idle" data-key="checks-strip" role="group" aria-label="Failing checks on this file">
     
-    <span class="ck-strip-pos">Failing:</span>
-    <form method="POST" class="ck-strip-pick"><input type="hidden" name="id" value="filler-intensifiers"><button type="submit" name="selectCheck" class="outline">Filler intensifiers <span class="ck-strip-n">1</span></button></form>
+    <form method="POST"><button type="submit" name="toggleCheckStrip" class="outline ck-strip-sum" aria-expanded="false" title="Show the failing checks">1 failing · 1 check<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M6 9l6 6 6-6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  fill="none"
+/></svg></button></form>
     <form method="POST" class="ck-strip-run"><button type="submit" name="runJudges" class="outline">Run judges (1)</button></form>
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
+    
     
   </div>
   

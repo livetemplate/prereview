@@ -655,6 +655,10 @@ func renderFixtures() []renderFixture {
 	judgeRun.SelectedCheck = ""
 	judgeRun.AgentMode = true
 	judgeRun.Checks = &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), judgeRes("notrun", "", nil))}
+	// The idle bar opened: a failing checker and a failing (advisory) judge as pills.
+	stripOpen := judgeRun
+	stripOpen.CheckStripOpen = true
+	stripOpen.Checks = &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), failJudge)}
 
 	// checks M3: the Library's Learnings tab — two proposals (one grounded in
 	// this review and another store, one replacing an accepted learning, being
@@ -671,7 +675,7 @@ func renderFixtures() []renderFixture {
 			}},
 		{ID: "l2", Text: "Use numbered lists for steps.", Scope: "Technical docs", Status: "proposed", Replaces: "l3",
 			CreatedAt: "2026-11-14T09:00:00Z", UpdatedAt: "2026-11-14T09:00:00Z",
-			Evidence: []library.Evidence{ev("/repo/.prereview", "suggestion", "docs/a.md", 7, "too wordy", "")}},
+			Evidence: []library.Evidence{ev("/repo/.prereview", "suggestion", "docs/a.md", 7, "rejected: cut it (keep my wording)", "")}},
 		{ID: "l3", Text: "Prefer prose over bullet lists.", Scope: "Technical docs", Status: "accepted",
 			Produces: []string{"instruction", "checker"}, Checker: "extends: existence\nname: Lists\ntokens: [bullet]\n",
 			CreatedAt: "2026-08-02T09:00:00Z", UpdatedAt: "2026-08-02T09:00:00Z"},
@@ -741,10 +745,13 @@ func renderFixtures() []renderFixture {
 		{Store: "/home/u/code/app/.prereview", Label: "~/code/app", Comments: 1, Signals: 1},
 	}
 	boot.BootSkip = []string{"/home/u/code/app/.prereview"}
+	// A learning job's progress shows on the Learnings tab only (the stalled one
+	// also has the dot on the Library button).
 	bootReading := goBase()
 	bootReading.Bootstrapped = true
 	bootReading.LearnNew = 3
 	bootReading.LearnReading = true // a learning job, not a comment: nothing on the file
+	bootReading.ShowLibrary = true
 	bootStalled := bootReading
 	bootStalled.LearnStalled = true
 	learnAdded := goBase() // the background learner added two learnings for you
@@ -829,6 +836,7 @@ func renderFixtures() []renderFixture {
 		{"checks-page-history", checksHistory},
 		{"checks-judge-card", judgeCard},
 		{"checks-judge-run", judgeRun},
+		{"checks-strip-open", stripOpen},
 		{"learnings", learnings},
 		{"learnings-superseded", superseded},
 		{"learnings-accepted", acceptedL},

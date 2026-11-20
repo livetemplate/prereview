@@ -13,6 +13,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -77,9 +78,26 @@ func textOf(t *testing.T, p *runningPrereview, sel string) string {
 // pageRow selects a check's row on the Checks page by ID.
 func pageRow(id string) string { return fmt.Sprintf(`.ckp-row[data-key="ckp-row-%s"]`, id) }
 
+// openCheckStrip expands the failing-checks bar (it starts as one summary line)
+// so its pills show; it stays open across live updates.
+func openCheckStrip() chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		if err := chromedp.WaitVisible(`.ck-strip-sum`, chromedp.ByQuery).Do(ctx); err != nil {
+			return err
+		}
+		if err := chromedp.Evaluate(`(() => { const b = document.querySelector('.ck-strip-sum[aria-expanded="false"]'); if (b) b.click() })()`, nil).Do(ctx); err != nil {
+			return err
+		}
+		return chromedp.WaitVisible(`.ck-strip-list`, chromedp.ByQuery).Do(ctx)
+	})
+}
+
 // clickStripPick taps the bar's button for the named failing check.
 func clickStripPick(t *testing.T, p *runningPrereview, name string, diag func() string) {
 	t.Helper()
+	if err := chromedp.Run(p.ctx, openCheckStrip()); err != nil {
+		t.Fatalf("open the failing-checks bar: %v%s", err, diag())
+	}
 	ok := false
 	js := fmt.Sprintf(`(() => { const b = [...document.querySelectorAll('.ck-strip.is-idle .ck-strip-pick button')].find(b => b.textContent.trim().startsWith(%q)); if (!b) return false; b.click(); return true })()`, name)
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(js, &ok)); err != nil || !ok {
@@ -113,9 +131,16 @@ func TestE2E_ChecksPage(t *testing.T) {
 				t.Errorf("a failing check must mark the button failing%s", diag())
 			}
 
-			// The bar lists the failing check; nothing is drawn until it's picked.
+			// The bar sums up the failing check in one line; opened, it lists it.
+			// Nothing is drawn until it's picked.
 			if err := chromedp.Run(ctx, chromedp.WaitVisible(`.ck-strip.is-idle`, chromedp.ByQuery)); err != nil {
 				t.Fatalf("no failing-checks bar: %v%s", err, diag())
+			}
+			if got := textOf(t, p, `.ck-strip-sum`); got != "1 failing · 1 check" {
+				t.Errorf("bar summary %q%s", got, diag())
+			}
+			if err := chromedp.Run(ctx, openCheckStrip()); err != nil {
+				t.Fatalf("open the bar: %v%s", err, diag())
 			}
 			if got := textOf(t, p, `.ck-strip.is-idle .ck-strip-pick`); got != "Filler intensifiers 1" {
 				t.Errorf("bar lists %q%s", got, diag())

@@ -1,6 +1,7 @@
 package review
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"html/template"
@@ -68,6 +69,24 @@ func (c *PrereviewController) lastSkillReport() skills.Report {
 	c.reportMu.Lock()
 	defer c.reportMu.Unlock()
 	return c.skillReport
+}
+
+// WriteWith is, per kind of agent text, the generated skills to load before
+// writing it. Every snapshot carries it, so a skill the background learner adds
+// mid-review reaches the agent in the next one; it's re-read only when the
+// learnings or skill records change. A review with no library of its own
+// (--external) reads SkillsLibDir.
+func (c *PrereviewController) WriteWith() map[string][]string {
+	lib := cmp.Or(c.LibraryDir, c.SkillsLibDir)
+	if lib == "" {
+		return nil
+	}
+	c.reportMu.Lock()
+	defer c.reportMu.Unlock()
+	if st := skills.InputsStamp(lib); st != c.writeWithStamp {
+		c.writeWithStamp, c.writeWith = st, skills.WriteWithFor(lib)
+	}
+	return c.writeWith
 }
 
 // libTabSkills is the Library's Skills tab.

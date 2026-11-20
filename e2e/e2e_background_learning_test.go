@@ -80,8 +80,12 @@ func TestE2E_BackgroundLearning(t *testing.T) {
 	}
 	ctxA, cancelA := within(a, 30*time.Second)
 	defer cancelA()
-	if err := chromedp.Run(ctxA, chromedp.WaitVisible(`.boot[aria-label="Reading past reviews"]`, chromedp.ByQuery)); err != nil {
-		t.Fatalf("the open job doesn't show as being read: %v%s", err, diagA())
+	// The progress is on Library → Learnings, never above the file.
+	if err := chromedp.Run(ctxA, learningsShowProgress()); err != nil {
+		t.Fatalf("the open job doesn't show as being read on Learnings: %v%s", err, diagA())
+	}
+	if n := countSel(t, a, `.boot`); n != 0 {
+		t.Fatalf("the open job's progress shows above the file%s", diagA())
 	}
 	disk, err := csv.Read(filepath.Join(store, "comments.csv"))
 	if err != nil {
@@ -131,9 +135,6 @@ func TestE2E_BackgroundLearning(t *testing.T) {
 		if got := textOf(t, s.p, `.library-trigger .lib-badge`); got != "2" {
 			t.Errorf("%s: badge = %q, want 2%s", s.p.repo, got, s.diag())
 		}
-	}
-	if err := chromedp.Run(ctxA, chromedp.WaitNotPresent(`.boot[aria-label="Reading past reviews"]`, chromedp.ByQuery)); err != nil {
-		t.Errorf("the finished job still shows as being read: %v%s", err, diagA())
 	}
 	skill := filepath.Join(home, ".claude", "skills", "learned-writing", "SKILL.md")
 	waitFile := func(want func(string) bool, what string) {
@@ -217,5 +218,15 @@ func TestE2E_BackgroundLearning(t *testing.T) {
 	defer cancelA2()
 	if err := chromedp.Run(ctxA2, chromedp.WaitNotPresent(`.learn-toast`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("seeing it in one review didn't clear the notice in the other: %v%s", err, diagA())
+	}
+	// Both jobs finished: the Learnings tab no longer shows them being read.
+	if err := chromedp.Run(ctxA2,
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(learnCard(id3), chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("opening the Library: %v%s", err, diagA())
+	}
+	if n := countSel(t, a, `.boot`); n != 0 {
+		t.Errorf("the finished jobs still show as being read%s", diagA())
 	}
 }

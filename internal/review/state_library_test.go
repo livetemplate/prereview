@@ -70,29 +70,62 @@ func TestBootCard_WhenItShows(t *testing.T) {
 	if s.BootCard() != nil {
 		t.Fatal("offered again after it was answered")
 	}
+	// Progress shows only on the Learnings tab, never above the file.
 	s.LearnReading = true
-	if c := s.BootCard(); c == nil || !c.Reading || c.Stalled {
-		t.Fatalf("an open learning job shows progress: %+v", c)
+	if c := s.BootCard(); c != nil {
+		t.Fatalf("an open learning job showed above the file: %+v", c)
+	}
+	s.ShowLibrary, s.LibraryTab = true, libTabLearnings
+	if c := s.LibraryBootCard(); c == nil || !c.Reading || c.Stalled {
+		t.Fatalf("an open learning job shows progress on Learnings: %+v", c)
 	}
 	s.LearnStalled = true
-	if c := s.BootCard(); c == nil || !c.Stalled {
+	if c := s.LibraryBootCard(); c == nil || !c.Stalled {
 		t.Fatalf("a job with no learner says so: %+v", c)
 	}
 	s.LearnReading, s.LearnStalled = false, false
-	if s.BootCard() != nil {
+	if s.LibraryBootCard() != nil {
 		t.Fatal("progress kept showing after the job finished")
 	}
 	// A request comment queued before learning moved to jobs still shows progress.
 	s.Comments = []Comment{{ID: "x", Kind: commentKindFile, Request: csv.RequestExtraction, Body: "Read past reviews…"}}
-	if c := s.BootCard(); c == nil || !c.Reading {
+	if c := s.LibraryBootCard(); c == nil || !c.Reading {
 		t.Fatalf("an open extraction request shows progress: %+v", c)
 	}
-	s.Comments[0].Processed = true
+	s.ShowLibrary = false
 	if s.BootCard() != nil {
-		t.Fatal("progress kept showing after the agent finished")
+		t.Fatal("an open extraction request showed above the file")
 	}
+	s.Comments[0].Processed = true
+	// An unanswered offer still shows above the file.
+	s.Bootstrapped = false
+	if c := s.BootCard(); c == nil || c.Reading || len(c.Stores) != 2 {
+		t.Fatalf("the unanswered offer is gone from above the file: %+v", c)
+	}
+	s.Bootstrapped = true
 	s.ShowLibrary, s.BootOpen = true, true
 	if c := s.LibraryBootCard(); c == nil || len(c.Stores) != 2 {
 		t.Fatalf("Read past reviews reopens the offer on the Learnings tab: %+v", c)
+	}
+}
+
+// TestEvidenceWhere: the card's location line names a reply on a quiz question
+// as one, and keeps a reply's file and line from what it replied to.
+func TestEvidenceWhere(t *testing.T) {
+	s := PrereviewState{LearnStore: "/r/.prereview"}
+	for _, c := range []struct {
+		e    library.Evidence
+		want string
+	}{
+		{library.Evidence{Store: "/r/.prereview", ID: "c1@1", Kind: library.EvidenceReply, File: "README.md", Line: 5, At: "2026-11-02T09:00:00Z"},
+			"thread reply · README.md L5 · this review · 2 Nov 2026"},
+		{library.Evidence{Store: "/r/.prereview", ID: "qz1:q2@1", Kind: library.EvidenceReply, File: "docs/a.md", Line: 3},
+			"reply on a quiz question · docs/a.md L3 · this review"},
+		{library.Evidence{Store: "/h/notes/.prereview", ID: "s3", Kind: library.EvidenceSuggestion, File: "docs/a.md", Line: 11},
+			"suggestion decision · docs/a.md L11 · notes"},
+	} {
+		if got := s.evidenceWhere(c.e); got != c.want {
+			t.Errorf("evidenceWhere(%s) = %q, want %q", c.e.ID, got, c.want)
+		}
 	}
 }

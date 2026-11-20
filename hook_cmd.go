@@ -78,7 +78,7 @@ func runHook(stdin io.Reader, stderr io.Writer) error {
 		}
 		for _, f := range r.Findings {
 			if all || touches(lines, f) {
-				out = append(out, fmt.Sprintf("%s:%d:%d: %s: %s (%s)", path, f.Line, f.FromCol+1, f.Severity, f.Message, r.Name))
+				out = append(out, findingLine(path, r, f))
 			}
 		}
 	}

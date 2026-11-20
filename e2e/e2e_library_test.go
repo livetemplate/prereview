@@ -17,6 +17,7 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // seedReviewStore writes another review's store (a .prereview with comments)
@@ -35,6 +36,14 @@ func seedReviewStore(t *testing.T, root string, rows ...csv.Row) string {
 
 // learnPropose runs `prereview learn propose` the way the agent does, against the
 // same library the server reads, and returns the new learning's id.
+// learnProposeErr runs `prereview learn propose` and returns its output and error.
+func learnProposeErr(p *runningPrereview, args ...string) (string, error) {
+	cmd := exec.Command(p.binary, append([]string{"learn", "propose"}, args...)...)
+	cmd.Env = prefsIsolatedEnv(p.repo) // the same library as the server
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 func learnPropose(t *testing.T, p *runningPrereview, args ...string) string {
 	t.Helper()
 	cmd := exec.Command(p.binary, append([]string{"learn", "propose"}, args...)...)
@@ -228,7 +237,13 @@ func TestE2E_FirstLaunch(t *testing.T) {
 		csv.Row{ID: "c1", File: "plan.md", FromLine: 4, ToLine: 4, Body: "Drop “basically”.", CreatedAt: time.Now()})
 	const replyAt = int64(1762000000000000000)
 	if err := os.WriteFile(filepath.Join(notes, "reviewer-replies.jsonl"),
-		[]byte(`{"target_id":"c1","body":"still filler","at":1762000000000000000}`+"\n"), 0o644); err != nil {
+		[]byte(`{"target_id":"c1","body":"still filler","at":1762000000000000000}`+"\n"+
+			`{"target_id":"qz1:q2","body":"ask about the edge case instead","at":1763000000000000000}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A quiz question: the agent's text (context), which the reviewer replied on.
+	if err := os.WriteFile(filepath.Join(notes, "quiz.jsonl"),
+		[]byte(`{"id":"qz1","file":"plan.md","questions":[{"id":"q2","prompt":"What changed?","from_line":4}]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	app := seedReviewStore(t, filepath.Join(home, "code", "app"),
@@ -260,7 +275,9 @@ func TestE2E_FirstLaunch(t *testing.T) {
 		chromedp.Click(item(private), chromedp.ByQuery),
 		chromedp.WaitVisible(item(private)+`[aria-checked="false"]`, chromedp.ByQuery),
 		chromedp.Click(`button[name="readPastReviews"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.boot[aria-label="Reading past reviews"]`, chromedp.ByQuery),
+		// The offer leaves the file; the progress shows on Library → Learnings.
+		chromedp.WaitNotPresent(`.boot`, chromedp.ByQuery),
+		learningsShowProgress(),
 	); err != nil {
 		t.Fatalf("Read with my agent: %v%s", err, diag())
 	}
@@ -291,7 +308,7 @@ func TestE2E_FirstLaunch(t *testing.T) {
 	// The learner answers as the job says; with auto-accept on (the default) the
 	// learning is accepted on arrival and announced.
 	id := learnPropose(t, p, "--job", job, "--text", "Cut filler words.", "--evidence", notes+":c1",
-		"--evidence", fmt.Sprintf("%s:c1@%d", notes, replyAt))
+		"--evidence", fmt.Sprintf("%s:c1@%d", notes, replyAt), "--evidence", notes+":qz1:q2@1763000000000000000")
 	learnCLI(t, p, "finish", job)
 	if err := chromedp.Run(ctx,
 		chromedp.WaitVisible(`.learn-toast`, chromedp.ByQuery),
@@ -305,12 +322,76 @@ func TestE2E_FirstLaunch(t *testing.T) {
 	if got := textOf(t, p, learnCard(id)+` .lc-evidence`); !strings.Contains(got, "still filler") {
 		t.Errorf("the reply evidence didn't resolve: %q%s", got, diag())
 	}
+	if got := textOf(t, p, learnCard(id)+` .lc-evidence`); !strings.Contains(got, "reply on a quiz question · plan.md L4") ||
+		!strings.Contains(got, "ask about the edge case instead") {
+		t.Errorf("the reply on a quiz question didn't resolve with its place: %q%s", got, diag())
+	}
 
 	// The answer is recorded for the machine (applyLibrary hides the offer once
 	// bootstrap.json exists; the state unit test pins that).
 	if _, err := os.Stat(filepath.Join(libraryDirFor(repo), "bootstrap.json")); err != nil {
 		t.Errorf("the answer wasn't recorded: %v", err)
 	}
+}
+
+// bootProgress is a learning job's progress card (Library → Learnings only).
+const bootProgress = `.boot[aria-label="Learning from your reviews"]`
+
+// learningsShowProgress opens the Library, waits for the progress card on the
+// Learnings tab, and closes it again (the notice hides while Learnings shows).
+func learningsShowProgress() chromedp.Action {
+	return chromedp.Tasks{
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(bootProgress, chromedp.ByQuery),
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.lib-tabs`, chromedp.ByQuery),
+	}
+}
+
+// TestE2E_LearnStalledDot: a learning job waiting with no learner running shows
+// no card above the file, only a warning dot on the Library button; the
+// Learnings tab says what's wrong, and the dot goes once a learner is waiting.
+func TestE2E_LearnStalledDot(t *testing.T) {
+	const w, h = 390, 844
+	repo := setupFixtureRepoChecks(t, "notes.md")
+	dir := libraryDirFor(repo)
+	if err := library.MarkBootstrapped(dir, "dismissed"); err != nil { // no first-launch offer
+		t.Fatal(err)
+	}
+	p := bootChromeAgainstRepo(t, repo, w, h, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReadyAt(w, h)
+
+	// Queued an hour ago and never claimed: stalled at once (no learner.json).
+	job := library.Job{ID: "jstalled", Op: library.JobQueued, Stores: []string{p.store},
+		Server: p.store, At: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano), Machine: library.Machine()}
+	if err := library.Append(filepath.Join(dir, library.LearnJobsFile), job); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := within(p, 30*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx, chromedp.WaitVisible(`.library-trigger .agent-dot.is-stalled`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("no warning dot on the Library button: %v%s", err, diag())
+	}
+	if n := countSel(t, p, `.boot`); n != 0 {
+		t.Fatalf("the stalled job shows a card above the file%s", diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(bootProgress, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("the Learnings tab doesn't show the job: %v%s", err, diag())
+	}
+	if got := textOf(t, p, `.boot`); !strings.Contains(got, "Waiting for your agent's learner") {
+		t.Errorf("the card doesn't say the learner isn't running: %q%s", got, diag())
+	}
+	if err := library.TouchLearner(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := chromedp.Run(ctx, chromedp.WaitNotPresent(`.library-trigger .agent-dot.is-stalled`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("the dot stayed with a learner waiting: %v%s", err, diag())
+	}
+	noHorizontalScroll(t, p, diag)
 }
 
 // TestE2E_LibraryVersions: an edit to a rule file on disk becomes a version in

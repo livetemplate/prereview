@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -36,6 +37,7 @@ func runReply(args []string) error {
 	body := fs.String("body", "", "the reply text — a brief note on what you did")
 	file := fs.String("file", "", "read the reply body from this file, or \"-\" for stdin (instead of --body)")
 	answered := fs.Bool("answered", false, "this reply settles the comment with no edit (an answer, or a question back) — the reviewer sees it as \"answered\"; comments only")
+	checkOnly := fs.Bool("check", false, "check the reply against the reviewer's checks and print what they find, without posting it")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview reply [--out <dir>] [--answered] (--body \"…\" | --file <f>|-) <comment-or-suggestion-id>\n\n"+
@@ -44,7 +46,9 @@ func runReply(args []string) error {
 				"  comment; --out must match the review's store (the STORE line). The id is\n"+
 				"  validated against comments.csv and suggestions — list ids with\n"+
 				"  `prereview comments --json`.\n\n"+
-				"  --answered settles a comment with no edit (instead of `prereview done`).\n")
+				"  --answered settles a comment with no edit (instead of `prereview done`).\n"+
+				"  --check prints what the reviewer's checks find in the reply and posts nothing.\n"+
+				"  A posted reply is checked too; findings go to stderr and never fail it.\n")
 	}
 	if err := parseInterspersed(fs, args); err != nil {
 		return err
@@ -83,6 +87,11 @@ func runReply(args []string) error {
 	if *answered && !isComment {
 		return fmt.Errorf("--answered settles a comment, and %q is a suggestion or quiz question — reply without --answered", id)
 	}
+	if *checkOnly {
+		checkAgentText(os.Stderr, library.ReplyText, replyPieces(text))
+		fmt.Println("checked the reply on " + id + "; nothing posted")
+		return nil
+	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", dir, err)
@@ -113,6 +122,7 @@ func runReply(args []string) error {
 		msg += " and marked it answered (no change)"
 	}
 	fmt.Println(msg)
+	checkAgentText(os.Stderr, library.ReplyText, replyPieces(text))
 	return nil
 }
 

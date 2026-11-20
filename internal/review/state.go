@@ -62,6 +62,9 @@ type PrereviewState struct {
 	Checks        *FileChecks   `json:"checks"`
 	ReviewChecks  *ReviewChecks `json:"review_checks"`
 	SelectedCheck string        `json:"selected_check" lvt:"persist"`
+	// CheckStripOpen: the failing-checks bar shows its pills, not just the
+	// one-line summary. Server-side (a <details> would close on every update).
+	CheckStripOpen bool `json:"check_strip_open" lvt:"persist"`
 	// HiddenFindings are finding cards you folded this session (findingKey).
 	HiddenFindings []string `json:"hidden_findings"`
 	FindingCursor  int      `json:"finding_cursor"`

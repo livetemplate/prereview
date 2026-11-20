@@ -332,7 +332,9 @@ your Accept (an import, or everything with the switch off), it opens on
 - Each card says where the lesson applies (its **scope**, e.g. "Technical docs")
   and cites the **evidence**: the comments, replies and accept/reject decisions it
   rests on, quoted, with where they were made. A lesson can't be proposed without
-  evidence that exists.
+  evidence that exists, and only what you said or decided counts. The agent's
+  replies, suggestions and quiz questions are context: they show what you reacted
+  to, but a lesson can't rest on them.
 - **Accept**, **Edit** (the text and scope), **Reject** or **Delete**. A
   proposal that contradicts an accepted lesson says so ("Replaces an older
   learning"); newer wins, so accepting it marks the old one **superseded**, which
@@ -346,7 +348,9 @@ your Accept (an import, or everything with the switch off), it opens on
   or more new comments, replies or decisions in the review, prereview hands them
   to your agent's **background learner**. That's a helper agent it starts with the
   review. The request never lands on a file and doesn't
-  interrupt the agent doing your edits. Turn it off on the Learnings tab.
+  interrupt the agent doing your edits. While it reads, the Learnings tab says
+  so; if no learner is running, the toolbar's Library button shows a warning dot.
+  Turn it off on the Learnings tab.
 - **Accept automatically** (on by default): what the learner finds goes straight
   into your skills. A notice in every open review says so ("2 learnings added",
   or the learning itself) and stays until you close it. **Review** opens them;
@@ -379,7 +383,9 @@ shows them:
 - Every accepted learning becomes one line of a skill prereview writes for you:
   `learned-writing`, or a skill of its own for a scope (when five accepted learnings
   share one, the tab offers **Create skill**). The checkers and judges learnings
-  carry go into your checks folder as `learned-…` checks.
+  carry go into your checks folder as `learned-…` checks. Each runs only where its
+  lesson applies: its glob (a lesson for `docs/**` checks only those files), or the
+  agent's replies, suggestions or quiz questions for a lesson about those.
 - The skill is **installed for every agent set up on this machine**:
   `~/.claude/skills` (Claude Code), `~/.agents/skills` (Codex, Gemini CLI, opencode),
   `~/.codex/skills`, and `~/.cursor/rules` (as a Cursor rule). An agent whose folder
@@ -399,6 +405,15 @@ shows them:
   For a prose file, it runs your checks and shows Claude the findings on the lines it
   just wrote. Your other settings and hooks keep their values and order, and the
   previous file is kept as `settings.json.prereview-bak`.
+- **The agent's own text learns too.** A lesson from your reply on an agent's reply,
+  suggestion or quiz question gets its own skill from the first one. The skills are
+  `learned-agent-replies`, `learned-suggestions` and `learned-quiz-questions`, each
+  extending `learned-writing`, so they never apply to your docs. Each snapshot tells
+  your agent which skills to load before writing each kind. `prereview reply`,
+  `suggest` and `quiz` check what the agent sent and show it any findings, after
+  posting. The built-in checks (filler words, sentence length, weasel words) don't
+  run on this text, because they're tuned for documents, and a suggestion's proposed
+  text is checked as part of its file.
 - The tab's **Tell agents to use these skills** switch removes the block and the hook
   (and puts them back), and its pills say where each went. Both also go away when you
   have no learned skills left.

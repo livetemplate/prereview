@@ -50,10 +50,10 @@ flags, or `prereview help` for the top-level list.
 | `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](#suggested-edits). |
 | `prereview quiz [--file <f>\|-]` | Submit a **comprehension quiz** about a file's diff for the reviewer to answer (append to `quiz.jsonl`). Each question needs >= 2 `options`, a 0-based `answer`, a `why`, and `from_line`/`to_line`/`side`; `probe` is one of change-type / localization / consequence / rationale / decision. **Validated before anything is written** — an out-of-range answer, a missing explanation, or a non-`decision` question without a line anchor fails with a non-zero exit naming the question. The server additionally flags a question whose cited line is not in the diff. |
 | `prereview learn wait [--out <STORE>] [--timeout 9m]` | The background learner's loop step (see SKILL.md → *Start the background learner*): claim the next **learning job** and print `job <id>`, a blank line, then the job. It prints `idle` at the timeout, or `stop` once the review `--out` names has ended. `prereview learn finish <id>` closes the job. |
-| `prereview learn propose --job <id> --text "…" --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <p>]… [--replaces <id>] [--produces instruction,checker,judge] [--checker <rule.yml\|->] [--judge <rubric.md\|->]` | Propose one **learning** drawn from the reviewer's reviews, answering a learning job. It appends to `~/.config/prereview/learnings.jsonl`. The learning is *accepted* when the job was queued with auto-accept on, otherwise *proposed* for the reviewer to accept in Library → Learnings. Without `--job` it is always proposed. Every `--evidence` must resolve to a real record in one of the job's stores, or nothing is written: a comment or suggestion `id`, or a reply as `<target_id>@<at>`. Request comments are never evidence. `--checker`/`--judge` attach a drafted rule YAML / judge rubric, validated first (a checker can't be `extends: command`); accepted, it lands in the reviewer's checks folder as `learned-<id>`. `prereview learn list [--status s] [--json]` prints the library. |
+| `prereview learn propose --job <id> --text "…" --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <p>]… [--replaces <id>] [--produces instruction,checker,judge] [--checker <rule.yml\|->] [--judge <rubric.md\|->]` | Propose one **learning** drawn from the reviewer's reviews, answering a learning job. It appends to `~/.config/prereview/learnings.jsonl`. The learning is *accepted* when the job was queued with auto-accept on, otherwise *proposed* for the reviewer to accept in Library → Learnings. Without `--job` it is always proposed. Every `--evidence` must resolve to a reviewer signal in one of the job's stores, or nothing is written: a comment `id`, the reviewer's reply as `<target_id>@<at>`, or a decided suggestion's `id`. Request comments, the agent's replies, undecided suggestions and quiz questions are never evidence. `--checker`/`--judge` attach a drafted rule YAML / judge rubric, validated first (a checker can't be `extends: command`). Accepted, it lands in the reviewer's checks folder as `learned-<id>`. With no `files:` it's scoped to the lesson's `--glob`, or to `reply.md`, `suggestion.md` or `quiz.md` on a lesson about the agent's own text. `prereview learn list [--status s] [--json]` prints the library. |
 | `prereview judge --bench <id> --run <run> --case <case> --judge <id> --content-hash <h> --rubric-hash <h> --verdict pass\|fail --critique "…" [--model <id>]` | Record one judge's verdict on one **benchmark case**, answering a benchmark request (`"request":"benchmark"`) (append to the benchmark's `runs.jsonl` in the library). Copy each command from the request; the hashes must match the run's pins. Pass `--model`: the run pins the judging model. |
 | `prereview judge --file <f> --judge <id> --content-hash <h> --rubric-hash <h> --verdict pass\|fail --critique "…" [--quote "…"] [--model <id>]` | Record one judge's **verdict** on one file, answering a "Run judges" request (append to `judgments.jsonl`). One call per judge; **copy the command from the request** — it carries the file's and the rubric's hashes, recorded with the verdict so the review shows it as out of date once either changes. Validated first: the judge must exist and apply to the file, the path must be review-relative, the verdict is `pass` or `fail`, and a critique is required. |
-| `prereview reply [--answered] <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment, suggestion **or quiz question** (the latter addressed as `<quizID>:<questionID>`), so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. `--answered` also settles a **comment** with no edit (it reads "answered" instead of "done"); it fails on a suggestion or quiz id. See [Threads](#threads). |
+| `prereview reply [--answered] <id> (--body "…"\|--file <f>\|-)` | Post a thread reply on a comment, suggestion **or quiz question** (the latter addressed as `<quizID>:<questionID>`), so the reviewer sees what you did (and can reply back to steer). Validated against comments + suggestions. `--answered` also settles a **comment** with no edit (it reads "answered" instead of "done"); it fails on a suggestion or quiz id. `--check` checks the reply and posts nothing. A posted reply, like `suggest` and `quiz`, is checked against the reviewer's checks (as `reply.md`, `suggestion.md`, `quiz.md`; a suggestion's proposed text under its own file), with findings on stderr and exit 0. See [Threads](#threads). |
 | `prereview applied <suggestion-id>...` | Ack that you applied an **accepted** suggestion's edit to the file, so the UI marks it "applied" and drops it from the snapshot. Ids come from a snapshot's `suggestions[]` (`verdict=accept`); validated against suggestions. Idempotent. |
 | `prereview reverted <suggestion-id>...` | Ack that you **reverted** an applied suggestion — restored its `original` text after the reviewer asked to undo the accept (delivered as `verdict=revert`). Nets the suggestion back out of "applied" → the card returns to undecided. Validated against suggestions. Idempotent. |
 
@@ -150,7 +150,7 @@ with work outstanding; never write it by hand. `events.jsonl`, `llm-status.json`
 
 For a git repo or non-git directory the store is `<path argument>/.prereview/`. A
 single-file review gets its **own** store, one per reviewed file, under the parent
-directory's `.prereview/files/`: reviews of two files in one directory are independent
+directory's `.prereview/files/`. Reviews of two files in one directory are independent
 sessions that can run at the same time, and neither can see the other's queue (#199).
 The store is created eagerly on startup. Add `.prereview/` to the repo's `.gitignore` —
 one entry still covers everything.
@@ -185,24 +185,30 @@ Four event types:
   still-actionable queue** (a superset, not a delta): act only on the **latest** and
   **dedupe by `id`**. Fields: `event, seq, ts, comments[], suggestions[]`. `comments`
   and `suggestions` are always present (`[]` when empty). The snapshot is pre-filtered
-  to what needs you: unresolved, non-outdated, non-draft comments — **plus** any comment
-  the reviewer just replied on, whatever its state (resolved, outdated, or already done;
-  see [Threads](#threads)); an item you
+  to what needs you: unresolved, non-outdated, non-draft comments. It **also** carries
+  any comment the reviewer just replied on, whatever its state (resolved, outdated, or
+  already done; see [Threads](#threads)). An item you
   replied on last drops out until the reviewer speaks again. While the reviewer has the
   queue **paused** (batching), no snapshot is emitted — mutations still persist, but
   `watch` blocks — and **resume** emits ONE coalesced snapshot of everything queued.
   `comments[]` is in **queue order, oldest first** (an edited comment keeps its place):
   to tell which of two comments is later, use array position, not the
   second-resolution `created_at`, which ties.
+  `write_with` (omitted when empty) maps each kind of text you write into the review,
+  `reply`, `suggestion` and `quiz`, to the generated skills to load before writing
+  it: `learned-writing`, then the kind's own skill (`learned-agent-replies`,
+  `learned-suggestions`, `learned-quiz-questions`) once a lesson exists for it. It's
+  read fresh for every snapshot, so a skill the background learner adds mid-review
+  shows up in the next one. Live-site reviews (`--external`) carry it too.
 - **`files_changed`** — reviewed files changed on disk under you: the reviewer (or
   another tool) edited them, or the reviewer **restored a version**. One event per
   settled run of edits, not per write. Fields: `event, seq, ts, files[], version,
   cause`, plus `agent_watching` when true. `files` are the paths whose content moved
-  (including a file that dropped out of the review); `version` is the new version's
-  seq, absent when no version was recorded; `cause` is `edit` or `rollback`. **Re-read every listed file before your next edit
+  (including a file that dropped out of the review). `version` is the new version's
+  seq, absent when no version was recorded. `cause` is `edit` or `rollback`. **Re-read every listed file before your next edit
   to it** — line numbers and any copy you loaded are stale. `agent_watching:true`
   means your `watch` was blocked for every edit in the run, so none of them were
-  yours; without it the run may include your own edits — if the listed files are
+  yours. Without it the run may include your own edits: if the listed files are
   only ones you just changed yourself, carry on. Not queue work: it carries no
   comments and arrives even while the queue is paused. A run you close with
   `status done` is treated as your own batch and sends nothing.
@@ -262,9 +268,9 @@ entry is `{ "author": "agent" | "reviewer", "body": "…", "at": "<RFC3339>" }`.
   it is **fresh** (no thread yet, unresolved) or its **last entry is the reviewer's**.
   Reply, and it drops out until the reviewer speaks again — you never re-answer yourself.
   A **resolved, outdated, or already-done** comment reappears iff the reviewer replied on
-  it (reopening the conversation); the reply overrides the suppression but never changes
-  `resolved`/`outdated`/`done` on its own, and marking `done` again won't settle it —
-  only your `reply` drops it back out.
+  it (reopening the conversation). The reply overrides the suppression but never changes
+  `resolved`/`outdated`/`done` on its own. Marking `done` again won't settle it: only
+  your `reply` drops it back out.
 
 Suggestion threads work the same way — a `thread` on a `suggestions[]` entry — with one
 exception: a **decided** suggestion stays in `suggestions[]` whatever its thread says, until
@@ -345,7 +351,7 @@ Act by `verdict`:
 
 Every emitted entry has `anchor_status` **`ok`** or **`moved`** — both carry
 trustworthy `from_line`/`to_line` (a `moved` suggestion was already re-anchored). An
-`outdated` suggestion is **never** emitted, so once you apply an `accept` it simply
+`outdated` suggestion is **never** emitted, so once you apply an `accept` it
 stops appearing.
 
 ## Comment data
@@ -497,5 +503,5 @@ either the pre- or post-mutation state, never a torn write.
   list. Use a different `--base` to review deletions.
 - **Binary files** render as "Binary file — cannot display"; treat any binary-file CSV
   rows as informational.
-- **Very large files** (>1 MB) render with a "file too large to review" placeholder;
+- **Files over 1 MB** render with a "file too large to review" placeholder;
   comments are still accepted but the agent saw only the placeholder — be conservative.

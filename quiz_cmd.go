@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -111,6 +112,7 @@ func runQuiz(args []string) error {
 		questions += len(quizzes[i].Questions)
 	}
 	fmt.Printf("submitted %d quiz(zes), %d question(s)\n", len(quizzes), questions)
+	checkAgentText(os.Stderr, library.QuizText, quizPieces(quizzes))
 	return nil
 }
 

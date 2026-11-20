@@ -50,8 +50,12 @@ func TestAutoLearn(t *testing.T) {
 		t.Fatalf("extraction recorded %d signals, want %d", e.Signals, AutoLearnMinSignals)
 	}
 	var st PrereviewState
-	if c.applyLibrary(&st); !st.LearnReading || st.BootCard() == nil || !st.BootCard().Reading {
-		t.Fatal("the open job doesn't show as being read")
+	if c.applyLibrary(&st); !st.LearnReading || st.BootCard() != nil {
+		t.Fatal("the open job isn't read, or shows above the file")
+	}
+	st.ShowLibrary, st.LibraryTab = true, libTabLearnings
+	if c := st.LibraryBootCard(); c == nil || !c.Reading {
+		t.Fatal("the open job doesn't show as being read on Learnings")
 	}
 
 	seed(2 * AutoLearnMinSignals) // enough again, but the open job covers this store

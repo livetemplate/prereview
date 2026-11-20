@@ -179,7 +179,10 @@ type PrereviewController struct {
 	// sessions, extractions. "" disables the Learnings tab. The folded learnings
 	// are cached by the log's fingerprint; learnWatchFP is what the watcher last
 	// fanned out.
-	LibraryDir   string
+	LibraryDir string
+	// SkillsLibDir is the per-user library a review without LibraryDir reads
+	// only to tell the agent which skills to write with (--external).
+	SkillsLibDir string
 	learnMu      sync.Mutex
 	learnFP      string
 	learnWatchFP string
@@ -231,6 +234,10 @@ type PrereviewController struct {
 	syncMu      sync.Mutex
 	reportMu    sync.Mutex
 	skillReport skills.Report
+	// writeWith is WriteWith's answer, read when the library's skills.InputsStamp
+	// was writeWithStamp.
+	writeWith      map[string][]string
+	writeWithStamp string
 }
 
 type cachedDiff struct {

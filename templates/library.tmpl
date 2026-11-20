@@ -212,12 +212,12 @@
 {{/* First launch (M3): the past reviews found on this machine, ticked by default;
      your agent reads the ticked ones. Called with the BootCard as `.`. */}}
 {{define "bootCard"}}
-  <section class="boot" data-key="boot" aria-label="{{if .Reading}}Reading past reviews{{else}}Learn from your past reviews{{end}}">
+  <section class="boot" data-key="boot" aria-label="{{if .Reading}}Learning from your reviews{{else}}Learn from your past reviews{{end}}">
     {{if .Reading}}
-    <h2>Reading past reviews…</h2>
+    <h2>Learning from your reviews…</h2>
     <div class="boot-progress" aria-hidden="true"><span></span></div>
     {{if .Stalled}}<p>Waiting for your agent's learner. It starts one in the background when it launches the review; if it didn't, ask it to start it (<code>prereview learn wait</code>).</p>
-    {{else}}<p>Your agent is reading them in the background{{if .Waiting}} · {{.Waiting}} learning{{if ne .Waiting 1}}s{{end}} waiting in Library → Learnings{{end}}. You can keep reviewing; you'll be told when learnings are added.</p>{{end}}
+    {{else}}<p>Your agent's learner is reading them in the background{{if .Waiting}} · {{.Waiting}} learning{{if ne .Waiting 1}}s{{end}} waiting for you below{{end}}. You can keep reviewing; you'll be told when learnings are added.</p>{{end}}
     {{else if .Scanning}}
     <h2>Looking for past reviews…</h2>
     <div class="boot-progress" aria-hidden="true"><span></span></div>

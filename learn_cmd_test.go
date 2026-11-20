@@ -76,3 +76,26 @@ func TestLearnWait(t *testing.T) {
 		t.Fatalf("an ended review: %q %v, want stop", out.String(), err)
 	}
 }
+
+// TestLearnPropose_RefusesAgentText: citing the agent's reply is refused with a
+// message saying what to cite, and nothing is written to the library.
+func TestLearnPropose_RefusesAgentText(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PREREVIEW_LIBRARY_DIR", dir) // never the real per-user library
+	store := filepath.Join(t.TempDir(), ".prereview")
+	if err := os.MkdirAll(store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store, library.AgentRepliesFile),
+		[]byte(`{"target_id":"c1","body":"Cut it from the intro.","at":1761000000000000000}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	err := runLearn([]string{"propose", "--text", "Keep replies short.", "--evidence", store + ":c1@1761000000000000000"}, &out)
+	if err == nil || !strings.Contains(err.Error(), "the agent's reply") {
+		t.Fatalf("propose citing an agent reply: %v (%q), want a refusal naming the agent's reply", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, library.LearningsFile)); !os.IsNotExist(err) {
+		t.Fatalf("the refused proposal wrote the library: %v", err)
+	}
+}

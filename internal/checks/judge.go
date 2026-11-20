@@ -162,22 +162,30 @@ func shellQuote(s string) string {
 // program on your files, so command checks stay hand-written. judge selects the
 // rubric form.
 func ValidateDrafted(data []byte, judge bool) error {
+	_, err := ParseDrafted("drafted", data, judge)
+	return err
+}
+
+// ParseDrafted is ValidateDrafted that also returns the parsed rule (named id
+// when it sets no name), so a caller needn't parse it again.
+func ParseDrafted(id string, data []byte, judge bool) (*Rule, error) {
 	if judge {
-		if j := ParseJudge("drafted", SourceUser, "", data); j.Err != "" {
-			return fmt.Errorf("judge: %s", j.Err)
+		j := ParseJudge(id, SourceUser, "", data)
+		if j.Err != "" {
+			return nil, fmt.Errorf("judge: %s", j.Err)
 		}
-		return nil
+		return j, nil
 	}
 	var head struct {
 		Extends string `yaml:"extends"`
 	}
 	_ = yaml.Unmarshal(data, &head) // a malformed file is reported by ParseRule below
-	r := ParseRule("drafted", SourceUser, "", data)
+	r := ParseRule(id, SourceUser, "", data)
 	switch {
 	case head.Extends == TypeCommand || r.Type == TypeCommand:
-		return fmt.Errorf("checker: a drafted checker can't be a command check (it would run a program); use existence, substitution, occurrence or vocab")
+		return nil, fmt.Errorf("checker: a drafted checker can't be a command check (it would run a program); use existence, substitution, occurrence or vocab")
 	case r.Err != "":
-		return fmt.Errorf("checker: %s", r.Err)
+		return nil, fmt.Errorf("checker: %s", r.Err)
 	}
-	return nil
+	return r, nil
 }

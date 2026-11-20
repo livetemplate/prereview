@@ -42,6 +42,7 @@ const (
 	DecisionsFile       = "suggestion-decisions.jsonl"
 	AgentRepliesFile    = "agent-replies.jsonl"
 	ReviewerRepliesFile = "reviewer-replies.jsonl"
+	QuizFile            = "quiz.jsonl"
 	VersionsDirName     = "versions"
 	TimelineFileName    = "timeline.jsonl"
 	// TargetsDir is where a directory's per-target (single-file review) stores
@@ -49,18 +50,28 @@ const (
 	TargetsDir = "files"
 )
 
-// ParseRef splits "store:id". The store is everything before the LAST colon, so
-// a Windows drive letter ("C:\…") survives.
+// ParseRef splits "store:id". The store is the longest-from-the-right prefix
+// ending at a colon that is a directory, so a Windows drive letter ("C:\…") and
+// a quiz reply's id ("<quizID>:<questionID>@<at>") both survive. When no prefix
+// is a directory, the last colon splits, so the error names the same store.
 func ParseRef(ref string) (store, id string, err error) {
-	i := strings.LastIndex(ref, ":")
-	if i <= 0 || i == len(ref)-1 {
+	last := strings.LastIndex(ref, ":")
+	if last <= 0 || last == len(ref)-1 {
 		return "", "", fmt.Errorf("evidence %q: want <store>:<id>", ref)
 	}
-	return ref[:i], ref[i+1:], nil
+	for i := last; i > 0; i = strings.LastIndex(ref[:i], ":") {
+		if fi, err := os.Stat(ref[:i]); err == nil && fi.IsDir() {
+			return ref[:i], ref[i+1:], nil
+		}
+	}
+	return ref[:last], ref[last+1:], nil
 }
 
-// Resolve finds the record ref ("<store>:<id>") names and returns it as
-// evidence, or an error naming what's missing. It only reads the store.
+// Resolve finds the reviewer signal ref ("<store>:<id>") names and returns it as
+// evidence, or an error naming what's missing. Evidence is only what the
+// reviewer said or decided: a comment, their thread reply, or their decision on
+// a suggestion. The agent's replies, suggestions and quiz questions are context,
+// so citing one is refused with what to cite instead. It only reads the store.
 func Resolve(ref string) (Evidence, error) {
 	store, id, err := ParseRef(ref)
 	if err != nil {
@@ -73,55 +84,170 @@ func Resolve(ref string) (Evidence, error) {
 	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
 		return Evidence{}, fmt.Errorf("evidence %q: no store at %s", ref, abs)
 	}
-	if rows, err := csv.Read(filepath.Join(abs, CommentsFile)); err == nil {
-		for _, r := range rows {
-			if r.ID == id {
-				if r.IsRequest() {
-					return Evidence{}, fmt.Errorf("evidence %q: that comment is a request to the agent, not a reviewer signal", ref)
-				}
-				return Evidence{Store: abs, ID: id, Kind: EvidenceComment, File: r.File, Line: r.FromLine,
-					Quote: r.Body, At: r.CreatedAt.UTC().Format(time.RFC3339)}, nil
-			}
+	r := storeReader{abs}
+	refuse := func(why string) (Evidence, error) { return Evidence{}, fmt.Errorf("evidence %q: %s", ref, why) }
+	if target, atStr, ok := strings.Cut(id, "@"); ok {
+		at, err := strconv.ParseInt(atStr, 10, 64)
+		if err != nil {
+			return refuse("a reply is cited as <target_id>@<at>, with <at> a number")
+		}
+		if body, ok := r.reply(ReviewerRepliesFile, target, at); ok {
+			file, line := r.where(target)
+			return Evidence{Store: abs, ID: id, Kind: EvidenceReply, File: file, Line: line, Quote: body, At: unixAt(at)}, nil
+		}
+		if _, ok := r.reply(AgentRepliesFile, target, at); ok {
+			return refuse("that's the agent's reply, not a reviewer signal; cite the reviewer's reply or comment on it")
+		}
+		return refuse("no reviewer reply with that id in " + abs)
+	}
+	if c, ok := r.comment(id); ok {
+		if c.IsRequest() {
+			return refuse("that comment is a request to the agent, not a reviewer signal")
+		}
+		return Evidence{Store: abs, ID: id, Kind: EvidenceComment, File: c.File, Line: c.FromLine,
+			Quote: c.Body, At: c.CreatedAt.UTC().Format(time.RFC3339)}, nil
+	}
+	if sg, ok := r.suggestion(id); ok {
+		d, ok := r.decision(id)
+		if !ok {
+			return refuse("that suggestion has no decision yet; cite it once the reviewer accepts or rejects it")
+		}
+		q := d.Verdict + "ed: " + sg.Proposed // accepted: / rejected:
+		if d.Note != "" {
+			q += " (" + d.Note + ")"
+		}
+		return Evidence{Store: abs, ID: id, Kind: EvidenceSuggestion, File: sg.File, Line: sg.FromLine, Quote: q,
+			At: d.Created.UTC().Format(time.RFC3339)}, nil
+	}
+	if _, _, ok := r.question(id); ok {
+		return refuse("that's the agent's quiz question, not a reviewer signal; cite the reviewer's reply on it")
+	}
+	return refuse("no comment, suggestion or reply with that id in " + abs)
+}
+
+// QuizThreadID is a question's identity for THREADS. Question ids are only unique
+// within their quiz ("q1" appears in every quiz), while a thread target id is
+// global — so the two are joined. Colon-separated because it is typed by a human
+// or an agent on the `prereview reply` command line, unlike the NUL-joined
+// internal answer key.
+func QuizThreadID(quizID, questionID string) string { return quizID + ":" + questionID }
+
+// SplitQuizThreadID reverses QuizThreadID; ok is false when s is not a composite.
+func SplitQuizThreadID(s string) (quizID, questionID string, ok bool) {
+	i := strings.IndexByte(s, ':')
+	if i <= 0 || i == len(s)-1 {
+		return "", "", false
+	}
+	return s[:i], s[i+1:], true
+}
+
+// storeReader reads one review store's records for Resolve.
+type storeReader struct{ dir string }
+
+func (r storeReader) comment(id string) (csv.Row, bool) {
+	rows, _ := csv.Read(filepath.Join(r.dir, CommentsFile))
+	for _, c := range rows {
+		if c.ID == id {
+			return c, true
 		}
 	}
-	var found *Evidence
-	eachLine(filepath.Join(abs, SuggestionsFile), func(b []byte) {
-		var s struct {
-			ID       string `json:"id"`
-			File     string `json:"file"`
-			FromLine int    `json:"from_line"`
-			Proposed string `json:"proposed"`
-			Note     string `json:"note"`
-		}
+	return csv.Row{}, false
+}
+
+type storeSuggestion struct {
+	ID       string `json:"id"`
+	File     string `json:"file"`
+	FromLine int    `json:"from_line"`
+	Proposed string `json:"proposed"`
+}
+
+// suggestion is the latest record for id (re-submitting an id revises it).
+func (r storeReader) suggestion(id string) (storeSuggestion, bool) {
+	var found storeSuggestion
+	ok := false
+	eachLine(filepath.Join(r.dir, SuggestionsFile), func(b []byte) {
+		var s storeSuggestion
 		if json.Unmarshal(b, &s) == nil && s.ID == id {
-			q := s.Note
-			if q == "" {
-				q = s.Proposed
-			}
-			found = &Evidence{Store: abs, ID: id, Kind: EvidenceSuggestion, File: s.File, Line: s.FromLine, Quote: q}
+			found, ok = s, true
 		}
 	})
-	if found != nil {
-		return *found, nil
+	return found, ok
+}
+
+type storeDecision struct {
+	SuggestionID string    `json:"suggestion_id"`
+	Verdict      string    `json:"verdict"` // accept | reject
+	Note         string    `json:"note"`
+	Created      time.Time `json:"created"`
+}
+
+// decision is the reviewer's accept or reject on suggestion id (last line wins;
+// a legacy "revise" line is skipped, as review's loadDecisions does).
+func (r storeReader) decision(id string) (storeDecision, bool) {
+	var found storeDecision
+	ok := false
+	eachLine(filepath.Join(r.dir, DecisionsFile), func(b []byte) {
+		var d storeDecision
+		if json.Unmarshal(b, &d) == nil && d.SuggestionID == id && (d.Verdict == "accept" || d.Verdict == "reject") {
+			found, ok = d, true
+		}
+	})
+	return found, ok
+}
+
+// reply finds the reply on target at at in a replies file.
+func (r storeReader) reply(name, target string, at int64) (body string, ok bool) {
+	eachLine(filepath.Join(r.dir, name), func(b []byte) {
+		var rp struct {
+			TargetID string `json:"target_id"`
+			Body     string `json:"body"`
+			At       int64  `json:"at"`
+		}
+		if json.Unmarshal(b, &rp) == nil && rp.TargetID == target && rp.At == at {
+			body, ok = rp.Body, true
+		}
+	})
+	return body, ok
+}
+
+// question finds a quiz question by its thread id ("<quizID>:<questionID>").
+func (r storeReader) question(threadID string) (file string, line int, ok bool) {
+	quizID, qID, isQuiz := SplitQuizThreadID(threadID)
+	if !isQuiz {
+		return "", 0, false
 	}
-	if target, at, ok := strings.Cut(id, "@"); ok {
-		for _, name := range []string{ReviewerRepliesFile, AgentRepliesFile} {
-			eachLine(filepath.Join(abs, name), func(b []byte) {
-				var r struct {
-					TargetID string `json:"target_id"`
-					Body     string `json:"body"`
-					At       int64  `json:"at"`
-				}
-				if json.Unmarshal(b, &r) == nil && r.TargetID == target && strconv.FormatInt(r.At, 10) == at {
-					found = &Evidence{Store: abs, ID: id, Kind: EvidenceReply, Quote: r.Body, At: unixAt(r.At)}
-				}
-			})
-			if found != nil {
-				return *found, nil
+	eachLine(filepath.Join(r.dir, QuizFile), func(b []byte) {
+		var q struct {
+			ID        string `json:"id"`
+			File      string `json:"file"`
+			Questions []struct {
+				ID       string `json:"id"`
+				FromLine int    `json:"from_line"`
+			} `json:"questions"`
+		}
+		if json.Unmarshal(b, &q) != nil || q.ID != quizID {
+			return
+		}
+		for _, qu := range q.Questions {
+			if qu.ID == qID {
+				file, line, ok = q.File, qu.FromLine, true
 			}
 		}
+	})
+	return file, line, ok
+}
+
+// where is the file and line of a reply's target: a comment, a suggestion or a
+// quiz question.
+func (r storeReader) where(target string) (string, int) {
+	if c, ok := r.comment(target); ok {
+		return c.File, c.FromLine
 	}
-	return Evidence{}, fmt.Errorf("evidence %q: no comment, suggestion or reply with that id in %s", ref, abs)
+	if sg, ok := r.suggestion(target); ok {
+		return sg.File, sg.FromLine
+	}
+	file, line, _ := r.question(target)
+	return file, line
 }
 
 // unixAt renders a unix timestamp (seconds, milliseconds or nanoseconds — replies

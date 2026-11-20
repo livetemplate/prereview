@@ -112,6 +112,8 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 		check(rec.capture(ctx, 150)) // the doc, with the checks bar
 
 		step(ctx,
+			clickJS(`.ck-strip-sum[aria-expanded="false"]`), // the bar starts as one summary line
+			chromedp.WaitVisible(`.ck-strip-list`, chromedp.ByQuery),
 			clickByText(`.ck-strip.is-idle .ck-strip-pick button`, "Filler"),
 			chromedp.WaitReady(`.code mark.check-finding`, chromedp.ByQuery),
 			scrollTo(`.code mark.check-finding`),

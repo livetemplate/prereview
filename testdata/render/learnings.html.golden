@@ -637,7 +637,7 @@
       </form>
       <div class="lc-conflict"><b>Replaces an older learning</b>: “Prefer prose over bullet lists.” (accepted 2 Aug 2026). Newer wins: accepting this keeps the old one as superseded, so you can restore it.</div>
       <details open><summary>Evidence (1)</summary><ul class="lc-evidence">
-        <li><span class="ev-where">suggestion · docs/a.md L7 · this review</span><br><q>too wordy</q></li>
+        <li><span class="ev-where">suggestion decision · docs/a.md L7 · this review</span><br><q>rejected: cut it (keep my wording)</q></li>
         </ul></details>
       
       

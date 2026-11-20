@@ -133,7 +133,8 @@ comment in the next review.
    be checked also brings a checker or a judge.
 4. **Your agents are told to use them.** prereview adds a short block naming the
    skills to each agent's memory file, such as `~/.claude/CLAUDE.md`. In Claude
-   Code, a hook runs your checks after every edit.
+   Code, a hook runs your checks after every edit. The agent's replies,
+   suggestions and quiz questions in a review get the skills and checks too.
 5. **The agent writes the next change with them.** It loads your lessons and
    checks its own prose before you see it.
 

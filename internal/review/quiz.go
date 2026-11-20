@@ -9,7 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
+
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // quiz.go wires the #191 comprehension quiz: the reviewer asks for a quiz about
@@ -45,7 +46,7 @@ const (
 	// QuizFileName is the agent-written, append-only quiz file under .prereview/.
 	// Durable across launches, deduped by quiz id (last write wins) so the agent
 	// can revise a quiz by re-appending the same id.
-	QuizFileName = "quiz.jsonl"
+	QuizFileName = library.QuizFile
 	// QuizAnswersFileName is the server-written record of the reviewer's answers.
 	// Separate file because quiz.jsonl is the agent's; one writer per file.
 	QuizAnswersFileName = "quiz-answers.jsonl"
@@ -226,20 +227,13 @@ func LoadQuizPrompts(userDir string) []Prompt {
 	return loadPromptLibrary(builtinQuizzesFS, "builtin_quizzes", userDir)
 }
 
-// QuizThreadID is a question's identity for THREADS. Question ids are only unique
-// within their quiz ("q1" appears in every quiz), while a thread target id is
-// global — so the two are joined. Colon-separated because it is typed by a human
-// or an agent on the `prereview reply` command line, unlike the NUL-joined
-// internal answer key.
-func QuizThreadID(quizID, questionID string) string { return quizID + ":" + questionID }
+// QuizThreadID and SplitQuizThreadID are a question's thread identity; the
+// library owns the format so evidence can tell a reply on a quiz question.
+func QuizThreadID(quizID, questionID string) string { return library.QuizThreadID(quizID, questionID) }
 
 // SplitQuizThreadID reverses QuizThreadID; ok is false when s is not a composite.
 func SplitQuizThreadID(s string) (quizID, questionID string, ok bool) {
-	i := strings.IndexByte(s, ':')
-	if i <= 0 || i == len(s)-1 {
-		return "", "", false
-	}
-	return s[:i], s[i+1:], true
+	return library.SplitQuizThreadID(s)
 }
 
 // NewQuizID mints a stable, sortable id when the agent omits one. Exported
