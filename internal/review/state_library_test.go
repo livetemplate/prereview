@@ -70,27 +70,39 @@ func TestBootCard_WhenItShows(t *testing.T) {
 	if s.BootCard() != nil {
 		t.Fatal("offered again after it was answered")
 	}
+	// Progress shows only on the Learnings tab, never above the file.
 	s.LearnReading = true
-	if c := s.BootCard(); c == nil || !c.Reading || c.Stalled {
-		t.Fatalf("an open learning job shows progress: %+v", c)
+	if c := s.BootCard(); c != nil {
+		t.Fatalf("an open learning job showed above the file: %+v", c)
+	}
+	s.ShowLibrary, s.LibraryTab = true, libTabLearnings
+	if c := s.LibraryBootCard(); c == nil || !c.Reading || c.Stalled {
+		t.Fatalf("an open learning job shows progress on Learnings: %+v", c)
 	}
 	s.LearnStalled = true
-	if c := s.BootCard(); c == nil || !c.Stalled {
+	if c := s.LibraryBootCard(); c == nil || !c.Stalled {
 		t.Fatalf("a job with no learner says so: %+v", c)
 	}
 	s.LearnReading, s.LearnStalled = false, false
-	if s.BootCard() != nil {
+	if s.LibraryBootCard() != nil {
 		t.Fatal("progress kept showing after the job finished")
 	}
 	// A request comment queued before learning moved to jobs still shows progress.
 	s.Comments = []Comment{{ID: "x", Kind: commentKindFile, Request: csv.RequestExtraction, Body: "Read past reviews…"}}
-	if c := s.BootCard(); c == nil || !c.Reading {
+	if c := s.LibraryBootCard(); c == nil || !c.Reading {
 		t.Fatalf("an open extraction request shows progress: %+v", c)
 	}
-	s.Comments[0].Processed = true
+	s.ShowLibrary = false
 	if s.BootCard() != nil {
-		t.Fatal("progress kept showing after the agent finished")
+		t.Fatal("an open extraction request showed above the file")
 	}
+	s.Comments[0].Processed = true
+	// An unanswered offer still shows above the file.
+	s.Bootstrapped = false
+	if c := s.BootCard(); c == nil || c.Reading || len(c.Stores) != 2 {
+		t.Fatalf("the unanswered offer is gone from above the file: %+v", c)
+	}
+	s.Bootstrapped = true
 	s.ShowLibrary, s.BootOpen = true, true
 	if c := s.LibraryBootCard(); c == nil || len(c.Stores) != 2 {
 		t.Fatalf("Read past reviews reopens the offer on the Learnings tab: %+v", c)

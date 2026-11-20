@@ -261,8 +261,8 @@ func learnedLabel(ls []LearnedRef) string {
 	return fmt.Sprintf("%d learnings added", len(ls))
 }
 
-// BootCard is the first-launch offer to learn from past reviews, or the
-// progress once your agent is reading them.
+// BootCard is the first-launch offer to learn from past reviews, or (on the
+// Learnings tab) the progress once your agent is reading.
 type BootCard struct {
 	Reading    bool // a learning job is open (or a pre-job extraction request)
 	Stalled    bool // the job waits with no learner running
@@ -280,28 +280,35 @@ type BootStore struct {
 	Picked               bool
 }
 
-// BootCard is the offer above the file view: until it's answered on this machine,
-// and while the agent reads.
+// BootCard is the offer above the file view, until it's answered on this
+// machine, and hidden while a learning job runs: the progress shows only on the
+// Learnings tab (a job can run for a while; the toolbar's Library button says
+// when it's stuck).
 func (s PrereviewState) BootCard() *BootCard {
-	if s.ShowLibrary {
+	if s.ShowLibrary || s.learnOpen() {
 		return nil
 	}
 	return s.bootCard(!s.Bootstrapped)
 }
 
-// LibraryBootCard is the same offer on the Learnings tab: reopened there by
-// "Read past reviews", or still unanswered.
+// LibraryBootCard is the Learnings tab's card: a learning job's progress, else
+// the offer (reopened there by "Read past reviews", or still unanswered).
 func (s PrereviewState) LibraryBootCard() *BootCard {
 	if !s.ShowLibrary || !s.LibraryOnLearnings() {
 		return nil
 	}
+	if s.learnOpen() {
+		return &BootCard{Reading: true, Stalled: s.LearnStalled, Waiting: s.LearnNew}
+	}
 	return s.bootCard(!s.Bootstrapped || s.BootOpen)
 }
 
+// learnOpen reports a learning job open for this review (or a pre-job
+// extraction request).
+func (s PrereviewState) learnOpen() bool { return s.LearnReading || s.extractionOpen() }
+
+// bootCard is the first-launch offer, when offer is set.
 func (s PrereviewState) bootCard(offer bool) *BootCard {
-	if s.LearnReading || s.extractionOpen() {
-		return &BootCard{Reading: true, Stalled: s.LearnStalled, Waiting: s.LearnNew}
-	}
 	if !offer {
 		return nil
 	}

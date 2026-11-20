@@ -17,6 +17,7 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 // seedReviewStore writes another review's store (a .prereview with comments)
@@ -260,7 +261,9 @@ func TestE2E_FirstLaunch(t *testing.T) {
 		chromedp.Click(item(private), chromedp.ByQuery),
 		chromedp.WaitVisible(item(private)+`[aria-checked="false"]`, chromedp.ByQuery),
 		chromedp.Click(`button[name="readPastReviews"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.boot[aria-label="Reading past reviews"]`, chromedp.ByQuery),
+		// The offer leaves the file; the progress shows on Library → Learnings.
+		chromedp.WaitNotPresent(`.boot`, chromedp.ByQuery),
+		learningsShowProgress(),
 	); err != nil {
 		t.Fatalf("Read with my agent: %v%s", err, diag())
 	}
@@ -311,6 +314,66 @@ func TestE2E_FirstLaunch(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(libraryDirFor(repo), "bootstrap.json")); err != nil {
 		t.Errorf("the answer wasn't recorded: %v", err)
 	}
+}
+
+// bootProgress is a learning job's progress card (Library → Learnings only).
+const bootProgress = `.boot[aria-label="Learning from your reviews"]`
+
+// learningsShowProgress opens the Library, waits for the progress card on the
+// Learnings tab, and closes it again (the notice hides while Learnings shows).
+func learningsShowProgress() chromedp.Action {
+	return chromedp.Tasks{
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(bootProgress, chromedp.ByQuery),
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.lib-tabs`, chromedp.ByQuery),
+	}
+}
+
+// TestE2E_LearnStalledDot: a learning job waiting with no learner running shows
+// no card above the file, only a warning dot on the Library button; the
+// Learnings tab says what's wrong, and the dot goes once a learner is waiting.
+func TestE2E_LearnStalledDot(t *testing.T) {
+	const w, h = 390, 844
+	repo := setupFixtureRepoChecks(t, "notes.md")
+	dir := libraryDirFor(repo)
+	if err := library.MarkBootstrapped(dir, "dismissed"); err != nil { // no first-launch offer
+		t.Fatal(err)
+	}
+	p := bootChromeAgainstRepo(t, repo, w, h, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReadyAt(w, h)
+
+	// Queued an hour ago and never claimed: stalled at once (no learner.json).
+	job := library.Job{ID: "jstalled", Op: library.JobQueued, Stores: []string{p.store},
+		Server: p.store, At: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano), Machine: library.Machine()}
+	if err := library.Append(filepath.Join(dir, library.LearnJobsFile), job); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := within(p, 30*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx, chromedp.WaitVisible(`.library-trigger .agent-dot.is-stalled`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("no warning dot on the Library button: %v%s", err, diag())
+	}
+	if n := countSel(t, p, `.boot`); n != 0 {
+		t.Fatalf("the stalled job shows a card above the file%s", diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.library-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(bootProgress, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("the Learnings tab doesn't show the job: %v%s", err, diag())
+	}
+	if got := textOf(t, p, `.boot`); !strings.Contains(got, "Waiting for your agent's learner") {
+		t.Errorf("the card doesn't say the learner isn't running: %q%s", got, diag())
+	}
+	if err := library.TouchLearner(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := chromedp.Run(ctx, chromedp.WaitNotPresent(`.library-trigger .agent-dot.is-stalled`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("the dot stayed with a learner waiting: %v%s", err, diag())
+	}
+	noHorizontalScroll(t, p, diag)
 }
 
 // TestE2E_LibraryVersions: an edit to a rule file on disk becomes a version in

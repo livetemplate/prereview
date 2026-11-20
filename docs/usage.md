@@ -346,7 +346,9 @@ your Accept (an import, or everything with the switch off), it opens on
   or more new comments, replies or decisions in the review, prereview hands them
   to your agent's **background learner**. That's a helper agent it starts with the
   review. The request never lands on a file and doesn't
-  interrupt the agent doing your edits. Turn it off on the Learnings tab.
+  interrupt the agent doing your edits. While it reads, the Learnings tab says
+  so; if no learner is running, the toolbar's Library button shows a warning dot.
+  Turn it off on the Learnings tab.
 - **Accept automatically** (on by default): what the learner finds goes straight
   into your skills. A notice in every open review says so ("2 learnings added",
   or the learning itself) and stays until you close it. **Review** opens them;

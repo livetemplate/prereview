@@ -3675,6 +3675,9 @@ header.file-head .file-head-checks { margin: 0; }
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--accent); color: var(--pico-primary-inverse); font-size: 0.68rem; font-weight: 700;
 }
+/* A learning job waits with no learner running: the Queue's stalled dot (#194),
+   since the progress card is on the Learnings tab only. */
+.library-trigger .agent-dot { margin-right: 0; flex: none; }
 .library-trigger.is-on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .library-trigger svg { display: block; }
 /* Icon-only below 1400px: with the agent's Queue beside it, the labelled button

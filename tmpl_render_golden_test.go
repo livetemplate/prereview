@@ -741,10 +741,13 @@ func renderFixtures() []renderFixture {
 		{Store: "/home/u/code/app/.prereview", Label: "~/code/app", Comments: 1, Signals: 1},
 	}
 	boot.BootSkip = []string{"/home/u/code/app/.prereview"}
+	// A learning job's progress shows on the Learnings tab only (the stalled one
+	// also has the dot on the Library button).
 	bootReading := goBase()
 	bootReading.Bootstrapped = true
 	bootReading.LearnNew = 3
 	bootReading.LearnReading = true // a learning job, not a comment: nothing on the file
+	bootReading.ShowLibrary = true
 	bootStalled := bootReading
 	bootStalled.LearnStalled = true
 	learnAdded := goBase() // the background learner added two learnings for you
