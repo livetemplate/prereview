@@ -108,3 +108,24 @@ func TestBootCard_WhenItShows(t *testing.T) {
 		t.Fatalf("Read past reviews reopens the offer on the Learnings tab: %+v", c)
 	}
 }
+
+// TestEvidenceWhere: the card's location line names a reply on a quiz question
+// as one, and keeps a reply's file and line from what it replied to.
+func TestEvidenceWhere(t *testing.T) {
+	s := PrereviewState{LearnStore: "/r/.prereview"}
+	for _, c := range []struct {
+		e    library.Evidence
+		want string
+	}{
+		{library.Evidence{Store: "/r/.prereview", ID: "c1@1", Kind: library.EvidenceReply, File: "README.md", Line: 5, At: "2026-11-02T09:00:00Z"},
+			"thread reply · README.md L5 · this review · 2 Nov 2026"},
+		{library.Evidence{Store: "/r/.prereview", ID: "qz1:q2@1", Kind: library.EvidenceReply, File: "docs/a.md", Line: 3},
+			"reply on a quiz question · docs/a.md L3 · this review"},
+		{library.Evidence{Store: "/h/notes/.prereview", ID: "s3", Kind: library.EvidenceSuggestion, File: "docs/a.md", Line: 11},
+			"suggestion decision · docs/a.md L11 · notes"},
+	} {
+		if got := s.evidenceWhere(c.e); got != c.want {
+			t.Errorf("evidenceWhere(%s) = %q, want %q", c.e.ID, got, c.want)
+		}
+	}
+}

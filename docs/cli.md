@@ -274,9 +274,10 @@ prereview check     [--json] <file>...
   `--checker`/`--judge` attach a
   drafted rule or rubric (validated; never a command check) that lands in your
   checks folder when the lesson is accepted.
-  Every `--evidence` must name a real record in one of the job's stores (a comment
-  id, a suggestion id, or a thread reply as `<target_id>@<at>`), or nothing is
-  written. The lesson is appended to `~/.config/prereview/learnings.jsonl`:
+  Every `--evidence` must name one of the reviewer's signals in one of the job's
+  stores, or nothing is written. A signal is a comment id, the reviewer's thread
+  reply as `<target_id>@<at>`, or the id of a suggestion they accepted or rejected. The
+  agent's replies, suggestions and quiz questions are context, never evidence. The lesson is appended to `~/.config/prereview/learnings.jsonl`:
   *accepted* when the job was queued with "Accept automatically" on (the reviewer is
   told and can undo it), otherwise *proposed*, waiting in Library → Learnings.
   Without `--job` it is always proposed. **`prereview learn list [--status s]

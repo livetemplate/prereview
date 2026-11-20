@@ -197,8 +197,15 @@ func (s PrereviewState) learnCard(l library.Learning, byID map[string]library.Le
 // this review · 2 Nov".
 func (s PrereviewState) evidenceWhere(e library.Evidence) string {
 	w := e.Kind
-	if e.Kind == library.EvidenceReply {
+	switch e.Kind {
+	case library.EvidenceReply:
 		w = "thread reply"
+		target, _, _ := strings.Cut(e.ID, "@")
+		if _, _, quiz := library.SplitQuizThreadID(target); quiz {
+			w = "reply on a quiz question"
+		}
+	case library.EvidenceSuggestion:
+		w = "suggestion decision" // the quote says accepted or rejected
 	}
 	if e.File != "" {
 		w += " · " + e.File

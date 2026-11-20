@@ -186,11 +186,80 @@ func TestParseRef(t *testing.T) {
 	}
 }
 
+// TestParseRef_ColonInID: a reply on a quiz question cites
+// "<store>:<quizID>:<questionID>@<at>"; the store is the prefix that is a
+// directory, so the colon inside the id doesn't cut the store path.
+func TestParseRef_ColonInID(t *testing.T) {
+	store := filepath.Join(t.TempDir(), ".prereview")
+	if err := os.MkdirAll(store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s, id, err := ParseRef(store + ":qz1:q2@1762000000000000000")
+	if err != nil || s != store || id != "qz1:q2@1762000000000000000" {
+		t.Fatalf("ParseRef = %q, %q, %v; want %q and the quiz reply id", s, id, err, store)
+	}
+	// No prefix is a directory: the last colon, as before (the error names that store).
+	if s, id, _ := ParseRef(`C:\gone\.prereview:abc`); s != `C:\gone\.prereview` || id != "abc" {
+		t.Fatalf("fallback ParseRef = %q, %q", s, id)
+	}
+}
+
+// TestResolve_ReviewerOnly: evidence is what the reviewer said or decided. The
+// agent's replies, an undecided suggestion and a quiz question are context, so
+// citing them is refused with a message that says what to cite instead.
+func TestResolve_ReviewerOnly(t *testing.T) {
+	store := seedStore(t, t.TempDir())
+	write(t, filepath.Join(store, SuggestionsFile),
+		`{"id":"s1","file":"docs/a.md","from_line":7,"proposed":"cut it","note":"too wordy"}`+"\n"+
+			`{"id":"s2","file":"docs/a.md","from_line":9,"proposed":"shorter"}`+"\n"+
+			`{"id":"s3","file":"docs/a.md","from_line":11,"proposed":"plainer"}`+"\n")
+	write(t, filepath.Join(store, DecisionsFile),
+		`{"suggestion_id":"s1","verdict":"accept","created":"2026-11-02T09:00:00Z"}`+"\n"+
+			`{"suggestion_id":"s3","verdict":"reject","note":"keep my wording","created":"2026-11-03T09:00:00Z"}`+"\n"+
+			`{"suggestion_id":"s1","verdict":"revise","created":"2026-11-04T09:00:00Z"}`+"\n") // legacy, skipped
+	write(t, filepath.Join(store, AgentRepliesFile),
+		`{"target_id":"c1","body":"Cut it from the intro.","at":1761000000000000000}`+"\n")
+	write(t, filepath.Join(store, ReviewerRepliesFile),
+		`{"target_id":"c1","body":"still filler","at":1762000000000000000}`+"\n"+
+			`{"target_id":"qz1:q2","body":"too easy, ask about the edge case","at":1763000000000000000}`+"\n")
+	write(t, filepath.Join(store, QuizFile),
+		`{"id":"qz1","file":"docs/a.md","questions":[{"id":"q2","prompt":"What changed?"}]}`+"\n")
+
+	for _, c := range []struct{ id, kind, quote, file string }{
+		{"c1@1762000000000000000", EvidenceReply, "still filler", "README.md"},
+		{"s3", EvidenceSuggestion, "rejected: plainer (keep my wording)", "docs/a.md"},
+		{"s1", EvidenceSuggestion, "accepted: cut it", "docs/a.md"},
+		{"qz1:q2@1763000000000000000", EvidenceReply, "too easy, ask about the edge case", "docs/a.md"},
+	} {
+		e, err := Resolve(store + ":" + c.id)
+		if err != nil {
+			t.Fatalf("%s: %v", c.id, err)
+		}
+		if e.Kind != c.kind || e.Quote != c.quote || e.File != c.file {
+			t.Errorf("%s resolved to %+v", c.id, e)
+		}
+	}
+	if e, _ := Resolve(store + ":s3"); e.At != "2026-11-03T09:00:00Z" {
+		t.Errorf("a decision's At = %q, want the decision's time", e.At)
+	}
+	for id, want := range map[string]string{
+		"c1@1761000000000000000": "the agent's reply",
+		"s2":                     "no decision",
+		"qz1:q2":                 "quiz question",
+	} {
+		if _, err := Resolve(store + ":" + id); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Resolve(%s) err = %v, want one saying %q", id, err, want)
+		}
+	}
+}
+
 func TestResolve_EachKind(t *testing.T) {
 	store := seedStore(t, t.TempDir())
+	write(t, filepath.Join(store, DecisionsFile),
+		`{"suggestion_id":"s1","verdict":"accept","created":"2026-11-02T09:00:00Z"}`+"\n")
 	for _, c := range []struct{ id, kind, quote string }{
 		{"c1", EvidenceComment, "Drop 'basically'"},
-		{"s1", EvidenceSuggestion, "too wordy"},
+		{"s1", EvidenceSuggestion, "accepted: cut it"},
 		{"c1@1762000000000000000", EvidenceReply, "still filler"},
 	} {
 		e, err := Resolve(store + ":" + c.id)
@@ -375,6 +444,26 @@ func TestExtractionPrompt(t *testing.T) {
 	rejected := p[strings.Index(p, "Rejected by the reviewer"):]
 	if !strings.Contains(rejected, "`l2` [rejected · Docs] Say it once.") || strings.Contains(rejected, "`l1`") {
 		t.Errorf("the rejected list is wrong:\n%s", p)
+	}
+	// The signals to cite, apart from the agent's text, which is context only.
+	signals, context, _ := strings.Cut(p[strings.Index(p, "the reviewer's signals and their evidence ids"):], "Context")
+	for _, f := range []string{"`comments.csv`", "`reviewer-replies.jsonl`", "`suggestion-decisions.jsonl`"} {
+		if !strings.Contains(signals, f) {
+			t.Errorf("signals lack %s:\n%s", f, p)
+		}
+	}
+	for _, f := range []string{"`agent-replies.jsonl`", "`suggestions.jsonl`", "`quiz.jsonl`"} {
+		if strings.Contains(signals, f) || !strings.Contains(context, f) {
+			t.Errorf("%s must be listed as context, not as a signal:\n%s", f, p)
+		}
+	}
+	if strings.Contains(p, "quiz-answers") {
+		t.Errorf("the prompt lists the quiz answers:\n%s", p)
+	}
+	for _, want := range []string{"`--scope \"Agent replies\" --glob reply.md`", "`--scope \"Suggestions\" --glob suggestion.md`", "`--scope \"Quiz questions\" --glob quiz.md`"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt lacks the scope for agent text %s:\n%s", want, p)
+		}
 	}
 	if strings.Contains(p, "mark this comment done") {
 		t.Error("a job is not a comment: the prompt still asks to mark one done")

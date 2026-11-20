@@ -229,7 +229,13 @@ func TestE2E_FirstLaunch(t *testing.T) {
 		csv.Row{ID: "c1", File: "plan.md", FromLine: 4, ToLine: 4, Body: "Drop “basically”.", CreatedAt: time.Now()})
 	const replyAt = int64(1762000000000000000)
 	if err := os.WriteFile(filepath.Join(notes, "reviewer-replies.jsonl"),
-		[]byte(`{"target_id":"c1","body":"still filler","at":1762000000000000000}`+"\n"), 0o644); err != nil {
+		[]byte(`{"target_id":"c1","body":"still filler","at":1762000000000000000}`+"\n"+
+			`{"target_id":"qz1:q2","body":"ask about the edge case instead","at":1763000000000000000}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A quiz question: the agent's text (context), which the reviewer replied on.
+	if err := os.WriteFile(filepath.Join(notes, "quiz.jsonl"),
+		[]byte(`{"id":"qz1","file":"plan.md","questions":[{"id":"q2","prompt":"What changed?","from_line":4}]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	app := seedReviewStore(t, filepath.Join(home, "code", "app"),
@@ -294,7 +300,7 @@ func TestE2E_FirstLaunch(t *testing.T) {
 	// The learner answers as the job says; with auto-accept on (the default) the
 	// learning is accepted on arrival and announced.
 	id := learnPropose(t, p, "--job", job, "--text", "Cut filler words.", "--evidence", notes+":c1",
-		"--evidence", fmt.Sprintf("%s:c1@%d", notes, replyAt))
+		"--evidence", fmt.Sprintf("%s:c1@%d", notes, replyAt), "--evidence", notes+":qz1:q2@1763000000000000000")
 	learnCLI(t, p, "finish", job)
 	if err := chromedp.Run(ctx,
 		chromedp.WaitVisible(`.learn-toast`, chromedp.ByQuery),
@@ -307,6 +313,10 @@ func TestE2E_FirstLaunch(t *testing.T) {
 	}
 	if got := textOf(t, p, learnCard(id)+` .lc-evidence`); !strings.Contains(got, "still filler") {
 		t.Errorf("the reply evidence didn't resolve: %q%s", got, diag())
+	}
+	if got := textOf(t, p, learnCard(id)+` .lc-evidence`); !strings.Contains(got, "reply on a quiz question · plan.md L4") ||
+		!strings.Contains(got, "ask about the edge case instead") {
+		t.Errorf("the reply on a quiz question didn't resolve with its place: %q%s", got, diag())
 	}
 
 	// The answer is recorded for the machine (applyLibrary hides the offer once

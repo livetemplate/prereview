@@ -671,7 +671,7 @@ func renderFixtures() []renderFixture {
 			}},
 		{ID: "l2", Text: "Use numbered lists for steps.", Scope: "Technical docs", Status: "proposed", Replaces: "l3",
 			CreatedAt: "2026-11-14T09:00:00Z", UpdatedAt: "2026-11-14T09:00:00Z",
-			Evidence: []library.Evidence{ev("/repo/.prereview", "suggestion", "docs/a.md", 7, "too wordy", "")}},
+			Evidence: []library.Evidence{ev("/repo/.prereview", "suggestion", "docs/a.md", 7, "rejected: cut it (keep my wording)", "")}},
 		{ID: "l3", Text: "Prefer prose over bullet lists.", Scope: "Technical docs", Status: "accepted",
 			Produces: []string{"instruction", "checker"}, Checker: "extends: existence\nname: Lists\ntokens: [bullet]\n",
 			CreatedAt: "2026-08-02T09:00:00Z", UpdatedAt: "2026-08-02T09:00:00Z"},
