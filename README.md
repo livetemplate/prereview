@@ -32,7 +32,8 @@ as you save it. Nothing is committed, and nothing leaves your machine.
 - **Understand a change you didn't write.** Quiz yourself on the diff, or ask the
   agent a question in a comment thread.
 - **Teach the agent your preferences.** Your comments become lessons and then
-  skills, so you don't have to make the same comment twice.
+  skills, so you don't have to make the same comment twice (see
+  [The learning loop](#the-learning-loop)).
 
 ## Get started
 
@@ -92,12 +93,6 @@ write your own. A judge is a yes/no rubric your agent answers for the whole file
 
 <p align="center"><img src="docs/checks.gif" alt="A filler word flagged on its line, the Checks page, and a judge's verdict from the agent" width="760"></p>
 
-**It learns from your reviews.** After a review, a helper agent turns your comments
-into lessons. Accepted lessons become skills that your agents load, and prereview
-tells them to use the skills.
-
-<p align="center"><img src="docs/learning.gif" alt="A comment, the notice of a learning added, and the Writing skill it became, with the agents told to use it" width="760"></p>
-
 **Quiz yourself on the diff.** Quiz me asks the agent for questions about the change.
 Each question sits on the lines it asks about, and prereview checks those lines exist.
 
@@ -115,6 +110,34 @@ Tailscale address, so the same review works from your phone.
 
 The full tour, with every control and shortcut, is [docs/usage.md](docs/usage.md),
 which is also built into the app (**⋯** menu, **Usage guide**).
+
+## The learning loop
+
+Each review teaches your agents what you want, so you don't have to repeat a
+comment in the next review.
+
+1. **You review.** Your comments, replies and accept/reject decisions are the
+   evidence.
+2. **A helper agent draws lessons from them.** When your agent goes idle with five
+   or more new comments, replies or decisions, prereview passes them to a
+   background learner, a helper agent started with the review. It proposes
+   lessons, and each one quotes the comments it rests on. prereview never calls a
+   model itself. The first time you run it, the learner can also read your past
+   reviews.
+3. **Lessons become skills and checks.** Accepted lessons (accepted automatically
+   unless you turn that off) are written into skills such as `learned-writing`,
+   installed for each agent on the machine. A lesson that can be checked also
+   brings a checker or a judge.
+4. **Your agents are told to use them.** prereview adds a short block naming the
+   skills to each agent's memory file, such as `~/.claude/CLAUDE.md`. In Claude
+   Code, a hook runs your checks after every edit.
+5. **The agent writes the next change with them.** It loads your lessons and
+   checks its own prose before you see it.
+
+<p align="center"><img src="docs/learning.gif" alt="A comment, the notice of a learning added, and the Writing skill it became, with the agents told to use it" width="760"></p>
+
+Every lesson is in the Library, where you can edit, undo or export it, and you can
+turn the loop off there. The details are in [docs/usage.md](docs/usage.md#learnings).
 
 ## Works with any LLM CLI
 
