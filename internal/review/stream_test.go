@@ -39,7 +39,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
-	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
 		t.Fatalf("EmitSnapshot: %v", err)
 	}
 	if err := es.EmitEnd(fixedTS); err != nil {
@@ -103,7 +103,7 @@ func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	if err := es.EmitReady("/r", "/r/c.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
-	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
 		t.Fatalf("handoff: %v", err)
 	}
 	if err := es.EmitEnd(fixedTS); err != nil {
@@ -344,5 +344,26 @@ func TestActionableComments_PreservesQueueOrder(t *testing.T) {
 	want := []string{"q1", "q2", "q3", "q4"}
 	if got := ids(actionableComments(comments, nil)); !slices.Equal(got, want) {
 		t.Fatalf("snapshot order = %v, want queue order %v (#207: the skill's later-wins rule reads array position)", got, want)
+	}
+}
+
+// TestEmitSnapshot_WriteWith: a snapshot names, per kind of agent text, the
+// skills to load before writing it; with none the key is absent.
+func TestEmitSnapshot_WriteWith(t *testing.T) {
+	var out bytes.Buffer
+	es := NewEventStream(&out, filepath.Join(t.TempDir(), "events.jsonl"))
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
+		t.Fatal(err)
+	}
+	ww := map[string][]string{"reply": {"learned-writing", "learned-agent-replies"}}
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, ww, false, fixedTS); err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(out.Bytes()), []byte("\n"))
+	if len(lines) != 2 || bytes.Contains(lines[0], []byte("write_with")) {
+		t.Fatalf("a snapshot with no skills carries write_with:\n%s", out.Bytes())
+	}
+	if !bytes.Contains(lines[1], []byte(`"write_with":{"reply":["learned-writing","learned-agent-replies"]}`)) {
+		t.Fatalf("snapshot lacks write_with:\n%s", lines[1])
 	}
 }

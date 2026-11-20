@@ -332,7 +332,9 @@ your Accept (an import, or everything with the switch off), it opens on
 - Each card says where the lesson applies (its **scope**, e.g. "Technical docs")
   and cites the **evidence**: the comments, replies and accept/reject decisions it
   rests on, quoted, with where they were made. A lesson can't be proposed without
-  evidence that exists.
+  evidence that exists, and only what you said or decided counts. The agent's
+  replies, suggestions and quiz questions are context: they show what you reacted
+  to, but a lesson can't rest on them.
 - **Accept**, **Edit** (the text and scope), **Reject** or **Delete**. A
   proposal that contradicts an accepted lesson says so ("Replaces an older
   learning"); newer wins, so accepting it marks the old one **superseded**, which
@@ -401,6 +403,15 @@ shows them:
   For a prose file, it runs your checks and shows Claude the findings on the lines it
   just wrote. Your other settings and hooks keep their values and order, and the
   previous file is kept as `settings.json.prereview-bak`.
+- **The agent's own text learns too.** A lesson from your reply on an agent's reply,
+  suggestion or quiz question gets its own skill from the first one. The skills are
+  `learned-agent-replies`, `learned-suggestions` and `learned-quiz-questions`, each
+  extending `learned-writing`, so they never apply to your docs. Each snapshot tells
+  your agent which skills to load before writing each kind. `prereview reply`,
+  `suggest` and `quiz` check what the agent sent and show it any findings, after
+  posting. The built-in checks (filler words, sentence length, weasel words) don't
+  run on this text, because they're tuned for documents, and a suggestion's proposed
+  text is checked as part of its file.
 - The tab's **Tell agents to use these skills** switch removes the block and the hook
   (and puts them back), and its pills say where each went. Both also go away when you
   have no learned skills left.

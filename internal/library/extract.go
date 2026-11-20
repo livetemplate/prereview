@@ -103,7 +103,7 @@ func ExtractionPrompt(j Job, existing []Learning) string {
 		"- `agent-replies.jsonl`: the agent's thread replies (same `target_id` as the reviewer's).\n" +
 		"- `suggestions.jsonl`: the edits the agent suggested.\n" +
 		"- `quiz.jsonl`: the agent's quiz questions.\n" +
-		"\nWhen a lesson is about the agent's own text, not the reviewer's documents, scope it to that text: `--scope \"Agent replies\" --glob reply.md` for its thread replies, `--scope \"Suggestions\" --glob suggestion.md` for its suggested edits, `--scope \"Quiz questions\" --glob quiz.md` for its quiz questions.\n")
+		"\n" + agentTextScopes())
 	listLearnings(&b, existing, func(l Learning) bool { return l.Status == StatusAccepted || l.Status == StatusProposed },
 		"\nAlready in the library: don't propose these again. When the signals contradict one, propose the new lesson with `--replaces <id>` (newer wins):\n")
 	listLearnings(&b, existing, func(l Learning) bool { return l.Status == StatusRejected },
@@ -117,6 +117,17 @@ func ExtractionPrompt(j Job, existing []Learning) string {
 		"When a lesson can be checked mechanically (banned words, a preferred spelling), also draft a checker and pass it with `--checker <file>`: a rule YAML with `extends: existence` (`tokens: [...]`), `substitution` (`swap: {bad: good}`), `occurrence` or `vocab`, plus `name` and `message`. Never `extends: command`: it is refused. When it takes judgment (\"lead with what changed for the reader\"), draft a judge instead with `--judge <file>`: `---\\nkind: judge\\nname: …\\n---` followed by one yes/no rubric question. Both are validated before anything is written.\n\n" +
 		"When the reviewer gives the same instruction in three or more comments (\"why is this here?\", \"make this shorter\"), also add a one-tap chip for it in their comment box: `--shortcut-label \"<their own words, short>\" --shortcut-body \"<the comment text the chip fills in>\"`, citing those comments as evidence.\n")
 	return b.String()
+}
+
+// agentTextScopes tells the learner how to scope a lesson about the agent's own
+// text (library.AgentTexts), and its checker or judge, which the glob doesn't reach.
+func agentTextScopes() string {
+	var parts []string
+	for _, a := range AgentTexts {
+		parts = append(parts, fmt.Sprintf("`--scope \"%s\" --glob %s` for %s", a.Scope, a.File, a.Use))
+	}
+	return "When a lesson is about the agent's own text, not the reviewer's documents, scope it to that text: " + strings.Join(parts, ", ") +
+		". Its checker or judge needs the same name in `files:` (for example `files: [reply.md]`), or it would run on every document.\n"
 }
 
 // listLearnings lists the learnings keep selects under head (nothing when none

@@ -98,6 +98,9 @@ type StreamEvent struct {
 	// the agent's loaded skill is now stale. The agent should re-read the skill
 	// from its install path before continuing and tell the user to reload it.
 	SkillUpdated bool `json:"skill_updated,omitempty"` // ready
+	// WriteWith names, per kind of agent text ("reply", "suggestion", "quiz"),
+	// the generated skills to load before writing it. Omitted when there are none.
+	WriteWith map[string][]string `json:"write_with,omitempty"` // snapshot
 
 	// files_changed (#213): reviewed files that changed on disk under the agent,
 	// the new version's seq (absent when none was recorded), and the attribution —
@@ -405,10 +408,11 @@ func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool,
 // Both snapshots are always non-nil slices so their keys are always present
 // (`[]` when nothing is actionable). decided is the fingerprint-matched decision
 // map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
-func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, quizzes []StreamQuiz, paused bool, ts time.Time) error {
+// writeWith is the skills per kind of agent text (skills.WriteWith).
+func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, quizzes []StreamQuiz, writeWith map[string][]string, paused bool, ts time.Time) error {
 	csnap := actionableComments(comments, threadByID)
 	dsnap := actionableDecisions(suggestions, decided, threadByID, applied)
-	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Quizzes: quizzes, Paused: paused}, ts)
+	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Quizzes: quizzes, WriteWith: writeWith, Paused: paused}, ts)
 }
 
 // EmitFilesChanged tells the agent that reviewed files changed under it (#213),

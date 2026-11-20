@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/review"
+	"github.com/livetemplate/prereview/internal/skills"
 )
 
 // agentReplies reads the agent-replies.jsonl thread entries under <root>/.prereview.
@@ -247,5 +249,60 @@ func TestRunReply_AnsweredRejectsQuizQuestion(t *testing.T) {
 	}
 	if got := answeredIDs(t, dir); len(got) != 0 {
 		t.Errorf("nothing may be marked, got %v", got)
+	}
+}
+
+// captureStderr runs fn with os.Stderr redirected and returns what it wrote.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
+	fn()
+	w.Close()
+	b, _ := io.ReadAll(r)
+	return string(b)
+}
+
+// TestRunReply_Check: --check prints what the checks find in the reply and posts
+// nothing; a posted reply is checked too, and its findings never fail it. A check
+// turned off on the Checks page stays off for replies.
+func TestRunReply_Check(t *testing.T) {
+	dir := t.TempDir()
+	seedStore(t, dir, []csv.Row{row("c1")})
+	lib, prefs := t.TempDir(), filepath.Join(t.TempDir(), "prefs.json")
+	t.Setenv("PREREVIEW_LIBRARY_DIR", lib)
+	t.Setenv("PREREVIEW_UI_PREFS_PATH", prefs)
+	learned := skills.LearnedChecksDir(lib)
+	if err := os.MkdirAll(learned, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(learned, "learned-l1.yml"),
+		[]byte("extends: existence\nname: No basically\nmessage: Cut 'basically'.\nfiles: [reply.md]\ntokens: [basically]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var err error
+	got := captureStderr(t, func() {
+		err = runReply([]string{"--out", dir, "--check", "--body", "Renamed it, basically.", "c1"})
+	})
+	if err != nil || !strings.Contains(got, "reply:1:13: warning: Cut 'basically'. (No basically)") {
+		t.Fatalf("--check: %v, stderr %q", err, got)
+	}
+	if n := len(agentReplies(t, dir)); n != 0 {
+		t.Fatalf("--check posted %d replies", n)
+	}
+	got = captureStderr(t, func() { err = runReply([]string{"--out", dir, "--body", "Renamed it, basically.", "c1"}) })
+	if err != nil || !strings.Contains(got, "(No basically)") || len(agentReplies(t, dir)) != 1 {
+		t.Fatalf("posted reply: %v, stderr %q", err, got)
+	}
+	if err := os.WriteFile(prefs, []byte(`{"disabled_checks":["learned-l1"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := captureStderr(t, func() { err = runReply([]string{"--out", dir, "--check", "--body", "basically.", "c1"}) }); got != "" {
+		t.Fatalf("a turned-off check ran on a reply: %q", got)
 	}
 }

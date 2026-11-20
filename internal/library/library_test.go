@@ -460,7 +460,7 @@ func TestExtractionPrompt(t *testing.T) {
 	if strings.Contains(p, "quiz-answers") {
 		t.Errorf("the prompt lists the quiz answers:\n%s", p)
 	}
-	for _, want := range []string{"`--scope \"Agent replies\" --glob reply.md`", "`--scope \"Suggestions\" --glob suggestion.md`", "`--scope \"Quiz questions\" --glob quiz.md`"} {
+	for _, want := range []string{"`--scope \"Agent replies\" --glob reply.md`", "`--scope \"Suggestions\" --glob suggestion.md`", "`--scope \"Quiz questions\" --glob quiz.md`", "`files: [reply.md]`"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks the scope for agent text %s:\n%s", want, p)
 		}

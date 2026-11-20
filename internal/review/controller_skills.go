@@ -53,8 +53,12 @@ func (c *PrereviewController) syncSkills(changelog string) {
 		slog.Warn("skills sync", "err", err)
 		return
 	}
+	gen := make([]skills.Skill, 0, len(rep.Skills))
+	for _, s := range rep.Skills {
+		gen = append(gen, s.Skill)
+	}
 	c.reportMu.Lock()
-	c.skillReport = rep
+	c.skillReport, c.writeWith = rep, skills.WriteWith(gen)
 	c.reportMu.Unlock()
 	checksChanged := c.reloadChecksIfChanged()
 	c.checkpointLibrary(VersionTriggerLearning, changelog)
@@ -68,6 +72,15 @@ func (c *PrereviewController) lastSkillReport() skills.Report {
 	c.reportMu.Lock()
 	defer c.reportMu.Unlock()
 	return c.skillReport
+}
+
+// WriteWith is, per kind of agent text, the generated skills to load before
+// writing it, as of the latest sync: every snapshot carries it, so a skill the
+// background learner adds mid-review reaches the agent in the next one.
+func (c *PrereviewController) WriteWith() map[string][]string {
+	c.reportMu.Lock()
+	defer c.reportMu.Unlock()
+	return c.writeWith
 }
 
 // libTabSkills is the Library's Skills tab.

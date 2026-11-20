@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -130,5 +131,47 @@ func TestGenerate_ScopeSkillsChecksAndProposals(t *testing.T) {
 	}
 	if p := Proposals(lib, many); len(p) != 0 {
 		t.Fatalf("proposed a dismissed scope: %v", p)
+	}
+}
+
+// TestGenerate_AgentTextSkills: a lesson about the agent's replies gets its own
+// skill from the first accepted one, extending Writing and adding nothing to it;
+// the snapshot's write_with lists Writing then that skill for replies.
+func TestGenerate_AgentTextSkills(t *testing.T) {
+	ls := []library.Learning{
+		acc("l1", "Plain words.", library.DefaultScope, "2026-11-01T00:00:00Z"),
+		acc("l2", "Say what you changed in one line.", "Agent replies", "2026-11-02T00:00:00Z"),
+	}
+	gen := Generate(ls, nil)
+	if len(gen) != 2 || gen[0].ID != WritingID || gen[1].ID != "learned-agent-replies" {
+		t.Fatalf("skills = %+v, want learned-writing and learned-agent-replies", gen)
+	}
+	if len(gen[0].Lines) != 1 || gen[0].Lines[0].LearningID != "l1" {
+		t.Errorf("learned-writing carries %+v, want only l1", gen[0].Lines)
+	}
+	replies := gen[1]
+	if replies.Extends != WritingID || len(replies.Lines) != 1 || !strings.Contains(replies.Description(), "prereview reply") {
+		t.Errorf("learned-agent-replies = %+v, description %q", replies, replies.Description())
+	}
+	if !strings.Contains(gen[0].Description(), "replies, suggestions and quiz questions") {
+		t.Errorf("Writing's description doesn't name the agent's text: %q", gen[0].Description())
+	}
+	if !strings.Contains(MemoryBlock(gen), "`learned-agent-replies`: the thread replies you post with `prereview reply`") {
+		t.Errorf("memory block:\n%s", MemoryBlock(gen))
+	}
+	ww := WriteWith(gen)
+	if !slices.Equal(ww["reply"], []string{WritingID, "learned-agent-replies"}) || !slices.Equal(ww["quiz"], []string{WritingID}) {
+		t.Errorf("WriteWith = %v", ww)
+	}
+	// No lesson about them: no artifact skill, and no write_with at all.
+	if gen := Generate(nil, nil); len(gen) != 0 || WriteWith(gen) != nil {
+		t.Errorf("no learnings gave %+v / %v", gen, WriteWith(gen))
+	}
+	// The built-in scopes are never offered as a skill of their own.
+	for _, p := range Proposals(t.TempDir(), []library.Learning{
+		acc("a1", "x", "Suggestions", "2026-11-01T00:00:00Z"), acc("a2", "x", "Suggestions", "2026-11-01T00:00:01Z"),
+		acc("a3", "x", "Suggestions", "2026-11-01T00:00:02Z"), acc("a4", "x", "Suggestions", "2026-11-01T00:00:03Z"),
+		acc("a5", "x", "Suggestions", "2026-11-01T00:00:04Z")}) {
+		t.Errorf("proposed a skill for the built-in scope %q", p.Scope)
 	}
 }

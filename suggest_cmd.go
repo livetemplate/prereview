@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 )
 
@@ -104,6 +105,7 @@ func runSuggest(args []string) error {
 		}
 	}
 	fmt.Printf("submitted %d suggestion(s)\n", len(sugs))
+	checkAgentText(os.Stderr, library.SuggestionText, suggestionPieces(sugs))
 	return nil
 }
 

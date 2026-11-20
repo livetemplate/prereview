@@ -36,6 +36,14 @@ func seedReviewStore(t *testing.T, root string, rows ...csv.Row) string {
 
 // learnPropose runs `prereview learn propose` the way the agent does, against the
 // same library the server reads, and returns the new learning's id.
+// learnProposeErr runs `prereview learn propose` and returns its output and error.
+func learnProposeErr(p *runningPrereview, args ...string) (string, error) {
+	cmd := exec.Command(p.binary, append([]string{"learn", "propose"}, args...)...)
+	cmd.Env = prefsIsolatedEnv(p.repo) // the same library as the server
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 func learnPropose(t *testing.T, p *runningPrereview, args ...string) string {
 	t.Helper()
 	cmd := exec.Command(p.binary, append([]string{"learn", "propose"}, args...)...)

@@ -138,6 +138,16 @@ func checkRel(repo, abs string) string {
 	return filepath.ToSlash(rel)
 }
 
+// findingLine is one finding as every CLI check prints it: path:line:col.
+func findingLine(where string, r checks.Result, f checks.Finding) string {
+	return fmt.Sprintf("%s:%d:%d: %s: %s (%s)", where, f.Line, f.FromCol+1, f.Severity, f.Message, r.Name)
+}
+
+// errorLine is a check that couldn't run.
+func errorLine(where string, r checks.Result) string {
+	return fmt.Sprintf("%s: %s: error: %s", where, r.Name, r.Err)
+}
+
 func printCheckReports(w io.Writer, reports []review.PathChecks) {
 	for _, rep := range reports {
 		passed := 0
@@ -146,10 +156,10 @@ func printCheckReports(w io.Writer, reports []review.PathChecks) {
 			case checks.StatusPass:
 				passed++
 			case checks.StatusError:
-				fmt.Fprintf(w, "%s: %s: error: %s\n", rep.Path, r.Name, r.Err)
+				fmt.Fprintln(w, errorLine(rep.Path, r))
 			default:
 				for _, f := range r.Findings {
-					fmt.Fprintf(w, "%s:%d:%d: %s: %s (%s)\n", rep.Path, f.Line, f.FromCol+1, f.Severity, f.Message, r.Name)
+					fmt.Fprintln(w, findingLine(rep.Path, r, f))
 				}
 			}
 		}

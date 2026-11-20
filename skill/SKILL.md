@@ -328,6 +328,16 @@ alongside the `done` mark:
 prereview reply --out "<STORE>" <comment-or-suggestion-id> --body "Renamed to userToken and updated the 3 call sites."
 ```
 
+**Write replies, suggestions and quiz questions with the reviewer's skills.** They
+are prose the reviewer reads, so their learned preferences apply. Each snapshot's
+`write_with` names the skills for each: `write_with.reply`, `write_with.suggestion`
+and `write_with.quiz` (absent until a skill exists). Load those skills before you
+write one. `reply`, `suggest` and `quiz` then check what you sent against the
+reviewer's checks and print any findings and judge questions to stderr. They never
+fail on a finding, so read them and apply them next time. A reply can't be revised
+once posted, so check it first: `prereview reply --check` takes the same arguments
+and posts nothing.
+
 The id is validated against `comments.csv` and suggestions (an unknown id fails
 non-zero, like `done`). Keep it to a sentence or two.
 

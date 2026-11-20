@@ -231,6 +231,7 @@ type PrereviewController struct {
 	syncMu      sync.Mutex
 	reportMu    sync.Mutex
 	skillReport skills.Report
+	writeWith   map[string][]string // skills.WriteWith of skillReport, for every snapshot
 }
 
 type cachedDiff struct {

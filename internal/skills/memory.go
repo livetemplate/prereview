@@ -48,11 +48,14 @@ const (
 func MemoryBlock(gen []Skill) string {
 	var b strings.Builder
 	b.WriteString(blockStart + "\n")
-	b.WriteString("The user's writing preferences, learned by prereview from their review comments, are skills. Before you write or edit prose (docs, plans, READMEs, release notes, commit and PR messages), load the matching one and follow it:\n\n")
+	b.WriteString("The user's writing preferences, learned by prereview from their review comments, are skills. Before you write or edit prose (docs, plans, READMEs, release notes, commit and PR messages, and the replies, suggestions and quiz questions you send through prereview), load the matching one and follow it:\n\n")
 	for _, s := range gen {
-		if s.Extends == "" {
+		switch {
+		case s.Extends == "":
 			fmt.Fprintf(&b, "- `%s`: any prose\n", s.ID)
-		} else {
+		case s.Use != "":
+			fmt.Fprintf(&b, "- `%s`: %s (apply `%s` too)\n", s.ID, s.Use, s.Extends)
+		default:
 			fmt.Fprintf(&b, "- `%s`: %s (apply `%s` too)\n", s.ID, strings.ToLower(s.Name), s.Extends)
 		}
 	}

@@ -195,7 +195,7 @@ prereview status    [--out <dir>] <working|done> [message]
 prereview suggest   [--out <dir>] [--file <payload.json>]
 - `prereview quiz` - submit a comprehension quiz about a file's diff for the
   reviewer to answer; writes `.prereview/quiz.jsonl`.
-prereview reply     [--out <dir>] [--answered] (--body "…" | --file <f>|-) <id>
+prereview reply     [--out <dir>] [--answered] [--check] (--body "…" | --file <f>|-) <id>
 prereview applied   [--out <dir>] [--file <f>|-] <suggestion-id>...
 prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
 prereview check     [--json] <file>...
@@ -237,7 +237,14 @@ prereview check     [--json] <file>...
   is validated against comments + suggestions. Appends to
   `.prereview/agent-replies.jsonl`. `--answered` also settles a **comment** with no
   edit (appends to `.prereview/answered.jsonl`), so it reads "answered" rather than
-  "done". See [Threads](../skill/reference.md#threads).
+  "done". `--check` checks the reply and posts nothing. See
+  [Threads](../skill/reference.md#threads).
+- **`reply`, `suggest` and `quiz` check what they post** against your checks and
+  learned checks, then print any findings and the questions of judges scoped to that
+  text to stderr. They exit 0 whatever they find. The text is checked as `reply.md`,
+  `suggestion.md` (a suggestion's note) or `quiz.md`, so a check's `files:` can pick
+  one. A suggestion's proposed text is checked under its own file's path. The
+  built-in checks run only on that proposed text.
 - **`prereview applied`** — ack that you **applied** an accepted suggestion's edit
   to the file, so the UI flips the card from "accepted" to "applied" and drops it
   from the snapshot. Ids come from a snapshot's `suggestions[]` (`verdict=accept`);
