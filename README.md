@@ -3,8 +3,10 @@
 prereview is a local review tool for what your agent produces. You comment
 right on the artifact (a diff, a plan, a rendered doc, an image or a running dev
 site) and the agent picks up each comment and makes the fix. The agent can also
-propose edits that you accept or reject inline. It runs on your machine, works
-with any agent, and you can review from your desk or your phone.
+propose edits that you accept or reject inline. Over time, prereview turns your
+comments into skills your agents load, so they learn what you want
+([the learning loop](#the-learning-loop)). It runs on your machine, works with any
+agent, and you can review from your desk or your phone.
 
 <p align="center">
   <img src="docs/hero.gif" alt="A reviewer comments on a Go diff and the agent fixes it; then the reviewer accepts an edit the agent proposes" width="820">
