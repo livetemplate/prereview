@@ -65,16 +65,16 @@ prereview --external http://localhost:5173 --out ./review
 ```
 
 To keep the app's own root-relative URLs (`/api/…`, its framework client, its
-websockets) working with **zero rewriting**, external mode boots **two servers**:
-the normal prereview UI **plus** a reverse proxy on its own port — a separate
-origin the UI iframes. Both bind the same `--host`, so both are tailnet-reachable
+websockets) working with **zero rewriting**, external mode boots **two servers**.
+One is the normal prereview UI, the other a reverse proxy on its own port: a
+separate origin the UI iframes. Both bind the same `--host`, so both are tailnet-reachable
 on a remote box. Stdout gains an extra `PROXY <url>` line (the proxy origin) after
 the `ALT` lines and before `REPO`/`STORE`; `READY` is still the UI url.
 
-Annotations anchor to a **URL + region rectangle** rather than a file + line:
-they're stored as `kind=region` rows with the page in the `url` column and the
-rectangle (0..1 fractions of the page's document, so a re-pin survives scroll) in
-the `area` column. Like image-area comments they're **frozen** — no content
+Annotations anchor to a **URL + region rectangle** rather than a file + line.
+They're stored as `kind=region` rows with the page in the `url` column and the
+rectangle in the `area` column (0..1 fractions of the page's document, so a re-pin
+survives scroll). Like image-area comments they're **frozen** — no content
 re-anchoring — and are informational feedback about a page, not file-edit
 directives.
 
@@ -85,7 +85,7 @@ and `--base` are **ignored**.
 
 Standalone `prereview` is human-only: you review, comments save to
 `comments.csv`, and the top-bar button is **Quit**. `--agent` runs the review
-**under a coding agent** — it streams the review as a queue of JSON events the
+**under a coding agent**. It streams the review as a queue of JSON events the
 agent consumes with `prereview watch`, and swaps the UI for a **Queue**
 (⏸ Pause / ▶ Resume) control plus an **End session** button.
 
@@ -130,7 +130,7 @@ hand-written CSV parser:
     `processed.jsonl`, so a comment you marked `done` stops coming back.
   - **`files_changed`** — reviewed files changed on disk under the agent (a
     settled run of edits, or a version restore): `{"event":"files_changed",
-    "seq":N,"files":[…],"version":V,"cause":"edit"|"rollback"}`, plus
+    "seq":N,"files":[…],"version":V,"cause":"edit"|"rollback"}`. It adds
     `"agent_watching":true` when a blocking `watch` was attached for every edit
     (so none were the agent's own). The agent re-reads the listed files.
   - **`end`** — once, on **End session**; the only terminator. The server shuts
@@ -255,10 +255,10 @@ prereview check     [--json] <file>...
   the reviewer's card returns to undecided. Validated against suggestions.
   Idempotent. Appends to `.prereview/reverted.jsonl`.
 
-- **`prereview judge`** — the coding agent's answer to a "Run judges" request:
+- **`prereview judge`** — the coding agent's answer to a "Run judges" request.
+  Make one call per judge, copied from the request:
   `prereview judge --out <STORE> --file <f> --judge <id> --content-hash <h>
-  --rubric-hash <h> --verdict pass|fail --critique "…" [--quote "…"] [--model <id>]`,
-  one call per judge, copied from the request. Appends the verdict (with the
+  --rubric-hash <h> --verdict pass|fail --critique "…" [--quote "…"] [--model <id>]`. Appends the verdict (with the
   request's file and rubric hashes, so the review can tell when it's out of date) to
   the store's `judgments.jsonl`. Validated before anything is written. Answering a
   benchmark run, `--bench <id> --run <run> --case <case>` replaces `--out`/`--file`:
@@ -290,11 +290,12 @@ prereview check     [--json] <file>...
   Without `--job` it is always proposed. **`prereview learn list [--status s]
   [--json]`** prints the library.
 - **`prereview check`** — run the review's [checks](usage.md#checks) on files
-  from the terminal: the built-in prose rules, your `~/.config/prereview/checks/`
-  rules, and the repo's Vale config when you've trusted it on the Checks page and
-  `vale` is installed (run it from the repo root). Prints each finding as `path:line:col: severity: message (check)`
-  and exits `1` when any check fails or errors, so an agent can self-check prose
-  before `prereview done`. `--json` prints every check's result per file. Checks
+  from the terminal. It runs the built-in prose rules and your
+  `~/.config/prereview/checks/` rules. It also runs the repo's Vale config when
+  you've trusted it on the Checks page and `vale` is installed (run it from the
+  repo root). It prints each finding as
+  `path:line:col: severity: message (check)`. It exits `1` when any check fails or
+  errors, so an agent can self-check prose before `prereview done`. `--json` prints every check's result per file. Checks
   you turned off on the Checks page are skipped. Takes no `--out`: it reads files, not a
   review's store.
 - **`prereview check --hook`** — the command of the Claude Code hook prereview adds
@@ -321,9 +322,9 @@ composes with any path and base.
 
 ## Binding & remote access
 
-`--host` defaults to `127.0.0.1` and is smart on remote boxes: on an SSH host
-with a tailnet, prereview binds the host's **Tailscale IP** so you can open the
-review from your phone over the tailnet — never the public internet. A remote box
+`--host` defaults to `127.0.0.1` and is smart on remote boxes. On an SSH host
+with a tailnet, prereview binds the host's **Tailscale IP**, so you can open the
+review from your phone over the tailnet and never the public internet. A remote box
 with no tailnet stays on `127.0.0.1` and prints a stderr warning telling you to
 pass an explicit `--host`. Passing `--host` explicitly is an absolute override
 (never auto-rebound). **Avoid `0.0.0.0`**: it exposes the source diff on every
@@ -416,7 +417,7 @@ required with `--external`).
 
 A **single-file** review gets its own store per reviewed file, at
 `<parent>/.prereview/files/<name>-<hash>/`. That is what lets two files in one
-directory be reviewed at the same time: they used to share a store *and* the "one
+directory be reviewed at the same time. They used to share a store *and* the "one
 server per store" lock, so launching a review of a second file evicted the first
 (#199). It also means a single-file review and a directory review of the same
 directory are separate reviews that do not see each other's comments. Upgrading from
@@ -464,7 +465,7 @@ Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
 | `versions/` | server | per-file version checkpoints + content blobs and their changelog (durable) |
 
 When an agent finishes a batch that edited files, prereview snapshots a new
-**version** of each changed file into `versions/`, using the agent's `prereview
-status done` message as that version's changelog entry — surfaced in the file's
+**version** of each changed file into `versions/`. The agent's `prereview status
+done` message becomes that version's changelog entry, shown in the file's
 **Versions** panel (View / Diff / Restore). See
 [skill/reference.md](../skill/reference.md#filesystem-layout) for the full layout.

@@ -127,7 +127,7 @@ func agentTextScopes() string {
 		parts = append(parts, fmt.Sprintf("`--scope \"%s\" --glob %s` for %s", a.Scope, a.File, a.Use))
 	}
 	return "When a lesson is about the agent's own text, not the reviewer's documents, scope it to that text: " + strings.Join(parts, ", ") +
-		". Its checker or judge needs the same name in `files:` (for example `files: [reply.md]`), or it would run on every document.\n"
+		". Its checker or judge must name the same file in `files:` (for example `files: [reply.md]`), or it is refused: it would run on every document.\n"
 }
 
 // listLearnings lists the learnings keep selects under head (nothing when none

@@ -71,6 +71,9 @@ func Propose(dir string, p Proposal) (Learning, error) {
 		if err := checks.ValidateDrafted([]byte(d.body), d.judge); err != nil {
 			return Learning{}, fmt.Errorf("learn propose: %w", err)
 		}
+		if err := agentTextScoped(p.Scope, d.body, d.judge); err != nil {
+			return Learning{}, err
+		}
 		if !slices.Contains(p.Produces, d.kind) {
 			p.Produces = append(p.Produces, d.kind)
 		}
@@ -250,4 +253,23 @@ func trimFile(s string) string {
 		return ""
 	}
 	return s + "\n"
+}
+
+// agentTextScoped refuses a checker or judge on a lesson about the agent's own
+// text (AgentTexts) unless its `files:` names that kind's file: without it, the
+// check would run on every document, the thing the scope exists to stop.
+func agentTextScoped(scope, body string, judge bool) error {
+	for _, a := range AgentTexts {
+		if a.Scope != scope {
+			continue
+		}
+		r := checks.ParseRule("draft", checks.SourceLearned, "", []byte(body))
+		if judge {
+			r = checks.ParseJudge("draft", checks.SourceLearned, "", []byte(body))
+		}
+		if !slices.Contains(r.Files, a.File) {
+			return fmt.Errorf("learn propose: a %q lesson's checker or judge must set `files: [%s]`, or it runs on every document", scope, a.File)
+		}
+	}
+	return nil
 }

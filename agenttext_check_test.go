@@ -63,6 +63,12 @@ func TestAgentTextCheck(t *testing.T) {
 	if strings.Contains(got, "Lead with the point") {
 		t.Errorf("an unscoped (whole-document) judge was asked about a reply:\n%s", got)
 	}
+	// A check scoped to replies doesn't fire on a README.
+	out.Reset()
+	ac.report(&out, "suggestion", []agentPiece{{Label: "suggestion s1 (README.md)", Name: "README.md", Lines: []string{"I refactored it."}, FileText: true}}, none)
+	if strings.Contains(out.String(), "Reply length") {
+		t.Errorf("a reply-only check fired on a README:\n%s", out.String())
+	}
 
 	// No built-ins on agent text: a filler word and a 40-word sentence in a reply
 	// print nothing (with no other check matching)...

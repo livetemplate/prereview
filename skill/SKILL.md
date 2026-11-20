@@ -15,8 +15,9 @@ triggers:
 # prereview
 
 Launches a web UI for the user to review the working tree (or any file/directory)
-and leave comments — on a diff line or text range, a rendered Markdown/HTML block,
-a region of an image, or a box on a live local site (`--external`). The reviewer
+and leave comments. A comment can sit on a diff line or text range, a rendered
+Markdown/HTML block, a region of an image, or a box on a live local site
+(`--external`). The reviewer
 builds up a **queue** of comments in the browser; you consume that queue as a JSON
 event stream and apply the fixes.
 
@@ -71,13 +72,13 @@ prereview --agent ~/.claude/plans &                # whole dir, recursively
 ```
 
 For a single file, `REPO` is the file's **parent** directory (resolve the `file`
-column against it) and `STORE` is that one file's own store — so reviews of two
+column against it) and `STORE` is that one file's own store. So reviews of two
 files in one directory are independent and can run at the same time. Re-anchoring
 works the same.
 
 **Clean working tree → handled for you.** When you did *not* pass an explicit
 `--base` and the working tree is clean, prereview reviews the whole tree against the
-empty base (every file appears added, any line is commentable) — so just
+empty base. Every file appears added, and any line is commentable. So just run
 `prereview --agent "$(pwd)" > /tmp/prereview-$$.log 2>&1 &`. An explicitly requested base (`--base main`,
 `HEAD~3`, a tag, …) is always honored as-is.
 
@@ -184,8 +185,8 @@ reviewer just replied on, whatever its state (resolved, outdated, or already don
 ## Act on the comments
 
 **Read the whole actionable set as one before you edit anything — never act on the
-comments in isolation.** A snapshot is the complete set of still-actionable comments,
-and the user expects them addressed together as a related whole. Read the entire set,
+comments in isolation.** A snapshot is the complete set of still-actionable comments.
+The user expects them addressed together as a related whole. Read the entire set,
 then look across it for:
 
 - **Themes** — several comments pointing at one concern imply a single consistent fix,
@@ -201,9 +202,9 @@ then look across it for:
 1. **Set aside requests** (`"request"` set): they are tasks, not edits. Handle each
    after the edits, as its section below says. A comment that leaves a taste call open
    gets alternatives, not an edit (*Offer alternatives* under *Suggested edits*).
-2. **On overlap, the later wins.** When two comments overlap (same file and lines, or
-   a `kind=file` comment and a line in that file) and the later one restates, narrows
-   or contradicts the earlier, make one edit for the later. Mark both ids `done` and
+2. **On overlap, the later wins.** Two comments overlap when they share a file and
+   lines, or one is a `kind=file` comment and the other a line in that file. When the
+   later one restates, narrows or contradicts the earlier, make one edit for the later. Mark both ids `done` and
    `reply` on the earlier one naming the comment it was folded into. "Later" means
    further down `comments[]`, not a newer `created_at` (see
    [reference.md → snapshot](./reference.md#agent-mode)).
@@ -240,9 +241,9 @@ prereview watches the reviewed files: the moment you edit one, every open tab ge
 knows you acted; the deterministic signal is the file-watch, not this echo. `status` is
 an *enrichment* on top: a live "working…" pill with a human-readable message while you
 work, and a one-line changelog when you finish. The reviewer also sees, with no command
-from you, whether you are connected: `prereview watch` records itself, so the Queue says
-"Agent connected" while it blocks and "picked up at HH:MM" once it hands you a batch — and,
-if work then sits for minutes with nothing watching, suggests re-running `watch`. So keep
+from you, whether you are connected. `prereview watch` records itself, so the Queue says
+"Agent connected" while it blocks and "picked up at HH:MM" once it hands you a batch. If
+work then sits for minutes with nothing watching, it suggests re-running `watch`. So keep
 the watch loop going; that, not `status`, is what tells the reviewer you're on it.
 Skipping `status` never breaks anything, and
 it can no longer hide your edits — but a short `working` note reassures mid-batch, and
@@ -291,8 +292,8 @@ loudly** (non-zero exit, naming the unknown ids) rather than recording garbage, 
 typo can't corrupt anything. **Prefer per-id marking** (tie each mark to its edit) over
 `--all-open`; reach for `--all-open` only when you genuinely handled the entire batch.
 Marking **settles** the comment: a marked id leaves your snapshot and stays out until the
-reviewer speaks again — either by replying on its thread (which reopens it, see below) or
-by re-enqueueing it with the queue's ↺ button. So mark honestly and mark once; you will not
+reviewer speaks again. They do that by replying on its thread (which reopens it, see
+below) or by re-enqueueing it with the queue's ↺ button. So mark honestly and mark once; you will not
 be handed it a second time on your own. Marking is still only a signal that you *acted* —
 the human decides whether the note is **resolved**, so keep acting only on unresolved rows.
 
@@ -368,8 +369,8 @@ snapshot's `suggestions[]`.
 ("Ask for suggestions"). It arrives as a normal `kind=file` comment whose body asks you
 to *suggest* edits (e.g. "review this file's grammar … propose each change as a
 `prereview suggest` edit — do not modify files directly"). Treat it as a suggest
-request: read the file, propose the edits with `prereview suggest` (**do not edit the
-file** — the reviewer accepts/rejects each box), then `done` the prompt comment and
+request. Read the file and propose the edits with `prereview suggest` (**do not edit the
+file**: the reviewer accepts or rejects each box). Then `done` the prompt comment and
 `reply` a one-line summary ("proposed N edits below"). This is the one case where a
 comment wants **suggestions, not a direct fix** — the body says so; follow it.
 
@@ -490,7 +491,7 @@ write no `decision` question: an honest omission beats a manufactured surprise.
 
 Anchor each question the way you would anchor a comment, with `kind`:
 `"line"` (the default) for a line range, or `"file"` for a question about the
-change as a whole — including one about something **absent** ("chose not to add a
+change as a whole. That includes one about something **absent** ("chose not to add a
 test for the error path"), which has no lines to point at. `text`, `area` and
 `region` are accepted for parity with comments but are not rendered yet.
 

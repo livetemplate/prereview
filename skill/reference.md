@@ -150,7 +150,7 @@ with work outstanding; never write it by hand. `events.jsonl`, `llm-status.json`
 
 For a git repo or non-git directory the store is `<path argument>/.prereview/`. A
 single-file review gets its **own** store, one per reviewed file, under the parent
-directory's `.prereview/files/`: reviews of two files in one directory are independent
+directory's `.prereview/files/`. Reviews of two files in one directory are independent
 sessions that can run at the same time, and neither can see the other's queue (#199).
 The store is created eagerly on startup. Add `.prereview/` to the repo's `.gitignore` —
 one entry still covers everything.
@@ -185,9 +185,9 @@ Four event types:
   still-actionable queue** (a superset, not a delta): act only on the **latest** and
   **dedupe by `id`**. Fields: `event, seq, ts, comments[], suggestions[]`. `comments`
   and `suggestions` are always present (`[]` when empty). The snapshot is pre-filtered
-  to what needs you: unresolved, non-outdated, non-draft comments — **plus** any comment
-  the reviewer just replied on, whatever its state (resolved, outdated, or already done;
-  see [Threads](#threads)); an item you
+  to what needs you: unresolved, non-outdated, non-draft comments. It **also** carries
+  any comment the reviewer just replied on, whatever its state (resolved, outdated, or
+  already done; see [Threads](#threads)). An item you
   replied on last drops out until the reviewer speaks again. While the reviewer has the
   queue **paused** (batching), no snapshot is emitted — mutations still persist, but
   `watch` blocks — and **resume** emits ONE coalesced snapshot of everything queued.
@@ -204,11 +204,11 @@ Four event types:
   another tool) edited them, or the reviewer **restored a version**. One event per
   settled run of edits, not per write. Fields: `event, seq, ts, files[], version,
   cause`, plus `agent_watching` when true. `files` are the paths whose content moved
-  (including a file that dropped out of the review); `version` is the new version's
-  seq, absent when no version was recorded; `cause` is `edit` or `rollback`. **Re-read every listed file before your next edit
+  (including a file that dropped out of the review). `version` is the new version's
+  seq, absent when no version was recorded. `cause` is `edit` or `rollback`. **Re-read every listed file before your next edit
   to it** — line numbers and any copy you loaded are stale. `agent_watching:true`
   means your `watch` was blocked for every edit in the run, so none of them were
-  yours; without it the run may include your own edits — if the listed files are
+  yours. Without it the run may include your own edits: if the listed files are
   only ones you just changed yourself, carry on. Not queue work: it carries no
   comments and arrives even while the queue is paused. A run you close with
   `status done` is treated as your own batch and sends nothing.
@@ -268,9 +268,9 @@ entry is `{ "author": "agent" | "reviewer", "body": "…", "at": "<RFC3339>" }`.
   it is **fresh** (no thread yet, unresolved) or its **last entry is the reviewer's**.
   Reply, and it drops out until the reviewer speaks again — you never re-answer yourself.
   A **resolved, outdated, or already-done** comment reappears iff the reviewer replied on
-  it (reopening the conversation); the reply overrides the suppression but never changes
-  `resolved`/`outdated`/`done` on its own, and marking `done` again won't settle it —
-  only your `reply` drops it back out.
+  it (reopening the conversation). The reply overrides the suppression but never changes
+  `resolved`/`outdated`/`done` on its own. Marking `done` again won't settle it: only
+  your `reply` drops it back out.
 
 Suggestion threads work the same way — a `thread` on a `suggestions[]` entry — with one
 exception: a **decided** suggestion stays in `suggestions[]` whatever its thread says, until

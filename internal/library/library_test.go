@@ -613,3 +613,27 @@ func TestPropose_Shortcut(t *testing.T) {
 		t.Error("the extraction prompt doesn't ask for shortcuts")
 	}
 }
+
+// TestPropose_AgentTextChecksNameTheirFile: a lesson about the agent's own text
+// may carry a checker or judge only if its `files:` names that kind's file; one
+// without would run on every document, which is what the scope exists to stop.
+func TestPropose_AgentTextChecksNameTheirFile(t *testing.T) {
+	dir, store := t.TempDir(), seedStore(t, t.TempDir())
+	const unscoped = "extends: existence\nname: No refactored\nmessage: Say what changed.\ntokens: [refactored]\n"
+	const judge = "---\nkind: judge\nname: One line\n---\nIs the reply one line?\n"
+	for _, c := range []struct{ checker, judge string }{{unscoped, ""}, {"", judge}} {
+		_, err := Propose(dir, Proposal{Text: "Say what you changed.", Scope: "Agent replies", Evidence: []string{store + ":c1"},
+			Checker: c.checker, Judge: c.judge})
+		if err == nil || !strings.Contains(err.Error(), "files: [reply.md]") {
+			t.Errorf("an agent-reply lesson with an unscoped check: %v, want a refusal naming files: [reply.md]", err)
+		}
+	}
+	scoped := strings.Replace(unscoped, "tokens:", "files: [reply.md]\ntokens:", 1)
+	if _, err := Propose(dir, Proposal{Text: "Say what you changed.", Scope: "Agent replies", Evidence: []string{store + ":c1"}, Checker: scoped}); err != nil {
+		t.Fatalf("a scoped checker was refused: %v", err)
+	}
+	// Other scopes keep today's rule: no files: means the default prose globs.
+	if _, err := Propose(dir, Proposal{Text: "Cut filler.", Scope: "Technical docs", Evidence: []string{store + ":c1"}, Checker: unscoped}); err != nil {
+		t.Fatalf("an ordinary lesson's checker was refused: %v", err)
+	}
+}
