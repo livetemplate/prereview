@@ -5,23 +5,23 @@
 class Prereview < Formula
   desc "Local review-and-fix webapp — review any change and hand the fixes to an LLM before you push"
   homepage "https://github.com/livetemplate/prereview"
-  version "0.30.2"
+  version "0.30.3"
   license "MIT"
 
   depends_on "git"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/livetemplate/prereview/releases/download/v0.30.2/prereview_0.30.2_darwin_amd64.tar.gz"
-      sha256 "79e9828fcfd92d1fea3aec06663bb295d15ccd5f36e935e9bbe3e19e87189714"
+      url "https://github.com/livetemplate/prereview/releases/download/v0.30.3/prereview_0.30.3_darwin_amd64.tar.gz"
+      sha256 "7377517e99755bc9339b0cb43a610a53a1d00cfcac5763a273d270c5c090e79f"
 
       define_method(:install) do
         bin.install "prereview"
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/livetemplate/prereview/releases/download/v0.30.2/prereview_0.30.2_darwin_arm64.tar.gz"
-      sha256 "e268d58af4657c6b8d618bea4bc1cf540fdf83478aff7cbe8729baad1a54757b"
+      url "https://github.com/livetemplate/prereview/releases/download/v0.30.3/prereview_0.30.3_darwin_arm64.tar.gz"
+      sha256 "c153608a727b70fd5166aa536a4d8423968fff8255be12592b28c5ad1096cdcc"
 
       define_method(:install) do
         bin.install "prereview"
@@ -31,15 +31,15 @@ class Prereview < Formula
 
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/livetemplate/prereview/releases/download/v0.30.2/prereview_0.30.2_linux_amd64.tar.gz"
-      sha256 "fe900779e6d66eda691779fef64601daedcd904e8f7c1838f4cb9ffaf201f4c3"
+      url "https://github.com/livetemplate/prereview/releases/download/v0.30.3/prereview_0.30.3_linux_amd64.tar.gz"
+      sha256 "310ce61a35f226a72cb92f8735c3a9783b944610e47ab5abd2788956dc98c695"
       define_method(:install) do
         bin.install "prereview"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/livetemplate/prereview/releases/download/v0.30.2/prereview_0.30.2_linux_arm64.tar.gz"
-      sha256 "e5b5e59b32cdbd17c7ad768b1d197877fc343aec2ad606cd05a555e44b320982"
+      url "https://github.com/livetemplate/prereview/releases/download/v0.30.3/prereview_0.30.3_linux_arm64.tar.gz"
+      sha256 "34777fdd41c6f539b04ac89e6d3098cd2bad370b622ba156e25ae03b31e843c2"
       define_method(:install) do
         bin.install "prereview"
       end
