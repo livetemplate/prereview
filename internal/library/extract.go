@@ -61,8 +61,9 @@ func (c storeCount) signals() int { return c.comments + c.replies + c.decisions 
 func countStore(store string) storeCount {
 	var c storeCount
 	if rows, err := csv.Read(filepath.Join(store, CommentsFile)); err == nil {
+		imported := Imports(store)
 		for _, r := range rows {
-			if !r.IsRequest() {
+			if _, ok := imported[r.ID]; !ok && !r.IsRequest() {
 				c.comments++
 			}
 		}

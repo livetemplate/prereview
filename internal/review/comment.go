@@ -101,6 +101,10 @@ type Comment struct {
 	// (#205, `prereview reply --answered`). Derived like Processed, from
 	// .prereview/answered.jsonl (see AnsweredFileName for why it is a plain set).
 	Answered bool `json:"-"`
+	// Source is where an imported comment came from (#209): set from the store's
+	// import ledger like Processed, never persisted in the CSV. nil for a comment
+	// left in prereview.
+	Source *ImportSource `json:"-"`
 	// Draft is the not-yet-enqueued flag (#119): a reviewer's in-progress note
 	// that is kept OUT of the agent's actionable snapshot until they enqueue it.
 	// The default (false) means enqueued/active — "save auto-enqueues" — so the
@@ -167,13 +171,17 @@ func (c Comment) IsRegionLevel() bool { return c.Kind == commentKindRegion }
 // line-anchor relocate machinery, so it is not skipped there.
 func (c Comment) IsTextLevel() bool { return c.Kind == commentKindText }
 
-// Snippet returns the exact selected phrase for a kind=text comment (empty
-// otherwise) — shown as a quote on the card so the reviewer sees what the
+// Snippet returns the exact selected phrase for a kind=text comment, or the
+// quote an imported comment was left on when it couldn't be found in the file
+// (empty otherwise) — shown as a quote on the card so the reviewer sees what the
 // comment is about, especially for rendered-view (Preview) comments that anchor
 // line-level.
 func (c Comment) Snippet() string {
-	if c.IsTextLevel() {
+	switch {
+	case c.IsTextLevel():
 		return c.Anchor.Snippet
+	case c.Source != nil: // an import whose quote wasn't found (#209): the text it was on
+		return c.Source.Quote
 	}
 	return ""
 }

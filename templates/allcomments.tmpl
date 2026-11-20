@@ -35,7 +35,8 @@
             {{- if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}
             {{- if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}
             {{- if .Processed}} {{template "processedBadge"}}{{end}}
-            {{- if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end -}}
+            {{- if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}
+            {{- with .Source}} {{template "sourceBadge" .}}{{end -}}
           </div>
           <div class="ac-body">{{.Headline}}</div>
         </button>

@@ -54,6 +54,13 @@ without turning the whole group off). **Resolve all** resolves every listed
 comment that's still open, and its notice offers **Undo** until you close the
 list.
 
+**Comments from a remote copy.** When your agent synced the doc somewhere else
+(Google Docs, Notion, a wiki), it can bring the comments left there into the review
+with `prereview import`. Each shows where it came from and who wrote it, linked to
+the original, on the text it was left on (or on the whole file when that text has
+changed). They're queued for your agent like your own comments, but never used to
+learn your preferences.
+
 **One-tap comments.** The comment box on a line, a text selection or a block has a
 row of chips. Each is an instruction you give often: *Drop this*, *Why is this here?*,
 *What does this mean?*, *Make this shorter* and more. A tap adds the chip's text after whatever

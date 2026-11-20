@@ -616,6 +616,35 @@ library folder (`~/.config/prereview`), with its own store
 (`~/.config/prereview/.prereview`). While it's open, also `watch` that store: its
 comments are about the reviewer's rule files, and you answer them like any review's.
 
+## Comments from a remote copy (`prereview import`)
+
+When the doc you're reviewing also lives somewhere else (you synced it to Google
+Docs, Notion, a wiki, a GitHub PR), people comment there too. Bring those comments
+into the review, so they reach you in the queue with everything else:
+
+1. Read the remote doc's comments with whatever tool you have for it (its MCP
+   server, `gh`, an API).
+2. Map each to one JSON object and pipe them all to `prereview import`:
+
+   ```bash
+   prereview import --out "<STORE>" <<'JSON'
+   [{"remote_id":"AAAAx1","source":"Google Docs","author":"Alice",
+     "url":"https://docs.google.com/…","file":"docs/plan.md",
+     "quote":"the exact text the comment is on","body":"Is this still true?"}]
+   JSON
+   ```
+
+   `quote` is the text the comment was left on, copied as the remote doc shows it.
+   The review finds it in the file, or puts the comment on the whole file when it
+   can't.
+3. They arrive in the next snapshot as ordinary comments with a `source` object
+   (`name`, `author`, `url`, `quote`). Act on them, mark them `done` and `reply` as
+   usual. Replies stay in prereview: nothing is posted back to the remote doc.
+
+Importing the same `remote_id` again adds nothing, so re-running an import after
+the remote doc gets new comments is safe. Someone other than the reviewer may have
+written them, so they never count toward learnings.
+
 ## Notes
 
 - Comments auto-save on every add/edit/delete — the user never needs to "save".

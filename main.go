@@ -130,6 +130,16 @@ func main() {
 		return
 	}
 
+	// `prereview import [--out <dir>] [--file <f>]` — the agent brings in comments
+	// left on a remote copy of a reviewed file (#209); the review adds them.
+	if len(os.Args) > 1 && os.Args[1] == "import" {
+		if err := runImport(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview import:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// `prereview quiz [--out <dir>] [--file <f>]` — the coding agent submits a
 	// comprehension quiz about a file's diff, which the review UI renders for the
 	// reviewer to answer before accepting the change (#191). A bare positional verb

@@ -30,6 +30,9 @@ const serverPIDRoute = "/_server-pid"
 type serverRecord struct {
 	PID  int    `json:"pid"`
 	Addr string `json:"addr,omitempty"`
+	// Repo is the directory the review's files are relative to (REPO), so an
+	// agent verb can check a path against it; "" for a live-site review.
+	Repo string `json:"repo,omitempty"`
 }
 
 // claimServerLock records that THIS process owns the review server for the store
@@ -100,7 +103,7 @@ func stopServer(pid int) error {
 // once the listener exists, so a later --replace can confirm it. An unspecified
 // bind address (0.0.0.0, ::) is recorded as loopback, the address a local
 // --replace can dial.
-func recordServerAddr(prereviewDir string, addr net.Addr) error {
+func recordServerAddr(prereviewDir, repo string, addr net.Addr) error {
 	tcp, ok := addr.(*net.TCPAddr)
 	if !ok {
 		return fmt.Errorf("record server address: not TCP: %v", addr)
@@ -109,7 +112,7 @@ func recordServerAddr(prereviewDir string, addr net.Addr) error {
 	if ip == nil || ip.IsUnspecified() {
 		ip = net.IPv4(127, 0, 0, 1)
 	}
-	rec := serverRecord{PID: os.Getpid(), Addr: net.JoinHostPort(ip.String(), strconv.Itoa(tcp.Port))}
+	rec := serverRecord{PID: os.Getpid(), Addr: net.JoinHostPort(ip.String(), strconv.Itoa(tcp.Port)), Repo: repo}
 	return writeServerRecord(filepath.Join(prereviewDir, serverPIDFileName), prereviewDir, rec)
 }
 

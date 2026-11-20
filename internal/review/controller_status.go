@@ -290,6 +290,7 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 	// window — then none of them can be the agent's own (files_changed attribution).
 	var watchingAll bool
 	lastStatusFP := statusFingerprint(c.statusPath())
+	lastImports := statusFingerprint(ImportsPath(c.CSVPath)) // drained at launch
 	wasIdle := false
 	for {
 		select {
@@ -359,6 +360,17 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 			}
 			wasIdle = idle
 			prevState = cur.State
+
+			// #209: drain a new import here, once per server (no tab needed), then
+			// show it in the open tabs.
+			if fp := statusFingerprint(ImportsPath(c.CSVPath)); fp != lastImports {
+				lastImports = fp
+				if n, err := c.DrainImports(); err != nil {
+					slog.Warn("import", "err", err)
+				} else if n > 0 {
+					c.broadcast("CommentsAdded")
+				}
+			}
 
 			if !signalChanged && !reviewedChanged && !settlingChanged && presenceKey == lastPresence {
 				continue

@@ -289,6 +289,10 @@
 </article></dialog>
 {{- end}}
 
+{{/* sourceBadge: where an imported comment came from (#209), linked to it
+     there. Called with the comment's ImportSource as ".". */}}
+{{define "sourceBadge"}}<small class="source-badge" title="Imported from {{.Name}}">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{with .Author}} · {{.}}{{end}}</small>{{end}}
+
 {{define "commentCardFull" -}}
 <div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}"
      data-key="{{.ID}}"
@@ -311,7 +315,8 @@
     {{- if .Processed}} · {{template "processedBadge"}}{{end}}
     {{- if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}
     {{- if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}
-    {{- if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end -}}
+    {{- if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}
+    {{- with .Source}} · {{template "sourceBadge" .}}{{end -}}
   </span></header>
   {{- /* selected phrase (kind=text) — shows what the comment is about, esp. for
          rendered-view comments that anchor line-level */ -}}
@@ -511,7 +516,10 @@
   lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}
 >
   {{- /* line span · resolved badge */ -}}
-  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}</span></header>
+  <header><span>{{.LineSpan}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}{{with .Source}} · {{template "sourceBadge" .}}{{end}}</span></header>
+  {{- /* an imported comment whose quote wasn't found in the file (#209): the text
+         it was on, so the reader can find it */ -}}
+  {{- if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end -}}
   {{- /* comment text; a request prereview queued shows one line, its prompt
          (written for the agent) behind Read more. lvt-ignore-attrs keeps an open
          one open across live updates. */ -}}

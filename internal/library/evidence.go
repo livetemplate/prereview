@@ -104,6 +104,9 @@ func Resolve(ref string) (Evidence, error) {
 		if c.IsRequest() {
 			return refuse("that comment is a request to the agent, not a reviewer signal")
 		}
+		if imp, ok := Imports(r.dir)[id]; ok {
+			return refuse("that comment was imported from " + imp.Source + ", so someone else wrote it; cite a comment the reviewer left in prereview")
+		}
 		return Evidence{Store: abs, ID: id, Kind: EvidenceComment, File: c.File, Line: c.FromLine,
 			Quote: c.Body, At: c.CreatedAt.UTC().Format(time.RFC3339)}, nil
 	}

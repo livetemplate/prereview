@@ -109,6 +109,7 @@ func (c *PrereviewController) applyProcessed(state *PrereviewState) {
 // read the sidecar, so `prereview comments --json` and `done --all-open` saw Processed
 // == false for every comment — which is why --all-open kept re-marking work already done.
 func applyProcessedMarks(comments []Comment, csvPath string) {
+	applyImportSources(comments, csvPath) // the other id-keyed sidecar every read path needs
 	pc := loadMarkCounts(ProcessedPath(csvPath))
 	ac := loadMarkCounts(AnsweredPath(csvPath)) // #205: a plain set, never netted
 	if len(pc) == 0 && len(ac) == 0 {

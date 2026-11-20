@@ -237,6 +237,10 @@ type StreamComment struct {
 	// request to the agent ("extraction" | "judge" | "benchmark" | "quiz") whose
 	// body says exactly what to do. Absent on reviewer comments.
 	Request string `json:"request,omitempty"`
+	// Source is set on a comment imported from a remote copy of the doc (#209):
+	// someone wrote it there, on Quote. A comment whose quote wasn't found in the
+	// file is a file comment, and Quote is where to look.
+	Source *ImportSource `json:"source,omitempty"`
 }
 
 // StreamQuiz is one quiz's outcome as the agent sees it. Taken is false when the
@@ -300,6 +304,7 @@ func toStreamComment(c Comment) StreamComment {
 	if c.IsTextLevel() {
 		sc.Text = c.Anchor.Snippet
 	}
+	sc.Source = c.Source
 	return sc
 }
 
