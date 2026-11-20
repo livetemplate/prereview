@@ -1,12 +1,16 @@
 # Using prereview
 
-**prereview** is a local review tool: you read a diff (or any files, Markdown,
-images, or a live local site) in the browser, leave comments, and hand the batch
-to your coding agent to act on. Everything is local — comments live in a plain
+**prereview** is a local review tool. You read a diff, or any files, Markdown,
+images or a live local site, in the browser and leave comments, and your coding
+agent acts on them. Everything is local — comments live in a plain
 `.prereview/comments.csv` next to what you're reviewing. No account, no cloud.
 
 This page is a quick tour of the app. Press <kbd>?</kbd> anytime for the full
 list of keyboard shortcuts.
+
+Your own prompts, checks, shortcuts and learnings live in one library folder:
+`~/.config/prereview` on Linux and `~/Library/Application Support/prereview` on
+macOS (`PREREVIEW_LIBRARY_DIR` moves it). The paths below use the Linux form.
 
 ## Reviewing
 
@@ -15,10 +19,10 @@ extend the range, or tap the first again to reseat it. Type, then **Save**. The
 gutter numbers are permalinks — the URL hash tracks your selection, so you can
 copy the link to reopen or share exactly what you were looking at.
 
-**Comment on part of a line.** Select a word, phrase, or multi-line span (drag
-with a mouse, long-press on a phone, or use the keyboard caret) and a floating
-**Comment** button appears — the comment anchors to exactly those characters and
-the span is highlighted when you come back to it.
+**Comment on part of a line.** Select a word, phrase or multi-line span by
+dragging with a mouse, long-pressing on a phone, or with the keyboard caret, and a
+floating **Comment** button appears. The comment anchors to exactly those
+characters, and the span stays highlighted when you come back to it.
 
 **Comment on a whole file** with the **Comment on file** button — useful for
 binary, deleted, or unchanged files where there's no line to click. The file
@@ -36,15 +40,15 @@ and comment on it. The box is stored as fractions of the image, so it survives
 re-encoding and resizing.
 
 **Annotate a live local site.** Started with `--external <url>` (see below),
-prereview proxies a running dev server so you can drag a box on any part of the
-live page and comment; the annotation re-pins as the page scrolls. Once the agent has
+prereview proxies a running dev server, so you can drag a box on any part of the
+live page and comment. The annotation re-pins as the page scrolls. Once the agent has
 worked on or answered a box, it turns dashed with a ✓ until you resolve it, and the
 **Annotations** panel shows its reply, with a **Reply** button to push back. Boxes on
 an image comment work the same way.
 
 **See every comment in one place.** **All comments** (in the **View ▾** menu, or
-press <kbd>a</kbd>) lists every comment across all files — line, text, file, and
-region kinds — each with a jump back to its source. **Show / hide resolved** keeps
+press <kbd>a</kbd>) lists every comment across all files, of every kind, each with
+a jump back to its source. **Show / hide resolved** keeps
 addressed comments out of the way (or hide a single resolved one to declutter
 without turning the whole group off).
 
@@ -64,13 +68,13 @@ and scrolling it into view. The chip next to the count limits the steps to
 comments, suggestions or quiz questions, and **×** hides the bar for the session.
 
 **Search across files.** Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>)
-to open a search palette that matches both file names and line contents across
-the changed files — toggle it to search every file. Picking a result opens the
+to open a search palette. It matches file names and line contents across the
+changed files, and a toggle searches every file. Picking a result opens the
 file and jumps to the line, revealing it even if it's inside a folded region.
 
 ## Sending work to your agent
 
-prereview is built to feed a coding agent. In **agent mode** (`--agent`, which
+prereview is built to feed an agent. In **agent mode** (`--agent`, which
 an agent's `/prereview` command sets for you) the toolbar shows a **Queue**
 button (with an **End session** button) instead of **Quit**:
 
@@ -85,19 +89,42 @@ button (with an **End session** button) instead of **Quit**:
 in agent mode prereview also emits a continuous JSON event stream the agent
 consumes across many rounds — see the CLI reference below.
 
-While the agent works, its **live status** (working / done) shows in the toolbar,
-each comment it addresses gets a **done** badge, and the **Queue** dropdown tracks
-what's queued, done, and awaiting the agent. **Reply** on any comment for a
-two-way thread, and every batch the agent finishes is captured as a **file
-version** (with a changelog) in the **Versions** panel — view, diff, or restore
-it.
+**Is the agent there?** The dot on the **Queue** button answers it. A solid dot
+means an agent is watching your queue; a hollow one means nothing has picked it
+up yet. Open the dropdown for the detail, such as "Agent connected — watching
+your queue" or, when an agent has gone quiet, a hint to ask it to run
+`prereview watch` again. While it works, its status (working / done) shows there
+too.
+
+**Where each comment stands.** The Queue dropdown and each card show it:
+
+- **queued**: sent, not yet picked up;
+- **worked on** and then **done**: the agent edited the file for it;
+- **answered**: the agent replied without an edit (a question, or a choice for you
+  to make). Read the reply, then resolve it or reply back;
+- **likely addressed**: the agent edited exactly the lines the comment is on.
+  Check the change and resolve it;
+- **blocked**: the comment's text is gone from the file, so it needs re-anchoring.
+
+**Reply** on any comment for a two-way thread; a reply you send goes back to the
+agent. When the reviewed files change on disk, prereview says so at the top of the
+file and offers **Refresh diff** once the edits settle. The agent is told which of
+your files changed under it.
+
+## Versions
+
+Every batch the agent finishes is saved as a **version** of each file it changed,
+with the agent's own changelog. Open **Versions** in the file header to read the
+list, **View** or **Diff** a version against the current file, or **Restore** it.
+Versions work the same in git repos, plain folders and single files, and nothing is
+committed.
 
 ## Suggested edits
 
 The loop also runs the other way: your agent can *propose* edits and you decide
-on them. Ask it to review something and suggest edits (e.g. "review the doc for
-ambiguity and suggest edits in prereview" — or use the file header's **Ask for
-suggestions** menu of ready-made prompts); it submits them with `prereview
+on them. Ask it to review something and suggest edits, for example "review the doc
+for ambiguity and suggest edits in prereview", or use the file header's **Ask for
+suggestions** menu of ready-made prompts. It submits them with `prereview
 suggest`, and each appears inline as a **before → after** box, visually distinct
 from a comment.
 
@@ -123,8 +150,8 @@ link back. Accept all leaves any set of alternatives for you to pick. The *Drop 
 shortcut asks for exactly this.
 
 **Alternatives.** When a comment leaves a choice that is yours to make (tone, audience,
-scope), the agent may offer two versions as linked boxes ("alternative 1 of 2") instead
-of picking one, and mark your comment *answered*. Accepting one rejects the other. Reject
+scope), the agent may offer two versions as linked boxes ("alternative 1 of 2")
+instead of picking one. It marks your comment *answered*. Accepting one rejects the other. Reject
 both and the agent asks which direction you want; reply on the comment and it works from
 your reply instead. The Queue panel and the End-session dialog count the choices still
 awaiting your pick.
@@ -136,6 +163,19 @@ suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
 **Hide** on one box sets just that one aside: it leaves "1 hidden suggestion ·
 Show" on its line, and **Show** brings it back. The suggestion stays open for the
 agent either way.
+
+## Quiz
+
+**Quiz me** in the file header asks your agent for a short multiple-choice quiz on
+the diff you're about to accept. The questions appear on the lines they ask about
+(a question about the whole file sits at the top), and choosing an answer shows
+whether it's right and why. Every question cites a line range, and prereview checks
+that the lines are in the diff, so a question about code that isn't there is marked
+instead of shown as fact. **Overview** lists every question with your score.
+
+To add your own quiz prompts, put Markdown files in
+`~/.config/prereview/quizzes/` (see `PREREVIEW_QUIZZES_DIR` in
+[`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment)).
 
 ## Checks
 
@@ -169,7 +209,7 @@ that flag wording, run every time the file loads. The file header shows
   source picker and the **category** list narrow it further; categories where
   every check passes fold into one line until you ask to see them.
 - **Tap a check** to see its findings grouped by file, with **Show in file** and
-  **Queue** on each, and its rule actions: **Edit a copy** (built-ins), **Open in
+  **Queue** on each. Its rule actions are **Edit a copy** (built-ins), **Open in
   editor** (your rules) and **Turn off** (for you, in every repo).
 - A rule's category is its `category:` key; without one it groups as Built-in,
   Yours, or its Vale style (`Microsoft.Passive` → Vale · Microsoft).
@@ -223,7 +263,7 @@ any fails.
 
 ### Judges
 
-A **judge** is a rubric your coding agent answers: one yes/no question about a
+A **judge** is a rubric your agent answers: one yes/no question about a
 whole document plus what passing looks like ("Does it lead with what the reader
 must do?"). prereview never calls a model itself; judges need a review started with
 `--agent`. Put one in your checks folder as a Markdown file:
@@ -256,10 +296,10 @@ Pass when the first paragraph says what changes for the reader.
   place once it agrees with you often enough: at least 10 of your answers for its
   current rubric, with 8 of the last 10 agreeing. Your answers count across every
   review on this machine. Edit the rubric and it starts over (a changed rubric is a
-  different judge). The Checks page shows each judge's standing, flags one that is
-  *flaky* (the same text got both verdicts) or *doesn't discriminate* (every verdict
-  you answered was the same), and lists the verdicts you disagreed with, with the
-  critique, so you can fix the rubric. Nothing is ever blocked on a judge.
+  different judge). The Checks page shows each judge's standing and flags one that
+  is *flaky* (the same text got both verdicts) or *doesn't discriminate* (every
+  verdict you answered was the same). It also lists the verdicts you disagreed
+  with, with the critique, so you can fix the rubric. Nothing is ever blocked on a judge.
 
 **Benchmarks** (Library → Benchmarks) tell you whether a change to a check, a
 rubric or your agent's model made things better or worse:
@@ -277,12 +317,12 @@ rubric or your agent's model made things better or worse:
 
 **Rule history.** Every edit to a rule file in your checks folder is kept as a
 version. Expand one of your checks on the Checks page to see its history, newest
-first, with the lines each version changed and **Restore** on the older ones (a
-restore is itself a new version, so you can undo it the same way).
+first, with the lines each version changed and **Restore** on the older ones. A
+restore is itself a new version, so you can undo it the same way.
 
 ## Learnings
 
-The **Library** opens on **Learnings**: lessons your coding agent drew from your
+The **Library** opens on **Learnings**: lessons your agent drew from your
 reviews. prereview never calls a model; the agent proposes them. With **Accept
 automatically** on (below) they're in your skills as they arrive, and Learnings
 opens on **Accepted**, where they are ("added for you"). When something waits for
@@ -302,10 +342,10 @@ your Accept (an import, or everything with the switch off), it opens on
   it adds" on the card). Accepting it adds the chip at once. The **Shortcuts** tab
   lists every chip (built-in, from your folder, or learned) with how often you've
   used it, and **Hide** takes one out of the comment box without deleting it.
-- **Learn after each review** (on by default): when your agent goes idle and the
-  review holds five or more new comments, replies or decisions since it last read
-  it, prereview hands them to your agent's **background learner**, a helper agent
-  it starts with the review. The request never lands on a file and doesn't
+- **Learn after each review** (on by default): when your agent goes idle with five
+  or more new comments, replies or decisions in the review, prereview hands them
+  to your agent's **background learner**. That's a helper agent it starts with the
+  review. The request never lands on a file and doesn't
   interrupt the agent doing your edits. Turn it off on the Learnings tab.
 - **Accept automatically** (on by default): what the learner finds goes straight
   into your skills. A notice in every open review says so ("2 learnings added",
@@ -326,10 +366,10 @@ your Accept (an import, or everything with the switch off), it opens on
   adds nothing.
 - **A learning can carry a check.** When your agent proposes a lesson that can be
   checked, it can draft the checker (banned words, a preferred spelling) or judge
-  (a yes/no rubric) with it; the card shows it before you accept.
-- **Review in prereview** (the Library header) opens a review of the library folder
-  itself (`~/.config/prereview`) in a new tab, so you can comment on your rule files
-  and have your agent change them, with the same version history.
+  (a yes/no rubric) with it. The card shows it before you accept.
+- **Review in prereview** (the Library header) opens a review of the library
+  folder itself (`~/.config/prereview`) in a new tab. You can comment on your rule
+  files there and have your agent change them, with the same version history.
 
 ## Skills
 
@@ -413,7 +453,7 @@ store, so reviews of two files in one directory run independently.
 | `--port <n>` | `0` | TCP port; `0` = a random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address. On a remote box with Tailscale, auto-binds the tailnet IP so a phone can reach it — never public. Avoid `0.0.0.0`. |
 | `--out <dir>` | the review path | Directory to create the store under (its `.prereview/`). Required with `--external`. The resolved store is printed as the `STORE` line. |
-| `--agent` | off | Run under a coding agent: stream the review queue as JSON events and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. (`--skill`/`--stream` are deprecated aliases.) |
+| `--agent` | off | Run under an agent: stream the review queue as JSON events and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. (`--skill`/`--stream` are deprecated aliases.) |
 | `--replace` | off | Stop an already-running server for this store and take over. |
 | `--external <url>` | — | Annotate a live local site instead of files. Requires `--out`; ignores the path and `--base`. |
 

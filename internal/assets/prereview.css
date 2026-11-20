@@ -1297,7 +1297,9 @@ header.file-head .file-head-actions {
   font-size: 0.72rem; font-weight: 600; text-align: center; white-space: nowrap;
   color: var(--pico-muted-color);
 }
-.queue-scope-opt.is-on { background: var(--surface); color: var(--pico-color); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+/* --text-strong, not --pico-color: inside the <button> Pico redefines --pico-color
+   as the button-label colour, which is the pill background (the label vanished). */
+.queue-scope-opt.is-on { background: var(--surface); color: var(--text-strong); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
 /* Coarse pointers get a 44px tap target (the whole switch), same rule as the badges. */
 @media (pointer: coarse) { .queue-scope-btn { min-height: 44px; align-items: center; } }
 /* The count of work the current filter is hiding — muted, but present, so the per-file

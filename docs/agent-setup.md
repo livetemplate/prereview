@@ -29,7 +29,8 @@ then on. On Windows, use `scoop bucket add prereview https://github.com/livetemp
 and then `scoop install prereview/prereview`. With Go installed, you can also run
 `go install github.com/livetemplate/prereview@latest`.
 
-Run `prereview --version` again to confirm.
+Run `prereview --version` again to confirm. Every install method, and behind a
+proxy, is in [install.md](install.md).
 
 ## 3. Install the skill for your agent
 

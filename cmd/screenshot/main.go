@@ -19,6 +19,8 @@ import (
 
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
+
+	"github.com/livetemplate/prereview/internal/library"
 )
 
 func main() {
@@ -29,7 +31,27 @@ func main() {
 	gifFlow := flag.String("gif", "", "capture a single animated GIF flow (hero); needs a demo-repo server")
 	repo := flag.String("repo", "", "demo repo working tree (the hero flow edits payment.go here to show Claude's fix)")
 	bin := flag.String("bin", "", "prereview binary, for flows that drive agent-side subcommands (status/reply) — versions/thread")
+	dump := flag.String("dump", "", "decode this GIF's frames to PNGs in --out, then exit (no browser)")
+	skipFirstLaunch := flag.Bool("skip-first-launch", false, "answer the first-launch offer (Not now) in $PREREVIEW_LIBRARY_DIR, then exit (no browser)")
 	flag.Parse()
+	defer exitOnFailure()
+
+	// The capture's library is fresh, so a later demo server would find an
+	// earlier one's review in the shared session list and show "Learn from your
+	// past reviews" in every frame. The answer is what Not now writes.
+	if *skipFirstLaunch {
+		if err := library.MarkBootstrapped(library.Dir(), "dismissed"); err != nil {
+			log.Fatalf("skip first launch: %v", err)
+		}
+		return
+	}
+
+	if *dump != "" {
+		if err := dumpGIF(*dump, *outDir); err != nil {
+			log.Fatalf("dump: %v", err)
+		}
+		return
+	}
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
 		log.Fatalf("mkdir: %v", err)
@@ -148,7 +170,7 @@ func main() {
 			chromedp.SendKeys(`.composer textarea`, "test comment", chromedp.ByQuery),
 			chromedp.Sleep(200 * time.Millisecond),
 			// scroll composer into view
-			chromedp.Evaluate(`document.querySelector('.composer')?.scrollIntoView({block:'center'})`, nil),
+			scrollTo(`.composer`),
 			chromedp.Sleep(200 * time.Millisecond),
 		}},
 		{"iphone-drawer-with-selection", 375, 812, []chromedp.Action{
@@ -269,14 +291,14 @@ func main() {
 		actions = append(actions, chromedp.CaptureScreenshot(&buf))
 
 		if err := chromedp.Run(shotCtx, actions...); err != nil {
-			log.Printf("[%s] failed: %v", s.name, err)
+			fail("[%s] failed: %v", s.name, err)
 			shotTCancel()
 			shotCancel()
 			continue
 		}
 		path := filepath.Join(*outDir, s.name+".png")
 		if err := os.WriteFile(path, buf, 0o644); err != nil {
-			log.Printf("[%s] write: %v", s.name, err)
+			fail("[%s] write: %v", s.name, err)
 		} else {
 			fmt.Printf("wrote %s (%d bytes)\n", path, len(buf))
 		}
@@ -297,36 +319,21 @@ func main() {
 const saveBtn = `button.save-btn[name="addComment"]`
 
 func runReadmeShots(allocCtx context.Context, url, outDir string) {
-	// 1) Seed comments that later shots read back from the CSV. Order matters:
-	//    all-comments / file / image shots depend on these existing.
+	// 1) Seed the comments the phone shot shows on payment.go: a line comment
+	//    and a file comment, made through the real UI.
 	seedLineComment(allocCtx, url, "payment.go:L13-L16",
 		"Retry loop has no backoff or ctx — a failing gateway gets hammered.")
 	seedFileComment(allocCtx, url, "payment.go",
 		"Add a package doc comment summarizing the charge → gateway → refund flow.")
-	seedAreaComment(allocCtx, url, "architecture.png",
-		"This box overlaps the gateway lane — tighten the spacing.")
 
-	// 2) Capture. review-mobile shows the live composing flow (unsaved draft);
-	//    the rest read the seeded comments. The desktop hero, image-area, and
-	//    markdown-block flows are now animated GIFs (see `make gifs`), so they
-	//    are intentionally NOT captured here as stills.
+	// 2) Capture. review-mobile shows the live composing flow (an unsaved
+	//    draft). Every other README image is an animated GIF (`make gifs`).
 	shots := []struct {
 		name  string
 		w, h  int
 		frag  string
 		setup []chromedp.Action
 	}{
-		{"file-comment", 1280, 800, "payment.go", nil},
-		{"all-comments", 1280, 800, "", []chromedp.Action{
-			clickJS(`button[name="toggleCommentList"]`),
-			chromedp.Sleep(400 * time.Millisecond),
-			// "All comments" now lives inside the View ▾ dropdown, so a click on it
-			// bubbles to the dropdown's toggleClass handler and pops the menu open —
-			// close it again so the shot shows the clean all-comments list, not a
-			// menu overlapping the first card.
-			chromedp.Evaluate(`document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`, nil),
-			chromedp.Sleep(300 * time.Millisecond),
-		}},
 		{"review-mobile", 390, 844, "payment.go:L18", []chromedp.Action{
 			typeComposer("Surface the gateway's real error here, not a generic string."),
 		}},
@@ -360,7 +367,7 @@ func withCtx(allocCtx context.Context, label string, fn func(context.Context) er
 	ctx, tcancel := context.WithTimeout(ctx, 45*time.Second)
 	defer tcancel()
 	if err := fn(ctx); err != nil {
-		log.Printf("[%s] %v", label, err)
+		fail("[%s] %v", label, err)
 	}
 }
 
@@ -383,32 +390,6 @@ func seedFileComment(allocCtx context.Context, url, frag, body string) {
 		acts := base(url, frag, 1280, 800)
 		acts = append(acts,
 			chromedp.Click(`button[name="openFileComment"]`, chromedp.ByQuery),
-			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
-			chromedp.Sleep(150*time.Millisecond),
-			chromedp.Click(saveBtn, chromedp.ByQuery),
-			chromedp.Sleep(600*time.Millisecond),
-		)
-		return chromedp.Run(ctx, acts...)
-	})
-}
-
-func seedAreaComment(allocCtx context.Context, url, frag, body string) {
-	withCtx(allocCtx, "seed-area:"+frag, func(ctx context.Context) error {
-		imgSel := `img[src*="` + frag + `"]`
-		var r struct{ X, Y, W, H float64 }
-		acts := base(url, frag, 1280, 800)
-		acts = append(acts,
-			chromedp.WaitVisible(imgSel, chromedp.ByQuery),
-			chromedp.Sleep(300*time.Millisecond),
-			// #57: image area-select is gated behind the region toggle (images
-			// pinch-zoom by default), so arm it before the drag can capture.
-			chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
-			chromedp.WaitVisible(`.image-with-areas.is-armed`, chromedp.ByQuery),
-			chromedp.Evaluate(`(()=>{const im=document.querySelector('`+imgSel+`');const b=im.getBoundingClientRect();return {X:b.x,Y:b.y,W:b.width,H:b.height};})()`, &r),
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				return mouseDrag(ctx, r.X+r.W*0.15, r.Y+r.H*0.15, r.X+r.W*0.62, r.Y+r.H*0.58)
-			}),
 			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
 			chromedp.Sleep(150*time.Millisecond),
@@ -446,10 +427,27 @@ func typeComposer(body string) chromedp.Action {
 			chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
 			chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
 			chromedp.Sleep(250*time.Millisecond),
-			chromedp.Evaluate(`document.querySelector('.composer')?.scrollIntoView({block:'center'})`, nil),
+			scrollTo(`.composer`),
 			chromedp.Sleep(150*time.Millisecond),
 		)
 	})
+}
+
+// settled waits until the page has no running animations, so a frame doesn't
+// catch a card mid-fade (lvt-fx:animate="fade" on new cards).
+func settled() chromedp.Action {
+	return chromedp.Poll(`document.getAnimations().every(a => a.playState !== 'running')`, nil,
+		chromedp.WithPollingTimeout(5*time.Second))
+}
+
+// scrollTo centres the first element matching sel.
+func scrollTo(sel string) chromedp.Action {
+	return chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q)?.scrollIntoView({block:'center'})`, sel), nil)
+}
+
+// clickByText clicks the first element matching sel whose text contains text.
+func clickByText(sel, text string) chromedp.Action {
+	return chromedp.Evaluate(fmt.Sprintf(`[...document.querySelectorAll(%q)].find(e=>e.textContent.includes(%q))?.click()`, sel, text), nil)
 }
 
 func clickJS(sel string) chromedp.Action {
