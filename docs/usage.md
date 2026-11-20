@@ -74,7 +74,7 @@ file and jumps to the line, revealing it even if it's inside a folded region.
 
 ## Sending work to your agent
 
-prereview is built to feed a coding agent. In **agent mode** (`--agent`, which
+prereview is built to feed an agent. In **agent mode** (`--agent`, which
 an agent's `/prereview` command sets for you) the toolbar shows a **Queue**
 button (with an **End session** button) instead of **Quit**:
 
@@ -263,7 +263,7 @@ any fails.
 
 ### Judges
 
-A **judge** is a rubric your coding agent answers: one yes/no question about a
+A **judge** is a rubric your agent answers: one yes/no question about a
 whole document plus what passing looks like ("Does it lead with what the reader
 must do?"). prereview never calls a model itself; judges need a review started with
 `--agent`. Put one in your checks folder as a Markdown file:
@@ -322,7 +322,7 @@ restore is itself a new version, so you can undo it the same way.
 
 ## Learnings
 
-The **Library** opens on **Learnings**: lessons your coding agent drew from your
+The **Library** opens on **Learnings**: lessons your agent drew from your
 reviews. prereview never calls a model; the agent proposes them. With **Accept
 automatically** on (below) they're in your skills as they arrive, and Learnings
 opens on **Accepted**, where they are ("added for you"). When something waits for
@@ -453,7 +453,7 @@ store, so reviews of two files in one directory run independently.
 | `--port <n>` | `0` | TCP port; `0` = a random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address. On a remote box with Tailscale, auto-binds the tailnet IP so a phone can reach it — never public. Avoid `0.0.0.0`. |
 | `--out <dir>` | the review path | Directory to create the store under (its `.prereview/`). Required with `--external`. The resolved store is printed as the `STORE` line. |
-| `--agent` | off | Run under a coding agent: stream the review queue as JSON events and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. (`--skill`/`--stream` are deprecated aliases.) |
+| `--agent` | off | Run under an agent: stream the review queue as JSON events and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. (`--skill`/`--stream` are deprecated aliases.) |
 | `--replace` | off | Stop an already-running server for this store and take over. |
 | `--external <url>` | — | Annotate a live local site instead of files. Requires `--out`; ignores the path and `--base`. |
 

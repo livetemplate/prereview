@@ -1,8 +1,7 @@
 # Installing prereview
 
 prereview is one Go binary with everything embedded. It needs `git` on your
-`$PATH`. Install it one of these ways, then install the integration for your
-coding agent.
+`$PATH`. Install it one of these ways, then install the integration for your agent.
 
 ```bash
 # Quick install (macOS / Linux): downloads the latest release, checksum-verified
