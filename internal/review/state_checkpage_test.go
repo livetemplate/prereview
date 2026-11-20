@@ -399,3 +399,29 @@ func TestCloseFullViews_LibraryExcludesOthers(t *testing.T) {
 		t.Errorf("opening All comments closes the Library")
 	}
 }
+
+// TestCheckStrip_Counts: the idle bar is one collapsed summary line ("8 failing
+// · 3 checks · 5 judges") until the reviewer opens it; toggling flips it, and
+// the summary counts checks and judges apart.
+func TestCheckStrip_Counts(t *testing.T) {
+	s := PrereviewState{AgentMode: true, Checks: &FileChecks{Results: []checks.Result{
+		{ID: "filler", Name: "Filler", Status: checks.StatusFail, Findings: []checks.Finding{{Line: 1}, {Line: 2}}},
+		{ID: "weasel", Name: "Weasel", Status: checks.StatusFail, Findings: []checks.Finding{{Line: 3}}},
+		{ID: "j1", Name: "Lead with the point", Type: checks.TypeJudge, Status: checks.StatusFail},
+		{ID: "j2", Name: "Say it once", Type: checks.TypeJudge, Status: checks.StatusFail},
+		{ID: "j3", Name: "Plain", Type: checks.TypeJudge, Status: checks.StatusPass},
+	}}}
+	st := s.CheckStrip()
+	if st == nil || st.Open || st.FailingChecks != 2 || st.FailingJudges != 2 || len(st.Failing) != 4 {
+		t.Fatalf("idle bar = %+v, want collapsed with 2 checks and 2 judges failing", st)
+	}
+	c := &PrereviewController{}
+	s, _ = c.ToggleCheckStrip(s, nil)
+	if !s.CheckStrip().Open {
+		t.Fatal("toggling didn't open the bar")
+	}
+	s, _ = c.ToggleCheckStrip(s, nil)
+	if s.CheckStrip().Open {
+		t.Fatal("toggling again didn't close it")
+	}
+}

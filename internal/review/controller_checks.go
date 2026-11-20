@@ -709,6 +709,12 @@ func (c *PrereviewController) ExpandCheck(state PrereviewState, ctx *livetemplat
 	return state, nil
 }
 
+// ToggleCheckStrip opens or closes the failing-checks bar's list of pills.
+func (c *PrereviewController) ToggleCheckStrip(state PrereviewState, _ *livetemplate.Context) (PrereviewState, error) {
+	state.CheckStripOpen = !state.CheckStripOpen
+	return state, nil
+}
+
 // TogglePassingGroups shows or folds the categories where every check passes.
 func (c *PrereviewController) TogglePassingGroups(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.ShowPassingGroups = !state.ShowPassingGroups

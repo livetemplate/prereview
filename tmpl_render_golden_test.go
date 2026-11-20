@@ -655,6 +655,10 @@ func renderFixtures() []renderFixture {
 	judgeRun.SelectedCheck = ""
 	judgeRun.AgentMode = true
 	judgeRun.Checks = &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), judgeRes("notrun", "", nil))}
+	// The idle bar opened: a failing checker and a failing (advisory) judge as pills.
+	stripOpen := judgeRun
+	stripOpen.CheckStripOpen = true
+	stripOpen.Checks = &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), failJudge)}
 
 	// checks M3: the Library's Learnings tab — two proposals (one grounded in
 	// this review and another store, one replacing an accepted learning, being
@@ -832,6 +836,7 @@ func renderFixtures() []renderFixture {
 		{"checks-page-history", checksHistory},
 		{"checks-judge-card", judgeCard},
 		{"checks-judge-run", judgeRun},
+		{"checks-strip-open", stripOpen},
 		{"learnings", learnings},
 		{"learnings-superseded", superseded},
 		{"learnings-accepted", acceptedL},

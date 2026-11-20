@@ -45,12 +45,13 @@
     <form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
     <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this check">×</button></form>
     {{else}}
-    {{if .Failing}}<span class="ck-strip-pos">Failing:</span>
-    {{range .Failing}}<form method="POST" class="ck-strip-pick"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline{{if .Judge}} is-judge{{end}}">{{.Name}} {{if .Judge}}<span class="ck-judge-tag">judge{{if .Advisory}} · advisory{{end}}</span>{{else}}<span class="ck-strip-n">{{.Count}}</span>{{end}}</button></form>
-    {{end}}{{end}}{{if .JudgesRun}}{{if .NeedsAgent}}<span class="ck-strip-run"><button type="button" class="outline" disabled title="Judges are run by your coding agent">Run judges — needs an agent</button> <a class="ck-link" href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></span>
+    {{if .Failing}}<form method="POST"><button type="submit" name="toggleCheckStrip" class="outline ck-strip-sum" aria-expanded="{{if .Open}}true{{else}}false{{end}}" title="{{if .Open}}Hide{{else}}Show{{end}} the failing checks">{{len .Failing}} failing{{if .FailingChecks}} · {{.FailingChecks}} check{{if ne .FailingChecks 1}}s{{end}}{{end}}{{if .FailingJudges}} · {{.FailingJudges}} judge{{if ne .FailingJudges 1}}s{{end}}{{end}}{{template "iconChevronDown"}}</button></form>
+    {{end}}{{if .JudgesRun}}{{if .NeedsAgent}}<span class="ck-strip-run"><button type="button" class="outline" disabled title="Judges are run by your coding agent">Run judges — needs an agent</button> <a class="ck-link" href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></span>
     {{else if .JudgeWaiting}}<span class="ck-waiting" role="status">Asked your agent · {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}</span>
     {{else}}<form method="POST" class="ck-strip-run"><button type="submit" name="runJudges" class="outline">{{if .JudgeTimedOut}}No answer yet — run judges again{{else if .JudgesStale}}Re-run judges ({{.JudgesStale}} stale){{else}}Run judges ({{.JudgesRun}}){{end}}</button></form>
     {{end}}{{end}}<form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
+    {{if and .Failing .Open}}<div class="ck-strip-list">{{range .Failing}}<form method="POST" class="ck-strip-pick"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline{{if .Judge}} is-judge{{end}}">{{.Name}} {{if .Judge}}<span class="ck-judge-tag">judge{{if .Advisory}} · advisory{{end}}</span>{{else}}<span class="ck-strip-n">{{.Count}}</span>{{end}}</button></form>
+    {{end}}</div>{{end}}
     {{end}}
   </div>
   {{with .Judge}}<div class="jv-card" data-key="judge-card" role="note">

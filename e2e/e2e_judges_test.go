@@ -91,7 +91,7 @@ func TestE2E_Judges(t *testing.T) {
 			}
 			playJudge(t, p, repo, request.Body, "--file", "notes.md", "--judge", "reader-first", "--verdict", "fail",
 				"--critique", "Buries what the reader must do.", "--quote", "This is very good.", "--model", "test-model")
-			if err := chromedp.Run(ctx, chromedp.WaitVisible(`.ck-strip .ck-strip-pick button.is-judge`, chromedp.ByQuery)); err != nil {
+			if err := chromedp.Run(ctx, openCheckStrip(), chromedp.WaitVisible(`.ck-strip .ck-strip-pick button.is-judge`, chromedp.ByQuery)); err != nil {
 				t.Fatalf("the verdict didn't render live: %v%s", err, diag())
 			}
 			if n := countSel(t, p, `.ck-strip .ck-waiting`); n != 0 {
@@ -312,7 +312,7 @@ func TestE2E_JudgeQueuedFileLevel(t *testing.T) {
 			request := onlyComment(t, p)
 			playJudge(t, p, repo, request.Body, "--file", "notes.md", "--judge", "reader-first", "--verdict", "fail",
 				"--critique", "Never says what to do.", "--model", "test-model")
-			if err := chromedp.Run(ctx, chromedp.WaitVisible(`.ck-strip .ck-strip-pick button.is-judge`, chromedp.ByQuery)); err != nil {
+			if err := chromedp.Run(ctx, openCheckStrip(), chromedp.WaitVisible(`.ck-strip .ck-strip-pick button.is-judge`, chromedp.ByQuery)); err != nil {
 				t.Fatalf("the verdict didn't render live: %v%s", err, diag())
 			}
 			clickStripPick(t, p, "Reader first", diag)
