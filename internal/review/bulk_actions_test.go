@@ -240,3 +240,55 @@ func TestBulkActions_PageWide(t *testing.T) {
 		t.Errorf("page-wide Queue all queued %+v (err %v), want only the checker's finding", s.Comments, err)
 	}
 }
+
+// TestIgnoreToggles: Ignore is a toggle at every level. A verdict's own button
+// ignores and brings it back; once everything in a row or on the page is
+// ignored, the pressed Ignored N brings it all back — on the page even after
+// every group passes and folds.
+func TestIgnoreToggles(t *testing.T) {
+	c := judgeController(t)
+	s := judgedState(t, c, "fail", "very good", nil) // the judge and filler-intensifiers both fail doc.md
+	writeRepoFile(t, c, "doc.md", strings.Join(sideContent(mdDiff(), "new"), "\n")+"\n") // a checker's Ignore reads the line
+	s.ShowLibrary, s.LibraryTab, s.ExpandedCheck = true, libTabChecks, "reader-first"
+	status := func(s PrereviewState, id string) string { r, _ := s.checkResult(id); return r.Status }
+
+	toggle := func(s PrereviewState) PrereviewState {
+		t.Helper()
+		s, err := c.ToggleIgnoreVerdict(s, checksCtx("toggleIgnoreVerdict", map[string]interface{}{"id": "reader-first"}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	if s = toggle(s); status(s, "reader-first") != checks.StatusPass || pageRow(t, s.CheckPage(), "reader-first").Verdicts[0].Status != verdictIgnored {
+		t.Fatalf("the verdict's Ignore didn't ignore it: %s", status(s, "reader-first"))
+	}
+	if row := pageRow(t, s.CheckPage(), "reader-first"); row.IgnoreAll != 0 || row.Ignored != 1 {
+		t.Errorf("row after ignoring its only failure: IgnoreAll %d Ignored %d, want 0 and 1", row.IgnoreAll, row.Ignored)
+	}
+	if s = toggle(s); status(s, "reader-first") != checks.StatusFail {
+		t.Fatalf("pressing Ignored didn't bring it back: %s", status(s, "reader-first"))
+	}
+
+	// The row's pressed Ignored N.
+	s, _ = c.DismissAllFindings(s, checksCtx("dismissAllFindings", map[string]interface{}{"id": "reader-first"}))
+	s, _ = c.RestoreAllDismissed(s, checksCtx("restoreAllDismissed", map[string]interface{}{"id": "reader-first"}))
+	if status(s, "reader-first") != checks.StatusFail {
+		t.Errorf("the row's Ignored N didn't bring it back")
+	}
+
+	// The page's: everything ignored, every group folds, the toggle stays.
+	s.ExpandedCheck = ""
+	s, err := c.DismissAllFindings(s, checksCtx("dismissAllFindings", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := s.CheckPage()
+	if len(p.Groups) != 0 || p.IgnoreAll != 0 || p.Ignored != 2 {
+		t.Fatalf("page after Ignore all: %d groups listed, IgnoreAll %d, Ignored %d; want 0, 0, 2", len(p.Groups), p.IgnoreAll, p.Ignored)
+	}
+	s, _ = c.RestoreAllDismissed(s, checksCtx("restoreAllDismissed", nil))
+	if p := s.CheckPage(); p.IgnoreAll != 2 || p.Ignored != 0 {
+		t.Errorf("page after Ignored N: IgnoreAll %d Ignored %d, want 2 and 0", p.IgnoreAll, p.Ignored)
+	}
+}

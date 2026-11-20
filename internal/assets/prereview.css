@@ -3936,6 +3936,7 @@ button.ckp-row-head:hover { background: var(--soft-bg); }
 .ckp-bulk button { margin: 0; padding: 0.25rem 0.65rem; font-size: 0.8rem; }
 .ckp-bulk-page { margin-bottom: 0.5rem; }
 .ckp-bulk-label { font-size: 0.8rem; color: var(--text-muted); }
+.ckp-bulk button.is-on { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); font-weight: 600; }
 .ckp-err { margin: 0; color: var(--mark); font-size: 0.8rem; overflow-wrap: anywhere; }
 .ckp-file { border-left: 2px solid var(--border-strong); padding-left: 0.55rem; }
 .ckp-file > header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem; font-size: 0.78rem; }

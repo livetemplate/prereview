@@ -48,8 +48,9 @@ type CheckPage struct {
 	Checks  int // distinct checks
 
 	// The page-wide Queue all / Ignore all: every failure of every enabled
-	// check listed, under the page's filters (bulkCounts).
-	QueueAll, IgnoreAll int
+	// check listed, under the page's filters (bulkCounts); Ignored is what
+	// those checks have ignored, for the pressed Ignored N.
+	QueueAll, IgnoreAll, Ignored int
 }
 
 // CheckChip is one status chip.
@@ -98,7 +99,7 @@ type CheckRow struct {
 	History   *HistoryView // the rule file's versions (yours only), newest first
 	QueueAll  int          // failures Queue all would queue: counted, not yet queued, with a span
 	IgnoreAll int          // failures Ignore all would ignore: every counted one
-	Ignored   int          // a judge's verdicts you already ignored (Show again)
+	Ignored   int          // failures you already ignored, in the files the page covers: Ignored N brings them back
 }
 
 // CheckFileFindings is one file's findings under an expanded row.
@@ -164,6 +165,7 @@ type checkAgg struct {
 	nameHit  bool // the search matches the check itself, so every finding counts
 	isJudge  bool
 	judged   map[string]int // a judge's file count per status
+	ignored  int            // a checker's findings you ignored
 	verdicts []JudgeVerdictView
 }
 
@@ -218,6 +220,7 @@ func (s PrereviewState) CheckPage() *CheckPage {
 			a.total += len(r.Findings)
 			// Only the expanded row lists findings; the rest only count them.
 			listed := r.ID == s.ExpandedCheck
+			a.ignored += r.Dismissed
 			ff := CheckFileFindings{Path: pc.Path, CheckID: r.ID, Open: pc.Path == s.SelectedFile, Dismissed: r.Dismissed}
 			for i, f := range r.Findings {
 				if a.nameHit || findingMatches(f, q) {
@@ -350,19 +353,32 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		p.Groups = append(p.Groups, *g)
 	}
 	p.QueueAll, p.IgnoreAll = s.bulkCounts(s.targetsFor(p.listedChecks()))
+	for _, r := range p.listedRows() {
+		p.Ignored += r.Ignored
+	}
 	return p
 }
 
-// listedChecks is the enabled checks the page lists, in order: what its
+// listedRows is the enabled checks the page lists, folded passing groups
+// included (ignoring everything makes a group pass and fold): what its
 // Queue all / Ignore all act on.
-func (p *CheckPage) listedChecks() []string {
-	var ids []string
-	for _, g := range p.Groups {
+func (p *CheckPage) listedRows() []CheckRow {
+	var out []CheckRow
+	for _, g := range append(slices.Clone(p.Groups), p.Folded...) {
 		for _, r := range g.Rows {
 			if r.Status != checkStatusOff {
-				ids = append(ids, r.ID)
+				out = append(out, r)
 			}
 		}
+	}
+	return out
+}
+
+// listedChecks is listedRows' IDs.
+func (p *CheckPage) listedChecks() []string {
+	var ids []string
+	for _, r := range p.listedRows() {
+		ids = append(ids, r.ID)
 	}
 	return ids
 }
@@ -542,6 +558,9 @@ func (s PrereviewState) checkRow(a *checkAgg, status string) CheckRow {
 	row.Detail = row.SourceLabel()
 	if r.Type != "" && r.Type != checks.SourceVale {
 		row.Detail += " · " + r.Type
+	}
+	if status != checkStatusOff {
+		row.Ignored = a.ignored // every row: the page's Ignored N sums them
 	}
 	if !row.Expanded {
 		return row

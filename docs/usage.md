@@ -218,10 +218,12 @@ that flag wording, run every time the file loads. The file header shows
   same pair above the list acts on every check listed. A search and the filters
   narrow both, as they narrow the list. Queue all skips what's already queued and
   a judge's failure with no passage to point at.
-- **Ignore all** on a judge marks each failing verdict *ignored*. It stops
-  counting as a failure until the file or the judge's rubric changes, so running
-  judges again on the same text doesn't bring it back. It doesn't count as
-  Disagree. "1 ignored · show again" on the judge brings them back.
+- **Ignore all** is a toggle: once nothing in its scope is left open, it reads
+  **Ignored N**, and pressing it brings them all back.
+- **Ignore** on a judge's verdict marks it *ignored*, and pressing **Ignored**
+  brings it back. An ignored verdict stops counting as a failure until the file
+  or the judge's rubric changes, so running judges again on the same text
+  doesn't bring it back. It doesn't count as Disagree.
 - A rule's category is its `category:` key; without one it groups as Built-in,
   Yours, or its Vale style (`Microsoft.Passive` → Vale · Microsoft).
 

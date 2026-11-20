@@ -114,7 +114,7 @@ func TestE2E_BulkFindingActions(t *testing.T) {
 				t.Errorf("%d findings read Queued, want 4%s", n, diag())
 			}
 
-			// Ignore all: the row passes; Show again brings the findings back.
+			// Ignore all: the row passes, and each file offers Show again.
 			if err := chromedp.Run(ctx,
 				chromedp.Click(filler+` button[name="dismissAllFindings"]`, chromedp.ByQuery),
 				chromedp.WaitVisible(filler+`.is-pass`, chromedp.ByQuery),
@@ -122,15 +122,18 @@ func TestE2E_BulkFindingActions(t *testing.T) {
 				t.Fatalf("Ignore all: %v%s", err, diag())
 			}
 			if n := countSel(t, p, filler+` button[name="restoreDismissed"]`); n != 2 {
-				t.Fatalf("%d files offer Show again, want 2%s", n, diag())
+				t.Errorf("%d files offer Show again, want 2%s", n, diag())
 			}
-			for range 2 {
-				if err := chromedp.Run(ctx, chromedp.Click(filler+` button[name="restoreDismissed"]`, chromedp.ByQuery), chromedp.Sleep(300*time.Millisecond)); err != nil {
-					t.Fatalf("Show again: %v%s", err, diag())
-				}
+			// Ignore all is now pressed, as Ignored 4: pressing it brings them back.
+			toggled := filler + ` .ckp-bulk button[name="restoreAllDismissed"][aria-pressed="true"]`
+			if got := textOf(t, p, toggled); got != "Ignored 4" {
+				t.Errorf("pressed toggle reads %q, want Ignored 4%s", got, diag())
 			}
-			if err := chromedp.Run(ctx, chromedp.WaitVisible(filler+`.is-fail`, chromedp.ByQuery)); err != nil {
-				t.Fatalf("the row doesn't fail again after Show again: %v%s", err, diag())
+			if err := chromedp.Run(ctx,
+				chromedp.Click(toggled, chromedp.ByQuery),
+				chromedp.WaitVisible(filler+`.is-fail`, chromedp.ByQuery),
+			); err != nil {
+				t.Fatalf("the row doesn't fail again after Ignored 4: %v%s", err, diag())
 			}
 
 			// The judge's row: Queue all 1, Ignore all 1.
@@ -170,11 +173,26 @@ func TestE2E_BulkFindingActions(t *testing.T) {
 			if n := countSel(t, p, judge+`.is-fail`); n != 0 {
 				t.Errorf("the judge row still fails%s", diag())
 			}
+			// The verdict's own toggle reads Ignored; pressing it brings it back.
+			verdictBtn := judge + ` .jv button[name="toggleIgnoreVerdict"]`
+			if got := textOf(t, p, verdictBtn+`[aria-pressed="true"]`); got != "Ignored" {
+				t.Errorf("verdict toggle reads %q, want Ignored%s", got, diag())
+			}
 			if err := chromedp.Run(ctx,
-				chromedp.Click(judge+` .ckp-bulk button[name="restoreDismissed"]`, chromedp.ByQuery),
+				chromedp.Click(verdictBtn, chromedp.ByQuery),
+				chromedp.WaitVisible(judge+` .jv .ck-fail`, chromedp.ByQuery),
+				chromedp.WaitVisible(verdictBtn+`[aria-pressed="false"]`, chromedp.ByQuery),
+			); err != nil {
+				t.Fatalf("the verdict's Ignored toggle: %v%s", err, diag())
+			}
+			// Ignore it from its own button; the row's toggle then reads Ignored 1.
+			if err := chromedp.Run(ctx,
+				chromedp.Click(verdictBtn, chromedp.ByQuery),
+				chromedp.WaitVisible(judge+` .jv .ck-ignored`, chromedp.ByQuery),
+				chromedp.Click(judge+` .ckp-bulk button[name="restoreAllDismissed"]`, chromedp.ByQuery),
 				chromedp.WaitVisible(judge+` .jv .ck-fail`, chromedp.ByQuery),
 			); err != nil {
-				t.Fatalf("judge Show again: %v%s", err, diag())
+				t.Fatalf("the verdict's Ignore, then the row's Ignored 1: %v%s", err, diag())
 			}
 
 			// The page-wide pair acts on every check listed: the checker's 4 and
@@ -187,14 +205,29 @@ func TestE2E_BulkFindingActions(t *testing.T) {
 				t.Errorf("page-wide Queue all offered with everything queued%s", diag())
 			}
 			bulkFits(t, p, page, diag)
+			pagePressed := page + ` button[name="restoreAllDismissed"][aria-pressed="true"]`
 			if err := chromedp.Run(ctx,
 				chromedp.Click(page+` button[name="dismissAllFindings"]`, chromedp.ByQuery),
-				chromedp.WaitNotPresent(page, chromedp.ByQuery),
+				chromedp.WaitVisible(pagePressed, chromedp.ByQuery),
 			); err != nil {
 				t.Fatalf("page-wide Ignore all: %v%s", err, diag())
 			}
 			if n := countSel(t, p, `.ckp-row.is-fail`); n != 0 {
 				t.Errorf("%d rows still fail after page-wide Ignore all%s", n, diag())
+			}
+			// It stays, pressed, though every group now passes: pressing it
+			// brings all five back.
+			if got := textOf(t, p, pagePressed); got != "Ignored 5" {
+				t.Errorf("page toggle reads %q, want Ignored 5%s", got, diag())
+			}
+			if err := chromedp.Run(ctx,
+				chromedp.Click(pagePressed, chromedp.ByQuery),
+				chromedp.WaitVisible(page+` button[name="dismissAllFindings"]`, chromedp.ByQuery),
+			); err != nil {
+				t.Fatalf("page-wide Ignored 5: %v%s", err, diag())
+			}
+			if got := textOf(t, p, page+` button[name="dismissAllFindings"]`); got != "Ignore all 5" {
+				t.Errorf("after the page toggle: %q, want Ignore all 5%s", got, diag())
 			}
 			noHorizontalScroll(t, p, diag)
 		})

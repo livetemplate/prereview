@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -216,20 +217,65 @@ func (c *PrereviewController) DismissAllFindings(state PrereviewState, ctx *live
 	return state, nil
 }
 
+// RestoreAllDismissed is the pressed Ignored N: it brings back what check id
+// ignored, or with no id what every listed check ignored, in the files the
+// page covers (its file filter).
+func (c *PrereviewController) RestoreAllDismissed(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	ids := []string{ctx.GetString("id")}
+	if ids[0] == "" {
+		p := state.CheckPage()
+		if p == nil {
+			return state, nil
+		}
+		ids = p.listedChecks()
+	}
+	return c.restore(state, ids, state.ChecksFile)
+}
+
+// ToggleIgnoreVerdict ignores a judge's failing verdict on path ("" = the open
+// file), or brings an ignored one back.
+func (c *PrereviewController) ToggleIgnoreVerdict(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	path, id := ctx.GetString("path"), ctx.GetString("id")
+	if path == "" {
+		path = state.SelectedFile
+	}
+	j, ok := c.verdicts()[judgmentKey(path, id)]
+	if !ok {
+		return state, nil // gone already (another tab)
+	}
+	d := judgeDismissal(path, id, j)
+	d.Dismissed, d.At = !ignoredVerdict(c.dismissals(), path, id, j), time.Now().UTC().Format(time.RFC3339)
+	if err := appendJSONL(c.dismissalsPath(), d); err != nil {
+		return state, err
+	}
+	c.reapplyChecks(&state)
+	go c.broadcast("ChecksUpdated") // other tabs
+	return state, nil
+}
+
 // RestoreDismissed brings back every finding (or judge verdict) you ignored for
 // one check in one file, or in every file when path is "".
 func (c *PrereviewController) RestoreDismissed(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	path, id := ctx.GetString("path"), ctx.GetString("id")
+	id := ctx.GetString("id")
 	if id == "" {
 		return state, nil
 	}
+	return c.restore(state, []string{id}, ctx.GetString("path"))
+}
+
+// restore brings back what checks ids ignored in path, or in every file when
+// path is "", in one write.
+func (c *PrereviewController) restore(state PrereviewState, ids []string, path string) (PrereviewState, error) {
 	at := time.Now().UTC().Format(time.RFC3339)
 	var undo []any
 	for _, d := range c.dismissals() {
-		if d.Check == id && (path == "" || d.File == path) {
+		if slices.Contains(ids, d.Check) && (path == "" || d.File == path) {
 			d.Dismissed, d.At = false, at
 			undo = append(undo, d)
 		}
+	}
+	if len(undo) == 0 {
+		return state, nil
 	}
 	if err := appendJSONL(c.dismissalsPath(), undo...); err != nil {
 		return state, err
