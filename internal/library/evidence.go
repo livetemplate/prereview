@@ -201,16 +201,21 @@ func (r storeReader) decision(id string) (storeDecision, bool) {
 // reply finds the reply on target at at in a replies file.
 func (r storeReader) reply(name, target string, at int64) (body string, ok bool) {
 	eachLine(filepath.Join(r.dir, name), func(b []byte) {
-		var rp struct {
-			TargetID string `json:"target_id"`
-			Body     string `json:"body"`
-			At       int64  `json:"at"`
-		}
-		if json.Unmarshal(b, &rp) == nil && rp.TargetID == target && rp.At == at {
+		var rp storeReply
+		if json.Unmarshal(b, &rp) == nil && rp.TargetID == target && rp.At == at && rp.RemoteID == "" {
 			body, ok = rp.Body, true
 		}
 	})
 	return body, ok
+}
+
+// storeReply is a thread entry in a replies file. RemoteID marks a reply
+// imported from a remote copy (#209): someone else's, never evidence.
+type storeReply struct {
+	TargetID string `json:"target_id"`
+	Body     string `json:"body"`
+	At       int64  `json:"at"`
+	RemoteID string `json:"remote_id,omitempty"`
 }
 
 // question finds a quiz question by its thread id ("<quizID>:<questionID>").

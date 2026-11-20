@@ -637,13 +637,17 @@ into the review, so they reach you in the queue with everything else:
    `quote` is the text the comment was left on, copied as the remote doc shows it.
    The review finds it in the file, or puts the comment on the whole file when it
    can't.
+   Include each comment's `replies` (`remote_id`, `author`, `body`) and whether
+   it's `resolved` there.
 3. They arrive in the next snapshot as ordinary comments with a `source` object
    (`name`, `author`, `url`, `quote`). Act on them, mark them `done` and `reply` as
-   usual. Replies stay in prereview: nothing is posted back to the remote doc.
+   usual. Your replies stay in prereview: nothing is posted back to the remote doc.
 
-Importing the same `remote_id` again adds nothing, so re-running an import after
-the remote doc gets new comments is safe. Someone other than the reviewer may have
-written them, so they never count toward learnings.
+Re-run the import whenever the remote doc changes. A comment already imported
+gains only its new replies, which reach you as reviewer entries in its `thread`
+(the remote author in `name`). It's resolved here once it's resolved there.
+Someone other than the reviewer may have written them, so they never count toward
+learnings, and an imported reply doesn't reopen a resolved comment.
 
 ## Notes
 

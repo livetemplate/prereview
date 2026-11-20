@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/livetemplate/livetemplate"
 
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 	"github.com/livetemplate/prereview/internal/library"
 )
@@ -60,6 +62,16 @@ type ImportSource struct {
 	Quote  string `json:"quote,omitempty"`
 }
 
+// webURL is u when it's an absolute http or https URL with a host, else "": the
+// badge links only to a web page, never to a javascript: or data: URL.
+func webURL(u string) string {
+	p, err := url.Parse(strings.TrimSpace(u))
+	if err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "" {
+		return ""
+	}
+	return p.String()
+}
+
 // Normalize checks the record and cleans its file path in place. file must stay
 // inside the review, and be the file under review when scope is set (a
 // single-file review). With root set, it must also be a regular file there,
@@ -83,6 +95,7 @@ func (r *RemoteComment) Normalize(root, scope string) error {
 	if scope != "" && f != scope {
 		return fmt.Errorf("%q isn't the file under review (%s)", r.File, scope)
 	}
+	r.URL = webURL(r.URL) // an unusable link is dropped, not the comment
 	if root != "" {
 		full, err := gitdiff.ResolveWithin(root, f)
 		if err != nil {
@@ -253,11 +266,15 @@ func readInbox(csvPath string) []RemoteComment {
 	return out
 }
 
-// DrainImports adds the inbox's new remote comments to comments.csv, written
-// through persist's merge so no tab's save can drop them, and records each in
-// the ledger. It returns how many it added. A record already in the ledger, or
-// naming a file the review doesn't cover, is skipped. Run once per server: at
-// launch and from the watcher.
+// DrainImports applies the inbox's new remote comments to the review and
+// records each change in the ledger; it returns how many it made. A new comment
+// is added to comments.csv through persist's merge, so no tab's save can drop
+// it. For a comment imported before, a later import adds only its new replies
+// (reviewer entries in its thread, so the agent sees them), and resolves it
+// once the remote copy is resolved. A comment resolved on its first import
+// isn't brought in, a remote reopen changes nothing, and a record naming a file
+// the review doesn't cover is skipped. Run once per server: at launch and from
+// the watcher.
 func (c *PrereviewController) DrainImports() (int, error) {
 	if c.CSVPath == "" || c.ExternalMode {
 		return 0, nil
@@ -266,50 +283,122 @@ func (c *PrereviewController) DrainImports() (int, error) {
 	if len(inbox) == 0 {
 		return 0, nil
 	}
-	done := map[string]bool{}
-	for _, r := range library.Imports(filepath.Dir(c.CSVPath)) {
-		done[library.RemoteKey(r.Source, r.RemoteID)] = true
+	commentFor := map[string]string{} // remote comment → comment id
+	applied := map[string]bool{}      // kind + remote key, for replies and resolves
+	for _, r := range library.ImportLedger(filepath.Dir(c.CSVPath)) {
+		key := library.RemoteKey(r.Source, r.RemoteID)
+		if r.Kind == library.ImportComment {
+			commentFor[key] = r.CommentID
+		} else {
+			applied[r.Kind+key] = true
+		}
 	}
-	scope := SessionScope(c.CSVPath)
 	files := map[string]*quoteIndex{}
+	scope := SessionScope(c.CSVPath)
 	var add []Comment
-	var recs []any
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var replies, recs []any
+	resolve := map[string]bool{}
+	stamp := time.Now().UTC()
+	now, at := stamp.Format(time.RFC3339Nano), stamp.UnixNano()
 	for _, r := range inbox {
 		key := library.RemoteKey(r.Source, r.RemoteID)
-		if done[key] || r.Resolved { // a comment resolved on the remote copy isn't brought in
-			continue
-		}
-		done[key] = true
-		if err := r.Normalize(c.RepoPath, scope); err != nil { // the inbox is a file anyone can write
-			slog.Warn("import: skipped a remote comment", "remote_id", r.RemoteID, "err", err)
-			continue
-		}
-		x, ok := files[r.File]
-		if !ok {
-			d, err := c.loadDiffFresh(c.Base, r.File)
-			if err != nil {
-				slog.Warn("import: no text to anchor to; adding it as a file comment", "file", r.File, "err", err)
+		id, known := commentFor[key]
+		if !known {
+			if r.Resolved { // resolved on the remote copy before it ever came in
+				continue
 			}
-			x = newQuoteIndex(d)
-			files[r.File] = x
+			cm, ok := c.importNew(r, scope, files)
+			if !ok {
+				continue
+			}
+			add = append(add, cm)
+			id = cm.ID
+			commentFor[key] = id
+			recs = append(recs, library.ImportRecord{RemoteID: r.RemoteID, CommentID: id, Source: r.Source,
+				URL: webURL(r.URL), Author: r.Author, Quote: strings.TrimSpace(r.Quote), At: now})
 		}
-		cm := importedComment(x, r)
-		add = append(add, cm)
-		recs = append(recs, library.ImportRecord{RemoteID: r.RemoteID, CommentID: cm.ID, Source: r.Source,
-			URL: r.URL, Author: r.Author, Quote: strings.TrimSpace(r.Quote), At: now})
+		for _, rp := range r.Replies {
+			rkey := library.ImportReply + library.RemoteKey(r.Source, rp.RemoteID)
+			if rp.RemoteID == "" || strings.TrimSpace(rp.Body) == "" || applied[rkey] {
+				continue
+			}
+			applied[rkey] = true
+			at++ // drain order, not the remote clock: a new remote reply sorts after the agent's
+			replies = append(replies, ThreadEntry{TargetID: id, Author: AuthorReviewer, Body: rp.Body, At: at,
+				Name: rp.Author, RemoteID: rp.RemoteID})
+			recs = append(recs, library.ImportRecord{Kind: library.ImportReply, RemoteID: rp.RemoteID, CommentID: id,
+				Source: r.Source, Author: rp.Author, At: now})
+		}
+		if rkey := library.ImportResolve + key; r.Resolved && !applied[rkey] { // known: see the top of the loop
+			applied[rkey] = true
+			resolve[id] = true
+			recs = append(recs, library.ImportRecord{Kind: library.ImportResolve, RemoteID: r.RemoteID, CommentID: id,
+				Source: r.Source, At: now})
+		}
 	}
-	if len(add) == 0 {
+	if len(recs) == 0 {
 		return 0, nil
 	}
-	// persist keeps every row on disk the slice doesn't name, so this appends.
-	if err := c.persist(add); err != nil {
+	if len(add) > 0 { // persist keeps every row on disk the slice doesn't name: an append
+		if err := c.persist(add); err != nil {
+			return 0, fmt.Errorf("import: %w", err)
+		}
+	}
+	if err := c.resolveRows(resolve); err != nil {
 		return 0, fmt.Errorf("import: %w", err)
+	}
+	if err := AppendJSONL(ReviewerRepliesPath(c.CSVPath), replies...); err != nil {
+		return 0, fmt.Errorf("import: replies: %w", err)
 	}
 	if err := AppendJSONL(ledgerPath(c.CSVPath), recs...); err != nil {
 		return 0, fmt.Errorf("import: ledger: %w", err)
 	}
-	return len(add), nil
+	c.scheduleEmit()
+	return len(recs), nil
+}
+
+// importNew is remote comment r as a new comment, anchored on its quote in the
+// file's text (files caches each file's index for the drain); false when the
+// record names a file the review doesn't cover.
+func (c *PrereviewController) importNew(r RemoteComment, scope string, files map[string]*quoteIndex) (Comment, bool) {
+	if err := r.Normalize(c.RepoPath, scope); err != nil { // the inbox is a file anyone can write
+		slog.Warn("import: skipped a remote comment", "remote_id", r.RemoteID, "err", err)
+		return Comment{}, false
+	}
+	x, ok := files[r.File]
+	if !ok {
+		d, err := c.loadDiffFresh(c.Base, r.File)
+		if err != nil {
+			slog.Warn("import: no text to anchor to; adding it as a file comment", "file", r.File, "err", err)
+		}
+		x = newQuoteIndex(d)
+		files[r.File] = x
+	}
+	return importedComment(x, r), true
+}
+
+// resolveRows sets Resolved on the rows named by ids, changing only that field
+// of each, under persistMu, so a tab's save in between can't be overwritten.
+func (c *PrereviewController) resolveRows(ids map[string]bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	c.persistMu.Lock()
+	defer c.persistMu.Unlock()
+	rows, err := csv.Read(c.CSVPath)
+	if err != nil {
+		return err
+	}
+	changed := false
+	for i := range rows {
+		if ids[rows[i].ID] && !rows[i].Resolved {
+			rows[i].Resolved, changed = true, true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return c.CSVWriter.Write(rows)
 }
 
 // applyImportSources sets Source on the comments the ledger says were imported.
@@ -320,24 +409,31 @@ func applyImportSources(comments []Comment, csvPath string) {
 	}
 	for i := range comments {
 		if r, ok := imp[comments[i].ID]; ok {
-			comments[i].Source = &ImportSource{Name: r.Source, URL: r.URL, Author: r.Author, Quote: r.Quote}
+			// webURL again: the ledger is a file, and its URL reaches an href
+			comments[i].Source = &ImportSource{Name: r.Source, URL: webURL(r.URL), Author: r.Author, Quote: r.Quote}
 		}
 	}
 }
 
-// CommentsAdded adds to this tab's copy the comments on disk it hasn't loaded,
-// such as an import's (persist keeps them on disk either way; this shows them).
-func (c *PrereviewController) CommentsAdded(state PrereviewState, _ *livetemplate.Context) (PrereviewState, error) {
-	have := make(map[string]bool, len(state.Comments))
-	for _, cm := range state.Comments {
-		have[cm.ID] = true
+// CommentsChanged brings this tab's copy up to date after a change made outside
+// it, such as an import: it adds the comments on disk the copy lacks, takes each
+// row's resolved state from disk (every tab saves as it acts, so disk is the
+// latest), and reloads the threads. Only Resolved is taken: a tab's relocated
+// anchors reach disk on its own schedule (persistAnchors).
+func (c *PrereviewController) CommentsChanged(state PrereviewState, _ *livetemplate.Context) (PrereviewState, error) {
+	at := make(map[string]int, len(state.Comments))
+	for i, cm := range state.Comments {
+		at[cm.ID] = i
 	}
 	for _, cm := range c.loadCommentsFromDisk() {
-		if !have[cm.ID] {
+		if i, ok := at[cm.ID]; ok {
+			state.Comments[i].Resolved = cm.Resolved
+		} else {
 			state.Comments = append(state.Comments, cm)
 		}
 	}
 	c.applyProcessed(&state)
+	state.ThreadEntries = loadThreads(c.CSVPath)
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
 }

@@ -260,6 +260,9 @@ type StreamReply struct {
 	Author string `json:"author"`
 	Body   string `json:"body"`
 	At     string `json:"at"`
+	// Name is the remote author of a reply imported from a remote copy (#209),
+	// whose Author is "reviewer".
+	Name string `json:"name,omitempty"`
 }
 
 // toStreamThread maps a target's thread entries to the consumer shape; nil when empty.
@@ -273,6 +276,7 @@ func toStreamThread(thread []ThreadEntry) []StreamReply {
 			Author: e.Author,
 			Body:   e.Body,
 			At:     time.Unix(0, e.At).UTC().Format(time.RFC3339),
+			Name:   e.Name,
 		})
 	}
 	return out
@@ -348,7 +352,7 @@ func commentActionable(c Comment, thread []ThreadEntry) bool {
 	// which is what "prereview stops making progress" looked like from the outside.
 	// SKILL.md has always documented the opposite ("the snapshot only carries items
 	// that need you"); the term was simply missing from the expression.
-	return threadActionable(c.Resolved || c.AnchorOutdated() || c.Processed, thread)
+	return threadActionable(c.Resolved || c.AnchorOutdated() || c.Processed, c.Resolved, thread)
 }
 
 // emit stamps ev with the next seq + the given timestamp and writes it as one

@@ -661,8 +661,14 @@ func (s PrereviewState) Threads() map[string][]ThreadEntry {
 // "awaiting agent". Zero-arg for the framework; nil when none.
 func (s PrereviewState) AwaitingAgent() map[string]bool {
 	out := map[string]bool{}
+	resolved := map[string]bool{}
+	for _, c := range s.Comments {
+		if c.Resolved {
+			resolved[c.ID] = true
+		}
+	}
 	for id, th := range groupThreads(s.ThreadEntries) {
-		if hasUnreadReviewerReply(th) {
+		if reopeningReplies(resolved[id], th) > 0 {
 			out[id] = true
 		}
 	}

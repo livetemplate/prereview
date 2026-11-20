@@ -53,6 +53,20 @@ func runImportCmd(t *testing.T, p *runningPrereview, payload string) string {
 	return string(out)
 }
 
+// waitRows waits until comments.csv satisfies ok.
+func waitRows(t *testing.T, p *runningPrereview, ok func([]csv.Row) bool, msg string, diag func() string) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		rows, _ := csv.Read(filepath.Join(p.store, "comments.csv"))
+		if ok(rows) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s: comments.csv %+v%s", msg, rows, diag())
+		}
+	}
+}
+
 type importedJSON struct {
 	ID     string `json:"id"`
 	Kind   string `json:"kind"`
@@ -142,24 +156,15 @@ func TestE2E_ImportLive(t *testing.T) {
 			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('.inline-comment button[name="toggleResolved"]').click()`, nil)); err != nil {
 				t.Fatal(err)
 			}
-			// (a resolved comment leaves the view, so read the save from disk)
-			resolvedOnDisk := func() (n int) {
-				rows, _ := csv.Read(filepath.Join(p.store, "comments.csv"))
+			waitRows(t, p, func(rows []csv.Row) bool {
+				n := 0
 				for _, r := range rows {
 					if r.Resolved {
 						n++
 					}
 				}
-				return n
-			}
-			for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(100 * time.Millisecond) {
-				if resolvedOnDisk() == 1 {
-					break
-				}
-				if time.Now().After(deadline) {
-					t.Fatalf("the resolve wasn't saved%s", diag())
-				}
-			}
+				return n == 1
+			}, "the resolve wasn't saved", diag)
 			runImportCmd(t, p, `{"remote_id":"r1","source":"Google Docs","file":"plan.md","quote":"The rollout starts small.","body":"Too vague?"}`)
 			time.Sleep(1500 * time.Millisecond) // two watcher ticks
 			rows, err := csv.Read(filepath.Join(p.store, "comments.csv"))
@@ -194,5 +199,56 @@ func TestE2E_ImportAtLaunch(t *testing.T) {
 		"the comment imported before launch shows")
 	if got := textOf(t, p, `.source-badge`); got != "Google Docs · Alice" {
 		t.Errorf("badge %q%s", got, diag())
+	}
+}
+
+// TestE2E_ImportReplies: a remote comment's replies land in its thread, named
+// for their authors; a re-import adds only the new one, live; and resolving it
+// on the remote copy resolves it here.
+func TestE2E_ImportReplies(t *testing.T) {
+	for _, vp := range []struct {
+		name string
+		w, h int
+	}{{"desktop", 1200, 800}, {"phone", 390, 844}} {
+		t.Run(vp.name, func(t *testing.T) {
+			repo := setupImportRepo(t)
+			p := bootChromeAgainstRepo(t, repo, vp.w, vp.h, "--agent")
+			diag := captureDiag(t, p)
+			p.waitReadyAt(vp.w, vp.h)
+			ctx, cancel := within(p, 30*time.Second)
+			defer cancel()
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`window.__noReload = 1`, nil)); err != nil {
+				t.Fatal(err)
+			}
+			first := `{"remote_id":"r1","source":"Google Docs","author":"Alice","file":"plan.md","quote":"The rollout starts small.","body":"Too vague?",
+				"replies":[{"remote_id":"y1","author":"Bob","body":"Agreed, say how small."}]}`
+			runImportCmd(t, p, first)
+			authors := `[...document.querySelectorAll('.thread .thread-author')].map(e => e.textContent.trim()).join(',')`
+			waitJSTrue(t, p.ctx, authors+` === 'Bob'`, 10*time.Second, "the remote reply shows in the thread, named Bob")
+
+			// A re-import with one more reply: only the new one is added, live.
+			runImportCmd(t, p, strings.Replace(first, `}]}`, `},{"remote_id":"y2","author":"Cy","body":"Ten percent?"}]}`, 1))
+			waitJSTrue(t, p.ctx, authors+` === 'Bob,Cy'`, 10*time.Second, "the new reply shows after the first, once")
+
+			// Resolved on the remote copy: resolved here.
+			runImportCmd(t, p, strings.Replace(first, `"body":"Too vague?"`, `"body":"Too vague?","resolved":true`, 1))
+			waitRows(t, p, func(rows []csv.Row) bool { return len(rows) == 1 && rows[0].Resolved },
+				"not resolved after the remote copy was", diag)
+			// The card stays, collapsed as resolved (#165), and isn't handed back to
+			// the agent for the imported reply it ends with.
+			waitJSTrue(t, p.ctx, `document.querySelectorAll('.inline-comment.is-resolved .source-badge').length === 1`, 10*time.Second,
+				"the card reads resolved, live")
+			if n := countSel(t, p, `.inline-comment .awaiting-badge`); n != 0 {
+				t.Errorf("the resolved comment still reads awaiting agent%s", diag())
+			}
+			raw, err := exec.Command(p.binary, "comments", "--json", "--out", p.store).Output()
+			if err != nil || strings.TrimSpace(string(raw)) != "[]" {
+				t.Errorf("the agent is still handed the resolved comment (%v): %s", err, raw)
+			}
+			var reloaded bool
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`window.__noReload !== 1`, &reloaded)); err != nil || reloaded {
+				t.Errorf("the page reloaded (%v)%s", err, diag())
+			}
+		})
 	}
 }

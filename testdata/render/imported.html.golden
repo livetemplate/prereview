@@ -883,7 +883,7 @@
         </button>
       </span><div class="inline-comment"
      data-key="i1"
-     lvt-fx:animate="fade"><header><span>L2 · <small>new</small> · <small class="queued-badge" title="queued for the agent">queued</small> · <small class="source-badge" title="Imported from Google Docs"><a href="https://docs.example.com/d/1#cmnt1" target="_blank" rel="noopener">Google Docs</a> · Alice</small></span></header><div class="body">Is this still true?</div><div class="ic-actions">
+     lvt-fx:animate="fade"><header><span>L2 · <small>new</small> · <small class="queued-badge" title="queued for the agent">queued</small> · <small class="source-badge" title="Imported from Google Docs"><a href="https://docs.example.com/d/1#cmnt1" target="_blank" rel="noopener noreferrer">Google Docs</a> · Alice</small></span></header><div class="body">Is this still true?</div><div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="i1">
       <button

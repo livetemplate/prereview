@@ -291,7 +291,7 @@
 
 {{/* sourceBadge: where an imported comment came from (#209), linked to it
      there. Called with the comment's ImportSource as ".". */}}
-{{define "sourceBadge"}}<small class="source-badge" title="Imported from {{.Name}}">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{with .Author}} · {{.}}{{end}}</small>{{end}}
+{{define "sourceBadge"}}<small class="source-badge" title="Imported from {{.Name}}">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{with .Author}} · {{.}}{{end}}</small>{{end}}
 
 {{define "commentCardFull" -}}
 <div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}"
@@ -408,7 +408,7 @@
 <div class="thread">
   {{- range . -}}
   <div class="thread-entry thread-{{.Author}}">
-    <div class="thread-meta"><span class="thread-author">{{.Author}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
+    <div class="thread-meta"><span class="thread-author">{{.Who}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
     <div class="thread-body">{{.Body}}</div>
   </div>
   {{- end -}}

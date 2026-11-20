@@ -236,13 +236,14 @@ prereview check     [--json] <file>...
 - **`prereview import`** — bring in **comments left on a remote copy** of a reviewed
   file (Google Docs, Notion, a wiki…), so they're queued like the reviewer's. Reads
   the same payload forms as `suggest` and appends to `.prereview/imports.jsonl`. Each
-  object: `{"remote_id":"…","source":"Google Docs","file":"…","body":"…","quote":"…","author":"…","url":"…","resolved":false}`.
+  object: `{"remote_id":"…","source":"Google Docs","file":"…","body":"…","quote":"…","author":"…","url":"…","resolved":false,"replies":[{"remote_id":"…","author":"…","body":"…"}]}`.
   `remote_id`, `source`, `file` and `body` are required, and a bad record fails the
   command before anything is written. The running review adds them at once (in agent
   mode; otherwise at its next launch). Each lands on its `quote` — found in the source
   text, or for Markdown in the rendered text — or on the whole file when the quote
-  isn't found exactly once. Remote ids already imported, and comments resolved on the
-  remote copy, are skipped. Nothing is sent back to the remote copy.
+  isn't found exactly once. Importing a comment again adds only its new `replies`, to
+  its thread, and resolves it once `resolved` is true; a comment already resolved on
+  its first import is skipped. Nothing is sent back to the remote copy.
 - **`prereview reply`** — post a **thread reply** on a comment **or** suggestion,
   so the reviewer sees what you changed (and can reply back to steer you). The id
   is validated against comments + suggestions. Appends to

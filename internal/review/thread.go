@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"time"
 
@@ -48,11 +49,26 @@ const (
 // nanosecond timestamp (time.Now().UnixNano()): the agent CLI and the server share
 // the same box + clock, so an agent reply is naturally later than the reviewer
 // prompt it answers, and (At, author) sorts stably.
+//
+// A reply imported from a remote copy of the doc (#209) is a reviewer entry
+// (so it hands the comment back to the agent), with the remote author's Name
+// and its RemoteID; the server writes it at drain time.
 type ThreadEntry struct {
 	TargetID string `json:"target_id"`
 	Author   string `json:"author"`
 	Body     string `json:"body"`
 	At       int64  `json:"at"`
+	Name     string `json:"name,omitempty"`
+	RemoteID string `json:"remote_id,omitempty"`
+}
+
+// Who is how the card names the entry's author: the remote author of an
+// imported reply, else agent or reviewer.
+func (e ThreadEntry) Who() string {
+	if e.Name != "" {
+		return e.Name
+	}
+	return e.Author
 }
 
 // When renders At as a compact wall-clock time for the card (e.g. "3:04 PM").
@@ -123,6 +139,21 @@ func hasUnreadReviewerReply(thread []ThreadEntry) bool {
 	return len(thread) > 0 && thread[len(thread)-1].Author == AuthorReviewer
 }
 
+// reopeningReplies is how many of a target's trailing reviewer replies hand it
+// back to the agent: all of them, unless it's resolved and they were all
+// imported from a remote copy (#209). That discussion was closed there (or you
+// closed it here), and someone else wrote them. Any reply of yours reopens it.
+func reopeningReplies(resolved bool, thread []ThreadEntry) int {
+	n := trailingReviewerReplies(thread)
+	if n == 0 || !resolved {
+		return n
+	}
+	if slices.ContainsFunc(thread[len(thread)-n:], func(e ThreadEntry) bool { return e.RemoteID == "" }) {
+		return n
+	}
+	return 0
+}
+
 // agentRepliedLast reports whether a target's thread ends with the AGENT — it has
 // answered and is waiting on the reviewer, so the snapshot does not hand the target
 // over (threadActionable's thread branch). Empty thread → false.
@@ -158,11 +189,12 @@ func trailingReviewerReplies(thread []ThreadEntry) int {
 //   - thread, agent-last → NOT actionable (the agent replied and is waiting on the
 //     reviewer; without this it would re-act on a handled comment forever — the
 //     exact gap a plain !settled filter leaves open).
-func threadActionable(settled bool, thread []ThreadEntry) bool {
+//   - an imported reply on a resolved comment doesn't reopen it (reopeningReplies).
+func threadActionable(settled, resolved bool, thread []ThreadEntry) bool {
 	if len(thread) == 0 {
 		return !settled
 	}
-	return hasUnreadReviewerReply(thread)
+	return reopeningReplies(resolved, thread) > 0
 }
 
 // appendReviewerReply records a reviewer's thread entry in the server-owned

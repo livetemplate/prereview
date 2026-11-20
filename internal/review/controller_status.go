@@ -368,7 +368,7 @@ func (c *PrereviewController) WatchLLMStatus(stop <-chan struct{}, poll time.Dur
 				if n, err := c.DrainImports(); err != nil {
 					slog.Warn("import", "err", err)
 				} else if n > 0 {
-					c.broadcast("CommentsAdded")
+					c.broadcast("CommentsChanged")
 				}
 			}
 

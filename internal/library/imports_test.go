@@ -1,6 +1,7 @@
 package library
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,5 +29,27 @@ func TestLearner_SkipsImported(t *testing.T) {
 	}
 	if _, err := Resolve(store + ":c1"); err != nil {
 		t.Errorf("the reviewer's own comment: %v", err)
+	}
+}
+
+// TestLearner_SkipsImportedReplies: a reply imported from a remote copy is a
+// reviewer entry in the thread, but someone else's: not counted, not citable.
+func TestLearner_SkipsImportedReplies(t *testing.T) {
+	store := seedStore(t, t.TempDir()) // one reviewer reply on c1 at 1762000000000000000
+	before := ReviewerSignals(store)
+	f, err := os.OpenFile(filepath.Join(store, ReviewerRepliesFile), os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(`{"target_id":"c1","author":"reviewer","body":"from Bob","at":1763000000000000000,"name":"Bob","remote_id":"y1"}` + "\n")
+	f.Close()
+	if got := ReviewerSignals(store); got != before {
+		t.Errorf("signals %d, want %d: the imported reply counted", got, before)
+	}
+	if _, err := Resolve(store + ":c1@1763000000000000000"); err == nil {
+		t.Error("an imported reply was accepted as evidence")
+	}
+	if _, err := Resolve(store + ":c1@1762000000000000000"); err != nil {
+		t.Errorf("the reviewer's own reply: %v", err)
 	}
 }

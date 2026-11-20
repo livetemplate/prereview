@@ -68,7 +68,12 @@ func countStore(store string) storeCount {
 			}
 		}
 	}
-	eachLine(filepath.Join(store, ReviewerRepliesFile), func([]byte) { c.replies++ })
+	eachLine(filepath.Join(store, ReviewerRepliesFile), func(b []byte) {
+		var rp storeReply
+		if json.Unmarshal(b, &rp) == nil && rp.RemoteID == "" { // an imported reply isn't the reviewer's
+			c.replies++
+		}
+	})
 	eachLine(filepath.Join(store, DecisionsFile), func([]byte) { c.decisions++ })
 	eachLine(filepath.Join(store, SuggestionsFile), func([]byte) { c.suggestions++ })
 	return c

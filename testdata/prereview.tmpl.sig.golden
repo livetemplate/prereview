@@ -1456,7 +1456,7 @@
   {{with .Empty}}<p class="ckp-empty">{{.}}</p>{{end}}
 
 === sourceBadge ===
-<small class="source-badge" title="Imported from {{.Name}}">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{with .Author}} · {{.}}{{end}}</small>
+<small class="source-badge" title="Imported from {{.Name}}">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{with .Author}} · {{.}}{{end}}</small>
 === statusBanners ===
 {{if .Quitting}}
 <div class="banner-stopping" role="status">
@@ -1515,7 +1515,7 @@
   </div>{{end}}{{end}}{{end}}</div>
 === thread ===
 {{if .}}<div class="thread">{{range .}}<div class="thread-entry thread-{{.Author}}">
-    <div class="thread-meta"><span class="thread-author">{{.Author}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
+    <div class="thread-meta"><span class="thread-author">{{.Who}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
     <div class="thread-body">{{.Body}}</div>
   </div>{{end}}</div>{{end}}
 === tocOverlay ===
