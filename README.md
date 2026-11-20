@@ -3,8 +3,11 @@
 prereview is a local review tool for what your agent produces. You comment
 right on the artifact (a diff, a plan, a rendered doc, an image or a running dev
 site) and the agent picks up each comment and makes the fix. The agent can also
-propose edits that you accept or reject inline. It runs on your machine, works
-with any agent, and you can review from your desk or your phone.
+propose edits that you accept or reject inline. Over time, prereview turns your
+comments into skills your agents load, plus checks and judges that test what they
+write, so they learn what you want ([the learning loop](#the-learning-loop)). It
+runs on your machine, works with any agent, and you can review from your desk or
+your phone.
 
 <p align="center">
   <img src="docs/hero.gif" alt="A reviewer comments on a Go diff and the agent fixes it; then the reviewer accepts an edit the agent proposes" width="820">
@@ -31,8 +34,8 @@ as you save it. Nothing is committed, and nothing leaves your machine.
   and say what is wrong in that spot.
 - **Understand a change you didn't write.** Quiz yourself on the diff, or ask the
   agent a question in a comment thread.
-- **Teach the agent your preferences.** Your comments become lessons and then
-  skills, so you don't have to make the same comment twice (see
+- **Teach the agent your preferences.** Your comments become lessons, then skills,
+  checks and judges, so you don't have to make the same comment twice (see
   [The learning loop](#the-learning-loop)).
 
 ## Get started
@@ -124,10 +127,10 @@ comment in the next review.
    lessons, and each one quotes the comments it rests on. prereview never calls a
    model itself. The first time you run it, the learner can also read your past
    reviews.
-3. **Lessons become skills and checks.** Accepted lessons (accepted automatically
-   unless you turn that off) are written into skills such as `learned-writing`,
-   installed for each agent on the machine. A lesson that can be checked also
-   brings a checker or a judge.
+3. **Lessons become skills, checks and judges.** Accepted lessons (accepted
+   automatically unless you turn that off) are written into skills such as
+   `learned-writing`, installed for each agent on the machine. A lesson that can
+   be checked also brings a checker or a judge.
 4. **Your agents are told to use them.** prereview adds a short block naming the
    skills to each agent's memory file, such as `~/.claude/CLAUDE.md`. In Claude
    Code, a hook runs your checks after every edit.
