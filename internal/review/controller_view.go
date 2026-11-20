@@ -13,6 +13,7 @@ import (
 func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	toggleFullView(&state, &state.ShowAllComments)
 	state.MoreMenuOpen = false
+	state.LastResolvedIDs = nil // Resolve all's Undo belongs to the screen (a deleted comment's stays)
 	// Opening the overview must show accurate badges/snippets for every
 	// commented file, including ones never opened this session.
 	if state.ShowAllComments {

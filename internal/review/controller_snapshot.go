@@ -59,7 +59,7 @@ func (c *PrereviewController) EndSession(state PrereviewState, ctx *livetemplate
 		}
 	}
 	state.SessionEnded = true
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	c.requestShutdown()
 	return state, nil
 }

@@ -118,8 +118,12 @@ func readJSONL(path string, each func([]byte)) {
 // ValidVerdict reports one of the only verdicts: binary, with a critique (no scores).
 func ValidVerdict(v string) bool { return v == checks.StatusPass || v == checks.StatusFail }
 
-// appendJSONL appends one JSON line to path, creating it.
-func appendJSONL(path string, v any) error {
+// appendJSONL appends one JSON line per value to path, creating it. No values
+// writes nothing.
+func appendJSONL(path string, vs ...any) error {
+	if len(vs) == 0 {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -128,7 +132,13 @@ func appendJSONL(path string, v any) error {
 		return err
 	}
 	defer f.Close()
-	return json.NewEncoder(f).Encode(v)
+	enc := json.NewEncoder(f)
+	for _, v := range vs {
+		if err := enc.Encode(v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // AppendJudgment validates and records a verdict (the `prereview judge` write

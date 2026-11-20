@@ -13,6 +13,19 @@
 </div>
 {{end}}
 
+{{if and .LastResolvedIDs (not .Quitting)}}
+<div class="undo-toast" role="status">
+  <span>Resolved {{len .LastResolvedIDs}} comment{{if ne (len .LastResolvedIDs) 1}}s{{end}}</span>
+  <span class="toast-actions">
+    <form method="POST" style="margin:0;display:inline">
+      <button type="submit" name="undoResolveAll" class="undo-btn">Undo</button>
+    </form>
+    <form method="POST" class="toast-dismiss-form">
+      <button type="submit" name="dismissResolveUndo" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
+    </form>
+  </span>
+</div>
+{{end -}}
 {{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
 <div class="reanchor-prompt" role="status">
   <span>Re-anchoring — tap the line(s) this comment should attach to.</span>

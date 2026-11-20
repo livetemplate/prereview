@@ -701,6 +701,11 @@
       
     </nav>
     <div class="ckp-main">
+      <div class="ckp-bulk ckp-bulk-page">
+        <span class="ckp-bulk-label">Everything listed:</span>
+        <form method="POST"><button type="submit" name="queueAllFindings" class="outline" title="Queue each failure listed below as a comment for your agent">Queue all 1</button></form>
+        <form method="POST"><button type="submit" name="dismissAllFindings" class="outline secondary" title="They're fine: stop flagging everything listed below">Ignore all 1</button></form>
+      </div>
       
       
       <section class="ckp-group" data-key="ckp-group-Reader-first">
@@ -717,6 +722,11 @@
             </button></form>
             
             <div class="ckp-detail">
+              <div class="ckp-bulk">
+                <form method="POST"><input type="hidden" name="id" value="reader-first"><button type="submit" name="queueAllFindings" class="outline" title="Queue each one as a comment for your agent">Queue all 1</button></form>
+                <form method="POST"><input type="hidden" name="id" value="reader-first"><button type="submit" name="dismissAllFindings" class="outline secondary" title="They're fine: stop flagging them">Ignore all 1</button></form>
+                
+              </div>
               
               
               <div class="ckp-file jv" data-key="ckp-v-notes.txt">

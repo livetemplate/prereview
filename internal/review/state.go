@@ -397,6 +397,11 @@ type PrereviewState struct {
 	// user later with state from minutes ago.
 	LastDeletedComment *Comment `json:"last_deleted_comment"`
 
+	// LastResolvedIDs is what the All comments screen's Resolve all just
+	// resolved, so its notice can undo exactly those. Cleared with
+	// LastDeletedComment (clearUndo) and by closing the screen.
+	LastResolvedIDs []string `json:"last_resolved_ids"`
+
 	// ViewedFiles is a per-session set of files the user has marked as
 	// "reviewed" (GitHub PR convention). Persisted so the state survives
 	// browser refresh; not written to CSV (this is UX state, not a comment).
@@ -750,6 +755,23 @@ func (s PrereviewState) VisibleComments() []Comment {
 	}
 	return out
 }
+
+// UnresolvedListed is how many comments the All comments screen lists that
+// aren't resolved: what Resolve all resolves.
+func (s PrereviewState) UnresolvedListed() int {
+	n := 0
+	for _, c := range s.Comments {
+		if s.resolvable(c) {
+			n++
+		}
+	}
+	return n
+}
+
+// resolvable reports whether Resolve all resolves c: in scope and open. The
+// screen lists every such comment (commentHiddenFromView hides only resolved
+// ones).
+func (s PrereviewState) resolvable(c Comment) bool { return !c.Resolved && s.inScope(c.File) }
 
 // CommentCount is the number of in-scope comments — the all-comments view's header
 // total. Zero-arg because livetemplate only pre-computes zero-arg methods; the

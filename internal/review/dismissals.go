@@ -2,6 +2,7 @@ package review
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,24 +18,31 @@ import (
 // the file, the check, the flagged text and its line's text, so it survives
 // the line moving and lapses when that line is edited. A dismissed finding
 // stops counting: a check with nothing left passes.
+//
+// A judge's failing verdict is ignored the same way, keyed by the file, the
+// judge and the hashes of the text and rubric it judged: it stays ignored
+// across re-runs until either changes. It reads as a pass, which leaves
+// calibration alone (labels record the verdict itself).
 
 // CheckDismissalsFileName is the review store's dismissal log.
 const CheckDismissalsFileName = "check-dismissals.jsonl"
 
 // Dismissal is one dismissal (or its undoing).
 type Dismissal struct {
-	File      string `json:"file"`
-	Check     string `json:"check"`
-	Match     string `json:"match"` // the flagged text
-	Line      string `json:"line"`  // the whole line's text, trimmed
+	File  string `json:"file"`
+	Check string `json:"check"`
+	Match string `json:"match"` // the flagged text
+	Line  string `json:"line"`  // the whole line's text, trimmed
+	// A judge's verdict: the hashes of the text and rubric it judged (Match and
+	// Line stay empty).
+	Content   string `json:"content,omitempty"`
+	Rubric    string `json:"rubric,omitempty"`
 	Dismissed bool   `json:"dismissed"`
 	At        string `json:"at"`
 }
 
-func (d Dismissal) key() string { return dismissKey(d.File, d.Check, d.Match, d.Line) }
-
-func dismissKey(file, check, match, line string) string {
-	return file + "\x00" + check + "\x00" + match + "\x00" + line
+func (d Dismissal) key() string {
+	return d.File + "\x00" + d.Check + "\x00" + d.Match + "\x00" + d.Line + "\x00" + d.Content + "\x00" + d.Rubric
 }
 
 // dismissalFor identifies a finding on its line.
@@ -47,6 +55,18 @@ func dismissalFor(file, check string, f checks.Finding, lines []string) Dismissa
 		d.Line = strings.TrimSpace(lines[f.Line-1])
 	}
 	return d
+}
+
+// judgeDismissal identifies verdict j of judge check on file.
+func judgeDismissal(file, check string, j Judgment) Dismissal {
+	return Dismissal{File: file, Check: check, Content: j.ContentHash, Rubric: j.RubricHash}
+}
+
+// ignoredVerdict reports whether the reviewer ignored verdict j of judge check
+// on file.
+func ignoredVerdict(dismissed map[string]Dismissal, file, check string, j Judgment) bool {
+	_, ok := dismissed[judgeDismissal(file, check, j).key()]
+	return ok
 }
 
 func (c *PrereviewController) dismissalsPath() string {
@@ -144,17 +164,75 @@ func (c *PrereviewController) DismissFinding(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
-// RestoreDismissed brings back every finding you ignored for one check in one file.
+// DismissAllFindings ignores every failure check id's row counts, or with no
+// id every listed check's (bulkTargets): a checker's findings, or a judge's
+// failing verdicts.
+func (c *PrereviewController) DismissAllFindings(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	at := time.Now().UTC().Format(time.RFC3339)
+	verdicts := c.verdicts()
+	files := map[string][]string{}
+	var recs []any
+	var judged int
+	for _, t := range state.bulkTargets(ctx.GetString("id")) {
+		id := t.Res.ID
+		var d Dismissal
+		if t.Res.Type == checks.TypeJudge {
+			j, ok := verdicts[judgmentKey(t.Path, id)]
+			if !ok { // the log changed since the page was built
+				continue
+			}
+			d = judgeDismissal(t.Path, id, j)
+			judged++
+		} else {
+			lines, ok := files[t.Path]
+			if !ok {
+				var err error
+				if lines, err = checks.ReadLines(filepath.Join(c.RepoPath, filepath.FromSlash(t.Path))); err != nil {
+					return state, err
+				}
+				files[t.Path] = lines
+			}
+			d = dismissalFor(t.Path, id, t.Res.Findings[t.Index], lines)
+		}
+		d.Dismissed, d.At = true, at
+		recs = append(recs, d)
+	}
+	if len(recs) == 0 {
+		return state, nil
+	}
+	if err := appendJSONL(c.dismissalsPath(), recs...); err != nil {
+		return state, err
+	}
+	c.reapplyChecks(&state)
+	noun := "failure" // findings and verdicts
+	switch judged {
+	case 0:
+		noun = "finding"
+	case len(recs):
+		noun = "verdict"
+	}
+	state.Flash = fmt.Sprintf("Ignored %d %s%s", len(recs), noun, plural(len(recs)))
+	go c.broadcast("ChecksUpdated") // other tabs
+	return state, nil
+}
+
+// RestoreDismissed brings back every finding (or judge verdict) you ignored for
+// one check in one file, or in every file when path is "".
 func (c *PrereviewController) RestoreDismissed(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	path, id := ctx.GetString("path"), ctx.GetString("id")
+	if id == "" {
+		return state, nil
+	}
 	at := time.Now().UTC().Format(time.RFC3339)
+	var undo []any
 	for _, d := range c.dismissals() {
-		if d.File == path && d.Check == id {
+		if d.Check == id && (path == "" || d.File == path) {
 			d.Dismissed, d.At = false, at
-			if err := appendJSONL(c.dismissalsPath(), d); err != nil {
-				return state, err
-			}
+			undo = append(undo, d)
 		}
+	}
+	if err := appendJSONL(c.dismissalsPath(), undo...); err != nil {
+		return state, err
 	}
 	c.reapplyChecks(&state)
 	go c.broadcast("ChecksUpdated")

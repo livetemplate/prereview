@@ -2,6 +2,9 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments ({{.CommentCount}})</strong>
+    {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
+      <button type="submit" name="resolveAll" class="outline" title="Resolve every comment listed here">Resolve all {{.UnresolvedListed}}</button>
+    </form>{{end}}
     <form method="POST" style="margin:0">
       <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
     </form>
@@ -161,6 +164,11 @@
             </button></form>
             {{if .Expanded}}
             <div class="ckp-detail">
+              {{if or .QueueAll .IgnoreAll .Ignored}}<div class="ckp-bulk">
+                {{if .QueueAll}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="queueAllFindings" class="outline" title="Queue each one as a comment for your agent">Queue all {{.QueueAll}}</button></form>{{end}}
+                {{if .IgnoreAll}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="dismissAllFindings" class="outline secondary" title="They're fine: stop flagging them">Ignore all {{.IgnoreAll}}</button></form>{{end}}
+                {{if .Ignored}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="restoreDismissed" class="ck-link" title="Bring back the verdicts you ignored">{{.Ignored}} ignored · show again</button></form>{{end}}
+              </div>{{end}}
               {{range .Errors}}<p class="ckp-err"><code>{{.Path}}</code>: {{.Err}}</p>
               {{end}}
               {{range .Verdicts}}
@@ -720,6 +728,11 @@
       {{end}}
     </nav>
     <div class="ckp-main">
+      {{if or .QueueAll .IgnoreAll}}<div class="ckp-bulk ckp-bulk-page">
+        <span class="ckp-bulk-label">Everything listed:</span>
+        {{if .QueueAll}}<form method="POST"><button type="submit" name="queueAllFindings" class="outline" title="Queue each failure listed below as a comment for your agent">Queue all {{.QueueAll}}</button></form>{{end}}
+        <form method="POST"><button type="submit" name="dismissAllFindings" class="outline secondary" title="They're fine: stop flagging everything listed below">Ignore all {{.IgnoreAll}}</button></form>
+      </div>{{end}}
       {{if .Query}}<p class="ckp-hits">{{.Matches}} check{{if ne .Matches 1}}s{{end}} match “{{.Query}}”: names, descriptions, categories, and the words a finding flagged.</p>{{end}}
       {{range .Groups}}
       <section class="ckp-group" data-key="ckp-group-{{.Name}}">
@@ -1749,7 +1762,19 @@
 </div>
 {{end}}
 
-{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
+{{if and .LastResolvedIDs (not .Quitting)}}
+<div class="undo-toast" role="status">
+  <span>Resolved {{len .LastResolvedIDs}} comment{{if ne (len .LastResolvedIDs) 1}}s{{end}}</span>
+  <span class="toast-actions">
+    <form method="POST" style="margin:0;display:inline">
+      <button type="submit" name="undoResolveAll" class="undo-btn">Undo</button>
+    </form>
+    <form method="POST" class="toast-dismiss-form">
+      <button type="submit" name="dismissResolveUndo" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
+    </form>
+  </span>
+</div>
+{{end}}{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
 <div class="reanchor-prompt" role="status">
   <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
   <form method="POST" class="toast-dismiss-form">

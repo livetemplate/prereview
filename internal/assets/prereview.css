@@ -1602,6 +1602,7 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
   background: var(--pico-card-background-color); z-index: 5;
 }
 .all-comments .ac-head button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.all-comments .ac-resolve-all { margin: 0 0.4rem 0 auto; } /* beside Back, not centred */
 .all-comments .ac-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .all-comments .ac-item { margin: 0; }
 .all-comments .ac-jump { margin: 0; }
@@ -3696,7 +3697,7 @@ header.file-head .file-head-checks { margin: 0; }
 .ck-running, .ck-off { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
 .ck-open, .ck-new { color: var(--accent); background: var(--accent-weak); }
 .ck-muted { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
-.ck-notrun, .ck-stale { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
+.ck-notrun, .ck-stale, .ck-ignored { color: var(--text-faint); background: var(--surface-muted); font-weight: 500; }
 .ck-advisory { color: var(--text-muted); border-color: var(--border-strong); background: transparent; font-weight: 500; }
 .ck-judge-tag {
   font-size: 0.66rem; font-weight: 600; color: var(--text-muted); white-space: nowrap;
@@ -3929,6 +3930,12 @@ button.ckp-row-head:hover { background: var(--soft-bg); }
 .ckp-src { color: var(--text-faint); font-size: 0.72rem; }
 .ckp-chev { color: var(--text-faint); width: 0.8rem; }
 .ckp-detail { padding: 0.2rem 0.6rem 0.6rem; display: flex; flex-direction: column; gap: 0.45rem; }
+/* Queue all / Ignore all / show again: one wrapping line above the list. */
+.ckp-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.ckp-bulk form { margin: 0; }
+.ckp-bulk button { margin: 0; padding: 0.25rem 0.65rem; font-size: 0.8rem; }
+.ckp-bulk-page { margin-bottom: 0.5rem; }
+.ckp-bulk-label { font-size: 0.8rem; color: var(--text-muted); }
 .ckp-err { margin: 0; color: var(--mark); font-size: 0.8rem; overflow-wrap: anywhere; }
 .ckp-file { border-left: 2px solid var(--border-strong); padding-left: 0.55rem; }
 .ckp-file > header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem; font-size: 0.78rem; }

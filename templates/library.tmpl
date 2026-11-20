@@ -65,6 +65,11 @@
       {{end}}
     </nav>
     <div class="ckp-main">
+      {{if or .QueueAll .IgnoreAll}}<div class="ckp-bulk ckp-bulk-page">
+        <span class="ckp-bulk-label">Everything listed:</span>
+        {{if .QueueAll}}<form method="POST"><button type="submit" name="queueAllFindings" class="outline" title="Queue each failure listed below as a comment for your agent">Queue all {{.QueueAll}}</button></form>{{end}}
+        <form method="POST"><button type="submit" name="dismissAllFindings" class="outline secondary" title="They're fine: stop flagging everything listed below">Ignore all {{.IgnoreAll}}</button></form>
+      </div>{{end}}
       {{if .Query}}<p class="ckp-hits">{{.Matches}} check{{if ne .Matches 1}}s{{end}} match “{{.Query}}”: names, descriptions, categories, and the words a finding flagged.</p>{{end}}
       {{range .Groups}}
       <section class="ckp-group" data-key="ckp-group-{{.Name}}">
@@ -163,6 +168,11 @@
             </button></form>
             {{if .Expanded}}
             <div class="ckp-detail">
+              {{if or .QueueAll .IgnoreAll .Ignored}}<div class="ckp-bulk">
+                {{if .QueueAll}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="queueAllFindings" class="outline" title="Queue each one as a comment for your agent">Queue all {{.QueueAll}}</button></form>{{end}}
+                {{if .IgnoreAll}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="dismissAllFindings" class="outline secondary" title="They're fine: stop flagging them">Ignore all {{.IgnoreAll}}</button></form>{{end}}
+                {{if .Ignored}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="restoreDismissed" class="ck-link" title="Bring back the verdicts you ignored">{{.Ignored}} ignored · show again</button></form>{{end}}
+              </div>{{end}}
               {{range .Errors}}<p class="ckp-err"><code>{{.Path}}</code>: {{.Err}}</p>
               {{end}}
               {{range .Verdicts}}
