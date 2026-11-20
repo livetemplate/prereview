@@ -2,6 +2,9 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments ({{.CommentCount}})</strong>
+    {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
+      <button type="submit" name="resolveAll" class="outline" title="Resolve every comment listed here">Resolve all {{.UnresolvedListed}}</button>
+    </form>{{end}}
     <form method="POST" style="margin:0">
       <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
     </form>
@@ -161,6 +164,11 @@
             </button></form>
             {{if .Expanded}}
             <div class="ckp-detail">
+              {{if or .QueueAll .IgnoreAll .Ignored}}<div class="ckp-bulk">
+                {{if .QueueAll}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="queueAllFindings" class="outline" title="Queue each one as a comment for your agent">Queue all {{.QueueAll}}</button></form>{{end}}
+                {{if .IgnoreAll}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="dismissAllFindings" class="outline secondary" aria-pressed="false" title="They're fine: stop flagging them">Ignore all {{.IgnoreAll}}</button></form>
+                {{else}}{{if .Ignored}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="restoreAllDismissed" class="outline secondary is-on" aria-pressed="true" title="Bring back the {{.Ignored}} you ignored">Ignored {{.Ignored}}</button></form>{{end}}{{end}}
+              </div>{{end}}
               {{range .Errors}}<p class="ckp-err"><code>{{.Path}}</code>: {{.Err}}</p>
               {{end}}
               {{range .Verdicts}}
@@ -577,6 +585,7 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 4l9 15H3z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round" /><path d="M12 10v4M12 16.5v.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
 === judgeVerdictActions ===
 {{if .CanShow}}<form method="POST" class="ckp-show"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>
+      {{end}}{{if or (eq .Status "fail") (eq .Status "ignored")}}<form method="POST" class="jv-ignore"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><button type="submit" name="toggleIgnoreVerdict" class="outline secondary jv-btn{{if eq .Status "ignored"}} is-on{{end}}" aria-pressed="{{if eq .Status "ignored"}}true{{else}}false{{end}}" title="{{if eq .Status "ignored"}}Bring it back{{else}}It's fine here: stop counting it until the file or the rubric changes{{end}}">{{if eq .Status "ignored"}}Ignored{{else}}Ignore{{end}}</button></form>
       {{end}}<span class="jv-agree"><span class="jv-label">Agree?</span>
       <form method="POST"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="label" value="agree"><button type="submit" name="labelJudgment" class="outline jv-btn{{if eq .Label "agree"}} is-on{{end}}" aria-pressed="{{if eq .Label "agree"}}true{{else}}false{{end}}">Agree</button></form>
       <form method="POST"><input type="hidden" name="path" value="{{.Path}}"><input type="hidden" name="id" value="{{.CheckID}}"><input type="hidden" name="label" value="disagree"><button type="submit" name="labelJudgment" class="outline jv-btn{{if eq .Label "disagree"}} is-on{{end}}" aria-pressed="{{if eq .Label "disagree"}}true{{else}}false{{end}}">Disagree</button></form>
@@ -720,6 +729,12 @@
       {{end}}
     </nav>
     <div class="ckp-main">
+      {{if or .QueueAll .IgnoreAll .Ignored}}<div class="ckp-bulk ckp-bulk-page">
+        <span class="ckp-bulk-label">Everything listed:</span>
+        {{if .QueueAll}}<form method="POST"><button type="submit" name="queueAllFindings" class="outline" title="Queue each failure listed below as a comment for your agent">Queue all {{.QueueAll}}</button></form>{{end}}
+        {{if .IgnoreAll}}<form method="POST"><button type="submit" name="dismissAllFindings" class="outline secondary" aria-pressed="false" title="They're fine: stop flagging everything listed below">Ignore all {{.IgnoreAll}}</button></form>
+        {{else}}<form method="POST"><button type="submit" name="restoreAllDismissed" class="outline secondary is-on" aria-pressed="true" title="Bring back the {{.Ignored}} you ignored">Ignored {{.Ignored}}</button></form>{{end}}
+      </div>{{end}}
       {{if .Query}}<p class="ckp-hits">{{.Matches}} check{{if ne .Matches 1}}s{{end}} match “{{.Query}}”: names, descriptions, categories, and the words a finding flagged.</p>{{end}}
       {{range .Groups}}
       <section class="ckp-group" data-key="ckp-group-{{.Name}}">
@@ -1749,7 +1764,19 @@
 </div>
 {{end}}
 
-{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
+{{if and .LastResolvedIDs (not .Quitting)}}
+<div class="undo-toast" role="status">
+  <span>Resolved {{len .LastResolvedIDs}} comment{{if ne (len .LastResolvedIDs) 1}}s{{end}}</span>
+  <span class="toast-actions">
+    <form method="POST" style="margin:0;display:inline">
+      <button type="submit" name="undoResolveAll" class="undo-btn">Undo</button>
+    </form>
+    <form method="POST" class="toast-dismiss-form">
+      <button type="submit" name="dismissResolveUndo" class="toast-dismiss" aria-label="Dismiss">{{template "iconClose14"}}</button>
+    </form>
+  </span>
+</div>
+{{end}}{{if and .ReanchorCommentID (eq .SelectionEndMax 0)}}
 <div class="reanchor-prompt" role="status">
   <span>Re-anchoring — tap the line(s) this comment should attach to.</span>
   <form method="POST" class="toast-dismiss-form">

@@ -149,7 +149,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 			state.DraftBody = ""
 			state.ReanchorCommentID = ""
 			state.EditingCommentID = ""
-			state.LastDeletedComment = nil
+			clearUndo(&state)
 			state.LastSaved = time.Now().Format("15:04:05")
 			state.Files = annotateCommentCounts(state.Files, state.Comments)
 			return state, nil
@@ -227,7 +227,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 	state.SelectionSide = ""
 	state.DraftBody = ""
 	state.EditingCommentID = ""
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
@@ -293,7 +293,7 @@ func (c *PrereviewController) addFileLevelComment(state PrereviewState, body str
 	state.CommentMode = ""
 	state.DraftBody = ""
 	state.EditingCommentID = ""
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
@@ -350,7 +350,7 @@ func (c *PrereviewController) addAreaComment(state PrereviewState, body string) 
 	state.SelectionArea = Area{}
 	state.DraftBody = ""
 	state.EditingCommentID = ""
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
@@ -409,7 +409,7 @@ func (c *PrereviewController) addRegionComment(state PrereviewState, body string
 	state.SelectionArea = Area{}
 	state.DraftBody = ""
 	state.EditingCommentID = ""
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
 }
@@ -469,7 +469,7 @@ func (c *PrereviewController) addTextComment(state PrereviewState, body string) 
 	state.SelectionText = ""
 	state.DraftBody = ""
 	state.EditingCommentID = ""
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	return state, nil
@@ -552,7 +552,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 	}
 	state.DraftBody = cm.Body
 	state.EditingCommentID = cm.ID
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	// The composer only renders in the diff branch; when Edit is invoked
 	// from the all-comments view this drops back into the file so the
 	// edit composer is actually visible (no-op when already in the diff).
@@ -589,7 +589,7 @@ func (c *PrereviewController) ReanchorComment(state PrereviewState, ctx *livetem
 	state.DraftBody = cm.Body
 	state.ReanchorCommentID = cm.ID
 	state.EditingCommentID = ""
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	closeFullViews(&state)
 	return state, nil
 }
@@ -611,6 +611,7 @@ func (c *PrereviewController) DeleteComment(state PrereviewState, ctx *livetempl
 	if err := c.persist(state.Comments); err != nil {
 		return state, fmt.Errorf("persist after delete: %w", err)
 	}
+	clearUndo(&state) // one undo notice at a time
 	state.LastDeletedComment = &deleted
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	state.LastSaved = time.Now().Format("15:04:05")
@@ -630,15 +631,80 @@ func (c *PrereviewController) ToggleResolved(state PrereviewState, ctx *livetemp
 	if idx < 0 {
 		return state, fmt.Errorf("toggleResolved: id %s not found", id)
 	}
-	state.Comments[idx].Resolved = !state.Comments[idx].Resolved
-	if err := c.persist(state.Comments); err != nil {
-		// Roll back so disk and memory match.
-		state.Comments[idx].Resolved = !state.Comments[idx].Resolved
+	if err := c.setResolved(&state, []string{id}, !state.Comments[idx].Resolved); err != nil {
 		return state, fmt.Errorf("persist after toggle resolved: %w", err)
 	}
-	state.LastDeletedComment = nil
-	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
+}
+
+// ResolveAll resolves every comment the All comments screen lists that isn't
+// resolved, in one write, and keeps their IDs for the notice's Undo.
+func (c *PrereviewController) ResolveAll(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	var ids []string
+	for _, cm := range state.Comments {
+		if state.resolvable(cm) {
+			ids = append(ids, cm.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return state, nil
+	}
+	if err := c.setResolved(&state, ids, true); err != nil {
+		return state, fmt.Errorf("resolve all: %w", err)
+	}
+	state.LastResolvedIDs = ids // after setResolved, which clears the undo notice
+	return state, nil
+}
+
+// clearUndo drops the undo notice (a deleted comment's, or Resolve all's):
+// any other change to the comments makes it stale.
+func clearUndo(state *PrereviewState) {
+	state.LastDeletedComment, state.LastResolvedIDs = nil, nil
+}
+
+// UndoResolveAll reopens what the last Resolve all resolved.
+func (c *PrereviewController) UndoResolveAll(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	ids := state.LastResolvedIDs
+	if err := c.setResolved(&state, ids, false); err != nil {
+		state.LastResolvedIDs = ids // the notice stays, to try again
+		return state, fmt.Errorf("undo resolve all: %w", err)
+	}
+	return state, nil
+}
+
+// DismissResolveUndo closes Resolve all's notice; the comments stay resolved.
+func (c *PrereviewController) DismissResolveUndo(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	clearUndo(&state)
+	return state, nil
+}
+
+// setResolved sets Resolved on the comments named by ids (in place: Comments is
+// the CSV's write-back buffer) and persists once, rolling back on a write error.
+// A change clears the undo notice.
+func (c *PrereviewController) setResolved(state *PrereviewState, ids []string, resolved bool) error {
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var changed []int
+	for i, cm := range state.Comments {
+		if want[cm.ID] && cm.Resolved != resolved {
+			state.Comments[i].Resolved = resolved
+			changed = append(changed, i)
+		}
+	}
+	if len(changed) == 0 {
+		return nil
+	}
+	if err := c.persist(state.Comments); err != nil {
+		for _, i := range changed {
+			state.Comments[i].Resolved = !resolved
+		}
+		return err
+	}
+	clearUndo(state)
+	state.LastSaved = time.Now().Format("15:04:05")
+	return nil
 }
 
 // setCommentDraft flips a comment's Draft flag by id and persists, rolling back
@@ -662,7 +728,7 @@ func (c *PrereviewController) setCommentDraft(state PrereviewState, id string, d
 		state.Comments[idx].Draft = prev
 		return state, fmt.Errorf("persist after draft toggle: %w", err)
 	}
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
 }
@@ -759,7 +825,7 @@ func (c *PrereviewController) HideComment(state PrereviewState, ctx *livetemplat
 		state.Comments[idx].Hidden = false // roll back so disk and memory match
 		return state, fmt.Errorf("persist after hide: %w", err)
 	}
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
 }
@@ -801,7 +867,7 @@ func (c *PrereviewController) UndoDelete(state PrereviewState, ctx *livetemplate
 		// Don't clear LastDeletedComment so the user can try again.
 		return state, fmt.Errorf("persist after undo: %w", err)
 	}
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.Files = annotateCommentCounts(state.Files, state.Comments)
 	state.LastSaved = time.Now().Format("15:04:05")
 	return state, nil
@@ -812,6 +878,6 @@ func (c *PrereviewController) UndoDelete(state PrereviewState, ctx *livetemplate
 // counterpart to UndoDelete's restore. Mirror of ClearFlash: a one-field clear
 // with no persistence (the CSV already reflects the deletion).
 func (c *PrereviewController) DismissUndo(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	return state, nil
 }

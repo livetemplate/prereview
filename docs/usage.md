@@ -50,7 +50,9 @@ an image comment work the same way.
 press <kbd>a</kbd>) lists every comment across all files, of every kind, each with
 a jump back to its source. **Show / hide resolved** keeps
 addressed comments out of the way (or hide a single resolved one to declutter
-without turning the whole group off).
+without turning the whole group off). **Resolve all** resolves every listed
+comment that's still open, and its notice offers **Undo** until you close the
+list.
 
 **One-tap comments.** The comment box on a line, a text selection or a block has a
 row of chips. Each is an instruction you give often: *Drop this*, *Why is this here?*,
@@ -211,6 +213,17 @@ that flag wording, run every time the file loads. The file header shows
 - **Tap a check** to see its findings grouped by file, with **Show in file** and
   **Queue** on each. Its rule actions are **Edit a copy** (built-ins), **Open in
   editor** (your rules) and **Turn off** (for you, in every repo).
+- **Queue all** and **Ignore all** at the top of an open check act on every
+  failure it counts, in every file, including those past the list's limit. The
+  same pair above the list acts on every check listed. A search and the filters
+  narrow both, as they narrow the list. Queue all skips what's already queued and
+  a judge's failure with no passage to point at.
+- **Ignore all** is a toggle: once nothing in its scope is left open, it reads
+  **Ignored N**, and pressing it brings them all back.
+- **Ignore** on a judge's verdict marks it *ignored*, and pressing **Ignored**
+  brings it back. An ignored verdict stops counting as a failure until the file
+  or the judge's rubric changes, so running judges again on the same text
+  doesn't bring it back. It doesn't count as Disagree.
 - A rule's category is its `category:` key; without one it groups as Built-in,
   Yours, or its Vale style (`Microsoft.Passive` → Vale · Microsoft).
 

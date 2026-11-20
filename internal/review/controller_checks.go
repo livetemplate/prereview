@@ -287,11 +287,15 @@ func (cs checkSetup) rulesFor(path string) (checkers, judges []*checks.Rule) {
 
 // judgeResults appends each judge's latest verdict on path as a result.
 // contentHash identifies the text the review shows; lines loads it only to
-// locate a current verdict's quote.
-func judgeResults(res []checks.Result, path string, judges []*checks.Rule, verdicts map[string]Judgment, calibrated map[string]bool, contentHash string, lines func() []string) []checks.Result {
+// locate a current verdict's quote. A failing verdict you ignored passes, with
+// Dismissed 1, as a checker left with nothing does.
+func judgeResults(res []checks.Result, path string, judges []*checks.Rule, verdicts map[string]Judgment, calibrated map[string]bool, dismissed map[string]Dismissal, contentHash string, lines func() []string) []checks.Result {
 	for _, jr := range judges {
 		j, ok := verdicts[judgmentKey(path, jr.ID)]
 		r := judgeResult(jr, j, ok, contentHash, lines)
+		if r.Status == checks.StatusFail && ignoredVerdict(dismissed, path, jr.ID, j) {
+			r.Status, r.Findings, r.Dismissed = checks.StatusPass, nil, 1
+		}
 		r.Advisory = !calibrated[jr.ID] // only a calibrated judge counts (M5)
 		res = append(res, r)
 	}
@@ -404,9 +408,10 @@ func (c *PrereviewController) applyChecks(state *PrereviewState) {
 		r.mu.Unlock()
 	}
 	res, _ := c.results(cs, d.Path, key, rules, func() []string { return lines })
-	res = withoutDismissed(res, d.Path, func() []string { return lines }, c.dismissals())
+	dismissed := c.dismissals()
+	res = withoutDismissed(res, d.Path, func() []string { return lines }, dismissed)
 	if len(judges) > 0 {
-		res = judgeResults(res, d.Path, judges, c.verdicts(), c.calibrated(), keyContentHash(key), func() []string { return lines })
+		res = judgeResults(res, d.Path, judges, c.verdicts(), c.calibrated(), dismissed, keyContentHash(key), func() []string { return lines })
 	}
 	state.Checks = &FileChecks{Results: res, ValeNotice: valeNotice(cs.mode), ValeTrust: cs.mode == valeUntrusted}
 }
@@ -452,7 +457,7 @@ func (c *PrereviewController) applyReviewChecks(state *PrereviewState) {
 		}
 		if res, ok := c.results(cs, f.Path, key, rules, load); ok {
 			res = withoutDismissed(res, f.Path, load, dismissed)
-			res = judgeResults(res, f.Path, judges, verdicts, calibrated, keyContentHash(key), load)
+			res = judgeResults(res, f.Path, judges, verdicts, calibrated, dismissed, keyContentHash(key), load)
 			rc.Files = append(rc.Files, PathChecks{Path: f.Path, Results: res})
 		}
 	}
@@ -818,11 +823,21 @@ func (c *PrereviewController) queueFinding(state PrereviewState, path, id string
 	if !ok {
 		return state, fmt.Errorf("queue finding: %s %s #%d not found", path, id, idx)
 	}
+	cm, err := c.findingComment(state, path, res, f)
+	if err != nil {
+		return state, err
+	}
+	return c.appendQueued(state, cm)
+}
+
+// findingComment is finding f of result res in path as the text comment Queue
+// makes.
+func (c *PrereviewController) findingComment(state PrereviewState, path string, res checks.Result, f checks.Finding) (Comment, error) {
 	d := state.CurrentDiff
 	if path != state.SelectedFile || d == nil || state.ViewingVersion { // the anchor needs the live text
 		var err error
 		if d, err = c.loadDiffCached(state.Base, path); err != nil {
-			return state, fmt.Errorf("queue finding: load %s: %w", path, err)
+			return Comment{}, fmt.Errorf("queue finding: load %s: %w", path, err)
 		}
 	}
 	anchor := captureAnchor(d, f.Line, f.EndLine, "new")
@@ -837,16 +852,44 @@ func (c *PrereviewController) queueFinding(state PrereviewState, path, id string
 	cm := newTextComment(path, f.Line, f.EndLine, f.FromCol, f.ToCol, "new",
 		fmt.Sprintf("%s (%s: %s)", f.Message, kind, res.Name), anchor)
 	cm.Check = res.ID
-	return c.appendQueued(state, cm)
+	return cm, nil
 }
 
-// appendQueued adds a comment the server built (a finding, a request to the
-// agent) to the queue and persists it, leaving the composer — and any half-typed
-// draft or comment being edited — exactly as it was.
-func (c *PrereviewController) appendQueued(state PrereviewState, cm Comment) (PrereviewState, error) {
-	state.Comments = append(state.Comments, cm)
+// QueueAllFindings queues every failure check id's row counts that isn't queued
+// yet, or with no id every listed check's (bulkTargets), in one write. A judge
+// failure whose quote wasn't found is skipped: it has no span to anchor to.
+func (c *PrereviewController) QueueAllFindings(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	queued := state.queuedFindings()
+	var add []Comment
+	for _, t := range state.bulkTargets(ctx.GetString("id")) {
+		if !state.queueable(t, queued) {
+			continue
+		}
+		cm, err := c.findingComment(state, t.Path, t.Res, t.Res.Findings[t.Index])
+		if err != nil {
+			return state, err
+		}
+		add = append(add, cm)
+	}
+	if len(add) == 0 {
+		return state, nil
+	}
+	state, err := c.appendQueued(state, add...)
+	if err == nil {
+		state.Flash = fmt.Sprintf("Queued %d finding%s", len(add), plural(len(add)))
+	}
+	state.noteNav()
+	return state, err
+}
+
+// appendQueued adds comments the server built (findings, a request to the
+// agent) to the queue and persists them in one write, leaving the composer —
+// and any half-typed draft or comment being edited — exactly as it was.
+func (c *PrereviewController) appendQueued(state PrereviewState, cms ...Comment) (PrereviewState, error) {
+	n := len(state.Comments)
+	state.Comments = append(state.Comments, cms...)
 	if err := c.persist(state.Comments); err != nil {
-		state.Comments = state.Comments[:len(state.Comments)-1]
+		state.Comments = state.Comments[:n]
 		return state, fmt.Errorf("persist queued comment: %w", err)
 	}
 	noteEnqueue(&state)

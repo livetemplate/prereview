@@ -2,6 +2,14 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments ({{.CommentCount}})</strong>
+    {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
+      <button
+        type="submit"
+        name="resolveAll"
+        class="outline"
+        title="Resolve every comment listed here"
+      >Resolve all {{.UnresolvedListed}}</button>
+    </form>{{end}}
     <form method="POST" style="margin:0">
       <button
         type="submit"

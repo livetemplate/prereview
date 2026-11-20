@@ -163,7 +163,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
-	state.LastDeletedComment = nil
+	clearUndo(&state)
 	state.EditingCommentID = ""
 	state.CursorKey = "" // new file, new lines — drop the line cursor
 	c.relocateSelected(&state)

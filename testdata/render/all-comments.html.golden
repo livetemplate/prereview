@@ -701,6 +701,14 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments (1)</strong>
+    <form method="POST" class="ac-resolve-all">
+      <button
+        type="submit"
+        name="resolveAll"
+        class="outline"
+        title="Resolve every comment listed here"
+      >Resolve all 1</button>
+    </form>
     <form method="POST" style="margin:0">
       <button
         type="submit"

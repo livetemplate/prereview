@@ -338,6 +338,15 @@ func renderFixtures() []renderFixture {
 		{ID: "c1", File: "app.go", Body: "fix this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new"},
 	}
 
+	// after Resolve all: every listed comment resolved, the notice offering Undo
+	resolvedAll := goBase()
+	resolvedAll.ShowAllComments, resolvedAll.ShowResolved = true, true
+	resolvedAll.Comments = []review.Comment{
+		{ID: "c1", File: "app.go", Body: "fix this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new", Resolved: true},
+		{ID: "c2", File: "app.go", Body: "and this", Kind: "line", FromLine: 3, ToLine: 3, Side: "new", Resolved: true},
+	}
+	resolvedAll.LastResolvedIDs = []string{"c1", "c2"}
+
 	// a request prereview queued (Run judges): one summary line on its card, the
 	// prompt behind Read more; All comments and the Queue row show the summary
 	// alone. A reviewer's file comment beside it renders as it always has.
@@ -807,6 +816,7 @@ func renderFixtures() []renderFixture {
 		{"binary-audio", binary("sound.mp3")},
 		{"binary-fallback", binary("archive.zip")},
 		{"all-comments", allComments},
+		{"all-comments-resolved-all", resolvedAll},
 		{"request-readmore", requestCard},
 		{"request-all-comments", requestAll},
 		{"quiz", quiz},

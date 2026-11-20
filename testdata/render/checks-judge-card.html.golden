@@ -730,6 +730,7 @@
     <div class="jv-actions">
       <form method="POST"><input type="hidden" name="id" value="reader-first"><button type="submit" name="queueJudgment" class="outline">Queue as comment</button></form>
       <form method="POST" class="ckp-show"><input type="hidden" name="path" value="notes.txt"><input type="hidden" name="id" value="reader-first"><input type="hidden" name="index" value="0"><button type="submit" name="jumpToFinding" class="outline">Show in file</button></form>
+      <form method="POST" class="jv-ignore"><input type="hidden" name="path" value="notes.txt"><input type="hidden" name="id" value="reader-first"><button type="submit" name="toggleIgnoreVerdict" class="outline secondary jv-btn" aria-pressed="false" title="It's fine here: stop counting it until the file or the rubric changes">Ignore</button></form>
       <span class="jv-agree"><span class="jv-label">Agree?</span>
       <form method="POST"><input type="hidden" name="path" value="notes.txt"><input type="hidden" name="id" value="reader-first"><input type="hidden" name="label" value="agree"><button type="submit" name="labelJudgment" class="outline jv-btn" aria-pressed="false">Agree</button></form>
       <form method="POST"><input type="hidden" name="path" value="notes.txt"><input type="hidden" name="id" value="reader-first"><input type="hidden" name="label" value="disagree"><button type="submit" name="labelJudgment" class="outline jv-btn" aria-pressed="false">Disagree</button></form>

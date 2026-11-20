@@ -46,6 +46,11 @@ type CheckPage struct {
 	Files   int // files checked
 	Skipped int // files past maxCheckFiles
 	Checks  int // distinct checks
+
+	// The page-wide Queue all / Ignore all: every failure of every enabled
+	// check listed, under the page's filters (bulkCounts); Ignored is what
+	// those checks have ignored, for the pressed Ignored N.
+	QueueAll, IgnoreAll, Ignored int
 }
 
 // CheckChip is one status chip.
@@ -87,11 +92,14 @@ type CheckRow struct {
 	Agreement                               string         // a judge's calibration ("agrees with you 5 of 7 · …")
 	Disagreed                               []Disagreement // verdicts you disagreed with (expanded judge rows)
 	// Expanded rows only:
-	Verdicts []JudgeVerdictView // a judge's verdict per file
-	ByFile   []CheckFileFindings
-	Errors   []CheckFileError
-	More     int          // findings past maxPageFindings
-	History  *HistoryView // the rule file's versions (yours only), newest first
+	Verdicts  []JudgeVerdictView // a judge's verdict per file
+	ByFile    []CheckFileFindings
+	Errors    []CheckFileError
+	More      int          // findings past maxPageFindings
+	History   *HistoryView // the rule file's versions (yours only), newest first
+	QueueAll  int          // failures Queue all would queue: counted, not yet queued, with a span
+	IgnoreAll int          // failures Ignore all would ignore: every counted one
+	Ignored   int          // failures you already ignored, in the files the page covers: Ignored N brings them back
 }
 
 // CheckFileFindings is one file's findings under an expanded row.
@@ -104,11 +112,22 @@ type CheckFileFindings struct {
 	Findings  []FindingView
 }
 
+// verdictIgnored is how a judge verdict you ignored reads (its result passes).
+const verdictIgnored = "ignored"
+
+// verdictStatus is how judge result r reads: its status, or ignored.
+func verdictStatus(r checks.Result) string {
+	if r.Dismissed > 0 {
+		return verdictIgnored
+	}
+	return r.Status
+}
+
 // JudgeVerdictView is one file's verdict under an expanded judge row.
 type JudgeVerdictView struct {
 	Path, CheckID   string
 	Open            bool   // the file on screen
-	Status          string // pass | fail | stale | notrun | error
+	Status          string // pass | fail | stale | notrun | error | ignored
 	Critique, Model string
 	At              string // the verdict's time (labels key on it)
 	Label           string // your answer: agree | disagree | ""
@@ -146,6 +165,7 @@ type checkAgg struct {
 	nameHit  bool // the search matches the check itself, so every finding counts
 	isJudge  bool
 	judged   map[string]int // a judge's file count per status
+	ignored  int            // a checker's findings you ignored
 	verdicts []JudgeVerdictView
 }
 
@@ -200,9 +220,10 @@ func (s PrereviewState) CheckPage() *CheckPage {
 			a.total += len(r.Findings)
 			// Only the expanded row lists findings; the rest only count them.
 			listed := r.ID == s.ExpandedCheck
+			a.ignored += r.Dismissed
 			ff := CheckFileFindings{Path: pc.Path, CheckID: r.ID, Open: pc.Path == s.SelectedFile, Dismissed: r.Dismissed}
 			for i, f := range r.Findings {
-				if a.nameHit || strings.Contains(strings.ToLower(f.Message), q) || strings.Contains(strings.ToLower(f.Match), q) {
+				if a.nameHit || findingMatches(f, q) {
 					ff.Count++
 					if listed {
 						fv := findingView(pc.Path, r, i)
@@ -331,7 +352,48 @@ func (s PrereviewState) CheckPage() *CheckPage {
 		}
 		p.Groups = append(p.Groups, *g)
 	}
+	p.QueueAll, p.IgnoreAll = s.bulkCounts(s.targetsFor(p.listedChecks()))
+	for _, r := range p.listedRows() {
+		p.Ignored += r.Ignored
+	}
 	return p
+}
+
+// listedRows is the enabled checks the page lists, folded passing groups
+// included (ignoring everything makes a group pass and fold): what its
+// Queue all / Ignore all act on.
+func (p *CheckPage) listedRows() []CheckRow {
+	var out []CheckRow
+	for _, g := range append(slices.Clone(p.Groups), p.Folded...) {
+		for _, r := range g.Rows {
+			if r.Status != checkStatusOff {
+				out = append(out, r)
+			}
+		}
+	}
+	return out
+}
+
+// listedChecks is listedRows' IDs.
+func (p *CheckPage) listedChecks() []string {
+	var ids []string
+	for _, r := range p.listedRows() {
+		ids = append(ids, r.ID)
+	}
+	return ids
+}
+
+// bulkTargets is what Queue all / Ignore all act on: check id's row, or with
+// id "" every check the page lists.
+func (s PrereviewState) bulkTargets(id string) []rowTarget {
+	if id != "" {
+		return s.rowTargets(id)
+	}
+	p := s.CheckPage()
+	if p == nil {
+		return nil
+	}
+	return s.targetsFor(p.listedChecks())
 }
 
 // valeCategory is the Vale config's own group (its summary row and notice);
@@ -362,6 +424,92 @@ func allPassing(g *CheckGroup, expanded string) bool {
 		}
 	}
 	return true
+}
+
+// findingMatches reports whether the page's search q (lower-cased) finds a
+// finding's message or flagged text.
+func findingMatches(f checks.Finding, q string) bool {
+	return strings.Contains(strings.ToLower(f.Message), q) || strings.Contains(strings.ToLower(f.Match), q)
+}
+
+// critiqueMatches reports whether the page's search q finds a judge's critique.
+func critiqueMatches(r checks.Result, q string) bool {
+	return r.Critique != "" && strings.Contains(strings.ToLower(r.Critique), q)
+}
+
+// rowTarget is one failure a check's row counts: a checker's finding, or a
+// judge's failing verdict (Index -1 when its quote wasn't found).
+type rowTarget struct {
+	Path  string
+	Res   checks.Result
+	Index int
+}
+
+// rowTargets is every failure check id's row counts under the page's file chip
+// and search, past the list's cap: what Queue all and Ignore all act on.
+func (s PrereviewState) rowTargets(id string) []rowTarget {
+	q := strings.ToLower(strings.TrimSpace(s.ChecksQuery))
+	var out []rowTarget
+	for _, pc := range s.pageFiles() {
+		if s.ChecksFile != "" && pc.Path != s.ChecksFile {
+			continue
+		}
+		r, ok := resultFor(pc.Results, id)
+		if !ok {
+			continue
+		}
+		nameHit := q == "" || checkNameMatches(r, q)
+		if r.Type == checks.TypeJudge {
+			if r.Status == checks.StatusFail && (nameHit || critiqueMatches(r, q)) {
+				t := rowTarget{Path: pc.Path, Res: r, Index: -1}
+				if len(r.Findings) > 0 { // the quote was found
+					t.Index = 0
+				}
+				out = append(out, t)
+			}
+			continue
+		}
+		for i, f := range r.Findings {
+			if nameHit || findingMatches(f, q) {
+				out = append(out, rowTarget{Path: pc.Path, Res: r, Index: i})
+			}
+		}
+	}
+	return out
+}
+
+// targetsFor is rowTargets for each check in ids.
+func (s PrereviewState) targetsFor(ids []string) []rowTarget {
+	var out []rowTarget
+	for _, id := range ids {
+		out = append(out, s.rowTargets(id)...)
+	}
+	return out
+}
+
+// queueable reports whether Queue all queues t: it has a span to anchor to and
+// isn't queued already. queued is queuedFindings.
+func (s PrereviewState) queueable(t rowTarget, queued map[string]bool) bool {
+	switch {
+	case t.Index < 0:
+		return false
+	case t.Res.Type == checks.TypeJudge:
+		return !s.judgmentQueued(t.Path, t.Res)
+	default:
+		return !queued[findingKey(t.Path, t.Res.Findings[t.Index], t.Res.ID)]
+	}
+}
+
+// bulkCounts is how many of targets Queue all would queue, and Ignore all
+// would ignore (all of them).
+func (s PrereviewState) bulkCounts(targets []rowTarget) (queueAll, ignoreAll int) {
+	queued := s.queuedFindings()
+	for _, t := range targets {
+		if s.queueable(t, queued) {
+			queueAll++
+		}
+	}
+	return queueAll, len(targets)
 }
 
 func checkNameMatches(r checks.Result, q string) bool {
@@ -411,10 +559,16 @@ func (s PrereviewState) checkRow(a *checkAgg, status string) CheckRow {
 	if r.Type != "" && r.Type != checks.SourceVale {
 		row.Detail += " · " + r.Type
 	}
+	if status != checkStatusOff {
+		row.Ignored = a.ignored // every row: the page's Ignored N sums them
+	}
 	if !row.Expanded {
 		return row
 	}
 	row.Errors = a.errs
+	if status != checkStatusOff {
+		row.QueueAll, row.IgnoreAll = s.bulkCounts(s.rowTargets(row.ID))
+	}
 	if len(s.CheckHistory) > 0 {
 		row.History = &HistoryView{ID: row.ID, Action: "restoreRuleVersion", Versions: s.CheckHistory}
 	}
@@ -593,8 +747,8 @@ func (s PrereviewState) aggJudge(a *checkAgg, path string, r checks.Result, q st
 	if a.judged == nil {
 		a.judged = map[string]int{}
 	}
-	a.judged[r.Status]++
-	if a.nameHit || (r.Critique != "" && strings.Contains(strings.ToLower(r.Critique), q)) {
+	a.judged[verdictStatus(r)]++ // an ignored verdict counts apart from the passes it reads as
+	if a.nameHit || critiqueMatches(r, q) {
 		a.count++
 	}
 	if r.ID != s.ExpandedCheck {
@@ -606,7 +760,7 @@ func (s PrereviewState) aggJudge(a *checkAgg, path string, r checks.Result, q st
 // verdictView is one judge result as the page row and the file's card show it.
 func (s PrereviewState) verdictView(path string, r checks.Result) JudgeVerdictView {
 	return JudgeVerdictView{Path: path, CheckID: r.ID, Open: path == s.SelectedFile,
-		Status: r.Status, Critique: r.Critique, Model: r.Model, At: r.JudgedAt,
+		Status: verdictStatus(r), Critique: r.Critique, Model: r.Model, At: r.JudgedAt,
 		Label: s.JudgeLabels[labelKey(path, r.ID, r.JudgedAt)], CanShow: len(r.Findings) > 0,
 		Queued: s.judgmentQueued(path, r)}
 }
@@ -635,7 +789,8 @@ func (s PrereviewState) judgmentQueued(path string, r checks.Result) bool {
 func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg) {
 	row.IsJudge = true
 	n := func(st string) int { return a.judged[st] }
-	files := n(checks.StatusPass) + n(checks.StatusFail) + n(checks.StatusStale) + n(checks.StatusNotRun)
+	ignored := n(verdictIgnored)
+	files := n(checks.StatusPass) + n(checks.StatusFail) + n(checks.StatusStale) + n(checks.StatusNotRun) + ignored
 	switch row.Status {
 	case checkStatusOff:
 		row.Summary = "off"
@@ -659,6 +814,14 @@ func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg) {
 		row.Detail = "judge · calibrated · " + row.SourceLabel()
 	}
 	row.Agreement = calibrationText(cal)
+	row.Ignored = ignored
+	if ignored > 0 && row.Status != checkStatusOff {
+		if row.Status == checks.StatusPass && n(checks.StatusPass) == 0 {
+			row.Summary = fmt.Sprintf("%d ignored", ignored)
+		} else {
+			row.Summary += fmt.Sprintf(" · %d ignored", ignored)
+		}
+	}
 	if row.Expanded { // only the open row lists them
 		for _, l := range cal.Disagreed {
 			row.Disagreed = append(row.Disagreed, Disagreement{File: l.File, Verdict: l.Verdict, Critique: l.Critique})
@@ -669,6 +832,9 @@ func (s PrereviewState) judgeRow(row *CheckRow, a *checkAgg) {
 	}
 	row.Errors = a.errs
 	row.Verdicts = a.verdicts
+	if row.Expanded && row.Status != checkStatusOff {
+		row.QueueAll, row.IgnoreAll = s.bulkCounts(s.rowTargets(row.ID))
+	}
 }
 
 // calibrationShort is a judge's standing in a word or two, and the agreement it
