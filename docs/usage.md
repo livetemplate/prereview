@@ -41,7 +41,9 @@ re-encoding and resizing.
 
 **Annotate a live local site.** Started with `--external <url>` (see below),
 prereview proxies a running dev server, so you can drag a box on any part of the
-live page and comment. The annotation re-pins as the page scrolls. Once the agent has
+live page and comment. Add a directory (`--external <url> .`) to review its files in
+the same session: the **Live** toggle in the header (or <kbd>l</kbd>) switches
+between them, and both kinds of comment share one queue. The annotation re-pins as the page scrolls. Once the agent has
 worked on or answered a box, it turns dashed with a ✓ until you resolve it, and the
 **Annotations** panel shows its reply, with a **Reply** button to push back. Boxes on
 an image comment work the same way.
@@ -489,10 +491,10 @@ store, so reviews of two files in one directory run independently.
 | `--base <ref>` | `HEAD` | Git ref to diff against (`HEAD~1`, `main`, a tag, a SHA). Git mode only. |
 | `--port <n>` | `0` | TCP port; `0` = a random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address. On a remote box with Tailscale, auto-binds the tailnet IP so a phone can reach it — never public. Avoid `0.0.0.0`. |
-| `--out <dir>` | the review path | Directory to create the store under (its `.prereview/`). Required with `--external`. The resolved store is printed as the `STORE` line. |
+| `--out <dir>` | the review path | Directory to create the store under (its `.prereview/`). Required with `--external` and no path. The resolved store is printed as the `STORE` line. |
 | `--agent` | off | Run under an agent: stream the review queue as JSON events and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. (`--skill`/`--stream` are deprecated aliases.) |
 | `--replace` | off | Stop an already-running server for this store and take over. |
-| `--external <url>` | — | Annotate a live local site instead of files. Requires `--out`; ignores the path and `--base`. |
+| `--external <url>` | — | Annotate a live local site. With a directory path, also review it in the same session; without one, requires `--out`. |
 
 Run-and-exit actions (they don't start the server): `--version`,
 `--install-skill` / `--client`, `--update`, `--uninstall`, `--no-update`.

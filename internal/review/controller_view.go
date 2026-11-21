@@ -315,6 +315,9 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	if idx < 0 {
 		return state, fmt.Errorf("jumpToComment: id %s not found", id)
 	}
+	if state.Comments[idx].IsRegionLevel() {
+		return focusLive(state, id), nil
+	}
 	state, err := c.selectFileForJump(state, state.Comments[idx].File)
 	if err != nil {
 		return state, err
@@ -356,8 +359,43 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 		c.enterFile(&state, file, diff)
 	}
 	closeFullViews(&state)
+	state.LiveView = false
 	clearScrollTargets(&state)
 	return state, nil
+}
+
+// ToggleLiveView switches surfaces in a combined session (#114): the header's
+// Live toggle and the "l" shortcut. It flips what is on screen, so from a
+// full-page view over the live site it brings the site back.
+func (c *PrereviewController) ToggleLiveView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	showLive(&state, !state.LiveShowing())
+	return state, nil
+}
+
+// focusLive jumps to a live-site annotation (#114): it shows the live site and
+// focuses the annotation, which moves the framed site to its page and scrolls
+// to it, as the live-only sidebar's Locate does. The file stays selected, for
+// the switch back.
+func focusLive(state PrereviewState, id string) PrereviewState {
+	showLive(&state, true)
+	clearScrollTargets(&state)
+	focusRegion(&state, id)
+	return state
+}
+
+// showLive shows the live site (on) or the files. Either way the reviewer lands
+// on that surface, so a full-page view closes; and the region overlay disarms,
+// as it does on a file switch, because the HTML preview and the live stage each
+// have one and they share RegionSelectArmed. Only a combined session has two
+// surfaces to switch between; any other ignores it.
+func showLive(state *PrereviewState, on bool) {
+	if !state.Combined() {
+		return
+	}
+	state.LiveView = on
+	closeFullViews(state)
+	state.RegionSelectArmed = false
+	state.MoreMenuOpen = false
 }
 
 // clearScrollTargets drops every one-render scroll nudge, so a jump that sets none

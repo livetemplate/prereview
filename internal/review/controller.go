@@ -44,10 +44,12 @@ type PrereviewController struct {
 	NoGit      bool
 	SingleFile string
 
-	// ExternalMode is true under `prereview --external <url>`: the session
-	// fronts a live local website through the reverse proxy instead of a
-	// repo. ProxyBaseURL is the second-origin URL the UI iframes; TargetURL
-	// is the upstream shown to the user. Set once by main.go.
+	// ExternalMode is true under `prereview --external <url>` with no path: the
+	// session fronts a live local website through the reverse proxy instead of
+	// a repo. ProxyBaseURL is the second-origin URL the UI iframes; TargetURL
+	// is the upstream shown to the user. A combined session (#114, --external
+	// with a path) sets the proxy fields and leaves ExternalMode false: it has
+	// a repo. Set once by main.go.
 	ExternalMode bool
 	ProxyBaseURL string
 	TargetURL    string
@@ -525,14 +527,20 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// it through PrereviewState.inScope. "" in a directory / git review (no narrowing).
 	state.SingleFile = c.SingleFile
 
+	// The live surface's identity is mirror-only: the controller is the source
+	// of truth on every connect, so a persisted copy from another launch (a
+	// live-only session's ExternalMode, an old proxy port) never renders.
+	state.ExternalMode = c.ExternalMode
+	state.ProxyBaseURL = proxyURLFor(c.ProxyBaseURL, ctx)
+	state.TargetURL = c.TargetURL
+	if !state.Combined() {
+		state.LiveView = false
+	}
+
 	// External (proxy) mode short-circuits the entire git/file-list path:
-	// there is no repo to diff. Mirror the proxy identity from the controller
-	// (source of truth) and return — the template renders the framed live
-	// site + URL-grouped annotations instead of a file tree.
+	// there is no repo to diff — the template renders the framed live site +
+	// URL-grouped annotations instead of a file tree.
 	if c.ExternalMode {
-		state.ExternalMode = true
-		state.ProxyBaseURL = c.ProxyBaseURL
-		state.TargetURL = c.TargetURL
 		state.Version = c.Version
 		state.CSVPath = c.CSVPath
 		return state, nil

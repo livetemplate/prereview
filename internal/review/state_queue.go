@@ -158,11 +158,18 @@ func (s PrereviewState) queueComments() []Comment {
 	}
 	out := make([]Comment, 0, len(scoped))
 	for _, c := range scoped {
-		if c.File == s.SelectedFile {
+		if s.inQueueFile(c) {
 			out = append(out, c)
 		}
 	}
 	return out
+}
+
+// inQueueFile reports whether c belongs to the Queue's "This file" view. A
+// live-site annotation (#114) has no file, so it belongs to every file's view
+// rather than to none.
+func (s PrereviewState) inQueueFile(c Comment) bool {
+	return c.File == s.SelectedFile || c.IsRegionLevel()
 }
 
 func (s PrereviewState) queueSuggestions() []Suggestion {
@@ -199,7 +206,7 @@ func (s PrereviewState) QueueHiddenCount() int {
 	awaiting := s.AwaitingAgent()
 	n := 0
 	for _, c := range s.scopedComments() {
-		if c.File != s.SelectedFile && reopenIfReplied(c.QueueState(), c.ID, awaiting) != "" {
+		if !s.inQueueFile(c) && reopenIfReplied(c.QueueState(), c.ID, awaiting) != "" {
 			n++
 		}
 	}
@@ -372,7 +379,7 @@ func (s PrereviewState) AgentWorkingLabel() string {
 type QueueItem struct {
 	ID    string
 	Kind  string // queueKindComment | queueKindSuggestion
-	File  string
+	File  string // the row's location: the file, or a live-site annotation's page URL
 	Line  int    // new-side line (0 for file/region/area comments)
 	Body  string // the comment text (a request's summary) / suggestion note, shown truncated by CSS
 	State string // queueDraft | queueQueued | queueBlocked | queueAnswered | queueDone
@@ -392,7 +399,7 @@ func (s PrereviewState) QueueItems() []QueueItem {
 	add := func(item QueueItem) { buckets[item.State] = append(buckets[item.State], item) }
 	awaiting := s.AwaitingAgent()
 	for _, c := range s.queueComments() {
-		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.File, Line: c.ToLine, Body: c.Headline(), State: reopenIfReplied(c.QueueState(), c.ID, awaiting)})
+		add(QueueItem{ID: c.ID, Kind: queueKindComment, File: c.Location(), Line: c.ToLine, Body: c.Headline(), State: reopenIfReplied(c.QueueState(), c.ID, awaiting)})
 	}
 	for _, sg := range s.queueSuggestions() {
 		st := reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting)

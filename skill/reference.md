@@ -29,8 +29,8 @@ this file is the lookup for **what every value means**.
 | `--base` | `HEAD` | no | Git base for diff comparison. `HEAD` = working tree vs last commit; `main` = branch-vs-trunk; `HEAD~3` = last-3-commits view; any rev-spec git accepts works. **Ignored in no-git mode** (single file / non-git dir — there is no base). |
 | `--port` | `0` | no | TCP port to listen on. `0` = OS-assigned (random free port — what the agent should normally use to avoid collisions). |
 | `--host` | `127.0.0.1` | no | Host/IP to bind on. **Auto-resolved when not set explicitly:** a remote (SSH) box with a tailnet binds its Tailscale IP (phone-reachable, never public); a remote box with no tailnet stays `127.0.0.1` and prints a stderr warning; local stays `127.0.0.1`. An explicit value is an absolute override and is never auto-rebound — avoid `0.0.0.0`, which exposes the source diff on every interface including any public IP. |
-| `--external` | — | no | Annotate a live local website instead of files: reverse-proxies the URL on a second origin and overlays region annotation. Requires `--out`; ignores `[path]`/`--base`. See [External mode](#external-mode). |
-| `--out` | the review path | with `--external` | Directory to create the store under (its `.prereview/` holds `comments.csv`). Defaults to the review path; required with `--external`. The resolved store is printed as the `STORE` line — that, not this, is the `--out <STORE>` argument the [agent subcommands](#agent-subcommands) take. |
+| `--external` | — | no | Annotate a live local website: reverse-proxies the URL on a second origin and overlays region annotation. With a directory `[path]` the session reviews it too, one queue for both; without one it's live-only, requires `--out` and ignores `--base`. See [External mode](#external-mode). |
+| `--out` | the review path | with `--external` and no path | Directory to create the store under (its `.prereview/` holds `comments.csv`). Defaults to the review path; required with `--external` and no path. The resolved store is printed as the `STORE` line — that, not this, is the `--out <STORE>` argument the [agent subcommands](#agent-subcommands) take. |
 | `--version` | — | no | Print build version and exit. |
 | `--update` / `--uninstall` | — | no | Download+install the latest release, or remove the binary. prereview re-syncs the installed skill on every launch (see `skill_updated` in [Agent mode](#agent-mode)). It updates itself on launch only with `PREREVIEW_AUTO_UPDATE=1`; `PREREVIEW_NO_UPDATE=1` or `--no-update` turns that off. |
 
@@ -471,9 +471,14 @@ manually or relaunch with `--agent` later to have an agent process them.
 `--external <url>` reverse-proxies a **live local site** instead of reviewing files; the
 user drags a box on any page to leave a comment. Comments are stored as `kind=region`
 rows — a **URL + rectangle** (`url` + `area` columns), not a file + line — and are
-**frozen** (no content re-anchoring, like `area`). Requires `--out` (no repo to default
-the store to); `[path]`/`--base` are ignored. Region comments are informational feedback
-about a page, not file-edit directives.
+**frozen** (no content re-anchoring, like `area`). Without a path it requires `--out`
+(no repo to default the store to) and ignores `--base`. Region comments are informational
+feedback about a page, not file-edit directives.
+
+With a directory path as well (`prereview --agent --external <url> <dir>`), one session
+reviews both: the snapshot carries `kind=region` comments beside the line and file
+comments, from the one `STORE`. A region comment has no `file`; read its `url` and
+`area`. A single-file path is refused.
 
 ## Atomicity guarantees
 

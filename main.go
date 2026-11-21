@@ -63,7 +63,7 @@ var templateOrder = []string{
 	"page.tmpl", // the shell / entry template — MUST be first
 	// one file per UI component (define-only; parse order among them is irrelevant)
 	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
-	"toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl",
+	"toc.tmpl", "banners.tmpl", "external.tmpl", "livestage.tmpl", "moremenu.tmpl",
 	"filedrawer.tmpl", "allcomments.tmpl", "quiz.tmpl", "checks.tmpl", "library.tmpl",
 	// the {{with .CurrentDiff}} file-view sub-views
 	"fileheader.tmpl", "binaryview.tmpl", "htmlview.tmpl", "markdownview.tmpl", "diffview.tmpl",
@@ -265,8 +265,8 @@ func main() {
 		flag.PrintDefaults()
 	}
 	base := flag.String("base", "HEAD", "git base for comparison (default HEAD = working tree vs last commit); ignored for a non-git dir or single file")
-	external := flag.String("external", "", "annotate a live local website instead of files: reverse-proxies this http(s):// URL and overlays the region-annotation UI. Requires --out. Ignores [path]/--base.")
-	out := flag.String("out", "", "directory to create the annotation store under (its .prereview/ holds comments.csv). Defaults to the review path; required with --external (which has no review path). The resolved store is printed as the STORE line.")
+	external := flag.String("external", "", "annotate a live local website: reverse-proxies this http(s):// URL and overlays the region-annotation UI. With a [path] the session also reviews that path, and the header switches between the files and the live site. Without one it is live-only and requires --out.")
+	out := flag.String("out", "", "directory to create the annotation store under (its .prereview/ holds comments.csv). Defaults to the review path; required with --external and no path. The resolved store is printed as the STORE line.")
 	port := flag.Int("port", 0, "TCP port to listen on (0 = random free port)")
 	publicURL := flag.String("public-url", os.Getenv("PREREVIEW_PUBLIC_URL"), "the URL a browser outside this machine uses to reach the review, e.g. a sandbox proxy's https://vm.exe.xyz:4799 (also PREREVIEW_PUBLIC_URL). Printed as READY and allowed as a WebSocket origin; the bind port defaults to its port. The bind address is unchanged: widen it with --host")
 	host := flag.String("host", "127.0.0.1", "host/IP to bind on. Unset on a remote (SSH) box, prereview auto-binds to this host's Tailscale IP so a phone can reach it without exposing it publicly; locally it stays 127.0.0.1. Pass an explicit value to override.")
@@ -428,7 +428,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *external != "" {
+	// --external with no path is live-only; with one, run reviews the path and
+	// the live site in one session (#114).
+	if *external != "" && len(flag.Args()) == 0 {
 		if err := runExternal(*external, *out, *host, explicitHost, *port, agentMode, skillSyncs, *replace); err != nil {
 			slog.Error("fatal", "err", err)
 			os.Exit(1)
@@ -436,7 +438,7 @@ func main() {
 		return
 	}
 
-	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, explicitBase, listenPort, pubURL, agentMode, skillSyncs, *out, *replace); err != nil {
+	if err := run(reviewPath(flag.Args()), *base, *host, explicitHost, explicitBase, listenPort, pubURL, agentMode, skillSyncs, *out, *replace, *external); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}

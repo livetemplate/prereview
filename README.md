@@ -63,7 +63,8 @@ Select a word or phrase to comment on just those characters.
 <p align="center"><img src="docs/markdown-block.gif" alt="Clicking a rendered Markdown block; the comment anchors to its source lines" width="760"></p>
 
 **Comment on an image or a live site.** Drag a box on an image, or on a running dev
-server that prereview proxies with `--external`.
+server that prereview proxies with `--external`. Pass a directory too, and one session
+reviews the code and the running app, with one queue for both.
 
 <p align="center"><img src="docs/image-area.gif" alt="Dragging a rectangle on an image and saving a comment on that area" width="760"></p>
 

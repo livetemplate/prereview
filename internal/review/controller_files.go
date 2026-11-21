@@ -86,8 +86,7 @@ func (c *PrereviewController) SelectFile(state PrereviewState, ctx *livetemplate
 // previous file's versions). SelectFile and the jumps (comments, suggestions,
 // check findings) all switch through it; each sets its own scroll target after.
 func (c *PrereviewController) enterFile(state *PrereviewState, path string, diff *gitdiff.FileDiff) {
-	state.SelectedFile = path
-	c.showDiff(state, diff)
+	c.openFile(state, path, diff)
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
@@ -104,6 +103,16 @@ func (c *PrereviewController) enterFile(state *PrereviewState, path string, diff
 	closeFullViews(state)
 	c.relocateSelected(state)
 	c.applyVersionList(state) // per-file version timeline (#90) — refresh for the new file
+}
+
+// openFile selects path and shows its diff on the Files surface: every path that
+// opens a file for the reviewer goes through it, so in a combined session
+// (#114) the file never loads hidden behind the live site. Mount's own reload
+// of the selected file doesn't: a reconnect must keep the surface it had.
+func (c *PrereviewController) openFile(state *PrereviewState, path string, diff *gitdiff.FileDiff) {
+	state.SelectedFile = path
+	c.showDiff(state, diff)
+	state.LiveView = false
 }
 
 // ToggleFiles flips the mobile file-drawer's open state. Bound to the
@@ -158,8 +167,7 @@ func (c *PrereviewController) stepFile(state PrereviewState, delta int) (Prerevi
 	if err != nil {
 		return state, fmt.Errorf("load diff %s: %w", path, err)
 	}
-	state.SelectedFile = path
-	c.showDiff(&state, diff)
+	c.openFile(&state, path, diff)
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""

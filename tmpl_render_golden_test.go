@@ -468,6 +468,25 @@ func renderFixtures() []renderFixture {
 	a1.Processed, a2.Answered, a3.Resolved = true, true, true
 	imgAreas.Comments = []review.Comment{a1, a2, a3, a4}
 
+	// #114 combined session. Files showing on an armed HTML preview: the live
+	// stage is mounted but hidden, with no overlay of its own (only the
+	// preview's), and the header carries the Live toggle.
+	combine := func(st review.PrereviewState) review.PrereviewState {
+		st.TargetURL = "http://localhost:3000"
+		st.CurrentURL = "/"
+		st.ProxyBaseURL = "http://localhost:7000/"
+		st.Comments = append(st.Comments, review.Comment{ID: "r1", Kind: "region", URL: "/", Body: "CTA too faint",
+			Area: review.Area{X: 0.1, Y: 0.2, W: 0.3, H: 0.1}})
+		return st
+	}
+	combined := combine(html)
+	combined.RegionSelectArmed = true
+	// ...and the live site showing: the page address in the title, the stage
+	// with its pin, and no file-only controls.
+	combinedLive := combine(goBase())
+	combinedLive.LiveView = true
+	combinedLive.AgentMode = true
+
 	// version-view (historical read-only) + a populated version timeline so the
 	// file-header Versions panel (Phase 2) is exercised, not dark.
 	version := goBase()
@@ -840,6 +859,8 @@ func renderFixtures() []renderFixture {
 		{"ripple", ripple},
 		{"external", external},
 		{"external-acted", extActed},
+		{"combined", combined},
+		{"combined-live", combinedLive},
 		{"skill-notice", skillNotice},
 		{"skill-notice-external", skillNoticeExt},
 		{"version-view", version},

@@ -1,0 +1,72 @@
+{{/* The live site (#114): the proxied site in a cross-origin iframe, its pin
+     layer, and the region toggle, overlay and composer. Rendered by the
+     live-only view (externalBody) and, in a combined session, inside the repo
+     view's <main> in a .live-wrap that stays mounted while the files show, so
+     the framed site keeps its route, scroll and state; only the wrapper hides
+     (live-hidden). The overlay and composer render only while LiveShowing,
+     which is always true in live-only. The region toggle always renders: a
+     node appearing BEFORE the keyed stage makes morphdom re-insert the stage,
+     and moving an iframe reloads it. */}}
+{{define "liveStage"}}    {{template "regionToggle" $}}
+    <div class="preview-stage ext-stage"
+         lvt-fx:proxy-bridge="setProxyURL"
+         data-key="ext-stage"
+         {{- with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+      {{/* lvt-ignore: morphdom must never re-process this iframe. Its src is
+           set once (SSR); as the user navigates the live site in-app the
+           content moves while the src attribute stays put. Without this, any
+           server render re-emits src={{`{{.ProxyBaseURL}}`}} and morphdom
+           resets the iframe back to the home page. (lvt-ignore-attrs is NOT
+           enough — it only back-fills dropped attrs; the template always has
+           src, so morphdom would still sync it.) */}}
+      <iframe
+        class="ext-frame"
+        src="{{.ProxyBaseURL}}"
+        title="Live preview of {{.TargetURL}}"
+        lvt-ignore
+      ></iframe>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">
+        {{- range $.RegionComments -}}
+        <button type="button"
+                class="area-overlay pin-btn
+                {{- if .Resolved}} is-resolved{{end}}
+                {{- if index $.AgentActedLabels .ID}} is-acted{{end}}
+                {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}
+                "
+                lvt-on:click="editComment"
+                data-id="{{.ID}}"
+                data-key="pin-{{.ID}}"
+                style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
+                title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"
+                aria-label="Edit annotation"></button>
+        {{- end -}}
+        {{- if eq $.CommentMode "region" -}}
+        <div class="area-overlay area-overlay-pending"
+             data-key="pin-pending"
+             style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>
+        {{- end -}}
+      </div>
+      {{if and .RegionSelectArmed $.LiveShowing}}<div
+        class="region-overlay"
+        lvt-fx:region-select="selectRegion"
+        data-surface="page"
+        data-key="ext-region-overlay"
+      ></div>{{end}}
+    </div>
+    {{if and $.LiveShowing (eq $.CommentMode "region")}}{{template "composer" $}}{{end}}{{end}}
+
+{{/* The header's Live toggle in a combined session (#114): pressed while the
+     live site shows, and a tap switches surfaces (as "l" does). It reflects
+     LiveShowing, so with a full-page view over the live site it reads off and
+     a tap brings the site back. */}}
+{{define "liveToggle" -}}
+<form method="POST">
+  <button
+    type="submit"
+    name="toggleLiveView"
+    class="live-toggle {{if .LiveShowing}}contrast{{else}}outline contrast{{end}}"
+    aria-pressed="{{if .LiveShowing}}true{{else}}false{{end}}"
+    title="{{if .LiveShowing}}Back to the files{{else}}Show the live site{{end}}{{with index $.KeyHint "toggleLiveView"}} ({{.}}){{end}}"
+  >Live</button>
+</form>
+{{- end}}

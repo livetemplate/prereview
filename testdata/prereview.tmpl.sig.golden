@@ -16,7 +16,7 @@
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}{{with .Source}} {{template "sourceBadge" .}}{{end}}</div>
+          <div class="ac-where"><code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}{{with .Source}} {{template "sourceBadge" .}}{{end}}</div>
           <div class="ac-body">{{.Headline}}</div>
         </button>
       </form>
@@ -295,7 +295,7 @@
     <button type="submit" name="addComment" form="composer-add-form" class="save-btn">Save{{with index $.KeyHint "addComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
   </div></div>
 === deleteDialog ===
-<dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.File}}</code> {{.LineSpan}}</small></p><footer>
+<dialog id="confirm-delete-{{.ID}}"><article><header><strong>Delete comment?</strong></header><p><small><code>{{.Location}}</code> {{.LineSpan}}</small></p><footer>
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <fieldset role="group">
@@ -350,14 +350,7 @@
 </header>
 {{template "skillNotice" $}}<div class="layout layout-external">
   <main class="viewer ext-viewer">
-    {{template "regionToggle" $}}
-    <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
-      
-      <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
-      {{if .RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
-    </div>
-    {{if eq $.CommentMode "region"}}{{template "composer" $}}{{end}}
+{{template "liveStage" $}}
   </main>
   <aside class="ext-sidebar{{if .AnnoDrawerOpen}} is-open{{end}}" aria-label="Annotations">
     <header class="ext-sidebar-head"><strong>Annotations ({{len $.AllRegionComments}})</strong><form method="POST" style="margin:0">
@@ -765,6 +758,19 @@
     <button type="submit" name="toggleLibrary" class="contrast library-trigger{{if $.ShowLibrary}} is-on{{end}}" aria-pressed="{{if $.ShowLibrary}}true{{else}}false{{end}}" title="Library: the learnings and checks every review on this machine uses">{{template "iconLibrary"}}<span class="tb-label">Library</span>{{if $.LearnNew}}<span class="lib-badge" title="{{$.LearnNew}} new learning{{if ne $.LearnNew 1}}s{{end}} proposed">{{$.LearnNew}}</span>{{end}}{{if $.LearnStalled}}<span class="agent-dot is-stalled" role="img" aria-label="Learning is waiting: your agent's learner isn't running" title="Learning is waiting: your agent's learner isn't running"></span>{{end}}</button>
   </form>
 
+=== liveStage ===
+    {{template "regionToggle" $}}
+    <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+      
+      <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
+      {{if and .RegionSelectArmed $.LiveShowing}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
+    </div>
+    {{if and $.LiveShowing (eq $.CommentMode "region")}}{{template "composer" $}}{{end}}
+=== liveToggle ===
+<form method="POST">
+  <button type="submit" name="toggleLiveView" class="live-toggle {{if .LiveShowing}}contrast{{else}}outline contrast{{end}}" aria-pressed="{{if .LiveShowing}}true{{else}}false{{end}}" title="{{if .LiveShowing}}Back to the files{{else}}Show the live site{{end}}{{with index $.KeyHint "toggleLiveView"}} ({{.}}){{end}}">Live</button>
+</form>
 === markdownView ===
 {{with $.CurrentDiff}}  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.md-block" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
         <span class="line-mark{{if $ba.Open}} is-open{{else}}{{if $ba.Accepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$ba.Total}}</span>
@@ -774,7 +780,7 @@
 <div class="more-menu{{if .MoreMenuOpen}} is-open{{end}}" role="menu" aria-label="More options">
   <div class="menu-info">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed{{if gt .CommentCount 0}} · {{.CommentCount}} comment{{if ne .CommentCount 1}}s{{end}}{{end}}</div>
   
-  {{if gt (len .Files) 1}}
+  {{if and (gt (len .Files) 1) (not .LiveShowing)}}
   <form method="POST">
     <button type="submit" name="prevFile" class="menu-item" role="menuitem">
       <span class="menu-icon">{{template "iconChevronLeft"}}</span>
@@ -803,7 +809,7 @@
       <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
     </button>
   </form>
-  {{if .CurrentDiff}}
+  {{if .FileShowing}}
   
   {{with .RenderedHeadings}}
   
@@ -998,16 +1004,16 @@
 
 <div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" lvt-on:click="closeFiles" aria-label="Close file list"></div>
 
-<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .LiveShowing}} live-showing{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
 {{template "fileDrawer" $}}
 
-<main class="viewer" lvt-fx:viewport-report="reportViewport" data-lvt-viewport-items=".line, .md-block">
+<main class="viewer" lvt-fx:viewport-report="reportViewport" data-lvt-viewport-items=".line, .md-block">{{if .LiveAvailable}}<div class="live-wrap{{if not .LiveShowing}} live-hidden{{end}}" data-key="live-wrap">{{template "liveStage" $}}</div>{{end}}
 {{if .ShowQuiz}}
 {{template "quizView" $}}
 {{else}}{{if .ShowAllComments}}
 {{template "allComments" $}}
 {{else}}{{if .ShowLibrary}}{{template "library" $}}
-{{else}}
+{{else}}{{if .LiveView}}{{else}}
 {{with .CurrentDiff}}
 <article>
 {{template "fileHeader" $}}
@@ -1088,7 +1094,7 @@
   </div>
   {{end}}
 {{end}}
-{{end}}{{end}}{{end}}
+{{end}}{{end}}{{end}}{{end}}
 
 {{template "viewerPrompts" $}}
 </main>
@@ -1119,6 +1125,11 @@
 <script defer src="/mermaid-init.js"></script>
 </body>
 </html>
+
+
+
+
+
 
 
 
@@ -1556,7 +1567,7 @@
 <header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
   <form method="POST">
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
-  </form>
+  </form>{{if .LiveAvailable}}{{template "liveToggle" $}}{{end}}
   
   {{if not .ExternalMode}}
   <form method="POST">
@@ -1564,15 +1575,15 @@
   </form>
   {{end}}
   <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}</span>
+    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<span class="title-page">{{.LivePageLabel}}</span> <small class="live-count">· {{len .RegionComments}} annotation{{if ne (len .RegionComments) 1}}s{{end}}</small>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
   </div>
   
   <div class="toolbar-inline">
-    <div class="tb-group tb-counters">
+    {{if not .LiveShowing}}<div class="tb-group tb-counters">
       
       <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
-    </div>
-    {{if .CurrentDiff}}
+    </div>{{end}}
+    {{if .FileShowing}}
     <div class="tb-group tb-toggles">
       
       {{if .IsMarkdown}}
@@ -1600,7 +1611,7 @@
 {{template "viewMenu" $}}
   </div>
   
-  {{if gt (len .Files) 1}}
+  {{if and (gt (len .Files) 1) (not .LiveShowing)}}
   <form method="POST" class="nav-prev">
     <button type="submit" name="prevFile" title="Previous file" aria-label="Previous file" class="contrast">{{template "iconChevronLeft"}}<span class="nav-label">Prev{{with index $.KeyHint "prevFile"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
   </form>
@@ -1633,7 +1644,7 @@
     <div class="tb-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
       <button type="button" class="contrast theme-toggle tb-dropdown-trigger" aria-haspopup="menu" title="View options — focus, color scheme &amp; mode, comment filters, help"><span class="tb-label">View</span>{{template "iconChevronDown"}}</button>
       <div class="tb-dropdown-panel" role="menu" aria-label="View options">
-        {{if .CurrentDiff}}
+        {{if .FileShowing}}
         
         <form method="POST">
           <button type="submit" name="toggleFocusMode" class="menu-item{{if .FocusMode}} is-on{{end}}" role="menuitem">
@@ -1757,7 +1768,7 @@
 === viewerPrompts ===
 {{if and .LastDeletedComment (not .Quitting)}}
 <div class="undo-toast" role="status">
-  <span>Comment on <code>{{.LastDeletedComment.File}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
+  <span>Comment on <code>{{.LastDeletedComment.Location}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
   <span class="toast-actions">
     <form method="POST" style="margin:0;display:inline">
       <button type="submit" name="undoDelete" class="undo-btn">Undo</button>

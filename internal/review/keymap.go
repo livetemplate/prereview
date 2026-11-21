@@ -41,6 +41,10 @@ type KeyBinding struct {
 	// session isn't in agent mode, so a repo-only reviewer never sees a key for a
 	// control (the agent-queue Pause/Resume) that doesn't exist for them.
 	StreamOnly bool
+
+	// LiveOnly limits a binding to a combined session (#114), the one that has
+	// both files and a live site to switch between; filtered like StreamOnly.
+	LiveOnly bool
 }
 
 // keyBindings is the keymap. Every entry with a non-empty Action becomes a
@@ -62,6 +66,7 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"f"}, Display: "f", Action: "toggleFiles", Label: "Toggle file tree"},
 	{Keys: []string{"t"}, Display: "t", Action: "toggleTOC", Label: "Toggle table of contents"},
 	{Keys: []string{"Mod+k"}, Display: "⌘/Ctrl + K", Action: "openSearch", Label: "Search files"},
+	{Keys: []string{"l"}, Display: "l", Action: "toggleLiveView", Label: "Switch between the files and the live site", LiveOnly: true},
 	{Keys: []string{"a"}, Display: "a", Action: "toggleCommentList", Label: "All comments"},
 	{Keys: []string{"z"}, Display: "z", Action: "toggleQuiz", Label: "Comprehension quiz"},
 	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved comments"},
@@ -78,19 +83,33 @@ var keyBindings = []KeyBinding{
 // evaluator auto-invokes it; the template ranges over it for both the hidden
 // window bindings and the help overlay. StreamOnly rows are dropped outside
 // --agent mode so a repo-only reviewer gets neither a live binding nor a help
-// row for the agent-queue Pause/Resume shortcut (there's no queue for them).
+// row for the agent-queue Pause/Resume shortcut (there's no queue for them), and
+// LiveOnly rows outside a combined session (there's no live site to switch to).
 func (s PrereviewState) KeyBindings() []KeyBinding {
-	if s.AgentMode {
-		return keyBindings
-	}
-	out := make([]KeyBinding, 0, len(keyBindings))
-	for _, b := range keyBindings {
-		if b.StreamOnly {
-			continue
+	return keyBindingSets[boolIndex(s.AgentMode)][boolIndex(s.Combined())]
+}
+
+// keyBindingSets is the keymap filtered once per (agent mode, combined) pair, so
+// the per-render KeyBindings call returns a shared slice.
+var keyBindingSets = func() (sets [2][2][]KeyBinding) {
+	for agent := range 2 {
+		for combined := range 2 {
+			for _, b := range keyBindings {
+				if (b.StreamOnly && agent == 0) || (b.LiveOnly && combined == 0) {
+					continue
+				}
+				sets[agent][combined] = append(sets[agent][combined], b)
+			}
 		}
-		out = append(out, b)
 	}
-	return out
+	return sets
+}()
+
+func boolIndex(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // KeyHint maps a button name to its Display key, so a button that a shortcut

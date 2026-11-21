@@ -10,7 +10,7 @@
         title="View options — focus, color scheme &amp; mode, comment filters, help"
       ><span class="tb-label">View</span>{{template "iconChevronDown"}}</button>
       <div class="tb-dropdown-panel" role="menu" aria-label="View options">
-        {{if .CurrentDiff}}
+        {{if .FileShowing}}
         {{/* Focus — hide the side columns for distraction-free reading. Gated
              on an open file (with none open the drawer is the only way to pick
              one). Label flips, same as the old inline button. */}}

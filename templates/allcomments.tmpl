@@ -29,7 +29,7 @@
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>{{.File}}</code> · {{.LineSpan}} <small>({{.Side}})</small>
+          <div class="ac-where"><code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}
             {{- if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}
             {{- if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}
             {{- if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}

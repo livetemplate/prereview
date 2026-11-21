@@ -11,7 +11,7 @@
       class="hamburger outline contrast"
       aria-label="Toggle files"
     >{{template "iconHamburger"}}</button>
-  </form>
+  </form>{{if .LiveAvailable}}{{template "liveToggle" $}}{{end}}
   {{/* Search palette trigger (issue #91). Always visible (outside the
        desktop-only toolbar-inline) so it's reachable on a phone too; the Mod+k
        shortcut (documented in the help overlay) is the desktop path. Repo mode
@@ -30,6 +30,7 @@
   <div class="title">
     <span class="title-main">
       {{- if .ShowAllComments}}{{/* No title in all-comments mode — the "Show all comments (N) ☑" checkbox in the toolbar already conveys the view. */}}
+      {{- else if .LiveShowing}}<span class="title-page">{{.LivePageLabel}}</span> <small class="live-count">· {{len .RegionComments}} annotation{{if ne (len .RegionComments) 1}}s{{end}}</small>
       {{- else if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>
       {{- else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>
       {{- end -}}
@@ -43,15 +44,15 @@
        a CSS divider between them; the prev/next and Quit forms below
        form their own groups via .tb-group-divider on first-of-group. */}}
   <div class="toolbar-inline">
-    <div class="tb-group tb-counters">
+    {{if not .LiveShowing}}<div class="tb-group tb-counters">
       {{/* File-count status text. The "Show resolved" filter and the
            "⚠ outdated" button used to sit here; they now live in the
            "View ▾" dropdown below (their toggleShowResolved /
            toggleCommentList actions are unchanged), keeping the inline
            bar to one short text chip so it can't crop the right edge. */}}
       <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
-    </div>
-    {{if .CurrentDiff}}
+    </div>{{end}}
+    {{if .FileShowing}}
     <div class="tb-group tb-toggles">
       {{/* Native HTML radio groups for view-mode toggles. Auto-submit
            on change via livetemplate's `lvt-on:change` (same pattern as
@@ -141,7 +142,7 @@
   </div>
   {{/* "Comment on file" used to live here; it now sits in the file header
        (.file-head) next to the filename, which declutters the toolbar. */}}
-  {{if gt (len .Files) 1}}
+  {{if and (gt (len .Files) 1) (not .LiveShowing)}}
   <form method="POST" class="nav-prev">
     <button
       type="submit"

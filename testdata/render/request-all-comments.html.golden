@@ -690,7 +690,7 @@
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="r1">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>app.go</code> · file <small>()</small></div>
+          <div class="ac-where"><code>app.go</code> · file</div>
           <div class="ac-body">Asked your agent to run this file&#39;s judges</div>
         </button>
       </form>
@@ -748,7 +748,7 @@
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="c1">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>app.go</code> · file <small>()</small></div>
+          <div class="ac-where"><code>app.go</code> · file</div>
           <div class="ac-body">split this file</div>
         </button>
       </form>
