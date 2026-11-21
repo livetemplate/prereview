@@ -34,6 +34,7 @@ Subcommands (for the coding agent; each takes --out <STORE>):
   done       mark comments worked on (validated against comments.csv; --file -/--all-open)
   reply      post a thread reply on a comment or suggestion so the reviewer sees what you did (--body/--file)
   quiz       submit a comprehension quiz about a file's diff for the reviewer to answer (--file/stdin)
+  explain    submit a walkthrough of the whole change for the reviewer to follow (--file/stdin)
   status     echo the agent's status to the review UI: status <working|done> [message]
   suggest    submit proposed edits as inline suggestion boxes (--file/stdin)
   watch      deliver the next batch of queue events after --since <seq> (blocks when caught up), until the terminating end event
@@ -160,6 +161,17 @@ func main() {
 	// accepts them in the Library.
 	if len(os.Args) > 1 && os.Args[1] == "learn" {
 		learnMain(os.Args[2:])
+		return
+	}
+
+	// `prereview explain [--out <dir>] [--file <f>]` — the coding agent submits a
+	// walkthrough of the whole change (#115): steps in reading order, each citing
+	// the lines it explains, for the reviewer to follow on the Understand page.
+	if len(os.Args) > 1 && os.Args[1] == "explain" {
+		if err := runExplain(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview explain:", err)
+			os.Exit(1)
+		}
 		return
 	}
 

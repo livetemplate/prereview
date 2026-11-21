@@ -112,6 +112,13 @@ type PrereviewController struct {
 	// re-doing the work, not a stale read of stale data.
 	diffCache sync.Map // map[string]cachedDiff
 
+	// changedIdx caches the #115 changed-line index (see changedIndex), shared
+	// across tabs like diffCache: it describes the files, not a user.
+	changedIdx changedIndexCache
+	// firstSeenMu serialises first-seen.json's read-modify-write: tabs reloading
+	// at once may each stamp a new explanation.
+	firstSeenMu sync.Mutex
+
 	// sessionMu guards session. The controller is a singleton shared by all
 	// sessions, so OnConnect (any connection) writes it while the llm-status
 	// watcher goroutine reads it.
@@ -631,6 +638,9 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// MUST come after CurrentDiff is set — grounding earlier compares against nil
 	// and condemns every question.
 	c.groundQuizzes(&state)
+	// ...and ground the walkthrough (#115). It needs the file list, not the open
+	// diff, so this spot is merely the first where both are settled.
+	c.applyExplain(&state)
 	// Artifact versioning (#90): populate the selected file's version timeline
 	// and the paused state. Mount always shows the LIVE diff (ViewingVersion
 	// defaults false and isn't persisted), so a reconnect naturally leaves any

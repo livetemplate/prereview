@@ -457,6 +457,13 @@ type PrereviewState struct {
 	Quizzes     []Quiz                `json:"quizzes"`
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
 
+	// Explanations are the agent's walkthroughs of the change (#115,
+	// .prereview/explain.jsonl), newest last, grounded by applyExplain. Re-read
+	// like Quizzes, never persisted. ExplainSeen is explain.jsonl's fingerprint at
+	// that load, so the watcher reloads only when the file moved.
+	Explanations []Explanation `json:"explanations"`
+	ExplainSeen  string        `json:"explain_seen"`
+
 	// NavDismissed hides the open-items stepper (#193) for this session. The bar
 	// appears whenever the review has open items, so it is not behind a menu, but it
 	// must be possible to put away while reading.

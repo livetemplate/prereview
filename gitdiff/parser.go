@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -123,7 +122,7 @@ func LoadDiff(repo, base, path string) (*FileDiff, error) {
 		return &FileDiff{Path: path, Note: tooLargeNote(st.Size())}, nil
 	}
 	out, err := runGit(repo,
-		"diff", "--no-color", "-U999999", "-M", "--no-ext-diff",
+		"diff", "--no-color", "-U999999", "--no-ext-diff",
 		base, "--", path,
 	)
 	if err != nil {
@@ -244,23 +243,37 @@ func highlightLines(fd *FileDiff) {
 // as loadUntrackedAsAdded but Kind="ctx" so the diff overlay paints
 // nothing.
 func loadFileAsCtx(repo, path string) (*FileDiff, error) {
-	full := filepath.Join(repo, path)
-	data, err := os.ReadFile(full)
+	rows, binary, err := readRows(filepath.Join(repo, path))
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	if bytes.IndexByte(data, 0x00) >= 0 {
+	if binary {
 		return &FileDiff{Path: path, IsBinary: true, Note: "binary file"}, nil
 	}
 	fd := &FileDiff{Path: path}
-	content := strings.TrimSuffix(string(data), "\n")
-	if content == "" {
-		return fd, nil
-	}
-	for i, line := range strings.Split(content, "\n") {
+	for i, line := range rows {
 		fd.Lines = append(fd.Lines, DiffLine{OldNum: i + 1, NewNum: i + 1, Kind: "ctx", Content: line})
 	}
 	return fd, nil
+}
+
+// readRows reads a working-tree file as the rows the loaders render
+// (loadFileAsCtx, loadUntrackedAsAdded, and the #115 ChangedIndex, which must
+// agree with them): a NUL byte makes it binary, and a trailing newline adds no
+// row, so a file of only "\n" has none.
+func readRows(full string) (rows []string, binary bool, err error) {
+	data, err := os.ReadFile(full)
+	if err != nil {
+		return nil, false, err
+	}
+	if bytes.IndexByte(data, 0x00) >= 0 {
+		return nil, true, nil
+	}
+	content := strings.TrimSuffix(string(data), "\n")
+	if content == "" {
+		return nil, false, nil
+	}
+	return strings.Split(content, "\n"), false, nil
 }
 
 // isTracked reports whether path exists in the tree at base.
@@ -272,24 +285,15 @@ func isTracked(repo, base, path string) bool {
 // loadUntrackedAsAdded reads the working-tree file and synthesizes a FileDiff
 // where every line is an add. Used when ListFiles surfaced an untracked file.
 func loadUntrackedAsAdded(repo, path string) (*FileDiff, error) {
-	full := filepath.Join(repo, path)
-	data, err := os.ReadFile(full)
+	rows, binary, err := readRows(filepath.Join(repo, path))
 	if err != nil {
 		return nil, fmt.Errorf("read untracked %s: %w", path, err)
 	}
-	// Cheap binary detection: any NUL byte → binary.
-	if bytes.IndexByte(data, 0x00) >= 0 {
+	if binary {
 		return &FileDiff{Path: path, IsBinary: true, Note: "binary file"}, nil
 	}
-
 	fd := &FileDiff{Path: path, Note: "file added"}
-	content := string(data)
-	// Strip trailing newline so we don't emit a phantom empty add line.
-	content = strings.TrimSuffix(content, "\n")
-	if content == "" {
-		return fd, nil
-	}
-	for i, line := range strings.Split(content, "\n") {
+	for i, line := range rows {
 		fd.Lines = append(fd.Lines, DiffLine{NewNum: i + 1, Kind: "add", Content: line})
 	}
 	return fd, nil
@@ -389,46 +393,13 @@ func parseUnifiedDiff(path string, raw []byte) (*FileDiff, error) {
 }
 
 // parseHunkHeader extracts the starting old/new line numbers from a hunk header
-// of the form "@@ -123,4 +124,7 @@ optional context".
+// of the form "@@ -123,4 +124,7 @@ optional context". It is parseHunkRanges
+// (changed.go) without the counts, plus one quirk: a start of 0 ("-0,0", a new
+// file's old side) reads as 1, so the caller's increments start from 1.
 func parseHunkHeader(line string) (oldStart, newStart int, err error) {
-	end := strings.Index(line[2:], "@@")
-	if end < 0 {
+	h, ok := parseHunkRanges(line)
+	if !ok {
 		return 0, 0, fmt.Errorf("bad hunk header: %q", line)
 	}
-	body := strings.TrimSpace(line[2 : 2+end])
-	// body looks like "-123,4 +124,7" or "-1 +0,0" etc.
-	parts := strings.Fields(body)
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("bad hunk header parts: %q", line)
-	}
-	oldStart, err = parseHunkRangeStart(parts[0], '-')
-	if err != nil {
-		return 0, 0, err
-	}
-	newStart, err = parseHunkRangeStart(parts[1], '+')
-	if err != nil {
-		return 0, 0, err
-	}
-	return oldStart, newStart, nil
-}
-
-func parseHunkRangeStart(s string, sigil byte) (int, error) {
-	if len(s) < 2 || s[0] != sigil {
-		return 0, fmt.Errorf("bad hunk range %q", s)
-	}
-	num := s[1:]
-	if comma := strings.IndexByte(num, ','); comma >= 0 {
-		num = num[:comma]
-	}
-	n, err := strconv.Atoi(num)
-	if err != nil {
-		return 0, fmt.Errorf("bad hunk range %q: %w", s, err)
-	}
-	if n == 0 {
-		// git uses "-0,0" for a brand-new file's old side; surface 0 so the
-		// caller increments from 1 once content arrives. But -0 actually means
-		// "no lines on this side" — return 1 so subsequent increments stay sane.
-		return 1, nil
-	}
-	return n, nil
+	return max(h.OldStart, 1), max(h.NewStart, 1), nil
 }
