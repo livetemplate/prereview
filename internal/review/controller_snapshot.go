@@ -26,9 +26,8 @@ func (c *PrereviewController) flushSnapshot(state *PrereviewState) error {
 	state.Applied = loadAppliedSet(c.CSVPath)    // #159: applied acks drop from the flush
 	if c.Emitter != nil {
 		// SCOPED slices (#171) — the agent must not be handed the previous file's work.
-		// persist() above deliberately keeps the FULL state.Comments: that slice is the
-		// write-back buffer it rewrites comments.csv from, so scoping it would delete
-		// every other file's rows from disk.
+		// persist() above deliberately saves the FULL state.Comments: it's the tab's
+		// copy of every row, and scoping it would hide other files' rows from this tab.
 		if err := c.Emitter.EmitSnapshot(state.scopedComments(), state.scopedSuggestions(), state.DecisionsBySuggestion(), state.Threads(), state.Applied, state.QuizResults(), c.WriteWith(), c.isPaused(), time.Now()); err != nil {
 			return fmt.Errorf("emit snapshot event: %w", err)
 		}

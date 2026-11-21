@@ -193,6 +193,13 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	// handing the agent work on deleted files until something happens to trigger a
 	// relocate. The comments stay visible to the reviewer to resolve or delete.
 	controller.SweepGoneFiles()
+	// Remote comments imported while no server ran (#209); after the sweep, so an
+	// import is anchored to the text as it is now. Live imports drain in the watcher.
+	if n, err := controller.DrainImports(); err != nil {
+		slog.Warn("import", "err", err)
+	} else if n > 0 {
+		slog.Info("imported remote comments", "count", n)
+	}
 
 	initial := &review.PrereviewState{
 		RepoPath:  absRepo,
@@ -227,7 +234,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 	actual := ln.Addr().(*net.TCPAddr)
-	if err := recordServerAddr(store, actual); err != nil {
+	if err := recordServerAddr(store, absRepo, actual); err != nil {
 		ln.Close()
 		return err
 	}
@@ -551,7 +558,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		return fmt.Errorf("listen ui: %w", err)
 	}
 	uiPort := uiLn.Addr().(*net.TCPAddr).Port
-	if err := recordServerAddr(store, uiLn.Addr()); err != nil {
+	if err := recordServerAddr(store, "", uiLn.Addr()); err != nil {
 		uiLn.Close()
 		return err
 	}

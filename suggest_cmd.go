@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -53,20 +51,10 @@ func runSuggest(args []string) error {
 		return err
 	}
 
-	var raw []byte
-	var err error
-	if *file != "" {
-		raw, err = os.ReadFile(*file)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", *file, err)
-		}
-	} else {
-		raw, err = io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("read stdin: %w", err)
-		}
+	raw, err := readPayload(*file)
+	if err != nil {
+		return err
 	}
-
 	sugs, err := parseSuggestionsInput(raw)
 	if err != nil {
 		return err
@@ -114,30 +102,9 @@ func runSuggest(args []string) error {
 // Suggestions. Each is validated (file + a line range are required) and given a
 // stable id when the agent omitted one, so it round-trips through the loader.
 func parseSuggestionsInput(raw []byte) ([]review.Suggestion, error) {
-	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 {
-		return nil, fmt.Errorf("empty payload")
-	}
-
-	var parsed []review.Suggestion
-	if trimmed[0] == '[' {
-		if err := json.Unmarshal(trimmed, &parsed); err != nil {
-			return nil, fmt.Errorf("parse JSON array: %w", err)
-		}
-	} else {
-		// A stream of one-or-more concatenated / newline-delimited objects. The
-		// decoder consumes them one at a time, covering both a single object and
-		// JSONL without a separate code path.
-		dec := json.NewDecoder(bytes.NewReader(trimmed))
-		for {
-			var s review.Suggestion
-			if derr := dec.Decode(&s); derr == io.EOF {
-				break
-			} else if derr != nil {
-				return nil, fmt.Errorf("parse JSON object: %w", derr)
-			}
-			parsed = append(parsed, s)
-		}
+	parsed, err := decodePayload[review.Suggestion](raw)
+	if err != nil {
+		return nil, err
 	}
 
 	out := make([]review.Suggestion, 0, len(parsed))

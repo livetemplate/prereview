@@ -156,8 +156,12 @@ type PrereviewController struct {
 	emitDisabled atomic.Bool
 
 	// persistMu serializes every comments.csv rewrite, so persistAnchors' read-merge-
-	// write can't interleave with a persist (#228).
+	// write can't interleave with a persist (#228). It also guards deletedIDs.
 	persistMu sync.Mutex
+	// deletedIDs is every comment deleted on this server (and not undone): persist
+	// drops them even from a tab's stale copy, and keeps every other row on disk
+	// that the copy never loaded.
+	deletedIDs map[string]bool
 
 	// ChecksDir is the user's rule folder (~/.config/prereview/checks); "" =
 	// built-ins only. checks is the rule library + result cache, built on first use.
@@ -373,9 +377,10 @@ func (c *PrereviewController) relocateAll(state *PrereviewState) bool {
 // no longer exist while the UI had already stopped showing it. Doing the sweep at launch
 // means the store is TRUE from the first moment and every reader agrees.
 //
-// Cheap: one os.Stat per commented file, no git. It rewrites the CSV from the list it
-// read, which is safe only because it runs before the server accepts a save; anywhere
-// later it must merge with persistAnchors instead (#228).
+// Cheap: one os.Stat per commented file, no git. It saves the list it read through
+// persist, whose merge keeps rows added since but gives a row changed since this
+// list's copy back; that's safe only because it runs before the server accepts a
+// save. Anywhere later it must merge with persistAnchors instead (#228).
 func (c *PrereviewController) SweepGoneFiles() {
 	comments := c.loadCommentsFromDisk()
 	seen := map[string]bool{}
@@ -633,18 +638,22 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	return state, nil
 }
 
-// persist converts the in-memory comments to CSV Rows and atomically
-// rewrites the CSV file.
+// persist atomically rewrites the CSV from a tab's comments, merged with the
+// file: a row on disk that the tab's copy never loaded (a tab on another device
+// added it, or an import) is kept in its place, and a comment deleted on this
+// server is dropped even when the copy still holds it. Every other row is the
+// copy's. So a tab's copy is the source of truth only for what it knows about,
+// and leaving a comment out of the slice deletes nothing: a delete must also
+// call setDeleted (DeleteComment does).
 func (c *PrereviewController) persist(comments []Comment) error {
 	if c.CSVWriter == nil {
 		return fmt.Errorf("csv writer not configured")
 	}
-	rows := make([]csv.Row, 0, len(comments))
-	for _, cm := range comments {
-		rows = append(rows, commentRow(cm))
-	}
 	c.persistMu.Lock()
-	err := c.CSVWriter.Write(rows)
+	rows, err := c.mergeRows(comments)
+	if err == nil {
+		err = c.CSVWriter.Write(rows)
+	}
 	c.persistMu.Unlock()
 	if err != nil {
 		return err
@@ -653,6 +662,54 @@ func (c *PrereviewController) persist(comments []Comment) error {
 	// snapshot emit; no-op in non-stream mode.
 	c.scheduleEmit()
 	return nil
+}
+
+// mergeRows is persist's merge (persistMu held): the file's order, each row the
+// tab's version when it has one, then the tab's new rows. It fails rather than
+// write from the tab alone when the file can't be read: that would drop every
+// row the tab never loaded.
+func (c *PrereviewController) mergeRows(comments []Comment) ([]csv.Row, error) {
+	disk, err := csv.Read(c.CSVPath)
+	if err != nil {
+		return nil, fmt.Errorf("read before saving: %w", err)
+	}
+	mine := make(map[string]int, len(comments))
+	for i, cm := range comments {
+		mine[cm.ID] = i
+	}
+	rows := make([]csv.Row, 0, len(comments)+len(disk))
+	for _, r := range disk {
+		if c.deletedIDs[r.ID] {
+			continue
+		}
+		if i, ok := mine[r.ID]; ok {
+			rows = append(rows, commentRow(comments[i]))
+			delete(mine, r.ID) // written
+			continue
+		}
+		rows = append(rows, r) // a row this copy never loaded
+	}
+	for _, cm := range comments {
+		if _, left := mine[cm.ID]; left && !c.deletedIDs[cm.ID] {
+			rows = append(rows, commentRow(cm))
+		}
+	}
+	return rows, nil
+}
+
+// setDeleted marks id deleted on this server (persist drops it from every
+// copy), or, for an undone delete, not.
+func (c *PrereviewController) setDeleted(id string, deleted bool) {
+	c.persistMu.Lock()
+	defer c.persistMu.Unlock()
+	if c.deletedIDs == nil {
+		c.deletedIDs = map[string]bool{}
+	}
+	if deleted {
+		c.deletedIDs[id] = true
+	} else {
+		delete(c.deletedIDs, id)
+	}
 }
 
 // commentRow is a Comment's comments.csv row.
@@ -788,8 +845,8 @@ func CommentsFromRows(rows []csv.Row) []Comment {
 //
 // This is the CLI's read path, NOT the server's: the server reads the CSV through
 // loadCommentsFromDisk, which stays UNSCOPED on purpose because its result is the
-// buffer persist() rewrites comments.csv from. Scoping that one would delete every
-// other file's rows from disk.
+// tab's copy persist() saves from. persist keeps rows the copy lacks (#209), so
+// scoping it no longer deletes them, but the tab would stop seeing them.
 func LoadComments(csvPath string, all bool) ([]StreamComment, error) {
 	rows, err := csv.Read(csvPath)
 	if err != nil {

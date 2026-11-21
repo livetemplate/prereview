@@ -237,6 +237,10 @@ type StreamComment struct {
 	// request to the agent ("extraction" | "judge" | "benchmark" | "quiz") whose
 	// body says exactly what to do. Absent on reviewer comments.
 	Request string `json:"request,omitempty"`
+	// Source is set on a comment imported from a remote copy of the doc (#209):
+	// someone wrote it there, on Quote. A comment whose quote wasn't found in the
+	// file is a file comment, and Quote is where to look.
+	Source *ImportSource `json:"source,omitempty"`
 }
 
 // StreamQuiz is one quiz's outcome as the agent sees it. Taken is false when the
@@ -256,6 +260,9 @@ type StreamReply struct {
 	Author string `json:"author"`
 	Body   string `json:"body"`
 	At     string `json:"at"`
+	// Name is the remote author of a reply imported from a remote copy (#209),
+	// whose Author is "reviewer".
+	Name string `json:"name,omitempty"`
 }
 
 // toStreamThread maps a target's thread entries to the consumer shape; nil when empty.
@@ -269,6 +276,7 @@ func toStreamThread(thread []ThreadEntry) []StreamReply {
 			Author: e.Author,
 			Body:   e.Body,
 			At:     time.Unix(0, e.At).UTC().Format(time.RFC3339),
+			Name:   e.Name,
 		})
 	}
 	return out
@@ -300,6 +308,7 @@ func toStreamComment(c Comment) StreamComment {
 	if c.IsTextLevel() {
 		sc.Text = c.Anchor.Snippet
 	}
+	sc.Source = c.Source
 	return sc
 }
 
@@ -343,7 +352,7 @@ func commentActionable(c Comment, thread []ThreadEntry) bool {
 	// which is what "prereview stops making progress" looked like from the outside.
 	// SKILL.md has always documented the opposite ("the snapshot only carries items
 	// that need you"); the term was simply missing from the expression.
-	return threadActionable(c.Resolved || c.AnchorOutdated() || c.Processed, thread)
+	return threadActionable(c.Resolved || c.AnchorOutdated() || c.Processed, c.Resolved, thread)
 }
 
 // emit stamps ev with the next seq + the given timestamp and writes it as one

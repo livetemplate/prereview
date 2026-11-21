@@ -247,7 +247,7 @@ func TestBulkActions_PageWide(t *testing.T) {
 // every group passes and folds.
 func TestIgnoreToggles(t *testing.T) {
 	c := judgeController(t)
-	s := judgedState(t, c, "fail", "very good", nil) // the judge and filler-intensifiers both fail doc.md
+	s := judgedState(t, c, "fail", "very good", nil)                                     // the judge and filler-intensifiers both fail doc.md
 	writeRepoFile(t, c, "doc.md", strings.Join(sideContent(mdDiff(), "new"), "\n")+"\n") // a checker's Ignore reads the line
 	s.ShowLibrary, s.LibraryTab, s.ExpandedCheck = true, libTabChecks, "reader-first"
 	status := func(s PrereviewState, id string) string { r, _ := s.checkResult(id); return r.Status }

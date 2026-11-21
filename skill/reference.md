@@ -48,6 +48,7 @@ flags, or `prereview help` for the top-level list.
 | `prereview done [--file <f>\|-] [--all-open] <id>...` | Mark comments **done** (badge them in the UI). Ids come from args, `--file`/stdin (bare ids, a JSON array, or JSONL objects with an `id`), or `--all-open` (the whole actionable set). Each explicit id is **validated against `comments.csv`** — an unknown id fails with a non-zero exit and is not recorded. |
 | `prereview status <working\|done> [message]` | Echo the agent's status to the review UI (a live pill across every open tab): `working` while applying a batch, `done` when finished. Writes `llm-status.json` atomically. |
 | `prereview suggest [--file <f>]` | Submit proposed edits rendered as inline suggestion boxes (append to `suggestions.jsonl`). See [Suggested edits](#suggested-edits). |
+| `prereview import [--file <f>]` | Bring in comments left on a **remote copy** of a reviewed file (Google Docs, Notion, a wiki…), so they're queued like the reviewer's (append to `imports.jsonl`). Each object needs `remote_id`, `source`, `file` and `body`; `quote` is the text the comment is on, and `author`, `url` (http or https), `resolved` and `replies` (each `{remote_id, author, body}`) are optional. **Validated before anything is written**: a missing field, or a file that isn't in the review, fails the command. The server anchors each on its quote (in the source, then in the rendered Markdown), or on the whole file when the quote isn't found once. Importing a comment again adds only its new replies, as `reviewer` entries in its thread with the remote author as `name`, and resolves it once `resolved` is true; one resolved on its first import is skipped. See SKILL.md → *Comments from a remote copy*. |
 | `prereview quiz [--file <f>\|-]` | Submit a **comprehension quiz** about a file's diff for the reviewer to answer (append to `quiz.jsonl`). Each question needs >= 2 `options`, a 0-based `answer`, a `why`, and `from_line`/`to_line`/`side`; `probe` is one of change-type / localization / consequence / rationale / decision. **Validated before anything is written** — an out-of-range answer, a missing explanation, or a non-`decision` question without a line anchor fails with a non-zero exit naming the question. The server additionally flags a question whose cited line is not in the diff. |
 | `prereview learn wait [--out <STORE>] [--timeout 9m]` | The background learner's loop step (see SKILL.md → *Start the background learner*): claim the next **learning job** and print `job <id>`, a blank line, then the job. It prints `idle` at the timeout, or `stop` once the review `--out` names has ended. `prereview learn finish <id>` closes the job. |
 | `prereview learn propose --job <id> --text "…" --evidence <store>:<id> [--evidence …] [--scope "…"] [--glob <p>]… [--replaces <id>] [--produces instruction,checker,judge] [--checker <rule.yml\|->] [--judge <rubric.md\|->]` | Propose one **learning** drawn from the reviewer's reviews, answering a learning job. It appends to `~/.config/prereview/learnings.jsonl`. The learning is *accepted* when the job was queued with auto-accept on, otherwise *proposed* for the reviewer to accept in Library → Learnings. Without `--job` it is always proposed. Every `--evidence` must resolve to a reviewer signal in one of the job's stores, or nothing is written: a comment `id`, the reviewer's reply as `<target_id>@<at>`, or a decided suggestion's `id`. Request comments, the agent's replies, undecided suggestions and quiz questions are never evidence. `--checker`/`--judge` attach a drafted rule YAML / judge rubric, validated first (a checker can't be `extends: command`). Accepted, it lands in the reviewer's checks folder as `learned-<id>`. With no `files:` it's scoped to the lesson's `--glob`, or to `reply.md`, `suggestion.md` or `quiz.md` on a lesson about the agent's own text. `prereview learn list [--status s] [--json]` prints the library. |
@@ -127,6 +128,8 @@ Everything prereview writes lives under `<STORE>/`, the directory from the stdou
 ├── llm-status.json             ← INBOUND: agent-status echo, watched by the server; reset each launch
 ├── agent-cursor.json           ← INBOUND: written by `watch` / `comments --json` — who is reading the queue; reset each launch
 ├── suggestions.jsonl           ← INBOUND: the agent's proposed edits (`prereview suggest`); append-only, durable
+├── imports.jsonl               ← INBOUND: remote comments queued by `prereview import`; append-only, durable
+├── imports-ledger.jsonl        ← what the server imported (remote id → comment id, source); server-owned, durable
 ├── suggestion-decisions.jsonl  ← reviewer's accept/reject verdicts; server-owned, rewritten atomically, durable
 ├── quiz.jsonl                  ← INBOUND: comprehension quizzes (`prereview quiz`); append-only, durable
 ├── judgments.jsonl             ← INBOUND: judge verdicts (`prereview judge`); append-only, latest per file+judge
@@ -222,9 +225,10 @@ Each comment carries: `id`, `kind`, `file`, `from_line`, `to_line`, `from_col`,
 `to_col`, `side`, `body`, `url`, `area`, `created_at`, `anchor_status`, `text` (the
 exact selected substring, for `kind=text`), `thread` (the conversation, present
 only when non-empty — see [Threads](#threads)), and `request` (present only on a row
-prereview queued as a request to you — see the `request` column below). See
-[Comment data](#comment-data) for
-how to interpret them.
+prereview queued as a request to you — see the `request` column below). A comment
+imported from a remote copy also carries `source`: `{name, url, author, quote}`, where
+`quote` is the text it was on there. See [Comment data](#comment-data) for how to
+interpret them.
 
 ```jsonc
 {"event":"ready","seq":0,"ts":"…","repo":"/abs/dir","csv":"/abs/dir/.prereview/comments.csv"}

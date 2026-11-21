@@ -2,6 +2,7 @@ package review
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -118,11 +119,19 @@ func readJSONL(path string, each func([]byte)) {
 // ValidVerdict reports one of the only verdicts: binary, with a critique (no scores).
 func ValidVerdict(v string) bool { return v == checks.StatusPass || v == checks.StatusFail }
 
-// appendJSONL appends one JSON line per value to path, creating it. No values
-// writes nothing.
-func appendJSONL(path string, vs ...any) error {
+// AppendJSONL appends one JSON line per value to path, creating it: the
+// sidecar format every agent verb and the server use. The lines go out in one
+// write, so a reader never sees half of a batch. No values writes nothing.
+func AppendJSONL(path string, vs ...any) error {
 	if len(vs) == 0 {
 		return nil
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	for _, v := range vs {
+		if err := enc.Encode(v); err != nil {
+			return err
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -131,14 +140,11 @@ func appendJSONL(path string, vs ...any) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	enc := json.NewEncoder(f)
-	for _, v := range vs {
-		if err := enc.Encode(v); err != nil {
-			return err
-		}
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		f.Close()
+		return err
 	}
-	return nil
+	return f.Close()
 }
 
 // AppendJudgment validates and records a verdict (the `prereview judge` write
@@ -153,7 +159,7 @@ func AppendJudgment(csvPath string, j Judgment) error {
 	if j.At == "" {
 		j.At = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	return appendJSONL(JudgmentsPath(csvPath), j)
+	return AppendJSONL(JudgmentsPath(csvPath), j)
 }
 
 // judgeResult turns a judge rule and its latest verdict into the Result the

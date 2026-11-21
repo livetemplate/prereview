@@ -322,7 +322,7 @@ func (s PrereviewState) AwaitingReplyCount() int {
 	}
 	n := 0
 	for _, c := range s.scopedComments() {
-		n += trailingReviewerReplies(threads[c.ID])
+		n += reopeningReplies(c.Resolved, threads[c.ID])
 	}
 	for _, sg := range s.scopedSuggestions() {
 		n += trailingReviewerReplies(threads[sg.ID])

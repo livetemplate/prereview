@@ -608,6 +608,7 @@ func (c *PrereviewController) DeleteComment(state PrereviewState, ctx *livetempl
 	}
 	deleted := state.Comments[idx]
 	state.Comments = slices.Delete(state.Comments, idx, idx+1)
+	c.setDeleted(id, true) // so a stale copy in another tab can't bring it back
 	if err := c.persist(state.Comments); err != nil {
 		return state, fmt.Errorf("persist after delete: %w", err)
 	}
@@ -863,6 +864,7 @@ func (c *PrereviewController) UndoDelete(state PrereviewState, ctx *livetemplate
 		return state, nil
 	}
 	state.Comments = append(state.Comments, *state.LastDeletedComment)
+	c.setDeleted(state.LastDeletedComment.ID, false)
 	if err := c.persist(state.Comments); err != nil {
 		// Don't clear LastDeletedComment so the user can try again.
 		return state, fmt.Errorf("persist after undo: %w", err)

@@ -193,6 +193,7 @@ prereview comments  [--out <dir>] [--json] [--all]
 prereview done      [--out <dir>] [--file <f>|-] [--all-open] <comment-id>...
 prereview status    [--out <dir>] <working|done> [message]
 prereview suggest   [--out <dir>] [--file <payload.json>]
+prereview import    [--out <dir>] [--file <payload.json>]
 - `prereview quiz` - submit a comprehension quiz about a file's diff for the
   reviewer to answer; writes `.prereview/quiz.jsonl`.
 prereview reply     [--out <dir>] [--answered] [--check] (--body "…" | --file <f>|-) <id>
@@ -232,6 +233,17 @@ prereview check     [--json] <file>...
   (`id` optional but recommended — re-using it *replaces* that suggestion; `side`
   defaults to `new`; `to_line` defaults to `from_line`). Decisions come back in
   each `snapshot`'s `suggestions[]`.
+- **`prereview import`** — bring in **comments left on a remote copy** of a reviewed
+  file (Google Docs, Notion, a wiki…), so they're queued like the reviewer's. Reads
+  the same payload forms as `suggest` and appends to `.prereview/imports.jsonl`. Each
+  object: `{"remote_id":"…","source":"Google Docs","file":"…","body":"…","quote":"…","author":"…","url":"…","resolved":false,"replies":[{"remote_id":"…","author":"…","body":"…"}]}`.
+  `remote_id`, `source`, `file` and `body` are required, and a bad record fails the
+  command before anything is written. The running review adds them at once (in agent
+  mode; otherwise at its next launch). Each lands on its `quote` — found in the source
+  text, or for Markdown in the rendered text — or on the whole file when the quote
+  isn't found exactly once. Importing a comment again adds only its new `replies`, to
+  its thread, and resolves it once `resolved` is true; a comment already resolved on
+  its first import is skipped. Nothing is sent back to the remote copy.
 - **`prereview reply`** — post a **thread reply** on a comment **or** suggestion,
   so the reviewer sees what you changed (and can reply back to steer you). The id
   is validated against comments + suggestions. Appends to
@@ -455,6 +467,8 @@ Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
 | `comments.csv` | server | the comments (source of truth) |
 | `events.jsonl` | server | the agent-mode event log (`ready`/`snapshot`/`files_changed`/`end`); reset each launch |
 | `suggestions.jsonl` | **agent** (`prereview suggest`) | proposed edits, rendered as suggestion boxes (durable) |
+| `imports.jsonl` | **agent** (`prereview import`) | remote comments waiting to be added (durable, append-only) |
+| `imports-ledger.jsonl` | server | what was imported: remote id → comment id, and where it came from (durable) |
 | `suggestion-decisions.jsonl` | server | your accept/reject/revert verdicts (durable) |
 | `processed.jsonl` | **agent** (`prereview done`) | comment ids marked done (durable — NOT reset each launch, so "worked on" survives a relaunch) |
 | `answered.jsonl` | **agent** (`prereview reply --answered`) | comment ids settled by a reply with no edit (durable) |

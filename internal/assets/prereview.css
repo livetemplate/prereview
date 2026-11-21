@@ -3009,6 +3009,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
 }
+/* Source badge (#209): an imported comment's origin and author. Plain text in
+   the muted color, the source linked to the comment where it was left. */
+.inline-comment .source-badge, .all-comments .source-badge {
+  color: var(--text-muted); font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.source-badge a { color: inherit; text-decoration: underline; text-decoration-color: var(--border-strong); }
+
 /* Queued badge (#129): confirms a comment is enqueued for the agent. It's the
    DEFAULT state of an active comment (appears on nearly every card), so it's kept
    quiet — accent-tinted to match the toolbar queue count (.q-queued), but muted. */

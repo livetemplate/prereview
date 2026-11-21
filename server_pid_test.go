@@ -200,7 +200,7 @@ func TestRecordServerAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer release()
-	if err := recordServerAddr(dir, &net.TCPAddr{IP: net.IPv4zero, Port: 4799}); err != nil {
+	if err := recordServerAddr(dir, "", &net.TCPAddr{IP: net.IPv4zero, Port: 4799}); err != nil {
 		t.Fatal(err)
 	}
 	rec, ok := readServerRecord(pidFile(dir))

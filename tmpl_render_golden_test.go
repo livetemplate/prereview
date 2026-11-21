@@ -331,6 +331,16 @@ func renderFixtures() []renderFixture {
 		return s
 	}
 
+	// comments imported from a remote copy (#209): a line comment with its
+	// source badge (linked), and a file comment whose quote wasn't found, showing it
+	imported := goBase()
+	imported.Comments = []review.Comment{
+		{ID: "i1", File: "app.go", Body: "Is this still true?", Kind: "line", FromLine: 2, ToLine: 2, Side: "new",
+			Source: &review.ImportSource{Name: "Google Docs", URL: "https://docs.example.com/d/1#cmnt1", Author: "Alice"}},
+		{ID: "i2", File: "app.go", Body: "This section moved.", Kind: "file",
+			Source: &review.ImportSource{Name: "Notion", Author: "Bob", Quote: "the old intro"}},
+	}
+
 	// all-comments overview
 	allComments := goBase()
 	allComments.ShowAllComments = true
@@ -815,6 +825,7 @@ func renderFixtures() []renderFixture {
 		{"binary-video", binary("clip.mp4")},
 		{"binary-audio", binary("sound.mp3")},
 		{"binary-fallback", binary("archive.zip")},
+		{"imported", imported},
 		{"all-comments", allComments},
 		{"all-comments-resolved-all", resolvedAll},
 		{"request-readmore", requestCard},

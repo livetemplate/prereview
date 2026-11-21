@@ -156,7 +156,7 @@ func (c *PrereviewController) DismissFinding(state PrereviewState, ctx *livetemp
 	}
 	d := dismissalFor(path, r.ID, f, lines)
 	d.Dismissed, d.At = true, time.Now().UTC().Format(time.RFC3339)
-	if err := appendJSONL(c.dismissalsPath(), d); err != nil {
+	if err := AppendJSONL(c.dismissalsPath(), d); err != nil {
 		return state, err
 	}
 	c.reapplyChecks(&state)
@@ -201,7 +201,7 @@ func (c *PrereviewController) DismissAllFindings(state PrereviewState, ctx *live
 	if len(recs) == 0 {
 		return state, nil
 	}
-	if err := appendJSONL(c.dismissalsPath(), recs...); err != nil {
+	if err := AppendJSONL(c.dismissalsPath(), recs...); err != nil {
 		return state, err
 	}
 	c.reapplyChecks(&state)
@@ -245,7 +245,7 @@ func (c *PrereviewController) ToggleIgnoreVerdict(state PrereviewState, ctx *liv
 	}
 	d := judgeDismissal(path, id, j)
 	d.Dismissed, d.At = !ignoredVerdict(c.dismissals(), path, id, j), time.Now().UTC().Format(time.RFC3339)
-	if err := appendJSONL(c.dismissalsPath(), d); err != nil {
+	if err := AppendJSONL(c.dismissalsPath(), d); err != nil {
 		return state, err
 	}
 	c.reapplyChecks(&state)
@@ -277,7 +277,7 @@ func (c *PrereviewController) restore(state PrereviewState, ids []string, path s
 	if len(undo) == 0 {
 		return state, nil
 	}
-	if err := appendJSONL(c.dismissalsPath(), undo...); err != nil {
+	if err := AppendJSONL(c.dismissalsPath(), undo...); err != nil {
 		return state, err
 	}
 	c.reapplyChecks(&state)

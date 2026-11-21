@@ -104,6 +104,9 @@ func Resolve(ref string) (Evidence, error) {
 		if c.IsRequest() {
 			return refuse("that comment is a request to the agent, not a reviewer signal")
 		}
+		if imp, ok := Imports(r.dir)[id]; ok {
+			return refuse("that comment was imported from " + imp.Source + ", so someone else wrote it; cite a comment the reviewer left in prereview")
+		}
 		return Evidence{Store: abs, ID: id, Kind: EvidenceComment, File: c.File, Line: c.FromLine,
 			Quote: c.Body, At: c.CreatedAt.UTC().Format(time.RFC3339)}, nil
 	}
@@ -198,16 +201,21 @@ func (r storeReader) decision(id string) (storeDecision, bool) {
 // reply finds the reply on target at at in a replies file.
 func (r storeReader) reply(name, target string, at int64) (body string, ok bool) {
 	eachLine(filepath.Join(r.dir, name), func(b []byte) {
-		var rp struct {
-			TargetID string `json:"target_id"`
-			Body     string `json:"body"`
-			At       int64  `json:"at"`
-		}
-		if json.Unmarshal(b, &rp) == nil && rp.TargetID == target && rp.At == at {
+		var rp storeReply
+		if json.Unmarshal(b, &rp) == nil && rp.TargetID == target && rp.At == at && rp.RemoteID == "" {
 			body, ok = rp.Body, true
 		}
 	})
 	return body, ok
+}
+
+// storeReply is a thread entry in a replies file. RemoteID marks a reply
+// imported from a remote copy (#209): someone else's, never evidence.
+type storeReply struct {
+	TargetID string `json:"target_id"`
+	Body     string `json:"body"`
+	At       int64  `json:"at"`
+	RemoteID string `json:"remote_id,omitempty"`
 }
 
 // question finds a quiz question by its thread id ("<quizID>:<questionID>").

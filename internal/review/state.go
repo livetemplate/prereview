@@ -712,10 +712,10 @@ func (s PrereviewState) inScope(file string) bool {
 // per-file surfaces (CommentsByEndLine and friends) already narrow to SelectedFile and
 // don't go through here. Its suggestion twin is scopedSuggestions.
 //
-// It NEVER filters s.Comments in place, and nothing derived from it may reach persist:
-// s.Comments is the write-back buffer persist() atomically REWRITES comments.csv from,
-// so a filtered slice reaching it would delete every other file's rows from disk. Read
-// and emit are filtered; load is not.
+// It NEVER filters s.Comments in place, and nothing derived from it should reach
+// persist: s.Comments is the tab's copy of every row, which persist saves. persist
+// merges with the file (#209), so a filtered slice no longer deletes rows on disk,
+// but the tab would lose sight of them. Read and emit are filtered; load is not.
 func (s PrereviewState) scopedComments() []Comment {
 	if s.SingleFile == "" {
 		return s.Comments

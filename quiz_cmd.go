@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -63,21 +61,9 @@ func runQuiz(args []string) error {
 		return err
 	}
 
-	// "-" means stdin, matching `done`/`reply`/`applied`. Without it an agent that
-	// pipes a payload with `--file -` (the idiom those verbs document) gets a
-	// baffling `open -: no such file or directory`.
-	var raw []byte
-	var err error
-	if *file != "" && *file != "-" {
-		raw, err = os.ReadFile(*file)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", *file, err)
-		}
-	} else {
-		raw, err = io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("read stdin: %w", err)
-		}
+	raw, err := readPayload(*file)
+	if err != nil {
+		return err
 	}
 
 	quizzes, err := parseQuizInput(raw)
@@ -121,29 +107,9 @@ func runQuiz(args []string) error {
 // WHOLE payload before the caller writes anything, so a bad second quiz can't
 // leave a half-written file behind.
 func parseQuizInput(raw []byte) ([]review.Quiz, error) {
-	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 {
-		return nil, fmt.Errorf("empty payload")
-	}
-
-	var parsed []review.Quiz
-	if trimmed[0] == '[' {
-		if err := json.Unmarshal(trimmed, &parsed); err != nil {
-			return nil, fmt.Errorf("parse JSON array: %w", err)
-		}
-	} else {
-		// A stream of one-or-more concatenated / newline-delimited objects, which
-		// covers both a single object and JSONL without a separate code path.
-		dec := json.NewDecoder(bytes.NewReader(trimmed))
-		for {
-			var q review.Quiz
-			if derr := dec.Decode(&q); derr == io.EOF {
-				break
-			} else if derr != nil {
-				return nil, fmt.Errorf("parse JSON object: %w", derr)
-			}
-			parsed = append(parsed, q)
-		}
+	parsed, err := decodePayload[review.Quiz](raw)
+	if err != nil {
+		return nil, err
 	}
 
 	out := make([]review.Quiz, 0, len(parsed))

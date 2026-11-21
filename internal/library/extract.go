@@ -61,13 +61,19 @@ func (c storeCount) signals() int { return c.comments + c.replies + c.decisions 
 func countStore(store string) storeCount {
 	var c storeCount
 	if rows, err := csv.Read(filepath.Join(store, CommentsFile)); err == nil {
+		imported := Imports(store)
 		for _, r := range rows {
-			if !r.IsRequest() {
+			if _, ok := imported[r.ID]; !ok && !r.IsRequest() {
 				c.comments++
 			}
 		}
 	}
-	eachLine(filepath.Join(store, ReviewerRepliesFile), func([]byte) { c.replies++ })
+	eachLine(filepath.Join(store, ReviewerRepliesFile), func(b []byte) {
+		var rp storeReply
+		if json.Unmarshal(b, &rp) == nil && rp.RemoteID == "" { // an imported reply isn't the reviewer's
+			c.replies++
+		}
+	})
 	eachLine(filepath.Join(store, DecisionsFile), func([]byte) { c.decisions++ })
 	eachLine(filepath.Join(store, SuggestionsFile), func([]byte) { c.suggestions++ })
 	return c

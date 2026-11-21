@@ -3,6 +3,7 @@ package review
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -31,7 +32,7 @@ func TestLoadThreads_MergesAndSorts(t *testing.T) {
 	writeLines(t, AgentRepliesPath(csvPath),
 		`{"target_id":"c1","author":"agent","body":"fixed","at":200}`,
 		`{"target_id":"c1","author":"agent","body":"earlier note","at":50}`,
-		``, // blank line tolerated
+		``,                           // blank line tolerated
 		`{"garbage without a target`) // torn line skipped
 
 	got := loadThreads(csvPath)
@@ -86,21 +87,26 @@ func TestThreadActionable(t *testing.T) {
 	reviewerLast := []ThreadEntry{{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, At: 2}}
 	// settled == resolved OR outdated (#164): threadActionable treats both the same, so
 	// these cases cover the outdated axis too.
+	// #209: a reply imported from a remote copy, last.
+	importedLast := []ThreadEntry{{Author: AuthorAgent, At: 1}, {Author: AuthorReviewer, At: 2, RemoteID: "y1", Name: "Bob"}}
 	cases := []struct {
-		name    string
-		settled bool
-		thread  []ThreadEntry
-		want    bool
+		name              string
+		settled, resolved bool
+		thread            []ThreadEntry
+		want              bool
 	}{
-		{"fresh not-settled", false, nil, true},
-		{"fresh settled", true, nil, false},
-		{"agent-last, not-settled (handled, awaiting reviewer)", false, agentLast, false},
-		{"agent-last, settled", true, agentLast, false},
-		{"reviewer-last, not-settled", false, reviewerLast, true},
-		{"reviewer-last, settled (re-surface)", true, reviewerLast, true},
+		{"fresh not-settled", false, false, nil, true},
+		{"fresh settled", true, true, nil, false},
+		{"agent-last, not-settled (handled, awaiting reviewer)", false, false, agentLast, false},
+		{"agent-last, settled", true, true, agentLast, false},
+		{"reviewer-last, not-settled", false, false, reviewerLast, true},
+		{"reviewer-last, settled (re-surface)", true, true, reviewerLast, true},
+		{"imported reply last, done (re-surface)", true, false, importedLast, true},
+		{"imported reply last, resolved (stays closed)", true, true, importedLast, false},
+		{"your reply after an imported one, resolved (re-surface)", true, true, append(slices.Clone(importedLast), ThreadEntry{Author: AuthorReviewer, At: 3}), true},
 	}
 	for _, c := range cases {
-		if got := threadActionable(c.settled, c.thread); got != c.want {
+		if got := threadActionable(c.settled, c.resolved, c.thread); got != c.want {
 			t.Errorf("%s: threadActionable=%v, want %v", c.name, got, c.want)
 		}
 	}

@@ -1057,7 +1057,7 @@ func (c *PrereviewController) LabelJudgment(state PrereviewState, ctx *livetempl
 	if state.JudgeLabels[labelKey(path, id, at)] == label {
 		label = "" // the same answer again takes it back
 	}
-	if err := appendJSONL(JudgeLabelsPath(c.CSVPath), JudgeLabel{File: path, Judge: id, At: at, Label: label,
+	if err := AppendJSONL(JudgeLabelsPath(c.CSVPath), JudgeLabel{File: path, Judge: id, At: at, Label: label,
 		When: time.Now().UTC().Format(time.RFC3339)}); err != nil {
 		return state, fmt.Errorf("label judgment: %w", err)
 	}
