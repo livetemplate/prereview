@@ -126,21 +126,24 @@ func TestReviewChecks_AsyncLandsPerFile(t *testing.T) {
 	c := checksController(t)
 	os.MkdirAll(c.ChecksDir, 0o755)
 	sh := filepath.Join(c.ChecksDir, "slow.sh")
-	os.WriteFile(sh, []byte("#!/bin/sh\ncat >/dev/null\nsleep 0.2\necho '[{\"line\":1,\"from_col\":0,\"to_col\":4,\"message\":\"slow\"}]'\n"), 0o755)
+	// The command takes far longer than the bound below, so a pass that waited on
+	// it can't slip under the bound on a loaded machine (a 0.2s command against a
+	// 150ms bound flaked under -race beside the root package's suite).
+	os.WriteFile(sh, []byte("#!/bin/sh\ncat >/dev/null\nsleep 1.5\necho '[{\"line\":1,\"from_col\":0,\"to_col\":4,\"message\":\"slow\"}]'\n"), 0o755)
 	os.WriteFile(filepath.Join(c.ChecksDir, "slow.yml"), []byte("extends: command\ncommand: ['./slow.sh']\n"), 0o644)
 	writeRepoFile(t, c, "a.md", "Plain.\n")
 	writeRepoFile(t, c, "b.md", "Plain.\n")
 	s := reviewState("a.md", "b.md")
 	start := time.Now()
 	c.applyReviewChecks(&s)
-	if time.Since(start) > 150*time.Millisecond {
+	if time.Since(start) > 750*time.Millisecond {
 		t.Errorf("the review-wide pass blocked on commands for %s", time.Since(start))
 	}
 	s.ShowLibrary, s.LibraryTab = true, libTabChecks
 	if r := pageRow(t, s.CheckPage(), "slow"); r.Status != checks.StatusRunning {
 		t.Fatalf("slow row %+v", r)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		s, _ = c.ChecksUpdated(s, nil)
 		if r := pageRow(t, s.CheckPage(), "slow"); r.Status == checks.StatusFail {
