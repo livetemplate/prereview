@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"io"
 	"net"
 	"net/http"
@@ -8,8 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func pidFile(dir string) string { return filepath.Join(dir, "server.pid") }
@@ -97,9 +100,16 @@ func TestClaimServerLock_ReleaseLeavesForeignPID(t *testing.T) {
 // the shape of a recycled pid. The cleanup kills it if the test didn't.
 func sleeper(t *testing.T) *exec.Cmd {
 	t.Helper()
-	cmd := exec.Command("sleep", "30")
+	return startChild(t, exec.Command("sleep", "30"))
+}
+
+// startChild starts cmd and reaps it when it exits, so a stopped child doesn't
+// linger as a zombie that processAlive still sees. The cleanup kills it if the
+// test didn't.
+func startChild(t *testing.T, cmd *exec.Cmd) *exec.Cmd {
+	t.Helper()
 	if err := cmd.Start(); err != nil {
-		t.Fatalf("start sleeper: %v", err)
+		t.Fatalf("start %s: %v", cmd.Path, err)
 	}
 	exited := make(chan struct{})
 	go func() { _ = cmd.Wait(); close(exited) }()
@@ -206,5 +216,35 @@ func TestRecordServerAddr(t *testing.T) {
 	rec, ok := readServerRecord(pidFile(dir))
 	if !ok || rec.PID != os.Getpid() || rec.Addr != "127.0.0.1:4799" {
 		t.Fatalf("record = %+v, %v; want our pid at 127.0.0.1:4799", rec, ok)
+	}
+}
+
+// TestStopServer_KillsAfterGrace pins the --replace fallback: a server that
+// outlives its graceful shutdown is killed rather than reported stuck.
+func TestStopServer_KillsAfterGrace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs a POSIX shell to ignore SIGTERM")
+	}
+	defer func(g, k time.Duration) { stopGrace, stopKillWait = g, k }(stopGrace, stopKillWait)
+	stopGrace, stopKillWait = 300*time.Millisecond, 2*time.Second
+
+	// An ignored signal stays ignored across exec, so sleep shrugs off SIGTERM.
+	// "ready" says the trap is in place before the test signals.
+	cmd := exec.Command("sh", "-c", `trap "" TERM; echo ready; exec sleep 30`)
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	startChild(t, cmd)
+	if line, _ := bufio.NewReader(out).ReadString('\n'); line != "ready\n" {
+		t.Fatalf("child said %q", line)
+	}
+
+	start := time.Now()
+	if err := stopServer(cmd.Process.Pid); err != nil {
+		t.Fatalf("stopServer: %v", err)
+	}
+	if took := time.Since(start); took < stopGrace {
+		t.Errorf("killed after %v, before the %v grace", took, stopGrace)
 	}
 }
