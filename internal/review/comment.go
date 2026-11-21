@@ -105,6 +105,13 @@ type Comment struct {
 	// import ledger like Processed, never persisted in the CSV. nil for a comment
 	// left in prereview.
 	Source *ImportSource `json:"-"`
+	// base is this comment's row as its tab last saw it on disk: set when it's
+	// loaded (loadCommentsFromDisk) and after each save. persist writes only the
+	// fields the tab changed since, so a stale tab can't undo another's change.
+	// base.ID == "" for a comment this tab created and hasn't saved: written as
+	// it is. Code that copies a field from disk into a tab's comment must set
+	// that field in base too, or the copy is saved back as the tab's own change.
+	base csv.Row
 	// Draft is the not-yet-enqueued flag (#119): a reviewer's in-progress note
 	// that is kept OUT of the agent's actionable snapshot until they enqueue it.
 	// The default (false) means enqueued/active — "save auto-enqueues" — so the

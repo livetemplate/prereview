@@ -428,6 +428,7 @@ func (c *PrereviewController) CommentsChanged(state PrereviewState, _ *livetempl
 	for _, cm := range c.loadCommentsFromDisk() {
 		if i, ok := at[cm.ID]; ok {
 			state.Comments[i].Resolved = cm.Resolved
+			state.Comments[i].base.Resolved = cm.Resolved // seen now: a later change to it is this tab's
 		} else {
 			state.Comments = append(state.Comments, cm)
 		}

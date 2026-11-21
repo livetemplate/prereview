@@ -80,3 +80,64 @@ func TestPersist_UnreadableFileFails(t *testing.T) {
 		t.Errorf("the file changed: %q", got)
 	}
 }
+
+// TestPersist_FieldMerge: a save writes only the fields its tab changed. A
+// stale tab can't undo another tab's (or an import's) resolve by saving, while
+// its own edits still land; once it has seen the resolve, its reopen counts.
+func TestPersist_FieldMerge(t *testing.T) {
+	c := checksController(t)
+	if err := c.persist([]Comment{testComment("x")}); err != nil {
+		t.Fatal(err)
+	}
+	laptop := PrereviewState{Comments: c.loadCommentsFromDisk()}
+	phone := PrereviewState{Comments: c.loadCommentsFromDisk()}
+	onDisk := func() Comment { return c.loadCommentsFromDisk()[0] }
+
+	// The laptop resolves x; the phone, which still shows it open, saves.
+	laptop, err := c.ToggleResolved(laptop, checksCtx("toggleResolved", map[string]interface{}{"id": "x"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	phone.Comments = append(phone.Comments, testComment("y"))
+	if err := c.persist(phone.Comments); err != nil {
+		t.Fatal(err)
+	}
+	if !onDisk().Resolved {
+		t.Fatal("the phone's stale save reopened x")
+	}
+
+	// The phone edits x's body: that lands, and x stays resolved.
+	phone.Comments[0].Body = "edited on the phone"
+	if err := c.persist(phone.Comments); err != nil {
+		t.Fatal(err)
+	}
+	if got := onDisk(); got.Body != "edited on the phone" || !got.Resolved {
+		t.Fatalf("after the phone's edit: body %q resolved %v", got.Body, got.Resolved)
+	}
+
+	// The phone catches up, then reopens x: the reopen is its change, and lands.
+	phone, _ = c.CommentsChanged(phone, nil)
+	if !phone.Comments[0].Resolved {
+		t.Fatal("the phone didn't take the resolve")
+	}
+	phone, err = c.ToggleResolved(phone, checksCtx("toggleResolved", map[string]interface{}{"id": "x"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if onDisk().Resolved {
+		t.Error("the phone's reopen was lost")
+	}
+
+	// An out-of-band resolve (an import following the remote copy) survives a
+	// save from a tab that hasn't seen it.
+	if err := c.resolveRows(map[string]bool{"x": true}); err != nil {
+		t.Fatal(err)
+	}
+	laptop.Comments = append(laptop.Comments, testComment("z"))
+	if err := c.persist(laptop.Comments); err != nil {
+		t.Fatal(err)
+	}
+	if !onDisk().Resolved {
+		t.Error("a stale tab's save undid the import's resolve")
+	}
+}
