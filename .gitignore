@@ -12,3 +12,4 @@
 # committed so `go install github.com/livetemplate/prereview@latest`
 # works without a Makefile invocation — mirrors tinkerdown's approach.
 .muster/
+handlers/node_modules/

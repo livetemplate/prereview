@@ -919,6 +919,7 @@ If there isn&#39;t a good case, propose dropping it as a `prereview suggest` edi
 
 </div>
 </div><script defer src="/livetemplate-client.js"></script>
+<script defer src="/prereview-handlers.js"></script>
 
 <script defer src="/mermaid-init.js"></script>
 </body>

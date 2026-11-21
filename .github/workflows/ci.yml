@@ -45,6 +45,30 @@ jobs:
           GOWORK: 'off'
         run: go test -skip='E2E|e2e|Browser|browser' ./...
 
+  handlers:
+    # prereview's attribute handlers (handlers/src) and the vendored client are
+    # committed as built files, so `go install` needs no Node. This job runs
+    # their jest suite and fails when either committed file no longer matches
+    # what its source builds: handlers/src for prereview-handlers.js, and the
+    # @livetemplate/client pin in handlers/package-lock.json for the client.
+    # Node and esbuild are pinned (here and by the lockfile), so a rebuild is
+    # byte-identical.
+    name: Handler bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: handlers/package-lock.json
+      - name: jest
+        run: make test-handlers
+      - name: Committed bundles match their sources
+        run: |
+          make build-handlers sync-client
+          git diff --exit-code -- internal/assets/
+
   install-script:
     name: install.sh (${{ matrix.os }})
     strategy:
