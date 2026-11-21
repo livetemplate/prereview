@@ -1934,10 +1934,18 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`section.all-comments .ac-item button[name='toggleResolved']`, chromedp.ByQuery),
 		chromedp.Click(`section.all-comments .ac-item button[name='toggleResolved']`, chromedp.ByQuery),
-		chromedp.Sleep(350*time.Millisecond),
-		chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item').length`, &itemsAfterResolve),
 	); err != nil {
 		t.Fatalf("resolve alpha from list: %v%s", err, diag())
+	}
+	// Poll rather than sleep a fixed time: on a loaded CI runner the update can
+	// land after 350ms, which failed this check with the item merely late.
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelectorAll('section.all-comments .ac-item').length`, &itemsAfterResolve)); err != nil {
+			t.Fatalf("count list items: %v%s", err, diag())
+		}
+		if itemsAfterResolve == 0 || time.Now().After(deadline) {
+			break
+		}
 	}
 	if itemsAfterResolve != 0 {
 		t.Errorf("resolved comment should be hidden by default; %d items still shown%s", itemsAfterResolve, diag())
