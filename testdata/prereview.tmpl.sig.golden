@@ -1575,7 +1575,7 @@
   </form>
   {{end}}
   <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<span class="title-page">{{or .CurrentURL .TargetURL}}</span> <small class="live-count">· {{len .RegionComments}} annotation{{if ne (len .RegionComments) 1}}s{{end}}</small>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
+    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<span class="title-page">{{.LivePageLabel}}</span> <small class="live-count">· {{len .RegionComments}} annotation{{if ne (len .RegionComments) 1}}s{{end}}</small>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
   </div>
   
   <div class="toolbar-inline">

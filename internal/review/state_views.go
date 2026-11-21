@@ -3,6 +3,7 @@ package review
 import (
 	"fmt"
 	"html/template"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -1130,6 +1131,17 @@ func (s PrereviewState) LiveShowing() bool {
 		return true
 	}
 	return s.Combined() && s.LiveView && !s.ShowAllComments && !s.ShowQuiz && !s.ShowLibrary
+}
+
+// LivePageLabel names the framed page in a combined session's header: the
+// live site's host and the page's path (localhost:3000/pricing), as a bare
+// path ("/") reads as noise. Just the host until the frame reports its page.
+func (s PrereviewState) LivePageLabel() string {
+	host := s.TargetURL
+	if u, err := url.Parse(s.TargetURL); err == nil && u.Host != "" {
+		host = u.Host
+	}
+	return host + s.CurrentURL
 }
 
 // FileShowing reports that a file is loaded and on screen. A combined session

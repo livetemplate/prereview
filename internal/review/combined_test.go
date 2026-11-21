@@ -206,3 +206,16 @@ func TestOpenFileComment_FromLive(t *testing.T) {
 		t.Errorf("c from Live: err=%v liveView=%v mode=%q", err, st.LiveView, st.CommentMode)
 	}
 }
+
+// TestLivePageLabel pins the header's page name: host and path, or just the
+// host before the frame reports its page.
+func TestLivePageLabel(t *testing.T) {
+	st := PrereviewState{TargetURL: "http://localhost:3000"}
+	if got := st.LivePageLabel(); got != "localhost:3000" {
+		t.Errorf("before the beacon: %q", got)
+	}
+	st.CurrentURL = "/pricing?plan=team"
+	if got := st.LivePageLabel(); got != "localhost:3000/pricing?plan=team" {
+		t.Errorf("on a page: %q", got)
+	}
+}

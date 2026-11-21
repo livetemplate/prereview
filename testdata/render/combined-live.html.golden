@@ -146,7 +146,7 @@
   </form>
   
   <div class="title">
-    <span class="title-main"><span class="title-page">/</span> <small class="live-count">· 1 annotation</small></span>
+    <span class="title-main"><span class="title-page">localhost:3000/</span> <small class="live-count">· 1 annotation</small></span>
   </div>
   
   <div class="toolbar-inline">

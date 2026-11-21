@@ -2879,6 +2879,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   header.bar .nav-prev,
   header.bar .nav-next,
   header.bar .title-file,
+  header.bar .title-page,
   header.bar .live-count { display: none; }
   /* The external bar has no overflow menu — keep its actions compact so
      💬 + Hand off + End session fit on one row. */
