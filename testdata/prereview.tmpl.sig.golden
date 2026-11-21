@@ -333,6 +333,8 @@
       </fieldset>
     </form>
   </footer></article></dialog>
+=== explainButton ===
+{{if $.ExplainPending}}<span class="request-pending" title="The request is queued — the agent will answer shortly">Walkthrough requested…</span>{{else}}<form method="POST" style="margin:0"><button type="submit" name="requestExplain" class="outline" title="Ask the agent to walk you through the whole change">{{if $.HasExplanation}}Explain again{{else}}Explain this change{{end}}</button></form>{{end}}
 === externalBody ===
 
 <header class="bar bar-external">
@@ -438,21 +440,8 @@
     </form>
     {{end}}
     
-    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.QuizPrompts}}
-    {{if $.QuizPending}}
-    <span class="quiz-trigger is-pending" title="The request is queued — the agent will answer shortly">{{template "iconQuiz"}}<span class="quiz-trigger-label">Quiz requested…</span></span>
-    {{else}}{{if eq (len $.QuizPrompts) 1}}
-    <form method="POST" style="margin:0"><button type="submit" name="requestQuiz" class="quiz-trigger" title="Ask the agent for a comprehension quiz about this diff">{{template "iconQuiz"}}<span class="quiz-trigger-label">Quiz me</span></button></form>
-    {{else}}
-    <div class="tb-dropdown prompts-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="quiz-trigger" aria-haspopup="menu" title="Ask the agent for a comprehension quiz about this diff">{{template "iconQuiz"}}<span class="quiz-trigger-label">Quiz me</span></button>
-      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Quiz prompts">
-        {{range $.QuizPrompts}}
-        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="requestQuiz" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
-        {{end}}
-      </div>
-    </div>
-    {{end}}{{end}}
+    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.ShowUnderstandEntry}}
+    <form method="POST" style="margin:0"><button type="submit" name="toggleUnderstand" class="quiz-trigger" title="Walk through the whole change, and quiz yourself on it">{{template "iconQuiz"}}<span class="quiz-trigger-label">Understand</span></button></form>
     {{end}}
     
     {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
@@ -875,11 +864,11 @@
     </button>
   </form>
   {{end}}
-  {{if .HasQuiz}}
+  {{if .HasUnderstandContent}}
   <form method="POST">
-    <button type="submit" name="toggleQuiz" class="menu-item" role="menuitem">
+    <button type="submit" name="toggleUnderstand" class="menu-item" role="menuitem">
       <span class="menu-icon">{{template "iconQuiz"}}</span>
-      <span class="menu-label">{{if .ShowQuiz}}Back{{else}}Quiz{{end}}{{with index $.KeyHint "toggleQuiz"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+      <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
       <span class="menu-meta">{{.QuizScoreLabel}}</span>
     </button>
   </form>
@@ -1008,8 +997,8 @@
 {{template "fileDrawer" $}}
 
 <main class="viewer" lvt-fx:viewport-report="reportViewport" data-lvt-viewport-items=".line, .md-block">{{if .LiveAvailable}}<div class="live-wrap{{if not .LiveShowing}} live-hidden{{end}}" data-key="live-wrap">{{template "liveStage" $}}</div>{{end}}
-{{if .ShowQuiz}}
-{{template "quizView" $}}
+{{if .ShowUnderstand}}
+{{template "understandView" $}}
 {{else}}{{if .ShowAllComments}}
 {{template "allComments" $}}
 {{else}}{{if .ShowLibrary}}{{template "library" $}}
@@ -1037,7 +1026,7 @@
       </div>
     </div>
     <span class="ann-nav-actions">
-      {{if $.HasQuiz}}<form method="POST"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>{{end}}
+      {{if $.HasQuiz}}<form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="toggleUnderstand" class="outline" title="Open the quiz overview">Overview</button></form>{{end}}
       <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
     </span>
   </div>
@@ -1222,6 +1211,16 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
 === processedBadge ===
 <small class="processed-badge">worked on</small>
 === queuedBadge ===
@@ -1235,6 +1234,8 @@
       </fieldset>
     </form>
   </footer></article></dialog>
+=== quizAsk ===
+{{if $.QuizPrompts}}{{if $.QuizPending}}<span class="request-pending" title="The request is queued — the agent will answer shortly">Quiz requested…</span>{{else}}<div class="quiz-ask">{{range $.QuizPrompts}}<form method="POST" style="margin:0"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="requestQuiz" class="outline" title="{{.Body}}">{{.Title}}</button></form>{{end}}</div>{{end}}{{end}}
 === quizCard ===
 <div class="quiz-card{{if .Answered}} is-answered{{end}}{{if .Settled}} is-settled{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
   
@@ -1268,15 +1269,8 @@
   {{end}}
 </div>
 
-=== quizView ===
-<section class="quiz">
-  <header class="quiz-head">
-    <strong>Comprehension quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</strong>
-    <form method="POST" style="margin:0">
-      <button type="submit" name="toggleQuiz" class="outline contrast" title="Return to the file you were viewing">Back</button>
-    </form>
-  </header>
-  {{if $.HasQuiz}}
+=== quizPanel ===
+{{if $.HasQuiz}}
   <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
   <ol class="quiz-list">
     {{range $.QuizItems}}
@@ -1285,6 +1279,7 @@
         <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>
         {{if .Jumpable}}
         <form method="POST" style="margin:0">
+          <input type="hidden" name="file" value="{{$.SelectedFile}}">
           <input type="hidden" name="line" value="{{.FromLine}}">
           <input type="hidden" name="side" value="{{.Side}}">
           <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">{{.AnchorLabel}}</button>
@@ -1328,18 +1323,15 @@
       <button type="submit" name="retakeQuiz" class="outline" title="Clear your answers and take it again">Retake</button>
     </form>
     {{end}}
+    {{template "quizAsk" $}}
   </footer>
   {{else}}
   <div class="empty quiz-empty">
-    <p>No quiz for this file yet.</p>
-    <p><small>Use <strong>Quiz me</strong> in the file header to ask the agent for one.</small></p>
-    <form method="POST">
-      <button type="submit" name="toggleQuiz" class="outline contrast">Back to the file</button>
-    </form>
+    <p>No quiz for <code>{{$.SelectedFile}}</code> yet.</p>
+    <p><small>Ask the agent for a few questions about this file's diff, to check you understood it before you accept it.</small></p>
+    {{template "quizAsk" $}}
   </div>
   {{end}}
-</section>
-
 === regionToggle ===
 <form method="POST" class="region-toggle">
   <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
@@ -1638,6 +1630,20 @@
     </button>
   </form>
 </header>
+=== understandView ===
+<section class="quiz understand">
+  <header class="quiz-head">
+    <strong>Understand this change</strong>
+    <form method="POST" style="margin:0">
+      <button type="submit" name="toggleUnderstand" class="outline contrast" title="Return to the file you were viewing">Back</button>
+    </form>
+  </header>
+  <div class="lib-tabs understand-tabs" role="tablist">
+    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab{{if not $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}false{{else}}true{{end}}">Walkthrough{{with $.CurrentExplanation}} <span class="ck-pill">{{len .Steps}}</span>{{end}}</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab{{if $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}true{{else}}false{{end}}">Quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</button></form>
+  </div>
+  {{if $.UnderstandOnQuiz}}{{template "quizPanel" $}}{{else}}{{template "walkthroughPanel" $}}{{end}}
+</section>
 === versionSummary ===
 {{if .Initial}}<span class="vs-note">Initial version — the starting point.</span>{{else}}{{if .Deleted}}<span class="vs-note">File removed at this version.</span>{{else}}{{if .Binary}}<span class="vs-note">Binary file changed.</span>{{else}}<span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>{{end}}{{end}}{{end}}
 === viewMenu ===
@@ -1679,11 +1685,11 @@
         </form>
         {{end}}
         
-        {{if .HasQuiz}}
+        {{if .HasUnderstandContent}}
         <form method="POST">
-          <button type="submit" name="toggleQuiz" class="menu-item{{if .ShowQuiz}} is-on{{end}}" role="menuitem">
+          <button type="submit" name="toggleUnderstand" class="menu-item{{if .ShowUnderstand}} is-on{{end}}" role="menuitem">
             <span class="menu-icon">{{template "iconQuiz"}}</span>
-            <span class="menu-label">{{if .ShowQuiz}}Back{{else}}Quiz{{end}}{{with index $.KeyHint "toggleQuiz"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
             <span class="menu-meta">{{.QuizScoreLabel}}</span>
           </button>
         </form>
@@ -1827,6 +1833,31 @@
 <div class="reanchor-prompt agent-stall-prompt" role="status">
   <span>{{.AgentPhaseLabel}}</span>
 </div>
+{{end}}
+=== walkthroughPanel ===
+{{with $.CurrentExplanation}}
+  {{if .Summary}}<p class="walk-summary">{{.Summary}}</p>{{end}}
+  {{if .Stale}}<p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>{{end}}
+  <ol class="walk-steps">
+    {{range $.WalkSteps}}
+    <li class="walk-step" data-key="step-{{.ID}}">
+      <p class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> {{.Title}}</p>
+      {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}
+      <ul class="walk-anchors">
+        {{range .Anchors}}
+        <li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, but the review has no such line — treat this step with suspicion">⚠ {{.Label}}, not in this review</span>{{else}}<form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">{{.Label}}</button></form>{{end}}</li>
+        {{end}}
+      </ul>
+    </li>
+    {{end}}
+  </ol>
+  {{if $.CanExplain}}<footer class="quiz-foot">{{template "explainButton" $}}</footer>{{end}}
+{{else}}
+  <div class="empty quiz-empty">
+    <p>No walkthrough yet.</p>
+    <p><small>Ask the agent to walk you through the whole change, step by step, in the order it makes sense to read. prereview checks every line it cites.</small></p>
+    {{if $.CanExplain}}{{template "explainButton" $}}{{else}}<p><small>Run prereview with <code>--agent</code> to ask an agent for one.</small></p>{{end}}
+  </div>
 {{end}}
 === workQueue ===
   <div class="tb-dropdown queue-dropdown{{if .AgentPaused}} is-paused{{end}}" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">

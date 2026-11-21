@@ -72,7 +72,7 @@
     lvt-key="a"
     lvt-mod:skip-when-typing
   ></span><span
-    lvt-on:window:keydown="toggleQuiz"
+    lvt-on:window:keydown="toggleUnderstand"
     lvt-key="z"
     lvt-mod:skip-when-typing
   ></span><span
@@ -250,12 +250,12 @@
         <form method="POST">
           <button
             type="submit"
-            name="toggleQuiz"
+            name="toggleUnderstand"
             class="menu-item"
             role="menuitem"
           >
             <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
-            <span class="menu-label">Quiz <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
+            <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
             <span class="menu-meta">1/4</span>
           </button>
         </form>
@@ -485,12 +485,12 @@
   <form method="POST">
     <button
       type="submit"
-      name="toggleQuiz"
+      name="toggleUnderstand"
       class="menu-item"
       role="menuitem"
     >
       <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
-      <span class="menu-label">Quiz <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
+      <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
       <span class="menu-meta">1/4</span>
     </button>
   </form>
@@ -683,6 +683,8 @@
     
     
     
+    <form method="POST" style="margin:0"><button type="submit" name="toggleUnderstand" class="quiz-trigger" title="Walk through the whole change, and quiz yourself on it"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="quiz-trigger-label">Understand</span></button></form>
+    
     
     
     
@@ -726,7 +728,7 @@
       </div>
     </div>
     <span class="ann-nav-actions">
-      <form method="POST"><button type="submit" name="toggleQuiz" class="outline" title="Open the quiz overview">Overview</button></form>
+      <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="toggleUnderstand" class="outline" title="Open the quiz overview">Overview</button></form>
       <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
     </span>
   </div>
@@ -972,7 +974,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
-    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Comprehension quiz</dd></div>
+    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>

@@ -252,9 +252,11 @@ type PrereviewState struct {
 
 	// QuizPrompts is the #191 quiz-prompt library — built-ins plus the user's
 	// ~/.config/prereview/quizzes/ overlay — loaded every Mount like Prompts.
-	// Drives the file-header "Quiz me" control: one prompt renders a plain
-	// one-tap button, several render a picker.
+	// The Understand page's Quiz tab shows one button per prompt.
 	QuizPrompts []Prompt `json:"quiz_prompts"`
+	// ExplainPrompts is the #115 walkthrough-prompt library, loaded like
+	// QuizPrompts. The first one is what "Explain this change" sends.
+	ExplainPrompts []Prompt `json:"explain_prompts"`
 
 	// Shortcuts are the composer's one-tap chips (#204), loaded each Mount in the
 	// order they show (most used first). ComposerNonce is bumped only by a chip tap:
@@ -444,11 +446,13 @@ type PrereviewState struct {
 	// back in the diff view.
 	ShowAllComments bool `json:"show_all_comments"`
 
-	// ShowQuiz toggles the #191 comprehension-quiz view for the selected file
-	// (replaces the diff viewer, like ShowAllComments). Not persisted, and reset
-	// by every navigation action for the same reason: a view that survives a jump
-	// to another file would strand the reviewer somewhere they didn't ask to be.
-	ShowQuiz bool `json:"show_quiz"`
+	// ShowUnderstand shows the Understand page (#115): the walkthrough of the
+	// whole change and the selected file's quiz (#191), in place of the diff
+	// viewer like ShowAllComments. Not persisted, and reset by every navigation
+	// action: a view that survives a jump would strand the reviewer somewhere
+	// they didn't ask to be. UnderstandTab is "" (Walkthrough) or "quiz".
+	ShowUnderstand bool   `json:"show_understand"`
+	UnderstandTab  string `json:"understand_tab"`
 
 	// Quizzes are the agent-written comprehension quizzes (.prereview/quiz.jsonl),
 	// and QuizAnswers the reviewer's responses keyed "<quizID>\x00<questionID>".

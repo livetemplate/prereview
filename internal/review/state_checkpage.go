@@ -659,13 +659,19 @@ type CheckPick struct {
 }
 
 // openJudgeRequest is when the open file's newest still-open "Run judges"
-// request was queued (zero if none). Derived from the request comment — shared
-// by every tab and surviving a reload — so the waiting state is the queue's own:
-// it ends when verdicts land or the agent marks the request done.
+// request was queued (zero if none).
 func (s PrereviewState) openJudgeRequest() time.Time {
+	return s.openRequest(csv.RequestJudge, s.SelectedFile)
+}
+
+// openRequest is when the newest still-open request of kind was queued, on file
+// ("" = any file; zero if none). Derived from the request comment, so a waiting
+// state built on it is shared by every tab, survives a reload, and is the
+// queue's own: it ends when the agent marks the request done.
+func (s PrereviewState) openRequest(kind, file string) time.Time {
 	var asked time.Time
 	for _, c := range s.Comments {
-		if c.Request == csv.RequestJudge && c.File == s.SelectedFile && !c.Resolved && !c.Processed &&
+		if c.Request == kind && (file == "" || c.File == file) && !c.Resolved && !c.Processed &&
 			c.Created.After(asked) {
 			asked = c.Created
 		}

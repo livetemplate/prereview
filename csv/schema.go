@@ -85,6 +85,7 @@ const (
 	RequestJudge      = "judge"      // run a file's judges
 	RequestBenchmark  = "benchmark"  // run a benchmark's judges
 	RequestQuiz       = "quiz"       // write a comprehension quiz ("Quiz me")
+	RequestExplain    = "explain"    // write a walkthrough of the whole change (#115)
 )
 
 // Header is the row written before any data. Position-stable: only ever

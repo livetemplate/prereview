@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strconv"
 	"sync"
 
+	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 )
 
@@ -133,4 +136,95 @@ func groundRange(fc *gitdiff.FileChanges, kind, side string, from, to int) strin
 		return anchorOK
 	}
 	return anchorUngrounded
+}
+
+// The Understand page's tabs. "" picks one from what there is (UnderstandOnQuiz).
+const (
+	understandTabWalkthrough = "walkthrough"
+	understandTabQuiz        = "quiz"
+)
+
+// understandTab is tab when it names a tab, else "" (the default).
+func understandTab(tab string) string {
+	if tab == understandTabWalkthrough || tab == understandTabQuiz {
+		return tab
+	}
+	return ""
+}
+
+// ToggleUnderstand opens or closes the Understand page (#115), the "z" shortcut.
+// An optional "tab" opens it on that tab ("quiz" from the stepper's Overview).
+// Closes the overflow menu so the page is visible at once; not persisted, like
+// All comments.
+func (c *PrereviewController) ToggleUnderstand(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	toggleFullView(&state, &state.ShowUnderstand)
+	state.MoreMenuOpen = false
+	if state.ShowUnderstand {
+		state.UnderstandTab = understandTab(ctx.GetString("tab"))
+		// Ground again on open: the agent may have edited the files since load
+		// (an edit is only reloaded once settled, #198).
+		c.groundQuizzes(&state)
+		c.applyExplain(&state)
+	}
+	return state, nil
+}
+
+// SetUnderstandTab switches the Understand page's tab.
+func (c *PrereviewController) SetUnderstandTab(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.UnderstandTab = understandTab(ctx.GetString("tab"))
+	return state, nil
+}
+
+// RequestExplain queues "Explain this change": a request row (request=explain)
+// on the open file whose body is the walkthrough prompt plus the scope, since the
+// walkthrough covers the whole change, not the file the request is filed on. It
+// files on the open file because every reader of a comment assumes one (the same
+// as Quiz me and Run judges).
+func (c *PrereviewController) RequestExplain(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if state.SelectedFile == "" {
+		return state, fmt.Errorf("requestExplain: no file selected")
+	}
+	body := promptBody(state.ExplainPrompts, ctx.GetString("slug"))
+	if body == "" {
+		return state, nil // no prompts, or a stale slug from an old render
+	}
+	n := len(state.changedFiles())
+	if c.NoGit {
+		body += fmt.Sprintf("\n\nScope: the whole review, %d file(s), not only this one.", n)
+	} else {
+		body += fmt.Sprintf("\n\nScope: the whole change, %d changed file(s) against `%s`, not only this one.", n, c.effectiveBase(&state))
+	}
+	state, err := c.queueRequest(state, csv.RequestExplain, body)
+	if err != nil {
+		return state, err
+	}
+	state.Flash = "Walkthrough requested — the agent will answer shortly"
+	return state, nil
+}
+
+// JumpToAnchor opens the file a walkthrough step cites, at the cited line. The
+// file comes with the action, never from SelectedFile: a walkthrough spans files.
+func (c *PrereviewController) JumpToAnchor(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	file := ctx.GetString("file")
+	if file == "" {
+		return state, fmt.Errorf("jumpToAnchor: missing file")
+	}
+	line, _ := strconv.Atoi(ctx.GetString("line"))
+	return c.jumpToLine(state, file, ctx.GetString("side"), line)
+}
+
+// jumpToLine opens file and parks the cursor on line (on side), closing any
+// full-page view. The raw view is revealed, as for a search hit, so the row is in
+// the DOM even inside a fold or a rendered-Markdown file. line 0 just opens the
+// file. Shared by every "go read the code this cites" link.
+func (c *PrereviewController) jumpToLine(state PrereviewState, file, side string, line int) (PrereviewState, error) {
+	state, err := c.selectFileForJump(state, file)
+	if err != nil {
+		return state, err
+	}
+	state.CursorKey, state.RevealFile = "", ""
+	if l, ok := findDiffLine(state.CurrentDiff, side, line); ok {
+		state.CursorKey, state.RevealFile = lineCursorKey(l), file
+	}
+	return state, nil
 }

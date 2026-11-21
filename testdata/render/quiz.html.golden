@@ -72,7 +72,7 @@
     lvt-key="a"
     lvt-mod:skip-when-typing
   ></span><span
-    lvt-on:window:keydown="toggleQuiz"
+    lvt-on:window:keydown="toggleUnderstand"
     lvt-key="z"
     lvt-mod:skip-when-typing
   ></span><span
@@ -250,7 +250,7 @@
         <form method="POST">
           <button
             type="submit"
-            name="toggleQuiz"
+            name="toggleUnderstand"
             class="menu-item is-on"
             role="menuitem"
           >
@@ -485,7 +485,7 @@
   <form method="POST">
     <button
       type="submit"
-      name="toggleQuiz"
+      name="toggleUnderstand"
       class="menu-item"
       role="menuitem"
     >
@@ -659,18 +659,22 @@
       lvt-fx:viewport-report="reportViewport"
       data-lvt-viewport-items=".line, .md-block">
 
-<section class="quiz">
+<section class="quiz understand">
   <header class="quiz-head">
-    <strong>Comprehension quiz <span class="quiz-score">1/4</span></strong>
+    <strong>Understand this change</strong>
     <form method="POST" style="margin:0">
       <button
         type="submit"
-        name="toggleQuiz"
+        name="toggleUnderstand"
         class="outline contrast"
         title="Return to the file you were viewing"
       >Back</button>
     </form>
   </header>
+  <div class="lib-tabs understand-tabs" role="tablist">
+    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab" role="tab" aria-selected="false">Walkthrough</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab is-on" role="tab" aria-selected="true">Quiz <span class="quiz-score">1/4</span></button></form>
+  </div>
   
   <p class="quiz-sub"><small>on <code>app.go</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
   <ol class="quiz-list">
@@ -754,6 +758,7 @@
         <span class="quiz-probe quiz-probe-rationale">rationale</span>
         
         <form method="POST" style="margin:0">
+          <input type="hidden" name="file" value="app.go">
           <input type="hidden" name="line" value="1">
           <input type="hidden" name="side" value="new">
           <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">L1</button>
@@ -795,6 +800,7 @@
         <span class="quiz-probe quiz-probe-consequence">consequence</span>
         
         <form method="POST" style="margin:0">
+          <input type="hidden" name="file" value="app.go">
           <input type="hidden" name="line" value="2">
           <input type="hidden" name="side" value="new">
           <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">L2</button>
@@ -835,10 +841,10 @@
       <button type="submit" name="retakeQuiz" class="outline" title="Clear your answers and take it again">Retake</button>
     </form>
     
+    
   </footer>
   
 </section>
-
 
 
 
@@ -896,7 +902,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
-    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Comprehension quiz</dd></div>
+    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>

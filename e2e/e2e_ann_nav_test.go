@@ -135,7 +135,7 @@ func TestE2E_QuizStepper(t *testing.T) {
 	submitQuiz(t, p, quizJSON)
 	waitForQuizEntry(t, p)
 	waitNavLabel(t, p, "4 open", "a new quiz's four questions", diag)
-	if n := evalInt(t, p, `document.querySelectorAll('.ann-nav button[name="toggleQuiz"]').length`); n != 1 {
+	if n := evalInt(t, p, `document.querySelectorAll('.ann-nav button[name="toggleUnderstand"]').length`); n != 1 {
 		t.Errorf("a file with a quiz offers the overview from the bar, got %d%s", n, diag())
 	}
 

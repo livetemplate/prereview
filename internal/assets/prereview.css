@@ -1161,8 +1161,7 @@ header.file-head .file-head-actions {
   background: transparent; border: 0; cursor: pointer;
 }
 .prompt-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-/* #211: the footer link under the suggestion prompts, keyed on its own class so
-   the quiz picker (which shares .prompts-panel) is untouched. */
+/* #211: the footer link under the suggestion prompts, keyed on its own class. */
 .prompts-more {
   display: block; margin-top: 0.25rem; padding: 0.4rem 0.5rem 0.2rem;
   border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted);
@@ -3591,6 +3590,24 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    exactly what made a real reviewer tap twice and queue a duplicate. */
 .quiz-trigger.is-pending { opacity: 0.6; cursor: default; }
 .quiz-trigger.is-pending svg { color: var(--pico-muted-color); }
+/* #115 the Understand page: tabs over the quiz page's frame, then the walkthrough. */
+.understand-tabs { margin: 0 0.5rem 0.75rem; }
+.walk-summary { margin: 0 0.5rem 0.75rem; }
+.walk-stale {
+  margin: 0 0.5rem 0.75rem; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--pr-del) 45%, transparent);
+  background: color-mix(in srgb, var(--pr-del) 8%, var(--surface));
+}
+.walk-steps, .walk-steps > li, .walk-anchors, .walk-anchors > li { list-style: none; }
+.walk-steps { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.walk-step { padding: 0.7rem; border: 1px solid var(--pr-comment-bd); border-radius: var(--radius-sm); background: var(--pr-comment-bg); }
+.walk-title { margin: 0 0 0.35rem; font-weight: 600; display: flex; gap: 0.5rem; align-items: baseline; }
+.walk-num { flex: none; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.walk-body { margin: 0 0 0.5rem; white-space: pre-wrap; }
+.walk-anchors { padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.quiz-ask { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.quiz .quiz-ask button, .quiz .quiz-empty button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.request-pending { opacity: 0.6; font-size: 0.85rem; }
 
 /* The quiz question as an INLINE ANNOTATION — it renders in a diff row next to
    comment and suggestion cards, at the file head, and in the overview, so it

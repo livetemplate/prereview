@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/csv"
@@ -375,19 +376,18 @@ func renderFixtures() []renderFixture {
 	// anchorless `decision`. Those last two render differently on purpose and must
 	// stay visually distinguishable, so both are pinned here.
 	quiz := goBase()
-	quiz.ShowQuiz = true
+	quiz.ShowUnderstand = true
 	quiz.Quizzes = quizFixtureQuizzes()
 	quiz.QuizAnswers = map[string]review.QuizAnswer{
 		"z1\x00q1": {QuizID: "z1", QuestionID: "q1", Choice: 1},
 	}
 
-	// the file-header "Quiz me" control, which degrades by library size: ONE
-	// prompt renders a plain one-tap button (the phone case), two or more render a
-	// picker. Both shapes are pinned so the degrade logic can't silently regress.
-	quizBtn := goBase()
-	quizBtn.QuizPrompts = []review.Prompt{{Slug: "comprehension", Title: "Quiz me on this diff", Body: "generate a quiz"}}
-	quizPicker := goBase()
-	quizPicker.QuizPrompts = []review.Prompt{
+	// the Understand page's Quiz tab with no quiz yet: one button per prompt that
+	// asks for one (#115 moved them off the file header, which now shows a single
+	// Understand button — pinned here too).
+	quizAsk := goBase()
+	quizAsk.ShowUnderstand, quizAsk.UnderstandTab = true, "quiz"
+	quizAsk.QuizPrompts = []review.Prompt{
 		{Slug: "comprehension", Title: "Quiz me on this diff", Body: "generate a quiz"},
 		{Slug: "security", Title: "Quiz me like a security reviewer", Body: "security quiz"},
 	}
@@ -426,7 +426,34 @@ func renderFixtures() []renderFixture {
 	// quiz view with no quiz for the selected file — the empty state must offer a
 	// way out, or the reviewer is stranded on a near-blank page (issue #27).
 	quizEmpty := goBase()
-	quizEmpty.ShowQuiz = true
+	quizEmpty.ShowUnderstand, quizEmpty.UnderstandTab = true, "quiz"
+
+	// #115: the Understand page's Walkthrough tab, empty, with an agent to ask.
+	understandEmpty := goBase()
+	understandEmpty.ShowUnderstand, understandEmpty.AgentMode = true, true
+	understandEmpty.ExplainPrompts = []review.Prompt{{Slug: "walkthrough", Title: "Walk me through this change", Body: "explain it"}}
+
+	// #115: a walkthrough written before the last edit, with every anchor shape: a
+	// line range, a single old-side line, a whole file, and one the review doesn't
+	// have (⚠, no jump). A second request is pending, so the button is disabled.
+	understandWalk := goBase()
+	understandWalk.ShowUnderstand, understandWalk.AgentMode = true, true
+	understandWalk.ExplainPrompts = understandEmpty.ExplainPrompts
+	understandWalk.Comments = []review.Comment{{ID: "r1", File: "app.go", Body: "Walk me through this change.", Kind: "file", Request: csv.RequestExplain,
+		Created: time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)}}
+	understandWalk.Explanations = []review.Explanation{{
+		ID: "e1", Summary: "Adds a retry loop to the worker.", Stale: true, CreatedAt: "2026-11-21T11:00:00Z",
+		Steps: []review.Step{
+			{ID: "s1", Title: "The retry budget", Body: "A new field caps the retries.\nCheck the default.", Anchors: []review.Anchor{
+				{File: "app.go", Kind: "line", Side: "new", FromLine: 2, ToLine: 3, Status: "ok"},
+				{File: "app.go", Kind: "line", Side: "old", FromLine: 1, ToLine: 1, Status: "ok"},
+			}},
+			{ID: "s2", Title: "The logo", Anchors: []review.Anchor{
+				{File: "logo.png", Kind: "file", Side: "new", Status: "ok"},
+				{File: "gone.go", Kind: "line", Side: "new", FromLine: 9, ToLine: 9, Status: "ungrounded"},
+			}},
+		},
+	}}
 
 	// external (live-site) mode
 	external := review.PrereviewState{
@@ -852,8 +879,9 @@ func renderFixtures() []renderFixture {
 		{"quiz", quiz},
 		{"quiz-empty", quizEmpty},
 		{"quiz-inline", quizInline},
-		{"quiz-me-button", quizBtn},
-		{"quiz-me-picker", quizPicker},
+		{"quiz-ask", quizAsk},
+		{"understand-empty", understandEmpty},
+		{"understand-walkthrough", understandWalk},
 		{"prompts-picker", promptsPicker},
 		{"shortcuts-composer", shortcuts},
 		{"ripple", ripple},

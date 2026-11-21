@@ -246,6 +246,13 @@ func userQuizzesDir() string {
 	return libraryOverlayDir("PREREVIEW_QUIZZES_DIR", "quizzes")
 }
 
+// userExplainDir is the walkthrough-prompt overlay directory (#115):
+// <library>/explain. PREREVIEW_EXPLAIN_DIR overrides it. Its own directory for
+// the same reason as quizzes: the prompt asks for `prereview explain`.
+func userExplainDir() string {
+	return libraryOverlayDir("PREREVIEW_EXPLAIN_DIR", "explain")
+}
+
 // storeDirName is the on-disk store directory, and targetsDirName the container
 // inside it that holds the per-target stores. Both are path segments gitdiff
 // already skips (a .prereview segment is machinery, never review material), so

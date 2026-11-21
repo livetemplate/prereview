@@ -68,7 +68,7 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"Mod+k"}, Display: "⌘/Ctrl + K", Action: "openSearch", Label: "Search files"},
 	{Keys: []string{"l"}, Display: "l", Action: "toggleLiveView", Label: "Switch between the files and the live site", LiveOnly: true},
 	{Keys: []string{"a"}, Display: "a", Action: "toggleCommentList", Label: "All comments"},
-	{Keys: []string{"z"}, Display: "z", Action: "toggleQuiz", Label: "Comprehension quiz"},
+	{Keys: []string{"z"}, Display: "z", Action: "toggleUnderstand", Label: "Understand this change"},
 	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved comments"},
 	{Keys: []string{"s"}, Display: "s", Action: "toggleSuggestions", Label: "Show / hide suggestions"},
 	{Keys: []string{"q"}, Display: "q", Action: "toggleAgentPause", Label: "Pause / resume the agent queue", StreamOnly: true},

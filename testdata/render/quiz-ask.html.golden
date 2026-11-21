@@ -72,7 +72,7 @@
     lvt-key="a"
     lvt-mod:skip-when-typing
   ></span><span
-    lvt-on:window:keydown="toggleQuiz"
+    lvt-on:window:keydown="toggleUnderstand"
     lvt-key="z"
     lvt-mod:skip-when-typing
   ></span><span
@@ -633,111 +633,30 @@
       lvt-fx:viewport-report="reportViewport"
       data-lvt-viewport-items=".line, .md-block">
 
-
-<article>
-  <header class="file-head"><span class="file-head-name" title="app.go"><strong class="fh-base">app.go</strong></span>
-    
-    <span class="file-head-actions">
-    
-    
-    
-    
-    <form method="POST" class="file-head-comment">
+<section class="quiz understand">
+  <header class="quiz-head">
+    <strong>Understand this change</strong>
+    <form method="POST" style="margin:0">
       <button
         type="submit"
-        name="openFileComment"
-        class="contrast"
-        title="Add a comment about the whole file"
-        aria-label="Comment on file"
-      ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-    d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"
-    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"
-  /></svg><span class="file-head-comment-label">Comment on file <kbd class="kbd-hint" aria-hidden="true">c</kbd></span></button>
+        name="toggleUnderstand"
+        class="outline contrast"
+        title="Return to the file you were viewing"
+      >Back</button>
     </form>
-    
-    
-    
-    
-    <div
-      class="tb-dropdown prompts-dropdown"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
-      <button
-        type="button"
-        class="quiz-trigger"
-        aria-haspopup="menu"
-        title="Ask the agent for a comprehension quiz about this diff"
-      ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="quiz-trigger-label">Quiz me</span></button>
-      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Quiz prompts">
-        
-        <form method="POST"><input type="hidden" name="slug" value="comprehension"><button type="submit" name="requestQuiz" class="prompt-row" title="generate a quiz">Quiz me on this diff</button></form>
-        
-        <form method="POST"><input type="hidden" name="slug" value="security"><button type="submit" name="requestQuiz" class="prompt-row" title="security quiz">Quiz me like a security reviewer</button></form>
-        
-      </div>
-    </div>
-    
-    
-    
-    
-    
-    
-    </span>
   </header>
-  
-  
-  
-  
-  
-  
-  
-  <div class="file-head-marks">
-    
-    
-    <div class="file-head-cards">
-      
-  
-  
-    </div>
+  <div class="lib-tabs understand-tabs" role="tablist">
+    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab" role="tab" aria-selected="false">Walkthrough</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab is-on" role="tab" aria-selected="true">Quiz</button></form>
   </div>
   
+  <div class="empty quiz-empty">
+    <p>No quiz for <code>app.go</code> yet.</p>
+    <p><small>Ask the agent for a few questions about this file's diff, to check you understood it before you accept it.</small></p>
+    <div class="quiz-ask"><form method="POST" style="margin:0"><input type="hidden" name="slug" value="comprehension"><button type="submit" name="requestQuiz" class="outline" title="generate a quiz">Quiz me on this diff</button></form><form method="POST" style="margin:0"><input type="hidden" name="slug" value="security"><button type="submit" name="requestQuiz" class="outline" title="security quiz">Quiz me like a security reviewer</button></form></div>
+  </div>
   
-  
-  
-  <div class="code"
-       data-key="code-app.go"
-       data-path="app.go"
-       lvt-fx:scroll="reset-on:data-path"
-       lvt-fx:text-select="selectText"
-       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row" data-key="row-L1-1"><div tabindex="0"
-              lvt-on:click="selectLine"
-              lvt-on:keydown="selectLine"
-              lvt-key="Enter"
-              data-line="1"
-              data-side="new"
-              class="line ctx"
-              data-key="L1-1"><span class="gutter"><span class="gutter-mark">&nbsp; </span>1</span><span class="content chroma" data-line-text>package main</span></div></div>
-<div class="line-row" data-key="row-L2-0"><div tabindex="0"
-              lvt-on:click="selectLine"
-              lvt-on:keydown="selectLine"
-              lvt-key="Enter"
-              data-line="2"
-              data-side="old"
-              class="line del"
-              data-key="L2-0"><span class="gutter"><span class="gutter-mark">- </span>2</span><span class="content chroma" data-line-text>var x = 1</span></div></div>
-<div class="line-row" data-key="row-L0-2"><div tabindex="0"
-              lvt-on:click="selectLine"
-              lvt-on:keydown="selectLine"
-              lvt-key="Enter"
-              data-line="2"
-              data-side="new"
-              class="line add"
-              data-key="L0-2"><span class="gutter"><span class="gutter-mark">+ </span>2</span><span class="content chroma" data-line-text>var x = 2</span></div></div>
-<div class="code-sentinel" aria-hidden="true"></div></div>
-  
-</article>
-
+</section>
 
 
 
@@ -795,7 +714,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
-    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Comprehension quiz</dd></div>
+    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>

@@ -1,6 +1,7 @@
 package review
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -67,6 +68,22 @@ type Anchor struct {
 // Ungrounded reports that the anchor cites a line (or file) the review doesn't
 // have.
 func (a Anchor) Ungrounded() bool { return a.Status == anchorUngrounded }
+
+// Label names the anchor the way the rest of the UI names a span: the file, then
+// L42 or L42-L48 (as Comment.LineSpan), marking the old side.
+func (a Anchor) Label() string {
+	if a.Kind == AnchorKindFile {
+		return a.File
+	}
+	l := fmt.Sprintf("%s L%d", a.File, a.FromLine)
+	if a.ToLine > a.FromLine {
+		l += fmt.Sprintf("-L%d", a.ToLine)
+	}
+	if a.Side == "old" {
+		l += " (old)"
+	}
+	return l
+}
 
 // Explanation first-seen keys are namespaced in first-seen.json.
 func (e Explanation) seenKey() string { return "explain/" + e.ID }
@@ -196,4 +213,15 @@ func loadExplanations(path string) []Explanation {
 		}
 	}
 	return out
+}
+
+//go:embed builtin_explain/*.md
+var builtinExplainFS embed.FS
+
+// LoadExplainPrompts returns the built-in walkthrough prompts overlaid with the
+// user's (<library>/explain/*.md), with the shared prompt-library rules. As with
+// quiz prompts, a custom one is safe: the structure and the grounding are
+// enforced whatever prompt produced the walkthrough.
+func LoadExplainPrompts(userDir string) []Prompt {
+	return loadPromptLibrary(builtinExplainFS, "builtin_explain", userDir)
 }

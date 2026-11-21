@@ -82,6 +82,10 @@ type PrereviewController struct {
 	// because the two libraries answer with different verbs.
 	QuizzesDir string
 
+	// ExplainDir is the user overlay for #115 walkthrough prompts
+	// (<library>/explain), merged with the built-ins in LoadExplainPrompts.
+	ExplainDir string
+
 	// ShortcutsDir is the user overlay for #204 composer shortcuts
 	// (<library>/shortcuts). Read every Mount. "" = built-ins only.
 	ShortcutsDir string
@@ -510,6 +514,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// user's edits to their prompt files show without a relaunch.
 	state.Prompts = LoadPrompts(c.PromptsDir)
 	state.QuizPrompts = LoadQuizPrompts(c.QuizzesDir)
+	state.ExplainPrompts = LoadExplainPrompts(c.ExplainDir)
 	// Loads the quizzes and the reviewer's answers. Grounding is deliberately NOT
 	// done here: CurrentDiff is not loaded until ~100 lines below, so grounding at
 	// this point would compare every cited line against a nil diff and mark the

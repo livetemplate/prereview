@@ -5186,3 +5186,18 @@ func TestE2E_DeepLinkHash(t *testing.T) {
 		t.Errorf("external href = %q, want https://example.com", externalHref)
 	}
 }
+
+// openUnderstandTab opens the Understand page (#115) from the file header and
+// selects tab ("walkthrough" or "quiz").
+func (p *runningPrereview) openUnderstandTab(tab string) {
+	p.t.Helper()
+	sel := fmt.Sprintf(`button[name="setUnderstandTab"][data-tab=%q]`, tab)
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`.quiz-trigger[name="toggleUnderstand"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(sel, chromedp.ByQuery),
+		chromedp.Click(sel, chromedp.ByQuery),
+		chromedp.WaitVisible(`.understand-tabs `+sel+`.is-on`, chromedp.ByQuery),
+	); err != nil {
+		p.t.Fatalf("openUnderstandTab %s: %v\nstderr: %s", tab, err, p.stderr.String())
+	}
+}
