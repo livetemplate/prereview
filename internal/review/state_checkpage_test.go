@@ -143,17 +143,17 @@ func TestReviewChecks_AsyncLandsPerFile(t *testing.T) {
 	if r := pageRow(t, s.CheckPage(), "slow"); r.Status != checks.StatusRunning {
 		t.Fatalf("slow row %+v", r)
 	}
+	// Each file's result lands on its own, so the row can read "1 in 1 file"
+	// before the second arrives: wait for both.
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		s, _ = c.ChecksUpdated(s, nil)
-		if r := pageRow(t, s.CheckPage(), "slow"); r.Status == checks.StatusFail {
-			if r.Summary != "2 in 2 files" {
-				t.Errorf("slow row %+v", r)
-			}
+		r := pageRow(t, s.CheckPage(), "slow")
+		if r.Status == checks.StatusFail && r.Summary == "2 in 2 files" {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("async results never landed for both files")
+			t.Fatalf("async results never landed for both files: %+v", r)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -378,9 +379,7 @@ func (c *PrereviewController) relocateAll(state *PrereviewState) bool {
 // means the store is TRUE from the first moment and every reader agrees.
 //
 // Cheap: one os.Stat per commented file, no git. It saves the list it read through
-// persist, whose merge keeps rows added since but gives a row changed since this
-// list's copy back; that's safe only because it runs before the server accepts a
-// save. Anywhere later it must merge with persistAnchors instead (#228).
+// persist, whose per-field merge writes only the status it changed.
 func (c *PrereviewController) SweepGoneFiles() {
 	comments := c.loadCommentsFromDisk()
 	seen := map[string]bool{}
@@ -641,22 +640,27 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 // persist atomically rewrites the CSV from a tab's comments, merged with the
 // file: a row on disk that the tab's copy never loaded (a tab on another device
 // added it, or an import) is kept in its place, and a comment deleted on this
-// server is dropped even when the copy still holds it. Every other row is the
-// copy's. So a tab's copy is the source of truth only for what it knows about,
-// and leaving a comment out of the slice deletes nothing: a delete must also
-// call setDeleted (DeleteComment does).
+// server is dropped even when the copy still holds it. For a row in both, only
+// the fields the tab changed since it last saw the row are the tab's; the rest
+// keep the file's (mergeRow). So a tab's copy is the source of truth only for
+// what it changed, and leaving a comment out of the slice deletes nothing: a
+// delete must also call setDeleted (DeleteComment does). After the write, each
+// comment's base is its row as written from this copy.
 func (c *PrereviewController) persist(comments []Comment) error {
 	if c.CSVWriter == nil {
 		return fmt.Errorf("csv writer not configured")
 	}
 	c.persistMu.Lock()
-	rows, err := c.mergeRows(comments)
+	rows, mine, err := c.mergeRows(comments)
 	if err == nil {
 		err = c.CSVWriter.Write(rows)
 	}
 	c.persistMu.Unlock()
 	if err != nil {
-		return err
+		return err // base stays, so the tab's change is still its own next time
+	}
+	for i := range comments { // the tab has now seen each row as it has it
+		comments[i].base = mine[i]
 	}
 	// Continuous enqueue (#119): a persisted comment change (re)arms the debounced
 	// snapshot emit; no-op in non-stream mode.
@@ -664,37 +668,63 @@ func (c *PrereviewController) persist(comments []Comment) error {
 	return nil
 }
 
-// mergeRows is persist's merge (persistMu held): the file's order, each row the
-// tab's version when it has one, then the tab's new rows. It fails rather than
-// write from the tab alone when the file can't be read: that would drop every
-// row the tab never loaded.
-func (c *PrereviewController) mergeRows(comments []Comment) ([]csv.Row, error) {
+// mergeRows is persist's merge (persistMu held): the file's order, each row
+// merged per field with the tab's version when it has one (mergeRow), then the
+// tab's new rows. mine is each comment's own row, for its next base. It fails
+// rather than write from the tab alone when the file can't be read: that would
+// drop every row the tab never loaded.
+func (c *PrereviewController) mergeRows(comments []Comment) (rows, mine []csv.Row, err error) {
 	disk, err := csv.Read(c.CSVPath)
 	if err != nil {
-		return nil, fmt.Errorf("read before saving: %w", err)
+		return nil, nil, fmt.Errorf("read before saving: %w", err)
 	}
-	mine := make(map[string]int, len(comments))
+	mine = make([]csv.Row, len(comments))
+	at := make(map[string]int, len(comments))
 	for i, cm := range comments {
-		mine[cm.ID] = i
+		mine[i] = commentRow(cm)
+		at[cm.ID] = i
 	}
-	rows := make([]csv.Row, 0, len(comments)+len(disk))
+	rows = make([]csv.Row, 0, len(comments)+len(disk))
 	for _, r := range disk {
 		if c.deletedIDs[r.ID] {
 			continue
 		}
-		if i, ok := mine[r.ID]; ok {
-			rows = append(rows, commentRow(comments[i]))
-			delete(mine, r.ID) // written
+		if i, ok := at[r.ID]; ok {
+			row := mine[i]
+			if b := comments[i].base; b.ID != "" {
+				row = mergeRow(b, row, r)
+			}
+			rows = append(rows, row)
+			delete(at, r.ID) // written
 			continue
 		}
 		rows = append(rows, r) // a row this copy never loaded
 	}
-	for _, cm := range comments {
-		if _, left := mine[cm.ID]; left && !c.deletedIDs[cm.ID] {
-			rows = append(rows, commentRow(cm))
+	for i, cm := range comments {
+		if _, left := at[cm.ID]; left && !c.deletedIDs[cm.ID] {
+			rows = append(rows, mine[i])
 		}
 	}
-	return rows, nil
+	return rows, mine, nil
+}
+
+// mergeRow is a three-way merge of one row: each field mine changed since base
+// is mine, and every other field is disk's, which may hold another tab's or an
+// import's change.
+//
+// It walks csv.Row's fields, so a new column is merged with no change here.
+func mergeRow(base, mine, disk csv.Row) csv.Row {
+	if mine == base { // the usual case: the tab didn't touch this row
+		return disk
+	}
+	out := disk
+	b, m, o := reflect.ValueOf(base), reflect.ValueOf(mine), reflect.ValueOf(&out).Elem()
+	for i := range o.NumField() {
+		if !m.Field(i).Equal(b.Field(i)) {
+			o.Field(i).Set(m.Field(i))
+		}
+	}
+	return out
 }
 
 // setDeleted marks id deleted on this server (persist drops it from every
@@ -810,7 +840,11 @@ func (c *PrereviewController) loadCommentsFromDisk() []Comment {
 		slog.Warn("loadCommentsFromDisk", "err", err)
 		return nil
 	}
-	return CommentsFromRows(rows)
+	comments := CommentsFromRows(rows)
+	for i := range comments { // a tab's copy: its base, encoded as persist encodes, so an untouched field compares equal
+		comments[i].base = commentRow(comments[i])
+	}
+	return comments
 }
 
 // CommentsFromRows is the shared CSV-row → Comment projection used by the live
