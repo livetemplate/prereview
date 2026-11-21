@@ -55,30 +55,18 @@
     </div>
     {{if and $.LiveShowing (eq $.CommentMode "region")}}{{template "composer" $}}{{end}}{{end}}
 
-{{/* The header's Files | Live site control in a combined session (#114). Native
-     radios, like the toolbar's Diff | File: setLiveView reads the form's view.
-     The "l" key and a jump to a live-site annotation also switch the surface,
-     so the server's checked state must win over the client's: the client keeps
-     a radio's checked state as the user's unless the input carries
-     data-lvt-force-update, and it goes on both radios so the group's mutual
-     exclusion can't undo the one processed first. */}}
-{{define "liveSwitch" -}}
-<form method="POST" class="tb-radios live-switch" aria-label="Show the files or the live site">
-  <label><input
-    type="radio"
-    name="view"
-    value="files"
-    {{if not .LiveView}}checked{{end}}
-    data-lvt-force-update
-    lvt-on:change="setLiveView"
-  >Files</label>
-  <label><input
-    type="radio"
-    name="view"
-    value="live"
-    {{if .LiveView}}checked{{end}}
-    data-lvt-force-update
-    lvt-on:change="setLiveView"
-  >Live site</label>
+{{/* The header's Live toggle in a combined session (#114): pressed while the
+     live site shows, and a tap switches surfaces (as "l" does). It reflects
+     LiveShowing, so with a full-page view over the live site it reads off and
+     a tap brings the site back. */}}
+{{define "liveToggle" -}}
+<form method="POST">
+  <button
+    type="submit"
+    name="toggleLiveView"
+    class="live-toggle {{if .LiveShowing}}contrast{{else}}outline contrast{{end}}"
+    aria-pressed="{{if .LiveShowing}}true{{else}}false{{end}}"
+    title="{{if .LiveShowing}}Back to the files{{else}}Show the live site{{end}}{{with index $.KeyHint "toggleLiveView"}} ({{.}}){{end}}"
+  >Live</button>
 </form>
 {{- end}}

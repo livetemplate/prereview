@@ -78,7 +78,7 @@ func TestMount_RepoClearsStaleLive(t *testing.T) {
 func TestShowLive(t *testing.T) {
 	c := &PrereviewController{}
 	st := PrereviewState{ProxyBaseURL: "http://127.0.0.1:9999/", ShowAllComments: true, RegionSelectArmed: true}
-	st, _ = c.SetLiveView(st, regionCtx("setLiveView", map[string]any{"view": "live"}))
+	st, _ = c.ToggleLiveView(st, regionCtx("toggleLiveView", nil))
 	if !st.LiveView || st.ShowAllComments || st.RegionSelectArmed || !st.LiveShowing() {
 		t.Errorf("to Live: view=%v allComments=%v armed=%v showing=%v", st.LiveView, st.ShowAllComments, st.RegionSelectArmed, st.LiveShowing())
 	}
@@ -86,6 +86,12 @@ func TestShowLive(t *testing.T) {
 	st, _ = c.ToggleLiveView(st, regionCtx("toggleLiveView", nil))
 	if st.LiveView || st.RegionSelectArmed || st.LiveShowing() {
 		t.Errorf("toggle to Files: view=%v armed=%v", st.LiveView, st.RegionSelectArmed)
+	}
+	// All comments open over the live site: the toggle reads off (LiveShowing is
+	// false), so a tap brings the site back rather than switching to Files.
+	st = PrereviewState{ProxyBaseURL: "http://127.0.0.1:9999/", LiveView: true, ShowAllComments: true}
+	if st, _ = c.ToggleLiveView(st, regionCtx("toggleLiveView", nil)); !st.LiveShowing() {
+		t.Errorf("toggle from All comments over Live: view=%v allComments=%v", st.LiveView, st.ShowAllComments)
 	}
 
 	for name, s := range map[string]PrereviewState{

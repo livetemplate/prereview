@@ -118,23 +118,14 @@
   stroke-linecap="round"
   fill="none"
 /></svg></button>
-  </form><form method="POST" class="tb-radios live-switch" aria-label="Show the files or the live site">
-  <label><input
-    type="radio"
-    name="view"
-    value="files"
-    
-    data-lvt-force-update
-    lvt-on:change="setLiveView"
-  >Files</label>
-  <label><input
-    type="radio"
-    name="view"
-    value="live"
-    checked
-    data-lvt-force-update
-    lvt-on:change="setLiveView"
-  >Live site</label>
+  </form><form method="POST">
+  <button
+    type="submit"
+    name="toggleLiveView"
+    class="live-toggle contrast"
+    aria-pressed="true"
+    title="Back to the files (l)"
+  >Live</button>
 </form>
   
   

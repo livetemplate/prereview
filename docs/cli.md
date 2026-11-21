@@ -38,7 +38,7 @@ git repo's working tree against `HEAD`, in standalone (human-only) mode.
 | a dir without `.git` | **no-git** | the dir walked recursively; **every file shown whole** (each line "new"/commentable), no diff, base picker hidden |
 | a single file | **no-git (single file)** | just that file, whole; its store lives under the file's **parent** dir, one per reviewed file |
 | *(selected by `--external <url>` with no path)* | **external (proxy)** | reverse-proxies a live local site; drag a box on any page to annotate; needs `--out` |
-| a dir, with `--external <url>` | **combined** | the dir's review and the live site in one session and one queue; the header's **Files \| Live site** control switches between them |
+| a dir, with `--external <url>` | **combined** | the dir's review and the live site in one session and one queue; the header's **Live** toggle switches between them |
 
 In no-git mode `--base` is ignored (there are no refs). The directory walk skips
 `.git/`, `.prereview/`, dotfiles/dotdirs, and files over the 1 MB render cap.
@@ -74,7 +74,7 @@ on a remote box. Stdout gains an extra `PROXY <url>` line (the proxy origin) aft
 the `ALT` lines and before `REPO`/`STORE`; `READY` is still the UI url.
 
 Pass a path as well and one session reviews both: the path as usual, and the live
-site behind the header's **Files | Live site** control (or <kbd>l</kbd>). The two
+site behind the header's **Live** toggle (or <kbd>l</kbd>). The two
 share one store and one queue, so the agent reads a box on the page and a comment on
 a line from the same `watch`. `--out` defaults to the path, as in any review. The
 framed site stays loaded while the files show, so switching back keeps its page and

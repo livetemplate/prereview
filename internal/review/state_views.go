@@ -1118,7 +1118,7 @@ func (s PrereviewState) RegionComments() []Comment {
 func (s PrereviewState) LiveAvailable() bool { return s.ProxyBaseURL != "" }
 
 // Combined reports a session with both files and a live site to switch between
-// (#114): the Files | Live site control, "l" and showLive key on it.
+// (#114): the Live toggle, "l" and showLive key on it.
 func (s PrereviewState) Combined() bool { return s.LiveAvailable() && !s.ExternalMode }
 
 // LiveShowing reports that the live site is the surface on screen: always in a

@@ -95,18 +95,18 @@ func bootChromeCombined(t *testing.T, repo, target string, w, h int, extraArgs .
 	return p
 }
 
-// pickSurface clicks the header's Files | Live site radio and waits for that
-// surface to show.
+// pickSurface taps the header's Live toggle if needed to show the live site
+// (live) or the files, and waits for that surface.
 func pickSurface(t *testing.T, p *runningPrereview, live bool, diag func() string) {
 	t.Helper()
-	value, shown := "files", `!!document.querySelector('.live-wrap.live-hidden') && !!document.querySelector('main.viewer article')`
+	pressed, shown := "false", `!!document.querySelector('.live-wrap.live-hidden') && !!document.querySelector('main.viewer article')`
 	if live {
-		value, shown = "live", `!!document.querySelector('.live-wrap:not(.live-hidden)') && !document.querySelector('main.viewer article')`
+		pressed, shown = "true", `!!document.querySelector('.live-wrap:not(.live-hidden)') && !document.querySelector('main.viewer article')`
 	}
-	if err := chromedp.Run(p.ctx, chromedp.Click(`.live-switch input[value="`+value+`"]`, chromedp.ByQuery)); err != nil {
-		t.Fatalf("pick %s: %v%s", value, err, diag())
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(()=>{const b=document.querySelector('button.live-toggle');if(b.getAttribute('aria-pressed')!=='`+pressed+`')b.click();})()`, nil)); err != nil {
+		t.Fatalf("tap Live: %v%s", err, diag())
 	}
-	waitJSDiag(t, p, shown, "the "+value+" surface shows", diag)
+	waitJSDiag(t, p, shown+` && document.querySelector('button.live-toggle').getAttribute('aria-pressed') === '`+pressed+`'`, "the surface shows (live="+pressed+")", diag)
 }
 
 // TestE2E_CombinedStageSurvivesToggle is the §3.1 probe: the live stage stays
@@ -179,11 +179,11 @@ func TestE2E_CombinedLiveKey(t *testing.T) {
 	if err := chromedp.Run(p.ctx, chromedp.KeyEvent("l")); err != nil {
 		t.Fatal(err)
 	}
-	waitJSDiag(t, p, `!!document.querySelector('.live-wrap:not(.live-hidden)') && document.querySelector('.live-switch input[value=live]').checked`, "l shows the live site", diag)
+	waitJSDiag(t, p, `!!document.querySelector('.live-wrap:not(.live-hidden)') && document.querySelector('button.live-toggle').getAttribute('aria-pressed') === 'true'`, "l shows the live site", diag)
 	if err := chromedp.Run(p.ctx, chromedp.KeyEvent("l")); err != nil {
 		t.Fatal(err)
 	}
-	waitJSDiag(t, p, `!!document.querySelector('.live-wrap.live-hidden') && !!document.querySelector('main.viewer article') && document.querySelector('.live-switch input[value=files]').checked`, "l again shows the files", diag)
+	waitJSDiag(t, p, `!!document.querySelector('.live-wrap.live-hidden') && !!document.querySelector('main.viewer article') && document.querySelector('button.live-toggle').getAttribute('aria-pressed') === 'false'`, "l again shows the files", diag)
 	if err := chromedp.Run(p.ctx, chromedp.KeyEvent("?")); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestE2E_CombinedOneQueue(t *testing.T) {
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('.queue-row')].find(r => r.querySelector('.queue-loc').textContent.trim() === '/').querySelector('button.queue-item').click()`, nil)); err != nil {
 		t.Fatalf("jump from the queue: %v%s", err, diag())
 	}
-	waitJSDiag(t, p, `!!document.querySelector('.live-wrap:not(.live-hidden)') && !!document.querySelector('.pin-layer .is-focused') && document.querySelector('.live-switch input[value=live]').checked`,
+	waitJSDiag(t, p, `!!document.querySelector('.live-wrap:not(.live-hidden)') && !!document.querySelector('.pin-layer .is-focused') && document.querySelector('button.live-toggle').getAttribute('aria-pressed') === 'true'`,
 		"the queue jump shows the focused annotation", diag)
 
 	// All comments lists the annotation by its page, and jumps back to it.

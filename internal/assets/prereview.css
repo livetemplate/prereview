@@ -4100,3 +4100,4 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
    the framed site keeps its route, scroll and state; it only stops taking space
    and taps. */
 .live-wrap.live-hidden { display: none; }
+header.bar .live-toggle { margin: 0; }

@@ -470,7 +470,7 @@ func renderFixtures() []renderFixture {
 
 	// #114 combined session. Files showing on an armed HTML preview: the live
 	// stage is mounted but hidden, with no overlay of its own (only the
-	// preview's), and the header carries the Files | Live site control.
+	// preview's), and the header carries the Live toggle.
 	combine := func(st review.PrereviewState) review.PrereviewState {
 		st.TargetURL = "http://localhost:3000"
 		st.CurrentURL = "/"

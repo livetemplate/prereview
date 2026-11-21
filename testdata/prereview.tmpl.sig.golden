@@ -767,10 +767,9 @@
       {{if and .RegionSelectArmed $.LiveShowing}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
     </div>
     {{if and $.LiveShowing (eq $.CommentMode "region")}}{{template "composer" $}}{{end}}
-=== liveSwitch ===
-<form method="POST" class="tb-radios live-switch" aria-label="Show the files or the live site">
-  <label><input type="radio" name="view" value="files" {{if not .LiveView}}checked{{end}} data-lvt-force-update lvt-on:change="setLiveView">Files</label>
-  <label><input type="radio" name="view" value="live" {{if .LiveView}}checked{{end}} data-lvt-force-update lvt-on:change="setLiveView">Live site</label>
+=== liveToggle ===
+<form method="POST">
+  <button type="submit" name="toggleLiveView" class="live-toggle {{if .LiveShowing}}contrast{{else}}outline contrast{{end}}" aria-pressed="{{if .LiveShowing}}true{{else}}false{{end}}" title="{{if .LiveShowing}}Back to the files{{else}}Show the live site{{end}}{{with index $.KeyHint "toggleLiveView"}} ({{.}}){{end}}">Live</button>
 </form>
 === markdownView ===
 {{with $.CurrentDiff}}  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.md-block" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
@@ -1568,7 +1567,7 @@
 <header class="bar" lvt-fx:url-hash="setURLHash" data-lvt-url-hash="{{.URLHash}}">
   <form method="POST">
     <button type="submit" name="toggleFiles" class="hamburger outline contrast" aria-label="Toggle files">{{template "iconHamburger"}}</button>
-  </form>{{if .LiveAvailable}}{{template "liveSwitch" $}}{{end}}
+  </form>{{if .LiveAvailable}}{{template "liveToggle" $}}{{end}}
   
   {{if not .ExternalMode}}
   <form method="POST">

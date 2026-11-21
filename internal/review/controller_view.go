@@ -364,17 +364,11 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 	return state, nil
 }
 
-// SetLiveView picks the surface in a combined session (#114): the header's
-// Files | Live site control posts view=files or view=live. Idempotent, like the
-// other radio setters.
-func (c *PrereviewController) SetLiveView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	showLive(&state, ctx.GetString("view") == "live")
-	return state, nil
-}
-
-// ToggleLiveView flips the surface: the "l" shortcut.
+// ToggleLiveView switches surfaces in a combined session (#114): the header's
+// Live toggle and the "l" shortcut. It flips what is on screen, so from a
+// full-page view over the live site it brings the site back.
 func (c *PrereviewController) ToggleLiveView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	showLive(&state, !state.LiveView)
+	showLive(&state, !state.LiveShowing())
 	return state, nil
 }
 

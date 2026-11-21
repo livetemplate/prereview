@@ -11,7 +11,7 @@
       class="hamburger outline contrast"
       aria-label="Toggle files"
     >{{template "iconHamburger"}}</button>
-  </form>{{if .LiveAvailable}}{{template "liveSwitch" $}}{{end}}
+  </form>{{if .LiveAvailable}}{{template "liveToggle" $}}{{end}}
   {{/* Search palette trigger (issue #91). Always visible (outside the
        desktop-only toolbar-inline) so it's reachable on a phone too; the Mod+k
        shortcut (documented in the help overlay) is the desktop path. Repo mode
