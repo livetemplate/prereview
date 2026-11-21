@@ -93,7 +93,10 @@ func TestFilesChangedAttributionNeedsEveryEdit(t *testing.T) {
 
 // The agent's own done closes its batch silently; a no-op rewrite says nothing.
 func TestFilesChangedSilentCases(t *testing.T) {
-	h := newSettleHarness(t, 100*time.Millisecond)
+	// burstSettle, not 100ms: the revert to v1 must land inside v2's quiet
+	// window, and on a stalled CI runner a 100ms window opened and closed
+	// between two polls (gen=2 settling=false versions=3).
+	h := newSettleHarness(t, burstSettle)
 	h.edit("v1 by the agent")
 	h.waitFor("pending edits", time.Second, h.c.editsSettling.Load)
 	h.status(`{"state":"done","message":"applied"}`)
@@ -102,7 +105,7 @@ func TestFilesChangedSilentCases(t *testing.T) {
 	h.edit("v2 temporary")
 	h.waitFor("pending edits", time.Second, h.c.editsSettling.Load)
 	h.edit("v1 by the agent") // back to the newest version before settling
-	h.waitFor("the window to close", 2*time.Second, func() bool { return !h.c.editsSettling.Load() })
+	h.waitFor("the window to close", 4*time.Second, func() bool { return !h.c.editsSettling.Load() })
 	if evs := h.filesChanged(); len(evs) != 0 {
 		t.Fatalf("want no files_changed, got %+v", evs)
 	}
