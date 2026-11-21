@@ -700,6 +700,13 @@
   </div>
   
   
+  <div class="drawer-scope">
+    <form method="POST">
+      <button type="submit" name="toggleDrawerOrder" class="scope-toggle" title="Sort the files the way the walkthrough reads them">
+        A–Z · sort in walkthrough order
+      </button>
+    </form>
+  </div>
   <div class="drawer-body">
     
     <ul class="file-tree"><li class="tree-file" data-key="app.go">
@@ -759,10 +766,11 @@
   
   <p class="walk-summary">Adds a retry loop to the worker.</p>
   <p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>
+  <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     
     <li class="walk-step" data-key="step-s1">
-      <p class="walk-title"><span class="ck-pill walk-num">1</span> The retry budget</p>
+      <div class="walk-title"><span class="ck-pill walk-num">1</span> <span class="walk-title-text">The retry budget</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="1"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
       <p class="walk-body">A new field caps the retries.
 Check the default.</p>
       <ul class="walk-anchors">
@@ -775,7 +783,7 @@ Check the default.</p>
     </li>
     
     <li class="walk-step" data-key="step-s2">
-      <p class="walk-title"><span class="ck-pill walk-num">2</span> The logo</p>
+      <div class="walk-title"><span class="ck-pill walk-num">2</span> <span class="walk-title-text">The logo</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="2"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
       
       <ul class="walk-anchors">
         

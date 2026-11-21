@@ -467,6 +467,15 @@ type PrereviewState struct {
 	// that load, so the watcher reloads only when the file moved.
 	Explanations []Explanation `json:"explanations"`
 	ExplainSeen  string        `json:"explain_seen"`
+	// The walkthrough in progress (#115 A3): WalkExplanation names the one being
+	// walked ("" = no walk), so a replaced walkthrough ends the walk instead of
+	// landing on a stranger's stop; WalkStep/WalkAnchor is the stop shown
+	// (walkPos). DrawerWalkOrder sorts the file drawer by the step that first
+	// cites each file. Session view state.
+	WalkExplanation string `json:"walk_explanation"`
+	WalkStep        int    `json:"walk_step"`
+	WalkAnchor      int    `json:"walk_anchor"`
+	DrawerWalkOrder bool   `json:"drawer_walk_order"`
 
 	// NavDismissed hides the open-items stepper (#193) for this session. The bar
 	// appears whenever the review has open items, so it is not behind a menu, but it
@@ -990,16 +999,23 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	// view or rendered Markdown; an anchor that drifted). Its card hangs on that
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
+	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, s.pinnedRows())
+}
+
+// pinnedRows reports the rows a fold must never hide, because something hangs on
+// them: a card (#231), a row's hidden-suggestions "Show" marker (#233), the
+// selected check's findings (only that one check, so a rule with hundreds of hits
+// can't unfold the file until you pick it), and a walkthrough step's marker
+// (#115). Every fold reads this one set.
+func (s PrereviewState) pinnedRows() func(gitdiff.DiffLine) bool {
 	cards := s.AnnotationCountLines()
-	// A row whose suggestions are all hidden keeps its "Show" marker in place (#233).
 	hidden := s.HiddenSuggestionLines()
-	// The selected check's findings stay visible too — only that one check, so a
-	// rule with hundreds of hits can't unfold the file until you pick it.
 	found := s.findingLines()
-	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, func(l gitdiff.DiffLine) bool {
+	marks := s.StepMarkLines()
+	return func(l gitdiff.DiffLine) bool {
 		k := rowKey(l)
-		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum])
-	})
+		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)] != ""
+	}
 }
 
 // rowKey is a diff row's "<line>-<side>" key — the template's $rowkey, built

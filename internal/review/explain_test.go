@@ -2,6 +2,7 @@ package review
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -293,5 +294,169 @@ func TestUnderstandTabs(t *testing.T) {
 	closed, _ := c.ToggleUnderstand(switched, checksCtx("toggleUnderstand", nil))
 	if closed.ShowUnderstand {
 		t.Error("z closes the page")
+	}
+}
+
+// walkFixture: the explain fixture with a grounded three-step walkthrough on
+// disk: b.go first, then a step citing nothing the review has, then a.go.
+func walkFixture(t *testing.T) (*PrereviewController, PrereviewState) {
+	t.Helper()
+	c, state := explainFixture(t)
+	writeExplanations(t, c, Explanation{ID: "w", Steps: []Step{
+		{Title: "b first", Anchors: []Anchor{{File: "b.go", FromLine: 4, ToLine: 6}}},
+		{Title: "nowhere", Anchors: []Anchor{{File: "z.go", FromLine: 1}}},
+		{Title: "then a", Anchors: []Anchor{{File: "a.go", FromLine: 3}, {File: "c.go", Kind: AnchorKindFile}}},
+	}})
+	c.applyExplain(&state)
+	return c, state
+}
+
+// TestWalkthroughSteps: Start lands on the first stop's file and line; › walks
+// every grounded anchor in order, stopping (without jumping) on a step that
+// cites nothing; the bar hides the "N open" stepper; a replaced walkthrough
+// ends the walk.
+func TestWalkthroughSteps(t *testing.T) {
+	c, state := walkFixture(t)
+	if got := len(walkStopsOf(state.walkSteps())); got != 4 { // b, nowhere, a, c
+		t.Fatalf("stops = %d, want 4 (one per grounded anchor, one for the step citing nothing)", got)
+	}
+	state.ShowUnderstand = true
+	s, err := c.StartWalkthrough(state, checksCtx("startWalkthrough", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ShowUnderstand || s.SelectedFile != "b.go" || s.CursorKey != "L0-4" {
+		t.Fatalf("start: page %v, file %q, cursor %q; want b.go L0-4 with the page closed", s.ShowUnderstand, s.SelectedFile, s.CursorKey)
+	}
+	if bar := s.WalkBar(); bar == nil || bar.Num != 1 || bar.Total != 3 || bar.HasPrev || !bar.HasNext {
+		t.Fatalf("bar at start = %+v", bar)
+	}
+	if s.ShowNav() {
+		t.Error("the step bar takes the stepper's slot: ShowNav must be false while walking")
+	}
+	next := func(s PrereviewState) PrereviewState {
+		t.Helper()
+		out, err := c.WalkNext(s, checksCtx("walkNext", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	s = next(s)
+	if bar := s.WalkBar(); bar == nil || bar.Num != 2 || bar.Anchor != "" || s.SelectedFile != "b.go" {
+		t.Fatalf("step 2 cites nothing: bar %+v, file %q (must stay put)", bar, s.SelectedFile)
+	}
+	s = next(s)
+	if s.SelectedFile != "a.go" || s.CursorKey != "L5-3" { // new line 3 was old line 5
+		t.Fatalf("step 3: file %q cursor %q, want a.go L5-3", s.SelectedFile, s.CursorKey)
+	}
+	s = next(s)
+	if s.SelectedFile != "c.go" || s.CursorKey != "" || s.WalkBar().HasNext {
+		t.Fatalf("last stop (whole file c.go): file %q cursor %q", s.SelectedFile, s.CursorKey)
+	}
+	if again := next(s); again.WalkStep != s.WalkStep || again.WalkAnchor != s.WalkAnchor {
+		t.Error("› on the last stop must stay there")
+	}
+	// From a step: Walk from here.
+	from, _ := c.StartWalkthrough(state, checksCtx("startWalkthrough", map[string]interface{}{"step": "3"}))
+	if from.SelectedFile != "a.go" || from.WalkBar().Num != 3 {
+		t.Errorf("walk from step 3: file %q bar %+v", from.SelectedFile, from.WalkBar())
+	}
+	// A new walkthrough (another id) ends the walk.
+	s.Explanations = append(s.Explanations, Explanation{ID: "other", Steps: s.Explanations[0].Steps})
+	if s.WalkBar() != nil {
+		t.Error("a replaced walkthrough must end the walk")
+	}
+	ended, _ := c.EndWalkthrough(from, checksCtx("endWalkthrough", nil))
+	if ended.WalkBar() != nil {
+		t.Error("× must put the bar away")
+	}
+}
+
+// TestStepMarkLines: the open file's step starts are labelled on their rows, and
+// those rows survive folding.
+func TestStepMarkLines(t *testing.T) {
+	c, state := explainFixture(t)
+	lines := make([]string, 40)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i+1)
+	}
+	writeAt(t, c.RepoPath, "a.go", strings.Join(lines, "\n")+"\n")
+	writeExplanations(t, c, Explanation{ID: "m", Steps: []Step{
+		{Title: "far context", Anchors: []Anchor{{File: "a.go", FromLine: 30}}},
+	}})
+	files, err := gitdiff.ListFiles(c.RepoPath, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Files = files
+	c.applyExplain(&state)
+	d, err := gitdiff.LoadDiff(c.RepoPath, "HEAD", "a.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.CurrentDiff = d
+	marks := state.StepMarkLines()
+	var key string
+	for k, v := range marks {
+		if v == "Step 1: far context" {
+			key = k
+		}
+	}
+	if key == "" {
+		t.Fatalf("no marker for the step: %v", marks)
+	}
+	for _, l := range state.VisibleLines() {
+		if lineCursorKey(l) == key {
+			return
+		}
+	}
+	t.Errorf("row %s carries a step marker but was folded away", key)
+}
+
+// TestDrawerWalkOrder: in walkthrough order a file sorts by the first step that
+// cites it, a directory by the earliest step under it, and uncited files last.
+func TestDrawerWalkOrder(t *testing.T) {
+	s := PrereviewState{
+		Files: []gitdiff.FileEntry{
+			{Path: "a.go", Status: "M"}, {Path: "docs/z.md", Status: "M"}, {Path: "m.go", Status: "M"}, {Path: "web/b.js", Status: "M"},
+		},
+		Explanations: []Explanation{{ID: "e", Steps: []Step{
+			{Title: "1", Anchors: []Anchor{{File: "m.go"}}},
+			{Title: "2", Anchors: []Anchor{{File: "web/b.js"}, {File: "a.go"}}},
+		}}},
+	}
+	names := func() []string {
+		var out []string
+		for _, n := range s.FileTree() {
+			out = append(out, n.Name)
+		}
+		return out
+	}
+	if got := strings.Join(names(), ","); got != "docs,web,a.go,m.go" {
+		t.Errorf("A–Z order = %s", got)
+	}
+	s.DrawerWalkOrder = true
+	if got := strings.Join(names(), ","); got != "m.go,web,a.go,docs" {
+		t.Errorf("walkthrough order = %s, want m.go,web,a.go,docs", got)
+	}
+}
+
+// The walk's cursor is the stop itself, not an index: when the shown stop's
+// anchor stops resolving (after an edit), the walk stays on its step, at the
+// step's first remaining stop, instead of drifting onto another step.
+func TestWalkCursorSurvivesShiftingStops(t *testing.T) {
+	c, state := walkFixture(t)
+	s, err := c.StartWalkthrough(state, checksCtx("startWalkthrough", map[string]interface{}{"step": "3"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ = c.WalkNext(s, checksCtx("walkNext", nil)) // step 3, its second anchor (c.go)
+	if s.WalkStep != 2 || s.WalkAnchor != 1 {
+		t.Fatalf("cursor = step %d anchor %d, want 2/1", s.WalkStep, s.WalkAnchor)
+	}
+	s.Explanations[0].Steps[2].Anchors[1].Status = anchorUngrounded
+	if bar := s.WalkBar(); bar == nil || bar.Num != 3 || bar.Anchor != "a.go L3" {
+		t.Errorf("after c.go's anchor went ungrounded the bar must stay on step 3 at a.go, got %+v", bar)
 	}
 }

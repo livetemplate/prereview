@@ -1,6 +1,9 @@
 package review
 
 import (
+	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/livetemplate/prereview/csv"
@@ -103,4 +106,134 @@ func walkAnchor(a Anchor) WalkAnchor {
 		w.Line = a.FromLine
 	}
 	return w
+}
+
+// walkSteps is what a walk visits: the walkthrough's steps, in order. It is the
+// one list the step bar, the stops, the markers and the drawer order read, so a
+// derived step (A4's "Not explained") joins every one of them by joining it.
+func (s PrereviewState) walkSteps() []Step {
+	e := s.CurrentExplanation()
+	if e == nil {
+		return nil
+	}
+	return e.Steps
+}
+
+// walkStop is one stop of a walk: a step, and which of its anchors to show (-1
+// when none of them resolves, so the stop has nowhere to jump).
+type walkStop struct{ step, anchor int }
+
+// walkStopsOf flattens steps into the stops ‹ › visits: every grounded anchor of
+// every step, in order; a step with no grounded anchor is still one stop, so its
+// explanation (and its ⚠) is read, not skipped.
+func walkStopsOf(steps []Step) []walkStop {
+	var out []walkStop
+	for i, st := range steps {
+		n := len(out)
+		for j, a := range st.Anchors {
+			if !a.Ungrounded() {
+				out = append(out, walkStop{i, j})
+			}
+		}
+		if len(out) == n {
+			out = append(out, walkStop{i, -1})
+		}
+	}
+	return out
+}
+
+// walkPos is the walk in progress: its steps, its stops, and the index of the
+// stop being shown. The cursor is stored as the stop itself (WalkStep,
+// WalkAnchor), not an index, so stops shifting under it (an anchor that stopped
+// resolving after an edit) can't silently move it; a vanished stop falls back to
+// its step's first. ok is false when no walk is on for the current walkthrough.
+func (s PrereviewState) walkPos() (steps []Step, stops []walkStop, i int, ok bool) {
+	e := s.CurrentExplanation()
+	if e == nil || s.WalkExplanation == "" || e.ID != s.WalkExplanation {
+		return nil, nil, 0, false
+	}
+	steps = s.walkSteps()
+	stops = walkStopsOf(steps)
+	i = slices.Index(stops, walkStop{s.WalkStep, s.WalkAnchor})
+	if i < 0 {
+		i = slices.IndexFunc(stops, func(w walkStop) bool { return w.step == s.WalkStep })
+	}
+	return steps, stops, i, i >= 0
+}
+
+// WalkBarView is the step bar above the file while walking.
+type WalkBarView struct {
+	Num, Total  int // the step, of how many
+	Title, Body string
+	Anchor      string // the cited place this stop shows, "" when none resolves
+	HasPrev     bool
+	HasNext     bool
+}
+
+// WalkBar is the step bar, or nil when no walk is on or a page covers the file.
+func (s PrereviewState) WalkBar() *WalkBarView {
+	steps, stops, i, ok := s.walkPos()
+	if !ok || s.fileCovered() {
+		return nil
+	}
+	at, st := stops[i], steps[stops[i].step]
+	v := &WalkBarView{Num: at.step + 1, Total: len(steps), Title: st.Title, Body: st.Body,
+		HasPrev: i > 0, HasNext: i < len(stops)-1}
+	if at.anchor >= 0 {
+		v.Anchor = st.Anchors[at.anchor].Label()
+	}
+	return v
+}
+
+// StepMarkLines labels the open file's rows that a step starts at, keyed like
+// the row ("L<old>-<new>"): "Step 2: Retry loop", several joined by " · ". The
+// marker hangs on the first line of each grounded line anchor.
+func (s PrereviewState) StepMarkLines() map[string]string {
+	steps := s.walkSteps()
+	if len(steps) == 0 || s.CurrentDiff == nil {
+		return nil
+	}
+	byRow := map[string][]int{}
+	for i, st := range steps {
+		for _, a := range st.Anchors {
+			if a.File != s.SelectedFile || a.Kind != AnchorKindLine || a.Ungrounded() {
+				continue
+			}
+			l, ok := findDiffLine(s.CurrentDiff, a.Side, a.FromLine)
+			if !ok {
+				continue
+			}
+			k := lineCursorKey(l)
+			if !slices.Contains(byRow[k], i) {
+				byRow[k] = append(byRow[k], i)
+			}
+		}
+	}
+	out := make(map[string]string, len(byRow))
+	for k, idx := range byRow {
+		labels := make([]string, len(idx))
+		for n, i := range idx {
+			labels[n] = fmt.Sprintf("Step %d: %s", i+1, steps[i].Title)
+		}
+		out[k] = strings.Join(labels, " · ")
+	}
+	return out
+}
+
+// walkRanks is each file's place in the walkthrough: the index of the first step
+// that cites it (grounded or not, as the agent ordered it).
+func (s PrereviewState) walkRanks() map[string]int {
+	steps := s.walkSteps()
+	if len(steps) == 0 {
+		return nil
+	}
+	out := map[string]int{}
+	for i, st := range steps {
+		for _, a := range st.Anchors {
+			if _, seen := out[a.File]; !seen {
+				out[a.File] = i
+			}
+		}
+	}
+	return out
 }

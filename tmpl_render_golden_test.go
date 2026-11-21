@@ -455,6 +455,13 @@ func renderFixtures() []renderFixture {
 		},
 	}}
 
+	// #115 A3: walking the walkthrough — the step bar in the stepper's slot, the
+	// step's marker on its first cited line, and the drawer in walkthrough order.
+	walkBar := goBase()
+	walkBar.Explanations = understandWalk.Explanations
+	walkBar.WalkExplanation, walkBar.WalkStep, walkBar.WalkAnchor = "e1", 0, 0
+	walkBar.DrawerWalkOrder = true
+
 	// external (live-site) mode
 	external := review.PrereviewState{
 		RepoPath:     "/repo",
@@ -882,6 +889,7 @@ func renderFixtures() []renderFixture {
 		{"quiz-ask", quizAsk},
 		{"understand-empty", understandEmpty},
 		{"understand-walkthrough", understandWalk},
+		{"walk-bar", walkBar},
 		{"prompts-picker", promptsPicker},
 		{"shortcuts-composer", shortcuts},
 		{"ripple", ripple},

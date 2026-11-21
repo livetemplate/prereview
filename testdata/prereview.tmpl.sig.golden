@@ -316,7 +316,7 @@
   </footer></article></dialog>
 === diffView ===
 {{with $.CurrentDiff}}  
-  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}{{if $.WrapLines}} wrap-lines{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$hasQuiz := gt (index $.QuizCountLines $rowkey) 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion $hasQuiz}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}"><div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion $hasQuiz}}<span class="line-margin">
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}{{if $.WrapLines}} wrap-lines{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$hasQuiz := gt (index $.QuizCountLines $rowkey) 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion $hasQuiz}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">{{if index $.StepMarkLines $lkey}}<div class="step-mark">{{index $.StepMarkLines $lkey}}</div>{{end}}<div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion $hasQuiz}}<span class="line-margin">
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
           <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
@@ -415,7 +415,14 @@
       </button>
     </form>
   </div>
-  {{end}}
+  {{end}}{{if .HasExplanation}}
+  <div class="drawer-scope">
+    <form method="POST">
+      <button type="submit" name="toggleDrawerOrder" class="scope-toggle{{if .DrawerWalkOrder}} is-on{{end}}" title="Sort the files the way the walkthrough reads them">
+        {{if .DrawerWalkOrder}}Walkthrough order · sort A–Z{{else}}A–Z · sort in walkthrough order{{end}}
+      </button>
+    </form>
+  </div>{{end}}
   <div class="drawer-body">
     
     {{.FileBrowserHTML}}
@@ -1012,7 +1019,19 @@
     <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
-  {{end}}
+  {{end}}{{with $.WalkBar}}
+  <div class="ann-nav walk-bar" role="navigation" aria-label="Walkthrough">
+    <div class="walk-bar-nav">
+      <form method="POST"><button type="submit" name="walkPrev" class="outline ann-nav-step" aria-label="Previous step"{{if not .HasPrev}} disabled{{end}}>{{template "iconChevronLeft"}}</button></form>
+      <span class="ann-nav-label">Step {{.Num}} of {{.Total}}</span>
+      <form method="POST"><button type="submit" name="walkNext" class="outline ann-nav-step" aria-label="Next step"{{if not .HasNext}} disabled{{end}}>{{template "iconChevronRight"}}</button></form>
+      <span class="ann-nav-actions">
+        <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="toggleUnderstand" class="outline" title="See every step">Steps</button></form>
+        <form method="POST"><button type="submit" name="endWalkthrough" class="outline" aria-label="Stop the walkthrough" title="Stop the walkthrough">×</button></form>
+      </span>
+    </div>
+    <div class="walk-bar-text"><strong class="walk-bar-title">{{.Title}}</strong>{{if .Anchor}}<span class="walk-bar-at">{{.Anchor}}</span>{{else}}<span class="walk-bar-at quiz-ungrounded">⚠ cites nothing in this review</span>{{end}}{{if .Body}}<span class="walk-bar-body">{{.Body}}</span>{{end}}</div>
+  </div>{{end}}
   
   {{if $.ShowNav}}
   <div class="ann-nav" role="navigation" aria-label="Open items">
@@ -1838,10 +1857,11 @@
 {{with $.CurrentExplanation}}
   {{if .Summary}}<p class="walk-summary">{{.Summary}}</p>{{end}}
   {{if .Stale}}<p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>{{end}}
+  <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     {{range $.WalkSteps}}
     <li class="walk-step" data-key="step-{{.ID}}">
-      <p class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> {{.Title}}</p>
+      <div class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> <span class="walk-title-text">{{.Title}}</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="{{.Num}}"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
       {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}
       <ul class="walk-anchors">
         {{range .Anchors}}

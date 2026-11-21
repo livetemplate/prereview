@@ -89,3 +89,61 @@ func TestE2E_UnderstandWalkthrough(t *testing.T) {
 		t.Errorf("the open file must be fresh.go%s", diag())
 	}
 }
+
+// TestE2E_UnderstandWalkthroughBar (#115 A3): Start the walkthrough opens the
+// first step's file at its line, with the step bar on top and the step's marker
+// on the line; › walks into the next file; a step that cites nothing says so and
+// stays put; the "N open" stepper is out of the way while walking.
+func TestE2E_UnderstandWalkthroughBar(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("fresh.go")
+	submitExplain(t, p, explainJSON)
+	p.openUnderstandTab("walkthrough")
+	waitJSTrue(t, p.ctx, `document.querySelectorAll('.walk-step').length === 3`, 10*time.Second, "the steps are listed")
+
+	if err := chromedp.Run(p.ctx, chromedp.Click(`.walk-start button[name='startWalkthrough']`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("Start the walkthrough: %v%s", err, diag())
+	}
+	waitJSTrue(t, p.ctx, `!!document.querySelector('.walk-bar') && !!document.querySelector('.code .line.is-cursor')`, 5*time.Second, "the bar shows and the cursor lands")
+	bar := func() string {
+		return evalStr(t, p, `document.querySelector('.walk-bar').textContent.replace(/\s+/g, ' ')`)
+	}
+	if got := bar(); !strings.Contains(got, "Step 1 of 3") || !strings.Contains(got, "The greeting") || !strings.Contains(got, "edited.go L4") {
+		t.Errorf("bar at step 1 = %q%s", got, diag())
+	}
+	if got := evalStr(t, p, `document.querySelector('.code .line.is-cursor').getAttribute('data-key')`); got != "L0-4" {
+		t.Errorf("cursor at step 1 = %q, want edited.go's new line 4 (L0-4)%s", got, diag())
+	}
+	if got := evalStr(t, p, `[...document.querySelectorAll('.code .step-mark')].map(e => e.textContent).join('|')`); got != "Step 1: The greeting" {
+		t.Errorf("edited.go's step marker = %q%s", got, diag())
+	}
+	// The controls share one row, so ‹ and › line up with Steps and ×.
+	if got := evalStr(t, p, `(() => { const ys = [...document.querySelectorAll('.walk-bar-nav button')].map(b => { const r = b.getBoundingClientRect(); return r.top + r.height / 2; }); return Math.max(...ys) - Math.min(...ys) <= 2 ? 'one row' : ys.join(','); })()`); got != "one row" {
+		t.Errorf("the step bar's buttons must line up in one row, centres at %s%s", got, diag())
+	}
+	if n := evalInt(t, p, `document.querySelectorAll('.ann-nav:not(.walk-bar)').length`); n != 0 {
+		t.Errorf("the open-items stepper must give way to the step bar, found %d%s", n, diag())
+	}
+
+	navStep(t, p, "walkNext", diag)
+	waitJSTrue(t, p.ctx, `(document.querySelector('.walk-bar .ann-nav-label')||{}).textContent === 'Step 2 of 3'`, 5*time.Second, "› reaches step 2")
+	waitJSTrue(t, p.ctx, `(document.querySelector('.code .line.is-cursor')||{getAttribute:()=>''}).getAttribute('data-key') === 'L0-1'`, 5*time.Second, "step 2 opens fresh.go at line 1")
+	if got := evalStr(t, p, `(document.querySelector('.code .step-mark')||{}).textContent || ''`); got != "Step 2: A new package" {
+		t.Errorf("fresh.go's step marker = %q%s", got, diag())
+	}
+
+	navStep(t, p, "walkNext", diag)
+	waitJSTrue(t, p.ctx, `(document.querySelector('.walk-bar .ann-nav-label')||{}).textContent === 'Step 3 of 3'`, 5*time.Second, "› reaches step 3")
+	if got := bar(); !strings.Contains(got, "cites nothing in this review") {
+		t.Errorf("a step citing only nope.go must say it cites nothing here, got %q%s", got, diag())
+	}
+	if n := evalInt(t, p, `document.querySelectorAll('.walk-bar button[name="walkNext"][disabled]').length`); n != 1 {
+		t.Errorf("› must be disabled on the last stop%s", diag())
+	}
+	if err := chromedp.Run(p.ctx, chromedp.Click(`button[name='endWalkthrough']`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("×: %v%s", err, diag())
+	}
+	waitJSTrue(t, p.ctx, `!document.querySelector('.walk-bar')`, 5*time.Second, "× puts the bar away")
+}

@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
+	"math"
 	"path"
 	"sort"
 	"strings"
@@ -57,8 +58,11 @@ type TreeNode struct {
 	Entry *gitdiff.FileEntry
 
 	// Resolved per-node display state.
-	IsSelected  bool // leaf path == SelectedFile
-	IsViewed    bool // leaf path is in ViewedFiles
+	IsSelected bool // leaf path == SelectedFile
+	IsViewed   bool // leaf path is in ViewedFiles
+	// rank is the node's place in walkthrough order (#115): a file's first citing
+	// step, a directory's lowest rank below it; unrankedFile when none.
+	rank        int
 	DefaultOpen bool // dir initial expansion: contains a changed or the selected file
 
 	// Roll-ups. A leaf mirrors its own file; a directory aggregates its whole
@@ -151,10 +155,17 @@ func (s PrereviewState) FileTree() []*TreeNode {
 		})
 	}
 
+	// Walkthrough order (#115): rank every node before sorting, so a directory
+	// sorts by the earliest step anywhere under it.
+	var ranks map[string]int
+	if s.DrawerWalkOrder {
+		ranks = s.walkRanks() // nil without a walkthrough: alphabetical
+		rankTree(root, ranks)
+	}
 	// Sort, assign depth, and roll up counts. The sentinel root is passed
 	// depth -1 so its children (the top-level entries) land at depth 0; root's
 	// own aggregate fields are computed but unused (only Children is returned).
-	finalizeTreeNode(root, -1, s.SelectedFile)
+	finalizeTreeNode(root, -1, s.SelectedFile, ranks != nil)
 	return root.Children
 }
 
@@ -181,14 +192,36 @@ func (s PrereviewState) FilteredFileNodes() []*TreeNode {
 	return out
 }
 
+// unrankedFile sorts a file no step cites after every ranked one.
+const unrankedFile = math.MaxInt
+
+// rankTree sets each node's walkthrough rank from ranks (file path → step) and
+// returns it: a directory takes its lowest child's.
+func rankTree(node *TreeNode, ranks map[string]int) int {
+	node.rank = unrankedFile
+	if !node.IsDir {
+		if r, ok := ranks[node.Path]; ok {
+			node.rank = r
+		}
+		return node.rank
+	}
+	for _, c := range node.Children {
+		node.rank = min(node.rank, rankTree(c, ranks))
+	}
+	return node.rank
+}
+
 // finalizeTreeNode sorts a node's children (directories first, then files, each
-// case-insensitive alphabetical), recurses to assign depth, and rolls up the
-// subtree counts post-order.
-func finalizeTreeNode(node *TreeNode, depth int, selected string) {
+// case-insensitive alphabetical; by walkthrough rank first when byRank),
+// recurses to assign depth, and rolls up the subtree counts post-order.
+func finalizeTreeNode(node *TreeNode, depth int, selected string, byRank bool) {
 	node.Depth = depth
 
 	sort.SliceStable(node.Children, func(i, j int) bool {
 		a, b := node.Children[i], node.Children[j]
+		if byRank && a.rank != b.rank {
+			return a.rank < b.rank
+		}
 		if a.IsDir != b.IsDir {
 			return a.IsDir // directories before files
 		}
@@ -200,7 +233,7 @@ func finalizeTreeNode(node *TreeNode, depth int, selected string) {
 	})
 
 	for _, c := range node.Children {
-		finalizeTreeNode(c, depth+1, selected)
+		finalizeTreeNode(c, depth+1, selected, byRank)
 		node.CommentCount += c.CommentCount
 		if c.Added > 0 {
 			node.Added += c.Added

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -226,5 +227,65 @@ func (c *PrereviewController) jumpToLine(state PrereviewState, file, side string
 	if l, ok := findDiffLine(state.CurrentDiff, side, line); ok {
 		state.CursorKey, state.RevealFile = lineCursorKey(l), file
 	}
+	return state, nil
+}
+
+// StartWalkthrough begins walking the current walkthrough (#115 A3) at a step
+// ("step", 1-based; the first when absent): it shows that step's first stop and
+// opens its file there, closing the Understand page.
+func (c *PrereviewController) StartWalkthrough(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	e := state.CurrentExplanation()
+	if e == nil {
+		return state, fmt.Errorf("startWalkthrough: no walkthrough")
+	}
+	steps := state.walkSteps()
+	stops := walkStopsOf(steps)
+	step, _ := strconv.Atoi(ctx.GetString("step"))
+	i := max(slices.IndexFunc(stops, func(w walkStop) bool { return w.step == step-1 }), 0)
+	state.WalkExplanation = e.ID
+	return c.showWalkStop(state, steps, stops[i])
+}
+
+// WalkNext / WalkPrev move to the next or previous stop; at either end they stay.
+func (c *PrereviewController) WalkNext(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.stepWalk(state, +1)
+}
+
+func (c *PrereviewController) WalkPrev(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.stepWalk(state, -1)
+}
+
+func (c *PrereviewController) stepWalk(state PrereviewState, delta int) (PrereviewState, error) {
+	steps, stops, i, ok := state.walkPos()
+	if !ok {
+		state.WalkExplanation = ""
+		return state, nil
+	}
+	return c.showWalkStop(state, steps, stops[min(max(i+delta, 0), len(stops)-1)])
+}
+
+// EndWalkthrough puts the step bar away.
+func (c *PrereviewController) EndWalkthrough(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.WalkExplanation = ""
+	return state, nil
+}
+
+// showWalkStop makes at the current stop and opens its file at its line. A stop
+// with nothing to jump to (no anchor resolves) stays on the file being read and
+// only closes any page over it; the bar says why.
+func (c *PrereviewController) showWalkStop(state PrereviewState, steps []Step, at walkStop) (PrereviewState, error) {
+	state.WalkStep, state.WalkAnchor = at.step, at.anchor
+	if at.anchor < 0 {
+		closeFullViews(&state)
+		return state, nil
+	}
+	w := walkAnchor(steps[at.step].Anchors[at.anchor])
+	return c.jumpToLine(state, w.File, w.Side, w.Line)
+}
+
+// ToggleDrawerOrder switches the file drawer between alphabetical and
+// walkthrough order.
+func (c *PrereviewController) ToggleDrawerOrder(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.DrawerWalkOrder = !state.DrawerWalkOrder
 	return state, nil
 }

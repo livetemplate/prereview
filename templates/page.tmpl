@@ -128,6 +128,23 @@
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
   {{end}}
+  {{- /* #115 the walkthrough's step bar: the step being read and where it points,
+       ‹ › through the stops across files. Takes the stepper's slot while walking.
+       Trimmed so it adds nothing to the page while no walk is on. */}}
+  {{- with $.WalkBar}}
+  <div class="ann-nav walk-bar" role="navigation" aria-label="Walkthrough">
+    <div class="walk-bar-nav">
+      <form method="POST"><button type="submit" name="walkPrev" class="outline ann-nav-step" aria-label="Previous step"{{if not .HasPrev}} disabled{{end}}>{{template "iconChevronLeft"}}</button></form>
+      <span class="ann-nav-label">Step {{.Num}} of {{.Total}}</span>
+      <form method="POST"><button type="submit" name="walkNext" class="outline ann-nav-step" aria-label="Next step"{{if not .HasNext}} disabled{{end}}>{{template "iconChevronRight"}}</button></form>
+      <span class="ann-nav-actions">
+        <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="toggleUnderstand" class="outline" title="See every step">Steps</button></form>
+        <form method="POST"><button type="submit" name="endWalkthrough" class="outline" aria-label="Stop the walkthrough" title="Stop the walkthrough">×</button></form>
+      </span>
+    </div>
+    <div class="walk-bar-text"><strong class="walk-bar-title">{{.Title}}</strong>{{if .Anchor}}<span class="walk-bar-at">{{.Anchor}}</span>{{else}}<span class="walk-bar-at quiz-ungrounded">⚠ cites nothing in this review</span>{{end}}{{if .Body}}<span class="walk-bar-body">{{.Body}}</span>{{end}}</div>
+  </div>
+  {{- end}}
   {{/* #193 open-items stepper (state_nav.go). Sticky, and before the checks strip,
        which sticks just below it. */}}
   {{if $.ShowNav}}
