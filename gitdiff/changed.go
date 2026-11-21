@@ -61,6 +61,15 @@ func (h Hunk) Covers(side string, from, to int) bool {
 	return count > 0 && from <= start+count-1 && to >= start
 }
 
+// Range is where the hunk shows: its new-side lines, or its old-side lines for a
+// pure deletion (no new lines).
+func (h Hunk) Range() (side string, from, to int) {
+	if h.NewCount == 0 {
+		return "old", h.OldStart, h.OldStart + h.OldCount - 1
+	}
+	return "new", h.NewStart, h.NewStart + h.NewCount - 1
+}
+
 // HasLine reports whether line n exists on side of the file, i.e. whether
 // LoadDiff renders a row numbered n there. Opaque files have no rows.
 func (fc *FileChanges) HasLine(side string, n int) bool {

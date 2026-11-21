@@ -67,10 +67,11 @@ func (s PrereviewState) UnderstandOnQuiz() bool {
 
 // WalkStep is one step as the page renders it.
 type WalkStep struct {
-	Num         int
-	ID          string
-	Title, Body string
-	Anchors     []WalkAnchor
+	Num          int
+	ID           string
+	Title, Body  string
+	Anchors      []WalkAnchor
+	NotExplained bool // the derived last step, not the agent's
 }
 
 // WalkAnchor is a cited place, ready to render as a jump link (or a warning).
@@ -85,13 +86,13 @@ type WalkAnchor struct {
 // livetemplate computes every zero-arg method on each render, shown or not, so
 // it does nothing unless the Walkthrough tab is on screen.
 func (s PrereviewState) WalkSteps() []WalkStep {
-	e := s.CurrentExplanation()
-	if e == nil || !s.ShowUnderstand || s.UnderstandOnQuiz() {
+	steps := s.walkSteps()
+	if len(steps) == 0 || !s.ShowUnderstand || s.UnderstandOnQuiz() {
 		return nil
 	}
-	out := make([]WalkStep, len(e.Steps))
-	for i, st := range e.Steps {
-		ws := WalkStep{Num: i + 1, ID: st.ID, Title: st.Title, Body: st.Body}
+	out := make([]WalkStep, len(steps))
+	for i, st := range steps {
+		ws := WalkStep{Num: i + 1, ID: st.ID, Title: st.Title, Body: st.Body, NotExplained: st.Derived}
 		for _, a := range st.Anchors {
 			ws.Anchors = append(ws.Anchors, walkAnchor(a))
 		}
@@ -116,8 +117,17 @@ func (s PrereviewState) walkSteps() []Step {
 	if e == nil {
 		return nil
 	}
-	return e.Steps
+	if len(s.NotExplained) == 0 {
+		return e.Steps
+	}
+	// Clip, so appending never writes into the explanation's own array.
+	return append(slices.Clip(e.Steps), Step{ID: notExplainedStepID, Derived: true, Title: "Not explained",
+		Body:    "Changes no step cites. Read them too: what a walkthrough leaves out is where a surprise hides.",
+		Anchors: s.NotExplained})
 }
+
+// notExplainedStepID marks the derived last step.
+const notExplainedStepID = "not-explained"
 
 // walkStop is one stop of a walk: a step, and which of its anchors to show (-1
 // when none of them resolves, so the stop has nowhere to jump).
@@ -193,29 +203,47 @@ func (s PrereviewState) StepMarkLines() map[string]string {
 	if len(steps) == 0 || s.CurrentDiff == nil {
 		return nil
 	}
-	byRow := map[string][]int{}
+	// The steps each (side, line) starts, then one pass over the diff to find
+	// their rows: a scan per anchor is O(anchors × lines), and the derived step
+	// can bring an anchor for every hunk of a large file.
+	type at struct {
+		side string
+		line int
+	}
+	want := map[at][]int{}
 	for i, st := range steps {
 		for _, a := range st.Anchors {
 			if a.File != s.SelectedFile || a.Kind != AnchorKindLine || a.Ungrounded() {
 				continue
 			}
-			l, ok := findDiffLine(s.CurrentDiff, a.Side, a.FromLine)
-			if !ok {
-				continue
-			}
-			k := lineCursorKey(l)
-			if !slices.Contains(byRow[k], i) {
-				byRow[k] = append(byRow[k], i)
+			k := at{a.Side, a.FromLine}
+			if !slices.Contains(want[k], i) {
+				want[k] = append(want[k], i)
 			}
 		}
 	}
-	out := make(map[string]string, len(byRow))
-	for k, idx := range byRow {
-		labels := make([]string, len(idx))
-		for n, i := range idx {
-			labels[n] = fmt.Sprintf("Step %d: %s", i+1, steps[i].Title)
+	if len(want) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, l := range s.CurrentDiff.Lines {
+		for _, k := range []at{{"new", l.NewNum}, {"old", l.OldNum}} {
+			idx := want[k]
+			if len(idx) == 0 || k.line == 0 {
+				continue
+			}
+			labels := make([]string, len(idx))
+			for n, i := range idx {
+				labels[n] = fmt.Sprintf("Step %d: %s", i+1, steps[i].Title)
+			}
+			row := lineCursorKey(l)
+			if prev := out[row]; prev != "" {
+				out[row] = prev + " · " + strings.Join(labels, " · ")
+			} else {
+				out[row] = strings.Join(labels, " · ")
+			}
+			delete(want, k) // first row with that number on that side, as findDiffLine
 		}
-		out[k] = strings.Join(labels, " · ")
 	}
 	return out
 }

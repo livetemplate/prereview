@@ -128,14 +128,14 @@ func TestE2E_UnderstandWalkthroughBar(t *testing.T) {
 	}
 
 	navStep(t, p, "walkNext", diag)
-	waitJSTrue(t, p.ctx, `(document.querySelector('.walk-bar .ann-nav-label')||{}).textContent === 'Step 2 of 3'`, 5*time.Second, "› reaches step 2")
+	waitNavLabel(t, p, "Step 2 of 3", "› reaches step 2", diag)
 	waitJSTrue(t, p.ctx, `(document.querySelector('.code .line.is-cursor')||{getAttribute:()=>''}).getAttribute('data-key') === 'L0-1'`, 5*time.Second, "step 2 opens fresh.go at line 1")
 	if got := evalStr(t, p, `(document.querySelector('.code .step-mark')||{}).textContent || ''`); got != "Step 2: A new package" {
 		t.Errorf("fresh.go's step marker = %q%s", got, diag())
 	}
 
 	navStep(t, p, "walkNext", diag)
-	waitJSTrue(t, p.ctx, `(document.querySelector('.walk-bar .ann-nav-label')||{}).textContent === 'Step 3 of 3'`, 5*time.Second, "› reaches step 3")
+	waitNavLabel(t, p, "Step 3 of 3", "› reaches step 3", diag)
 	if got := bar(); !strings.Contains(got, "cites nothing in this review") {
 		t.Errorf("a step citing only nope.go must say it cites nothing here, got %q%s", got, diag())
 	}
@@ -146,4 +146,36 @@ func TestE2E_UnderstandWalkthroughBar(t *testing.T) {
 		t.Fatalf("×: %v%s", err, diag())
 	}
 	waitJSTrue(t, p.ctx, `!document.querySelector('.walk-bar')`, 5*time.Second, "× puts the bar away")
+}
+
+// TestE2E_UnderstandNotExplained (#115 A4): a walkthrough that leaves a change
+// out gets a derived last step listing it, the page says how many, and walking
+// to the end lands on the change, marked in the diff.
+func TestE2E_UnderstandNotExplained(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("edited.go")
+	// Only edited.go is explained; fresh.go (wholly added) is left out.
+	submitExplain(t, p, `{"steps": [{"title": "The greeting", "anchors": [{"file": "edited.go", "from_line": 4}]}]}`)
+	p.openUnderstandTab("walkthrough")
+	waitJSTrue(t, p.ctx, `document.querySelectorAll('.walk-step').length === 2`, 10*time.Second, "the agent's step plus the derived one")
+	if got := evalStr(t, p, `document.querySelector('.walk-unexplained').textContent.trim()`); !strings.Contains(got, "1 change no step explains") {
+		t.Errorf("the page must count the changes no step explains, got %q%s", got, diag())
+	}
+	last := evalStr(t, p, `(() => { const s = [...document.querySelectorAll('.walk-step')].pop(); return s.className + ' | ' + s.textContent.replace(/\s+/g, ' '); })()`)
+	if !strings.Contains(last, "walk-step-unexplained") || !strings.Contains(last, "Not explained") || !strings.Contains(last, "fresh.go L1-L3") {
+		t.Errorf("the last step must be the derived Not explained step citing fresh.go L1-L3, got %q%s", last, diag())
+	}
+
+	if err := chromedp.Run(p.ctx, chromedp.Click(`.walk-start button[name='startWalkthrough']`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("Start the walkthrough: %v%s", err, diag())
+	}
+	waitNavLabel(t, p, "Step 1 of 2", "the walk starts", diag)
+	navStep(t, p, "walkNext", diag)
+	waitNavLabel(t, p, "Step 2 of 2", "› reaches the derived step", diag)
+	waitJSTrue(t, p.ctx, `(document.querySelector('.code .line.is-cursor')||{getAttribute:()=>''}).getAttribute('data-key') === 'L0-1'`, 5*time.Second, "it opens fresh.go at the left-out change")
+	if got := evalStr(t, p, `(document.querySelector('.code .step-mark')||{}).textContent || ''`); got != "Step 2: Not explained" {
+		t.Errorf("the left-out change must be marked in the diff, got %q%s", got, diag())
+	}
 }

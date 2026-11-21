@@ -26,10 +26,11 @@
 {{with $.CurrentExplanation}}
   {{if .Summary}}<p class="walk-summary">{{.Summary}}</p>{{end}}
   {{if .Stale}}<p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>{{end}}
+  {{with $.NotExplained}}<p class="walk-stale walk-unexplained" role="status">⚠ {{len .}} change{{if ne (len .) 1}}s{{end}} no step explains. They are the last step.</p>{{end}}
   <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     {{range $.WalkSteps}}
-    <li class="walk-step" data-key="step-{{.ID}}">
+    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}" data-key="step-{{.ID}}">
       <div class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> <span class="walk-title-text">{{.Title}}</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="{{.Num}}"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
       {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}
       <ul class="walk-anchors">

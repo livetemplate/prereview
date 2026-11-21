@@ -51,7 +51,7 @@ func TestComment_KindPredicates(t *testing.T) {
 // TestRequestSummary: each request kind prereview queues has a summary line; a
 // reviewer's comment and an unknown kind have none, so they show their text.
 func TestRequestSummary(t *testing.T) {
-	for _, req := range []string{csv.RequestJudge, csv.RequestBenchmark, csv.RequestQuiz, csv.RequestExtraction} {
+	for _, req := range []string{csv.RequestJudge, csv.RequestBenchmark, csv.RequestQuiz, csv.RequestExplain, csv.RequestExtraction} {
 		c := Comment{Request: req, Body: "the prompt"}
 		if c.RequestSummary() == "" || c.Headline() != c.RequestSummary() {
 			t.Errorf("Request %q: summary %q, headline %q", req, c.RequestSummary(), c.Headline())

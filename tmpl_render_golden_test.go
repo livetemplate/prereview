@@ -439,6 +439,8 @@ func renderFixtures() []renderFixture {
 	understandWalk := goBase()
 	understandWalk.ShowUnderstand, understandWalk.AgentMode = true, true
 	understandWalk.ExplainPrompts = understandEmpty.ExplainPrompts
+	// One change no step cites: the count, and the derived last step (#115 A4).
+	understandWalk.NotExplained = []review.Anchor{{File: "app.go", Kind: "line", Side: "new", FromLine: 5, ToLine: 5, Status: "ok"}}
 	understandWalk.Comments = []review.Comment{{ID: "r1", File: "app.go", Body: "Walk me through this change.", Kind: "file", Request: csv.RequestExplain,
 		Created: time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)}}
 	understandWalk.Explanations = []review.Explanation{{

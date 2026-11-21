@@ -52,6 +52,9 @@ type Step struct {
 	Title   string   `json:"title"`
 	Body    string   `json:"body,omitempty"`
 	Anchors []Anchor `json:"anchors"`
+	// Derived marks a step prereview made (the "Not explained" step), never the
+	// agent's: code that treats steps as agent text skips it.
+	Derived bool `json:"-"`
 }
 
 // Anchor is a place in the change a step cites.
@@ -136,6 +139,9 @@ func ValidateExplanation(e Explanation) error {
 	seen := make(map[string]bool, len(e.Steps))
 	for i, s := range e.Steps {
 		where := fmt.Sprintf("step %d (%s)", i+1, s.ID)
+		if s.ID == notExplainedStepID {
+			return fmt.Errorf("%s: id %q is reserved for prereview's own step", where, s.ID)
+		}
 		if seen[s.ID] {
 			return fmt.Errorf("%s: duplicate id", where)
 		}

@@ -317,8 +317,10 @@ func walkFixture(t *testing.T) (*PrereviewController, PrereviewState) {
 // ends the walk.
 func TestWalkthroughSteps(t *testing.T) {
 	c, state := walkFixture(t)
-	if got := len(walkStopsOf(state.walkSteps())); got != 4 { // b, nowhere, a, c
-		t.Fatalf("stops = %d, want 4 (one per grounded anchor, one for the step citing nothing)", got)
+	// b, nowhere, a, c, then the derived "Not explained" step: a.go's deletion
+	// (old lines 3-4) is cited by no step.
+	if got := len(walkStopsOf(state.walkSteps())); got != 5 {
+		t.Fatalf("stops = %d, want 5 (one per grounded anchor, one for the step citing nothing, one not explained)", got)
 	}
 	state.ShowUnderstand = true
 	s, err := c.StartWalkthrough(state, checksCtx("startWalkthrough", nil))
@@ -328,7 +330,7 @@ func TestWalkthroughSteps(t *testing.T) {
 	if s.ShowUnderstand || s.SelectedFile != "b.go" || s.CursorKey != "L0-4" {
 		t.Fatalf("start: page %v, file %q, cursor %q; want b.go L0-4 with the page closed", s.ShowUnderstand, s.SelectedFile, s.CursorKey)
 	}
-	if bar := s.WalkBar(); bar == nil || bar.Num != 1 || bar.Total != 3 || bar.HasPrev || !bar.HasNext {
+	if bar := s.WalkBar(); bar == nil || bar.Num != 1 || bar.Total != 4 || bar.HasPrev || !bar.HasNext {
 		t.Fatalf("bar at start = %+v", bar)
 	}
 	if s.ShowNav() {
@@ -351,8 +353,12 @@ func TestWalkthroughSteps(t *testing.T) {
 		t.Fatalf("step 3: file %q cursor %q, want a.go L5-3", s.SelectedFile, s.CursorKey)
 	}
 	s = next(s)
-	if s.SelectedFile != "c.go" || s.CursorKey != "" || s.WalkBar().HasNext {
-		t.Fatalf("last stop (whole file c.go): file %q cursor %q", s.SelectedFile, s.CursorKey)
+	if s.SelectedFile != "c.go" || s.CursorKey != "" {
+		t.Fatalf("whole-file stop c.go: file %q cursor %q", s.SelectedFile, s.CursorKey)
+	}
+	s = next(s)
+	if bar := s.WalkBar(); bar == nil || bar.Title != "Not explained" || bar.Anchor != "a.go L3-L4 (old)" || bar.HasNext || s.CursorKey != "L3-0" {
+		t.Fatalf("last stop is the change no step cites: bar %+v, cursor %q", s.WalkBar(), s.CursorKey)
 	}
 	if again := next(s); again.WalkStep != s.WalkStep || again.WalkAnchor != s.WalkAnchor {
 		t.Error("› on the last stop must stay there")
@@ -458,5 +464,52 @@ func TestWalkCursorSurvivesShiftingStops(t *testing.T) {
 	s.Explanations[0].Steps[2].Anchors[1].Status = anchorUngrounded
 	if bar := s.WalkBar(); bar == nil || bar.Num != 3 || bar.Anchor != "a.go L3" {
 		t.Errorf("after c.go's anchor went ungrounded the bar must stay on step 3 at a.go, got %+v", bar)
+	}
+}
+
+// TestNotExplained: the hunks no grounded anchor covers on their side. A partly
+// covered hunk counts as explained; a deletion cited on the new side does not; an
+// opaque file needs a whole-file anchor; an ungrounded anchor explains nothing;
+// citing a text file whole doesn't explain its hunks.
+func TestNotExplained(t *testing.T) {
+	idx := &gitdiff.ChangedIndex{Files: map[string]*gitdiff.FileChanges{
+		"a.go":     {Hunks: []gitdiff.Hunk{{OldStart: 3, OldCount: 0, NewStart: 3, NewCount: 3}, {OldStart: 9, OldCount: 1, NewStart: 10, NewCount: 1}}, NewLen: 20, OldLen: 18},
+		"b.go":     {Hunks: []gitdiff.Hunk{{OldStart: 7, OldCount: 2, NewStart: 6, NewCount: 0}}, NewLen: 10, OldLen: 12},
+		"bin.png":  {Opaque: true},
+		"logo.png": {Opaque: true},
+		"c.go":     {Hunks: []gitdiff.Hunk{{NewStart: 1, NewCount: 2}}, NewLen: 2},
+		"d.go":     {Hunks: []gitdiff.Hunk{{NewStart: 5, NewCount: 1}}, NewLen: 9},
+	}}
+	ok := func(a Anchor) Anchor { normalizeAnchor(&a); a.Status = anchorOK; return a }
+	steps := []Step{
+		{Anchors: []Anchor{ok(Anchor{File: "a.go", FromLine: 4})}},              // part of a.go's first hunk
+		{Anchors: []Anchor{ok(Anchor{File: "b.go", FromLine: 7})}},              // new side: the deletion is old 7-8
+		{Anchors: []Anchor{ok(Anchor{File: "logo.png", Kind: AnchorKindFile})}}, // explains the opaque file
+		{Anchors: []Anchor{{File: "c.go", FromLine: 1, ToLine: 2, Status: anchorUngrounded}}},
+		{Anchors: []Anchor{ok(Anchor{File: "d.go", Kind: AnchorKindFile})}}, // whole text file: not its hunks
+	}
+	var got []string
+	for _, a := range notExplained(idx, steps) {
+		got = append(got, a.Label())
+	}
+	want := []string{"a.go L10", "b.go L7-L8 (old)", "bin.png", "c.go L1-L2", "d.go L5"}
+	if strings.Join(got, ", ") != strings.Join(want, ", ") {
+		t.Errorf("not explained = %v\nwant %v", got, want)
+	}
+}
+
+// The derived step joins the walk last, and never writes into the agent's steps.
+func TestWalkStepsAppendsNotExplained(t *testing.T) {
+	steps := make([]Step, 1, 4) // spare capacity: an unclipped append would write into it
+	steps[0] = Step{ID: "s1", Title: "one"}
+	s := PrereviewState{Explanations: []Explanation{{ID: "e", Steps: steps}},
+		NotExplained: []Anchor{{File: "x.go", Kind: AnchorKindLine, Side: "new", FromLine: 1, ToLine: 1, Status: anchorOK}}}
+	ws := s.walkSteps()
+	if len(ws) != 2 || !ws[1].Derived || ws[0].Derived || ws[1].Anchors[0].File != "x.go" {
+		t.Fatalf("walkSteps = %+v", ws)
+	}
+	ws[1].Title = "changed"
+	if again := s.walkSteps(); again[1].Title != "Not explained" || len(s.Explanations[0].Steps) != 1 {
+		t.Error("the derived step leaked into the explanation's own steps")
 	}
 }

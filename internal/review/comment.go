@@ -208,6 +208,7 @@ var requestSummaries = map[string]string{
 	csv.RequestJudge:      "Asked your agent to run this file's judges",
 	csv.RequestBenchmark:  "Asked your agent to run a benchmark's judges",
 	csv.RequestQuiz:       "Asked your agent for a quiz on this file",
+	csv.RequestExplain:    "Asked your agent to walk you through the whole change",
 	csv.RequestExtraction: "Asked your agent to read past reviews",
 }
 

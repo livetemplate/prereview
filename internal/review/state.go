@@ -467,6 +467,10 @@ type PrereviewState struct {
 	// that load, so the watcher reloads only when the file moved.
 	Explanations []Explanation `json:"explanations"`
 	ExplainSeen  string        `json:"explain_seen"`
+	// NotExplained is the current walkthrough's check (#115 A4): every changed
+	// hunk no step cites, as anchors (notExplained). walkSteps makes it the last
+	// step, so the walk visits what the agent left out.
+	NotExplained []Anchor `json:"not_explained"`
 	// The walkthrough in progress (#115 A3): WalkExplanation names the one being
 	// walked ("" = no walk), so a replaced walkthrough ends the walk instead of
 	// landing on a stranger's stop; WalkStep/WalkAnchor is the stop shown

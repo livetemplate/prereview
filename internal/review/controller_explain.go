@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -84,6 +85,7 @@ func (c *PrereviewController) changedIndexKey(base string, files []gitdiff.FileE
 func (c *PrereviewController) applyExplain(state *PrereviewState) {
 	state.ExplainSeen = statusFingerprint(ExplainPath(c.CSVPath))
 	state.Explanations = LoadExplanations(c.CSVPath)
+	state.NotExplained = nil
 	if len(state.Explanations) == 0 {
 		return
 	}
@@ -126,6 +128,42 @@ func (c *PrereviewController) applyExplain(state *PrereviewState) {
 			}
 		}
 	}
+	state.NotExplained = notExplained(idx, state.CurrentExplanation().Steps)
+}
+
+// notExplained is every changed hunk no grounded anchor of steps covers, as
+// anchors ready to walk, in path then line order. A hunk counts as explained when
+// an anchor overlaps it on its side (a whole-file anchor doesn't: citing a file
+// is not explaining each of its changes); an opaque file (binary, over the render
+// cap) has no lines, so a whole-file anchor is what explains it. Derived from the
+// diff, never from the agent: it is the check on what the walkthrough left out.
+func notExplained(idx *gitdiff.ChangedIndex, steps []Step) []Anchor {
+	cited := map[string][]Anchor{}
+	for _, st := range steps {
+		for _, a := range st.Anchors {
+			if !a.Ungrounded() {
+				cited[a.File] = append(cited[a.File], a)
+			}
+		}
+	}
+	var out []Anchor
+	for _, p := range slices.Sorted(maps.Keys(idx.Files)) {
+		fc, as := idx.Files[p], cited[p]
+		if fc.Opaque {
+			if !slices.ContainsFunc(as, func(a Anchor) bool { return a.Kind == AnchorKindFile }) {
+				out = append(out, Anchor{File: p, Kind: AnchorKindFile, Side: "new", Status: anchorOK})
+			}
+			continue
+		}
+		for _, h := range fc.Hunks {
+			if slices.ContainsFunc(as, func(a Anchor) bool { return a.Kind == AnchorKindLine && h.Covers(a.Side, a.FromLine, a.ToLine) }) {
+				continue
+			}
+			side, from, to := h.Range()
+			out = append(out, Anchor{File: p, Kind: AnchorKindLine, Side: side, FromLine: from, ToLine: to, Status: anchorOK})
+		}
+	}
+	return out
 }
 
 // groundRange reports whether a file entry has what an anchor cites: the whole

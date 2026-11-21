@@ -82,6 +82,7 @@ func TestRunExplain_RejectsNamingTheStep(t *testing.T) {
 		"absolute path":  `{"steps": [{"title": "t", "anchors": [{"file": "/etc/passwd", "from_line": 1}]}]}`,
 		"bad side":       `{"steps": [{"title": "t", "anchors": [{"file": "a.go", "side": "left", "from_line": 1}]}]}`,
 		"line kind no n": `{"steps": [{"title": "t", "anchors": [{"file": "a.go"}]}]}`,
+		"reserved id":    `{"steps": [{"id": "not-explained", "title": "t", "anchors": [{"file": "a.go", "kind": "file"}]}]}`,
 		"reversed range": `{"steps": [{"title": "t", "anchors": [{"file": "a.go", "from_line": 9, "to_line": 3}]}]}`,
 		"bad kind":       `{"steps": [{"title": "t", "anchors": [{"file": "a.go", "kind": "area"}]}]}`,
 		"duplicate id":   `{"steps": [{"id": "x", "title": "t", "anchors": [{"file": "a.go", "kind": "file"}]}, {"id": "x", "title": "u", "anchors": [{"file": "a.go", "kind": "file"}]}]}`,

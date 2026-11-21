@@ -3604,6 +3604,7 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .walk-title { margin: 0 0 0.35rem; font-weight: 600; display: flex; gap: 0.5rem; align-items: baseline; }
 .walk-num { flex: none; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .walk-body { margin: 0 0 0.5rem; white-space: pre-wrap; }
+.walk-step-unexplained { border-style: dashed; border-color: color-mix(in srgb, var(--pr-del) 55%, transparent); }
 .walk-anchors { padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .quiz-ask { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .quiz .quiz-ask button, .quiz .quiz-empty button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
