@@ -531,7 +531,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// of truth on every connect, so a persisted copy from another launch (a
 	// live-only session's ExternalMode, an old proxy port) never renders.
 	state.ExternalMode = c.ExternalMode
-	state.ProxyBaseURL = c.ProxyBaseURL
+	state.ProxyBaseURL = proxyURLFor(c.ProxyBaseURL, ctx)
 	state.TargetURL = c.TargetURL
 	if !state.Combined() {
 		state.LiveView = false

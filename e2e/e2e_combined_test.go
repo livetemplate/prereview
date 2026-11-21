@@ -248,6 +248,21 @@ func TestE2E_CombinedOneQueue(t *testing.T) {
 	}
 }
 
+// TestE2E_CombinedFrameFollowsPageHost pins that the framed site loads when the
+// page was opened by another name for the same address (a phone opening the
+// tailnet name from an ALT line). The launch cookie belongs to the host the
+// page was opened by, so a frame pointed at the bind address got a 403.
+func TestE2E_CombinedFrameFollowsPageHost(t *testing.T) {
+	app := newLiveApp(t)
+	p := bootChromeCombined(t, setupImportRepo(t), app.srv.URL, 1200, 900)
+	diag := captureDiag(t, p)
+	p.url = strings.Replace(p.url, "127.0.0.1", "localhost", 1)
+	p.waitReadyAt(1200, 900)
+	waitJSDiag(t, p, `new URL(document.querySelector('iframe.ext-frame').src).hostname === 'localhost'`, "the frame uses the page's host", diag)
+	pickSurface(t, p, true, diag)
+	waitJSDiag(t, p, `(document.querySelector('.bar .title-page')||{}).textContent === '/'`, "the framed site loads and its beacon reports /", diag)
+}
+
 // waitJSDiag is waitJSTrue that fails with the diag dump (server log, console,
 // WS frames, HTML) after 15s.
 func waitJSDiag(t *testing.T, p *runningPrereview, js, label string, diag func() string) {

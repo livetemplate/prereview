@@ -244,7 +244,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	// GET/HEAD for allowlisted asset extensions and serves them from the
 	// repo root; everything else (POSTs, WS upgrades, non-asset paths)
 	// falls through to the LiveHandler unchanged.
-	mux.Handle("/", staticFallback(absRepo, tmpl.Handle(controller, livetemplate.AsState(initial))))
+	mux.Handle("/", staticFallback(absRepo, review.WithRequestHost(tmpl.Handle(controller, livetemplate.AsState(initial)))))
 	registerUsageRoute(mux)
 	if controller.LibraryDir != "" {
 		mux.HandleFunc("/_library-review", guardLibraryRoute(libraryReviewHandler(controller.LibraryDir)))
@@ -567,7 +567,7 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	mux := http.NewServeMux()
 	// No staticFallback: there is no repo to serve assets from. The live
 	// site's own assets flow through the proxy origin, not this one.
-	mux.Handle("/", tmpl.Handle(controller, livetemplate.AsState(initial)))
+	mux.Handle("/", review.WithRequestHost(tmpl.Handle(controller, livetemplate.AsState(initial))))
 	registerUsageRoute(mux)
 
 	uiLn, err := net.Listen("tcp", net.JoinHostPort(bindHost, fmt.Sprintf("%d", port)))
