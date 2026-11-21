@@ -78,7 +78,7 @@ echo "› capturing gif:hero"
 # accepts a learning and installs skills; alternatives records shortcut taps. A
 # fresh repo, server and set of folders per flow keeps each out of the captures
 # above and out of each other. The flow gets the binary via --bin.
-for flow in versions thread checks learning quiz alternatives; do
+for flow in versions thread checks learning understand alternatives; do
 	echo "› creating demo repo and folders for gif:$flow"
 	rm -rf "$demo2"
 	bash cmd/screenshot/demo-repo.sh "$demo2" "$(pwd)/e2e/testdata/areacomments/diagram.png"
