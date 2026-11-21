@@ -37,7 +37,8 @@ git repo's working tree against `HEAD`, in standalone (human-only) mode.
 | a dir with `.git` (incl. worktrees/submodules) | **git** | real `git diff` hunks vs `--base`; base picker shown; file list is git/`.gitignore`-aware (tracked + untracked) |
 | a dir without `.git` | **no-git** | the dir walked recursively; **every file shown whole** (each line "new"/commentable), no diff, base picker hidden |
 | a single file | **no-git (single file)** | just that file, whole; its store lives under the file's **parent** dir, one per reviewed file |
-| *(selected by `--external <url>`, not the path)* | **external (proxy)** | reverse-proxies a live local site; drag a box on any page to annotate; needs `--out` |
+| *(selected by `--external <url>` with no path)* | **external (proxy)** | reverse-proxies a live local site; drag a box on any page to annotate; needs `--out` |
+| a dir, with `--external <url>` | **combined** | the dir's review and the live site in one session and one queue; the header's **Files \| Live site** control switches between them |
 
 In no-git mode `--base` is ignored (there are no refs). The directory walk skips
 `.git/`, `.prereview/`, dotfiles/dotdirs, and files over the 1 MB render cap.
@@ -45,7 +46,8 @@ Everything else — comments, CSV, re-anchoring, the agent queue — is identica
 git mode.
 
 External mode is the exception to "auto-detected from `path`": it's turned on by
-the `--external <url>` flag and ignores `[path]` entirely — see below.
+the `--external <url>` flag. Without a path it's live-only; with one, the session
+reviews the path too — see below.
 
 ```bash
 prereview                        # current git repo
@@ -70,6 +72,18 @@ One is the normal prereview UI, the other a reverse proxy on its own port: a
 separate origin the UI iframes. Both bind the same `--host`, so both are tailnet-reachable
 on a remote box. Stdout gains an extra `PROXY <url>` line (the proxy origin) after
 the `ALT` lines and before `REPO`/`STORE`; `READY` is still the UI url.
+
+Pass a path as well and one session reviews both: the path as usual, and the live
+site behind the header's **Files | Live site** control (or <kbd>l</kbd>). The two
+share one store and one queue, so the agent reads a box on the page and a comment on
+a line from the same `watch`. `--out` defaults to the path, as in any review. The
+framed site stays loaded while the files show, so switching back keeps its page and
+scroll. The path must be a directory: a single-file review lists only that file, and a
+live-site annotation has no file.
+
+```bash
+prereview --agent --external http://localhost:5173 .
+```
 
 Annotations anchor to a **URL + region rectangle** rather than a file + line.
 They're stored as `kind=region` rows with the page in the `url` column and the
@@ -159,7 +173,7 @@ Full event-schema and comment-field docs: [skill/reference.md](../skill/referenc
 | `--port <n>` | `0` | TCP port; `0` = OS-assigned random free port. |
 | `--host <ip>` | `127.0.0.1` | Bind address — see [Binding](#binding--remote-access). |
 | `--public-url <url>` | — | The URL a browser outside this machine uses, such as a sandbox proxy's `https://vm.exe.xyz:4799`. Printed as `READY` and allowed as a WebSocket origin; the bind port defaults to the URL's port. Doesn't change the bind address, and can't be combined with `--external`. See [Behind a proxy or in a sandbox](#behind-a-proxy-or-in-a-sandbox). |
-| `--external <url>` | — | Annotate a **live local site** instead of files: reverse-proxies `<url>` on a second origin and overlays region annotation. **Requires `--out`**; ignores `[path]` and `--base`. See [External mode](#external-mode---external). |
+| `--external <url>` | — | Annotate a **live local site**: reverse-proxies `<url>` on a second origin and overlays region annotation. With a directory `[path]` the session reviews it too, one queue for both; without one it's live-only, **requires `--out`** and ignores `--base`. See [External mode](#external-mode---external). |
 | `--out <dir>` | the review path | Store root — the directory under which the store holding `comments.csv` + the event log is created. Available in **every** mode (defaults to the review path, so repo mode is unchanged when omitted); **required** with `--external`. The resolved store is printed as the `STORE` stdout line, which is what the [subcommands](#subcommands) take as `--out`. |
 | `--agent` | `false` | Run under a coding agent: stream the review queue as JSON events (consume with `prereview watch`) and show the **Queue** (Pause/Resume) + **End session** UI instead of **Quit**. See [Agent mode](#agent-mode---agent). |
 | `--replace` | `false` | prereview refuses to start a second server for the same store (duplicate servers fight over it). `--replace` stops the running one and takes over. Comments auto-save, so nothing is lost. It stops a server only after that server confirms it is the process named in the store's `server.pid`. A server started by an older prereview can't confirm, so stop that one yourself. |
@@ -427,7 +441,7 @@ second, random port. prereview refuses `--external` with `--public-url`.
 `<store>/comments.csv` is the source of truth (RFC-4180, **19 columns**, atomically
 written via tmp+fsync+rename). The store is `<store-root>/.prereview/`, where the
 store root is the review path by default and `--out` redirects it in any mode (and is
-required with `--external`).
+required with `--external` and no path).
 
 A **single-file** review gets its own store per reviewed file, at
 `<parent>/.prereview/files/<name>-<hash>/`. That is what lets two files in one
