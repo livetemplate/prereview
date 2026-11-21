@@ -3435,6 +3435,10 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      flips to "Exit focus"). Mobile needs no rule: the drawer + TOC are
      already overlays/modals there, so the flag is a no-op. */
   .layout.focus-mode dialog#files-drawer { display: none; }
+  /* The live site fills the page in a combined session (#114); Files brings
+     the drawer back. On a phone the drawer is a slide-over the hamburger opens,
+     so it stays reachable there. */
+  .layout.live-showing dialog#files-drawer { display: none; }
   .layout.focus-mode .toc-sidebar { display: none; }
   /* #137: per-side collapse (independent of Focus mode). Each side collapses to
      a thin rail (not display:none) so its reopen chevron stays inside the column
@@ -4091,3 +4095,8 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
 .ckp-dismissed { display: inline; margin: 0 0 0 0.5rem; }
 .ck-strip-hidden { margin: 0; }
 .finding-queue button { margin: 0; padding: 0.1rem 0.55rem; min-height: 0; font-size: 0.75rem; }
+
+/* #114 combined session: the live stage stays mounted while the files show, so
+   the framed site keeps its route, scroll and state; it only stops taking space
+   and taps. */
+.live-wrap.live-hidden { display: none; }

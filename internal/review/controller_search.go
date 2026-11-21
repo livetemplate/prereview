@@ -57,10 +57,10 @@ func (c *PrereviewController) JumpToSearchResult(state PrereviewState, ctx *live
 		if err != nil {
 			return state, fmt.Errorf("load diff %s: %w", file, err)
 		}
-		state.SelectedFile = file
-		c.showDiff(&state, diff)
+		c.openFile(&state, file, diff)
 		c.applyVersionList(&state) // per-file version timeline (#90)
 	}
+	state.LiveView = false
 	// A content hit carries a working-tree line (new>0) to reveal + scroll to; a
 	// filename hit doesn't, so just open the file at the top in its normal view.
 	oldNum, _ := strconv.Atoi(ctx.GetString("old"))

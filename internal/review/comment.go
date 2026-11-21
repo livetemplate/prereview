@@ -172,6 +172,15 @@ func (c Comment) IsAreaLevel() bool { return c.Kind == commentKindArea }
 // relocate" contract.
 func (c Comment) IsRegionLevel() bool { return c.Kind == commentKindRegion }
 
+// Location is where the comment lives, for a list row: its file, or a live-site
+// annotation's page URL (#114), which has no file.
+func (c Comment) Location() string {
+	if c.IsRegionLevel() {
+		return c.URL
+	}
+	return c.File
+}
+
 // IsTextLevel reports whether this comment anchors to a character range
 // (kind="text" with FromCol/ToCol delimiting the selected substring).
 // Unlike file/area/region, a text comment DOES drift — it reuses the

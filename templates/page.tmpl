@@ -99,7 +99,7 @@
   aria-label="Close file list"
 ></div>
 
-<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .LiveShowing}} live-showing{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
 {{template "fileDrawer" $}}
 
 <main class="viewer"
@@ -110,13 +110,13 @@
       {{- /* track both the code-view lines AND the preview-view markdown blocks;
              only one renders at a time, and both carry a data-key the server
              parses to a source line (L<old>-<new> / MB-<start>-<end>). */}}
-      data-lvt-viewport-items=".line, .md-block">
+      data-lvt-viewport-items=".line, .md-block">{{if .LiveAvailable}}<div class="live-wrap{{if not .LiveShowing}} live-hidden{{end}}" data-key="live-wrap">{{template "liveStage" $}}</div>{{end}}
 {{if .ShowQuiz}}
 {{template "quizView" $}}
 {{else if .ShowAllComments}}
 {{template "allComments" $}}
 {{else if .ShowLibrary}}{{template "library" $}}
-{{else}}
+{{else if .LiveView}}{{else}}
 {{with .CurrentDiff}}
 <article>
 {{template "fileHeader" $}}

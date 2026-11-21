@@ -259,9 +259,15 @@ func (c *PrereviewController) FocusComment(state PrereviewState, ctx *livetempla
 	if id == "" {
 		return state, fmt.Errorf("focusComment: missing id")
 	}
+	focusRegion(&state, id)
+	return state, nil
+}
+
+// focusRegion focuses a live-site annotation. FocusSeq bumps on every focus so
+// re-focusing the same one still reaches the iframe.
+func focusRegion(state *PrereviewState, id string) {
 	state.FocusedCommentID = id
 	state.FocusSeq++
-	return state, nil
 }
 
 // ClearSelection wipes the line selection and any draft. Bound to a
@@ -373,8 +379,7 @@ func (c *PrereviewController) SetURLHash(state PrereviewState, ctx *livetemplate
 		if err != nil {
 			return state, nil
 		}
-		state.SelectedFile = parsed.Path
-		c.showDiff(&state, diff)
+		c.openFile(&state, parsed.Path, diff)
 		state.SelectionArea = Area{}
 		state.RegionSelectArmed = false
 		state.CommentMode = ""
@@ -429,6 +434,11 @@ func (c *PrereviewController) SetURLHash(state PrereviewState, ctx *livetemplate
 func (c *PrereviewController) OpenFileComment(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	if state.SelectedFile == "" {
 		return state, fmt.Errorf("openFileComment: no file selected")
+	}
+	// The file composer is part of the file view; from the live site (#114),
+	// "comment on this file" goes to the file.
+	if state.LiveShowing() {
+		showLive(&state, false)
 	}
 	resetToFileComment(&state)
 	return state, nil

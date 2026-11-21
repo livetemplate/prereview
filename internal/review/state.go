@@ -36,12 +36,8 @@ type PrereviewState struct {
 	TargetURL    string `json:"target_url"     lvt:"persist"`
 	CurrentURL   string `json:"current_url"    lvt:"persist"`
 
-	// LiveAvailable: a live surface exists in this session (live-only, or a
-	// combined #114 session that also reviews files). Set from the controller
-	// on every Mount; not persisted, for the reason SingleFile isn't.
-	LiveAvailable bool `json:"live_available"`
-	// LiveView: the live surface is the one showing in a combined session.
-	// Persisted so a reconnect mid-annotation stays on Live.
+	// LiveView: the live site is the surface picked in a combined session
+	// (#114). Persisted so a reconnect mid-annotation stays on Live.
 	LiveView bool `json:"live_view" lvt:"persist"`
 
 	// File navigation.
@@ -1284,9 +1280,10 @@ func (s PrereviewState) URLHash() string {
 // adding navigational value for typical docs). Returns nil when the
 // rendered view isn't showing OR when there are fewer than two
 // headings — a TOC with one entry is pointless and just steals
-// horizontal real estate from the prose.
+// horizontal real estate from the prose. Nil while the live site shows (#114),
+// which keeps the file loaded behind it.
 func (s PrereviewState) RenderedHeadings() []gitdiff.Heading {
-	if !s.ShowRenderedMarkdown() {
+	if !s.ShowRenderedMarkdown() || !s.FileShowing() {
 		return nil
 	}
 	all := s.CurrentDiff.Headings

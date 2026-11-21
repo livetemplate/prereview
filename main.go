@@ -63,7 +63,7 @@ var templateOrder = []string{
 	"page.tmpl", // the shell / entry template — MUST be first
 	// one file per UI component (define-only; parse order among them is irrelevant)
 	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
-	"toc.tmpl", "banners.tmpl", "external.tmpl", "moremenu.tmpl",
+	"toc.tmpl", "banners.tmpl", "external.tmpl", "livestage.tmpl", "moremenu.tmpl",
 	"filedrawer.tmpl", "allcomments.tmpl", "quiz.tmpl", "checks.tmpl", "library.tmpl",
 	// the {{with .CurrentDiff}} file-view sub-views
 	"fileheader.tmpl", "binaryview.tmpl", "htmlview.tmpl", "markdownview.tmpl", "diffview.tmpl",

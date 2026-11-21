@@ -343,7 +343,14 @@ func annotateRegion(t *testing.T, p *runningPrereview, body string, diag func() 
 	); err != nil {
 		t.Fatalf("frame live site + beacon nav: %v%s", err, diag())
 	}
+	drawRegion(t, p, body, diag)
+}
 
+// drawRegion arms region select on the showing live stage, drags a box well
+// inside the page overlay and saves an annotation with body, waiting until its
+// pin is on the page.
+func drawRegion(t *testing.T, p *runningPrereview, body string, diag func() string) {
+	t.Helper()
 	// Arm the toggle → the page-surface region overlay appears.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),

@@ -509,12 +509,13 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 		return state, fmt.Errorf("editComment: id %s not found", id)
 	}
 	cm := state.Comments[idx]
-	state.SelectedFile = cm.File
 	// Reload diff for the comment's file in case we're on a different one.
-	// Region comments (--external) have no file, so skip the git call entirely.
+	// Region comments (--external) have no file: skip the git call, and keep
+	// the selected file, which a combined session (#114) returns to.
 	if cm.File != "" {
+		state.SelectedFile = cm.File
 		if diff, err := c.loadDiffCached(state.Base, cm.File); err == nil {
-			c.showDiff(&state, diff)
+			c.openFile(&state, cm.File, diff)
 		}
 	}
 	// Route the composer into the right mode based on the comment's
@@ -540,6 +541,8 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 		// Scope to the comment's page so addRegionComment writes it back to
 		// the right URL even if the iframe is currently on another page.
 		state.CurrentURL = cm.URL
+		// The region composer renders on the live stage (#114).
+		showLive(&state, true)
 		state.SelectionAnchor = 0
 		state.SelectionEnd = 0
 		state.SelectionSide = ""
@@ -578,9 +581,10 @@ func (c *PrereviewController) ReanchorComment(state PrereviewState, ctx *livetem
 		return state, fmt.Errorf("reanchorComment: id %s not found", id)
 	}
 	cm := state.Comments[idx]
-	state.SelectedFile = cm.File
 	if diff, err := c.loadDiffCached(state.Base, cm.File); err == nil {
-		c.showDiff(&state, diff)
+		c.openFile(&state, cm.File, diff)
+	} else {
+		state.SelectedFile = cm.File
 	}
 	// No pre-seeded selection — the whole point is to choose a new spot.
 	state.SelectionAnchor = 0

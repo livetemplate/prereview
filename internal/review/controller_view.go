@@ -315,6 +315,9 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	if idx < 0 {
 		return state, fmt.Errorf("jumpToComment: id %s not found", id)
 	}
+	if state.Comments[idx].IsRegionLevel() {
+		return focusLive(state, id), nil
+	}
 	state, err := c.selectFileForJump(state, state.Comments[idx].File)
 	if err != nil {
 		return state, err
@@ -356,8 +359,49 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 		c.enterFile(&state, file, diff)
 	}
 	closeFullViews(&state)
+	state.LiveView = false
 	clearScrollTargets(&state)
 	return state, nil
+}
+
+// SetLiveView picks the surface in a combined session (#114): the header's
+// Files | Live site control posts view=files or view=live. Idempotent, like the
+// other radio setters.
+func (c *PrereviewController) SetLiveView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	showLive(&state, ctx.GetString("view") == "live")
+	return state, nil
+}
+
+// ToggleLiveView flips the surface: the "l" shortcut.
+func (c *PrereviewController) ToggleLiveView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	showLive(&state, !state.LiveView)
+	return state, nil
+}
+
+// focusLive jumps to a live-site annotation (#114): it shows the live site and
+// focuses the annotation, which moves the framed site to its page and scrolls
+// to it, as the live-only sidebar's Locate does. The file stays selected, for
+// the switch back.
+func focusLive(state PrereviewState, id string) PrereviewState {
+	showLive(&state, true)
+	clearScrollTargets(&state)
+	focusRegion(&state, id)
+	return state
+}
+
+// showLive shows the live site (on) or the files. Either way the reviewer lands
+// on that surface, so a full-page view closes; and the region overlay disarms,
+// as it does on a file switch, because the HTML preview and the live stage each
+// have one and they share RegionSelectArmed. Only a combined session has two
+// surfaces to switch between; any other ignores it.
+func showLive(state *PrereviewState, on bool) {
+	if !state.Combined() {
+		return
+	}
+	state.LiveView = on
+	closeFullViews(state)
+	state.RegionSelectArmed = false
+	state.MoreMenuOpen = false
 }
 
 // clearScrollTargets drops every one-render scroll nudge, so a jump that sets none

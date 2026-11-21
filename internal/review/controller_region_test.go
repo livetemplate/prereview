@@ -200,9 +200,9 @@ func TestAddRegionComment_PersistsAndRoundTrips(t *testing.T) {
 // set (AllRegionComments) spans every page.
 func TestRegionComments_ScopedByCurrentURL(t *testing.T) {
 	st := PrereviewState{
-		ExternalMode:  true,
-		LiveAvailable: true,
-		CurrentURL:    "/pricing",
+		ExternalMode: true,
+		ProxyBaseURL: "http://127.0.0.1:9999/",
+		CurrentURL:   "/pricing",
 		Comments: []Comment{
 			{ID: "a", Kind: commentKindRegion, URL: "/pricing", Area: Area{X: 0.1, Y: 0.1, W: 0.1, H: 0.1}},
 			{ID: "b", Kind: commentKindRegion, URL: "/dashboard", Area: Area{X: 0.2, Y: 0.2, W: 0.1, H: 0.1}},

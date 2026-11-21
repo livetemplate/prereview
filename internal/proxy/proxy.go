@@ -28,8 +28,8 @@ const maxInjectableHTML = 8 << 20 // 8 MiB
 // validates event.origin before trusting a message (see the client bridge).
 //
 // Proven in the Phase 0 spike against a live Vite dev server: load + pushState
-// + popstate fire `nav`; throttled scroll fires `scroll` with the document
-// dimensions the parent needs to place re-pinned annotations.
+// + popstate fire `nav`; throttled scroll and resize fire `scroll` with the
+// document dimensions the parent needs to place re-pinned annotations.
 const proxyBeaconJS = `<script>(function(){
   function rel(){return location.pathname+location.search;}
   function metrics(){var e=document.documentElement;return {scrollX:window.scrollX,scrollY:window.scrollY,docW:e.scrollWidth,docH:e.scrollHeight};}
@@ -39,7 +39,13 @@ const proxyBeaconJS = `<script>(function(){
   var _p=history.pushState;history.pushState=function(){var r=_p.apply(this,arguments);nav();return r;};
   var _r=history.replaceState;history.replaceState=function(){var r=_r.apply(this,arguments);nav();return r;};
   var tick=false;
-  addEventListener('scroll',function(){if(tick)return;tick=true;requestAnimationFrame(function(){tick=false;post({type:'scroll'});});},{passive:true});
+  function onMove(){if(tick)return;tick=true;requestAnimationFrame(function(){tick=false;post({type:'scroll'});});}
+  addEventListener('scroll',onMove,{passive:true});
+  // A resize changes the document size the parent converts drawn boxes with.
+  // It also fires when a hidden frame is shown: a combined session (#114) keeps
+  // the frame mounted under display:none, where every size reads 0, and a box
+  // drawn against 0x0 metrics is dropped.
+  addEventListener('resize',onMove);
   // Locate-an-annotation: the parent posts {__prereviewFocus,url,y} when the
   // user taps a sidebar entry. y is a 0..1 fraction of the document. If the
   // annotation lives on another page, navigate there (stashing the scroll for

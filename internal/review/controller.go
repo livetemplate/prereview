@@ -533,8 +533,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	state.ExternalMode = c.ExternalMode
 	state.ProxyBaseURL = c.ProxyBaseURL
 	state.TargetURL = c.TargetURL
-	state.LiveAvailable = c.ProxyBaseURL != ""
-	if !state.LiveAvailable {
+	if !state.Combined() {
 		state.LiveView = false
 	}
 

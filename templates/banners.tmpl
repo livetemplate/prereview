@@ -1,7 +1,7 @@
 {{define "viewerPrompts" -}}
 {{if and .LastDeletedComment (not .Quitting)}}
 <div class="undo-toast" role="status">
-  <span>Comment on <code>{{.LastDeletedComment.File}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
+  <span>Comment on <code>{{.LastDeletedComment.Location}}</code> {{.LastDeletedComment.LineSpan}} deleted</span>
   <span class="toast-actions">
     <form method="POST" style="margin:0;display:inline">
       <button type="submit" name="undoDelete" class="undo-btn">Undo</button>

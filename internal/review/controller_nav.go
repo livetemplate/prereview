@@ -19,22 +19,26 @@ func (c *PrereviewController) navGo(state PrereviewState, delta int) (PrereviewS
 	if it == nil {
 		return state, nil
 	}
-	state, err := c.selectFileForJump(state, it.File)
-	if err != nil {
-		return state, err
-	}
 	pos := it.Pos
+	if it.Region {
+		state = focusLive(state, pos.ID)
+	} else {
+		var err error
+		if state, err = c.selectFileForJump(state, it.File); err != nil {
+			return state, err
+		}
+		switch pos.Kind {
+		case navComment:
+			state.ScrollToCommentID = pos.ID
+		case navSuggestion:
+			state.ScrollToItemKey = "sg:" + pos.ID
+		case navQuiz:
+			state.ScrollToItemKey = "qz:" + pos.ID
+		}
+		revealItem(&state, *it)
+	}
 	state.NavAt = &pos
 	state.NavSeen = true
-	switch pos.Kind {
-	case navComment:
-		state.ScrollToCommentID = pos.ID
-	case navSuggestion:
-		state.ScrollToItemKey = "sg:" + pos.ID
-	case navQuiz:
-		state.ScrollToItemKey = "qz:" + pos.ID
-	}
-	revealItem(&state, *it)
 	return state, nil
 }
 

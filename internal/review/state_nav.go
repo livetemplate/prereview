@@ -63,9 +63,10 @@ func (a NavPos) sameItem(b NavPos) bool {
 
 // NavItem is one stop: the file to open, the side its row is on, and where it sorts.
 type NavItem struct {
-	File string
-	Side string
-	Pos  NavPos
+	File   string
+	Side   string
+	Pos    NavPos
+	Region bool // a live-site annotation (#114): a step shows the live site, not a file
 }
 
 // navItems is every open item in the review, sorted, before the kind filter.
@@ -75,7 +76,7 @@ func (s PrereviewState) navItems() []NavItem {
 		// A request (Run judges, Quiz me) is the agent's work, not a reviewer's note.
 		if !c.Resolved && c.Request == "" {
 			body := !c.IsFileLevel() && !c.IsAreaLevel()
-			out = append(out, NavItem{File: c.File, Side: c.Side, Pos: NavPos{Body: body, Line: c.ToLine, Kind: navComment, Seq: i, ID: c.ID}})
+			out = append(out, NavItem{File: c.File, Side: c.Side, Pos: NavPos{Body: body, Line: c.ToLine, Kind: navComment, Seq: i, ID: c.ID}, Region: c.IsRegionLevel()})
 		}
 	}
 	if !s.HideSuggestions {
@@ -203,7 +204,7 @@ func (s PrereviewState) NavKindLabel() string {
 // rather than pulling it out from under the reviewer (#212's rule). It counts
 // before the filter, so a filter that matches nothing still leaves the chip.
 func (s PrereviewState) ShowNav() bool {
-	if s.NavDismissed || s.ExternalMode || s.LiveView || s.ShowAllComments || s.ShowQuiz || s.ShowLibrary {
+	if s.NavDismissed || s.LiveShowing() || s.ShowAllComments || s.ShowQuiz || s.ShowLibrary {
 		return false
 	}
 	return s.NavSeen || len(s.navItems()) > 0

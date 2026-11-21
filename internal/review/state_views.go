@@ -1096,7 +1096,7 @@ func (s PrereviewState) AreaComments() []Comment {
 // CurrentURL (the page the iframe is on) rather than SelectedFile, since
 // external mode has no file. Zero-arg so the template can range over it.
 func (s PrereviewState) RegionComments() []Comment {
-	if !s.LiveAvailable || s.CurrentURL == "" {
+	if !s.LiveAvailable() || s.CurrentURL == "" {
 		return nil
 	}
 	var out []Comment
@@ -1111,6 +1111,32 @@ func (s PrereviewState) RegionComments() []Comment {
 	}
 	return out
 }
+
+// LiveAvailable reports that the session has a live site: live-only, or a
+// combined session (#114). Mount mirrors ProxyBaseURL from the controller on
+// every connect, so it is derived from that rather than stored.
+func (s PrereviewState) LiveAvailable() bool { return s.ProxyBaseURL != "" }
+
+// Combined reports a session with both files and a live site to switch between
+// (#114): the Files | Live site control, "l" and showLive key on it.
+func (s PrereviewState) Combined() bool { return s.LiveAvailable() && !s.ExternalMode }
+
+// LiveShowing reports that the live site is the surface on screen: always in a
+// live-only session, and in a combined one while Live is picked and no
+// full-page view covers it. The live stage's region toggle, overlay and
+// composer key on it.
+func (s PrereviewState) LiveShowing() bool {
+	if s.ExternalMode {
+		return true
+	}
+	return s.Combined() && s.LiveView && !s.ShowAllComments && !s.ShowQuiz && !s.ShowLibrary
+}
+
+// FileShowing reports that a file is loaded and on screen. A combined session
+// keeps the file loaded behind the live site, so CurrentDiff alone doesn't say
+// it shows; the file-only controls (Diff | File, Prev/Next, the View menu's
+// file items, the TOC) key on this.
+func (s PrereviewState) FileShowing() bool { return s.CurrentDiff != nil && !s.LiveShowing() }
 
 // FocusedComment returns the region annotation the user tapped to locate
 // (FocusedCommentID), or nil. The template reads its URL + Area to tell the
@@ -1132,7 +1158,7 @@ func (s PrereviewState) FocusedComment() *Comment {
 // scoped to the current page, so the sidebar can show annotations across
 // every page the user has visited.
 func (s PrereviewState) AllRegionComments() []Comment {
-	if !s.LiveAvailable {
+	if !s.ExternalMode {
 		return nil
 	}
 	var out []Comment
