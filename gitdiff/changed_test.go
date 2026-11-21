@@ -1,9 +1,13 @@
 package gitdiff
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // hunksOf derives the hunks the reviewer sees: each maximal run of del/add rows
@@ -258,5 +262,45 @@ func TestUnchangedFileMatchesLoadDiff(t *testing.T) {
 	}
 	if fc := UnchangedFile(repo, "../escape"); !fc.Opaque {
 		t.Errorf("a path outside the repo must not be citable: %+v", fc)
+	}
+}
+
+// The index reads only regular files inside the repo, like LoadDiff's guard: a
+// symlink out of the repo or a FIFO is opaque and never read (a FIFO would block).
+func TestChangedIndexReadsOnlyRegularFilesInside(t *testing.T) {
+	outside := t.TempDir()
+	write(t, outside, "secret.txt", "s\ne\nc\n")
+	repo := fixtureRepo(t, map[string]string{"a.go": "a\n"})
+	if err := os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(repo, "link.txt")); err != nil {
+		t.Skip("symlinks unsupported:", err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(repo, "pipe"), 0o644); err != nil {
+		t.Skip("mkfifo unsupported:", err)
+	}
+	files := []FileEntry{{Path: "link.txt", Status: "A"}, {Path: "pipe", Status: "A"}}
+	done := make(chan *ChangedIndex, 1)
+	go func() {
+		idx, err := LoadChangedIndex(repo, "HEAD", files)
+		if err != nil {
+			t.Error(err)
+		}
+		done <- idx
+	}()
+	var idx *ChangedIndex
+	select {
+	case idx = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("LoadChangedIndex blocked: it opened the FIFO")
+	}
+	for _, p := range []string{"link.txt", "pipe"} {
+		if fc := idx.Files[p]; fc == nil || !fc.Opaque {
+			t.Errorf("%s: %+v, want opaque", p, fc)
+		}
+		if fc := UnchangedFile(repo, p); !fc.Opaque {
+			t.Errorf("UnchangedFile(%s): %+v, want opaque", p, fc)
+		}
+	}
+	if n := LoadChangedIndexNoGit(repo, []string{"link.txt", "pipe"}); !n.Files["link.txt"].Opaque || !n.Files["pipe"].Opaque {
+		t.Errorf("no-git index read a symlink or FIFO: %+v %+v", n.Files["link.txt"], n.Files["pipe"])
 	}
 }

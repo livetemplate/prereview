@@ -95,10 +95,10 @@ func LoadChangedIndex(repo, base string, files []FileEntry) (*ChangedIndex, erro
 		if f.Status == "" {
 			continue
 		}
-		full := filepath.Join(repo, f.Path)
+		full, ok := indexable(repo, f.Path)
 		fc, inDiff := parsed[f.Path]
 		switch {
-		case tooLarge(full):
+		case !ok || tooLarge(full):
 			fc = &FileChanges{Opaque: true}
 		case !inDiff && f.Status == "A" && worktreeBase:
 			// Untracked: git diff is silent about it, and LoadDiff shows it as wholly
@@ -131,29 +131,48 @@ func LoadChangedIndexNoGit(repo string, paths []string) *ChangedIndex {
 	sorted := append([]string(nil), paths...)
 	sort.Strings(sorted)
 	for _, p := range sorted {
-		full := filepath.Join(repo, p)
-		if tooLarge(full) {
+		full, ok := indexable(repo, p)
+		if !ok || tooLarge(full) {
 			idx.Files[p] = &FileChanges{Opaque: true}
 		} else {
 			idx.Files[p] = addedFile(full)
 		}
-		statSig(sum, p, full)
+		statSig(sum, p, filepath.Join(repo, p))
 	}
 	idx.Fingerprint = hex.EncodeToString(sum.Sum(nil))[:16]
 	return idx
 }
 
 // UnchangedFile is the entry for a file LoadDiff shows as all context: rows on
-// both sides, no hunks. Opaque when it is binary or unreadable, or not inside repo.
+// both sides, no hunks. Opaque when it is binary, over the render cap, unreadable,
+// or not a regular file inside repo.
 func UnchangedFile(repo, path string) *FileChanges {
-	if checkWithin(repo, path) != nil {
+	full, ok := indexable(repo, path)
+	if !ok || tooLarge(full) {
 		return &FileChanges{Opaque: true}
 	}
-	rows, binary, err := readRows(filepath.Join(repo, path))
+	rows, binary, err := readRows(full)
 	if err != nil || binary {
 		return &FileChanges{Opaque: true}
 	}
 	return &FileChanges{OldLen: len(rows), NewLen: len(rows)}
+}
+
+// indexable resolves path for the index to read, with LoadDiff's guard (nothing
+// outside repo, through a symlink included) and one more: only a regular file. A
+// FIFO or device would block or never end, and a symlink is diffed by git as its
+// target's path, not as the file it points at, so its rows can't be counted from
+// disk. ok=false: treat the file as opaque (citable only as a whole file).
+func indexable(repo, path string) (full string, ok bool) {
+	full, err := ResolveWithin(repo, path)
+	if err != nil {
+		return "", false
+	}
+	fi, err := os.Lstat(filepath.Join(repo, filepath.FromSlash(path)))
+	if err != nil || !fi.Mode().IsRegular() {
+		return "", false
+	}
+	return full, true
 }
 
 // addedFile is a wholly-added file, as loadUntrackedAsAdded renders it.
