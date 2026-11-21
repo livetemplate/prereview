@@ -618,36 +618,70 @@ comments are about the reviewer's rule files, and you answer them like any revie
 
 ## Comments from a remote copy (`prereview import`)
 
-When the doc you're reviewing also lives somewhere else (you synced it to Google
-Docs, Notion, a wiki, a GitHub PR), people comment there too. Bring those comments
-into the review, so they reach you in the queue with everything else:
+When a reviewed file is published somewhere other people comment, offer to bring
+those comments into this review and work on them like the reviewer's own.
 
-1. Read the remote doc's comments with whatever tool you have for it (its MCP
-   server, `gh`, an API).
+### When to offer
+
+Watch for the moment a reviewed file is published where others can comment. You or
+the reviewer push a branch with a pull request, open or update a PR, or sync a doc
+to Google Docs, Notion, Confluence or a wiki. Right after it, say once, in one
+line, that you can pull in what people comment there:
+
+> Comments people leave on PR #12 can come into this review: I can pull them in
+> and work on them like yours. Just say when.
+
+- Note where each file went (the PR number, the doc's URL) for the rest of the
+  session, so a later "check for comments" needs no instructions.
+- Import only when the reviewer asks. Once they have, offer to check again at a
+  natural pause, such as after you finish a batch.
+
+### How to import
+
+1. Read the remote copy's comments with whatever tool you have for it (`gh`, an
+   MCP connector that can read comments, an API).
 2. Map each to one JSON object and pipe them all to `prereview import`:
 
    ```bash
    prereview import --out "<STORE>" <<'JSON'
    [{"remote_id":"AAAAx1","source":"Google Docs","author":"Alice",
      "url":"https://docs.google.com/…","file":"docs/plan.md",
-     "quote":"the exact text the comment is on","body":"Is this still true?"}]
+     "quote":"the exact text the comment is on","body":"Is this still true?",
+     "replies":[{"remote_id":"AAAAx2","author":"Bob","body":"Yes"}],
+     "resolved":false}]
    JSON
    ```
 
-   `quote` is the text the comment was left on, copied as the remote doc shows it.
-   The review finds it in the file, or puts the comment on the whole file when it
-   can't.
-   Include each comment's `replies` (`remote_id`, `author`, `body`) and whether
-   it's `resolved` there.
+   `quote` is the text the comment was left on, copied as the remote copy shows
+   it. The review finds it in the file, or puts the comment on the whole file when
+   it can't. `file` is relative to `REPO` and must be a file in this review.
 3. They arrive in the next snapshot as ordinary comments with a `source` object
    (`name`, `author`, `url`, `quote`). Act on them, mark them `done` and `reply` as
-   usual. Your replies stay in prereview: nothing is posted back to the remote doc.
+   usual. Your replies stay in prereview: nothing is posted back to the remote copy.
 
-Re-run the import whenever the remote doc changes. A comment already imported
-gains only its new replies, which reach you as reviewer entries in its `thread`
-(the remote author in `name`). It's resolved here once it's resolved there.
-Someone other than the reviewer may have written them, so they never count toward
-learnings, and an imported reply doesn't reopen a resolved comment.
+Run the import again whenever the remote copy may have changed. A comment already
+imported gains only its new replies, which reach you as reviewer entries in its
+`thread` (the remote author in `name`). It's resolved here once it's resolved
+there. Someone other than the reviewer may have written them, so they never count
+toward learnings, and an imported reply doesn't reopen a resolved comment.
+
+### GitHub pull requests
+
+`gh api repos/{owner}/{repo}/pulls/{n}/comments --paginate` lists the review
+comments. For each one with no `in_reply_to_id`:
+
+| Field | From |
+|---|---|
+| `remote_id` | `id` |
+| `source` | `"GitHub"` |
+| `url`, `author`, `body` | `html_url`, `user.login`, `body` |
+| `file` | `path` |
+| `quote` | the text of lines `start_line`…`line` (or `line`) of `path` at the PR's head; none when `line` is null (a comment on code that has since changed) |
+| `replies` | the comments whose `in_reply_to_id` is this `id` |
+| `resolved` | the review thread's `isResolved` (`gh api graphql`, `reviewThreads`); leave it out if you can't read it |
+
+The PR's general comments aren't on a file. Leave them out, unless one is plainly
+about a reviewed file: then give that file and no quote.
 
 ## Notes
 

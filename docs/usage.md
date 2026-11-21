@@ -54,9 +54,10 @@ without turning the whole group off). **Resolve all** resolves every listed
 comment that's still open, and its notice offers **Undo** until you close the
 list.
 
-**Comments from a remote copy.** When your agent synced the doc somewhere else
-(Google Docs, Notion, a wiki), it can bring the comments left there into the review
-with `prereview import`. Each shows where it came from and who wrote it, linked to
+**Comments from a remote copy.** A reviewed file may be published somewhere people
+comment: a GitHub pull request, Google Docs, Notion, a wiki. Your agent then offers
+to bring those comments into the review with `prereview import`, and does when you
+ask. Each shows where it came from and who wrote it, linked to
 the original, on the text it was left on (or on the whole file when that text has
 changed). Replies there show in its thread under their authors' names, and resolving
 it there resolves it here. They're queued for your agent like your own comments, but
