@@ -27,7 +27,16 @@ import (
 	"github.com/livetemplate/prereview/internal/skills"
 )
 
-func run(repo, base, host string, explicitHost, explicitBase bool, port int, publicURL string, agentMode bool, skillSyncs []skills.ClientSync, out string, replace bool) error {
+// externalURL, when set, adds the live site to the review (#114): the session
+// fronts it through the reverse proxy as runExternal does, alongside the files.
+func run(repo, base, host string, explicitHost, explicitBase bool, port int, publicURL string, agentMode bool, skillSyncs []skills.ClientSync, out string, replace bool, externalURL string) error {
+	var target *url.URL
+	if externalURL != "" {
+		var err error
+		if target, err = parseExternalURL(externalURL); err != nil {
+			return err
+		}
+	}
 	absRepo, err := filepath.Abs(repo)
 	if err != nil {
 		return fmt.Errorf("resolve repo path: %w", err)
@@ -36,6 +45,12 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	tgt, err := resolveTarget(absRepo)
 	if err != nil {
 		return err
+	}
+	// A single-file review scopes every list to that file, and a live-site
+	// annotation has no file, so it would vanish from the page and the agent's
+	// snapshot. Refuse rather than lose it.
+	if target != nil && tgt.SingleFile != "" {
+		return fmt.Errorf("--external can't review a single file alongside the live site: pass its directory (%s) instead", tgt.RepoPath)
 	}
 	// Normalize: RepoPath is always a directory from here on, so the
 	// .prereview/ store and every filepath.Join(absRepo, relPath) stay
@@ -153,7 +168,17 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	// AFTER the framework has rendered the "stopping…" state back to the client.
 	shutdownReq := make(chan struct{}, 1)
 
+	var proxySrv *http.Server
+	proxyBaseURL := ""
+	if target != nil {
+		if proxySrv, proxyBaseURL, err = startProxy(target, bindHost, token); err != nil {
+			return err
+		}
+	}
+
 	controller := &review.PrereviewController{
+		ProxyBaseURL: proxyBaseURL,
+		TargetURL:    externalURL,
 		RepoPath:     absRepo,
 		Base:         base,
 		NoGit:        tgt.NoGit,
@@ -264,6 +289,11 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 	for _, alt := range netaddr.AltURLs(bindHost, tsIP, magicDNS, actual.Port) {
 		fmt.Printf("ALT %s\n", token.url(alt))
 	}
+	// A combined session (#114) names the live site's proxy origin, as
+	// runExternal does.
+	if proxyBaseURL != "" {
+		fmt.Printf("PROXY %s\n", proxyBaseURL)
+	}
 	// Print the resolved review directory so the agent can locate the store
 	// under <dir>/.prereview/ even when the path was a single file (RepoPath
 	// is normalized to the file's parent). For a git repo this equals the
@@ -310,7 +340,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 		}()
 	}
 
-	return serveAndWait(srv, ln, nil, shutdownReq)
+	return serveAndWait(srv, ln, proxySrv, shutdownReq)
 }
 
 // liveQueueDepth bounds the stdout live channel's queue (#215): worst-case
@@ -443,9 +473,9 @@ func serveAndWait(srv *http.Server, ln net.Listener, extra *http.Server, shutdow
 // URLs forward cleanly — see proxy.go) plus the prereview UI that frames it and
 // overlays the region-annotation overlay. Annotations save to <out>/comments.csv.
 func runExternal(externalURL, outDir, host string, explicitHost bool, port int, agentMode bool, skillSyncs []skills.ClientSync, replace bool) error {
-	target, err := url.Parse(externalURL)
-	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
-		return fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
+	target, err := parseExternalURL(externalURL)
+	if err != nil {
+		return err
 	}
 	catchSIGPIPE()
 	if outDir == "" {
@@ -505,23 +535,10 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 		fmt.Fprintf(os.Stderr, "prereview: %v\n", err)
 	}
 
-	// The proxy gets its OWN origin (a random port on the same bind host) so
-	// the framed app's root-relative URLs resolve against the proxy root. Bind
-	// it first to learn its port before rendering the UI that iframes it.
-	proxyLn, err := net.Listen("tcp", net.JoinHostPort(bindHost, "0"))
+	proxySrv, proxyBaseURL, err := startProxy(target, bindHost, token)
 	if err != nil {
-		return fmt.Errorf("listen proxy: %w", err)
+		return err
 	}
-	proxyPort := proxyLn.Addr().(*net.TCPAddr).Port
-	proxyBaseURL := fmt.Sprintf("http://%s:%d/", bindHost, proxyPort)
-	// The proxy forwards the browser's cookies and auth headers to the target,
-	// so it takes the same token: the UI page's cookie covers this port too.
-	proxySrv := &http.Server{Handler: token.guard(proxy.NewExternalProxy(target)), ReadHeaderTimeout: 10 * time.Second}
-	go func() {
-		if err := proxySrv.Serve(proxyLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("proxy server", "err", err)
-		}
-	}()
 
 	shutdownReq := make(chan struct{}, 1)
 	controller := &review.PrereviewController{
@@ -587,6 +604,36 @@ func runExternal(externalURL, outDir, host string, explicitHost bool, port int, 
 	}
 
 	return serveAndWait(uiSrv, uiLn, proxySrv, shutdownReq)
+}
+
+// parseExternalURL validates an --external target: an absolute http(s) URL.
+func parseExternalURL(externalURL string) (*url.URL, error) {
+	target, err := url.Parse(externalURL)
+	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
+		return nil, fmt.Errorf("invalid --external URL %q: expected e.g. http://localhost:8080", externalURL)
+	}
+	return target, nil
+}
+
+// startProxy serves the reverse proxy for an --external target and returns it
+// with its base URL. The proxy gets its OWN origin (a random port on the same
+// bind host) so the framed app's root-relative URLs resolve against the proxy
+// root. It is bound before the UI renders, which iframes it.
+func startProxy(target *url.URL, bindHost string, token launchToken) (*http.Server, string, error) {
+	proxyLn, err := net.Listen("tcp", net.JoinHostPort(bindHost, "0"))
+	if err != nil {
+		return nil, "", fmt.Errorf("listen proxy: %w", err)
+	}
+	proxyBaseURL := fmt.Sprintf("http://%s:%d/", bindHost, proxyLn.Addr().(*net.TCPAddr).Port)
+	// The proxy forwards the browser's cookies and auth headers to the target,
+	// so it takes the same token: the UI page's cookie covers this port too.
+	proxySrv := &http.Server{Handler: token.guard(proxy.NewExternalProxy(target)), ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		if err := proxySrv.Serve(proxyLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("proxy server", "err", err)
+		}
+	}()
+	return proxySrv, proxyBaseURL, nil
 }
 
 func serveBytes(contentType string, body []byte) http.HandlerFunc {

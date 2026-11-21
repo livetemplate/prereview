@@ -1096,7 +1096,7 @@ func (s PrereviewState) AreaComments() []Comment {
 // CurrentURL (the page the iframe is on) rather than SelectedFile, since
 // external mode has no file. Zero-arg so the template can range over it.
 func (s PrereviewState) RegionComments() []Comment {
-	if !s.ExternalMode || s.CurrentURL == "" {
+	if !s.LiveAvailable || s.CurrentURL == "" {
 		return nil
 	}
 	var out []Comment
@@ -1132,7 +1132,7 @@ func (s PrereviewState) FocusedComment() *Comment {
 // scoped to the current page, so the sidebar can show annotations across
 // every page the user has visited.
 func (s PrereviewState) AllRegionComments() []Comment {
-	if !s.ExternalMode {
+	if !s.LiveAvailable {
 		return nil
 	}
 	var out []Comment

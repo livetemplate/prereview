@@ -203,7 +203,7 @@ func (s PrereviewState) NavKindLabel() string {
 // rather than pulling it out from under the reviewer (#212's rule). It counts
 // before the filter, so a filter that matches nothing still leaves the chip.
 func (s PrereviewState) ShowNav() bool {
-	if s.NavDismissed || s.ExternalMode || s.ShowAllComments || s.ShowQuiz || s.ShowLibrary {
+	if s.NavDismissed || s.ExternalMode || s.LiveView || s.ShowAllComments || s.ShowQuiz || s.ShowLibrary {
 		return false
 	}
 	return s.NavSeen || len(s.navItems()) > 0

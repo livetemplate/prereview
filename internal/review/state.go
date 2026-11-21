@@ -36,6 +36,14 @@ type PrereviewState struct {
 	TargetURL    string `json:"target_url"     lvt:"persist"`
 	CurrentURL   string `json:"current_url"    lvt:"persist"`
 
+	// LiveAvailable: a live surface exists in this session (live-only, or a
+	// combined #114 session that also reviews files). Set from the controller
+	// on every Mount; not persisted, for the reason SingleFile isn't.
+	LiveAvailable bool `json:"live_available"`
+	// LiveView: the live surface is the one showing in a combined session.
+	// Persisted so a reconnect mid-annotation stays on Live.
+	LiveView bool `json:"live_view" lvt:"persist"`
+
 	// File navigation.
 	Files        []gitdiff.FileEntry `json:"files"`
 	SelectedFile string              `json:"selected_file" lvt:"persist"`

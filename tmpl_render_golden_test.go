@@ -430,11 +430,12 @@ func renderFixtures() []renderFixture {
 
 	// external (live-site) mode
 	external := review.PrereviewState{
-		RepoPath:     "/repo",
-		ExternalMode: true,
-		TargetURL:    "http://localhost:3000",
-		CurrentURL:   "http://localhost:3000/",
-		ProxyBaseURL: "http://localhost:7000",
+		RepoPath:      "/repo",
+		ExternalMode:  true,
+		LiveAvailable: true,
+		TargetURL:     "http://localhost:3000",
+		CurrentURL:    "http://localhost:3000/",
+		ProxyBaseURL:  "http://localhost:7000",
 	}
 
 	// #248: live-site annotations in every agent state: worked on, answered, replied
