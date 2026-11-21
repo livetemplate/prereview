@@ -350,7 +350,7 @@ const liveQueueDepth = 8
 
 // liveFlushTimeout bounds the shutdown flush of the live channel: ample for a
 // draining reader to receive the final `end`, and short so an undrained stdout
-// doesn't eat --replace's 3s takeover deadline (stopServer).
+// adds little to a shutdown --replace waits on (stopGrace counts it).
 const liveFlushTimeout = 500 * time.Millisecond
 
 // newStreamEmitter builds the agent-mode event emitter targeting
@@ -457,16 +457,23 @@ func serveAndWait(srv *http.Server, ln net.Listener, extra *http.Server, shutdow
 		}
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	started := time.Now()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if extra != nil {
 		_ = extra.Shutdown(shutdownCtx)
 	}
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	err := srv.Shutdown(shutdownCtx)
+	slog.Info("servers stopped", "took", time.Since(started).Round(time.Millisecond))
+	if err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil
 }
+
+// shutdownTimeout bounds a server's graceful HTTP shutdown. --replace waits for
+// it (stopGrace), so the two can't drift apart.
+const shutdownTimeout = 5 * time.Second
 
 // runExternal serves `prereview --external <url>`: a reverse proxy fronting the
 // live local site on its own port (a separate origin so the app's root-relative

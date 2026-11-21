@@ -94,11 +94,19 @@ func TestE2E_ReplaceConfirmsBeforeStopping(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(one.store, "server.pid"), raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A failed takeover is about the FIRST server: startPrereview reports only
+	// the replacement's log, so print the first one's too ("servers stopped
+	// took=" says how long its shutdown ran).
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("--- first server ---\n%s", one.stderr.String())
+		}
+	})
 	urlTwo, storeTwo, srvTwo, stderrTwo := startPrereview(t, one.binary, one.repo, "--agent", "--replace")
 	t.Cleanup(func() { _ = srvTwo.Process.Kill(); _, _ = srvTwo.Process.Wait() })
 	select {
 	case <-exited:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second): // past --replace's own wait (stopGrace: shutdownTimeout + liveFlushTimeout + 1s)
 		t.Fatalf("the confirmed server did not exit after --replace\n--- replacement ---\n%s%s", stderrTwo.String(), diag())
 	}
 	if storeTwo != one.store {

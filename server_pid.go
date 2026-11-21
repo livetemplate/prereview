@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -75,9 +76,21 @@ func claimServerLock(prereviewDir string, replace bool) (release func(), err err
 	}, nil
 }
 
+// stopGrace is how long --replace lets a confirmed server shut down after
+// SIGTERM: the server's whole graceful shutdown (shutdownTimeout for its HTTP
+// servers, then liveFlushTimeout for stdout) plus a margin. Waiting less
+// declared a server stuck while it was still shutting down cleanly. stopKillWait
+// bounds the wait after the SIGKILL fallback. Variables so a test can shorten them.
+var (
+	stopGrace    = shutdownTimeout + liveFlushTimeout + time.Second
+	stopKillWait = 2 * time.Second
+)
+
 // stopServer terminates the running server pid and waits for it to exit, so the
 // replacement can claim the store cleanly. SIGTERM lets it unwind its deferred
-// cleanups (comments auto-save); Kill is the fallback if signalling fails.
+// cleanups; SIGKILL follows if it outlives stopGrace. The kill loses nothing
+// saved: the server was confirmed as this store's, and comments are written on
+// every action.
 func stopServer(pid int) error {
 	p, err := os.FindProcess(pid)
 	if err != nil {
@@ -86,17 +99,29 @@ func stopServer(pid int) error {
 	if serr := p.Signal(syscall.SIGTERM); serr != nil {
 		_ = p.Kill()
 	}
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
+	if waitExit(pid, stopGrace) {
+		return nil
+	}
+	slog.Warn("--replace: the running server outlived its shutdown; killing it", "pid", pid, "waited", stopGrace)
+	_ = p.Kill()
+	if waitExit(pid, stopKillWait) {
+		return nil
+	}
+	return fmt.Errorf("existing prereview server (pid %d) did not exit after --replace", pid)
+}
+
+// waitExit polls until pid has exited or d has passed, reporting whether it exited.
+func waitExit(pid int, d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for {
 		if !processAlive(pid) {
-			return nil
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if processAlive(pid) {
-		return fmt.Errorf("existing prereview server (pid %d) did not exit after --replace", pid)
-	}
-	return nil
 }
 
 // recordServerAddr adds this server's listen address to the store's server.pid,
