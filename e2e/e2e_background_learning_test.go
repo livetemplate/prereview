@@ -123,17 +123,17 @@ func TestE2E_BackgroundLearning(t *testing.T) {
 		p    *runningPrereview
 		diag func() string
 	}{{a, diagA}, {b, diagB}} {
+		// The notice shows as soon as the first learning lands and then counts
+		// up, so wait for the final text rather than reading it once.
 		ctx, cancel := within(s.p, 20*time.Second)
-		err := chromedp.Run(ctx, chromedp.WaitVisible(`.learn-toast`, chromedp.ByQuery))
+		err := chromedp.Run(ctx, chromedp.Poll(`(()=>{
+			const m = document.querySelector('.learn-toast .toast-msg'), b = document.querySelector('.library-trigger .lib-badge');
+			return !!m && m.textContent.trim() === '2 learnings added' && !!b && b.textContent.trim() === '2';
+		})()`, nil))
 		cancel()
 		if err != nil {
-			t.Fatalf("%s: no notice: %v%s", s.p.repo, err, s.diag())
-		}
-		if got := textOf(t, s.p, `.learn-toast .toast-msg`); got != "2 learnings added" {
-			t.Errorf("%s: notice = %q%s", s.p.repo, got, s.diag())
-		}
-		if got := textOf(t, s.p, `.library-trigger .lib-badge`); got != "2" {
-			t.Errorf("%s: badge = %q, want 2%s", s.p.repo, got, s.diag())
+			t.Errorf("%s: notice = %q, badge = %q, want \"2 learnings added\" and 2 (%v)%s", s.p.repo,
+				textOf(t, s.p, `.learn-toast .toast-msg`), textOf(t, s.p, `.library-trigger .lib-badge`), err, s.diag())
 		}
 	}
 	skill := filepath.Join(home, ".claude", "skills", "learned-writing", "SKILL.md")
