@@ -72,18 +72,19 @@
           </button>
         </form>
         {{end}}
-        {{/* #191 comprehension quiz — only offered once the agent has generated one
-             for this file; "Quiz me" in the file header is how you ask for it. */}}
-        {{if .HasQuiz}}
+        {{/* #115 Understand page — offered once there is something on it (a
+             walkthrough, or this file's quiz); the page itself is where you ask
+             for one, opened from the file header's Understand button. */}}
+        {{if .HasUnderstandContent}}
         <form method="POST">
           <button
             type="submit"
-            name="toggleQuiz"
-            class="menu-item{{if .ShowQuiz}} is-on{{end}}"
+            name="toggleUnderstand"
+            class="menu-item{{if .ShowUnderstand}} is-on{{end}}"
             role="menuitem"
           >
             <span class="menu-icon">{{template "iconQuiz"}}</span>
-            <span class="menu-label">{{if .ShowQuiz}}Back{{else}}Quiz{{end}}{{with index $.KeyHint "toggleQuiz"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
             <span class="menu-meta">{{.QuizScoreLabel}}</span>
           </button>
         </form>

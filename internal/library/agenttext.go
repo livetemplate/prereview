@@ -18,10 +18,11 @@ var (
 	ReplyText      = AgentText{Kind: "reply", Scope: "Agent replies", File: "reply.md", Noun: "reply", Use: "the thread replies you post with `prereview reply`"}
 	SuggestionText = AgentText{Kind: "suggestion", Scope: "Suggestions", File: "suggestion.md", Noun: "suggestions", Use: "the suggested edits you propose with `prereview suggest`"}
 	QuizText       = AgentText{Kind: "quiz", Scope: "Quiz questions", File: "quiz.md", Noun: "quiz questions", Use: "the quiz questions you write with `prereview quiz`"}
+	ExplainText    = AgentText{Kind: "explain", Scope: "Walkthroughs", File: "explain.md", Noun: "walkthrough", Use: "the walkthroughs of a change you write with `prereview explain`"}
 )
 
 // AgentTexts are every kind, in the order the prompt and the docs list them.
-var AgentTexts = []AgentText{ReplyText, SuggestionText, QuizText}
+var AgentTexts = []AgentText{ReplyText, SuggestionText, QuizText, ExplainText}
 
 // AgentTextFor is the kind a lesson scoped to scope is about, if any.
 func AgentTextFor(scope string) (AgentText, bool) {

@@ -19,7 +19,7 @@ import (
 	"github.com/livetemplate/prereview/internal/review"
 )
 
-// The four agent-loop flows (checks, learning, quiz, alternatives). The agent's
+// The four agent-loop flows (checks, learning, understand, alternatives). The agent's
 // side is the real binary, played by agentOut, as in the versions/thread flows.
 
 // agentOut runs the prereview binary as the coding agent, with optional stdin,
@@ -237,17 +237,19 @@ func gifLearning(allocCtx context.Context, url, repo, bin, outDir string) {
 	})
 }
 
-// quizDemo is the stand-in agent's quiz on payment.go's diff: two questions on
-// the changed lines (13–18) and one decision question about the whole file.
-const quizDemo = `{"id":"pay1","file":"payment.go","questions":[
- {"id":"q1","probe":"consequence","prompt":"If the gateway keeps failing, what does Charge return?","options":["The gateway's last error","A generic \"charge failed after retries\" error","nil"],"answer":1,"why":"Line 18 returns errors.New(...): the gateway's own error is dropped.","from_line":18,"to_line":18,"side":"new"},
- {"id":"q2","probe":"rationale","prompt":"How long does the loop wait between attempts?","options":["Exponential backoff","A fixed 50ms","It doesn't wait"],"answer":2,"why":"Lines 13–17 call Submit back to back with no delay.","from_line":13,"to_line":17,"side":"new"},
- {"id":"q3","kind":"file","probe":"decision","prompt":"What did this change decide that nobody asked for?","options":["It added a dependency","It retries every error, declines included"],"answer":1,"why":"Nothing tells a transient failure from a card decline."}]}`
+// explainDemo is the stand-in agent's walkthrough of the demo change: the retry
+// loop, its error, then the guide. It leaves architecture.png out on purpose, so
+// the derived "Not explained" step shows the check catching it.
+const explainDemo = `{"id":"walk1","summary":"Charge now retries the gateway, and the guide states a charge limit.","steps":[
+ {"title":"Charge retries the gateway","body":"Submit runs up to maxRetries times and returns on the first success. Check: every error is retried, card declines included.","anchors":[{"file":"payment.go","from_line":13,"to_line":17}]},
+ {"title":"One error for every failure","body":"After the last attempt Charge returns a generic error, so the gateway's own error is lost.","anchors":[{"file":"payment.go","from_line":18,"to_line":18}]},
+ {"title":"The guide states the limit","body":"A new Limits section: 100,000 cents per order. Nothing in the code enforces it yet.","anchors":[{"file":"guide.md","from_line":18,"to_line":20}]}]}`
 
-// gifQuiz — the comprehension quiz (#191): Quiz me asks the agent, its
-// questions appear on the lines they ask about, and answering one shows why.
-func gifQuiz(allocCtx context.Context, url, repo, bin, outDir string) {
-	withCtx(allocCtx, "gif:quiz", func(ctx context.Context) error {
+// gifUnderstand — the Understand page (#115): Explain this change asks the agent
+// for a walkthrough, its steps arrive with every cited line checked and the
+// left-out change listed last, and the step bar walks the change file to file.
+func gifUnderstand(allocCtx context.Context, url, repo, bin, outDir string) {
+	withCtx(allocCtx, "gif:understand", func(ctx context.Context) error {
 		rec := &gifRec{}
 		if err := chromedp.Run(ctx, base(url, "payment.go", 1280, 800)...); err != nil {
 			return err
@@ -255,42 +257,61 @@ func gifQuiz(allocCtx context.Context, url, repo, bin, outDir string) {
 		step(ctx, settled())
 		check(rec.capture(ctx, 120)) // the diff
 		step(ctx,
-			chromedp.Click(`button[name="requestQuiz"]`, chromedp.ByQuery),
-			chromedp.WaitVisible(`.quiz-trigger.is-pending`, chromedp.ByQuery),
+			chromedp.Click(`.quiz-trigger[name="toggleUnderstand"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`button[name="requestExplain"]`, chromedp.ByQuery),
+			chromedp.Click(`button[name="requestExplain"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.understand .request-pending`, chromedp.ByQuery),
 			chromedp.Sleep(200*time.Millisecond),
 		)
 		step(ctx, settled())
-		check(rec.capture(ctx, 130)) // quiz requested
+		check(rec.capture(ctx, 140)) // walkthrough requested
 
-		req, err := requestComment(bin, repo, "quiz")
+		req, err := requestComment(bin, repo, "explain")
 		if err != nil {
 			return err
 		}
-		if _, err := agentOut(bin, quizDemo, "quiz", "--out", repo, "--file", "-"); err != nil {
+		if _, err := agentOut(bin, explainDemo, "explain", "--out", repo, "--file", "-"); err != nil {
 			return err
 		}
 		if _, err := agentOut(bin, "", "done", "--out", repo, req.ID); err != nil {
 			return err
 		}
-		q1 := `.quiz-card[data-key='quiz-q1']`
 		step(ctx,
 			clearFlash(),
-			chromedp.WaitReady(q1, chromedp.ByQuery),
-			scrollTo(q1),
+			chromedp.WaitVisible(`.walk-step-unexplained`, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 		)
 		step(ctx, settled())
-		check(rec.capture(ctx, 220)) // questions on the lines they ask about
+		check(rec.capture(ctx, 260)) // the steps, and the change no step explains
 
 		step(ctx,
-			clickJS(q1+` .quiz-options li:nth-child(2) button[name='answerQuestion']`),
-			chromedp.WaitReady(q1+` .quiz-why`, chromedp.ByQuery),
-			scrollTo(q1),
+			chromedp.Click(`.walk-start button[name="startWalkthrough"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.walk-bar`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.code .step-mark`, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 		)
 		step(ctx, settled())
-		check(rec.capture(ctx, 280)) // answered, with the explanation
-		return rec.encode(filepath.Join(outDir, "quiz.gif"))
+		check(rec.capture(ctx, 220)) // step 1: the bar and the step's marker
+
+		for _, want := range []string{"Step 3 of 4", "Step 4 of 4"} {
+			var label string
+			for range 4 { // a step can have more than one stop
+				step(ctx,
+					clickJS(`.walk-bar button[name="walkNext"]`),
+					chromedp.Sleep(400*time.Millisecond),
+					chromedp.Text(`.walk-bar .ann-nav-label`, &label, chromedp.ByQuery),
+				)
+				if strings.TrimSpace(label) == want {
+					break
+				}
+			}
+			if strings.TrimSpace(label) != want {
+				return fmt.Errorf("the walk never reached %q (bar reads %q)", want, label)
+			}
+			step(ctx, settled())
+			check(rec.capture(ctx, 220)) // into guide.md, then the left-out image
+		}
+		return rec.encode(filepath.Join(outDir, "understand.gif"))
 	})
 }
 

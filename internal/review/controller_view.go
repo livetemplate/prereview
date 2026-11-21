@@ -410,7 +410,7 @@ func clearScrollTargets(state *PrereviewState) {
 // all-comments overview, the quiz, and the Library. Every jump into a file calls it.
 func closeFullViews(state *PrereviewState) {
 	state.ShowAllComments = false
-	state.ShowQuiz = false
+	state.ShowUnderstand = false
 	state.ShowLibrary = false
 }
 

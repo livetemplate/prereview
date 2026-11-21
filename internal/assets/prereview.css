@@ -1161,8 +1161,7 @@ header.file-head .file-head-actions {
   background: transparent; border: 0; cursor: pointer;
 }
 .prompt-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-/* #211: the footer link under the suggestion prompts, keyed on its own class so
-   the quiz picker (which shares .prompts-panel) is untouched. */
+/* #211: the footer link under the suggestion prompts, keyed on its own class. */
 .prompts-more {
   display: block; margin-top: 0.25rem; padding: 0.4rem 0.5rem 0.2rem;
   border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted);
@@ -3591,6 +3590,37 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
    exactly what made a real reviewer tap twice and queue a duplicate. */
 .quiz-trigger.is-pending { opacity: 0.6; cursor: default; }
 .quiz-trigger.is-pending svg { color: var(--pico-muted-color); }
+/* #115 the Understand page: tabs over the quiz page's frame, then the walkthrough. */
+.understand-tabs { margin: 0 0.5rem 0.75rem; }
+.walk-summary { margin: 0 0.5rem 0.75rem; }
+.walk-stale {
+  margin: 0 0.5rem 0.75rem; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--pr-del) 45%, transparent);
+  background: color-mix(in srgb, var(--pr-del) 8%, var(--surface));
+}
+.walk-steps, .walk-steps > li, .walk-anchors, .walk-anchors > li { list-style: none; }
+.walk-steps { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.walk-step { padding: 0.7rem; border: 1px solid var(--pr-comment-bd); border-radius: var(--radius-sm); background: var(--pr-comment-bg); }
+.walk-title { margin: 0 0 0.35rem; font-weight: 600; display: flex; gap: 0.5rem; align-items: baseline; }
+.walk-num { flex: none; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.walk-body { margin: 0 0 0.5rem; white-space: pre-wrap; }
+.walk-step-unexplained { border-style: dashed; border-color: color-mix(in srgb, var(--pr-del) 55%, transparent); }
+.walk-anchors { padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.quiz-ask { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.quiz .quiz-ask button, .quiz .quiz-empty button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.request-pending { opacity: 0.6; font-size: 0.85rem; }
+.walk-start { margin: 0 0.5rem 0.9rem; }
+.walk-start button { margin: 0; padding: 0.35rem 0.9rem; font-size: 0.85rem; width: auto; }
+.walk-title-text { flex: 1; }
+.walk-from { margin: 0 0 0 auto; }
+.walk-from button { margin: 0; padding: 0.1rem 0.5rem; font-size: 0.72rem; min-height: 0; width: auto; font-weight: 400; }
+/* #115 A3: a step's marker above its first cited line (the step bar is after .ann-nav). */
+.code .step-mark {
+  padding: 0.15rem 0.6rem; font-size: 0.75rem; font-weight: 600; line-height: 1.4;
+  font-family: var(--sans); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-top: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
 
 /* The quiz question as an INLINE ANNOTATION — it renders in a diff row next to
    comment and suggestion cards, at the file head, and in the overview, so it
@@ -3627,11 +3657,35 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .ann-nav form { margin: 0; }
 .ann-nav button { margin: 0; padding: 0.15rem 0.5rem; min-height: 0; font-size: 0.75rem; width: auto; }
 .ann-nav .ann-nav-step { display: inline-flex; align-items: center; padding: 0.15rem 0.35rem; }
+.ann-nav button[disabled] { opacity: 0.35; }
 .ann-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ann-nav ~ .ck-strip:not(.is-idle) { top: 2.2rem; } /* --ann-nav-h */
 .ann-nav-kind > button { display: inline-flex; align-items: center; gap: 0.2rem; }
 .ann-nav-kind .tb-dropdown-panel { left: 0; right: auto; min-width: 10rem; } /* opens rightward: the chip sits left of centre */
 .ann-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
+/* #115 A3: the walkthrough's step bar, an .ann-nav variant. After the .ann-nav rules
+   on purpose: at equal specificity they would win (fixed height, min-height: 0). */
+/* Two rows: the controls on one line (‹ Step n of N ›, then Steps ×, as the
+   open-items stepper lays them out), then what the step says, full width. */
+.ann-nav.walk-bar {
+  height: auto; flex-direction: column; align-items: stretch; gap: 0.3rem;
+  padding: 0.35rem 0.6rem 0.45rem;
+}
+.walk-bar-nav { display: flex; align-items: center; gap: 0.4rem; }
+.walk-bar-nav button { min-height: 2rem; }
+.walk-bar-nav .ann-nav-step { justify-content: center; min-width: 2.4rem; }
+.walk-bar-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; font-size: 0.82rem; line-height: 1.35; }
+.walk-bar-at { font-size: 0.75rem; color: var(--accent); overflow-wrap: anywhere; }
+.walk-bar-at.quiz-ungrounded { color: var(--pr-del); }
+.walk-bar-body {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  color: var(--pico-muted-color); white-space: pre-wrap;
+}
+@media (pointer: coarse) {
+  .walk-bar-nav button { min-height: 40px; min-width: 40px; }
+  .walk-bar-nav .ann-nav-step { min-width: 48px; }
+}
+
 /* The stepper centres its target, and the sticky bar sits above it: keep a quiz
    card clear of the bar when the head is scrolled to. */
 .quiz-card { scroll-margin-top: 7rem; }

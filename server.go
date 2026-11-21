@@ -187,6 +187,7 @@ func run(repo, base, host string, explicitHost, explicitBase bool, port int, pub
 		UIPrefsPath:  uiPrefsPath(),
 		PromptsDir:   userPromptsDir(),
 		QuizzesDir:   userQuizzesDir(),
+		ExplainDir:   userExplainDir(),
 		ShortcutsDir: userShortcutsDir(),
 		ChecksDir:    userChecksDir(),
 		LibraryDir:   library.Dir(),

@@ -31,8 +31,11 @@ const (
 	// i.e. exactly these lines were edited in place. A deterministic "likely
 	// addressed" signal, distinct from outdated (region deleted/restructured). It
 	// stays actionable (a badge, not a drop): edited != correctly addressed.
-	anchorEdited   = "edited"
-	anchorContextN = 3 // lines of before/after context kept for disambiguation
+	anchorEdited = "edited"
+	// anchorUngrounded: agent-written text (a walkthrough step, a quiz question)
+	// cites a line or file the review doesn't have.
+	anchorUngrounded = "ungrounded"
+	anchorContextN   = 3 // lines of before/after context kept for disambiguation
 )
 
 // Comment kinds — mirror csv.ColKind values. "" / commentKindLine for

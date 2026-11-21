@@ -59,8 +59,20 @@ batch and exits on the terminating `end` event — otherwise just re-read
 `prereview comments --json`. A `files_changed` event in that stream means the
 reviewer edited or restored the listed files on disk: re-read them before editing.
 
-If a comment asks for a comprehension quiz (the reviewer clicked "Quiz me"; the
-comment is marked `"request":"quiz"`), do
+If a comment asks for a walkthrough of the whole change (marked
+`"request":"explain"`), do not edit files and do not suggest edits. Answer with:
+
+    prereview explain --out <STORE> --file walkthrough.json
+
+Write the steps in reading order (usually the data first, then the logic, its
+callers, the tests). Each step has a `title`, a `body` (what changed, why, what to
+check) and `anchors`: `{"file", "from_line", "to_line", "side"}` for lines, or
+`{"file", "kind": "file"}` for a whole file. prereview checks every cited line and
+lists the changes no step cites, so read the files before you cite them. Then mark
+the comment done and reply with a one-line summary.
+
+If a comment asks for a comprehension quiz (the reviewer asked from the Understand
+page's Quiz tab; the comment is marked `"request":"quiz"`), do
 not edit files and do not suggest edits - reply with a quiz instead:
 
     prereview quiz --out <STORE> --file quiz.json

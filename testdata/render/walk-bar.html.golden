@@ -72,7 +72,7 @@
     lvt-key="a"
     lvt-mod:skip-when-typing
   ></span><span
-    lvt-on:window:keydown="toggleQuiz"
+    lvt-on:window:keydown="toggleUnderstand"
     lvt-key="z"
     lvt-mod:skip-when-typing
   ></span><span
@@ -246,6 +246,19 @@
         
         
         
+        
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleUnderstand"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
+            <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
+            <span class="menu-meta"></span>
+          </button>
+        </form>
         
         
         
@@ -469,6 +482,19 @@
   
   
   
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleUnderstand"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
+      <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
+      <span class="menu-meta"></span>
+    </button>
+  </form>
+  
   
   
   
@@ -593,6 +619,13 @@
   </div>
   
   
+  <div class="drawer-scope">
+    <form method="POST">
+      <button type="submit" name="toggleDrawerOrder" class="scope-toggle is-on" title="Sort the files the way the walkthrough reads them">
+        Walkthrough order · sort A–Z
+      </button>
+    </form>
+  </div>
   <div class="drawer-body">
     
     <ul class="file-tree"><li class="tree-file" data-key="app.go">
@@ -657,27 +690,7 @@
     
     
     
-    
-    <div
-      class="tb-dropdown prompts-dropdown"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
-      <button
-        type="button"
-        class="quiz-trigger"
-        aria-haspopup="menu"
-        title="Ask the agent for a comprehension quiz about this diff"
-      ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="quiz-trigger-label">Quiz me</span></button>
-      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Quiz prompts">
-        
-        <form method="POST"><input type="hidden" name="slug" value="comprehension"><button type="submit" name="requestQuiz" class="prompt-row" title="generate a quiz">Quiz me on this diff</button></form>
-        
-        <form method="POST"><input type="hidden" name="slug" value="security"><button type="submit" name="requestQuiz" class="prompt-row" title="security quiz">Quiz me like a security reviewer</button></form>
-        
-      </div>
-    </div>
-    
+    <form method="POST" style="margin:0"><button type="submit" name="toggleUnderstand" class="quiz-trigger" title="Walk through the whole change, and quiz yourself on it"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="quiz-trigger-label">Understand</span></button></form>
     
     
     
@@ -686,6 +699,31 @@
     </span>
   </header>
   
+  <div class="ann-nav walk-bar" role="navigation" aria-label="Walkthrough">
+    <div class="walk-bar-nav">
+      <form method="POST"><button type="submit" name="walkPrev" class="outline ann-nav-step" aria-label="Previous step" disabled><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M15 6l-6 6 6 6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button></form>
+      <span class="ann-nav-label">Step 1 of 2</span>
+      <form method="POST"><button type="submit" name="walkNext" class="outline ann-nav-step" aria-label="Next step"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M9 6l6 6-6 6"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  fill="none"
+/></svg></button></form>
+      <span class="ann-nav-actions">
+        <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="toggleUnderstand" class="outline" title="See every step">Steps</button></form>
+        <form method="POST"><button type="submit" name="endWalkthrough" class="outline" aria-label="Stop the walkthrough" title="Stop the walkthrough">×</button></form>
+      </span>
+    </div>
+    <div class="walk-bar-text"><strong class="walk-bar-title">The retry budget</strong><span class="walk-bar-at">app.go L2-L3</span><span class="walk-bar-body">A new field caps the retries.
+Check the default.</span></div>
+  </div>
   
   
   
@@ -710,7 +748,7 @@
        data-path="app.go"
        lvt-fx:scroll="reset-on:data-path"
        lvt-fx:text-select="selectText"
-       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row" data-key="row-L1-1"><div tabindex="0"
+       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row" data-key="row-L1-1"><div class="step-mark">Step 1: The retry budget</div><div tabindex="0"
               lvt-on:click="selectLine"
               lvt-on:keydown="selectLine"
               lvt-key="Enter"
@@ -726,7 +764,7 @@
               data-side="old"
               class="line del"
               data-key="L2-0"><span class="gutter"><span class="gutter-mark">- </span>2</span><span class="content chroma" data-line-text>var x = 1</span></div></div>
-<div class="line-row" data-key="row-L0-2"><div tabindex="0"
+<div class="line-row" data-key="row-L0-2"><div class="step-mark">Step 1: The retry budget</div><div tabindex="0"
               lvt-on:click="selectLine"
               lvt-on:keydown="selectLine"
               lvt-key="Enter"
@@ -795,7 +833,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
-    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Comprehension quiz</dd></div>
+    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>

@@ -177,17 +177,38 @@ suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
 Show" on its line, and **Show** brings it back. The suggestion stays open for the
 agent either way.
 
-## Quiz
+## Understand
 
-**Quiz me** in the file header asks your agent for a short multiple-choice quiz on
-the diff you're about to accept. The questions appear on the lines they ask about
-(a question about the whole file sits at the top), and choosing an answer shows
-whether it's right and why. Every question cites a line range, and prereview checks
-that the lines are in the diff, so a question about code that isn't there is marked
-instead of shown as fact. **Overview** lists every question with your score.
+**Understand** in the file header (or <kbd>z</kbd>) opens a page for getting to
+grips with a change before you accept it. It has two tabs: a walkthrough of the
+whole change, and a quiz on the open file.
 
-To add your own quiz prompts, put Markdown files in
-`~/.config/prereview/quizzes/` (see `PREREVIEW_QUIZZES_DIR` in
+**Walkthrough.** **Explain this change** asks your agent to walk you through the
+change in the order it makes sense to read: usually the data first, then the logic,
+its callers and the tests. Each step says what changed and why, and links to the
+lines it cites. prereview checks every cited line against the diff, in every file,
+and marks one it can't find with ⚠. When the files change after the walkthrough was
+written, the page says so, and **Explain again** asks for a fresh one.
+
+**Start the walkthrough** (or **Walk from here** on a step) opens the step's file at
+the cited line. The step bar on top shows the step and why it matters; **‹** and
+**›** move to the next cited place, file to file, and **×** puts the bar away. Each
+step's title also marks its first line in the diff. **A–Z · sort in walkthrough
+order** in the file drawer lists the files in the order the walkthrough reads them.
+
+**Not explained.** prereview lists every changed hunk no step cites as the last
+step, so walking to the end shows you what the walkthrough left out. The page says
+how many there are.
+
+**Quiz.** The Quiz tab asks your agent for a short multiple-choice quiz on the open
+file's diff. The questions also appear on the lines they ask about (a question about
+the whole file sits at the top), and choosing an answer shows whether it's right and
+why. Every question cites a line range that prereview checks, so a question about
+code that isn't there is marked instead of shown as fact.
+
+To add your own walkthrough or quiz prompts, put Markdown files in
+`~/.config/prereview/explain/` or `~/.config/prereview/quizzes/` (see
+`PREREVIEW_EXPLAIN_DIR` and `PREREVIEW_QUIZZES_DIR` in
 [`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment)).
 
 ## Checks
@@ -309,7 +330,7 @@ Pass when the first paragraph says what changes for the reader.
   **Show in file** when the critique quotes a passage.
 - The request shows on the file as one line, such as "Asked your agent to run this
   file's judges". **Read more** opens the prompt your agent received. A benchmark
-  run and **Quiz me** show their requests the same way.
+  run, a quiz and **Explain this change** show their requests the same way.
 - A failing judge joins the bar's list (tagged *judge*). Pick it to see its critique,
   queue it as a comment, or answer **Agree** / **Disagree**. Your answers are how a
   judge earns trust; the Checks page shows how often each one agrees with you.

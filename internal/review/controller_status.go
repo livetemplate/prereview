@@ -49,6 +49,7 @@ func signalFingerprint(statusFP string, c *PrereviewController) string {
 		statusFingerprint(AppliedPath(c.CSVPath)) + "|" +
 		statusFingerprint(RevertedPath(c.CSVPath)) + "|" +
 		statusFingerprint(c.quizPath()) + "|" +
+		statusFingerprint(ExplainPath(c.CSVPath)) + "|" +
 		statusFingerprint(JudgmentsPath(c.CSVPath))
 }
 
@@ -200,6 +201,12 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// ...and on a quiz.jsonl change (#191): reload the quizzes and re-ground them
 	// against the live diff, so a freshly generated quiz appears with no reload.
 	c.applyQuiz(&state)
+	// ...and on an explain.jsonl change (#115): reload the walkthrough and ground
+	// it. Gated like judgments below: the fan-out fires for every agent signal.
+	// (Edits to the reviewed files reach it through RefreshDiff → Mount.)
+	if statusFingerprint(ExplainPath(c.CSVPath)) != state.ExplainSeen {
+		c.applyExplain(&state)
+	}
 	// ...and on a judgments.jsonl change (M2): re-apply checks so a fresh judge
 	// verdict replaces "not run" / the waiting state with no reload. Gated on that
 	// file's fingerprint: the watcher fans out for every agent signal, and most

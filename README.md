@@ -32,8 +32,8 @@ as you save it. Nothing is committed, and nothing leaves your machine.
   you read.
 - **Check a UI.** Drag a box on a screenshot, a diagram or your running dev site,
   and say what is wrong in that spot.
-- **Understand a change you didn't write.** Quiz yourself on the diff, or ask the
-  agent a question in a comment thread.
+- **Understand a change you didn't write.** Ask the agent to walk you through it,
+  step by step, quiz yourself on the diff, or ask a question in a comment thread.
 - **Teach the agent your preferences.** Your comments become lessons, then skills,
   checks and judges, so you don't have to make the same comment twice (see
   [The learning loop](#the-learning-loop)).
@@ -97,10 +97,13 @@ write your own. A judge is a yes/no rubric your agent answers for the whole file
 
 <p align="center"><img src="docs/checks.gif" alt="A filler word flagged on its line, the Checks page, and a judge's verdict from the agent" width="760"></p>
 
-**Quiz yourself on the diff.** Quiz me asks the agent for questions about the change.
-Each question sits on the lines it asks about, and prereview checks those lines exist.
+**Walk through the change, and quiz yourself on it.** **Understand** asks the agent
+to walk you through the whole change in the order it makes sense to read. A step bar
+takes you from step to step, file to file. prereview checks every line a step cites,
+and lists the changes no step explains as the last step. The Quiz tab asks for
+questions about the diff, each on the lines it asks about.
 
-<p align="center"><img src="docs/quiz.gif" alt="Quiz me, questions appearing on the changed lines, and an answer with its explanation" width="760"></p>
+<p align="center"><img src="docs/understand.gif" alt="Explain this change, the agent's walkthrough with one change no step explains, then the step bar walking the change file to file" width="760"></p>
 
 **Search, themes and your phone.** <kbd>⌘K</kbd> searches file names and contents.
 Three colour schemes come in light and dark. On a remote box prereview binds your

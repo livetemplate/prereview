@@ -48,7 +48,7 @@ const (
 func MemoryBlock(gen []Skill) string {
 	var b strings.Builder
 	b.WriteString(blockStart + "\n")
-	b.WriteString("The user's writing preferences, learned by prereview from their review comments, are skills. Before you write or edit prose (docs, plans, READMEs, release notes, commit and PR messages, and the replies, suggestions and quiz questions you send through prereview), load the matching one and follow it:\n\n")
+	b.WriteString("The user's writing preferences, learned by prereview from their review comments, are skills. Before you write or edit prose (docs, plans, READMEs, release notes, commit and PR messages, and the replies, suggestions, quiz questions and walkthroughs you send through prereview), load the matching one and follow it:\n\n")
 	for _, s := range gen {
 		switch {
 		case s.Extends == "":

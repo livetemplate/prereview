@@ -329,11 +329,12 @@ alongside the `done` mark:
 prereview reply --out "<STORE>" <comment-or-suggestion-id> --body "Renamed to userToken and updated the 3 call sites."
 ```
 
-**Write replies, suggestions and quiz questions with the reviewer's skills.** They
-are prose the reviewer reads, so their learned preferences apply. Each snapshot's
-`write_with` names the skills for each: `write_with.reply`, `write_with.suggestion`
-and `write_with.quiz` (absent until a skill exists). Load those skills before you
-write one. `reply`, `suggest` and `quiz` then check what you sent against the
+**Write replies, suggestions, quiz questions and walkthroughs with the reviewer's
+skills.** They are prose the reviewer reads, so their learned preferences apply.
+Each snapshot's `write_with` names the skills for each: `write_with.reply`,
+`write_with.suggestion`, `write_with.quiz` and `write_with.explain` (absent until a
+skill exists). Load those skills before you write one. `reply`, `suggest`, `quiz`
+and `explain` then check what you sent against the
 reviewer's checks and print any findings and judge questions to stderr. They never
 fail on a finding, so read them and apply them next time. A reply can't be revised
 once posted, so check it first: `prereview reply --check` takes the same arguments
@@ -457,10 +458,38 @@ whose thread ends with you reads as handled (see the `reject` rule above):
 If the review ends with a fork unpicked, apply neither: tell the user in chat which
 comment still waits on a pick.
 
+## Walkthroughs (`prereview explain`, #115)
+
+The reviewer can ask you to **walk them through the whole change** ("Explain this
+change" on the Understand page). It arrives as a `kind=file` comment marked
+`"request":"explain"`, filed on whichever file was open; its body says the scope is
+the whole change. It wants **neither a fix nor a suggestion**: answer with
+`prereview explain`, and edit no files.
+
+```bash
+prereview explain --out "<STORE>" --file walkthrough.json    # or pipe JSON on stdin
+```
+
+Then `done` the request comment and `reply` a one-liner ("8 steps, schema first").
+
+Write the steps in the order you would explain the change to a colleague: usually
+the data or interface first, then the logic, then its callers, then the tests. Each
+step has a `title` and a `body` saying what changed, why, and what to check. Its
+`anchors` are the lines it is about: `file`, `from_line`, `to_line`, and `side`
+(`"new"` by default, `"old"` for removed lines). Use `"kind": "file"` for a whole
+file: a binary, or a step about a file as a whole. The format is in
+[reference.md](./reference.md#agent-subcommands).
+
+prereview checks every anchor against the diff, in every file, and marks one it
+can't find with ⚠, so **read before you cite** and don't guess line numbers. It also
+lists every changed hunk no step cites as a last step, "Not explained", which the
+reviewer walks too. Cite each change worth reading; citing a whole text file does
+not explain its changes. To revise, re-submit with the same `id`.
+
 ## Comprehension quizzes (`prereview quiz`, #191)
 
-The reviewer can also ask for a **comprehension quiz** about a file's diff, via
-"Quiz me" in the file header. Like a prompt it arrives as a `kind=file` comment
+The reviewer can also ask for a **comprehension quiz** about a file's diff, from the
+Quiz tab of the Understand page. Like a prompt it arrives as a `kind=file` comment
 (marked `"request":"quiz"`), and its body spells out the contract — but it wants
 **neither a fix nor a suggestion**. Answer with `prereview quiz`, never `prereview
 suggest`, and do not edit any files.

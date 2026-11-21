@@ -1130,7 +1130,7 @@ func (s PrereviewState) LiveShowing() bool {
 	if s.ExternalMode {
 		return true
 	}
-	return s.Combined() && s.LiveView && !s.ShowAllComments && !s.ShowQuiz && !s.ShowLibrary
+	return s.Combined() && s.LiveView && !s.ShowAllComments && !s.ShowUnderstand && !s.ShowLibrary
 }
 
 // LivePageLabel names the framed page in a combined session's header: the

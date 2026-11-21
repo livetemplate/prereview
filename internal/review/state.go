@@ -252,9 +252,11 @@ type PrereviewState struct {
 
 	// QuizPrompts is the #191 quiz-prompt library — built-ins plus the user's
 	// ~/.config/prereview/quizzes/ overlay — loaded every Mount like Prompts.
-	// Drives the file-header "Quiz me" control: one prompt renders a plain
-	// one-tap button, several render a picker.
+	// The Understand page's Quiz tab shows one button per prompt.
 	QuizPrompts []Prompt `json:"quiz_prompts"`
+	// ExplainPrompts is the #115 walkthrough-prompt library, loaded like
+	// QuizPrompts. The first one is what "Explain this change" sends.
+	ExplainPrompts []Prompt `json:"explain_prompts"`
 
 	// Shortcuts are the composer's one-tap chips (#204), loaded each Mount in the
 	// order they show (most used first). ComposerNonce is bumped only by a chip tap:
@@ -444,11 +446,13 @@ type PrereviewState struct {
 	// back in the diff view.
 	ShowAllComments bool `json:"show_all_comments"`
 
-	// ShowQuiz toggles the #191 comprehension-quiz view for the selected file
-	// (replaces the diff viewer, like ShowAllComments). Not persisted, and reset
-	// by every navigation action for the same reason: a view that survives a jump
-	// to another file would strand the reviewer somewhere they didn't ask to be.
-	ShowQuiz bool `json:"show_quiz"`
+	// ShowUnderstand shows the Understand page (#115): the walkthrough of the
+	// whole change and the selected file's quiz (#191), in place of the diff
+	// viewer like ShowAllComments. Not persisted, and reset by every navigation
+	// action: a view that survives a jump would strand the reviewer somewhere
+	// they didn't ask to be. UnderstandTab is "" (Walkthrough) or "quiz".
+	ShowUnderstand bool   `json:"show_understand"`
+	UnderstandTab  string `json:"understand_tab"`
 
 	// Quizzes are the agent-written comprehension quizzes (.prereview/quiz.jsonl),
 	// and QuizAnswers the reviewer's responses keyed "<quizID>\x00<questionID>".
@@ -456,6 +460,26 @@ type PrereviewState struct {
 	// Mount and on each watcher tick, exactly like Comments and Suggestions.
 	Quizzes     []Quiz                `json:"quizzes"`
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
+
+	// Explanations are the agent's walkthroughs of the change (#115,
+	// .prereview/explain.jsonl), newest last, grounded by applyExplain. Re-read
+	// like Quizzes, never persisted. ExplainSeen is explain.jsonl's fingerprint at
+	// that load, so the watcher reloads only when the file moved.
+	Explanations []Explanation `json:"explanations"`
+	ExplainSeen  string        `json:"explain_seen"`
+	// NotExplained is the current walkthrough's check (#115 A4): every changed
+	// hunk no step cites, as anchors (notExplained). walkSteps makes it the last
+	// step, so the walk visits what the agent left out.
+	NotExplained []Anchor `json:"not_explained"`
+	// The walkthrough in progress (#115 A3): WalkExplanation names the one being
+	// walked ("" = no walk), so a replaced walkthrough ends the walk instead of
+	// landing on a stranger's stop; WalkStep/WalkAnchor is the stop shown
+	// (walkPos). DrawerWalkOrder sorts the file drawer by the step that first
+	// cites each file. Session view state.
+	WalkExplanation string `json:"walk_explanation"`
+	WalkStep        int    `json:"walk_step"`
+	WalkAnchor      int    `json:"walk_anchor"`
+	DrawerWalkOrder bool   `json:"drawer_walk_order"`
 
 	// NavDismissed hides the open-items stepper (#193) for this session. The bar
 	// appears whenever the review has open items, so it is not behind a menu, but it
@@ -979,16 +1003,23 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	// view or rendered Markdown; an anchor that drifted). Its card hangs on that
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
+	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, s.pinnedRows())
+}
+
+// pinnedRows reports the rows a fold must never hide, because something hangs on
+// them: a card (#231), a row's hidden-suggestions "Show" marker (#233), the
+// selected check's findings (only that one check, so a rule with hundreds of hits
+// can't unfold the file until you pick it), and a walkthrough step's marker
+// (#115). Every fold reads this one set.
+func (s PrereviewState) pinnedRows() func(gitdiff.DiffLine) bool {
 	cards := s.AnnotationCountLines()
-	// A row whose suggestions are all hidden keeps its "Show" marker in place (#233).
 	hidden := s.HiddenSuggestionLines()
-	// The selected check's findings stay visible too — only that one check, so a
-	// rule with hundreds of hits can't unfold the file until you pick it.
 	found := s.findingLines()
-	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, func(l gitdiff.DiffLine) bool {
+	marks := s.StepMarkLines()
+	return func(l gitdiff.DiffLine) bool {
 		k := rowKey(l)
-		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum])
-	})
+		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)] != ""
+	}
 }
 
 // rowKey is a diff row's "<line>-<side>" key — the template's $rowkey, built

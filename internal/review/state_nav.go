@@ -204,10 +204,19 @@ func (s PrereviewState) NavKindLabel() string {
 // rather than pulling it out from under the reviewer (#212's rule). It counts
 // before the filter, so a filter that matches nothing still leaves the chip.
 func (s PrereviewState) ShowNav() bool {
-	if s.NavDismissed || s.LiveShowing() || s.ShowAllComments || s.ShowQuiz || s.ShowLibrary {
+	// Hidden while walking a walkthrough (#115): its step bar takes the slot, and
+	// two bars would stack on a phone.
+	_, _, _, walking := s.walkPos()
+	if s.NavDismissed || s.fileCovered() || walking {
 		return false
 	}
 	return s.NavSeen || len(s.navItems()) > 0
+}
+
+// fileCovered: something covers the file view: a full-page view (the views
+// closeFullViews closes) or the live site.
+func (s PrereviewState) fileCovered() bool {
+	return s.ShowAllComments || s.ShowUnderstand || s.ShowLibrary || s.LiveShowing()
 }
 
 // noteNav sets NavSeen once the review has open items. Called wherever items

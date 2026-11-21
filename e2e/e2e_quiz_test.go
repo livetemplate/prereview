@@ -52,10 +52,17 @@ const quizJSON = `{
 // the agent does in production.
 func submitQuiz(t *testing.T, p *runningPrereview, payload string) {
 	t.Helper()
-	cmd := exec.Command(p.binary, "quiz", "--out", p.repo, "--file", "-")
+	runAgentVerb(t, p, "quiz", payload)
+}
+
+// runAgentVerb plays the agent: `prereview <verb> --out <repo>` with payload on
+// stdin (quiz, explain).
+func runAgentVerb(t *testing.T, p *runningPrereview, verb, payload string) {
+	t.Helper()
+	cmd := exec.Command(p.binary, verb, "--out", p.repo, "--file", "-")
 	cmd.Stdin = strings.NewReader(payload)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("prereview quiz: %v\n%s", err, out)
+		t.Fatalf("prereview %s: %v\n%s", verb, err, out)
 	}
 }
 
@@ -87,7 +94,7 @@ func evalStr(t *testing.T, p *runningPrereview, js string) string {
 func waitForQuizEntry(t *testing.T, p *runningPrereview) {
 	t.Helper()
 	for i := 0; i < 60; i++ {
-		if evalInt(t, p, `document.querySelectorAll("button[name='toggleQuiz']").length`) > 0 {
+		if evalInt(t, p, `document.querySelectorAll(".tb-dropdown-panel button[name='toggleUnderstand']").length`) > 0 {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -98,7 +105,7 @@ func waitForQuizEntry(t *testing.T, p *runningPrereview) {
 // openQuiz opens the View dropdown and clicks the quiz entry.
 func openQuiz(t *testing.T, p *runningPrereview) {
 	t.Helper()
-	p.openViewItem("toggleQuiz")
+	p.openViewItem("toggleUnderstand")
 	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.quiz .quiz-list`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("quiz view never rendered: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -110,8 +117,9 @@ func TestE2E_QuizAppearsLiveAndAnswers(t *testing.T) {
 	p.waitReady()
 	p.clickFile("edited.go")
 
-	// Before the agent submits anything there is no quiz, so no menu entry.
-	if n := evalInt(t, p, `document.querySelectorAll("button[name='toggleQuiz']").length`); n != 0 {
+	// Before the agent submits anything there is no quiz, so no menu entry. (The
+	// file header's Understand button is there from the start: it is how you ask.)
+	if n := evalInt(t, p, `document.querySelectorAll(".tb-dropdown-panel button[name='toggleUnderstand']").length`); n != 0 {
 		t.Fatalf("the quiz entry must not appear before a quiz exists, found %d", n)
 	}
 
@@ -132,7 +140,7 @@ func TestE2E_QuizAppearsLiveAndAnswers(t *testing.T) {
 	// phases: Mount loaded the quizzes ~100 lines before it loaded CurrentDiff, so
 	// grounding compared every cited line against a nil diff and condemned the whole
 	// quiz. It stayed invisible while the quiz was a separate screen, because
-	// ToggleQuiz re-grounded on open, by which point the diff was in hand. If
+	// ToggleUnderstand re-grounded on open, by which point the diff was in hand. If
 	// grounding regresses that way again, every question lands at the file head
 	// flagged ungrounded — so inRow drops to 0 and the ungrounded count jumps.
 	inRow := evalInt(t, p, `document.querySelectorAll('.line-row .quiz-card, .code .quiz-card').length`)
@@ -320,6 +328,7 @@ func TestE2E_QuizMeRequestsAQuiz(t *testing.T) {
 			"a second element sharing that class hangs TestE2E_PromptPicker rather than failing it", n)
 	}
 
+	p.openUnderstandTab("quiz")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`button[name='requestQuiz']`, chromedp.ByQuery),
 		chromedp.Click(`button[name='requestQuiz']`, chromedp.ByQuery),
@@ -364,6 +373,7 @@ func TestE2E_QuizMeConfirmsAndBlocksDoubleTap(t *testing.T) {
 	p := bootChromeAgainstPrereview(t, 390, 844, "--agent")
 	p.waitReadyAt(390, 844)
 	p.clickFile("edited.go")
+	p.openUnderstandTab("quiz")
 
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='requestQuiz']`, chromedp.ByQuery),
@@ -382,7 +392,7 @@ func TestE2E_QuizMeConfirmsAndBlocksDoubleTap(t *testing.T) {
 		t.Errorf("while a request is unanswered the button must be replaced by a pending\n"+
 			"state, so a second tap cannot queue a duplicate; found %d tappable button(s)", n)
 	}
-	if n := evalInt(t, p, `document.querySelectorAll('.quiz-trigger.is-pending').length`); n != 1 {
+	if n := evalInt(t, p, `document.querySelectorAll('.understand .request-pending').length`); n != 1 {
 		t.Errorf("expected the pending marker to be shown, got %d", n)
 	}
 

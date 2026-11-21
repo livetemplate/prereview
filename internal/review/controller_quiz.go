@@ -121,7 +121,7 @@ func (c *PrereviewController) RequestQuiz(state PrereviewState, ctx *livetemplat
 	if state.SelectedFile == "" {
 		return state, fmt.Errorf("requestQuiz: no file selected")
 	}
-	body := quizPromptBody(state.QuizPrompts, ctx.GetString("slug"))
+	body := promptBody(state.QuizPrompts, ctx.GetString("slug"))
 	if body == "" {
 		return state, nil // no prompts, or a stale slug from an old render
 	}
@@ -147,10 +147,10 @@ func quizForFile(quizzes []Quiz, file string) bool {
 	return false
 }
 
-// quizPromptBody picks the requested prompt's body, falling back to the first
+// promptBody picks the requested prompt's body, falling back to the first
 // when no slug was sent — which is the common case, since a single-prompt library
 // renders a plain button with nothing to choose.
-func quizPromptBody(prompts []Prompt, slug string) string {
+func promptBody(prompts []Prompt, slug string) string {
 	if len(prompts) == 0 {
 		return ""
 	}
@@ -233,16 +233,11 @@ func (c *PrereviewController) JumpToQuizLine(state PrereviewState, ctx *livetemp
 	if err != nil || line < 1 {
 		return state, fmt.Errorf("jumpToQuizLine: bad line %q", raw)
 	}
-	state.ShowQuiz = false
-	// Park the line cursor on the cited line; the template stamps `is-cursor` and
-	// scrolls it into view. Same mechanism the search palette uses to land on a
-	// hit (controller_search.go), so quiz jumps and search jumps behave alike.
-	// The key needs BOTH the old and new numbers, so it is derived from the diff
-	// line itself rather than assembled from the question's single number.
-	if l, ok := findDiffLine(state.CurrentDiff, ctx.GetString("side"), line); ok {
-		state.CursorKey = lineCursorKey(l)
+	file := ctx.GetString("file")
+	if file == "" {
+		file = state.SelectedFile // a per-file quiz's questions are on the open file
 	}
-	return state, nil
+	return c.jumpToLine(state, file, ctx.GetString("side"), line)
 }
 
 // findQuestion locates a question by (quiz id, question id). Question ids are
@@ -259,19 +254,4 @@ func findQuestion(quizzes []Quiz, quizID, questionID string) *Question {
 		}
 	}
 	return nil
-}
-
-// ToggleQuiz flips between the diff viewer and the comprehension-quiz view for
-// the selected file. Mirrors ToggleCommentList: closes the overflow menu so the
-// result is visible immediately, and is not persisted — reopening the browser
-// starts back in the diff.
-func (c *PrereviewController) ToggleQuiz(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	toggleFullView(&state, &state.ShowQuiz)
-	state.MoreMenuOpen = false
-	if state.ShowQuiz {
-		// Re-ground on open: the agent may have edited the file since the quiz was
-		// generated, which can turn a valid anchor stale.
-		c.groundQuizzes(&state)
-	}
-	return state, nil
 }

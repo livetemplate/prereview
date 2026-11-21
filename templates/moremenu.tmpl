@@ -153,16 +153,16 @@
     </button>
   </form>
   {{end}}
-  {{if .HasQuiz}}
+  {{if .HasUnderstandContent}}
   <form method="POST">
     <button
       type="submit"
-      name="toggleQuiz"
+      name="toggleUnderstand"
       class="menu-item"
       role="menuitem"
     >
       <span class="menu-icon">{{template "iconQuiz"}}</span>
-      <span class="menu-label">{{if .ShowQuiz}}Back{{else}}Quiz{{end}}{{with index $.KeyHint "toggleQuiz"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+      <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
       <span class="menu-meta">{{.QuizScoreLabel}}</span>
     </button>
   </form>

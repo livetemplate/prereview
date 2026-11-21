@@ -154,7 +154,7 @@ func TestGenerate_AgentTextSkills(t *testing.T) {
 	if replies.Extends != WritingID || len(replies.Lines) != 1 || !strings.Contains(replies.Description(), "prereview reply") {
 		t.Errorf("learned-agent-replies = %+v, description %q", replies, replies.Description())
 	}
-	if !strings.Contains(gen[0].Description(), "replies, suggestions and quiz questions") {
+	if !strings.Contains(gen[0].Description(), "replies, suggestions, quiz questions and walkthroughs") {
 		t.Errorf("Writing's description doesn't name the agent's text: %q", gen[0].Description())
 	}
 	if !strings.Contains(MemoryBlock(gen), "`learned-agent-replies`: the thread replies you post with `prereview reply`") {

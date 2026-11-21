@@ -72,7 +72,7 @@
     lvt-key="a"
     lvt-mod:skip-when-typing
   ></span><span
-    lvt-on:window:keydown="toggleQuiz"
+    lvt-on:window:keydown="toggleUnderstand"
     lvt-key="z"
     lvt-mod:skip-when-typing
   ></span><span
@@ -633,29 +633,30 @@
       lvt-fx:viewport-report="reportViewport"
       data-lvt-viewport-items=".line, .md-block">
 
-<section class="quiz">
+<section class="quiz understand">
   <header class="quiz-head">
-    <strong>Comprehension quiz</strong>
+    <strong>Understand this change</strong>
     <form method="POST" style="margin:0">
       <button
         type="submit"
-        name="toggleQuiz"
+        name="toggleUnderstand"
         class="outline contrast"
         title="Return to the file you were viewing"
       >Back</button>
     </form>
   </header>
+  <div class="lib-tabs understand-tabs" role="tablist">
+    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab" role="tab" aria-selected="false">Walkthrough</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab is-on" role="tab" aria-selected="true">Quiz</button></form>
+  </div>
   
   <div class="empty quiz-empty">
-    <p>No quiz for this file yet.</p>
-    <p><small>Use <strong>Quiz me</strong> in the file header to ask the agent for one.</small></p>
-    <form method="POST">
-      <button type="submit" name="toggleQuiz" class="outline contrast">Back to the file</button>
-    </form>
+    <p>No quiz for <code>app.go</code> yet.</p>
+    <p><small>Ask the agent for a few questions about this file's diff, to check you understood it before you accept it.</small></p>
+    
   </div>
   
 </section>
-
 
 
 
@@ -713,7 +714,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
-    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Comprehension quiz</dd></div>
+    <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>

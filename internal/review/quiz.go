@@ -106,7 +106,7 @@ var probeKinds = []string{
 const (
 	quizAnchorOK         = "ok"
 	quizAnchorAbsent     = "absent"
-	quizAnchorUngrounded = "ungrounded"
+	quizAnchorUngrounded = anchorUngrounded
 )
 
 // Quiz is one generated comprehension quiz about one file's diff.

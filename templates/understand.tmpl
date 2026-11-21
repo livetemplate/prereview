@@ -1,0 +1,123 @@
+{{/* The Understand page (#115): a walkthrough of the whole change, and the open
+     file's comprehension quiz (#191), as two tabs over one full-page view. Every
+     step and question also points back at the code it is about. */}}
+{{define "understandView" -}}
+<section class="quiz understand">
+  <header class="quiz-head">
+    <strong>Understand this change</strong>
+    <form method="POST" style="margin:0">
+      <button
+        type="submit"
+        name="toggleUnderstand"
+        class="outline contrast"
+        title="Return to the file you were viewing"
+      >Back</button>
+    </form>
+  </header>
+  <div class="lib-tabs understand-tabs" role="tablist">
+    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab{{if not $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}false{{else}}true{{end}}">Walkthrough{{with $.CurrentExplanation}} <span class="ck-pill">{{len .Steps}}</span>{{end}}</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab{{if $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}true{{else}}false{{end}}">Quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</button></form>
+  </div>
+  {{if $.UnderstandOnQuiz}}{{template "quizPanel" $}}{{else}}{{template "walkthroughPanel" $}}{{end}}
+</section>
+{{- end}}
+
+{{define "walkthroughPanel" -}}
+{{with $.CurrentExplanation}}
+  {{if .Summary}}<p class="walk-summary">{{.Summary}}</p>{{end}}
+  {{if .Stale}}<p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>{{end}}
+  {{with $.NotExplained}}<p class="walk-stale walk-unexplained" role="status">⚠ {{len .}} change{{if ne (len .) 1}}s{{end}} no step explains. They are the last step.</p>{{end}}
+  <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
+  <ol class="walk-steps">
+    {{range $.WalkSteps}}
+    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}" data-key="step-{{.ID}}">
+      <div class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> <span class="walk-title-text">{{.Title}}</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="{{.Num}}"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
+      {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}
+      <ul class="walk-anchors">
+        {{range .Anchors}}
+        <li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, but the review has no such line — treat this step with suspicion">⚠ {{.Label}}, not in this review</span>{{else}}<form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">{{.Label}}</button></form>{{end}}</li>
+        {{end}}
+      </ul>
+    </li>
+    {{end}}
+  </ol>
+  {{if $.CanExplain}}<footer class="quiz-foot">{{template "explainButton" $}}</footer>{{end}}
+{{else}}
+  <div class="empty quiz-empty">
+    <p>No walkthrough yet.</p>
+    <p><small>Ask the agent to walk you through the whole change, step by step, in the order it makes sense to read. prereview checks every line it cites.</small></p>
+    {{if $.CanExplain}}{{template "explainButton" $}}{{else}}<p><small>Run prereview with <code>--agent</code> to ask an agent for one.</small></p>{{end}}
+  </div>
+{{end}}
+{{- end}}
+
+{{define "explainButton"}}{{if $.ExplainPending}}<span class="request-pending" title="The request is queued — the agent will answer shortly">Walkthrough requested…</span>{{else}}<form method="POST" style="margin:0"><button type="submit" name="requestExplain" class="outline" title="Ask the agent to walk you through the whole change">{{if $.HasExplanation}}Explain again{{else}}Explain this change{{end}}</button></form>{{end}}{{end}}
+
+{{/* The quiz tab: the open file's quiz (#191), and one button per quiz prompt to
+     ask for one. */}}
+{{define "quizPanel" -}}
+  {{if $.HasQuiz}}
+  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
+  <ol class="quiz-list">
+    {{range $.QuizItems}}
+    <li class="quiz-q{{if .Answered}} is-answered{{end}}" data-key="{{.ID}}">
+      <div class="quiz-q-head">
+        <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>
+        {{if .Jumpable}}
+        <form method="POST" style="margin:0">
+          <input type="hidden" name="file" value="{{$.SelectedFile}}">
+          <input type="hidden" name="line" value="{{.FromLine}}">
+          <input type="hidden" name="side" value="{{.Side}}">
+          <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">{{.AnchorLabel}}</button>
+        </form>
+        {{else if .Ungrounded}}
+        <span class="quiz-ungrounded" title="The quiz cited {{.AnchorLabel}}, but that line is not in this diff — treat the question with suspicion">⚠ cited {{.AnchorLabel}}, not in this diff</span>
+        {{else}}
+        <span class="quiz-absent" title="This question is about something the change does NOT contain, so there is no line to jump to">about something absent</span>
+        {{end}}
+      </div>
+      <p class="quiz-prompt">{{.Prompt}}</p>
+      <ul class="quiz-options">
+        {{$item := .}}
+        {{range $i, $opt := .Options}}
+        <li>
+          {{if $item.Answered}}
+          <div class="quiz-option{{if eq $i $item.Answer}} is-correct{{end}}{{if and (eq $i $item.Choice) (ne $i $item.Answer)}} is-wrong{{end}}">
+            <span class="quiz-mark">{{if eq $i $item.Answer}}✓{{else if eq $i $item.Choice}}✗{{else}} {{end}}</span>{{$opt}}
+          </div>
+          {{else}}
+          <form method="POST" style="margin:0">
+            <input type="hidden" name="quizId" value="{{$.CurrentQuiz.ID}}">
+            <input type="hidden" name="questionId" value="{{$item.ID}}">
+            <input type="hidden" name="choice" value="{{$i}}">
+            <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button>
+          </form>
+          {{end}}
+        </li>
+        {{end}}
+      </ul>
+      {{if .Answered}}
+      <p class="quiz-why{{if .Correct}} is-correct{{else}} is-wrong{{end}}"><small>{{.Why}}</small></p>
+      {{end}}
+    </li>
+    {{end}}
+  </ol>
+  <footer class="quiz-foot">
+    {{if $.QuizComplete}}<p class="quiz-done"><strong>{{$.QuizScoreLabel}}</strong> — every question answered.</p>{{end}}
+    {{if gt $.QuizAnsweredCount 0}}
+    <form method="POST" style="margin:0">
+      <button type="submit" name="retakeQuiz" class="outline" title="Clear your answers and take it again">Retake</button>
+    </form>
+    {{end}}
+    {{template "quizAsk" $}}
+  </footer>
+  {{else}}
+  <div class="empty quiz-empty">
+    <p>No quiz for <code>{{$.SelectedFile}}</code> yet.</p>
+    <p><small>Ask the agent for a few questions about this file's diff, to check you understood it before you accept it.</small></p>
+    {{template "quizAsk" $}}
+  </div>
+  {{end}}
+{{- end}}
+
+{{define "quizAsk"}}{{if $.QuizPrompts}}{{if $.QuizPending}}<span class="request-pending" title="The request is queued — the agent will answer shortly">Quiz requested…</span>{{else}}<div class="quiz-ask">{{range $.QuizPrompts}}<form method="POST" style="margin:0"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="requestQuiz" class="outline" title="{{.Body}}">{{.Title}}</button></form>{{end}}</div>{{end}}{{end}}{{end}}

@@ -210,6 +210,11 @@ prereview suggest   [--out <dir>] [--file <payload.json>]
 prereview import    [--out <dir>] [--file <payload.json>]
 - `prereview quiz` - submit a comprehension quiz about a file's diff for the
   reviewer to answer; writes `.prereview/quiz.jsonl`.
+- `prereview explain` - submit a walkthrough of the whole change: steps in reading
+  order, each citing the lines it explains, which the reviewer follows on the
+  Understand page; writes `.prereview/explain.jsonl`. prereview checks every cited
+  line and adds a last "Not explained" step listing the changes no step cites. The
+  payload is in [skill/reference.md](../skill/reference.md#agent-subcommands).
 prereview reply     [--out <dir>] [--answered] [--check] (--body "…" | --file <f>|-) <id>
 prereview applied   [--out <dir>] [--file <f>|-] <suggestion-id>...
 prereview reverted  [--out <dir>] [--file <f>|-] <suggestion-id>...
@@ -265,11 +270,11 @@ prereview check     [--json] <file>...
   edit (appends to `.prereview/answered.jsonl`), so it reads "answered" rather than
   "done". `--check` checks the reply and posts nothing. See
   [Threads](../skill/reference.md#threads).
-- **`reply`, `suggest` and `quiz` check what they post** against your checks and
-  learned checks, then print any findings and the questions of judges scoped to that
-  text to stderr. They exit 0 whatever they find. The text is checked as `reply.md`,
-  `suggestion.md` (a suggestion's note) or `quiz.md`, so a check's `files:` can pick
-  one. A suggestion's proposed text is checked under its own file's path. The
+- **`reply`, `suggest`, `quiz` and `explain` check what they post** against your
+  checks and learned checks, then print any findings and the questions of judges
+  scoped to that text to stderr. They exit 0 whatever they find. The text is checked
+  as `reply.md`, `suggestion.md` (a suggestion's note), `quiz.md` or `explain.md`, so
+  a check's `files:` can pick one. A suggestion's proposed text is checked under its own file's path. The
   built-in checks run only on that proposed text.
 - **`prereview applied`** — ack that you **applied** an accepted suggestion's edit
   to the file, so the UI flips the card from "accepted" to "applied" and drops it
@@ -307,12 +312,12 @@ prereview check     [--json] <file>...
   `--checker`/`--judge` attach a
   drafted rule or rubric (validated; never a command check) that lands in your
   checks folder when the lesson is accepted. A check with no `files:` runs on the
-  lesson's `--glob`, and a lesson about the agent's replies, suggestions or quiz
-  questions scopes its checks to that text.
+  lesson's `--glob`, and a lesson about the agent's replies, suggestions, quiz
+  questions or walkthroughs scopes its checks to that text.
   Every `--evidence` must name one of the reviewer's signals in one of the job's
   stores, or nothing is written. A signal is a comment id, the reviewer's thread
   reply as `<target_id>@<at>`, or the id of a suggestion they accepted or rejected. The
-  agent's replies, suggestions and quiz questions are context, never evidence. The lesson is appended to `~/.config/prereview/learnings.jsonl`:
+  agent's replies, suggestions, quiz questions and walkthroughs are context, never evidence. The lesson is appended to `~/.config/prereview/learnings.jsonl`:
   *accepted* when the job was queued with "Accept automatically" on (the reviewer is
   told and can undo it), otherwise *proposed*, waiting in Library → Learnings.
   Without `--job` it is always proposed. **`prereview learn list [--status s]
@@ -425,6 +430,11 @@ second, random port. prereview refuses `--external` with `--public-url`.
   own quiz prompt, or reuse a built-in's filename to replace it. The prompt is
   guidance only: prereview still enforces the question schema and still checks
   that every cited line exists in the diff, whatever prompt produced the quiz.
+- `PREREVIEW_EXPLAIN_DIR` - override the walkthrough-prompt overlay directory
+  (default `~/.config/prereview/explain`). A `*.md` file there replaces the built-in
+  "Explain this change" prompt when it reuses its filename (`walkthrough.md`); the
+  first prompt is the one the button sends. As with quizzes, the prompt is guidance:
+  prereview checks the structure and every cited line whatever it says.
 
 | Var | Effect |
 |---|---|
@@ -432,7 +442,7 @@ second, random port. prereview refuses `--external` with `--public-url`.
 | `PREREVIEW_NO_UPDATE=1` | Same as `--no-update`: never run the on-launch update check. |
 | `PREREVIEW_PUBLIC_URL` | Same as `--public-url`; the flag wins when both are set. |
 | `PREREVIEW_CHECKS_DIR` | Override the checks rule folder (default `~/.config/prereview/checks`). |
-| `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer, and the default `checks`, `prompts` and `quizzes` folders inside it (default `~/.config/prereview`). |
+| `PREREVIEW_LIBRARY_DIR` | Override the per-user library folder: learnings, sessions, the first-launch answer, and the default `checks`, `prompts`, `quizzes` and `explain` folders inside it (default `~/.config/prereview`). |
 | `PREREVIEW_SCAN_HOME` | Where the first-launch scan looks for past reviews (default your home folder). |
 | `PREREVIEW_HOME` | The home folder prereview writes agent integrations under: its own skill (`--install-skill`, the startup sync) and generated skills (default your home folder). |
 
@@ -469,7 +479,7 @@ id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kin
 holds `{x,y,w,h}` fractions), or `region` (a live-site rectangle from `--external`,
 anchored to `url`). `hidden` and `enqueued` are reviewer/queue view flags; `request`
 marks a row prereview queued as a request to the agent (`judge`, `benchmark`,
-`quiz`; `extraction` on rows from before learning moved to background jobs),
+`quiz`, `explain`; `extraction` on rows from before learning moved to background jobs),
 empty for the reviewer's own comments. See
 [skill/reference.md](../skill/reference.md#csv-schema) for the full column docs.
 
@@ -488,6 +498,8 @@ Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
 | `answered.jsonl` | **agent** (`prereview reply --answered`) | comment ids settled by a reply with no edit (durable) |
 | `applied.jsonl` | **agent** (`prereview applied`) | accepted-suggestion apply acks (durable) |
 | `reverted.jsonl` | **agent** (`prereview reverted`) | applied-suggestion revert acks (durable) |
+| `explain.jsonl` | **agent** (`prereview explain`) | walkthroughs of the change, shown on the Understand page (durable) |
+| `first-seen.json` | server | the diff each walkthrough was first seen against, so the page can say it predates the latest edit (durable) |
 | `agent-replies.jsonl` | **agent** (`prereview reply`) | agent thread replies (durable) |
 | `reviewer-replies.jsonl` | server | reviewer thread replies (durable) |
 | `llm-status.json` | **agent** (`prereview status`) | the agent's live working/done status (reset each launch) |

@@ -17,7 +17,7 @@ import (
 // checks your docs get, after it is written: `suggest`, `quiz` and `reply`
 // print what they find to stderr and never fail, since the text is already
 // posted and a broken rule must not stop the agent. Each kind is checked under
-// its own name (library.AgentTexts: reply.md, suggestion.md, quiz.md) so a
+// its own name (library.AgentTexts: reply.md, suggestion.md, quiz.md, explain.md) so a
 // check's `files:` picks it. Only inline rules run: the built-ins were tuned
 // for documents and are noisy on a one-line reply, and a command check or Vale
 // needs a file on disk.
@@ -124,6 +124,24 @@ func quizPieces(quizzes []review.Quiz) []agentPiece {
 				lines = append(lines, strings.Split(t, "\n")...)
 			}
 			out = append(out, agentPiece{Label: "quiz " + review.QuizThreadID(q.ID, qu.ID), Name: library.QuizText.File, Lines: lines})
+		}
+	}
+	return out
+}
+
+// explainPieces is each step's title and body, and each summary, as explain.md.
+func explainPieces(exps []review.Explanation) []agentPiece {
+	var out []agentPiece
+	for _, e := range exps {
+		if e.Summary != "" {
+			out = append(out, agentPiece{Label: "explanation " + e.ID + " summary", Name: library.ExplainText.File, Lines: strings.Split(e.Summary, "\n")})
+		}
+		for _, s := range e.Steps {
+			lines := strings.Split(s.Title, "\n")
+			if s.Body != "" {
+				lines = append(lines, strings.Split(s.Body, "\n")...)
+			}
+			out = append(out, agentPiece{Label: "explanation " + e.ID + " step " + s.ID, Name: library.ExplainText.File, Lines: lines})
 		}
 	}
 	return out

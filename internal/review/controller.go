@@ -82,6 +82,10 @@ type PrereviewController struct {
 	// because the two libraries answer with different verbs.
 	QuizzesDir string
 
+	// ExplainDir is the user overlay for #115 walkthrough prompts
+	// (<library>/explain), merged with the built-ins in LoadExplainPrompts.
+	ExplainDir string
+
 	// ShortcutsDir is the user overlay for #204 composer shortcuts
 	// (<library>/shortcuts). Read every Mount. "" = built-ins only.
 	ShortcutsDir string
@@ -111,6 +115,13 @@ type PrereviewController struct {
 	// concurrent reads of the same file are racy but the worst case is
 	// re-doing the work, not a stale read of stale data.
 	diffCache sync.Map // map[string]cachedDiff
+
+	// changedIdx caches the #115 changed-line index (see changedIndex), shared
+	// across tabs like diffCache: it describes the files, not a user.
+	changedIdx changedIndexCache
+	// firstSeenMu serialises first-seen.json's read-modify-write: tabs reloading
+	// at once may each stamp a new explanation.
+	firstSeenMu sync.Mutex
 
 	// sessionMu guards session. The controller is a singleton shared by all
 	// sessions, so OnConnect (any connection) writes it while the llm-status
@@ -503,6 +514,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// user's edits to their prompt files show without a relaunch.
 	state.Prompts = LoadPrompts(c.PromptsDir)
 	state.QuizPrompts = LoadQuizPrompts(c.QuizzesDir)
+	state.ExplainPrompts = LoadExplainPrompts(c.ExplainDir)
 	// Loads the quizzes and the reviewer's answers. Grounding is deliberately NOT
 	// done here: CurrentDiff is not loaded until ~100 lines below, so grounding at
 	// this point would compare every cited line against a nil diff and mark the
@@ -631,6 +643,9 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// MUST come after CurrentDiff is set — grounding earlier compares against nil
 	// and condemns every question.
 	c.groundQuizzes(&state)
+	// ...and ground the walkthrough (#115). It needs the file list, not the open
+	// diff, so this spot is merely the first where both are settled.
+	c.applyExplain(&state)
 	// Artifact versioning (#90): populate the selected file's version timeline
 	// and the paused state. Mount always shows the LIVE diff (ViewingVersion
 	// defaults false and isn't persisted), so a reconnect naturally leaves any
