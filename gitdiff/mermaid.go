@@ -1,6 +1,8 @@
 package gitdiff
 
 import (
+	"fmt"
+	"hash/fnv"
 	"html"
 	"strings"
 
@@ -68,6 +70,8 @@ func renderMermaidBlock(raw []byte) string {
 	if def == "" {
 		return ""
 	}
-	return `<div class="md-mermaid" lvt-ignore><pre class="mermaid">` +
+	h := fnv.New64a()
+	h.Write([]byte(def))
+	return fmt.Sprintf(`<div class="md-mermaid" data-key="mmd-%x" lvt-ignore><pre class="mermaid">`, h.Sum64()) +
 		html.EscapeString(def) + `</pre></div>`
 }

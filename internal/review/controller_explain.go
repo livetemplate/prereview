@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/livetemplate/livetemplate"
@@ -99,13 +100,32 @@ func (c *PrereviewController) applyExplain(state *PrereviewState) {
 	}
 	seen := c.stampFirstSeen(keys, idx.Fingerprint)
 
+	for i := range state.Explanations {
+		e := &state.Explanations[i]
+		e.Stale = seen[e.seenKey()] != idx.Fingerprint
+	}
+
+	// Only the newest explanation is shown, so only it is grounded.
 	listed := map[string]bool{}
 	for _, f := range state.Files {
 		if state.inScope(f.Path) {
 			listed[f.Path] = true
 		}
 	}
-	unchanged := map[string]*gitdiff.FileChanges{} // read each unchanged file once
+	type fileRows struct {
+		rows []string
+		ok   bool
+	}
+	read := map[string]fileRows{} // each file outside the index, read once
+	rowsOf := func(path string) fileRows {
+		r, done := read[path]
+		if !done {
+			r.rows, r.ok = gitdiff.FileLines(c.RepoPath, path)
+			read[path] = r
+		}
+		return r
+	}
+	// lookup is the file a step or diagram anchor may cite: changed, or listed.
 	lookup := func(path string) *gitdiff.FileChanges {
 		if fc := idx.Files[path]; fc != nil {
 			return fc
@@ -113,22 +133,32 @@ func (c *PrereviewController) applyExplain(state *PrereviewState) {
 		if !listed[path] {
 			return nil
 		}
-		if _, ok := unchanged[path]; !ok {
-			unchanged[path] = gitdiff.UnchangedFile(c.RepoPath, path)
+		r := rowsOf(path)
+		if !r.ok {
+			return &gitdiff.FileChanges{Opaque: true}
 		}
-		return unchanged[path]
+		return &gitdiff.FileChanges{OldLen: len(r.rows), NewLen: len(r.rows)}
 	}
-	for i := range state.Explanations {
-		e := &state.Explanations[i]
-		e.Stale = seen[e.seenKey()] != idx.Fingerprint
-		for j := range e.Steps {
-			for k := range e.Steps[j].Anchors {
-				a := &e.Steps[j].Anchors[k]
-				a.Status = groundRange(lookup(a.File), a.Kind, a.Side, a.FromLine, a.ToLine)
-			}
+	ground := func(as []Anchor) {
+		for k := range as {
+			a := &as[k]
+			a.Status = groundRange(lookup(a.File), a.Kind, a.Side, a.FromLine, a.ToLine)
 		}
 	}
-	state.NotExplained = notExplained(idx, state.CurrentExplanation().Steps)
+	groundImpacts := func(as []ImpactAnchor) {
+		for k := range as {
+			as[k].Status = groundImpact(rowsOf(as[k].File).rows, as[k])
+		}
+	}
+	e := state.CurrentExplanation()
+	for j := range e.Steps {
+		ground(e.Steps[j].Anchors)
+		groundImpacts(e.Steps[j].Impact)
+	}
+	for j := range e.Diagrams {
+		ground(e.Diagrams[j].Anchors)
+	}
+	state.NotExplained = notExplained(idx, e.Steps)
 }
 
 // notExplained is every changed hunk no grounded anchor of steps covers, as
@@ -175,6 +205,20 @@ func groundRange(fc *gitdiff.FileChanges, kind, side string, from, to int) strin
 		return anchorOK
 	}
 	return anchorUngrounded
+}
+
+// groundImpact reports whether an impact anchor resolves in its file's working
+// tree lines: the range lies within them and, when set, Contains occurs in it.
+// It reads any regular file inside the repo, listed in the review or not: impact
+// points outside the diff by design.
+func groundImpact(rows []string, a ImpactAnchor) string {
+	if a.FromLine < 1 || a.ToLine < a.FromLine || a.ToLine > len(rows) {
+		return anchorUngrounded
+	}
+	if a.Contains != "" && !strings.Contains(strings.Join(rows[a.FromLine-1:a.ToLine], "\n"), a.Contains) {
+		return anchorUngrounded
+	}
+	return anchorOK
 }
 
 // The Understand page's tabs. "" picks one from what there is (UnderstandOnQuiz).

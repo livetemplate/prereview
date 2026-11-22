@@ -156,15 +156,26 @@ func LoadChangedIndexNoGit(repo string, paths []string) *ChangedIndex {
 // both sides, no hunks. Opaque when it is binary, over the render cap, unreadable,
 // or not a regular file inside repo.
 func UnchangedFile(repo, path string) *FileChanges {
-	full, ok := indexable(repo, path)
-	if !ok || tooLarge(full) {
-		return &FileChanges{Opaque: true}
-	}
-	rows, binary, err := readRows(full)
-	if err != nil || binary {
+	rows, ok := FileLines(repo, path)
+	if !ok {
 		return &FileChanges{Opaque: true}
 	}
 	return &FileChanges{OldLen: len(rows), NewLen: len(rows)}
+}
+
+// FileLines reads a working-tree file's lines as the diff view numbers them,
+// under the index's guards: inside repo, a regular file, under the size cap, not
+// binary. ok=false means the file can't be cited by line.
+func FileLines(repo, path string) (rows []string, ok bool) {
+	full, ok := indexable(repo, path)
+	if !ok || tooLarge(full) {
+		return nil, false
+	}
+	rows, binary, err := readRows(full)
+	if err != nil || binary {
+		return nil, false
+	}
+	return rows, true
 }
 
 // indexable resolves path for the index to read, with LoadDiff's guard (nothing

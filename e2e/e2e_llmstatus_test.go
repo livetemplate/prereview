@@ -57,6 +57,13 @@ func waitPillGone(t *testing.T, ctx context.Context, visibleJS string, timeout t
 // disappearance/content checks, which proved unreliable in these tests.
 func waitJSTrue(t *testing.T, ctx context.Context, js string, timeout time.Duration, label string) {
 	t.Helper()
+	waitJSTrueDiag(t, ctx, js, timeout, label, nil)
+}
+
+// waitJSTrueDiag is waitJSTrue that appends diag() (console, WS frames, server
+// log, HTML) to the failure, collected when the wait fails rather than before.
+func waitJSTrueDiag(t *testing.T, ctx context.Context, js string, timeout time.Duration, label string, diag func() string) {
+	t.Helper()
 	deadline := time.Now().Add(timeout)
 	var lastErr error
 	for {
@@ -68,7 +75,11 @@ func waitJSTrue(t *testing.T, ctx context.Context, js string, timeout time.Durat
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("%s: condition never became true within %s (lastErr=%v)", label, timeout, lastErr)
+			extra := ""
+			if diag != nil {
+				extra = diag()
+			}
+			t.Fatalf("%s: condition never became true within %s (lastErr=%v)%s", label, timeout, lastErr, extra)
 		}
 		time.Sleep(200 * time.Millisecond)
 	}

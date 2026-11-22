@@ -513,3 +513,117 @@ func TestWalkStepsAppendsNotExplained(t *testing.T) {
 		t.Error("the derived step leaked into the explanation's own steps")
 	}
 }
+
+// TestValidateExplanation covers A′'s fields: concerns, risks, impact, diagrams.
+// Each bad case names what to fix; the good one uses every field.
+func TestValidateExplanation(t *testing.T) {
+	// good builds a fresh explanation using every field, so a case's edit never
+	// leaks into another.
+	good := func() Explanation {
+		line := func() []Anchor { return []Anchor{{File: "a.go", FromLine: 1}} }
+		return NormalizeExplanation(Explanation{
+			Concerns: []Concern{{ID: "retry", Title: "Retry loop"}, {ID: "rename", Title: "Rename", Mechanical: true}},
+			Steps: []Step{
+				{ID: "s1", Title: "Loop", Anchors: line(), Concern: "retry", Risks: []Risk{{Kind: RiskConcurrency, Note: "shared ctx"}},
+					Impact: []ImpactAnchor{{File: "worker.go", FromLine: 88, Contains: "Send(", Note: "the caller"}}},
+				{ID: "s2", Title: "Cap", Anchors: line(), Concern: "retry"},
+				{ID: "s3", Title: "Rename", Anchors: line(), Concern: "rename"},
+				{ID: "s4", Title: "No concern", Anchors: line()},
+			},
+			Diagrams: []Diagram{{Title: "Flow", Mermaid: "graph TD\n A-->B", Anchors: line()}},
+		})
+	}
+	cases := map[string]struct {
+		mutate func(*Explanation)
+		want   string // "" = valid
+	}{
+		"valid":                 {func(*Explanation) {}, ""},
+		"unknown concern":       {func(e *Explanation) { e.Steps[3].Concern = "nope" }, `unknown "concern" "nope"`},
+		"duplicate concern id":  {func(e *Explanation) { e.Concerns = append(e.Concerns, Concern{ID: "retry", Title: "Again"}) }, "concern 3 (retry): duplicate id"},
+		"concern without title": {func(e *Explanation) { e.Concerns[0].Title = "" }, `concern 1 (retry): missing "title"`},
+		"split concern":         {func(e *Explanation) { e.Steps[3].Concern = "retry" }, `concern "retry"'s steps must be next to each other`},
+		"split by a plain step": {func(e *Explanation) { e.Steps[2].Concern = ""; e.Steps[3].Concern = "rename"; e.Steps[1].Concern = "" }, ""},
+		"unknown risk":          {func(e *Explanation) { e.Steps[0].Risks[0].Kind = "spooky" }, `unknown "kind" "spooky"`},
+		"risk on mechanical":    {func(e *Explanation) { e.Steps[2].Risks = []Risk{{Kind: RiskSecurity}} }, `mechanical concern "rename" can't carry a risk`},
+		"empty diagram":         {func(e *Explanation) { e.Diagrams[0].Mermaid = "  \n" }, `diagram 1 (d1): empty "mermaid"`},
+		"duplicate diagram id":  {func(e *Explanation) { e.Diagrams = append(e.Diagrams, Diagram{ID: "d1", Mermaid: "graph TD"}) }, "diagram 2 (d1): duplicate id"},
+		"bad diagram anchor":    {func(e *Explanation) { e.Diagrams[0].Anchors = []Anchor{{File: "../x.go", FromLine: 1}} }, "diagram 1 (d1), anchor 1"},
+		"impact outside repo":   {func(e *Explanation) { e.Steps[0].Impact[0].File = "../../etc/passwd" }, "step 1 (s1), impact 1"},
+		"impact reversed":       {func(e *Explanation) { e.Steps[0].Impact[0].ToLine = 3 }, `"to_line" (3) precedes "from_line" (88)`},
+		"impact no line":        {func(e *Explanation) { e.Steps[0].Impact[0].FromLine = 0 }, `needs "from_line" >= 1`},
+	}
+	for name, tc := range cases {
+		e := good()
+		tc.mutate(&e)
+		err := ValidateExplanation(e)
+		if tc.want == "" {
+			if err != nil {
+				t.Errorf("%s: rejected: %v", name, err)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err %v, want it to contain %q", name, err, tc.want)
+		}
+	}
+}
+
+// TestGroundImpact: impact anchors resolve against any regular file inside the
+// repo, listed in the review or not, by line range and the optional contains.
+func TestGroundImpact(t *testing.T) {
+	c, state := explainFixture(t)
+	writeAt(t, c.RepoPath, "lib/worker.go", "package lib\n\nfunc run() {\n\tSend(ctx)\n}\n")
+	outside := t.TempDir()
+	writeAt(t, outside, "secret.go", "one\ntwo\nthree\nfour\n")
+	if err := os.Symlink(filepath.Join(outside, "secret.go"), filepath.Join(c.RepoPath, "link.go")); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		a    ImpactAnchor
+		want string
+	}{
+		{"unlisted in-repo file", ImpactAnchor{File: "lib/worker.go", FromLine: 4}, anchorOK},
+		{"contains matches", ImpactAnchor{File: "lib/worker.go", FromLine: 3, ToLine: 4, Contains: "Send(ctx)"}, anchorOK},
+		{"contains misses", ImpactAnchor{File: "lib/worker.go", FromLine: 3, Contains: "Send(ctx)"}, anchorUngrounded},
+		{"past EOF", ImpactAnchor{File: "lib/worker.go", FromLine: 5, ToLine: 6}, anchorUngrounded},
+		{"changed file, working tree", ImpactAnchor{File: "b.go", FromLine: 6, Contains: "u"}, anchorOK},
+		{"symlink out of the repo", ImpactAnchor{File: "link.go", FromLine: 1}, anchorUngrounded},
+		{"missing file", ImpactAnchor{File: "nope.go", FromLine: 1}, anchorUngrounded},
+	}
+	var impact []ImpactAnchor
+	for _, tc := range cases {
+		impact = append(impact, tc.a)
+	}
+	writeExplanations(t, c, Explanation{ID: "e1", Steps: []Step{{ID: "s1", Title: "t", Anchors: []Anchor{{File: "a.go", Kind: AnchorKindFile}}, Impact: impact}},
+		Diagrams: []Diagram{{Mermaid: "graph TD", Anchors: []Anchor{{File: "b.go", FromLine: 3}, {File: "b.go", FromLine: 40}}}}})
+	c.applyExplain(&state)
+	got := state.Explanations[0].Steps[0].Impact
+	for i, tc := range cases {
+		if got[i].Status != tc.want {
+			t.Errorf("%s: %+v grounded %q, want %q", tc.name, tc.a, got[i].Status, tc.want)
+		}
+	}
+	// Diagram anchors ground like step anchors.
+	d := state.Explanations[0].Diagrams[0].Anchors
+	if d[0].Status != anchorOK || d[1].Status != anchorUngrounded {
+		t.Errorf("diagram anchors grounded %q, %q; want ok, ungrounded", d[0].Status, d[1].Status)
+	}
+}
+
+// TestNotExplainedIgnoresImpactAndDiagrams: citing a hunk's lines from impact or
+// a diagram never explains it; only a step's anchors do.
+func TestNotExplainedIgnoresImpactAndDiagrams(t *testing.T) {
+	c, state := explainFixture(t)
+	writeExplanations(t, c, Explanation{ID: "e1",
+		Steps:    []Step{{ID: "s1", Title: "t", Anchors: []Anchor{{File: "a.go", Side: "old", FromLine: 3, ToLine: 4}}, Impact: []ImpactAnchor{{File: "b.go", FromLine: 3, ToLine: 6}}}},
+		Diagrams: []Diagram{{Mermaid: "graph TD", Anchors: []Anchor{{File: "b.go", FromLine: 3, ToLine: 6}}}}})
+	c.applyExplain(&state)
+	var got []string
+	for _, a := range state.NotExplained {
+		got = append(got, a.Label())
+	}
+	if want := "b.go L3-L6"; strings.Join(got, ", ") != want {
+		t.Errorf("not explained = %v, want [%s]", got, want)
+	}
+}
