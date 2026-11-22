@@ -356,8 +356,9 @@ Does the text lead with what the reader must do or will notice, before how it wo
 Pass when the first paragraph says what changes for the reader.
 ```
 
-- **Run judges** in the file bar asks your agent to judge the open file against every
-  judge that applies. Verdicts appear live: pass or fail with a critique, and
+- **Run judges**, in the menu on the file header's **Checks** button, asks your agent
+  to judge the open file against every judge that applies. While it works, a dot on
+  the button shows it's waiting. Verdicts appear live: pass or fail with a critique, and
   **Show in file** when the critique quotes a passage.
 - The request shows on the file as one line, such as "Asked your agent to run this
   file's judges". **Read more** opens the prompt your agent received. A benchmark
@@ -365,8 +366,8 @@ Pass when the first paragraph says what changes for the reader.
 - A failing judge joins the bar's list (tagged *judge*). Pick it to see its critique,
   queue it as a comment, or answer **Agree** / **Disagree**. Your answers are how a
   judge earns trust; the Checks page shows how often each one agrees with you.
-- A verdict goes out of date when the file or the rubric changes; the bar then
-  offers **Re-run judges**.
+- A verdict goes out of date when the file or the rubric changes; the Checks menu
+  then offers **Re-run judges**.
 - **A judge starts advisory**: it shows its verdict and critique (tagged *judge ·
   advisory*) but doesn't count in **Checks n/m** or turn the button red. It earns its
   place once it agrees with you often enough: at least 10 of your answers for its

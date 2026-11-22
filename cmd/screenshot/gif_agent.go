@@ -125,7 +125,8 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 		step(ctx,
 			chromedp.Click(`.ck-strip-close button`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.ck-strip.is-idle`, chromedp.ByQuery),
-			chromedp.Click(`.checks-trigger`, chromedp.ByQuery),
+			chromedp.Click(`.checks-dropdown .checks-trigger`, chromedp.ByQuery), // #279: a menu once judges apply
+			chromedp.Click(`.checks-panel button[name="openChecks"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.ckp-row[data-key="ckp-row-filler-intensifiers"]`, chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 		)
@@ -134,9 +135,16 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 
 		step(ctx,
 			chromedp.Click(`.lib-back button`, chromedp.ByQuery),
-			chromedp.WaitVisible(`.ck-strip.is-idle button[name="runJudges"]`, chromedp.ByQuery),
-			chromedp.Click(`.ck-strip button[name="runJudges"]`, chromedp.ByQuery),
-			chromedp.WaitVisible(`.ck-strip .ck-waiting`, chromedp.ByQuery),
+			chromedp.Click(`.checks-dropdown .checks-trigger`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.checks-panel button[name="runJudges"]`, chromedp.ByQuery),
+			chromedp.Sleep(200*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 120)) // Run judges in the Checks menu
+
+		step(ctx,
+			chromedp.Click(`.checks-panel button[name="runJudges"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.checks-trigger.is-waiting`, chromedp.ByQuery),
 			chromedp.Sleep(200*time.Millisecond),
 		)
 		step(ctx, settled())

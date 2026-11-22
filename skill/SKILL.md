@@ -570,7 +570,7 @@ saying what you changed.
 ## Judges (`prereview judge`)
 
 The reviewer can ask you to **judge** a file against their rubrics ("Run judges"
-in the file bar). It arrives as a `kind=file` comment marked `"request":"judge"`,
+in the file header's Checks menu). It arrives as a `kind=file` comment marked `"request":"judge"`,
 listing each judge's rubric and the exact command per judge. It wants **neither a
 fix nor a suggestion**: read the whole file, decide pass or fail for each rubric,
 and record each verdict:

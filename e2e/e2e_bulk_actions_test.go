@@ -66,8 +66,8 @@ func TestE2E_BulkFindingActions(t *testing.T) {
 			defer cancel()
 
 			// The judge fails the open file (the request names it), quoting "very".
-			if err := chromedp.Run(ctx, chromedp.Click(`.ck-strip button[name="runJudges"]`, chromedp.ByQuery),
-				chromedp.WaitVisible(`.ck-strip .ck-waiting`, chromedp.ByQuery)); err != nil {
+			if err := chromedp.Run(ctx, runJudges(),
+				chromedp.WaitVisible(judgesWaiting, chromedp.ByQuery)); err != nil {
 				t.Fatalf("Run judges: %v%s", err, diag())
 			}
 			request := onlyComment(t, p)

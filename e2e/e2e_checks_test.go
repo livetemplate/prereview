@@ -92,6 +92,36 @@ func openCheckStrip() chromedp.Action {
 	})
 }
 
+// openChecksPage opens the Checks page from the file header: the Checks button
+// itself, or its menu's All checks when the file has judges (#279).
+func openChecksPage() chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		if err := chromedp.Click(`.checks-trigger`, chromedp.ByQuery).Do(ctx); err != nil {
+			return err
+		}
+		var menu bool
+		if err := chromedp.Evaluate(`!!document.querySelector('.checks-dropdown')`, &menu).Do(ctx); err != nil || !menu {
+			return err
+		}
+		return chromedp.Click(`.checks-panel button[name="openChecks"]`, chromedp.ByQuery).Do(ctx)
+	})
+}
+
+// runJudges opens the Checks menu (#279) and taps Run judges.
+func runJudges() chromedp.Action {
+	return chromedp.Tasks{
+		chromedp.Click(`.checks-dropdown .checks-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(runJudgesBtn, chromedp.ByQuery),
+		chromedp.Click(runJudgesBtn, chromedp.ByQuery),
+	}
+}
+
+// runJudgesBtn is the Run judges item in the file header's Checks menu (#279).
+const runJudgesBtn = `.checks-panel button[name="runJudges"]`
+
+// judgesWaiting is the Checks button while judges wait on the agent (#279).
+const judgesWaiting = `.checks-trigger.is-waiting`
+
 // clickStripPick taps the bar's button for the named failing check.
 func clickStripPick(t *testing.T, p *runningPrereview, name string, diag func() string) {
 	t.Helper()
@@ -211,7 +241,7 @@ func TestE2E_ChecksPage(t *testing.T) {
 
 			// The header button opens the Checks page filtered to this file.
 			if err := chromedp.Run(ctx,
-				chromedp.Click(`.checks-trigger`, chromedp.ByQuery),
+				openChecksPage(),
 				chromedp.WaitVisible(`.library`, chromedp.ByQuery),
 				chromedp.WaitVisible(pageRow("filler-intensifiers")+`.is-fail`, chromedp.ByQuery),
 			); err != nil {
@@ -500,7 +530,7 @@ func TestE2E_CheckRuleEditedLive(t *testing.T) {
 	ctx, cancel := within(p, 20*time.Second)
 	defer cancel()
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`.checks-trigger`, chromedp.ByQuery),
+		openChecksPage(),
 		chromedp.WaitVisible(pageRow("house")+`.is-fail`, chromedp.ByQuery),
 		chromedp.Click(`button[name="togglePassingGroups"]`, chromedp.ByQuery), // keep passing rows listed
 		chromedp.WaitVisible(pageRow("weasel-words"), chromedp.ByQuery),
@@ -602,7 +632,7 @@ func TestE2E_ChecksValeTrust(t *testing.T) {
 	ctx, cancel := within(p, 20*time.Second)
 	defer cancel()
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`.checks-trigger`, chromedp.ByQuery),
+		openChecksPage(),
 		chromedp.WaitVisible(`.ckp-trust button[name="trustVale"]`, chromedp.ByQuery),
 	); err != nil {
 		var panel string
@@ -672,7 +702,7 @@ func TestE2E_FindingIgnoreHide(t *testing.T) {
 
 	row := pageRow("filler-intensifiers")
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`.checks-trigger`, chromedp.ByQuery),
+		openChecksPage(),
 		chromedp.WaitVisible(`.library`, chromedp.ByQuery),
 		// It passes now; on an unfiltered page its group would fold.
 		chromedp.Evaluate(`(document.querySelector('button[name="togglePassingGroups"]')||{click(){}}).click()`, nil),
