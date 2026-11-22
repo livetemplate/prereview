@@ -320,7 +320,7 @@ func (c *PrereviewController) moveCursor(state PrereviewState, delta int) Prerev
 	lines := state.VisibleLines()
 	keys := make([]string, 0, len(lines))
 	for _, l := range lines {
-		if l.Kind == "fold" {
+		if l.Folded() {
 			continue
 		}
 		keys = append(keys, lineCursorKey(l))

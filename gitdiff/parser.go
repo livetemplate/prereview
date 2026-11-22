@@ -88,6 +88,9 @@ type DiffLine struct {
 	// raw Content stays around for CSV exports and other consumers that
 	// don't want HTML markup.
 	HighlightedContent template.HTML
+	// Group is set on a synthetic "mech" row (FoldRanges): the key of the group
+	// of changed rows it stands for.
+	Group string
 }
 
 // maxRenderableFileBytes caps the working-tree file size we'll send to

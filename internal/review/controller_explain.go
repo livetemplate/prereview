@@ -86,7 +86,7 @@ func (c *PrereviewController) changedIndexKey(base string, files []gitdiff.FileE
 func (c *PrereviewController) applyExplain(state *PrereviewState) {
 	state.ExplainSeen = statusFingerprint(ExplainPath(c.CSVPath))
 	state.Explanations = LoadExplanations(c.CSVPath)
-	state.NotExplained = nil
+	state.NotExplained, state.Mechanical = nil, nil
 	if len(state.Explanations) == 0 {
 		return
 	}
@@ -159,6 +159,99 @@ func (c *PrereviewController) applyExplain(state *PrereviewState) {
 		ground(e.Diagrams[j].Anchors)
 	}
 	state.NotExplained = notExplained(idx, e.Steps)
+	if !e.Stale {
+		state.Mechanical = mechanicalHunks(idx, *e)
+	}
+}
+
+// MechHunk is a changed hunk that folds: its key among the file's hunks
+// ("H<old start>-<new start>") and the title of the mechanical concern that
+// explains it, both fixed when the folds are derived.
+type MechHunk struct {
+	Hunk         gitdiff.Hunk
+	Key, Concern string // Concern is the concern's id
+	Title        string
+}
+
+// mechanicalHunks is each file's changed hunks that fold: at least one grounded
+// line anchor covers the hunk, and every one that does belongs to a step in a
+// mechanical concern. Derived from the anchors, so the agent can't fold code it
+// didn't cite, and a hunk no step cites (Not explained) never folds.
+func mechanicalHunks(idx *gitdiff.ChangedIndex, e Explanation) map[string][]MechHunk {
+	mech := map[string]string{} // mechanical concern id -> title
+	for _, c := range e.Concerns {
+		if c.Mechanical {
+			mech[c.ID] = c.Title
+		}
+	}
+	if len(mech) == 0 {
+		return nil
+	}
+	var out map[string][]MechHunk
+	for p, cs := range citesByFile(e.Steps) {
+		fc := idx.Files[p]
+		if fc == nil || fc.Opaque {
+			continue
+		}
+		for _, h := range fc.Hunks {
+			concern, all := "", true
+			for _, c := range cs {
+				if !c.covers(h) {
+					continue
+				}
+				if _, ok := mech[c.Concern]; !ok {
+					all = false
+					break
+				}
+				if concern == "" {
+					concern = c.Concern
+				}
+			}
+			if all && concern != "" {
+				if out == nil {
+					out = map[string][]MechHunk{}
+				}
+				out[p] = append(out[p], MechHunk{Hunk: h, Key: fmt.Sprintf("H%d-%d", h.OldStart, h.NewStart), Concern: concern, Title: mech[concern]})
+			}
+		}
+	}
+	return out
+}
+
+func (c *PrereviewController) RevealMechanical(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if hunk := ctx.GetString("hunk"); hunk != "" {
+		state.MechRevealed = withKey(state.MechRevealed, mechRevealKey(state.SelectedFile, hunk))
+	}
+	return state, nil
+}
+
+// mechRevealKey names an opened fold in MechRevealed.
+func mechRevealKey(file, hunk string) string { return file + "\x00" + hunk }
+
+// openFoldAt opens the mechanical fold holding row l of the open file, if any:
+// a jump that lands on a folded line must leave it readable after its reveal.
+func openFoldAt(state *PrereviewState, l gitdiff.DiffLine) {
+	if m := state.mechHunkOf(l); m != nil {
+		state.MechRevealed = withKey(state.MechRevealed, mechRevealKey(state.SelectedFile, m.Key))
+	}
+}
+
+// withKey sets k in m, allocating m when nil.
+func withKey(m map[string]bool, k string) map[string]bool {
+	if m == nil {
+		m = map[string]bool{}
+	}
+	m[k] = true
+	return m
+}
+
+// ToggleFoldMechanical turns every mechanical fold off or back on: a durable
+// view pref, so hidden code is one switch away from never hiding.
+func (c *PrereviewController) ToggleFoldMechanical(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.UnfoldMechanical = !state.UnfoldMechanical
+	state.MoreMenuOpen = false
+	c.savePrefs(state)
+	return state, nil
 }
 
 // notExplained is every changed hunk no grounded anchor of steps covers, as
@@ -168,29 +261,49 @@ func (c *PrereviewController) applyExplain(state *PrereviewState) {
 // cap) has no lines, so a whole-file anchor is what explains it. Derived from the
 // diff, never from the agent: it is the check on what the walkthrough left out.
 func notExplained(idx *gitdiff.ChangedIndex, steps []Step) []Anchor {
-	cited := map[string][]Anchor{}
-	for _, st := range steps {
-		for _, a := range st.Anchors {
-			if !a.Ungrounded() {
-				cited[a.File] = append(cited[a.File], a)
-			}
-		}
-	}
+	cited := citesByFile(steps)
 	var out []Anchor
 	for _, p := range slices.Sorted(maps.Keys(idx.Files)) {
-		fc, as := idx.Files[p], cited[p]
+		fc, cs := idx.Files[p], cited[p]
 		if fc.Opaque {
-			if !slices.ContainsFunc(as, func(a Anchor) bool { return a.Kind == AnchorKindFile }) {
+			if !slices.ContainsFunc(cs, func(c cite) bool { return c.Kind == AnchorKindFile }) {
 				out = append(out, Anchor{File: p, Kind: AnchorKindFile, Side: "new", Status: anchorOK})
 			}
 			continue
 		}
 		for _, h := range fc.Hunks {
-			if slices.ContainsFunc(as, func(a Anchor) bool { return a.Kind == AnchorKindLine && h.Covers(a.Side, a.FromLine, a.ToLine) }) {
+			if slices.ContainsFunc(cs, func(c cite) bool { return c.covers(h) }) {
 				continue
 			}
 			side, from, to := h.Range()
 			out = append(out, Anchor{File: p, Kind: AnchorKindLine, Side: side, FromLine: from, ToLine: to, Status: anchorOK})
+		}
+	}
+	return out
+}
+
+// cite is a grounded step anchor and the concern of the step that cites it.
+type cite struct {
+	Anchor
+	Concern string
+}
+
+// covers reports that the cite explains hunk h: a line anchor overlapping it on
+// its side. A whole-file anchor explains no hunk (citing a file is not
+// explaining each of its changes).
+func (c cite) covers(h gitdiff.Hunk) bool {
+	return c.Kind == AnchorKindLine && h.Covers(c.Side, c.FromLine, c.ToLine)
+}
+
+// citesByFile is every grounded anchor of steps, by file: what coverage and
+// the mechanical folds both read.
+func citesByFile(steps []Step) map[string][]cite {
+	out := map[string][]cite{}
+	for _, st := range steps {
+		for _, a := range st.Anchors {
+			if !a.Ungrounded() {
+				out[a.File] = append(out[a.File], cite{a, st.Concern})
+			}
 		}
 	}
 	return out
@@ -308,6 +421,7 @@ func (c *PrereviewController) jumpToLine(state PrereviewState, file, side string
 	state.CursorKey, state.RevealFile = "", ""
 	if l, ok := findDiffLine(state.CurrentDiff, side, line); ok {
 		state.CursorKey, state.RevealFile = lineCursorKey(l), file
+		openFoldAt(&state, l)
 	}
 	return state, nil
 }

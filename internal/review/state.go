@@ -471,6 +471,14 @@ type PrereviewState struct {
 	// hunk no step cites, as anchors (notExplained). walkSteps makes it the last
 	// step, so the walk visits what the agent left out.
 	NotExplained []Anchor `json:"not_explained"`
+	// Mechanical is the current walkthrough's foldable hunks per file (#115 A′3):
+	// every changed hunk cited only by steps in mechanical concerns. Nil while the
+	// walkthrough is stale. MechRevealed holds the folds the reviewer opened this
+	// visit (file + "\x00" + hunk key). UnfoldMechanical turns every fold off
+	// (a durable view pref, uiprefs.go).
+	Mechanical       map[string][]MechHunk `json:"mechanical"`
+	MechRevealed     map[string]bool       `json:"mech_revealed"`
+	UnfoldMechanical bool                  `json:"unfold_mechanical"`
 	// The walkthrough in progress (#115 A3): WalkExplanation names the one being
 	// walked ("" = no walk), so a replaced walkthrough ends the walk instead of
 	// landing on a stranger's stop; WalkStep/WalkAnchor is the stop shown
@@ -1003,7 +1011,12 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	// view or rendered Markdown; an anchor that drifted). Its card hangs on that
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
-	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, s.pinnedRows())
+	pinned := s.pinnedRows()
+	lines := gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, pinned)
+	if group := s.mechGroup(); group != nil {
+		lines = gitdiff.FoldRanges(lines, group, pinned)
+	}
+	return lines
 }
 
 // pinnedRows reports the rows a fold must never hide, because something hangs on

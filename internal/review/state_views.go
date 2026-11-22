@@ -960,7 +960,7 @@ func (s PrereviewState) LineDisplay() map[string]template.HTML {
 	findings := s.findingMarksByLine() // built once, not re-scanned per line
 	out := make(map[string]template.HTML, len(lines))
 	for _, line := range lines {
-		if line.Kind == "fold" {
+		if line.Folded() {
 			continue // fold rows render their own label, no code content
 		}
 		var fm []gitdiff.ColRange

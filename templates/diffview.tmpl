@@ -20,12 +20,18 @@
        lvt-fx:text-select="selectText"
        style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">
     {{- range $.VisibleLines -}}
+    {{- /* Folded rows (unchanged lines; #115 A′3 mechanical changes) share one
+         branch, so a real line's row keeps its nesting depth on the wire. */ -}}
+    {{- if or (eq .Kind "fold") (eq .Kind "mech") -}}
     {{- if eq .Kind "fold" -}}
     <div
       class="line-row fold-row"
       data-key="F{{.OldNum}}-{{.NewNum}}"
       aria-hidden="true"
     ><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>
+    {{- else -}}
+    <form method="POST" class="line-row mech-row" data-key="M{{.OldNum}}-{{.NewNum}}"><input type="hidden" name="hunk" value="{{.Group}}"><button type="submit" name="revealMechanical" class="mech-fold" title="The walkthrough calls these changes mechanical. Tap to read them.">Show {{.Content}} mechanical line{{if ne .Content "1"}}s{{end}} · {{index $.MechTitles .Group}}</button></form>
+    {{- end -}}
     {{- else -}}
     {{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end -}}
     {{- /* $lside is this row's diff side (matches data-side). A diff line

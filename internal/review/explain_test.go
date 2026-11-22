@@ -3,9 +3,11 @@ package review
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -673,5 +675,114 @@ func TestWalkStepsConcernsAndImpact(t *testing.T) {
 	state.SingleFile = "a.go"
 	if got := fmt.Sprint(links()); got != "[true false false]" {
 		t.Errorf("single-file linkable = %s, want [true false false] (w.go is outside the review)", got)
+	}
+}
+
+// TestMechanicalHunks: a hunk folds when every anchor covering it belongs to a
+// mechanical concern; a hunk a non-mechanical step also cites shows; one no step
+// cites never folds; and nothing folds once the walkthrough is stale. In the
+// diff view the fold is one "mech" row, a tap or a jump opens it, and the pref
+// turns every fold off.
+func TestMechanicalHunks(t *testing.T) {
+	c, state := explainFixture(t)
+	writeExplanations(t, c, Explanation{ID: "e1",
+		Concerns: []Concern{{ID: "m", Title: "Rename", Mechanical: true}, {ID: "r", Title: "Retry"}},
+		Steps: []Step{
+			{ID: "s1", Title: "drop the old lines", Concern: "m", Anchors: []Anchor{{File: "a.go", Side: "old", FromLine: 3, ToLine: 4}}},
+			{ID: "s2", Title: "rename in b", Concern: "m", Anchors: []Anchor{{File: "b.go", FromLine: 3, ToLine: 4}}},
+			{ID: "s3", Title: "retry in b", Concern: "r", Anchors: []Anchor{{File: "b.go", FromLine: 6}}},
+		}})
+	c.applyExplain(&state)
+	folds := func() string {
+		var out []string
+		for _, p := range slices.Sorted(maps.Keys(state.Mechanical)) {
+			for _, m := range state.Mechanical[p] {
+				out = append(out, p+" "+m.Key+" "+m.Concern)
+			}
+		}
+		return strings.Join(out, ", ")
+	}
+	if got, want := folds(), "a.go H3-2 m"; got != want {
+		t.Fatalf("mechanical = %q, want %q (b.go's hunk is also cited by a retry step)", got, want)
+	}
+
+	// In the diff: a.go's deleted rows fold into one row.
+	d, err := gitdiff.LoadDiff(c.RepoPath, "HEAD", "a.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.CurrentDiff = d
+	mechRows := func() []string {
+		var out []string
+		for _, l := range state.VisibleLines() {
+			if l.Kind == "mech" {
+				out = append(out, l.Content+"@"+l.Group)
+			}
+		}
+		return out
+	}
+	// Old line 3 carries step 1's marker, a pinned row, so it stays and the fold
+	// holds the one line after it (as the mockup's marker-then-fold).
+	if got := mechRows(); fmt.Sprint(got) != "[1@H3-2]" {
+		t.Fatalf("a.go mech rows = %v, want [1@H3-2]", got)
+	}
+	if got := state.MechTitles()["H3-2"]; got != "Rename" {
+		t.Errorf("fold title = %q, want Rename", got)
+	}
+	state.UnfoldMechanical = true
+	if got := mechRows(); len(got) != 0 {
+		t.Errorf("with folds off: %v, want none", got)
+	}
+	state.UnfoldMechanical = false
+	revealed, err := c.RevealMechanical(state, checksCtx("revealMechanical", map[string]interface{}{"hunk": "H3-2"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state = revealed
+	if got := mechRows(); len(got) != 0 {
+		t.Errorf("after a tap: %v, want the fold open", got)
+	}
+	state.MechRevealed = nil
+	jumped, err := c.jumpToLine(state, "a.go", "old", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jumped.RevealFile = "" // the whole-file reveal ends; the fold must stay open
+	state = jumped
+	if got := mechRows(); len(got) != 0 {
+		t.Errorf("after a jump into the fold: %v, want it open", got)
+	}
+
+	// Uncited hunks never fold: only a.go is cited now.
+	writeExplanations(t, c, Explanation{ID: "e2",
+		Concerns: []Concern{{ID: "m", Title: "Rename", Mechanical: true}},
+		Steps:    []Step{{ID: "s1", Title: "t", Concern: "m", Anchors: []Anchor{{File: "a.go", Side: "old", FromLine: 3}}}}})
+	c.applyExplain(&state)
+	if got := folds(); got != "a.go H3-2 m" {
+		t.Errorf("mechanical = %q, want only a.go's cited hunk", got)
+	}
+
+	// Stale: an edit after the walkthrough was first seen folds nothing.
+	writeAt(t, c.RepoPath, "a.go", "1\n2\n5\nnew\n")
+	c.applyExplain(&state)
+	if !state.CurrentExplanation().Stale || state.Mechanical != nil {
+		t.Errorf("stale=%v mechanical=%v, want stale and no folds", state.CurrentExplanation().Stale, state.Mechanical)
+	}
+}
+
+// TestSearchJumpOpensMechanicalFold: a search hit inside a mechanical fold opens
+// it, so the line stays readable once the jump's whole-file reveal ends.
+func TestSearchJumpOpensMechanicalFold(t *testing.T) {
+	c, state := explainFixture(t)
+	writeExplanations(t, c, Explanation{ID: "e1",
+		Concerns: []Concern{{ID: "m", Title: "Rename", Mechanical: true}},
+		Steps:    []Step{{ID: "s1", Title: "t", Concern: "m", Anchors: []Anchor{{File: "b.go", FromLine: 3, ToLine: 6}}}}})
+	c.applyExplain(&state)
+	got, err := c.JumpToSearchResult(state, checksCtx("jumpToSearchResult", map[string]interface{}{"file": "b.go", "old": "0", "new": "5"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.MechRevealed[mechRevealKey("b.go", "H2-3")] {
+		t.Errorf("the hit's fold stayed shut: revealed %v, mechanical %v", got.MechRevealed, got.Mechanical)
 	}
 }

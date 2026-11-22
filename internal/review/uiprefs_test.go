@@ -85,8 +85,9 @@ func TestSavePrefsWritesOnlyViewFields(t *testing.T) {
 		"show_resolved": true, "scheme_name": true, "theme_mode": true,
 		"focus_mode": true, "hide_marks": true, "file_view": true,
 		"raw_markdown": true, "raw_html": true,
-		"queue_global":  true, // #171: This file / All files — a view pref like the rest
-		"toc_collapsed": true, // #137: desktop TOC column collapse — a durable view pref
+		"queue_global":      true, // #171: This file / All files — a view pref like the rest
+		"toc_collapsed":     true, // #137: desktop TOC column collapse — a durable view pref
+		"unfold_mechanical": true, // #115 A′3: turn the walkthrough's mechanical folds off
 	}
 	for k := range m {
 		if !wantKeys[k] {

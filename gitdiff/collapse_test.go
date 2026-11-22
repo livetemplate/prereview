@@ -1,6 +1,7 @@
 package gitdiff
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -170,5 +171,42 @@ func TestCollapse_PinOnUnchangedFile_ReturnsInput(t *testing.T) {
 	in := []DiffLine{ctxLine(1), ctxLine(2), ctxLine(3)}
 	if got := kinds(CollapseToHunks(in, 0, pinNew(2))); got != "ctx ctx ctx " {
 		t.Fatalf("an unchanged file is shown whole regardless of pins, got %q", got)
+	}
+}
+
+// TestFoldRanges: each run of rows in one group becomes one "mech" row numbered
+// like its first row; a kept row splits the run; other rows pass through.
+func TestFoldRanges(t *testing.T) {
+	lines := []DiffLine{
+		{Kind: "ctx", OldNum: 1, NewNum: 1},
+		{Kind: "del", OldNum: 2},
+		{Kind: "add", NewNum: 2},
+		{Kind: "add", NewNum: 3}, // kept: splits the run
+		{Kind: "add", NewNum: 4},
+		{Kind: "fold", OldNum: 3, NewNum: 5, Content: "9"},
+		{Kind: "add", NewNum: 14},
+	}
+	group := func(l DiffLine) string {
+		switch {
+		case l.Kind == "del" || (l.Kind == "add" && l.NewNum <= 4):
+			return "H2-2"
+		case l.Kind == "add" && l.NewNum == 14:
+			return "H11-14"
+		}
+		return ""
+	}
+	keep := func(l DiffLine) bool { return l.Kind == "add" && l.NewNum == 3 }
+	var got []string
+	for _, l := range FoldRanges(lines, group, keep) {
+		got = append(got, fmt.Sprintf("%s:%d-%d:%s:%s", l.Kind, l.OldNum, l.NewNum, l.Content, l.Group))
+	}
+	want := []string{
+		"ctx:1-1::", "mech:2-0:2:H2-2", "add:0-3::", "mech:0-4:1:H2-2", "fold:3-5:9:", "mech:0-14:1:H11-14",
+	}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("FoldRanges =\n  %v\nwant\n  %v", got, want)
+	}
+	if out := FoldRanges(lines, func(DiffLine) string { return "" }, nil); len(out) != len(lines) {
+		t.Errorf("no group: %d rows, want %d unchanged", len(out), len(lines))
 	}
 }

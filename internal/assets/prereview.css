@@ -2123,6 +2123,19 @@ header.file-head .file-head-comment button svg { display: block; }
   font-size: 0.7rem; color: var(--pico-muted-color);
   font-family: var(--jbm); letter-spacing: 0.04em;
 }
+/* #115 A′3: changed lines folded as mechanical. A full-width tap target, tinted
+   as a change (not context), so folded code never reads as unchanged. */
+.code .mech-row { margin: 0; user-select: none; }
+.code .mech-row .mech-fold {
+  display: block; width: 100%; margin: 0; padding: 0.3rem 0.6rem; min-height: 0;
+  border: 0; border-radius: 0; text-align: center; cursor: pointer;
+  font-family: var(--sans); font-size: 0.75rem; font-weight: 600; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-top: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  border-bottom: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.code .mech-row .mech-fold:hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+@media (pointer: coarse) { .code .mech-row .mech-fold { min-height: 44px; } }
 .code .line-row:not(:has(.composer)):not(.has-line-marks):not(:has(.finding-card)) {
   content-visibility: auto;
   contain-intrinsic-size: auto 16px;

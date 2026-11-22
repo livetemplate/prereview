@@ -30,7 +30,7 @@
   <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     {{range $.WalkSteps}}
-    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}{{if .InConcern}} walk-in-concern{{end}}" data-key="step-{{.ID}}">{{if .Concern}}<div class="walk-concern"><span class="walk-concern-title">{{.Concern.Title}}</span> · {{.Concern.Steps}} step{{if ne .Concern.Steps 1}}s{{end}}{{if .Concern.Mechanical}} · mechanical{{end}}</div>{{end}}
+    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}{{if .InConcern}} walk-in-concern{{end}}" data-key="step-{{.ID}}">{{if .Concern}}<div class="walk-concern"><span class="walk-concern-title">{{.Concern.Title}}</span> · {{.Concern.Steps}} step{{if ne .Concern.Steps 1}}s{{end}}{{if .Concern.Mechanical}} · mechanical{{if .Concern.Folded}} · {{.Concern.Folded}} line{{if ne .Concern.Folded 1}}s{{end}} fold{{end}}{{end}}</div>{{end}}
       <div class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> <span class="walk-title-text">{{.Title}}</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="{{.Num}}"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
       {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}{{if .Risks}}<ul class="walk-risks">{{range .Risks}}<li><span class="ck-pill ck-fail risk-chip">{{.Kind}}</span>{{if .Note}} {{.Note}}{{end}}</li>{{end}}</ul>{{end}}
       <ul class="walk-anchors">

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/gitdiff"
 )
 
 // state_explain.go holds the Understand page's views (#115). Zero-arg methods
@@ -84,6 +85,7 @@ type ConcernHead struct {
 	Title      string
 	Mechanical bool
 	Steps      int // how many steps the run holds
+	Folded     int // changed lines in its foldable hunks, across files (0 with folds off)
 }
 
 // WalkImpact is an impact anchor ready to render: a jump link, a plain label (a
@@ -133,7 +135,7 @@ func (s PrereviewState) WalkSteps() []WalkStep {
 			if i > 0 && steps[i-1].Concern == st.Concern {
 				run.Steps++
 			} else {
-				run = &ConcernHead{Title: c.Title, Mechanical: c.Mechanical, Steps: 1}
+				run = &ConcernHead{Title: c.Title, Mechanical: c.Mechanical, Steps: 1, Folded: s.foldedLines(c.ID)}
 				ws.Concern = run
 			}
 		}
@@ -320,4 +322,75 @@ func (s PrereviewState) walkRanks() map[string]int {
 		}
 	}
 	return out
+}
+
+// mechHunkOf is the open file's mechanical hunk that holds row l, or nil. A del
+// row sits in the hunk's old lines, an add row in its new ones.
+func (s PrereviewState) mechHunkOf(l gitdiff.DiffLine) *MechHunk {
+	side, n := "new", l.NewNum
+	switch l.Kind {
+	case "del":
+		side, n = "old", l.OldNum
+	case "add":
+	default:
+		return nil
+	}
+	hunks := s.Mechanical[s.SelectedFile]
+	for i := range hunks {
+		if hunks[i].Hunk.Covers(side, n, n) {
+			return &hunks[i]
+		}
+	}
+	return nil
+}
+
+// mechGroup is VisibleLines' fold key for the open file's rows: the hunk key of
+// a row in a mechanical hunk the reviewer hasn't opened, "" for any other. Nil
+// when nothing folds (no mechanical hunks here, or the pref turns folds off).
+func (s PrereviewState) mechGroup() func(gitdiff.DiffLine) string {
+	if s.UnfoldMechanical || len(s.Mechanical[s.SelectedFile]) == 0 {
+		return nil
+	}
+	return func(l gitdiff.DiffLine) string {
+		if m := s.mechHunkOf(l); m != nil && !s.MechRevealed[mechRevealKey(s.SelectedFile, m.Key)] {
+			return m.Key
+		}
+		return ""
+	}
+}
+
+// MechTitles names the concern behind each of the open file's mechanical folds,
+// keyed by hunk key, for the fold row's label.
+func (s PrereviewState) MechTitles() map[string]string {
+	hunks := s.Mechanical[s.SelectedFile]
+	if len(hunks) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(hunks))
+	for _, m := range hunks {
+		out[m.Key] = m.Title
+	}
+	return out
+}
+
+// HasMechanical reports that the walkthrough has lines that fold, which is when
+// the View menu offers the switch.
+func (s PrereviewState) HasMechanical() bool { return len(s.Mechanical) > 0 }
+
+// foldedLines counts the changed lines in concern's foldable hunks, across
+// files: none when the pref turns folds off. Rows a marker or a card pins, and
+// folds the reviewer opened, still count: it sizes the concern, not the screen.
+func (s PrereviewState) foldedLines(concern string) int {
+	if s.UnfoldMechanical {
+		return 0
+	}
+	n := 0
+	for _, hunks := range s.Mechanical {
+		for _, m := range hunks {
+			if m.Concern == concern {
+				n += m.Hunk.OldCount + m.Hunk.NewCount
+			}
+		}
+	}
+	return n
 }
