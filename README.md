@@ -107,6 +107,10 @@ questions about the whole change, each on the lines it asks about.
 
 <p align="center"><img src="docs/understand.gif" alt="The agent's walkthrough grouped by concern, its flow diagram, and the step bar walking the change file to file" width="760"></p>
 
+**Read only what changed.** A file you marked viewed tells you when it changes
+again, and a file the agent edited since you last opened it marks the new lines.
+Moved code is labelled at both ends, and whitespace-only changes can be hidden.
+
 **Search, themes and your phone.** <kbd>⌘K</kbd> searches file names and contents.
 Three colour schemes come in light and dark. On a remote box prereview binds your
 Tailscale address, so the same review works from your phone.
