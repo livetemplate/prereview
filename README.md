@@ -100,10 +100,12 @@ write your own. A judge is a yes/no rubric your agent answers for the whole file
 **Walk through the change, and quiz yourself on it.** **Understand** asks the agent
 to walk you through the whole change in the order it makes sense to read. A step bar
 takes you from step to step, file to file. prereview checks every line a step cites,
-and lists the changes no step explains as the last step. The Quiz tab asks for
-questions about the diff, each on the lines it asks about.
+and lists the changes no step explains as the last step. The agent can group the
+steps, fold mechanical changes such as a rename, flag risks, point at the code a
+step affects outside the diff, and draw flow diagrams. The Quiz tab asks for
+questions about the whole change, each on the lines it asks about.
 
-<p align="center"><img src="docs/understand.gif" alt="Explain this change, the agent's walkthrough with one change no step explains, then the step bar walking the change file to file" width="760"></p>
+<p align="center"><img src="docs/understand.gif" alt="The agent's walkthrough grouped by concern, its flow diagram, and the step bar walking the change file to file" width="760"></p>
 
 **Search, themes and your phone.** <kbd>⌘K</kbd> searches file names and contents.
 Three colour schemes come in light and dark. On a remote box prereview binds your

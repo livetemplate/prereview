@@ -447,7 +447,7 @@ type PrereviewState struct {
 	ShowAllComments bool `json:"show_all_comments"`
 
 	// ShowUnderstand shows the Understand page (#115): the walkthrough of the
-	// whole change and the selected file's quiz (#191), in place of the diff
+	// whole change and the quiz on it (#191), in place of the diff
 	// viewer like ShowAllComments. Not persisted, and reset by every navigation
 	// action: a view that survives a jump would strand the reviewer somewhere
 	// they didn't ask to be. UnderstandTab is "" (Walkthrough) or "quiz".
@@ -467,10 +467,21 @@ type PrereviewState struct {
 	// that load, so the watcher reloads only when the file moved.
 	Explanations []Explanation `json:"explanations"`
 	ExplainSeen  string        `json:"explain_seen"`
+	// QuizSeen is quiz.jsonl's fingerprint at the last load (applyQuiz), so the
+	// watcher reloads the quizzes only when the file moved.
+	QuizSeen string `json:"quiz_seen"`
 	// NotExplained is the current walkthrough's check (#115 A4): every changed
 	// hunk no step cites, as anchors (notExplained). walkSteps makes it the last
 	// step, so the walk visits what the agent left out.
 	NotExplained []Anchor `json:"not_explained"`
+	// Mechanical is the current walkthrough's foldable hunks per file (#115 A′3):
+	// every changed hunk cited only by steps in mechanical concerns. Nil while the
+	// walkthrough is stale. MechRevealed holds the folds the reviewer opened this
+	// visit (file + "\x00" + hunk key). UnfoldMechanical turns every fold off
+	// (a durable view pref, uiprefs.go).
+	Mechanical       map[string][]MechHunk `json:"mechanical"`
+	MechRevealed     map[string]bool       `json:"mech_revealed"`
+	UnfoldMechanical bool                  `json:"unfold_mechanical"`
 	// The walkthrough in progress (#115 A3): WalkExplanation names the one being
 	// walked ("" = no walk), so a replaced walkthrough ends the walk instead of
 	// landing on a stranger's stop; WalkStep/WalkAnchor is the stop shown
@@ -515,16 +526,6 @@ type PrereviewState struct {
 	// away mid-quiz. Not ToggledRows: that is row-granular (it would hide an open
 	// question on the same row) and persisted (it would re-create #212).
 	QuizJustAnswered map[string]bool `json:"quiz_just_answered"`
-
-	// QuizRequestedFile is the file a "Quiz me" request was just sent for, so the
-	// control can show "Quiz requested…" instead of inviting a second tap. Cleared
-	// as soon as a quiz for that file arrives (applyQuiz).
-	//
-	// It exists because the first version gave NO feedback: the request saved a
-	// comment, nothing visibly changed, and a real reviewer on a phone tapped again
-	// and queued a duplicate. A UI hint, deliberately not persisted — worst case a
-	// reconnect re-offers the button, which is merely the old behaviour.
-	QuizRequestedFile string `json:"quiz_requested_file"`
 
 	// ScrollToCommentID, when non-empty for one render, drives the
 	// `lvt-fx:scroll="into-view"` directive on the matching inline-comment.
@@ -1003,7 +1004,12 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	// view or rendered Markdown; an anchor that drifted). Its card hangs on that
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
-	return gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, s.pinnedRows())
+	pinned := s.pinnedRows()
+	lines := gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, pinned)
+	if group := s.mechGroup(); group != nil {
+		lines = gitdiff.FoldRanges(lines, group, pinned)
+	}
+	return lines
 }
 
 // pinnedRows reports the rows a fold must never hide, because something hangs on
@@ -1018,7 +1024,7 @@ func (s PrereviewState) pinnedRows() func(gitdiff.DiffLine) bool {
 	marks := s.StepMarkLines()
 	return func(l gitdiff.DiffLine) bool {
 		k := rowKey(l)
-		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)] != ""
+		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)] != nil
 	}
 }
 

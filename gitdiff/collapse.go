@@ -68,3 +68,46 @@ func CollapseToHunks(lines []DiffLine, ctx int, keep func(DiffLine) bool) []Diff
 	}
 	return out
 }
+
+// Folded reports a synthetic row that stands for hidden lines (a CollapseToHunks
+// "fold" or a FoldRanges "mech"), not a line of the file.
+func (l DiffLine) Folded() bool { return l.Kind == "fold" || l.Kind == "mech" }
+
+// FoldRanges folds changed rows out of the way: each maximal run of rows that
+// group names with the same non-empty key becomes one synthetic row,
+//
+//	Kind == "mech", Content == "<N>", Group == the key
+//
+// numbered like the run's first row (so its data-key, M<old>-<new>, is stable and
+// apart from CollapseToHunks' F<old>-<new>). A row keep reports true is never
+// folded and splits its run; keep may be nil. Every other row passes through.
+func FoldRanges(lines []DiffLine, group func(DiffLine) string, keep func(DiffLine) bool) []DiffLine {
+	// Each row's group, once ("" = not folded, kept rows included).
+	groups := make([]string, len(lines))
+	for i, l := range lines {
+		if g := group(l); g != "" && (keep == nil || !keep(l)) {
+			groups[i] = g
+		}
+	}
+	out := make([]DiffLine, 0, len(lines))
+	for i := 0; i < len(lines); {
+		g := groups[i]
+		if g == "" {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+		start := i
+		for i < len(lines) && groups[i] == g {
+			i++
+		}
+		out = append(out, DiffLine{
+			Kind:    "mech",
+			OldNum:  lines[start].OldNum,
+			NewNum:  lines[start].NewNum,
+			Content: strconv.Itoa(i - start),
+			Group:   g,
+		})
+	}
+	return out
+}

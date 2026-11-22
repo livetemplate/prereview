@@ -382,6 +382,21 @@ func renderFixtures() []renderFixture {
 		"z1\x00q1": {QuizID: "z1", QuestionID: "q1", Choice: 1},
 	}
 
+	// #115 A′5: one quiz on the whole change, its questions grouped by file in
+	// drawer order (app.go is listed; lib.go is not, so it sorts after), with an
+	// older per-file quiz for app.go that the newer one replaces.
+	quizChange := goBase()
+	quizChange.ShowUnderstand, quizChange.UnderstandTab = true, "quiz"
+	quizChange.Quizzes = []review.Quiz{
+		{ID: "old", File: "app.go", Questions: []review.Question{
+			{ID: "q1", Kind: "line", Probe: "change-type", Prompt: "Replaced: you never see this", Options: []string{"a", "b"}, Why: "w", FromLine: 1, ToLine: 1, Side: "new", AnchorStatus: "ok"}}},
+		{ID: "whole", Questions: []review.Question{
+			{ID: "q1", File: "lib.go", Kind: "line", Probe: "consequence", Prompt: "What breaks if lib's loop exits early?", Options: []string{"Nothing", "The retry"}, Answer: 1, Why: "The retry depends on it.", FromLine: 4, ToLine: 4, Side: "new", AnchorStatus: "ok"},
+			{ID: "q2", File: "app.go", Kind: "line", Probe: "rationale", Prompt: "Why does app.go read the budget?", Options: []string{"To cap retries", "To log"}, Why: "It caps them.", FromLine: 2, ToLine: 3, Side: "new", AnchorStatus: "ok"},
+			{ID: "q3", File: "app.go", Kind: "file", Probe: "decision", Prompt: "Which test did the change not add?", Options: []string{"Timeout", "Happy path"}, Why: "No timeout test.", Side: "new", AnchorStatus: "absent"},
+		}},
+	}
+
 	// the Understand page's Quiz tab with no quiz yet: one button per prompt that
 	// asks for one (#115 moved them off the file header, which now shows a single
 	// Understand button — pinned here too).
@@ -460,9 +475,52 @@ func renderFixtures() []renderFixture {
 	// #115 A3: walking the walkthrough — the step bar in the stepper's slot, the
 	// step's marker on its first cited line, and the drawer in walkthrough order.
 	walkBar := goBase()
-	walkBar.Explanations = understandWalk.Explanations
+	// A risk on the first step: chips in the bar and on its diff marker (A′2).
+	walkBar.Explanations = []review.Explanation{understandWalk.Explanations[0]}
+	walkBar.Explanations[0].Steps = append([]review.Step(nil), understandWalk.Explanations[0].Steps...)
+	walkBar.Explanations[0].Steps[0].Risks = []review.Risk{{Kind: "concurrency", Note: "shared ctx"}}
 	walkBar.WalkExplanation, walkBar.WalkStep, walkBar.WalkAnchor = "e1", 0, 0
 	walkBar.DrawerWalkOrder = true
+
+	// #115 A′2: concern headings (one mechanical), risk chips with notes, and
+	// impact links: a jump, a ⚠ for one that doesn't resolve.
+	understandConcerns := goBase()
+	understandConcerns.ShowUnderstand, understandConcerns.AgentMode = true, true
+	understandConcerns.ExplainPrompts = understandEmpty.ExplainPrompts
+	line := func(from int) []review.Anchor {
+		return []review.Anchor{{File: "app.go", Kind: "line", Side: "new", FromLine: from, ToLine: from, Status: "ok"}}
+	}
+	understandConcerns.Explanations = []review.Explanation{{
+		ID: "e2", Summary: "Retries uploads, and renames the client.", CreatedAt: "2026-11-22T11:00:00Z",
+		Concerns: []review.Concern{{ID: "retry", Title: "Retry loop"}, {ID: "rename", Title: "Rename Client to Uploader", Mechanical: true}},
+		Steps: []review.Step{
+			{ID: "s1", Title: "Add the backoff loop", Anchors: line(2), Concern: "retry",
+				Risks: []review.Risk{{Kind: "concurrency", Note: "the loop shares ctx"}, {Kind: "error-handling"}},
+				Impact: []review.ImpactAnchor{
+					{File: "worker.go", FromLine: 88, ToLine: 88, Note: "the caller", Status: "ok"},
+					{File: "gone.go", FromLine: 4, ToLine: 4, Status: "ungrounded"},
+				}},
+			{ID: "s2", Title: "Cap the total wait", Anchors: line(3), Concern: "retry"},
+			{ID: "s3", Title: "Rename the type", Anchors: line(1), Concern: "rename"},
+			{ID: "s4", Title: "Bump the version", Anchors: line(5)},
+		},
+	}}
+
+	// #115 A′4: the Diagrams tab: one flow, drawn client-side from its escaped
+	// source, with the lines it cites (one doesn't resolve).
+	understandDiagrams := goBase()
+	understandDiagrams.ShowUnderstand, understandDiagrams.AgentMode = true, true
+	understandDiagrams.UnderstandTab = "diagrams"
+	understandDiagrams.Explanations = []review.Explanation{{
+		ID: "e3", CreatedAt: "2026-11-22T11:00:00Z",
+		Steps: []review.Step{{ID: "s1", Title: "Retry", Anchors: line(2)}},
+		Diagrams: []review.Diagram{{ID: "d1", Title: "Upload retry flow",
+			Mermaid: "graph TD\n  Send --> Fail{failed?}\n  Fail -->|yes| Backoff --> Send",
+			Anchors: []review.Anchor{
+				{File: "app.go", Kind: "line", Side: "new", FromLine: 2, ToLine: 3, Status: "ok"},
+				{File: "gone.go", Kind: "line", Side: "new", FromLine: 4, ToLine: 4, Status: "ungrounded"},
+			}}},
+	}}
 
 	// external (live-site) mode
 	external := review.PrereviewState{
@@ -886,12 +944,15 @@ func renderFixtures() []renderFixture {
 		{"request-readmore", requestCard},
 		{"request-all-comments", requestAll},
 		{"quiz", quiz},
+		{"quiz-change", quizChange},
 		{"quiz-empty", quizEmpty},
 		{"quiz-inline", quizInline},
 		{"quiz-ask", quizAsk},
 		{"understand-empty", understandEmpty},
 		{"understand-walkthrough", understandWalk},
 		{"walk-bar", walkBar},
+		{"understand-concerns", understandConcerns},
+		{"understand-diagrams", understandDiagrams},
 		{"prompts-picker", promptsPicker},
 		{"shortcuts-composer", shortcuts},
 		{"ripple", ripple},

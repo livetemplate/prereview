@@ -765,8 +765,8 @@
   </div>
   
   <p class="walk-summary">Adds a retry loop to the worker.</p>
-  <p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>
-  <p class="walk-stale walk-unexplained" role="status">⚠ 1 change no step explains. They are the last step.</p>
+  <p class="walk-stale" role="status">The files changed after this walkthrough was written, so some steps may be out of date.</p>
+  <p class="walk-stale walk-unexplained" role="status">⚠ The walkthrough skips 1 change, listed as the last step.</p>
   <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     
@@ -776,9 +776,9 @@
 Check the default.</p>
       <ul class="walk-anchors">
         
-        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="2"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">app.go L2-L3</button></form></li>
+        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="2"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L2-L3</button></form></li>
         
-        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="old"><input type="hidden" name="line" value="1"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">app.go L1 (old)</button></form></li>
+        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="old"><input type="hidden" name="line" value="1"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L1 (old)</button></form></li>
         
       </ul>
     </li>
@@ -788,19 +788,19 @@ Check the default.</p>
       
       <ul class="walk-anchors">
         
-        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="logo.png"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="0"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">logo.png</button></form></li>
+        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="logo.png"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="0"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">logo.png</button></form></li>
         
-        <li><span class="quiz-ungrounded" title="The walkthrough cites gone.go L9, but the review has no such line — treat this step with suspicion">⚠ gone.go L9, not in this review</span></li>
+        <li><span class="quiz-ungrounded" title="The walkthrough cites gone.go L9, which isn't in this review. The agent may have it wrong.">⚠ gone.go L9 isn't in this review</span></li>
         
       </ul>
     </li>
     
     <li class="walk-step walk-step-unexplained" data-key="step-not-explained">
       <div class="walk-title"><span class="ck-pill walk-num">3</span> <span class="walk-title-text">Not explained</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="3"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
-      <p class="walk-body">Changes no step cites. Read them too: what a walkthrough leaves out is where a surprise hides.</p>
+      <p class="walk-body">The walkthrough doesn&#39;t mention these changes. Read them too.</p>
       <ul class="walk-anchors">
         
-        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="5"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">app.go L5</button></form></li>
+        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="5"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L5</button></form></li>
         
       </ul>
     </li>

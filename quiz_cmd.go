@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
@@ -36,14 +37,15 @@ func runQuiz(args []string) error {
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview quiz [--out <dir>] [--file <quiz.json>]\n\n"+
-				"  Submit a comprehension quiz about a file's diff, which the live review UI\n"+
+				"  Submit a comprehension quiz about the change, which the live review UI\n"+
 				"  renders for the reviewer to answer. Reads a JSON payload from --file or\n"+
 				"  stdin: a single object, a JSON array, or newline-delimited objects (JSONL).\n\n"+
 				"    {\n"+
 				"      \"id\":   \"stable-id\",           // optional; re-use to revise a quiz\n"+
-				"      \"file\": \"internal/x/y.go\",     // required, repo-relative\n"+
+				"      \"file\": \"internal/x/y.go\",     // the file, for a quiz on one file; omit for the whole change\n"+
 				"      \"questions\": [\n"+
 				"        {\n"+
+				"          \"file\":      \"internal/x/y.go\", // the file it asks about; required without a quiz \"file\"\n"+
 				"          \"probe\":     \"consequence\", // change-type|localization|consequence|rationale|decision\n"+
 				"          \"prompt\":    \"What breaks if …?\",\n"+
 				"          \"options\":   [\"…\", \"…\", \"…\"],  // >= 2, all plausible\n"+
@@ -115,6 +117,9 @@ func parseQuizInput(raw []byte) ([]review.Quiz, error) {
 	out := make([]review.Quiz, 0, len(parsed))
 	for i := range parsed {
 		q := review.NormalizeQuiz(parsed[i])
+		if q.CreatedAt == "" {
+			q.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+		}
 		if err := review.ValidateQuiz(q); err != nil {
 			return nil, fmt.Errorf("quiz %d: %w", i+1, err)
 		}

@@ -486,10 +486,29 @@ lists every changed hunk no step cites as a last step, "Not explained", which th
 reviewer walks too. Cite each change worth reading; citing a whole text file does
 not explain its changes. To revise, re-submit with the same `id`.
 
+Four optional fields help the reviewer read a large change. Use each only where it
+applies:
+
+- **`concerns`**: declare `{"id", "title", "mechanical"?}` once, and name one on a
+  step with `"concern"`. Keep a concern's steps next to each other; the page heads
+  each run with its title. Mark a concern `mechanical` when its lines need no
+  careful reading (a rename, moved code, generated files): prereview folds the
+  changes only its steps cite. A mechanical step can't carry a risk.
+- **`risks`** on a step: `[{"kind", "note"?}]`, `kind` one of `auth`,
+  `concurrency`, `data-migration`, `error-handling`, `security`, `performance`,
+  `public-api`. They show as chips and never reorder anything.
+- **`impact`** on a step: code outside the diff the change affects, such as a
+  caller or a test: `[{"file", "from_line", "to_line"?, "contains"?, "note"?}]`.
+  prereview checks the lines exist and, with `contains`, that the text is in them.
+  Impact never counts as explaining a change.
+- **`diagrams`**: `[{"id"?, "title"?, "mermaid", "anchors"?}]`, a mermaid flow
+  drawn on a Diagrams tab, with the lines it cites. prereview checks the anchors,
+  not the diagram.
+
 ## Comprehension quizzes (`prereview quiz`, #191)
 
-The reviewer can also ask for a **comprehension quiz** about a file's diff, from the
-Quiz tab of the Understand page. Like a prompt it arrives as a `kind=file` comment
+The reviewer can also ask for a **comprehension quiz** about the whole change, from
+the Quiz tab of the Understand page. Like a prompt it arrives as a `kind=file` comment
 (marked `"request":"quiz"`), and its body spells out the contract — but it wants
 **neither a fix nor a suggestion**. Answer with `prereview quiz`, never `prereview
 suggest`, and do not edit any files.
@@ -501,10 +520,13 @@ prereview quiz --out "<STORE>" --file quiz.json    # or pipe JSON on stdin
 Then `done` the request comment and `reply` a one-liner ("5 questions, 2 about
 decisions you didn't ask for").
 
-Write 3-5 multiple-choice questions grounded **strictly in that diff**. Each needs
-`options` (>= 2), a 0-based `answer`, a `why` explaining it (shown after the
-reviewer answers - this is where the teaching happens), and `from_line`/`to_line`/
-`side` pointing at the lines it is about. Tag each with a `probe`:
+Write 3-7 multiple-choice questions grounded **strictly in the diff**, spread over
+the files where the change matters most. Leave the quiz's `file` empty and give
+each question the `file` it asks about. (A quiz with a `file` is about that one
+file; its questions may omit theirs.) Each question needs `options` (>= 2), a
+0-based `answer`, a `why` explaining it (shown after the reviewer answers - this is
+where the teaching happens), and `from_line`/`to_line`/`side` pointing at the lines
+it is about. Tag each with a `probe`:
 
 - `change-type` - what kind of change this is
 - `localization` - where a behavior lives in the diff
@@ -519,8 +541,8 @@ least one whenever the diff contains such a choice. If you genuinely made none,
 write no `decision` question: an honest omission beats a manufactured surprise.
 
 Anchor each question the way you would anchor a comment, with `kind`:
-`"line"` (the default) for a line range, or `"file"` for a question about the
-change as a whole. That includes one about something **absent** ("chose not to add a
+`"line"` (the default) for a line range, or `"file"` for a question about its file
+as a whole. That includes one about something **absent** ("chose not to add a
 test for the error path"), which has no lines to point at. `text`, `area` and
 `region` are accepted for parity with comments but are not rendered yet.
 

@@ -1,6 +1,8 @@
 package gitdiff
 
 import (
+	"fmt"
+	"hash/fnv"
 	"html"
 	"strings"
 
@@ -48,7 +50,7 @@ func fencedCodeRaw(fcb *ast.FencedCodeBlock, src []byte) []byte {
 	return buf
 }
 
-// renderMermaidBlock wraps a diagram definition in the container the client
+// MermaidHTML wraps a diagram definition in the container the client
 // renderer turns into SVG. Three load-bearing pieces:
 //
 //   - lvt-ignore: livetemplate's morphdom skips this element and its whole
@@ -63,11 +65,13 @@ func fencedCodeRaw(fcb *ast.FencedCodeBlock, src []byte) []byte {
 //
 // The trailing newline goldmark leaves on the last fence line is trimmed so
 // the definition mermaid parses has no spurious blank final line.
-func renderMermaidBlock(raw []byte) string {
+func MermaidHTML(raw []byte) string {
 	def := strings.TrimRight(string(raw), "\n")
 	if def == "" {
 		return ""
 	}
-	return `<div class="md-mermaid" lvt-ignore><pre class="mermaid">` +
+	h := fnv.New64a()
+	h.Write([]byte(def))
+	return fmt.Sprintf(`<div class="md-mermaid" data-key="mmd-%x" lvt-ignore><pre class="mermaid">`, h.Sum64()) +
 		html.EscapeString(def) + `</pre></div>`
 }

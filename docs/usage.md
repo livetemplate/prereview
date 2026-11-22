@@ -180,8 +180,8 @@ agent either way.
 ## Understand
 
 **Understand** in the file header (or <kbd>z</kbd>) opens a page for getting to
-grips with a change before you accept it. It has two tabs: a walkthrough of the
-whole change, and a quiz on the open file.
+grips with a change before you accept it. It has a walkthrough of the whole change,
+its flow diagrams when the agent drew any, and a quiz on the change.
 
 **Walkthrough.** **Explain this change** asks your agent to walk you through the
 change in the order it makes sense to read: usually the data first, then the logic,
@@ -200,10 +200,21 @@ order** in the file drawer lists the files in the order the walkthrough reads th
 step, so walking to the end shows you what the walkthrough left out. The page says
 how many there are.
 
-**Quiz.** The Quiz tab asks your agent for a short multiple-choice quiz on the open
-file's diff. The questions also appear on the lines they ask about (a question about
-the whole file sits at the top), and choosing an answer shows whether it's right and
-why. Every question cites a line range that prereview checks, so a question about
+**Concerns, risks and impact.** The agent can group the steps by what the change
+does, each group under its own heading. A group it marks mechanical, such as a
+rename, folds in the diff behind **Show N mechanical lines**: tap to read them, or
+turn **Fold mechanical changes** off in the View menu. A change any other step
+cites, or no step cites, never folds. Steps can carry risk chips (concurrency,
+security, …) and an **Affects** list of code outside the diff the step touches,
+such as a caller or a test; prereview checks those lines exist.
+
+**Diagrams.** When the walkthrough includes flow diagrams, a Diagrams tab draws
+them, each with links to the lines it cites.
+
+**Quiz.** The Quiz tab asks your agent for a short multiple-choice quiz on the
+whole change, listed by file. Each question also appears on the lines it asks about
+(a question about a whole file sits at its top), and the open-items bar steps
+through them file by file. Choosing an answer shows whether it's right and why. Every question cites a line range that prereview checks, so a question about
 code that isn't there is marked instead of shown as fact.
 
 To add your own walkthrough or quiz prompts, put Markdown files in

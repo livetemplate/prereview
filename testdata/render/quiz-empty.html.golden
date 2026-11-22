@@ -651,8 +651,8 @@
   </div>
   
   <div class="empty quiz-empty">
-    <p>No quiz for <code>app.go</code> yet.</p>
-    <p><small>Ask the agent for a few questions about this file's diff, to check you understood it before you accept it.</small></p>
+    <p>No quiz yet.</p>
+    <p><small>Ask the agent for a few questions about the whole change, to check you understood it before you accept it.</small></p>
     
   </div>
   

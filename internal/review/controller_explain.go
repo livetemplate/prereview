@@ -1,134 +1,163 @@
 package review
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"log/slog"
 	"maps"
-	"path/filepath"
 	"slices"
 	"strconv"
-	"sync"
 
 	"github.com/livetemplate/livetemplate"
 	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/gitdiff"
 )
 
-// changedIndexCache holds the last changed-line index and the key it was built
-// for. Building one runs `git diff -U0` over the repo (~150ms on a 165-file
-// change), so only a change to the key rebuilds it.
-type changedIndexCache struct {
-	mu  sync.Mutex
-	key string
-	idx *gitdiff.ChangedIndex
-}
-
-// changedFiles is the review's changed files: what the index covers. It is the
-// data, not the drawer, so the "show all files" toggle doesn't change it.
-func (s PrereviewState) changedFiles() []gitdiff.FileEntry {
-	var out []gitdiff.FileEntry
-	for _, f := range s.Files {
-		if f.Status != "" && s.inScope(f.Path) {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-// changedIndex returns the index of the changed files, rebuilt only when the
-// base's commit or a changed file's size or mtime moved.
-func (c *PrereviewController) changedIndex(state *PrereviewState) *gitdiff.ChangedIndex {
-	files := state.changedFiles()
-	base := c.effectiveBase(state)
-	key := c.changedIndexKey(base, files)
-
-	c.changedIdx.mu.Lock()
-	defer c.changedIdx.mu.Unlock()
-	if c.changedIdx.idx != nil && c.changedIdx.key == key {
-		return c.changedIdx.idx
-	}
-	var idx *gitdiff.ChangedIndex
-	if c.NoGit {
-		paths := make([]string, len(files))
-		for i, f := range files {
-			paths[i] = f.Path
-		}
-		idx = gitdiff.LoadChangedIndexNoGit(c.RepoPath, paths)
-	} else {
-		var err error
-		if idx, err = gitdiff.LoadChangedIndex(c.RepoPath, base, files); err != nil {
-			slog.Warn("explain: changed index", "base", base, "err", err)
-			return nil
-		}
-	}
-	c.changedIdx.key, c.changedIdx.idx = key, idx
-	return idx
-}
-
-func (c *PrereviewController) changedIndexKey(base string, files []gitdiff.FileEntry) string {
-	h := sha256.New()
-	if !c.NoGit {
-		fmt.Fprintf(h, "%s\x00%s\x00", base, gitdiff.ResolveRef(c.RepoPath, base))
-	}
-	for _, f := range files {
-		fmt.Fprintf(h, "%s\x00%s\x00%s\x00", f.Path, f.Status, statusFingerprint(filepath.Join(c.RepoPath, f.Path)))
-	}
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 // applyExplain loads the agent's explanations into state, grounds every anchor
 // against the live index, and marks the ones written before the latest edit.
 // Called from Mount (which RefreshDiff reuses) and, when explain.jsonl moved,
 // from the watcher reload.
 func (c *PrereviewController) applyExplain(state *PrereviewState) {
+	c.applyExplainWith(state, c.lazyCitable(state))
+}
+
+// applyExplainWith is applyExplain on a grounding pass's files, which the quiz
+// may share (groundUnderstand).
+func (c *PrereviewController) applyExplainWith(state *PrereviewState, citableFiles func() *citable) {
 	state.ExplainSeen = statusFingerprint(ExplainPath(c.CSVPath))
 	state.Explanations = LoadExplanations(c.CSVPath)
-	state.NotExplained = nil
+	state.NotExplained, state.Mechanical = nil, nil
 	if len(state.Explanations) == 0 {
 		return
 	}
-	idx := c.changedIndex(state)
-	if idx == nil {
+	files := citableFiles()
+	if files == nil {
 		return
 	}
+	idx := files.idx
 	keys := make([]string, len(state.Explanations))
 	for i, e := range state.Explanations {
 		keys[i] = e.seenKey()
 	}
 	seen := c.stampFirstSeen(keys, idx.Fingerprint)
 
-	listed := map[string]bool{}
-	for _, f := range state.Files {
-		if state.inScope(f.Path) {
-			listed[f.Path] = true
-		}
-	}
-	unchanged := map[string]*gitdiff.FileChanges{} // read each unchanged file once
-	lookup := func(path string) *gitdiff.FileChanges {
-		if fc := idx.Files[path]; fc != nil {
-			return fc
-		}
-		if !listed[path] {
-			return nil
-		}
-		if _, ok := unchanged[path]; !ok {
-			unchanged[path] = gitdiff.UnchangedFile(c.RepoPath, path)
-		}
-		return unchanged[path]
-	}
 	for i := range state.Explanations {
 		e := &state.Explanations[i]
 		e.Stale = seen[e.seenKey()] != idx.Fingerprint
-		for j := range e.Steps {
-			for k := range e.Steps[j].Anchors {
-				a := &e.Steps[j].Anchors[k]
-				a.Status = groundRange(lookup(a.File), a.Kind, a.Side, a.FromLine, a.ToLine)
+	}
+
+	// Only the newest explanation is shown, so only it is grounded.
+	ground := func(as []Anchor) {
+		for k := range as {
+			a := &as[k]
+			a.Status = groundRange(files.changes(a.File), a.Kind, a.Side, a.FromLine, a.ToLine)
+		}
+	}
+	groundImpacts := func(as []ImpactAnchor) {
+		for k := range as {
+			as[k].Status = groundImpact(files.rows(as[k].File).rows, as[k])
+		}
+	}
+	e := state.CurrentExplanation()
+	for j := range e.Steps {
+		ground(e.Steps[j].Anchors)
+		groundImpacts(e.Steps[j].Impact)
+	}
+	for j := range e.Diagrams {
+		ground(e.Diagrams[j].Anchors)
+	}
+	state.NotExplained = notExplained(idx, e.Steps)
+	if !e.Stale {
+		state.Mechanical = mechanicalHunks(idx, *e)
+	}
+}
+
+// MechHunk is a changed hunk that folds: its key among the file's hunks
+// ("H<old start>-<new start>") and the title of the mechanical concern that
+// explains it, both fixed when the folds are derived.
+type MechHunk struct {
+	Hunk         gitdiff.Hunk
+	Key, Concern string // Concern is the concern's id
+	Title        string
+}
+
+// mechanicalHunks is each file's changed hunks that fold: at least one grounded
+// line anchor covers the hunk, and every one that does belongs to a step in a
+// mechanical concern. Derived from the anchors, so the agent can't fold code it
+// didn't cite, and a hunk no step cites (Not explained) never folds.
+func mechanicalHunks(idx *gitdiff.ChangedIndex, e Explanation) map[string][]MechHunk {
+	mech := map[string]string{} // mechanical concern id -> title
+	for _, c := range e.Concerns {
+		if c.Mechanical {
+			mech[c.ID] = c.Title
+		}
+	}
+	if len(mech) == 0 {
+		return nil
+	}
+	var out map[string][]MechHunk
+	for p, cs := range citesByFile(e.Steps) {
+		fc := idx.Files[p]
+		if fc == nil || fc.Opaque {
+			continue
+		}
+		for _, h := range fc.Hunks {
+			concern, all := "", true
+			for _, c := range cs {
+				if !c.covers(h) {
+					continue
+				}
+				if _, ok := mech[c.Concern]; !ok {
+					all = false
+					break
+				}
+				if concern == "" {
+					concern = c.Concern
+				}
+			}
+			if all && concern != "" {
+				if out == nil {
+					out = map[string][]MechHunk{}
+				}
+				out[p] = append(out[p], MechHunk{Hunk: h, Key: fmt.Sprintf("H%d-%d", h.OldStart, h.NewStart), Concern: concern, Title: mech[concern]})
 			}
 		}
 	}
-	state.NotExplained = notExplained(idx, state.CurrentExplanation().Steps)
+	return out
+}
+
+func (c *PrereviewController) RevealMechanical(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	if hunk := ctx.GetString("hunk"); hunk != "" {
+		state.MechRevealed = withKey(state.MechRevealed, mechRevealKey(state.SelectedFile, hunk))
+	}
+	return state, nil
+}
+
+// mechRevealKey names an opened fold in MechRevealed.
+func mechRevealKey(file, hunk string) string { return file + "\x00" + hunk }
+
+// openFoldAt opens the mechanical fold holding row l of the open file, if any:
+// a jump that lands on a folded line must leave it readable after its reveal.
+func openFoldAt(state *PrereviewState, l gitdiff.DiffLine) {
+	if m := state.mechHunkOf(l); m != nil {
+		state.MechRevealed = withKey(state.MechRevealed, mechRevealKey(state.SelectedFile, m.Key))
+	}
+}
+
+// withKey sets k in m, allocating m when nil.
+func withKey(m map[string]bool, k string) map[string]bool {
+	if m == nil {
+		m = map[string]bool{}
+	}
+	m[k] = true
+	return m
+}
+
+// ToggleFoldMechanical turns every mechanical fold off or back on: a durable
+// view pref, so hidden code is one switch away from never hiding.
+func (c *PrereviewController) ToggleFoldMechanical(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.UnfoldMechanical = !state.UnfoldMechanical
+	state.MoreMenuOpen = false
+	c.savePrefs(state)
+	return state, nil
 }
 
 // notExplained is every changed hunk no grounded anchor of steps covers, as
@@ -138,25 +167,18 @@ func (c *PrereviewController) applyExplain(state *PrereviewState) {
 // cap) has no lines, so a whole-file anchor is what explains it. Derived from the
 // diff, never from the agent: it is the check on what the walkthrough left out.
 func notExplained(idx *gitdiff.ChangedIndex, steps []Step) []Anchor {
-	cited := map[string][]Anchor{}
-	for _, st := range steps {
-		for _, a := range st.Anchors {
-			if !a.Ungrounded() {
-				cited[a.File] = append(cited[a.File], a)
-			}
-		}
-	}
+	cited := citesByFile(steps)
 	var out []Anchor
 	for _, p := range slices.Sorted(maps.Keys(idx.Files)) {
-		fc, as := idx.Files[p], cited[p]
+		fc, cs := idx.Files[p], cited[p]
 		if fc.Opaque {
-			if !slices.ContainsFunc(as, func(a Anchor) bool { return a.Kind == AnchorKindFile }) {
+			if !slices.ContainsFunc(cs, func(c cite) bool { return c.Kind == AnchorKindFile }) {
 				out = append(out, Anchor{File: p, Kind: AnchorKindFile, Side: "new", Status: anchorOK})
 			}
 			continue
 		}
 		for _, h := range fc.Hunks {
-			if slices.ContainsFunc(as, func(a Anchor) bool { return a.Kind == AnchorKindLine && h.Covers(a.Side, a.FromLine, a.ToLine) }) {
+			if slices.ContainsFunc(cs, func(c cite) bool { return c.covers(h) }) {
 				continue
 			}
 			side, from, to := h.Range()
@@ -166,26 +188,43 @@ func notExplained(idx *gitdiff.ChangedIndex, steps []Step) []Anchor {
 	return out
 }
 
-// groundRange reports whether a file entry has what an anchor cites: the whole
-// file, or both ends of a line range on one side. A nil entry (a path outside the
-// review) is never grounded. It takes plain fields so the A′ whole-change quiz
-// can ground its questions the same way.
-func groundRange(fc *gitdiff.FileChanges, kind, side string, from, to int) string {
-	if fc != nil && (kind == AnchorKindFile || (fc.HasLine(side, from) && fc.HasLine(side, to))) {
-		return anchorOK
-	}
-	return anchorUngrounded
+// cite is a grounded step anchor and the concern of the step that cites it.
+type cite struct {
+	Anchor
+	Concern string
 }
 
-// The Understand page's tabs. "" picks one from what there is (UnderstandOnQuiz).
+// covers reports that the cite explains hunk h: a line anchor overlapping it on
+// its side. A whole-file anchor explains no hunk (citing a file is not
+// explaining each of its changes).
+func (c cite) covers(h gitdiff.Hunk) bool {
+	return c.Kind == AnchorKindLine && h.Covers(c.Side, c.FromLine, c.ToLine)
+}
+
+// citesByFile is every grounded anchor of steps, by file: what coverage and
+// the mechanical folds both read.
+func citesByFile(steps []Step) map[string][]cite {
+	out := map[string][]cite{}
+	for _, st := range steps {
+		for _, a := range st.Anchors {
+			if !a.Ungrounded() {
+				out[a.File] = append(out[a.File], cite{a, st.Concern})
+			}
+		}
+	}
+	return out
+}
+
+// The Understand page's tabs. "" picks one from what there is (UnderstandTabOn).
 const (
 	understandTabWalkthrough = "walkthrough"
+	understandTabDiagrams    = "diagrams"
 	understandTabQuiz        = "quiz"
 )
 
 // understandTab is tab when it names a tab, else "" (the default).
 func understandTab(tab string) string {
-	if tab == understandTabWalkthrough || tab == understandTabQuiz {
+	if tab == understandTabWalkthrough || tab == understandTabDiagrams || tab == understandTabQuiz {
 		return tab
 	}
 	return ""
@@ -202,8 +241,7 @@ func (c *PrereviewController) ToggleUnderstand(state PrereviewState, ctx *livete
 		state.UnderstandTab = understandTab(ctx.GetString("tab"))
 		// Ground again on open: the agent may have edited the files since load
 		// (an edit is only reloaded once settled, #198).
-		c.groundQuizzes(&state)
-		c.applyExplain(&state)
+		c.groundUnderstand(&state)
 	}
 	return state, nil
 }
@@ -227,18 +265,22 @@ func (c *PrereviewController) RequestExplain(state PrereviewState, ctx *livetemp
 	if body == "" {
 		return state, nil // no prompts, or a stale slug from an old render
 	}
-	n := len(state.changedFiles())
-	if c.NoGit {
-		body += fmt.Sprintf("\n\nScope: the whole review, %d file(s), not only this one.", n)
-	} else {
-		body += fmt.Sprintf("\n\nScope: the whole change, %d changed file(s) against `%s`, not only this one.", n, c.effectiveBase(&state))
-	}
-	state, err := c.queueRequest(state, csv.RequestExplain, body)
+	state, err := c.queueRequest(state, csv.RequestExplain, body+c.changeScope(&state))
 	if err != nil {
 		return state, err
 	}
 	state.Flash = "Walkthrough requested — the agent will answer shortly"
 	return state, nil
+}
+
+// changeScope is a request's scope line: the whole change (or review), not the
+// open file the request row is anchored on.
+func (c *PrereviewController) changeScope(state *PrereviewState) string {
+	n := len(state.changedFiles())
+	if c.NoGit {
+		return fmt.Sprintf("\n\nScope: the whole review, %d file(s), not only this one.", n)
+	}
+	return fmt.Sprintf("\n\nScope: the whole change, %d changed file(s) against `%s`, not only this one.", n, c.effectiveBase(state))
 }
 
 // JumpToAnchor opens the file a walkthrough step cites, at the cited line. The
@@ -264,6 +306,7 @@ func (c *PrereviewController) jumpToLine(state PrereviewState, file, side string
 	state.CursorKey, state.RevealFile = "", ""
 	if l, ok := findDiffLine(state.CurrentDiff, side, line); ok {
 		state.CursorKey, state.RevealFile = lineCursorKey(l), file
+		openFoldAt(&state, l)
 	}
 	return state, nil
 }

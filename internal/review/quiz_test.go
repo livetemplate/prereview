@@ -1,12 +1,15 @@
 package review
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/gitdiff"
 )
 
 // validQuestion is a minimal question that passes ValidateQuiz, so each test can
@@ -174,8 +177,9 @@ func TestLoadQuizzes_MissingFileIsNotAnError(t *testing.T) {
 
 // The agent appends, so the file accumulates revisions of the same id. Last write
 // must win (mirroring suggestions) or a corrected quiz would never replace the
-// wrong one.
-func TestLoadQuizzes_LastWritePerIDWinsAndOrderIsStable(t *testing.T) {
+// wrong one, and the revision moves to the end (#115 A′5): it is the newest, so it
+// is the one a file shows.
+func TestLoadQuizzes_LastWritePerIDWinsAndMovesToTheEnd(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, QuizFileName)
 	writeQuizFile(t, path, `{"id":"a","file":"a.go","questions":[{"id":"q1","prompt":"first"}]}
@@ -186,11 +190,11 @@ func TestLoadQuizzes_LastWritePerIDWinsAndOrderIsStable(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("two distinct ids must collapse to two quizzes, got %d", len(got))
 	}
-	if got[0].ID != "a" || got[1].ID != "b" {
-		t.Errorf("order must stay first-seen so the UI doesn't reshuffle each poll, got %s,%s", got[0].ID, got[1].ID)
+	if got[0].ID != "b" || got[1].ID != "a" {
+		t.Errorf("a re-appended quiz must move to the end, got %s,%s", got[0].ID, got[1].ID)
 	}
-	if got[0].Questions[0].Prompt != "revised" {
-		t.Errorf("re-appending an id must revise it (last write wins), got %q", got[0].Questions[0].Prompt)
+	if got[1].Questions[0].Prompt != "revised" {
+		t.Errorf("re-appending an id must revise it (last write wins), got %q", got[1].Questions[0].Prompt)
 	}
 }
 
@@ -391,7 +395,121 @@ func TestRequestQuiz_MarksTheRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	disk := c.loadCommentsFromDisk()
-	if last := disk[len(disk)-1]; last.Body != "Quiz me on this file." || last.Request != csv.RequestQuiz {
+	if last := disk[len(disk)-1]; !strings.HasPrefix(last.Body, "Quiz me on this file.\n\nScope: the whole change") || last.Request != csv.RequestQuiz {
 		t.Fatalf("the quiz request isn't marked on disk: %+v", last)
+	}
+}
+
+// TestQuizQuestions (#115 A′5): a file shows the questions of the last quiz that
+// asks about it; two files with a question on the same line each show only their
+// own; a legacy per-file quiz still shows; and numbering follows the drawer.
+func TestQuizQuestions(t *testing.T) {
+	q := func(id, file string, line int) Question {
+		return Question{ID: id, File: file, Kind: QuestionKindLine, Probe: ProbeConsequence, FromLine: line, ToLine: line, Side: "new", AnchorStatus: quizAnchorOK}
+	}
+	s := PrereviewState{
+		Files: []gitdiff.FileEntry{{Path: "b.go", Status: "M"}, {Path: "a.go", Status: "M"}, {Path: "c.go", Status: "M"}},
+		Quizzes: []Quiz{
+			{ID: "legacy-c", File: "c.go", Questions: []Question{{ID: "q1", Kind: QuestionKindLine, Probe: ProbeConsequence, FromLine: 2, ToLine: 2, Side: "new"}}},
+			{ID: "old-a", File: "a.go", Questions: []Question{q("q1", "", 7)}},
+			{ID: "whole", Questions: []Question{q("q1", "a.go", 5), q("q2", "b.go", 5), q("q3", "a.go", 1)}},
+		},
+		SelectedFile: "a.go",
+	}
+	var got []string
+	for _, it := range s.allQuizItems() {
+		got = append(got, fmt.Sprintf("%d:%s:%s:%s:L%d", it.Num, it.File, it.QuizID, it.ID, it.FromLine))
+	}
+	// Drawer order is b, a, c; a.go's old quiz is replaced by the newer one.
+	want := "1:b.go:whole:q2:L5 2:a.go:whole:q3:L1 3:a.go:whole:q1:L5 4:c.go:legacy-c:q1:L2"
+	if strings.Join(got, " ") != want {
+		t.Errorf("all questions =\n  %s\nwant\n  %s", strings.Join(got, " "), want)
+	}
+	// The open file renders only its own, though b.go also has a question on L5.
+	byLine := s.QuizByEndLine()
+	if len(byLine[5]) != 1 || byLine[5][0].File != "a.go" {
+		t.Errorf("a.go's line 5 shows %+v, want only a.go's question", byLine[5])
+	}
+	if n, _, _ := s.quizTally(); n != 4 {
+		t.Errorf("the count is the whole change's: %d, want 4", n)
+	}
+	s.SingleFile = "c.go"
+	if got, _, _ := s.quizTally(); got != 1 {
+		t.Errorf("a single-file review shows its file's questions only: %d, want 1", got)
+	}
+}
+
+// TestLoadQuizzesWholeChange: a quiz with no file loads when every question names
+// one, and is dropped when any doesn't.
+func TestLoadQuizzesWholeChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), QuizFileName)
+	writeQuizFile(t, path, `{"id":"ok","questions":[{"id":"q1","file":"a.go"},{"id":"q2","file":"b.go"}]}
+{"id":"bad","questions":[{"id":"q1","file":"a.go"},{"id":"q2"}]}
+`)
+	got := loadQuizzes(path)
+	if len(got) != 1 || got[0].ID != "ok" {
+		t.Fatalf("loaded %+v, want only the quiz whose every question names a file", got)
+	}
+}
+
+// TestValidateQuizWholeChange: without a quiz file, each question needs its own,
+// inside the repo.
+func TestValidateQuizWholeChange(t *testing.T) {
+	base := func() Quiz {
+		return NormalizeQuiz(Quiz{Questions: []Question{{File: "a.go", Probe: ProbeConsequence, Prompt: "p", Options: []string{"x", "y"}, Why: "w", FromLine: 1}}})
+	}
+	if err := ValidateQuiz(base()); err != nil {
+		t.Fatalf("a whole-change quiz was rejected: %v", err)
+	}
+	q := base()
+	q.Questions[0].File = ""
+	if err := ValidateQuiz(q); err == nil || !strings.Contains(err.Error(), `missing "file"`) {
+		t.Errorf("no file anywhere: err %v", err)
+	}
+	q = base()
+	q.Questions[0].File = "../x.go"
+	if err := ValidateQuiz(q); err == nil || !strings.Contains(err.Error(), "relative to the repo") {
+		t.Errorf("escaping path: err %v", err)
+	}
+}
+
+// TestQuizResultsWholeChange: one row per quiz, file "" for the whole change, and
+// totals that count only the review's scope.
+func TestQuizResultsWholeChange(t *testing.T) {
+	s := PrereviewState{
+		Quizzes: []Quiz{{ID: "w", Questions: []Question{
+			{ID: "q1", File: "a.go", Answer: 0}, {ID: "q2", File: "b.go", Answer: 1},
+		}}},
+		QuizAnswers: map[string]QuizAnswer{answerKey("w", "q2"): {QuizID: "w", QuestionID: "q2", Choice: 1}},
+	}
+	if got := fmt.Sprint(s.QuizResults()); got != "[{ w true 1 2}]" {
+		t.Errorf("results = %s, want [{ w true 1 2}]", got)
+	}
+	s.SingleFile = "a.go"
+	if got := fmt.Sprint(s.QuizResults()); got != "[{ w false 0 1}]" {
+		t.Errorf("single-file results = %s, want [{ w false 0 1}]", got)
+	}
+}
+
+// TestQuizPending: the request row makes it pending, until a quiz written at or
+// after the request arrives, or the agent marks the request done.
+func TestQuizPending(t *testing.T) {
+	asked := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
+	s := PrereviewState{Comments: []Comment{{ID: "r", File: "a.go", Request: csv.RequestQuiz, Created: asked}}}
+	if !s.QuizPending() {
+		t.Fatal("an open quiz request must read pending")
+	}
+	s.Quizzes = []Quiz{{ID: "old", File: "a.go", CreatedAt: "2026-11-22T11:00:00Z"}}
+	if !s.QuizPending() {
+		t.Error("a quiz from before the request doesn't answer it")
+	}
+	s.Quizzes = append(s.Quizzes, Quiz{ID: "new", CreatedAt: "2026-11-22T12:00:00Z"})
+	if s.QuizPending() {
+		t.Error("a quiz written after the request answers it")
+	}
+	s.Quizzes = nil
+	s.Comments[0].Processed = true
+	if s.QuizPending() {
+		t.Error("a request the agent marked done is no longer pending")
 	}
 }

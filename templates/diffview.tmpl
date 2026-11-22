@@ -20,12 +20,18 @@
        lvt-fx:text-select="selectText"
        style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">
     {{- range $.VisibleLines -}}
+    {{- /* Folded rows (unchanged lines; #115 A′3 mechanical changes) share one
+         branch, so a real line's row keeps its nesting depth on the wire. */ -}}
+    {{- if or (eq .Kind "fold") (eq .Kind "mech") -}}
     {{- if eq .Kind "fold" -}}
     <div
       class="line-row fold-row"
       data-key="F{{.OldNum}}-{{.NewNum}}"
       aria-hidden="true"
     ><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>
+    {{- else -}}
+    <form method="POST" class="line-row mech-row" data-key="M{{.OldNum}}-{{.NewNum}}"><input type="hidden" name="hunk" value="{{.Group}}"><button type="submit" name="revealMechanical" class="mech-fold" title="The walkthrough calls these changes mechanical. Tap to read them.">Show {{.Content}} mechanical line{{if ne .Content "1"}}s{{end}} · {{index $.MechTitles .Group}}</button></form>
+    {{- end -}}
     {{- else -}}
     {{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end -}}
     {{- /* $lside is this row's diff side (matches data-side). A diff line
@@ -51,7 +57,7 @@
     <div class="line-row{{if or $hasComment $hasSuggestion $hasQuiz}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* #115: a walkthrough step starts here. Above the line, inside the row,
              so the row keeps its key and stays out of the folds (VisibleLines). */ -}}
-      {{- if index $.StepMarkLines $lkey}}<div class="step-mark">{{index $.StepMarkLines $lkey}}</div>{{end}}
+      {{- $sm := index $.StepMarkLines $lkey}}{{if $sm}}<div class="step-mark">{{$sm.Label}}{{range $sm.Risks}} <span class="ck-pill ck-fail risk-chip">{{.}}</span>{{end}}</div>{{end}}
       {{- /* gutter mark + line number + highlighted code; kept inline because the gutter space and chroma markup are whitespace-significant */ -}}
       {{- /* A selectable div (not <button>): <button> content is non-
              selectable in UA styles, which would block native text selection.

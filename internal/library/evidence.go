@@ -230,6 +230,7 @@ func (r storeReader) question(threadID string) (file string, line int, ok bool) 
 			File      string `json:"file"`
 			Questions []struct {
 				ID       string `json:"id"`
+				File     string `json:"file"` // a whole-change quiz's (#115 A′5)
 				FromLine int    `json:"from_line"`
 			} `json:"questions"`
 		}
@@ -239,6 +240,9 @@ func (r storeReader) question(threadID string) (file string, line int, ok bool) 
 		for _, qu := range q.Questions {
 			if qu.ID == qID {
 				file, line, ok = q.File, qu.FromLine, true
+				if qu.File != "" {
+					file = qu.File
+				}
 			}
 		}
 	})

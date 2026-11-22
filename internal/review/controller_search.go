@@ -68,6 +68,9 @@ func (c *PrereviewController) JumpToSearchResult(state PrereviewState, ctx *live
 	if newNum > 0 {
 		state.CursorKey = fmt.Sprintf("L%d-%d", oldNum, newNum)
 		state.RevealFile = file // full raw view so the target line row is in the DOM
+		if l, ok := findDiffLine(state.CurrentDiff, "new", newNum); ok {
+			openFoldAt(&state, l) // and the hit stays readable once the reveal ends
+		}
 	} else {
 		state.CursorKey = ""
 		state.RevealFile = ""

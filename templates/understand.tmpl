@@ -15,29 +15,30 @@
     </form>
   </header>
   <div class="lib-tabs understand-tabs" role="tablist">
-    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab{{if not $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}false{{else}}true{{end}}">Walkthrough{{with $.CurrentExplanation}} <span class="ck-pill">{{len .Steps}}</span>{{end}}</button></form>
-    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab{{if $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}true{{else}}false{{end}}">Quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab{{if eq $.UnderstandTabOn "walkthrough"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "walkthrough"}}true{{else}}false{{end}}">Walkthrough{{with $.CurrentExplanation}} <span class="ck-pill">{{len .Steps}}</span>{{end}}</button></form>{{if $.HasDiagrams}}
+    <form method="POST"><input type="hidden" name="tab" value="diagrams"><button type="submit" name="setUnderstandTab" data-tab="diagrams" class="lib-tab{{if eq $.UnderstandTabOn "diagrams"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "diagrams"}}true{{else}}false{{end}}">Diagrams <span class="ck-pill">{{len $.CurrentExplanation.Diagrams}}</span></button></form>{{end}}
+    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab{{if eq $.UnderstandTabOn "quiz"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "quiz"}}true{{else}}false{{end}}">Quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</button></form>
   </div>
-  {{if $.UnderstandOnQuiz}}{{template "quizPanel" $}}{{else}}{{template "walkthroughPanel" $}}{{end}}
+  {{if eq $.UnderstandTabOn "quiz"}}{{template "quizPanel" $}}{{else if eq $.UnderstandTabOn "diagrams"}}{{template "diagramsPanel" $}}{{else}}{{template "walkthroughPanel" $}}{{end}}
 </section>
 {{- end}}
 
 {{define "walkthroughPanel" -}}
 {{with $.CurrentExplanation}}
   {{if .Summary}}<p class="walk-summary">{{.Summary}}</p>{{end}}
-  {{if .Stale}}<p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>{{end}}
-  {{with $.NotExplained}}<p class="walk-stale walk-unexplained" role="status">⚠ {{len .}} change{{if ne (len .) 1}}s{{end}} no step explains. They are the last step.</p>{{end}}
+  {{if .Stale}}<p class="walk-stale" role="status">The files changed after this walkthrough was written, so some steps may be out of date.</p>{{end}}
+  {{with $.NotExplained}}<p class="walk-stale walk-unexplained" role="status">⚠ The walkthrough skips {{len .}} change{{if ne (len .) 1}}s{{end}}, listed as the last step.</p>{{end}}
   <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     {{range $.WalkSteps}}
-    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}" data-key="step-{{.ID}}">
+    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}{{if .InConcern}} walk-in-concern{{end}}" data-key="step-{{.ID}}">{{if .Concern}}<div class="walk-concern"><span class="walk-concern-title">{{.Concern.Title}}</span> · {{.Concern.Steps}} step{{if ne .Concern.Steps 1}}s{{end}}{{if .Concern.Mechanical}} · mechanical{{if .Concern.Folded}} · folds {{.Concern.Folded}} line{{if ne .Concern.Folded 1}}s{{end}}{{end}}{{end}}</div>{{end}}
       <div class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> <span class="walk-title-text">{{.Title}}</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="{{.Num}}"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
-      {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}
+      {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}{{if .Risks}}<ul class="walk-risks">{{range .Risks}}<li><span class="ck-pill ck-fail risk-chip">{{.Kind}}</span>{{if .Note}} {{.Note}}{{end}}</li>{{end}}</ul>{{end}}
       <ul class="walk-anchors">
         {{range .Anchors}}
-        <li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, but the review has no such line — treat this step with suspicion">⚠ {{.Label}}, not in this review</span>{{else}}<form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">{{.Label}}</button></form>{{end}}</li>
+        <li>{{template "anchorItem" .}}</li>
         {{end}}
-      </ul>
+      </ul>{{if .Impact}}<div class="walk-impact"><strong>Affects</strong><ul>{{range .Impact}}<li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough says the change affects {{.Label}}, which doesn't exist. The agent may have it wrong.">⚠ Can't find {{.Label}}</span>{{else if .Linkable}}{{template "anchorJump" .}}{{else}}<span class="walk-impact-label" title="Outside this review">{{.Label}}</span>{{end}}{{if .Note}} <span class="walk-impact-note">— {{.Note}}</span>{{end}}</li>{{end}}</ul></div>{{end}}
     </li>
     {{end}}
   </ol>
@@ -51,21 +52,38 @@
 {{end}}
 {{- end}}
 
+{{/* The Diagrams tab (#115 A′4): the walkthrough's flow diagrams, drawn by
+     mermaid.js (mermaid-init.js), each with the lines it cites. */}}
+{{define "diagramsPanel" -}}
+  <ol class="walk-steps diagram-list">
+    {{range $.DiagramViews}}
+    <li class="walk-step diagram" data-key="diagram-{{.ID}}">
+      {{if .Title}}<div class="walk-title"><span class="walk-title-text">{{.Title}}</span></div>{{end}}
+      {{.HTML}}
+      {{if .Anchors}}<div class="walk-impact"><strong>Cites</strong><ul>{{range .Anchors}}<li>{{template "anchorItem" .}}</li>{{end}}</ul></div>{{end}}
+    </li>
+    {{end}}
+  </ol>
+{{- end}}
+
 {{define "explainButton"}}{{if $.ExplainPending}}<span class="request-pending" title="The request is queued — the agent will answer shortly">Walkthrough requested…</span>{{else}}<form method="POST" style="margin:0"><button type="submit" name="requestExplain" class="outline" title="Ask the agent to walk you through the whole change">{{if $.HasExplanation}}Explain again{{else}}Explain this change{{end}}</button></form>{{end}}{{end}}
 
-{{/* The quiz tab: the open file's quiz (#191), and one button per quiz prompt to
-     ask for one. */}}
+{{/* The quiz tab: the quiz on the whole change (#191, #115 A′5), grouped by file,
+     and one button per quiz prompt to ask for one. */}}
 {{define "quizPanel" -}}
   {{if $.HasQuiz}}
-  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
+  <p class="quiz-sub"><small>Questions on the whole change. Each one also shows next to the code it asks about.</small></p>
+  {{range $.QuizFiles}}
+  <h4 class="quiz-file"><code>{{.File}}</code></h4>
   <ol class="quiz-list">
-    {{range $.QuizItems}}
+    {{range .Items}}
+    {{- /* .ID is unique here: a file's questions all come from one quiz. */}}
     <li class="quiz-q{{if .Answered}} is-answered{{end}}" data-key="{{.ID}}">
       <div class="quiz-q-head">
         <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>
         {{if .Jumpable}}
         <form method="POST" style="margin:0">
-          <input type="hidden" name="file" value="{{$.SelectedFile}}">
+          <input type="hidden" name="file" value="{{.File}}">
           <input type="hidden" name="line" value="{{.FromLine}}">
           <input type="hidden" name="side" value="{{.Side}}">
           <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">{{.AnchorLabel}}</button>
@@ -87,7 +105,7 @@
           </div>
           {{else}}
           <form method="POST" style="margin:0">
-            <input type="hidden" name="quizId" value="{{$.CurrentQuiz.ID}}">
+            <input type="hidden" name="quizId" value="{{$item.QuizID}}">
             <input type="hidden" name="questionId" value="{{$item.ID}}">
             <input type="hidden" name="choice" value="{{$i}}">
             <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button>
@@ -102,6 +120,7 @@
     </li>
     {{end}}
   </ol>
+  {{end}}
   <footer class="quiz-foot">
     {{if $.QuizComplete}}<p class="quiz-done"><strong>{{$.QuizScoreLabel}}</strong> — every question answered.</p>{{end}}
     {{if gt $.QuizAnsweredCount 0}}
@@ -113,8 +132,8 @@
   </footer>
   {{else}}
   <div class="empty quiz-empty">
-    <p>No quiz for <code>{{$.SelectedFile}}</code> yet.</p>
-    <p><small>Ask the agent for a few questions about this file's diff, to check you understood it before you accept it.</small></p>
+    <p>No quiz yet.</p>
+    <p><small>Ask the agent for a few questions about the whole change, to check you understood it before you accept it.</small></p>
     {{template "quizAsk" $}}
   </div>
   {{end}}

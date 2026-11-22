@@ -37,8 +37,11 @@ type UIPrefs struct {
 	TocCollapsed bool `json:"toc_collapsed"`
 	HideMarks    bool `json:"hide_marks"`
 	FileView     bool `json:"file_view"`
-	RawMarkdown  bool `json:"raw_markdown"`
-	RawHTML      bool `json:"raw_html"`
+	// UnfoldMechanical turns off the walkthrough's mechanical folds (#115 A′3).
+	// Default false: lines a mechanical concern explains fold.
+	UnfoldMechanical bool `json:"unfold_mechanical"`
+	RawMarkdown      bool `json:"raw_markdown"`
+	RawHTML          bool `json:"raw_html"`
 	// QueueGlobal shows the whole review's work in the queue panel instead of just
 	// the current file's (#171). Default false = this file — the queue answers "what
 	// is happening to the document in front of me"; flip it to see the review-wide
@@ -143,6 +146,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.TocCollapsed = p.TocCollapsed
 	state.HideMarks = p.HideMarks
 	state.FileView = p.FileView
+	state.UnfoldMechanical = p.UnfoldMechanical
 	state.RawMarkdown = p.RawMarkdown
 	state.RawHTML = p.RawHTML
 	state.QueueGlobal = p.QueueGlobal
@@ -162,16 +166,17 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 // write must not fail the toggle the user just made.
 func (c *PrereviewController) savePrefs(state PrereviewState) {
 	if err := saveUIPrefs(c.UIPrefsPath, UIPrefs{
-		ShowResolved: state.ShowResolved,
-		SchemeName:   state.SchemeName,
-		ThemeMode:    state.ThemeMode,
-		FocusMode:    state.FocusMode,
-		TocCollapsed: state.TocCollapsed,
-		HideMarks:    state.HideMarks,
-		FileView:     state.FileView,
-		RawMarkdown:  state.RawMarkdown,
-		RawHTML:      state.RawHTML,
-		QueueGlobal:  state.QueueGlobal,
+		ShowResolved:     state.ShowResolved,
+		SchemeName:       state.SchemeName,
+		ThemeMode:        state.ThemeMode,
+		FocusMode:        state.FocusMode,
+		TocCollapsed:     state.TocCollapsed,
+		HideMarks:        state.HideMarks,
+		FileView:         state.FileView,
+		UnfoldMechanical: state.UnfoldMechanical,
+		RawMarkdown:      state.RawMarkdown,
+		RawHTML:          state.RawHTML,
+		QueueGlobal:      state.QueueGlobal,
 
 		DisabledChecks: state.DisabledChecks,
 		Editor:         state.Editor,

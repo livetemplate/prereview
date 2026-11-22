@@ -2,11 +2,12 @@ package review
 
 import (
 	"fmt"
+	"html/template"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/livetemplate/prereview/csv"
+	"github.com/livetemplate/prereview/gitdiff"
 )
 
 // state_explain.go holds the Understand page's views (#115). Zero-arg methods
@@ -32,19 +33,22 @@ func (s PrereviewState) ExplainPending() bool {
 	if asked.IsZero() {
 		return false
 	}
-	if e := s.CurrentExplanation(); e != nil {
-		if at, err := time.Parse(time.RFC3339, e.CreatedAt); err == nil && !at.Before(asked.Truncate(time.Second)) {
-			return false
-		}
-	}
-	return true
+	e := s.CurrentExplanation()
+	return e == nil || !answeredSince(e.CreatedAt, asked)
+}
+
+// answeredSince reports that something the agent wrote at createdAt (RFC 3339,
+// whole seconds) came at or after the request asked at.
+func answeredSince(createdAt string, asked time.Time) bool {
+	at, err := time.Parse(time.RFC3339, createdAt)
+	return err == nil && !at.Before(asked.Truncate(time.Second))
 }
 
 // CanExplain reports an agent can be asked for a walkthrough.
 func (s PrereviewState) CanExplain() bool { return s.AgentMode && len(s.ExplainPrompts) > 0 }
 
 // HasUnderstandContent: the Understand page has something on it, a walkthrough
-// or the open file's quiz. Gates the menu entries.
+// or a quiz. Gates the menu entries.
 func (s PrereviewState) HasUnderstandContent() bool { return s.HasExplanation() || s.HasQuiz() }
 
 // ShowUnderstandEntry gates the file header's Understand button: there is
@@ -53,16 +57,49 @@ func (s PrereviewState) ShowUnderstandEntry() bool {
 	return s.CanExplain() || len(s.QuizPrompts) > 0 || s.HasUnderstandContent()
 }
 
-// UnderstandOnQuiz picks the tab: the one asked for, else the walkthrough, unless
-// there is none and the open file has a quiz.
-func (s PrereviewState) UnderstandOnQuiz() bool {
+// UnderstandTabOn is the tab the page shows: the one asked for (Diagrams only
+// while there are diagrams), else the walkthrough, unless there is none and there
+// is a quiz.
+func (s PrereviewState) UnderstandTabOn() string {
 	switch s.UnderstandTab {
-	case "quiz":
-		return true
-	case "walkthrough":
-		return false
+	case understandTabQuiz, understandTabWalkthrough:
+		return s.UnderstandTab
+	case understandTabDiagrams:
+		if s.HasDiagrams() {
+			return understandTabDiagrams
+		}
 	}
-	return !s.HasExplanation() && s.HasQuiz()
+	if !s.HasExplanation() && s.HasQuiz() {
+		return understandTabQuiz
+	}
+	return understandTabWalkthrough
+}
+
+// HasDiagrams reports the walkthrough has flow diagrams, the gate for their tab.
+func (s PrereviewState) HasDiagrams() bool {
+	e := s.CurrentExplanation()
+	return e != nil && len(e.Diagrams) > 0
+}
+
+// DiagramView is a diagram as the Diagrams tab renders it.
+type DiagramView struct {
+	ID, Title string
+	HTML      template.HTML // gitdiff.MermaidHTML: the source, escaped, for mermaid.js
+	Anchors   []WalkAnchor
+}
+
+// DiagramViews is the walkthrough's diagrams, only while their tab is on screen.
+func (s PrereviewState) DiagramViews() []DiagramView {
+	if !s.ShowUnderstand || s.UnderstandTabOn() != understandTabDiagrams {
+		return nil
+	}
+	e := s.CurrentExplanation()
+	out := make([]DiagramView, 0, len(e.Diagrams))
+	for _, d := range e.Diagrams {
+		out = append(out, DiagramView{ID: d.ID, Title: d.Title, Anchors: walkAnchors(d.Anchors),
+			HTML: template.HTML(gitdiff.MermaidHTML([]byte(d.Mermaid)))})
+	}
+	return out
 }
 
 // WalkStep is one step as the page renders it.
@@ -72,6 +109,28 @@ type WalkStep struct {
 	Title, Body  string
 	Anchors      []WalkAnchor
 	NotExplained bool // the derived last step, not the agent's
+	// Concern is set on the first step of a concern's run, for its heading;
+	// InConcern on every step of the run.
+	Concern   *ConcernHead
+	InConcern bool
+	Risks     []Risk
+	Impact    []WalkImpact
+}
+
+// ConcernHead is a concern's heading on the Walkthrough tab.
+type ConcernHead struct {
+	Title      string
+	Mechanical bool
+	Steps      int // how many steps the run holds
+	Folded     int // changed lines in its foldable hunks, across files (0 with folds off)
+}
+
+// WalkImpact is an impact anchor ready to render: a jump link, a plain label (a
+// file outside a single-file review), or a warning.
+type WalkImpact struct {
+	WalkAnchor
+	Note     string
+	Linkable bool
 }
 
 // WalkAnchor is a cited place, ready to render as a jump link (or a warning).
@@ -87,16 +146,43 @@ type WalkAnchor struct {
 // it does nothing unless the Walkthrough tab is on screen.
 func (s PrereviewState) WalkSteps() []WalkStep {
 	steps := s.walkSteps()
-	if len(steps) == 0 || !s.ShowUnderstand || s.UnderstandOnQuiz() {
+	if len(steps) == 0 || !s.ShowUnderstand || s.UnderstandTabOn() != understandTabWalkthrough {
 		return nil
 	}
+	concerns := map[string]Concern{}
+	for _, c := range s.CurrentExplanation().Concerns {
+		concerns[c.ID] = c
+	}
 	out := make([]WalkStep, len(steps))
+	var run *ConcernHead // the heading of the concern run in progress
 	for i, st := range steps {
-		ws := WalkStep{Num: i + 1, ID: st.ID, Title: st.Title, Body: st.Body, NotExplained: st.Derived}
-		for _, a := range st.Anchors {
-			ws.Anchors = append(ws.Anchors, walkAnchor(a))
+		ws := WalkStep{Num: i + 1, ID: st.ID, Title: st.Title, Body: st.Body, NotExplained: st.Derived,
+			Risks: st.Risks, InConcern: st.Concern != ""}
+		ws.Anchors = walkAnchors(st.Anchors)
+		for _, a := range st.Impact {
+			w := walkAnchor(a.anchor())
+			w.Ungrounded = a.Ungrounded()
+			ws.Impact = append(ws.Impact, WalkImpact{WalkAnchor: w, Note: a.Note, Linkable: !w.Ungrounded && s.inScope(a.File)})
+		}
+		// Validation keeps a concern's steps together: the heading opens where
+		// the concern changes, and counts its run as the steps go by.
+		if c, ok := concerns[st.Concern]; ok {
+			if i > 0 && steps[i-1].Concern == st.Concern {
+				run.Steps++
+			} else {
+				run = &ConcernHead{Title: c.Title, Mechanical: c.Mechanical, Steps: 1, Folded: s.foldedLines(c.ID)}
+				ws.Concern = run
+			}
 		}
 		out[i] = ws
+	}
+	return out
+}
+
+func walkAnchors(as []Anchor) []WalkAnchor {
+	var out []WalkAnchor
+	for _, a := range as {
+		out = append(out, walkAnchor(a))
 	}
 	return out
 }
@@ -122,7 +208,7 @@ func (s PrereviewState) walkSteps() []Step {
 	}
 	// Clip, so appending never writes into the explanation's own array.
 	return append(slices.Clip(e.Steps), Step{ID: notExplainedStepID, Derived: true, Title: "Not explained",
-		Body:    "Changes no step cites. Read them too: what a walkthrough leaves out is where a surprise hides.",
+		Body:    "The walkthrough doesn't mention these changes. Read them too.",
 		Anchors: s.NotExplained})
 }
 
@@ -175,6 +261,7 @@ func (s PrereviewState) walkPos() (steps []Step, stops []walkStop, i int, ok boo
 type WalkBarView struct {
 	Num, Total  int // the step, of how many
 	Title, Body string
+	Risks       []Risk
 	Anchor      string // the cited place this stop shows, "" when none resolves
 	HasPrev     bool
 	HasNext     bool
@@ -187,7 +274,7 @@ func (s PrereviewState) WalkBar() *WalkBarView {
 		return nil
 	}
 	at, st := stops[i], steps[stops[i].step]
-	v := &WalkBarView{Num: at.step + 1, Total: len(steps), Title: st.Title, Body: st.Body,
+	v := &WalkBarView{Num: at.step + 1, Total: len(steps), Title: st.Title, Body: st.Body, Risks: st.Risks,
 		HasPrev: i > 0, HasNext: i < len(stops)-1}
 	if at.anchor >= 0 {
 		v.Anchor = st.Anchors[at.anchor].Label()
@@ -195,10 +282,17 @@ func (s PrereviewState) WalkBar() *WalkBarView {
 	return v
 }
 
-// StepMarkLines labels the open file's rows that a step starts at, keyed like
+// StepMark is the marker above a row a step starts at: its label and the risk
+// kinds of the steps it names.
+type StepMark struct {
+	Label string
+	Risks []string
+}
+
+// StepMarkLines marks the open file's rows that a step starts at, keyed like
 // the row ("L<old>-<new>"): "Step 2: Retry loop", several joined by " · ". The
 // marker hangs on the first line of each grounded line anchor.
-func (s PrereviewState) StepMarkLines() map[string]string {
+func (s PrereviewState) StepMarkLines() map[string]*StepMark {
 	steps := s.walkSteps()
 	if len(steps) == 0 || s.CurrentDiff == nil {
 		return nil
@@ -225,22 +319,29 @@ func (s PrereviewState) StepMarkLines() map[string]string {
 	if len(want) == 0 {
 		return nil
 	}
-	out := map[string]string{}
+	out := map[string]*StepMark{}
 	for _, l := range s.CurrentDiff.Lines {
 		for _, k := range []at{{"new", l.NewNum}, {"old", l.OldNum}} {
 			idx := want[k]
 			if len(idx) == 0 || k.line == 0 {
 				continue
 			}
-			labels := make([]string, len(idx))
-			for n, i := range idx {
-				labels[n] = fmt.Sprintf("Step %d: %s", i+1, steps[i].Title)
-			}
 			row := lineCursorKey(l)
-			if prev := out[row]; prev != "" {
-				out[row] = prev + " · " + strings.Join(labels, " · ")
-			} else {
-				out[row] = strings.Join(labels, " · ")
+			m := out[row]
+			if m == nil {
+				m = &StepMark{}
+				out[row] = m
+			}
+			for _, i := range idx {
+				if m.Label != "" {
+					m.Label += " · "
+				}
+				m.Label += fmt.Sprintf("Step %d: %s", i+1, steps[i].Title)
+				for _, r := range steps[i].Risks {
+					if !slices.Contains(m.Risks, r.Kind) {
+						m.Risks = append(m.Risks, r.Kind)
+					}
+				}
 			}
 			delete(want, k) // first row with that number on that side, as findDiffLine
 		}
@@ -264,4 +365,75 @@ func (s PrereviewState) walkRanks() map[string]int {
 		}
 	}
 	return out
+}
+
+// mechHunkOf is the open file's mechanical hunk that holds row l, or nil. A del
+// row sits in the hunk's old lines, an add row in its new ones.
+func (s PrereviewState) mechHunkOf(l gitdiff.DiffLine) *MechHunk {
+	side, n := "new", l.NewNum
+	switch l.Kind {
+	case "del":
+		side, n = "old", l.OldNum
+	case "add":
+	default:
+		return nil
+	}
+	hunks := s.Mechanical[s.SelectedFile]
+	for i := range hunks {
+		if hunks[i].Hunk.Covers(side, n, n) {
+			return &hunks[i]
+		}
+	}
+	return nil
+}
+
+// mechGroup is VisibleLines' fold key for the open file's rows: the hunk key of
+// a row in a mechanical hunk the reviewer hasn't opened, "" for any other. Nil
+// when nothing folds (no mechanical hunks here, or the pref turns folds off).
+func (s PrereviewState) mechGroup() func(gitdiff.DiffLine) string {
+	if s.UnfoldMechanical || len(s.Mechanical[s.SelectedFile]) == 0 {
+		return nil
+	}
+	return func(l gitdiff.DiffLine) string {
+		if m := s.mechHunkOf(l); m != nil && !s.MechRevealed[mechRevealKey(s.SelectedFile, m.Key)] {
+			return m.Key
+		}
+		return ""
+	}
+}
+
+// MechTitles names the concern behind each of the open file's mechanical folds,
+// keyed by hunk key, for the fold row's label.
+func (s PrereviewState) MechTitles() map[string]string {
+	hunks := s.Mechanical[s.SelectedFile]
+	if len(hunks) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(hunks))
+	for _, m := range hunks {
+		out[m.Key] = m.Title
+	}
+	return out
+}
+
+// HasMechanical reports that the walkthrough has lines that fold, which is when
+// the View menu offers the switch.
+func (s PrereviewState) HasMechanical() bool { return len(s.Mechanical) > 0 }
+
+// foldedLines counts the changed lines in concern's foldable hunks, across
+// files: none when the pref turns folds off. Rows a marker or a card pins, and
+// folds the reviewer opened, still count: it sizes the concern, not the screen.
+func (s PrereviewState) foldedLines(concern string) int {
+	if s.UnfoldMechanical {
+		return 0
+	}
+	n := 0
+	for _, hunks := range s.Mechanical {
+		for _, m := range hunks {
+			if m.Concern == concern {
+				n += m.Hunk.OldCount + m.Hunk.NewCount
+			}
+		}
+	}
+	return n
 }

@@ -602,3 +602,46 @@ func TestE2E_FileHeadAnnotationsCollapse(t *testing.T) {
 	}
 }
 
+
+// TestE2E_QuizWholeChange (#115 A′5): one quiz on the whole change. Each file's
+// diff shows only its own questions; the stepper walks them file by file; the
+// Quiz tab groups them by file; and an answer given on the tab shows on the
+// question's card in its own file.
+func TestE2E_QuizWholeChange(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("edited.go")
+	submitQuiz(t, p, `{"id": "whole", "questions": [
+  {"id": "e1", "file": "edited.go", "probe": "consequence", "prompt": "PROMPT-EDITED", "options": ["a", "b"], "answer": 1, "why": "WHY-EDITED", "from_line": 4},
+  {"id": "f1", "file": "fresh.go", "probe": "consequence", "prompt": "PROMPT-FRESH", "options": ["x", "y"], "answer": 0, "why": "WHY-FRESH", "from_line": 1}
+]}`)
+	waitNavLabel(t, p, "2 open", "both files' questions are open", diag)
+	if got := evalStr(t, p, `[...document.querySelectorAll('.quiz-card')].map(c => c.dataset.key).join(',')`); got != "quiz-e1" {
+		t.Errorf("edited.go must show only its own question inline, got %q%s", got, diag())
+	}
+
+	navStep(t, p, "navNext", diag)
+	waitNavLabel(t, p, "1 / 2 open", "the first file's question", diag)
+	expectInView(t, p, `.quiz-card[data-key="quiz-e1"] .quiz-card-head`, "edited.go's question first", diag)
+	navStep(t, p, "navNext", diag)
+	waitNavLabel(t, p, "2 / 2 open", "the next file's question", diag)
+	expectInView(t, p, `.quiz-card[data-key="quiz-f1"] .quiz-card-head`, "the stepper opens fresh.go at its question", diag)
+
+	p.openUnderstandTab("quiz")
+	if got := evalStr(t, p, `[...document.querySelectorAll('.quiz .quiz-file')].map(h => h.textContent).join(' ')`); got != "edited.go fresh.go" {
+		t.Errorf("the Quiz tab groups by file in drawer order, got %q%s", got, diag())
+	}
+	ctx, cancel := within(p, 10*time.Second)
+	err := chromedp.Run(ctx, chromedp.Click(`.quiz-q[data-key='f1'] .quiz-options li:nth-child(1) button[name='answerQuestion']`, chromedp.ByQuery))
+	cancel()
+	if err != nil {
+		t.Fatalf("answer fresh.go's question on the tab: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `!!document.querySelector(".quiz-q[data-key='f1'].is-answered")`, 5*time.Second, "the tab shows the answer", diag)
+
+	p.clickFile("fresh.go")
+	waitJSTrueDiag(t, p.ctx, `(document.querySelector(".quiz-card[data-key='quiz-f1']") || {innerText: ''}).innerText.includes('WHY-FRESH')`, 5*time.Second,
+		"the answer given on the tab shows on the card in its file", diag)
+	waitNavLabel(t, p, "1 open", "one question left", diag)
+}

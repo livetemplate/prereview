@@ -3,9 +3,11 @@ package review
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -269,23 +271,23 @@ func TestJumpToAnchor(t *testing.T) {
 // walkthrough, unless there is none and the file has a quiz.
 func TestUnderstandTabs(t *testing.T) {
 	c, state := explainFixture(t)
-	if state.UnderstandOnQuiz() {
+	if state.UnderstandTabOn() == understandTabQuiz {
 		t.Error("nothing on the page: the walkthrough tab (with its Explain button) comes first")
 	}
 	state.Quizzes = []Quiz{{ID: "z", File: "a.go", Questions: []Question{{ID: "q", Kind: QuestionKindFile}}}}
-	if !state.UnderstandOnQuiz() {
+	if state.UnderstandTabOn() != understandTabQuiz {
 		t.Error("only a quiz: the page should open on it")
 	}
 	state.Explanations = []Explanation{{ID: "e"}}
-	if state.UnderstandOnQuiz() {
+	if state.UnderstandTabOn() == understandTabQuiz {
 		t.Error("a walkthrough exists: it comes first")
 	}
 	open, err := c.ToggleUnderstand(state, checksCtx("toggleUnderstand", map[string]interface{}{"tab": "quiz"}))
-	if err != nil || !open.ShowUnderstand || !open.UnderstandOnQuiz() {
-		t.Fatalf("Overview opens the quiz tab: err %v, open %v, quiz %v", err, open.ShowUnderstand, open.UnderstandOnQuiz())
+	if err != nil || !open.ShowUnderstand || open.UnderstandTabOn() != understandTabQuiz {
+		t.Fatalf("Overview opens the quiz tab: err %v, open %v, quiz %v", err, open.ShowUnderstand, open.UnderstandTabOn())
 	}
 	switched, _ := c.SetUnderstandTab(open, checksCtx("setUnderstandTab", map[string]interface{}{"tab": "walkthrough"}))
-	if !switched.ShowUnderstand || switched.UnderstandOnQuiz() {
+	if !switched.ShowUnderstand || switched.UnderstandTabOn() == understandTabQuiz {
 		t.Error("the Walkthrough tab must switch to the walkthrough")
 	}
 	if bogus, _ := c.SetUnderstandTab(open, checksCtx("setUnderstandTab", map[string]interface{}{"tab": "nope"})); bogus.UnderstandTab != "" {
@@ -405,7 +407,7 @@ func TestStepMarkLines(t *testing.T) {
 	marks := state.StepMarkLines()
 	var key string
 	for k, v := range marks {
-		if v == "Step 1: far context" {
+		if v.Label == "Step 1: far context" {
 			key = k
 		}
 	}
@@ -511,5 +513,296 @@ func TestWalkStepsAppendsNotExplained(t *testing.T) {
 	ws[1].Title = "changed"
 	if again := s.walkSteps(); again[1].Title != "Not explained" || len(s.Explanations[0].Steps) != 1 {
 		t.Error("the derived step leaked into the explanation's own steps")
+	}
+}
+
+// TestValidateExplanation covers A′'s fields: concerns, risks, impact, diagrams.
+// Each bad case names what to fix; the good one uses every field.
+func TestValidateExplanation(t *testing.T) {
+	// good builds a fresh explanation using every field, so a case's edit never
+	// leaks into another.
+	good := func() Explanation {
+		line := func() []Anchor { return []Anchor{{File: "a.go", FromLine: 1}} }
+		return NormalizeExplanation(Explanation{
+			Concerns: []Concern{{ID: "retry", Title: "Retry loop"}, {ID: "rename", Title: "Rename", Mechanical: true}},
+			Steps: []Step{
+				{ID: "s1", Title: "Loop", Anchors: line(), Concern: "retry", Risks: []Risk{{Kind: RiskConcurrency, Note: "shared ctx"}},
+					Impact: []ImpactAnchor{{File: "worker.go", FromLine: 88, Contains: "Send(", Note: "the caller"}}},
+				{ID: "s2", Title: "Cap", Anchors: line(), Concern: "retry"},
+				{ID: "s3", Title: "Rename", Anchors: line(), Concern: "rename"},
+				{ID: "s4", Title: "No concern", Anchors: line()},
+			},
+			Diagrams: []Diagram{{Title: "Flow", Mermaid: "graph TD\n A-->B", Anchors: line()}},
+		})
+	}
+	cases := map[string]struct {
+		mutate func(*Explanation)
+		want   string // "" = valid
+	}{
+		"valid":                 {func(*Explanation) {}, ""},
+		"unknown concern":       {func(e *Explanation) { e.Steps[3].Concern = "nope" }, `unknown "concern" "nope"`},
+		"duplicate concern id":  {func(e *Explanation) { e.Concerns = append(e.Concerns, Concern{ID: "retry", Title: "Again"}) }, "concern 3 (retry): duplicate id"},
+		"concern without title": {func(e *Explanation) { e.Concerns[0].Title = "" }, `concern 1 (retry): missing "title"`},
+		"split concern":         {func(e *Explanation) { e.Steps[3].Concern = "retry" }, `concern "retry"'s steps must be next to each other`},
+		"split by a plain step": {func(e *Explanation) { e.Steps[2].Concern = ""; e.Steps[3].Concern = "rename"; e.Steps[1].Concern = "" }, ""},
+		"unknown risk":          {func(e *Explanation) { e.Steps[0].Risks[0].Kind = "spooky" }, `unknown "kind" "spooky"`},
+		"risk on mechanical":    {func(e *Explanation) { e.Steps[2].Risks = []Risk{{Kind: RiskSecurity}} }, `mechanical concern "rename" can't carry a risk`},
+		"empty diagram":         {func(e *Explanation) { e.Diagrams[0].Mermaid = "  \n" }, `diagram 1 (d1): empty "mermaid"`},
+		"duplicate diagram id":  {func(e *Explanation) { e.Diagrams = append(e.Diagrams, Diagram{ID: "d1", Mermaid: "graph TD"}) }, "diagram 2 (d1): duplicate id"},
+		"bad diagram anchor":    {func(e *Explanation) { e.Diagrams[0].Anchors = []Anchor{{File: "../x.go", FromLine: 1}} }, "diagram 1 (d1), anchor 1"},
+		"impact outside repo":   {func(e *Explanation) { e.Steps[0].Impact[0].File = "../../etc/passwd" }, "step 1 (s1), impact 1"},
+		"impact reversed":       {func(e *Explanation) { e.Steps[0].Impact[0].ToLine = 3 }, `"to_line" (3) precedes "from_line" (88)`},
+		"impact no line":        {func(e *Explanation) { e.Steps[0].Impact[0].FromLine = 0 }, `needs "from_line" >= 1`},
+	}
+	for name, tc := range cases {
+		e := good()
+		tc.mutate(&e)
+		err := ValidateExplanation(e)
+		if tc.want == "" {
+			if err != nil {
+				t.Errorf("%s: rejected: %v", name, err)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err %v, want it to contain %q", name, err, tc.want)
+		}
+	}
+}
+
+// TestGroundImpact: impact anchors resolve against any regular file inside the
+// repo, listed in the review or not, by line range and the optional contains.
+func TestGroundImpact(t *testing.T) {
+	c, state := explainFixture(t)
+	writeAt(t, c.RepoPath, "lib/worker.go", "package lib\n\nfunc run() {\n\tSend(ctx)\n}\n")
+	outside := t.TempDir()
+	writeAt(t, outside, "secret.go", "one\ntwo\nthree\nfour\n")
+	if err := os.Symlink(filepath.Join(outside, "secret.go"), filepath.Join(c.RepoPath, "link.go")); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		a    ImpactAnchor
+		want string
+	}{
+		{"unlisted in-repo file", ImpactAnchor{File: "lib/worker.go", FromLine: 4}, anchorOK},
+		{"contains matches", ImpactAnchor{File: "lib/worker.go", FromLine: 3, ToLine: 4, Contains: "Send(ctx)"}, anchorOK},
+		{"contains misses", ImpactAnchor{File: "lib/worker.go", FromLine: 3, Contains: "Send(ctx)"}, anchorUngrounded},
+		{"past EOF", ImpactAnchor{File: "lib/worker.go", FromLine: 5, ToLine: 6}, anchorUngrounded},
+		{"changed file, working tree", ImpactAnchor{File: "b.go", FromLine: 6, Contains: "u"}, anchorOK},
+		{"symlink out of the repo", ImpactAnchor{File: "link.go", FromLine: 1}, anchorUngrounded},
+		{"missing file", ImpactAnchor{File: "nope.go", FromLine: 1}, anchorUngrounded},
+	}
+	var impact []ImpactAnchor
+	for _, tc := range cases {
+		impact = append(impact, tc.a)
+	}
+	writeExplanations(t, c, Explanation{ID: "e1", Steps: []Step{{ID: "s1", Title: "t", Anchors: []Anchor{{File: "a.go", Kind: AnchorKindFile}}, Impact: impact}},
+		Diagrams: []Diagram{{Mermaid: "graph TD", Anchors: []Anchor{{File: "b.go", FromLine: 3}, {File: "b.go", FromLine: 40}}}}})
+	c.applyExplain(&state)
+	got := state.Explanations[0].Steps[0].Impact
+	for i, tc := range cases {
+		if got[i].Status != tc.want {
+			t.Errorf("%s: %+v grounded %q, want %q", tc.name, tc.a, got[i].Status, tc.want)
+		}
+	}
+	// Diagram anchors ground like step anchors.
+	d := state.Explanations[0].Diagrams[0].Anchors
+	if d[0].Status != anchorOK || d[1].Status != anchorUngrounded {
+		t.Errorf("diagram anchors grounded %q, %q; want ok, ungrounded", d[0].Status, d[1].Status)
+	}
+}
+
+// TestNotExplainedIgnoresImpactAndDiagrams: citing a hunk's lines from impact or
+// a diagram never explains it; only a step's anchors do.
+func TestNotExplainedIgnoresImpactAndDiagrams(t *testing.T) {
+	c, state := explainFixture(t)
+	writeExplanations(t, c, Explanation{ID: "e1",
+		Steps:    []Step{{ID: "s1", Title: "t", Anchors: []Anchor{{File: "a.go", Side: "old", FromLine: 3, ToLine: 4}}, Impact: []ImpactAnchor{{File: "b.go", FromLine: 3, ToLine: 6}}}},
+		Diagrams: []Diagram{{Mermaid: "graph TD", Anchors: []Anchor{{File: "b.go", FromLine: 3, ToLine: 6}}}}})
+	c.applyExplain(&state)
+	var got []string
+	for _, a := range state.NotExplained {
+		got = append(got, a.Label())
+	}
+	if want := "b.go L3-L6"; strings.Join(got, ", ") != want {
+		t.Errorf("not explained = %v, want [%s]", got, want)
+	}
+}
+
+// TestWalkStepsConcernsAndImpact: a concern's heading sits on its run's first
+// step and counts the run; an impact anchor is a link, unless it doesn't resolve
+// or a single-file review doesn't hold its file.
+func TestWalkStepsConcernsAndImpact(t *testing.T) {
+	ok := []Anchor{{File: "a.go", Kind: AnchorKindLine, Side: "new", FromLine: 1, ToLine: 1, Status: anchorOK}}
+	state := PrereviewState{ShowUnderstand: true, UnderstandTab: understandTabWalkthrough, Explanations: []Explanation{{
+		ID:       "e",
+		Concerns: []Concern{{ID: "c1", Title: "Retry"}, {ID: "c2", Title: "Rename", Mechanical: true}},
+		Steps: []Step{
+			{ID: "s1", Title: "a", Anchors: ok, Concern: "c1", Impact: []ImpactAnchor{
+				{File: "a.go", FromLine: 3, ToLine: 3, Status: anchorOK},
+				{File: "w.go", FromLine: 8, ToLine: 8, Status: anchorOK},
+				{File: "a.go", FromLine: 99, ToLine: 99, Status: anchorUngrounded},
+			}},
+			{ID: "s2", Title: "b", Anchors: ok, Concern: "c1"},
+			{ID: "s3", Title: "c", Anchors: ok, Concern: "c2"},
+			{ID: "s4", Title: "d", Anchors: ok},
+		},
+	}}}
+	steps := state.WalkSteps()
+	heads := []string{}
+	for _, s := range steps {
+		if s.Concern != nil {
+			heads = append(heads, fmt.Sprintf("%d:%s×%d mech=%v", s.Num, s.Concern.Title, s.Concern.Steps, s.Concern.Mechanical))
+		}
+	}
+	if got, want := strings.Join(heads, " "), "1:Retry×2 mech=false 3:Rename×1 mech=true"; got != want {
+		t.Errorf("concern heads = %q, want %q", got, want)
+	}
+	if steps[3].InConcern || !steps[1].InConcern {
+		t.Errorf("InConcern: step 2 %v (want true), step 4 %v (want false)", steps[1].InConcern, steps[3].InConcern)
+	}
+	links := func() []bool {
+		var out []bool
+		for _, im := range state.WalkSteps()[0].Impact {
+			out = append(out, im.Linkable)
+		}
+		return out
+	}
+	if got := fmt.Sprint(links()); got != "[true true false]" {
+		t.Errorf("linkable = %s, want [true true false] (the ungrounded one is a warning)", got)
+	}
+	state.SingleFile = "a.go"
+	if got := fmt.Sprint(links()); got != "[true false false]" {
+		t.Errorf("single-file linkable = %s, want [true false false] (w.go is outside the review)", got)
+	}
+}
+
+// TestMechanicalHunks: a hunk folds when every anchor covering it belongs to a
+// mechanical concern; a hunk a non-mechanical step also cites shows; one no step
+// cites never folds; and nothing folds once the walkthrough is stale. In the
+// diff view the fold is one "mech" row, a tap or a jump opens it, and the pref
+// turns every fold off.
+func TestMechanicalHunks(t *testing.T) {
+	c, state := explainFixture(t)
+	writeExplanations(t, c, Explanation{ID: "e1",
+		Concerns: []Concern{{ID: "m", Title: "Rename", Mechanical: true}, {ID: "r", Title: "Retry"}},
+		Steps: []Step{
+			{ID: "s1", Title: "drop the old lines", Concern: "m", Anchors: []Anchor{{File: "a.go", Side: "old", FromLine: 3, ToLine: 4}}},
+			{ID: "s2", Title: "rename in b", Concern: "m", Anchors: []Anchor{{File: "b.go", FromLine: 3, ToLine: 4}}},
+			{ID: "s3", Title: "retry in b", Concern: "r", Anchors: []Anchor{{File: "b.go", FromLine: 6}}},
+		}})
+	c.applyExplain(&state)
+	folds := func() string {
+		var out []string
+		for _, p := range slices.Sorted(maps.Keys(state.Mechanical)) {
+			for _, m := range state.Mechanical[p] {
+				out = append(out, p+" "+m.Key+" "+m.Concern)
+			}
+		}
+		return strings.Join(out, ", ")
+	}
+	if got, want := folds(), "a.go H3-2 m"; got != want {
+		t.Fatalf("mechanical = %q, want %q (b.go's hunk is also cited by a retry step)", got, want)
+	}
+
+	// In the diff: a.go's deleted rows fold into one row.
+	d, err := gitdiff.LoadDiff(c.RepoPath, "HEAD", "a.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.CurrentDiff = d
+	mechRows := func() []string {
+		var out []string
+		for _, l := range state.VisibleLines() {
+			if l.Kind == "mech" {
+				out = append(out, l.Content+"@"+l.Group)
+			}
+		}
+		return out
+	}
+	// Old line 3 carries step 1's marker, a pinned row, so it stays and the fold
+	// holds the one line after it (as the mockup's marker-then-fold).
+	if got := mechRows(); fmt.Sprint(got) != "[1@H3-2]" {
+		t.Fatalf("a.go mech rows = %v, want [1@H3-2]", got)
+	}
+	if got := state.MechTitles()["H3-2"]; got != "Rename" {
+		t.Errorf("fold title = %q, want Rename", got)
+	}
+	state.UnfoldMechanical = true
+	if got := mechRows(); len(got) != 0 {
+		t.Errorf("with folds off: %v, want none", got)
+	}
+	state.UnfoldMechanical = false
+	revealed, err := c.RevealMechanical(state, checksCtx("revealMechanical", map[string]interface{}{"hunk": "H3-2"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state = revealed
+	if got := mechRows(); len(got) != 0 {
+		t.Errorf("after a tap: %v, want the fold open", got)
+	}
+	state.MechRevealed = nil
+	jumped, err := c.jumpToLine(state, "a.go", "old", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jumped.RevealFile = "" // the whole-file reveal ends; the fold must stay open
+	state = jumped
+	if got := mechRows(); len(got) != 0 {
+		t.Errorf("after a jump into the fold: %v, want it open", got)
+	}
+
+	// Uncited hunks never fold: only a.go is cited now.
+	writeExplanations(t, c, Explanation{ID: "e2",
+		Concerns: []Concern{{ID: "m", Title: "Rename", Mechanical: true}},
+		Steps:    []Step{{ID: "s1", Title: "t", Concern: "m", Anchors: []Anchor{{File: "a.go", Side: "old", FromLine: 3}}}}})
+	c.applyExplain(&state)
+	if got := folds(); got != "a.go H3-2 m" {
+		t.Errorf("mechanical = %q, want only a.go's cited hunk", got)
+	}
+
+	// Stale: an edit after the walkthrough was first seen folds nothing.
+	writeAt(t, c.RepoPath, "a.go", "1\n2\n5\nnew\n")
+	c.applyExplain(&state)
+	if !state.CurrentExplanation().Stale || state.Mechanical != nil {
+		t.Errorf("stale=%v mechanical=%v, want stale and no folds", state.CurrentExplanation().Stale, state.Mechanical)
+	}
+}
+
+// TestSearchJumpOpensMechanicalFold: a search hit inside a mechanical fold opens
+// it, so the line stays readable once the jump's whole-file reveal ends.
+func TestSearchJumpOpensMechanicalFold(t *testing.T) {
+	c, state := explainFixture(t)
+	writeExplanations(t, c, Explanation{ID: "e1",
+		Concerns: []Concern{{ID: "m", Title: "Rename", Mechanical: true}},
+		Steps:    []Step{{ID: "s1", Title: "t", Concern: "m", Anchors: []Anchor{{File: "b.go", FromLine: 3, ToLine: 6}}}}})
+	c.applyExplain(&state)
+	got, err := c.JumpToSearchResult(state, checksCtx("jumpToSearchResult", map[string]interface{}{"file": "b.go", "old": "0", "new": "5"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.MechRevealed[mechRevealKey("b.go", "H2-3")] {
+		t.Errorf("the hit's fold stayed shut: revealed %v, mechanical %v", got.MechRevealed, got.Mechanical)
+	}
+}
+
+// TestGroundQuizzesAcrossFiles (#115 A′5): quiz questions ground against the
+// change index like walkthrough anchors, both ends of the range, in any file of
+// the review, open or not.
+func TestGroundQuizzesAcrossFiles(t *testing.T) {
+	c, state := explainFixture(t) // a.go open; b.go has 6 new lines
+	state.Quizzes = []Quiz{{ID: "w", Questions: []Question{
+		{ID: "ok", File: "b.go", Kind: QuestionKindLine, FromLine: 3, ToLine: 6, Side: "new"},
+		{ID: "end-past", File: "b.go", Kind: QuestionKindLine, FromLine: 5, ToLine: 9, Side: "new"},
+		{ID: "absent", File: "b.go", Kind: QuestionKindFile},
+		{ID: "outside", File: "z.go", Kind: QuestionKindLine, FromLine: 1, ToLine: 1, Side: "new"},
+	}}}
+	c.groundQuizzes(&state, c.lazyCitable(&state))
+	want := map[string]string{"ok": quizAnchorOK, "end-past": quizAnchorUngrounded, "absent": quizAnchorAbsent, "outside": quizAnchorUngrounded}
+	for _, qu := range state.Quizzes[0].Questions {
+		if qu.AnchorStatus != want[qu.ID] {
+			t.Errorf("%s: %q, want %q", qu.ID, qu.AnchorStatus, want[qu.ID])
+		}
 	}
 }

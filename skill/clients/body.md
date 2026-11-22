@@ -22,8 +22,8 @@ change, not row by row. Plan the pass before your first edit (skip this for a
 single comment):
 
 1. Set aside comments with `"request"` set (quiz, suggest, ...): tasks, not edits.
-2. When two comments overlap (same file and lines, or a `file` comment and a line
-   in it) and the later one restates, narrows or contradicts the earlier, the
+2. Two comments can overlap: same file and lines, or a `file` comment and a line
+   in it. When the later one restates, narrows or contradicts the earlier, the
    later wins: one edit, mark both done, and reply on the earlier naming the
    comment it was folded into. "Later" means further down the array, not a newer
    `created_at` (it is second-resolution, so it ties).
@@ -71,14 +71,26 @@ check) and `anchors`: `{"file", "from_line", "to_line", "side"}` for lines, or
 lists the changes no step cites, so read the files before you cite them. Then mark
 the comment done and reply with a one-line summary.
 
+Optional fields, where they help:
+- `concerns`: `{"id", "title", "mechanical"}`, named by a step's `"concern"`. Keep
+  a concern's steps together. prereview folds changes cited only by mechanical
+  steps.
+- a step's `risks`: `{"kind", "note"}`, kind one of auth, concurrency,
+  data-migration, error-handling, security, performance, public-api. None on a
+  mechanical step.
+- a step's `impact`: code outside the diff it affects, as
+  `{"file", "from_line", "to_line", "contains", "note"}`.
+- `diagrams`: `{"title", "mermaid", "anchors"}`, a mermaid flow.
+
 If a comment asks for a comprehension quiz (the reviewer asked from the Understand
 page's Quiz tab; the comment is marked `"request":"quiz"`), do
 not edit files and do not suggest edits - reply with a quiz instead:
 
     prereview quiz --out <STORE> --file quiz.json
 
-Write 3-5 multiple-choice questions grounded strictly in that file's diff. Each
-needs `options` (2+), a 0-based `answer`, a `why` explaining it, and
+Write 3-7 multiple-choice questions on the whole change, grounded strictly in the
+diff. Leave the quiz's `file` empty and give each question the `file` it asks
+about. Each needs `options` (2+), a 0-based `answer`, a `why` explaining it, and
 `from_line`/`to_line`/`side` locating it. Tag each with a `probe`: change-type,
 localization, consequence, rationale, or `decision` - the last meaning "what did
 you decide that the reviewer never asked for" (an unrequested dependency, a
@@ -86,7 +98,7 @@ changed default, a skipped edge case). Include at least one `decision` question
 when the diff contains such a choice, and none when it genuinely does not.
 
 Anchor each with `kind`: "line" (default) needs a real from_line, "file" is for a
-question about the change as a whole or about something absent. Never guess line
+question about its file as a whole or about something absent. Never guess line
 numbers - prereview flags a cited line that is not in the diff.
 
 Then `done` the request comment and `reply` a one-line summary. The reviewer can

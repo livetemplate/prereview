@@ -17,6 +17,8 @@ package e2e
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -219,4 +221,31 @@ func TestE2E_MermaidRendersAndStaysCommentable(t *testing.T) {
 			t.Errorf("browser console error: %s%s", line, diag(html))
 		}
 	}
+}
+
+// TestE2E_MermaidRevisionRerenders: a diagram whose source changes re-renders
+// after Refresh. The container is lvt-ignore (morphdom must not clobber the SVG
+// mermaid injects), so only a new data-key, a hash of the source, makes the
+// client replace it. Without the key the old SVG stayed (#115 A′1's spike).
+func TestE2E_MermaidRevisionRerenders(t *testing.T) {
+	t.Setenv("PREREVIEW_EDIT_SETTLE", "1s")
+	repo := setupFixtureMermaidRepo(t)
+	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+
+	svgHas := func(label string) string {
+		return `(() => { const s = document.querySelector('.md-mermaid svg'); return !!s && s.textContent.includes(` + strconv.Quote(label) + `); })()`
+	}
+	waitJSTrueDiag(t, p.ctx, svgHas("Start"), 25*time.Second, "the first diagram renders", diag)
+
+	revised := strings.Replace(mermaidDoc, "A[Start]", "A[Begin]", 1)
+	if err := os.WriteFile(filepath.Join(repo, "diagram.md"), []byte(revised), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	waitJSTrueDiag(t, p.ctx, refreshBtnVisibleJS, 15*time.Second, "refresh nudge", diag)
+	if err := chromedp.Run(p.ctx, chromedp.Click(`.refresh-prompt button[name="refreshDiff"]`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("click refresh: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, svgHas("Begin"), 15*time.Second, "the revised diagram re-renders", diag)
 }

@@ -73,7 +73,7 @@
         </form>
         {{end}}
         {{/* #115 Understand page — offered once there is something on it (a
-             walkthrough, or this file's quiz); the page itself is where you ask
+             walkthrough, or a quiz); the page itself is where you ask
              for one, opened from the file header's Understand button. */}}
         {{if .HasUnderstandContent}}
         <form method="POST">
@@ -134,6 +134,19 @@
             <span class="menu-icon">{{template "iconSuggestion"}}</span>
             <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
             <span class="menu-meta">{{.SuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}{{if $.HasMechanical}}
+        {{/* #115 A′3: one switch for every mechanical fold. */}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleFoldMechanical"
+            class="menu-item{{if not .UnfoldMechanical}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{if .UnfoldMechanical}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
+            <span class="menu-label">Fold mechanical changes</span>
           </button>
         </form>
         {{end}}

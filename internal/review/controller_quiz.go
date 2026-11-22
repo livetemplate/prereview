@@ -28,60 +28,46 @@ func (c *PrereviewController) quizPath() string { return QuizPath(c.CSVPath) }
 func (c *PrereviewController) quizAnswersPath() string { return QuizAnswersPath(c.CSVPath) }
 
 // applyQuiz loads the agent's quizzes plus the reviewer's answers into state and
-// derives each question's AnchorStatus against the live diff. Cheap and safe to
-// call from both Mount and the watcher fan-out (LLMStatusChanged), mirroring
-// applySuggestions.
+// grounds every question. QuizSeen is quiz.jsonl's fingerprint at this load, so
+// the watcher reloads only when the file moved (grounding builds the change
+// index, too costly for every tick).
 func (c *PrereviewController) applyQuiz(state *PrereviewState) {
+	state.QuizSeen = statusFingerprint(c.quizPath())
 	state.Quizzes = loadQuizzes(c.quizPath())
 	state.QuizAnswers = loadQuizAnswers(c.quizAnswersPath())
-	// The request has been answered — stop showing "Quiz requested…" and let the
-	// control invite a fresh one again.
-	if state.QuizRequestedFile != "" && quizForFile(state.Quizzes, state.QuizRequestedFile) {
-		state.QuizRequestedFile = ""
-	}
-	// Grounding is NOT done here. Mount calls applyQuiz long before it loads
-	// CurrentDiff, so grounding at load time would judge every question against a
-	// nil diff. Callers ground once they actually hold the diff.
-	c.groundQuizzes(state)
+	c.groundQuizzes(state, c.lazyCitable(state))
 }
 
-// groundQuizzes stamps AnchorStatus on every question of the SELECTED file's
-// quizzes — the only ones that render — by checking the claimed line against the
-// current diff.
-//
-// Only the selected file is grounded because CurrentDiff is the one diff in hand;
-// questions for other files keep an empty status until their file is opened. That
-// mirrors relocateSuggestionsSelected, and it is why a quiz for an unopened file
-// never shows a spurious "ungrounded" badge derived from the wrong diff.
-func (c *PrereviewController) groundQuizzes(state *PrereviewState) {
-	if state.SelectedFile == "" {
+// groundQuizzes stamps AnchorStatus on every question, against the change index
+// the walkthrough grounds on: both ends of a cited range must exist in the
+// question's file. Every file in the review, open or not, so the Quiz tab can
+// flag a question about a file the reviewer hasn't opened. A question that makes
+// no line claim (file/area/region) is "absent", which is deliberately not the
+// same state as a bad anchor.
+func (c *PrereviewController) groundQuizzes(state *PrereviewState, citableFiles func() *citable) {
+	if len(state.Quizzes) == 0 {
 		return
 	}
+	files := citableFiles()
+	if files == nil {
+		return // Mount loads quizzes before the file list, and grounds again after
+	}
 	for qi := range state.Quizzes {
-		if state.Quizzes[qi].File != state.SelectedFile {
-			continue
-		}
-		for i := range state.Quizzes[qi].Questions {
-			q := &state.Quizzes[qi].Questions[i]
-			switch {
-			case q.Anchorless():
-				// file/area/region questions make no line claim, so there is nothing
-				// to falsify. Deliberate, and deliberately NOT the same state as a
-				// bad anchor.
-				q.AnchorStatus = quizAnchorAbsent
-			case diffHasLine(state.CurrentDiff, q.Side, q.FromLine):
-				q.AnchorStatus = quizAnchorOK
-			default:
-				q.AnchorStatus = quizAnchorUngrounded
+		q := &state.Quizzes[qi]
+		for i := range q.Questions {
+			qu := &q.Questions[i]
+			if qu.Anchorless() {
+				qu.AnchorStatus = quizAnchorAbsent
+				continue
 			}
+			qu.AnchorStatus = groundRange(files.changes(q.fileOf(*qu)), AnchorKindLine, qu.Side, qu.FromLine, qu.EndLine())
 		}
 	}
 }
 
 // findDiffLine returns the diff line numbered n on the given side. It matches the
 // line NUMBERS the diff actually carries rather than indexing a slice by position,
-// so it stays correct for a hunked diff whose numbers are sparse — and a number
-// that isn't there is exactly the hallucinated anchor grounding exists to catch.
+// so it stays correct for a hunked diff whose numbers are sparse.
 func findDiffLine(diff *gitdiff.FileDiff, side string, n int) (gitdiff.DiffLine, bool) {
 	if diff == nil || n < 1 {
 		return gitdiff.DiffLine{}, false
@@ -99,24 +85,14 @@ func findDiffLine(diff *gitdiff.FileDiff, side string, n int) (gitdiff.DiffLine,
 	return gitdiff.DiffLine{}, false
 }
 
-// diffHasLine reports whether the cited line exists — the grounding predicate.
-func diffHasLine(diff *gitdiff.FileDiff, side string, n int) bool {
-	_, ok := findDiffLine(diff, side, n)
-	return ok
-}
-
-// RequestQuiz asks the agent for a quiz about the selected file, by SAVING a
-// file-level comment whose body is the quiz prompt.
+// RequestQuiz asks the agent for a quiz on the whole change (#115 A′5), by queuing
+// a request comment on the open file whose body is the quiz prompt plus the
+// change's scope, as RequestExplain does.
 //
-// It deliberately sends immediately rather than pre-filling the composer the way
-// PickPrompt does (#147). "Quiz me" should be one tap — this tool is mostly used
-// from a phone — and unlike a suggestions prompt there is rarely anything to
-// tweak. The cost is that the request is VISIBLE in the reviewer's own queue: an
-// earlier design hoped to hide it with Comment.Hidden, but that flag only applies
-// to RESOLVED comments ("Hidden is meaningless on them", state.go), so there is
-// no way to hide it and no reason to invent one. A saved Prompt comment already
-// behaves exactly this way, and the visible row doubles as a record of what was
-// asked, with the agent's reply threaded under it.
+// It sends at once rather than pre-filling the composer the way PickPrompt does
+// (#147): "Quiz me" should be one tap, and there is rarely anything to tweak. The
+// request row is visible in the reviewer's queue, a record of what was asked
+// with the agent's reply threaded under it.
 func (c *PrereviewController) RequestQuiz(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	if state.SelectedFile == "" {
 		return state, fmt.Errorf("requestQuiz: no file selected")
@@ -125,26 +101,14 @@ func (c *PrereviewController) RequestQuiz(state PrereviewState, ctx *livetemplat
 	if body == "" {
 		return state, nil // no prompts, or a stale slug from an old render
 	}
-	state, err := c.queueFileComment(state, fileComment(state, csv.RequestQuiz, body))
+	state, err := c.queueRequest(state, csv.RequestQuiz, body+c.changeScope(&state))
 	if err != nil {
 		return state, err
 	}
-	// Say so. Saving the comment changes nothing the reviewer can see — especially
-	// on a phone, where the queue is behind a menu — so without this the only
-	// feedback is silence, and silence reads as "it didn't work".
-	state.QuizRequestedFile = state.SelectedFile
+	// Say so: on a phone the queue is behind a menu, and silence reads as "it
+	// didn't work".
 	state.Flash = "Quiz requested — the agent will answer shortly"
 	return state, nil
-}
-
-// quizForFile reports whether any quiz targets file.
-func quizForFile(quizzes []Quiz, file string) bool {
-	for _, q := range quizzes {
-		if q.File == file {
-			return true
-		}
-	}
-	return false
 }
 
 // promptBody picks the requested prompt's body, falling back to the first
@@ -205,17 +169,17 @@ func (c *PrereviewController) AnswerQuestion(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
-// RetakeQuiz clears every answer for the current quiz so the reviewer can run it
-// again — retrieval practice works by repetition, and a quiz you can only take
-// once is a test, not a study tool.
+// RetakeQuiz clears the answers to every question the review shows, so the
+// reviewer can run the quiz again — retrieval practice works by repetition, and a
+// quiz you can only take once is a test, not a study tool.
 func (c *PrereviewController) RetakeQuiz(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	q := state.CurrentQuiz()
-	if q == nil {
+	items := state.allQuizItems()
+	if len(items) == 0 {
 		return state, nil
 	}
-	for _, qu := range q.Questions {
-		delete(state.QuizAnswers, answerKey(q.ID, qu.ID))
-		delete(state.QuizJustAnswered, answerKey(q.ID, qu.ID))
+	for _, it := range items {
+		delete(state.QuizAnswers, answerKey(it.QuizID, it.ID))
+		delete(state.QuizJustAnswered, answerKey(it.QuizID, it.ID))
 	}
 	if err := saveQuizAnswers(c.quizAnswersPath(), state.QuizAnswers); err != nil {
 		return state, fmt.Errorf("persist quiz retake: %w", err)
@@ -235,7 +199,7 @@ func (c *PrereviewController) JumpToQuizLine(state PrereviewState, ctx *livetemp
 	}
 	file := ctx.GetString("file")
 	if file == "" {
-		file = state.SelectedFile // a per-file quiz's questions are on the open file
+		return state, fmt.Errorf("jumpToQuizLine: missing file")
 	}
 	return c.jumpToLine(state, file, ctx.GetString("side"), line)
 }

@@ -54,6 +54,10 @@
   </div>
   {{end}}
 </section>
+=== anchorItem ===
+{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, which isn't in this review. The agent may have it wrong.">⚠ {{.Label}} isn't in this review</span>{{else}}{{template "anchorJump" .}}{{end}}
+=== anchorJump ===
+<form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">{{.Label}}</button></form>
 === answeredBadge ===
 <small class="answered-badge" title="the agent replied with no edit — read its answer, then resolve or reply">answered</small>
 === awaitingBadge ===
@@ -314,9 +318,19 @@
       </fieldset>
     </form>
   </footer></article></dialog>
+=== diagramsPanel ===
+<ol class="walk-steps diagram-list">
+    {{range $.DiagramViews}}
+    <li class="walk-step diagram" data-key="diagram-{{.ID}}">
+      {{if .Title}}<div class="walk-title"><span class="walk-title-text">{{.Title}}</span></div>{{end}}
+      {{.HTML}}
+      {{if .Anchors}}<div class="walk-impact"><strong>Cites</strong><ul>{{range .Anchors}}<li>{{template "anchorItem" .}}</li>{{end}}</ul></div>{{end}}
+    </li>
+    {{end}}
+  </ol>
 === diffView ===
 {{with $.CurrentDiff}}  
-  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}{{if $.WrapLines}} wrap-lines{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$hasQuiz := gt (index $.QuizCountLines $rowkey) 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion $hasQuiz}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">{{if index $.StepMarkLines $lkey}}<div class="step-mark">{{index $.StepMarkLines $lkey}}</div>{{end}}<div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion $hasQuiz}}<span class="line-margin">
+  <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}{{if $.WrapLines}} wrap-lines{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if or (eq .Kind "fold") (eq .Kind "mech")}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}<form method="POST" class="line-row mech-row" data-key="M{{.OldNum}}-{{.NewNum}}"><input type="hidden" name="hunk" value="{{.Group}}"><button type="submit" name="revealMechanical" class="mech-fold" title="The walkthrough calls these changes mechanical. Tap to read them.">Show {{.Content}} mechanical line{{if ne .Content "1"}}s{{end}} · {{index $.MechTitles .Group}}</button></form>{{end}}{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$commentCount := index $.CommentCountLines $rowkey}}{{$suggestionCount := index $.SuggestionCountLines $rowkey}}{{$hasComment := gt $commentCount 0}}{{$hasSuggestion := gt $suggestionCount 0}}{{$hasQuiz := gt (index $.QuizCountLines $rowkey) 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if or $hasComment $hasSuggestion $hasQuiz}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">{{$sm := index $.StepMarkLines $lkey}}{{if $sm}}<div class="step-mark">{{$sm.Label}}{{range $sm.Risks}} <span class="ck-pill ck-fail risk-chip">{{.}}</span>{{end}}</div>{{end}}<div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if or $hasComment $hasSuggestion $hasQuiz}}<span class="line-margin">
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
           <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
@@ -1030,7 +1044,7 @@
         <form method="POST"><button type="submit" name="endWalkthrough" class="outline" aria-label="Stop the walkthrough" title="Stop the walkthrough">×</button></form>
       </span>
     </div>
-    <div class="walk-bar-text"><strong class="walk-bar-title">{{.Title}}</strong>{{if .Anchor}}<span class="walk-bar-at">{{.Anchor}}</span>{{else}}<span class="walk-bar-at quiz-ungrounded">⚠ cites nothing in this review</span>{{end}}{{if .Body}}<span class="walk-bar-body">{{.Body}}</span>{{end}}</div>
+    <div class="walk-bar-text"><strong class="walk-bar-title">{{.Title}}</strong>{{if .Risks}}<span class="walk-bar-risks">{{range .Risks}}<span class="ck-pill ck-fail risk-chip">{{.Kind}}</span>{{end}}</span>{{end}}{{if .Anchor}}<span class="walk-bar-at">{{.Anchor}}</span>{{else}}<span class="walk-bar-at quiz-ungrounded">⚠ None of this step's lines are in the review</span>{{end}}{{if .Body}}<span class="walk-bar-body">{{.Body}}</span>{{end}}</div>
   </div>{{end}}
   
   {{if $.ShowNav}}
@@ -1240,6 +1254,15 @@
 
 
 
+
+
+
+
+
+
+
+
+
 === processedBadge ===
 <small class="processed-badge">worked on</small>
 === queuedBadge ===
@@ -1290,15 +1313,17 @@
 
 === quizPanel ===
 {{if $.HasQuiz}}
-  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
+  <p class="quiz-sub"><small>Questions on the whole change. Each one also shows next to the code it asks about.</small></p>
+  {{range $.QuizFiles}}
+  <h4 class="quiz-file"><code>{{.File}}</code></h4>
   <ol class="quiz-list">
-    {{range $.QuizItems}}
+    {{range .Items}}
     <li class="quiz-q{{if .Answered}} is-answered{{end}}" data-key="{{.ID}}">
       <div class="quiz-q-head">
         <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>
         {{if .Jumpable}}
         <form method="POST" style="margin:0">
-          <input type="hidden" name="file" value="{{$.SelectedFile}}">
+          <input type="hidden" name="file" value="{{.File}}">
           <input type="hidden" name="line" value="{{.FromLine}}">
           <input type="hidden" name="side" value="{{.Side}}">
           <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">{{.AnchorLabel}}</button>
@@ -1320,7 +1345,7 @@
           </div>
           {{else}}
           <form method="POST" style="margin:0">
-            <input type="hidden" name="quizId" value="{{$.CurrentQuiz.ID}}">
+            <input type="hidden" name="quizId" value="{{$item.QuizID}}">
             <input type="hidden" name="questionId" value="{{$item.ID}}">
             <input type="hidden" name="choice" value="{{$i}}">
             <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button>
@@ -1335,6 +1360,7 @@
     </li>
     {{end}}
   </ol>
+  {{end}}
   <footer class="quiz-foot">
     {{if $.QuizComplete}}<p class="quiz-done"><strong>{{$.QuizScoreLabel}}</strong> — every question answered.</p>{{end}}
     {{if gt $.QuizAnsweredCount 0}}
@@ -1346,8 +1372,8 @@
   </footer>
   {{else}}
   <div class="empty quiz-empty">
-    <p>No quiz for <code>{{$.SelectedFile}}</code> yet.</p>
-    <p><small>Ask the agent for a few questions about this file's diff, to check you understood it before you accept it.</small></p>
+    <p>No quiz yet.</p>
+    <p><small>Ask the agent for a few questions about the whole change, to check you understood it before you accept it.</small></p>
     {{template "quizAsk" $}}
   </div>
   {{end}}
@@ -1658,10 +1684,11 @@
     </form>
   </header>
   <div class="lib-tabs understand-tabs" role="tablist">
-    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab{{if not $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}false{{else}}true{{end}}">Walkthrough{{with $.CurrentExplanation}} <span class="ck-pill">{{len .Steps}}</span>{{end}}</button></form>
-    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab{{if $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}true{{else}}false{{end}}">Quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab{{if eq $.UnderstandTabOn "walkthrough"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "walkthrough"}}true{{else}}false{{end}}">Walkthrough{{with $.CurrentExplanation}} <span class="ck-pill">{{len .Steps}}</span>{{end}}</button></form>{{if $.HasDiagrams}}
+    <form method="POST"><input type="hidden" name="tab" value="diagrams"><button type="submit" name="setUnderstandTab" data-tab="diagrams" class="lib-tab{{if eq $.UnderstandTabOn "diagrams"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "diagrams"}}true{{else}}false{{end}}">Diagrams <span class="ck-pill">{{len $.CurrentExplanation.Diagrams}}</span></button></form>{{end}}
+    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab{{if eq $.UnderstandTabOn "quiz"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "quiz"}}true{{else}}false{{end}}">Quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</button></form>
   </div>
-  {{if $.UnderstandOnQuiz}}{{template "quizPanel" $}}{{else}}{{template "walkthroughPanel" $}}{{end}}
+  {{if eq $.UnderstandTabOn "quiz"}}{{template "quizPanel" $}}{{else}}{{if eq $.UnderstandTabOn "diagrams"}}{{template "diagramsPanel" $}}{{else}}{{template "walkthroughPanel" $}}{{end}}{{end}}
 </section>
 === versionSummary ===
 {{if .Initial}}<span class="vs-note">Initial version — the starting point.</span>{{else}}{{if .Deleted}}<span class="vs-note">File removed at this version.</span>{{else}}{{if .Binary}}<span class="vs-note">Binary file changed.</span>{{else}}<span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>{{end}}{{end}}{{end}}
@@ -1740,6 +1767,14 @@
             <span class="menu-icon">{{template "iconSuggestion"}}</span>
             <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
             <span class="menu-meta">{{.SuggestionCount}}</span>
+          </button>
+        </form>
+        {{end}}{{if $.HasMechanical}}
+        
+        <form method="POST">
+          <button type="submit" name="toggleFoldMechanical" class="menu-item{{if not .UnfoldMechanical}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{if .UnfoldMechanical}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
+            <span class="menu-label">Fold mechanical changes</span>
           </button>
         </form>
         {{end}}
@@ -1856,19 +1891,19 @@
 === walkthroughPanel ===
 {{with $.CurrentExplanation}}
   {{if .Summary}}<p class="walk-summary">{{.Summary}}</p>{{end}}
-  {{if .Stale}}<p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>{{end}}
-  {{with $.NotExplained}}<p class="walk-stale walk-unexplained" role="status">⚠ {{len .}} change{{if ne (len .) 1}}s{{end}} no step explains. They are the last step.</p>{{end}}
+  {{if .Stale}}<p class="walk-stale" role="status">The files changed after this walkthrough was written, so some steps may be out of date.</p>{{end}}
+  {{with $.NotExplained}}<p class="walk-stale walk-unexplained" role="status">⚠ The walkthrough skips {{len .}} change{{if ne (len .) 1}}s{{end}}, listed as the last step.</p>{{end}}
   <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     {{range $.WalkSteps}}
-    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}" data-key="step-{{.ID}}">
+    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}{{if .InConcern}} walk-in-concern{{end}}" data-key="step-{{.ID}}">{{if .Concern}}<div class="walk-concern"><span class="walk-concern-title">{{.Concern.Title}}</span> · {{.Concern.Steps}} step{{if ne .Concern.Steps 1}}s{{end}}{{if .Concern.Mechanical}} · mechanical{{if .Concern.Folded}} · folds {{.Concern.Folded}} line{{if ne .Concern.Folded 1}}s{{end}}{{end}}{{end}}</div>{{end}}
       <div class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> <span class="walk-title-text">{{.Title}}</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="{{.Num}}"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
-      {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}
+      {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}{{if .Risks}}<ul class="walk-risks">{{range .Risks}}<li><span class="ck-pill ck-fail risk-chip">{{.Kind}}</span>{{if .Note}} {{.Note}}{{end}}</li>{{end}}</ul>{{end}}
       <ul class="walk-anchors">
         {{range .Anchors}}
-        <li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, but the review has no such line — treat this step with suspicion">⚠ {{.Label}}, not in this review</span>{{else}}<form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">{{.Label}}</button></form>{{end}}</li>
+        <li>{{template "anchorItem" .}}</li>
         {{end}}
-      </ul>
+      </ul>{{if .Impact}}<div class="walk-impact"><strong>Affects</strong><ul>{{range .Impact}}<li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough says the change affects {{.Label}}, which doesn't exist. The agent may have it wrong.">⚠ Can't find {{.Label}}</span>{{else}}{{if .Linkable}}{{template "anchorJump" .}}{{else}}<span class="walk-impact-label" title="Outside this review">{{.Label}}</span>{{end}}{{end}}{{if .Note}} <span class="walk-impact-note">— {{.Note}}</span>{{end}}</li>{{end}}</ul></div>{{end}}
     </li>
     {{end}}
   </ol>
