@@ -621,6 +621,9 @@ func renderFixtures() []renderFixture {
 
 	sessionEnded := goBase()
 	sessionEnded.SessionEnded = true
+	// #278: ended with Approve and end.
+	sessionApproved := sessionEnded
+	sessionApproved.SessionApproved = true
 
 	// transient toasts + in-viewer prompts, all lit at once (independent {{if}}s)
 	toasts := goBase()
@@ -1028,6 +1031,7 @@ func renderFixtures() []renderFixture {
 		{"search-open", searchOpen},
 		{"banners-quitting", quitting},
 		{"banners-session-ended", sessionEnded},
+		{"session-approved", sessionApproved},
 		{"toasts", toasts},
 		{"empty-pick-file", emptyPick},
 		{"empty-no-files", emptyNoFiles},

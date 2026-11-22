@@ -117,7 +117,9 @@ button (with an **End session** button) instead of **Quit**:
    edits the file, and marks it **done**.
 3. Prefer to batch? Open the **Queue** dropdown and hit **⏸ Pause** — comments
    are held until you **▶ Resume**, which releases them together.
-4. Click **End session** when you're finished; the agent stops watching.
+4. Click **End session** when you're finished; the agent stops watching. The
+   confirm dialog has two ways to end. **Approve and end** tells the agent you
+   approved the plan or change. **End session** makes it ask you.
 
 `comments.csv` is always the source of truth (RFC-4180, one row per comment), and
 in agent mode prereview also emits a continuous JSON event stream the agent

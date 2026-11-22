@@ -44,7 +44,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
 		t.Fatalf("EmitSnapshot: %v", err)
 	}
-	if err := es.EmitEnd(fixedTS); err != nil {
+	if err := es.EmitEnd(fixedTS, false); err != nil {
 		t.Fatalf("EmitEnd: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
 		t.Fatalf("handoff: %v", err)
 	}
-	if err := es.EmitEnd(fixedTS); err != nil {
+	if err := es.EmitEnd(fixedTS, false); err != nil {
 		t.Fatalf("end: %v", err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
@@ -174,12 +174,12 @@ func TestEventStream_AppendOnly(t *testing.T) {
 
 	// First session writes one event.
 	es1 := NewEventStream(&bytes.Buffer{}, file)
-	if err := es1.EmitEnd(fixedTS); err != nil {
+	if err := es1.EmitEnd(fixedTS, false); err != nil {
 		t.Fatalf("first emit: %v", err)
 	}
 	// A second emitter pointed at the same file must append, not truncate.
 	es2 := NewEventStream(&bytes.Buffer{}, file)
-	if err := es2.EmitEnd(fixedTS); err != nil {
+	if err := es2.EmitEnd(fixedTS, false); err != nil {
 		t.Fatalf("second emit: %v", err)
 	}
 

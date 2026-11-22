@@ -107,7 +107,7 @@ where a `[url](url)` link is one tap and a bare URL can't be tapped:
 > (hostname: [http://host.tailnet.ts.net:PORT/?token=…](http://host.tailnet.ts.net:PORT/?token=…))
 > Just leave comments as you go — I'll pick them up automatically and address them.
 > Hit **⏸ Pause** to batch a few first, **▶ Resume** to release them, and
-> **End session** when you're done.
+> **End session** when you're done (**Approve and end** if it's good to go).
 
 When an `ALT` MagicDNS hostname is present, make **that** the headline link
 (stable and readable); otherwise use the `READY` URL. Always wrap as `[url](url)`.
@@ -175,6 +175,15 @@ Track this as a checklist; run it until you see the `end` event.
 5. **Stop only on `end`.** The `end` event is the ONLY terminator; when you read it,
    stop consuming (the server shuts down right after, so a backgrounded launch's job
    completes on its own). Never stop after a `snapshot` — the review is continuous.
+6. **Read how it ended (#278).** First handle anything still open in the batch's last
+   `snapshot`. Then:
+   - **`"approved": true`** — the reviewer chose **Approve and end**: they approved
+     the plan or change under review. Go on with the next step they asked for (for
+     a plan, start building it). Approval alone is not permission to push, merge or
+     release; ask for those as you normally would.
+   - **no `approved`** — they chose **End session**. Ask them whether the plan or
+     change is approved before going on, using your own options UI (in Claude Code,
+     `AskUserQuestion`), not a prose question.
 
 Event fields and comment kinds are in
 [reference.md → Agent mode](./reference.md#agent-mode). The snapshot is pre-filtered to

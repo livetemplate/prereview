@@ -1307,6 +1307,12 @@ header.file-head .file-head-actions {
   border-left: 2px solid var(--pr-open, #c9a000);
   border-radius: 3px;
 }
+/* #278: Cancel · End session · Approve and end. On a phone the three stack, the
+   primary Approve and end on top (column-reverse keeps Cancel last in the DOM). */
+@media (max-width: 640px) {
+  #confirm-end-session fieldset[role="group"] { display: flex; flex-direction: column-reverse; gap: 0.4rem; }
+  #confirm-end-session fieldset[role="group"] > button { width: 100%; margin: 0; border-radius: var(--pico-border-radius); }
+}
 .queue-row { margin: 0; display: flex; align-items: center; gap: 0.15rem; }
 .queue-jump-form { margin: 0; flex: 1 1 auto; min-width: 0; }
 .queue-reenqueue-form { margin: 0; flex: 0 0 auto; }

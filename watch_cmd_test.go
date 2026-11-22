@@ -118,7 +118,7 @@ func TestFollowEvents_RealEmitterContract(t *testing.T) {
 	if err := es.EmitSnapshot([]review.Comment{c}, nil, nil, nil, nil, nil, nil, false, ts); err != nil {
 		t.Fatalf("EmitSnapshot: %v", err)
 	}
-	if err := es.EmitEnd(ts); err != nil {
+	if err := es.EmitEnd(ts, false); err != nil {
 		t.Fatalf("EmitEnd: %v", err)
 	}
 
@@ -131,6 +131,23 @@ func TestFollowEvents_RealEmitterContract(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("reader did not deliver %s from the real emitter output:\n%s", want, out)
 		}
+	}
+}
+
+// TestFollowEvents_PassesApproved (#278): watch prints the end line as written, so
+// Approve and end's approved:true reaches the agent.
+func TestFollowEvents_PassesApproved(t *testing.T) {
+	path := filepath.Join(t.TempDir(), review.EventsFileName)
+	es := review.NewEventStream(io.Discard, path)
+	if err := es.EmitEnd(time.Unix(0, 0), true); err != nil {
+		t.Fatal(err)
+	}
+	var buf syncBuf
+	if err := followEvents(path, -1, &buf, testPoll, nil); err != nil {
+		t.Fatalf("followEvents: %v", err)
+	}
+	if out := buf.String(); !strings.Contains(out, `"event":"end"`) || !strings.Contains(out, `"approved":true`) {
+		t.Errorf("watch dropped approved from end:\n%s", out)
 	}
 }
 

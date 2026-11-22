@@ -123,7 +123,7 @@ func TestEventStream_LastSeq(t *testing.T) {
 		t.Errorf("fresh stream LastSeq = %d, want -1", got)
 	}
 	_ = es.EmitFilesChanged(nil, 0, "", false, fixedTS)
-	_ = es.EmitEnd(fixedTS)
+	_ = es.EmitEnd(fixedTS, false)
 	if got := es.LastSeq(); got != 1 {
 		t.Errorf("after seq 0,1 LastSeq = %d, want 1", got)
 	}

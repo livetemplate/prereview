@@ -3,6 +3,7 @@ package review
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,6 +124,41 @@ func TestEndSession_FlushesThenTerminatesAndShutsDown(t *testing.T) {
 	case <-shutdown:
 	case <-time.After(2 * time.Second):
 		t.Fatal("EndSession did not request shutdown")
+	}
+}
+
+// TestApproveAndEnd (#278): Approve and end runs End session's sequence (final
+// snapshot, then end, then shutdown) and its end carries approved:true; a plain
+// End session's end has no approved field and leaves SessionApproved false.
+func TestApproveAndEnd(t *testing.T) {
+	c, buf, shutdown := newStreamController(t)
+	st, err := c.ApproveAndEnd(PrereviewState{Comments: []Comment{regionComment("late", "left at the end")}}, regionCtx("approveAndEnd", nil))
+	if err != nil {
+		t.Fatalf("ApproveAndEnd: %v", err)
+	}
+	if !st.SessionEnded || !st.SessionApproved {
+		t.Errorf("ended %v approved %v, want both", st.SessionEnded, st.SessionApproved)
+	}
+	evs := decodeEvents(t, buf.Bytes())
+	if len(evs) != 2 || evs[0].Event != "snapshot" || evs[1].Event != "end" || !evs[1].Approved {
+		t.Fatalf("want [snapshot, end approved], got %+v", evs)
+	}
+	if !strings.Contains(buf.String(), `"approved":true`) {
+		t.Errorf("the end line lacks approved:true:\n%s", buf.String())
+	}
+	select {
+	case <-shutdown:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ApproveAndEnd did not request shutdown")
+	}
+
+	c2, buf2, _ := newStreamController(t)
+	st2, err := c2.EndSession(PrereviewState{}, regionCtx("endSession", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st2.SessionApproved || strings.Contains(buf2.String(), "approved") {
+		t.Errorf("a plain End session must not say approved: %v\n%s", st2.SessionApproved, buf2.String())
 	}
 }
 
