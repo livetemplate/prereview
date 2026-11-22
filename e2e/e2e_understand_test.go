@@ -137,7 +137,7 @@ func TestE2E_UnderstandWalkthroughBar(t *testing.T) {
 
 	navStep(t, p, "walkNext", diag)
 	waitNavLabel(t, p, "Step 3 of 3", "› reaches step 3", diag)
-	if got := bar(); !strings.Contains(got, "cites nothing in this review") {
+	if got := bar(); !strings.Contains(got, "None of this step's lines are in the review") {
 		t.Errorf("a step citing only nope.go must say it cites nothing here, got %q%s", got, diag())
 	}
 	if n := evalInt(t, p, `document.querySelectorAll('.walk-bar button[name="walkNext"][disabled]').length`); n != 1 {
@@ -161,7 +161,7 @@ func TestE2E_UnderstandNotExplained(t *testing.T) {
 	submitExplain(t, p, `{"steps": [{"title": "The greeting", "anchors": [{"file": "edited.go", "from_line": 4}]}]}`)
 	p.openUnderstandTab("walkthrough")
 	waitJSTrue(t, p.ctx, `document.querySelectorAll('.walk-step').length === 2`, 10*time.Second, "the agent's step plus the derived one")
-	if got := evalStr(t, p, `document.querySelector('.walk-unexplained').textContent.trim()`); !strings.Contains(got, "1 change no step explains") {
+	if got := evalStr(t, p, `document.querySelector('.walk-unexplained').textContent.trim()`); !strings.Contains(got, "The walkthrough skips 1 change") {
 		t.Errorf("the page must count the changes no step explains, got %q%s", got, diag())
 	}
 	last := evalStr(t, p, `(() => { const s = [...document.querySelectorAll('.walk-step')].pop(); return s.className + ' | ' + s.textContent.replace(/\s+/g, ' '); })()`)

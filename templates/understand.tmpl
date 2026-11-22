@@ -26,19 +26,19 @@
 {{define "walkthroughPanel" -}}
 {{with $.CurrentExplanation}}
   {{if .Summary}}<p class="walk-summary">{{.Summary}}</p>{{end}}
-  {{if .Stale}}<p class="walk-stale" role="status">Written before the last edit to the files, so a step may no longer match the code.</p>{{end}}
-  {{with $.NotExplained}}<p class="walk-stale walk-unexplained" role="status">⚠ {{len .}} change{{if ne (len .) 1}}s{{end}} no step explains. They are the last step.</p>{{end}}
+  {{if .Stale}}<p class="walk-stale" role="status">The files changed after this walkthrough was written, so some steps may be out of date.</p>{{end}}
+  {{with $.NotExplained}}<p class="walk-stale walk-unexplained" role="status">⚠ The walkthrough skips {{len .}} change{{if ne (len .) 1}}s{{end}}, listed as the last step.</p>{{end}}
   <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     {{range $.WalkSteps}}
-    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}{{if .InConcern}} walk-in-concern{{end}}" data-key="step-{{.ID}}">{{if .Concern}}<div class="walk-concern"><span class="walk-concern-title">{{.Concern.Title}}</span> · {{.Concern.Steps}} step{{if ne .Concern.Steps 1}}s{{end}}{{if .Concern.Mechanical}} · mechanical{{if .Concern.Folded}} · {{.Concern.Folded}} line{{if ne .Concern.Folded 1}}s{{end}} fold{{end}}{{end}}</div>{{end}}
+    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}{{if .InConcern}} walk-in-concern{{end}}" data-key="step-{{.ID}}">{{if .Concern}}<div class="walk-concern"><span class="walk-concern-title">{{.Concern.Title}}</span> · {{.Concern.Steps}} step{{if ne .Concern.Steps 1}}s{{end}}{{if .Concern.Mechanical}} · mechanical{{if .Concern.Folded}} · folds {{.Concern.Folded}} line{{if ne .Concern.Folded 1}}s{{end}}{{end}}{{end}}</div>{{end}}
       <div class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> <span class="walk-title-text">{{.Title}}</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="{{.Num}}"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
       {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}{{if .Risks}}<ul class="walk-risks">{{range .Risks}}<li><span class="ck-pill ck-fail risk-chip">{{.Kind}}</span>{{if .Note}} {{.Note}}{{end}}</li>{{end}}</ul>{{end}}
       <ul class="walk-anchors">
         {{range .Anchors}}
         <li>{{template "anchorItem" .}}</li>
         {{end}}
-      </ul>{{if .Impact}}<div class="walk-impact"><strong>Affects</strong><ul>{{range .Impact}}<li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough says the change affects {{.Label}}, but that line isn't in the files — treat it with suspicion">⚠ {{.Label}}, not found</span>{{else if .Linkable}}{{template "anchorJump" .}}{{else}}<span class="walk-impact-label" title="Outside this review">{{.Label}}</span>{{end}}{{if .Note}} <span class="walk-impact-note">— {{.Note}}</span>{{end}}</li>{{end}}</ul></div>{{end}}
+      </ul>{{if .Impact}}<div class="walk-impact"><strong>Affects</strong><ul>{{range .Impact}}<li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough says the change affects {{.Label}}, which doesn't exist. The agent may have it wrong.">⚠ Can't find {{.Label}}</span>{{else if .Linkable}}{{template "anchorJump" .}}{{else}}<span class="walk-impact-label" title="Outside this review">{{.Label}}</span>{{end}}{{if .Note}} <span class="walk-impact-note">— {{.Note}}</span>{{end}}</li>{{end}}</ul></div>{{end}}
     </li>
     {{end}}
   </ol>
@@ -72,7 +72,7 @@
      and one button per quiz prompt to ask for one. */}}
 {{define "quizPanel" -}}
   {{if $.HasQuiz}}
-  <p class="quiz-sub"><small>on the whole change — every question also sits inline next to the code it asks about; this is the overview</small></p>
+  <p class="quiz-sub"><small>Questions on the whole change. Each one also shows next to the code it asks about.</small></p>
   {{range $.QuizFiles}}
   <h4 class="quiz-file"><code>{{.File}}</code></h4>
   <ol class="quiz-list">

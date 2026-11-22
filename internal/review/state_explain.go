@@ -208,7 +208,7 @@ func (s PrereviewState) walkSteps() []Step {
 	}
 	// Clip, so appending never writes into the explanation's own array.
 	return append(slices.Clip(e.Steps), Step{ID: notExplainedStepID, Derived: true, Title: "Not explained",
-		Body:    "Changes no step cites. Read them too: what a walkthrough leaves out is where a surprise hides.",
+		Body:    "The walkthrough doesn't mention these changes. Read them too.",
 		Anchors: s.NotExplained})
 }
 

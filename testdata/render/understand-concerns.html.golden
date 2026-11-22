@@ -734,7 +734,7 @@
         
         <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="2"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L2</button></form></li>
         
-      </ul><div class="walk-impact"><strong>Affects</strong><ul><li><form method="POST" style="margin:0"><input type="hidden" name="file" value="worker.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="88"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">worker.go L88</button></form> <span class="walk-impact-note">— the caller</span></li><li><span class="quiz-ungrounded" title="The walkthrough says the change affects gone.go L4, but that line isn't in the files — treat it with suspicion">⚠ gone.go L4, not found</span></li></ul></div>
+      </ul><div class="walk-impact"><strong>Affects</strong><ul><li><form method="POST" style="margin:0"><input type="hidden" name="file" value="worker.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="88"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">worker.go L88</button></form> <span class="walk-impact-note">— the caller</span></li><li><span class="quiz-ungrounded" title="The walkthrough says the change affects gone.go L4, which doesn't exist. The agent may have it wrong.">⚠ Can't find gone.go L4</span></li></ul></div>
     </li>
     
     <li class="walk-step walk-in-concern" data-key="step-s2">

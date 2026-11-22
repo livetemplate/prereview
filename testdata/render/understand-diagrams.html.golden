@@ -728,7 +728,7 @@
       <div class="md-mermaid" data-key="mmd-fba7946ea42c14a6" lvt-ignore><pre class="mermaid">graph TD
   Send --&gt; Fail{failed?}
   Fail --&gt;|yes| Backoff --&gt; Send</pre></div>
-      <div class="walk-impact"><strong>Cites</strong><ul><li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="2"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L2-L3</button></form></li><li><span class="quiz-ungrounded" title="The walkthrough cites gone.go L4, but the review has no such line — treat it with suspicion">⚠ gone.go L4, not in this review</span></li></ul></div>
+      <div class="walk-impact"><strong>Cites</strong><ul><li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="2"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L2-L3</button></form></li><li><span class="quiz-ungrounded" title="The walkthrough cites gone.go L4, which isn't in this review. The agent may have it wrong.">⚠ gone.go L4 isn't in this review</span></li></ul></div>
     </li>
     
   </ol>

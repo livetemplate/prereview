@@ -666,4 +666,4 @@
 
 {{/* anchorItem (#115): a place a walkthrough or one of its diagrams cites — a
      jump link, or ⚠ when the review has no such line. */}}
-{{define "anchorItem"}}{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, but the review has no such line — treat it with suspicion">⚠ {{.Label}}, not in this review</span>{{else}}{{template "anchorJump" .}}{{end}}{{end}}
+{{define "anchorItem"}}{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, which isn't in this review. The agent may have it wrong.">⚠ {{.Label}} isn't in this review</span>{{else}}{{template "anchorJump" .}}{{end}}{{end}}
