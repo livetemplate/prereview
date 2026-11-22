@@ -3671,7 +3671,11 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 }
 
 /* #115 B3: a file marked viewed that changed since. */
-.file-label .viewed-changed { display: block; font-size: 0.7rem; font-weight: 500; color: var(--mark); white-space: normal; }
+/* On its own line under the row, so the file name keeps its full width. */
+dialog#files-drawer .file-row:has(> .viewed-changed) { flex-wrap: wrap; }
+dialog#files-drawer .file-row > .viewed-changed {
+  flex-basis: 100%; padding: 0 0 0.15rem 0.6rem; font-size: 0.72rem; font-weight: 500; color: var(--mark);
+}
 
 /* #115 B2: a moved block's label above its first row, linking to the other end,
    and a bar in the gutter on every moved row (left indicators go on the gutter:

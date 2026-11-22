@@ -495,6 +495,26 @@
   
   
   
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleHideWhitespace"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Hide whitespace changes</span>
+    </button>
+  </form>
+  
+  
   
   
   
@@ -620,14 +640,14 @@
     <form method="POST" class="file-select-form">
       <input type="hidden" name="path" value="app.go">
       <button type="submit" name="selectFile" class="file-btn outline contrast is-selected" title="app.go"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
-        <span class="file-label"><span class="file-name">app</span><span class="file-ext">.go</span><small class="viewed-changed">changed since you viewed it</small></span>
+        <span class="file-label"><span class="file-name">app</span><span class="file-ext">.go</span></span>
         <span class="file-meta"><small class="diff-stats"><span class="add">+3</span><span class="del">-1</span></small></span>
       </button>
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="app.go">
       <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Changed since you viewed it: mark viewed again"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
-    </form>
+    </form><small class="viewed-changed">changed since you viewed it</small>
   </div>
 </li><li class="tree-file" data-key="README.md">
   <div class="file-row" style="--depth:0">

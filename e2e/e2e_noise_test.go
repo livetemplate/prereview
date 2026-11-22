@@ -43,6 +43,10 @@ func TestE2E_HideWhitespace(t *testing.T) {
 		t.Fatalf("before: %d deleted and %d added rows, want 3 and 3%s", d, a, diag())
 	}
 
+	// The View menu (desktop) and the ⋮ menu (its phone mirror) both offer it.
+	if n := evalInt(t, p, `document.querySelectorAll("button[name='toggleHideWhitespace']").length`); n != 2 {
+		t.Errorf("the setting must be in the View menu and the ⋮ menu, found %d%s", n, diag())
+	}
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector("button[name='toggleHideWhitespace']").click()`, nil)); err != nil {
 		t.Fatalf("turn the setting on: %v%s", err, diag())
 	}

@@ -928,6 +928,22 @@
       <span class="menu-meta">{{.SuggestionCount}}</span>
     </button>
   </form>
+  {{end}}{{if $.HasMechanical}}
+  
+  <form method="POST">
+    <button type="submit" name="toggleFoldMechanical" class="menu-item{{if not .UnfoldMechanical}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">{{if .UnfoldMechanical}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
+      <span class="menu-label">Fold mechanical changes</span>
+    </button>
+  </form>
+  {{end}}{{if $.ShowsDiffRows}}
+  
+  <form method="POST">
+    <button type="submit" name="toggleHideWhitespace" class="menu-item{{if .HideWhitespace}} is-on{{end}}" role="menuitem">
+      <span class="menu-icon">{{if .HideWhitespace}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Hide whitespace changes</span>
+    </button>
+  </form>
   {{end}}
   
   {{if $.HasMarks}}
