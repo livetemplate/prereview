@@ -806,3 +806,102 @@ func TestGroundQuizzesAcrossFiles(t *testing.T) {
 		}
 	}
 }
+
+// TestViewedByContent (#115 B3): a viewed mark holds while the file's content
+// matches what was viewed; an edit makes it "changed since you viewed it"; undoing
+// the edit makes it viewed again; the mark survives a relaunch; and the toggle
+// clears it.
+func TestViewedByContent(t *testing.T) {
+	c, state := explainFixture(t)
+	toggle := func() {
+		t.Helper()
+		var err error
+		if state, err = c.ToggleViewed(state, checksCtx("toggleViewed", map[string]interface{}{"path": "b.go"})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	marks := func() string { return fmt.Sprintf("viewed=%v changed=%v", state.ViewedFiles["b.go"], state.ChangedSinceViewed["b.go"]) }
+	toggle()
+	if got := marks(); got != "viewed=true changed=false" {
+		t.Fatalf("after marking: %s", got)
+	}
+	orig, err := os.ReadFile(filepath.Join(c.RepoPath, "b.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeAt(t, c.RepoPath, "b.go", string(orig)+"t\n")
+	c.applyViewed(&state)
+	if got := marks(); got != "viewed=false changed=true" {
+		t.Errorf("after an edit: %s", got)
+	}
+	writeAt(t, c.RepoPath, "b.go", string(orig))
+	c.applyViewed(&state)
+	if got := marks(); got != "viewed=true changed=false" {
+		t.Errorf("after undoing the edit: %s", got)
+	}
+	relaunched := &PrereviewController{RepoPath: c.RepoPath, CSVPath: c.CSVPath}
+	fresh := PrereviewState{}
+	relaunched.applyViewed(&fresh)
+	if !fresh.ViewedFiles["b.go"] {
+		t.Errorf("a relaunch lost the mark: %+v", fresh.ViewedFiles)
+	}
+	toggle()
+	if got := marks(); got != "viewed=false changed=false" {
+		t.Errorf("after clearing: %s", got)
+	}
+}
+
+// TestSinceLook (#115 B4): the first look at a file records it with no notice;
+// after an edit, the next look marks exactly the lines added since and says how
+// many; a reconnect (same session) keeps that; Dismiss clears it; and what the
+// file showed at each look is kept as a blob.
+func TestSinceLook(t *testing.T) {
+	c, state := explainFixture(t)
+	vs, err := NewVersionStore(VersionsDir(c.CSVPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Versions = vs
+	state.SelectedFile = "b.go" // x y z w v u
+	c.recordLook(&state)
+	if n := state.SinceLookNotice(); n != nil {
+		t.Fatalf("a first look must not show a notice: %+v", n)
+	}
+	first := loadFileMarks(c.lastLookPath())["b.go"]
+	if _, err := vs.Blob(first.SHA); err != nil {
+		t.Fatalf("the first look's content wasn't kept: %v", err)
+	}
+
+	writeAt(t, c.RepoPath, "b.go", "x\ny\nNEW\nz\nw\nv\nU2\n") // line 3 added, u -> U2 (line 7)
+	d, err := gitdiff.LoadDiff(c.RepoPath, "HEAD", "b.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.CurrentDiff = d
+	c.recordLook(&state)
+	notice := state.SinceLookNotice()
+	if notice == nil || !strings.HasPrefix(notice.Label, "2 lines changed since you last looked at ") {
+		t.Fatalf("after an edit: notice %+v", notice)
+	}
+	var railed []string
+	for k, m := range state.RowMarks() {
+		if m.Since {
+			railed = append(railed, k)
+		}
+	}
+	slices.Sort(railed)
+	if got := strings.Join(railed, " "); got != "L0-3 L0-7" {
+		t.Errorf("railed rows = %q, want the two lines added since: L0-3 L0-7", got)
+	}
+
+	c.recordLook(&state) // a reconnect: same content, same session
+	if state.SinceLookNotice() == nil {
+		t.Error("a reconnect must keep the notice")
+	}
+	if state, err = c.DismissSinceLook(state, checksCtx("dismissSinceLook", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if n := state.SinceLookNotice(); n != nil {
+		t.Errorf("Dismiss must clear the notice: %+v", n)
+	}
+}

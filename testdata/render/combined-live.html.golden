@@ -238,6 +238,26 @@
         
         
         
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleHideWhitespace"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+            <span class="menu-label">Hide whitespace changes</span>
+          </button>
+        </form>
+        
+        
         
         
         
@@ -438,6 +458,26 @@
   
   
   
+  
+  
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleHideWhitespace"
+      class="menu-item"
+      role="menuitem"
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Hide whitespace changes</span>
+    </button>
+  </form>
   
   
   

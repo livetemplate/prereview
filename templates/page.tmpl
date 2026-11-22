@@ -128,6 +128,15 @@
     <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
   </div>
   {{end}}
+  {{- /* #115 B4: what changed since you last had this file open. Trimmed so it
+       adds nothing while there is nothing to say. */}}
+  {{- with $.SinceLookNotice}}
+  <div class="since-look" role="status">
+    <span>{{.Label}}</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="diffSinceLook" class="outline">Show the full diff</button></form>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="dismissSinceLook" class="outline">Dismiss</button></form>
+  </div>
+  {{- end}}
   {{- /* #115 the walkthrough's step bar: the step being read and where it points,
        ‹ › through the stops across files. Takes the stepper's slot while walking.
        Trimmed so it adds nothing to the page while no walk is on. */}}

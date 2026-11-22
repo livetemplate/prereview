@@ -408,10 +408,19 @@ type PrereviewState struct {
 	// LastDeletedComment (clearUndo) and by closing the screen.
 	LastResolvedIDs []string `json:"last_resolved_ids"`
 
-	// ViewedFiles is a per-session set of files the user has marked as
-	// "reviewed" (GitHub PR convention). Persisted so the state survives
-	// browser refresh; not written to CSV (this is UX state, not a comment).
-	ViewedFiles map[string]bool `json:"viewed_files" lvt:"persist"`
+	// ViewedFiles are the files marked viewed whose content still matches what
+	// was viewed; ChangedSinceViewed the marked ones that changed since (#115
+	// B3, GitHub's convention). Derived from .prereview/viewed.json on Mount
+	// (applyViewed), so a mark survives a relaunch.
+	ViewedFiles        map[string]bool `json:"viewed_files"`
+	ChangedSinceViewed map[string]bool `json:"changed_since_viewed"`
+	// SinceLook is each file's baseline look this session (#115 B4): what it
+	// showed the last time it was on screen, when it has changed since. Kept
+	// across reconnects until dismissed. SinceLookAdded/Removed are the open
+	// file's lines added since and how many were removed (applySinceLook).
+	SinceLook        map[string]FileMark `json:"since_look" lvt:"persist"`
+	SinceLookAdded   []int               `json:"since_look_added"`
+	SinceLookRemoved int                 `json:"since_look_removed"`
 
 	// Read progress (#128), keyed by file path. ReadThrough is the furthest
 	// new-side line number the reviewer has scrolled past (a high-water mark →
@@ -482,6 +491,13 @@ type PrereviewState struct {
 	Mechanical       map[string][]MechHunk `json:"mechanical"`
 	MechRevealed     map[string]bool       `json:"mech_revealed"`
 	UnfoldMechanical bool                  `json:"unfold_mechanical"`
+	// HideWhitespace shows lines that changed only in whitespace as unchanged
+	// (#115 B1), in VisibleLines only: CurrentDiff stays the real diff, so no
+	// anchor moves. A durable view pref (uiprefs.go).
+	HideWhitespace bool `json:"hide_whitespace"`
+	// Moves are the change's moved blocks, both ends (#115 B2), from the change
+	// index on each Mount.
+	Moves []gitdiff.Move `json:"moves"`
 	// The walkthrough in progress (#115 A3): WalkExplanation names the one being
 	// walked ("" = no walk), so a replaced walkthrough ends the walk instead of
 	// landing on a stranger's stop; WalkStep/WalkAnchor is the stop shown
@@ -988,9 +1004,8 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	if s.CurrentDiff == nil {
 		return nil
 	}
-	// FileView (durable pref) OR Revealing() (a transient search-jump reveal)
-	// shows the whole file so an arbitrary target line is present.
-	if s.FileView || s.Revealing() {
+	// FileView (durable pref) shows the working-tree file: no deleted lines.
+	if s.FileView {
 		out := make([]gitdiff.DiffLine, 0, len(s.CurrentDiff.Lines))
 		for _, l := range s.CurrentDiff.Lines {
 			if l.NewNum > 0 { // exists in the working-tree file
@@ -999,13 +1014,24 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 		}
 		return out
 	}
+	// Revealing() (a jump's transient reveal) shows every row, folds and all, so
+	// a target on either side is present: a jump to a deleted line (a move's old
+	// end, a walkthrough anchor on removed code) needs its row.
+	if s.Revealing() {
+		return s.CurrentDiff.Lines
+	}
 	// An annotation can sit on an unchanged line far from any change (the LLM
 	// emits arbitrary line numbers for suggestions, #98; a comment made in File
 	// view or rendered Markdown; an anchor that drifted). Its card hangs on that
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
 	pinned := s.pinnedRows()
-	lines := gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, pinned)
+	lines := s.CurrentDiff.Lines
+	if s.HideWhitespace {
+		// Before the collapse, so paired rows fold with the unchanged ones.
+		lines = gitdiff.PairWhitespace(lines, pinned)
+	}
+	lines = gitdiff.CollapseToHunks(lines, diffContextLines, pinned)
 	if group := s.mechGroup(); group != nil {
 		lines = gitdiff.FoldRanges(lines, group, pinned)
 	}
@@ -1021,10 +1047,10 @@ func (s PrereviewState) pinnedRows() func(gitdiff.DiffLine) bool {
 	cards := s.AnnotationCountLines()
 	hidden := s.HiddenSuggestionLines()
 	found := s.findingLines()
-	marks := s.StepMarkLines()
+	marks := s.RowMarks()
 	return func(l gitdiff.DiffLine) bool {
 		k := rowKey(l)
-		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)] != nil
+		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)].labelled()
 	}
 }
 

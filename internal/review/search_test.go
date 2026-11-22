@@ -148,9 +148,10 @@ func TestRevealingForcesRawView(t *testing.T) {
 	if st.ShowRenderedMarkdown() {
 		t.Error("revealing must force the raw line view (ShowRenderedMarkdown false)")
 	}
-	// VisibleLines shows every working-tree line (NewNum>0), del line excluded.
-	if vl := st.VisibleLines(); len(vl) != 2 {
-		t.Errorf("revealing should show 2 working-tree lines, got %d", len(vl))
+	// VisibleLines shows every row, the deleted one included, so a jump to a
+	// line on either side finds it (#115 B2: a move's old end).
+	if vl := st.VisibleLines(); len(vl) != 3 {
+		t.Errorf("revealing should show all 3 rows, got %d", len(vl))
 	}
 	// A different RevealFile does not reveal the current file.
 	st.RevealFile = "other.md"

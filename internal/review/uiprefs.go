@@ -40,8 +40,11 @@ type UIPrefs struct {
 	// UnfoldMechanical turns off the walkthrough's mechanical folds (#115 A′3).
 	// Default false: lines a mechanical concern explains fold.
 	UnfoldMechanical bool `json:"unfold_mechanical"`
-	RawMarkdown      bool `json:"raw_markdown"`
-	RawHTML          bool `json:"raw_html"`
+	// HideWhitespace shows lines that changed only in whitespace as unchanged
+	// (#115 B1). Default false: whitespace can matter (Python, YAML, lists).
+	HideWhitespace bool `json:"hide_whitespace"`
+	RawMarkdown    bool `json:"raw_markdown"`
+	RawHTML        bool `json:"raw_html"`
 	// QueueGlobal shows the whole review's work in the queue panel instead of just
 	// the current file's (#171). Default false = this file — the queue answers "what
 	// is happening to the document in front of me"; flip it to see the review-wide
@@ -147,6 +150,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.HideMarks = p.HideMarks
 	state.FileView = p.FileView
 	state.UnfoldMechanical = p.UnfoldMechanical
+	state.HideWhitespace = p.HideWhitespace
 	state.RawMarkdown = p.RawMarkdown
 	state.RawHTML = p.RawHTML
 	state.QueueGlobal = p.QueueGlobal
@@ -174,6 +178,7 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		HideMarks:        state.HideMarks,
 		FileView:         state.FileView,
 		UnfoldMechanical: state.UnfoldMechanical,
+		HideWhitespace:   state.HideWhitespace,
 		RawMarkdown:      state.RawMarkdown,
 		RawHTML:          state.RawHTML,
 		QueueGlobal:      state.QueueGlobal,

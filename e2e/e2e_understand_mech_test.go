@@ -73,6 +73,10 @@ func TestE2E_MechanicalFold(t *testing.T) {
 		t.Errorf("line 9 must be folded, found %d rows%s", n, diag())
 	}
 
+	// The View menu (desktop) and the ⋮ menu (its phone mirror) both offer it.
+	if n := evalInt(t, p, `document.querySelectorAll("button[name='toggleFoldMechanical']").length`); n != 2 {
+		t.Errorf("the switch must be in the View menu and the ⋮ menu, found %d%s", n, diag())
+	}
 	// The View-menu switch turns every fold off, and back on.
 	toggle := `document.querySelector("button[name='toggleFoldMechanical']").click()`
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(toggle, nil)); err != nil {

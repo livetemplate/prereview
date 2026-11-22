@@ -437,3 +437,114 @@ func (s PrereviewState) foldedLines(concern string) int {
 	}
 	return n
 }
+
+// RowMark is what a diff row carries above or beside its code: a step's marker,
+// a move's label (on the first row of each end), and Moved on every row of a
+// moved block, for its tint. One map, so a row costs one slot on the wire.
+type RowMark struct {
+	Step  *StepMark
+	Move  *MoveMark
+	Moved bool
+	Since bool // added since your last look (#115 B4)
+}
+
+// MoveMark labels one end of a moved block and links to the other end.
+type MoveMark struct {
+	Label      string // "Moved from b.go L4" / "Moved to a.go L12"
+	File, Side string // the other end
+	Line       int
+}
+
+// labelled reports a row with a marker or a label above it: it never folds.
+func (m *RowMark) labelled() bool { return m != nil && (m.Step != nil || m.Move != nil) }
+
+// RowMarks is every mark on the open file's rows, keyed like the row
+// ("L<old>-<new>"): StepMarkLines' markers, the moved blocks (#115 B2), and the
+// lines added since your last look (B4).
+func (s PrereviewState) RowMarks() map[string]*RowMark {
+	steps := s.StepMarkLines()
+	var moves []gitdiff.Move
+	for _, m := range s.Moves {
+		if m.File == s.SelectedFile {
+			moves = append(moves, m)
+		}
+	}
+	var since map[int]bool
+	if s.SinceLookNotice() != nil {
+		since = make(map[int]bool, len(s.SinceLookAdded))
+		for _, n := range s.SinceLookAdded {
+			since[n] = true
+		}
+	}
+	if len(steps) == 0 && ((len(moves) == 0 && len(since) == 0) || s.CurrentDiff == nil) {
+		return nil
+	}
+	out := make(map[string]*RowMark, len(steps))
+	for k, m := range steps {
+		out[k] = &RowMark{Step: m}
+	}
+	if len(moves) == 0 && len(since) == 0 {
+		return out
+	}
+	mark := func(l gitdiff.DiffLine) *RowMark {
+		k := lineCursorKey(l)
+		if out[k] == nil {
+			out[k] = &RowMark{}
+		}
+		return out[k]
+	}
+	for _, l := range s.CurrentDiff.Lines {
+		if l.Kind != "del" && since[l.NewNum] {
+			mark(l).Since = true
+		}
+		side, n := "new", l.NewNum
+		switch l.Kind {
+		case "del":
+			side, n = "old", l.OldNum
+		case "add":
+		default:
+			continue
+		}
+		for _, m := range moves {
+			if m.Side != side || n < m.From || n > m.To {
+				continue
+			}
+			r := mark(l)
+			r.Moved = true
+			if n == m.From {
+				label, other := "Moved to", "new"
+				if side == "new" {
+					label, other = "Moved from", "old"
+				}
+				r.Move = &MoveMark{Label: fmt.Sprintf("%s %s L%d", label, m.Other.File, m.Other.Line), File: m.Other.File, Side: other, Line: m.Other.Line}
+			}
+		}
+	}
+	return out
+}
+
+// SinceLookView is the notice above a file that changed since your last look.
+type SinceLookView struct{ Label string }
+
+// SinceLookNotice says what changed in the open file since your last look
+// (#115 B4), or nil: no baseline, nothing changed, or a version on screen.
+func (s PrereviewState) SinceLookNotice() *SinceLookView {
+	base, held := s.SinceLook[s.SelectedFile]
+	if !held || s.ViewingVersion || s.CurrentDiff == nil {
+		return nil
+	}
+	at := base.At.Local()
+	when := at.Format("15:04")
+	if y, m, d := at.Date(); time.Now().Year() != y || time.Now().Month() != m || time.Now().Day() != d {
+		when = at.Format("Jan 2, 15:04")
+	}
+	switch n := len(s.SinceLookAdded); {
+	case n == 1:
+		return &SinceLookView{Label: "1 line changed since you last looked at " + when}
+	case n > 1:
+		return &SinceLookView{Label: fmt.Sprintf("%d lines changed since you last looked at %s", n, when)}
+	case s.SinceLookRemoved > 0:
+		return &SinceLookView{Label: "Lines were removed since you last looked at " + when}
+	}
+	return nil
+}

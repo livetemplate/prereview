@@ -149,11 +149,16 @@ func (c *PrereviewController) lazyCitable(state *PrereviewState) func() *citable
 }
 
 // groundUnderstand reloads the walkthrough and grounds it and the quiz in one
-// pass. Mount and opening the Understand page call it once the file list is in.
+// pass, and reads the change's moved blocks from the same index (#115 B2).
+// Mount and opening the Understand page call it once the file list is in.
 func (c *PrereviewController) groundUnderstand(state *PrereviewState) {
 	files := c.lazyCitable(state)
 	c.groundQuizzes(state, files)
 	c.applyExplainWith(state, files)
+	state.Moves = nil
+	if f := files(); f != nil {
+		state.Moves = f.idx.Moves
+	}
 }
 
 // groundRange reports whether a file entry has what an anchor cites: the whole

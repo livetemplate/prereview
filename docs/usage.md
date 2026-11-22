@@ -56,6 +56,22 @@ without turning the whole group off). **Resolve all** resolves every listed
 comment that's still open, and its notice offers **Undo** until you close the
 list.
 
+**Mark files viewed.** The circle beside a file in the drawer marks it viewed, and
+the mark remembers what the file held. If the file changes later, the drawer says
+"changed since you viewed it"; undoing the change makes it viewed again. Marks last
+across sessions.
+
+**See what changed since you last looked.** Open a file that changed since you last
+had it open, usually after your agent edited it. A notice says how many lines
+changed, and a bar marks them in the diff. You can comment on them as usual.
+**Show the full diff** compares what you last saw with the file now, removed lines
+included, and **Dismiss** clears the notice.
+
+**Cut the noise.** **Hide whitespace changes** in the View menu shows a line that
+changed only in whitespace, such as a re-indent, as unchanged. A block of code that
+moved, within a file or to another, is labelled "Moved from …" and "Moved to …" at
+its two ends, each a link to the other.
+
 **Comments from a remote copy.** A reviewed file may be published somewhere people
 comment: a GitHub pull request, Google Docs, Notion, a wiki. Your agent then offers
 to bring those comments into the review with `prereview import`, and does when you

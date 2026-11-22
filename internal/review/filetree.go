@@ -60,6 +60,8 @@ type TreeNode struct {
 	// Resolved per-node display state.
 	IsSelected bool // leaf path == SelectedFile
 	IsViewed   bool // leaf path is in ViewedFiles
+	// ChangedSinceViewed: the leaf was marked viewed and changed since (#115 B3).
+	ChangedSinceViewed bool
 	// rank is the node's place in walkthrough order (#115): a file's first citing
 	// step, a directory's lowest rank below it; unrankedFile when none.
 	rank        int
@@ -143,15 +145,16 @@ func (s PrereviewState) FileTree() []*TreeNode {
 		// Attach the file leaf. Copy the entry so &entry is stable per leaf.
 		entry := files[i]
 		parent.Children = append(parent.Children, &TreeNode{
-			Name:         segments[len(segments)-1],
-			Path:         f.Path,
-			Entry:        &entry,
-			IsSelected:   f.Path == s.SelectedFile,
-			IsViewed:     s.ViewedFiles[f.Path],
-			HasChanged:   f.Status != "",
-			CommentCount: f.CommentCount,
-			Added:        f.Added,
-			Deleted:      f.Deleted,
+			Name:               segments[len(segments)-1],
+			Path:               f.Path,
+			Entry:              &entry,
+			IsSelected:         f.Path == s.SelectedFile,
+			IsViewed:           s.ViewedFiles[f.Path],
+			ChangedSinceViewed: s.ChangedSinceViewed[f.Path],
+			HasChanged:         f.Status != "",
+			CommentCount:       f.CommentCount,
+			Added:              f.Added,
+			Deleted:            f.Deleted,
 		})
 	}
 
@@ -182,11 +185,12 @@ func (s PrereviewState) FilteredFileNodes() []*TreeNode {
 		f := files[i]
 		entry := files[i]
 		out = append(out, &TreeNode{
-			Name:       f.Path, // full path label for the flat list
-			Path:       f.Path,
-			Entry:      &entry,
-			IsSelected: f.Path == s.SelectedFile,
-			IsViewed:   s.ViewedFiles[f.Path],
+			Name:               f.Path, // full path label for the flat list
+			Path:               f.Path,
+			Entry:              &entry,
+			IsSelected:         f.Path == s.SelectedFile,
+			IsViewed:           s.ViewedFiles[f.Path],
+			ChangedSinceViewed: s.ChangedSinceViewed[f.Path],
 		})
 	}
 	return out

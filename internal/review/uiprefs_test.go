@@ -88,6 +88,7 @@ func TestSavePrefsWritesOnlyViewFields(t *testing.T) {
 		"queue_global":      true, // #171: This file / All files — a view pref like the rest
 		"toc_collapsed":     true, // #137: desktop TOC column collapse — a durable view pref
 		"unfold_mechanical": true, // #115 A′3: turn the walkthrough's mechanical folds off
+		"hide_whitespace":   true, // #115 B1: show whitespace-only changes as unchanged
 	}
 	for k := range m {
 		if !wantKeys[k] {

@@ -137,6 +137,8 @@ Everything prereview writes lives under `<STORE>/`, the directory from the stdou
 ├── first-seen.json             ← the diff fingerprint each walkthrough was first seen against; server-owned, durable
 ├── judgments.jsonl             ← INBOUND: judge verdicts (`prereview judge`); append-only, latest per file+judge
 ├── judge-labels.jsonl          ← the reviewer's Agree/Disagree on verdicts (server-owned)
+├── viewed.json                 ← files the reviewer marked viewed, with each one's content hash; server-owned, durable
+├── last-look.json              ← what each file held when the reviewer last had it open; server-owned, durable
 └── quiz-answers.jsonl          ← reviewer's quiz answers; server-owned, rewritten atomically, durable
 ```
 

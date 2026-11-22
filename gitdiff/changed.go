@@ -31,6 +31,8 @@ type ChangedIndex struct {
 	// Fingerprint changes whenever any reviewed file's content (or the base)
 	// does, so a walkthrough can tell it was written against an older tree.
 	Fingerprint string
+	// Moves are the blocks deleted in one place and added in another (#115 B2).
+	Moves []Move
 }
 
 // FileChanges is one file's entry in a ChangedIndex.
@@ -49,6 +51,9 @@ type FileChanges struct {
 // an empty side is meaningless and never compared.
 type Hunk struct {
 	OldStart, OldCount, NewStart, NewCount int
+	// Old and New are the hunk's deleted and added lines' text, for move
+	// detection (#115 B2).
+	Old, New []string
 }
 
 // Covers reports whether the line range [from, to] on side ("old" or "new")
@@ -129,6 +134,7 @@ func LoadChangedIndex(repo, base string, files []FileEntry) (*ChangedIndex, erro
 		idx.Files[f.Path] = fc
 	}
 	idx.Fingerprint = hex.EncodeToString(sum.Sum(nil))[:16]
+	idx.Moves = detectMoves(idx.Files)
 	return idx, nil
 }
 
@@ -206,7 +212,7 @@ func addedFile(full string) *FileChanges {
 	}
 	fc := &FileChanges{NewLen: len(rows)}
 	if len(rows) > 0 {
-		fc.Hunks = []Hunk{{NewStart: 1, NewCount: len(rows)}}
+		fc.Hunks = []Hunk{{NewStart: 1, NewCount: len(rows), New: rows}}
 	}
 	return fc
 }
@@ -245,6 +251,7 @@ func parseU0(raw []byte) map[string]*FileChanges {
 	out := map[string]*FileChanges{}
 	var cur *FileChanges
 	var header, oldPath, newPath string
+	inHunks := false // past the file's headers: "--- x" is a deleted "-- x" line now
 	flush := func() {
 		if cur == nil {
 			return
@@ -261,12 +268,22 @@ func parseU0(raw []byte) map[string]*FileChanges {
 		}
 	}
 	for line := range strings.SplitSeq(string(raw), "\n") {
+		// A CRLF file's lines keep their "\r" here; LoadDiff's scanner drops it,
+		// and the hunk text must match what the view shows.
+		line = strings.TrimSuffix(line, "\r")
 		switch {
 		case strings.HasPrefix(line, "diff --git "):
 			flush()
 			cur = &FileChanges{}
 			header, oldPath, newPath = line, "", ""
+			inHunks = false
 		case cur == nil:
+		case inHunks && strings.HasPrefix(line, "-"):
+			h := &cur.Hunks[len(cur.Hunks)-1]
+			h.Old = append(h.Old, line[1:])
+		case inHunks && strings.HasPrefix(line, "+"):
+			h := &cur.Hunks[len(cur.Hunks)-1]
+			h.New = append(h.New, line[1:])
 		case strings.HasPrefix(line, "--- "):
 			oldPath = diffPath(line[4:], "a/")
 		case strings.HasPrefix(line, "+++ "):
@@ -276,6 +293,7 @@ func parseU0(raw []byte) map[string]*FileChanges {
 		case strings.HasPrefix(line, "@@ "):
 			if h, ok := parseHunkRanges(line); ok {
 				cur.Hunks = append(cur.Hunks, h)
+				inHunks = true
 			}
 		}
 	}
