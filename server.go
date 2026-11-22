@@ -411,6 +411,7 @@ func guardedHandler(token launchToken, page, files http.Handler) http.Handler {
 // serverPIDRoute, shared by repo mode and external (proxy) mode.
 func registerAssetRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/livetemplate-client.js", serveBytes("application/javascript", assets.ClientJS()))
+	mux.HandleFunc("/prereview-handlers.js", serveBytes("application/javascript", assets.HandlersJS()))
 	mux.HandleFunc("/mermaid.min.js", serveBytes("application/javascript", assets.MermaidJS()))
 	mux.HandleFunc("/mermaid-init.js", serveBytes("application/javascript", assets.MermaidInitJS()))
 	mux.HandleFunc("/pico.min.css", serveBytes("text/css", assets.PicoCSS()))

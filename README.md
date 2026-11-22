@@ -212,14 +212,17 @@ Other tools in the same space, worth a look:
 ## Development
 
 prereview is built on [livetemplate](https://github.com/livetemplate/livetemplate):
-the whole UI is server-rendered Go with no custom JavaScript, and when it needs a
-primitive the framework lacks, the primitive goes into livetemplate.
+the UI is server-rendered Go. The browser behaviour HTML can't express (text,
+area and region selection, deep links, the live-site bridge) is a set of
+livetemplate attribute handlers in `handlers/`, registered through the client's
+public API.
 
 ```bash
 git clone https://github.com/livetemplate/prereview
 cd prereview
-make sync-client   # copy the livetemplate client into internal/assets/client/
-go build .
+go build .         # the client and handler bundles are committed
+# After changing handlers/src: make build-handlers (needs Node; make test-handlers runs jest)
+# To vendor a new client: bump @livetemplate/client in handlers/package.json, then make sync-client
 ./prereview
 ```
 

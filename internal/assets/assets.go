@@ -3,10 +3,11 @@
 // binary with no CDN dependency (it is reviewed over Tailscale/devbox,
 // often offline).
 //
-// The files in client/ are populated by `make sync-client`, which copies
-// them from ../../../client/{dist/livetemplate-client.browser.js,
-// livetemplate.css}. They are gitignored — fresh clones must run
-// `make sync-client` before `go build`.
+// The files in client/ are populated by `make sync-client`, which copies them
+// from the @livetemplate/client version pinned in handlers/package.json.
+// handlers/prereview-handlers.js is prereview's own attribute handlers, built
+// from handlers/src by `make build-handlers`. Both are committed, so
+// `go install` works without running make.
 //
 // fonts/ holds the static Regular (400) and Bold (700) JetBrains Mono
 // woff2 (SIL OFL 1.1, see fonts/OFL.txt) — prose needs only those two
@@ -26,6 +27,9 @@ var clientJS []byte
 
 //go:embed client/livetemplate.css
 var clientCSS []byte
+
+//go:embed handlers/prereview-handlers.js
+var handlersJS []byte
 
 // picoCSS is the pinned Pico CSS v2.1.1 minified stylesheet (MIT). It was
 // previously loaded from a jsdelivr CDN <link>, which silently broke the
@@ -81,6 +85,10 @@ var mermaidInitJS []byte
 
 // ClientJS returns the embedded livetemplate client browser bundle.
 func ClientJS() []byte { return clientJS }
+
+// HandlersJS returns prereview's attribute handlers, which register with the
+// client through its public API.
+func HandlersJS() []byte { return handlersJS }
 
 // ClientCSS returns the embedded livetemplate shared stylesheet.
 func ClientCSS() []byte { return clientCSS }

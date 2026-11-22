@@ -220,7 +220,7 @@ keyboard). Anatomy:
 - **Side-awareness.** A modified line's number exists on BOTH the del(old) and
   add(new) rows, so the composer / cards / `<mark>` gate on `$lside` (== the
   selection's side), or they render twice.
-- **Client** (`../client` `dom/directives.ts`, `lvt-fx:text-select` on `.code`):
+- **Client** (`handlers/src/directives.ts`, `lvt-fx:text-select` on `.code`):
   native selection → floating Comment button. On a coarse pointer it is pinned
   bottom-centre of the viewport: iOS's OS-level Copy callout always beats z-index
   and flips above/below the selection by screen position, so a button beside the
