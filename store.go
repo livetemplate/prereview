@@ -201,10 +201,10 @@ func uiPrefsPath() string {
 	return filepath.Join(dir, "prereview", "ui-prefs.json")
 }
 
-// userPromptsDir is the "ask for suggestions" prompt overlay directory (#147):
-// <library>/prompts, so ~/.config/prereview/prompts by default. PREREVIEW_PROMPTS_DIR
-// overrides it. "" when the library dir can't be resolved — the built-in prompts still
-// ship, so the picker never depends on this resolving.
+// userPromptsDir is the whole-file shortcut (prompt) overlay directory (#147,
+// #275): <library>/prompts, so ~/.config/prereview/prompts by default.
+// PREREVIEW_PROMPTS_DIR overrides it. "" when the library dir can't be resolved —
+// the built-in prompts still ship, so the chips never depend on this resolving.
 func userPromptsDir() string {
 	return libraryOverlayDir("PREREVIEW_PROMPTS_DIR", "prompts")
 }

@@ -126,14 +126,21 @@
 {{/* #204: the Shortcuts tab — every comment-box chip, where it comes from and how
      often it's used; Hide takes one out of the comment box without deleting it. */}}
 {{define "shortcutsTab"}}<section class="lib-shortcuts">
-  <p class="sc-intro">One-tap comments for a line, a text selection or a block. The ones you use most come first. Add your own as Markdown files in <code>~/.config/prereview/shortcuts/</code>; an accepted learning can add one too.</p>
+  <p class="sc-intro">One-tap comments. The ones you use most come first. Add your own as Markdown files: line shortcuts in <code>~/.config/prereview/shortcuts/</code>, whole-file ones in <code>~/.config/prereview/prompts/</code>. An accepted learning can add either.</p>
+  <h3 class="sc-group">On a line</h3>
   <ul class="lib-list">
-    {{range .Rows}}<li class="lib-card sc-row{{if .Hidden}} is-hidden{{end}}" data-key="sc-{{.Slug}}">
+    {{range .Line}}{{template "shortcutRow" .}}{{end}}
+  </ul>
+  <h3 class="sc-group">On the whole file</h3>
+  <ul class="lib-list">
+    {{range .File}}{{template "shortcutRow" .}}{{end}}
+  </ul>
+</section>{{end}}
+
+{{define "shortcutRow"}}<li class="lib-card sc-row{{if .Hidden}} is-hidden{{end}}" data-key="sc-{{.Slug}}">
       <header><b class="sc-label">{{.Label}}</b><span class="ck-pill">{{.Source}}</span><span class="sc-uses">{{.Uses}} use{{if ne .Uses 1}}s{{end}}</span><form method="POST" class="sc-toggle"><button type="submit" name="{{if .Hidden}}showShortcut{{else}}hideShortcut{{end}}" value="{{.Slug}}" class="outline secondary">{{if .Hidden}}Show{{else}}Hide{{end}}</button></form></header>
       <p class="sc-body">{{.Body}}</p>
     </li>{{end}}
-  </ul>
-</section>{{end}}
 
 {{define "learnCard"}}
     <li class="lib-card is-{{.Status}}" data-key="learn-{{.ID}}">
@@ -150,7 +157,7 @@
       {{$accepted := eq .Status "accepted"}}{{with .Produces}}<div class="lc-row"><span>{{if $accepted}}became{{else}}would become{{end}}: <b>{{.}}</b></span></div>{{end}}
       {{with .Checker}}<details class="lc-drafted"><summary>Checker it adds</summary><pre>{{.}}</pre></details>{{end}}
       {{with .Judge}}<details class="lc-drafted"><summary>Judge it adds</summary><pre>{{.}}</pre></details>{{end}}
-      {{with .Shortcut}}<details class="lc-drafted"><summary>Shortcut it adds</summary><p><b>{{.Label}}</b></p><pre>{{.Body}}</pre></details>{{end}}
+      {{with .Shortcut}}<details class="lc-drafted"><summary>{{if .File}}Whole-file shortcut it adds{{else}}Shortcut it adds{{end}}</summary><p><b>{{.Label}}</b></p><pre>{{.Body}}</pre></details>{{end}}
       {{if not .Editing}}<div class="lc-actions">
         {{$id := .ID}}{{range .Actions}}<form method="POST"><input type="hidden" name="id" value="{{$id}}">{{with .Act}}<input type="hidden" name="act" value="{{.}}">{{end}}<button type="submit" name="{{.Name}}" class="{{.Class}}">{{.Label}}</button></form>
         {{end}}

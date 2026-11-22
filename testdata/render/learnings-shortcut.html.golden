@@ -590,7 +590,7 @@
   </div>
   
   <div class="lib-filters">
-    <form method="POST"><input type="hidden" name="status" value="proposed"><button type="submit" name="setLearnFilter" class="lib-chip is-on" aria-pressed="true">Proposed 1</button></form>
+    <form method="POST"><input type="hidden" name="status" value="proposed"><button type="submit" name="setLearnFilter" class="lib-chip is-on" aria-pressed="true">Proposed 2</button></form>
     <form method="POST"><input type="hidden" name="status" value="accepted"><button type="submit" name="setLearnFilter" class="lib-chip" aria-pressed="false">Accepted 0</button></form>
     <form method="POST"><input type="hidden" name="status" value="superseded"><button type="submit" name="setLearnFilter" class="lib-chip" aria-pressed="false">Superseded 0</button></form>
     <form method="POST"><input type="hidden" name="status" value="rejected"><button type="submit" name="setLearnFilter" class="lib-chip" aria-pressed="false">Rejected 0</button></form>
@@ -623,6 +623,26 @@
         <form method="POST"><input type="hidden" name="id" value="l9"><button type="submit" name="editLearning" class="outline">Edit</button></form>
         <form method="POST"><input type="hidden" name="id" value="l9"><input type="hidden" name="act" value="reject"><button type="submit" name="learningAction" class="outline reject">Reject</button></form>
         <form method="POST"><input type="hidden" name="id" value="l9"><input type="hidden" name="act" value="delete"><button type="submit" name="learningAction" class="outline secondary">Delete</button></form>
+        
+      </div>
+    </li>
+
+    <li class="lib-card is-proposed" data-key="learn-l10">
+      <header><span class="ck-pill ck-new">proposed</span><span>scope: <b>Writing (all documents)</b></span><span>1 piece of evidence · newest 15 Nov 2026</span></header>
+      <p class="lc-text">Tighten a whole doc before it goes out.</p>
+      
+      <details open><summary>Evidence (1)</summary><ul class="lc-evidence">
+        <li><span class="ev-where">comment · plan.md · this review · 15 Nov 2026</span><br><q>tighten this doc</q></li>
+        </ul></details>
+      <div class="lc-row"><span>would become: <b>instruction · shortcut</b></span></div>
+      
+      
+      <details class="lc-drafted"><summary>Whole-file shortcut it adds</summary><p><b>Tighten it</b></p><pre>Tighten this doc: cut repeats and filler.</pre></details>
+      <div class="lc-actions">
+        <form method="POST"><input type="hidden" name="id" value="l10"><input type="hidden" name="act" value="accept"><button type="submit" name="learningAction" class="accept">Accept</button></form>
+        <form method="POST"><input type="hidden" name="id" value="l10"><button type="submit" name="editLearning" class="outline">Edit</button></form>
+        <form method="POST"><input type="hidden" name="id" value="l10"><input type="hidden" name="act" value="reject"><button type="submit" name="learningAction" class="outline reject">Reject</button></form>
+        <form method="POST"><input type="hidden" name="id" value="l10"><input type="hidden" name="act" value="delete"><button type="submit" name="learningAction" class="outline secondary">Delete</button></form>
         
       </div>
     </li>

@@ -1134,12 +1134,9 @@ header.file-head .file-head-actions {
 }
 .version-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .version-btn:disabled { opacity: 0.5; cursor: default; }
-/* #147 "Ask for suggestions" picker — reuses the versions-dropdown chrome. */
-/* The quiz trigger is styled identically to the suggestions trigger but MUST
-   keep its own class: they sit side by side in the file header, and a shared
-   class makes `.prompts-trigger` ambiguous — which silently re-pointed an
-   existing e2e selector at the wrong button. Group the styles, not the names. */
-.prompts-trigger, .quiz-trigger {
+/* The file header's Understand button. (It once sat beside the "Ask for
+   suggestions" trigger, which #275 folded into the file comment box.) */
+.quiz-trigger {
   display: inline-flex; align-items: center; gap: 0.35rem;
   margin: 0; padding: 0.2rem 0.55rem; min-height: 0;
   font-size: 0.8rem; font-weight: 500; white-space: nowrap;
@@ -1147,27 +1144,10 @@ header.file-head .file-head-actions {
   border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
   cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
 }
-.prompts-trigger:hover, .prompts-trigger:focus-visible,
 .quiz-trigger:hover, .quiz-trigger:focus-visible {
   background: var(--soft-bg-hover); border-color: var(--accent);
 }
-.prompts-trigger svg, .quiz-trigger svg { display: block; color: var(--accent); }
-.prompts-panel { min-width: 15rem; padding: 0.3rem; }
-.prompts-panel form { margin: 0; }
-.prompt-row {
-  display: block; width: 100%; text-align: left; margin: 0; min-height: 0;
-  padding: 0.4rem 0.5rem; border-radius: 5px;
-  font-size: 0.85rem; font-weight: 600; color: var(--pico-h1-color);
-  background: transparent; border: 0; cursor: pointer;
-}
-.prompt-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-/* #211: the footer link under the suggestion prompts, keyed on its own class. */
-.prompts-more {
-  display: block; margin-top: 0.25rem; padding: 0.4rem 0.5rem 0.2rem;
-  border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted);
-  text-decoration: none;
-}
-.prompts-more:hover { color: var(--accent); text-decoration: underline; }
+.quiz-trigger svg { display: block; color: var(--accent); }
 .version-restore { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 45%, transparent); }
 .version-restore:hover:not(:disabled) { background: color-mix(in srgb, var(--pr-del) 14%, transparent); }
 /* Read-only banner while viewing a historical version. */
@@ -1876,7 +1856,7 @@ header.file-head .file-head-comment button:focus-visible {
 header.file-head .file-head-comment button svg { display: block; }
 .file-head-comment-label { display: none; }
 .versions-trigger-label { display: none; }
-.prompts-trigger-label, .quiz-trigger-label { display: none; }
+.quiz-trigger-label { display: none; }
 .checks-trigger-label { display: none; }
 
 /* Diff viewer container — was <pre> but that preserves whitespace which
@@ -2695,6 +2675,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border: 1px solid var(--border); background: var(--surface); color: var(--text);
 }
 .sc-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* #275: the file comment box's More chip, and its link to the Library. */
+.sc-chip.sc-more { border-style: dashed; color: var(--text-muted); }
+.sc-add {
+  flex: 0 0 auto; width: auto; margin: 0 0 0 0.2rem; padding: 0.2rem 0.3rem; min-height: 0;
+  font-size: 0.78rem; white-space: nowrap; border: 0; background: none; color: var(--accent);
+  text-decoration: underline; cursor: pointer;
+}
+.sc-group { font-size: 0.8rem; font-weight: 700; margin: 0.8rem 0 0.4rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 /* #204 Library → Shortcuts: one compact row per chip. */
 .sc-intro { font-size: 0.82rem; color: var(--text-muted); margin: 0.2rem 0 0.6rem; }
 .sc-row header { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -3392,7 +3380,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   /* Desktop has room for the "Comment on file" text label; mobile stays icon-only. */
   .file-head-comment-label { display: inline; }
   .versions-trigger-label { display: inline; }
-  .prompts-trigger-label, .quiz-trigger-label { display: inline; }
+  .quiz-trigger-label { display: inline; }
   .checks-trigger-label { display: inline; }
   /* The filename already headlines the diff (.file-head) and the
      all-comments view (.ac-head). Showing it again in the top bar is

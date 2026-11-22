@@ -682,86 +682,8 @@
     
     
     
-    <form method="POST" class="file-head-comment">
-      <button
-        type="submit"
-        name="openFileComment"
-        class="contrast"
-        title="Add a comment about the whole file"
-        aria-label="Comment on file"
-      ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-    d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"
-    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"
-  /></svg><span class="file-head-comment-label">Comment on file <kbd class="kbd-hint" aria-hidden="true">c</kbd></span></button>
-    </form>
     
     
-    
-    
-    
-    <div
-      class="tb-dropdown prompts-dropdown"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
-      <button
-        type="button"
-        class="prompts-trigger"
-        aria-haspopup="menu"
-        title="Ask the agent for suggestions using a prebuilt prompt"
-      ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
-    d="M12 3l1.8 4.9L18.7 9.7 13.8 11.5 12 16.4 10.2 11.5 5.3 9.7 10.2 7.9 12 3z"
-    fill="currentColor"
-  /><path
-    d="M18 15l.8 2.2 2.2.8-2.2.8L18 21l-.8-2.2-2.2-.8 2.2-.8L18 15z"
-    fill="currentColor"
-  /></svg><span class="prompts-trigger-label">Ask for suggestions</span></button>
-      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
-        
-        <form method="POST"><input type="hidden" name="slug" value="consistency"><button type="submit" name="pickPrompt" class="prompt-row" title="Read the whole file before proposing anything, then check it for consistency from start
-to end: the same names, terms, numbers, claims and decisions throughout, with no section
-contradicting another. Where two places disagree, say which one you think is right and
-fix the other.
-
-If the file has an appendix, check that everything in it supports something in the main
-body. Flag appendix content that the main body never uses, and main-body content that
-only makes sense after reading the appendix.
-
-Propose each change as a `prereview suggest` edit (a before→after on the exact lines) so
-I can accept or reject it. Do not modify files directly.">Check consistency</button></form>
-        
-        <form method="POST"><input type="hidden" name="slug" value="code-review"><button type="submit" name="pickPrompt" class="prompt-row" title="Review this file for bugs, edge cases, error handling, naming, and clarity. Focus on
-correctness and readability over style nits. For each concrete improvement, propose the
-change with a short rationale.
-
-Propose each change as a `prereview suggest` edit (a before→after on the exact lines)
-so I can accept or reject it. Do not modify files directly.">Code review</button></form>
-        
-        <form method="POST"><input type="hidden" name="slug" value="preamble"><button type="submit" name="pickPrompt" class="prompt-row" title="Find the phrases and sentences that add nothing: ones that defend what the text already
-says, announce what comes next, or prepare the reader for it instead of saying it. Cut
-them, or fold the one useful word into the sentence it introduces. Keep everything that
-carries information.
-
-Propose each cut as a `prereview suggest` edit (a before→after on the exact lines) so I
-can accept or reject it. Do not modify files directly.">Cut empty preamble</button></form>
-        
-        <form method="POST"><input type="hidden" name="slug" value="grammar"><button type="submit" name="pickPrompt" class="prompt-row" title="Proofread this file for grammar, spelling, and punctuation. For each issue, propose
-the corrected text — keep the author&#39;s voice and meaning; change only what&#39;s wrong.
-
-Propose each fix as a `prereview suggest` edit (a before→after on the exact lines) so I
-can accept or reject it. Do not modify files directly.">Fix grammar &amp; spelling</button></form>
-        
-        <form method="POST"><input type="hidden" name="slug" value="prose"><button type="submit" name="pickPrompt" class="prompt-row" title="Review this file&#39;s writing for clarity and concision. Cut filler, split run-on
-sentences, prefer plain words, and fix awkward phrasing — without changing the meaning
-or dropping any information.
-
-Propose each rewrite as a `prereview suggest` edit (a before→after on the exact lines)
-so I can accept or reject it. Do not modify files directly.">Tighten the prose</button></form>
-        
-        
-        <a class="prompts-more" role="menuitem" href="/_usage#suggested-edits" target="_blank" rel="noopener">Add your own prompts</a>
-      </div>
-    </div>
     
     
     
@@ -784,6 +706,70 @@ so I can accept or reject it. Do not modify files directly.">Tighten the prose</
     </div>
   </div>
   
+  
+  <div class="fc-modal-backdrop" data-key="fc-modal-backdrop" lvt-on:click="clearSelection" aria-hidden="true"></div>
+  <div class="fc-modal" data-key="fc-modal" role="dialog" aria-modal="true" aria-label="Comment on file">
+    <div
+  class="composer"
+  data-key="composer"
+><strong>Comment on file <code>app.go</code></strong><form
+    method="POST"
+    lvt-form:preserve
+    class="composer-add"
+    id="composer-add-form"
+    
+    lvt-on:keydown="addComment"
+    lvt-key="Mod+Enter"
+  ><div class="sc-chips" role="group" aria-label="Shortcuts"><button type="submit" name="useShortcut" value="file-consistency" class="sc-chip" formnovalidate title="Read the whole file before proposing anything, then check it for consistency from start
+to end: the same names, terms, numbers, claims and decisions throughout, with no section
+contradicting another. Where two places disagree, say which one you think is right and
+fix the other.
+
+If the file has an appendix, check that everything in it supports something in the main
+body. Flag appendix content that the main body never uses, and main-body content that
+only makes sense after reading the appendix.
+
+Propose each change as a `prereview suggest` edit (a before→after on the exact lines) so
+I can accept or reject it. Do not modify files directly.">Check consistency</button><button type="submit" name="useShortcut" value="file-code-review" class="sc-chip" formnovalidate title="Review this file for bugs, edge cases, error handling, naming, and clarity. Focus on
+correctness and readability over style nits. For each concrete improvement, propose the
+change with a short rationale.
+
+Propose each change as a `prereview suggest` edit (a before→after on the exact lines)
+so I can accept or reject it. Do not modify files directly.">Code review</button><button type="submit" name="useShortcut" value="file-preamble" class="sc-chip" formnovalidate title="Find the phrases and sentences that add nothing: ones that defend what the text already
+says, announce what comes next, or prepare the reader for it instead of saying it. Cut
+them, or fold the one useful word into the sentence it introduces. Keep everything that
+carries information.
+
+Propose each cut as a `prereview suggest` edit (a before→after on the exact lines) so I
+can accept or reject it. Do not modify files directly.">Cut empty preamble</button><button type="submit" name="useShortcut" value="file-grammar" class="sc-chip" formnovalidate title="Proofread this file for grammar, spelling, and punctuation. For each issue, propose
+the corrected text — keep the author&#39;s voice and meaning; change only what&#39;s wrong.
+
+Propose each fix as a `prereview suggest` edit (a before→after on the exact lines) so I
+can accept or reject it. Do not modify files directly.">Fix grammar &amp; spelling</button><button type="submit" name="showMoreShortcutChips" class="sc-chip sc-more" formnovalidate>More…</button><button type="submit" name="openShortcutLibrary" class="sc-add" formnovalidate>Add your own</button></div>
+    <textarea
+      name="body"
+      placeholder="What's wrong with this file?"
+      required
+      lvt-autofocus
+      lvt-on:input="saveDraft"
+      lvt-mod:debounce="150"
+      data-nonce="0"
+    ></textarea>
+  </form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions">
+    <button
+      type="submit"
+      name="clearSelection"
+      form="composer-cancel-form"
+      class="cancel-btn"
+    >Cancel <kbd class="kbd-hint" aria-hidden="true">Esc</kbd></button>
+    <button
+      type="submit"
+      name="addComment"
+      form="composer-add-form"
+      class="save-btn"
+    >Save <kbd class="kbd-hint" aria-hidden="true">⌘/Ctrl &#43; Enter</kbd></button>
+  </div></div>
+  </div>
   
   
   

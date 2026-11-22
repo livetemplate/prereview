@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +49,7 @@ func TestApplyShortcuts_OrderAndHidden(t *testing.T) {
 	c := &PrereviewController{LibraryDir: lib}
 	var st PrereviewState
 	c.applyShortcuts(&st)
+	st.Shortcuts = st.composerScope() // the line chips (the prompts are file chips, #275)
 	if len(st.Shortcuts) != 7 {
 		t.Fatalf("one hidden of 8: got %d", len(st.Shortcuts))
 	}
@@ -155,5 +157,88 @@ func TestUnwrapParagraphs(t *testing.T) {
 	got := unwrapParagraphs("Drop this. Then keep\nthe narrative whole.\n\nSecond   para\nhere.\n")
 	if want := "Drop this. Then keep the narrative whole.\n\nSecond para here."; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestAllShortcutsScopes (#275): the prompts load as whole-file shortcuts with
+// "file-" slugs, line slugs keep theirs, uses and Hide apply to a file shortcut by
+// its slug, and a learned shortcut takes its learning's scope.
+func TestAllShortcutsScopes(t *testing.T) {
+	lib := t.TempDir()
+	if err := library.RecordShortcutUse(lib, "file-grammar"); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.SetShortcutHidden(lib, "file-prose", true); err != nil {
+		t.Fatal(err)
+	}
+	prompts := t.TempDir()
+	if err := os.WriteFile(filepath.Join(prompts, "drop.md"), []byte("# Our style\n\nApply our house style."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &PrereviewController{LibraryDir: lib, PromptsDir: prompts}
+	scope := map[string]string{}
+	var grammar, mine, prose Shortcut
+	for _, s := range c.allShortcuts() {
+		scope[s.Slug] = s.Scope
+		switch s.Slug {
+		case "file-grammar":
+			grammar = s
+		case "file-drop":
+			mine = s
+		case "file-prose":
+			prose = s
+		}
+	}
+	if scope["drop"] != ScopeLine || scope["file-drop"] != ScopeFile {
+		t.Errorf("a prompt and a line shortcut named drop must both exist, apart: drop=%q file-drop=%q", scope["drop"], scope["file-drop"])
+	}
+	if grammar.Uses != 1 || mine.Source != shortcutYours || mine.Label != "Our style" || !prose.Hidden {
+		t.Errorf("file shortcuts: grammar %+v, yours %+v, prose %+v", grammar, mine, prose)
+	}
+	if shortcutScope("file") != ScopeFile || shortcutScope("") != ScopeLine || shortcutScope("bogus") != ScopeLine {
+		t.Error("a learning's scope: file, else line")
+	}
+}
+
+// TestComposerShortcuts (#275): the file comment box shows the first four
+// whole-file chips and More, which shows the rest; a line box shows line chips
+// only; a chip fills an empty file box and adds after typed text.
+func TestComposerShortcuts(t *testing.T) {
+	st := PrereviewState{SelectedFile: "a.go"}
+	for i := range 6 {
+		st.Shortcuts = append(st.Shortcuts, Shortcut{Slug: fmt.Sprintf("file-p%d", i), Label: fmt.Sprintf("P%d", i), Body: fmt.Sprintf("prompt %d", i), Scope: ScopeFile})
+	}
+	st.Shortcuts = append(st.Shortcuts, Shortcut{Slug: "drop", Label: "Drop", Body: "Drop this.", Scope: ScopeLine})
+	labels := func() string {
+		var out []string
+		for _, s := range st.ComposerShortcuts() {
+			out = append(out, s.Label)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := labels(); got != "Drop" || st.HasMoreShortcuts() {
+		t.Errorf("a line box: chips %q more=%v, want Drop and no More", got, st.HasMoreShortcuts())
+	}
+	resetToFileComment(&st)
+	if got := labels(); got != "P0,P1,P2,P3" || !st.HasMoreShortcuts() || !st.ShowShortcuts() {
+		t.Errorf("a file box: chips %q more=%v show=%v, want the first four and More", got, st.HasMoreShortcuts(), st.ShowShortcuts())
+	}
+	c := &PrereviewController{}
+	var err error
+	if st, err = c.ShowMoreShortcutChips(st, useCtx("", "half a thought")); err != nil {
+		t.Fatal(err)
+	}
+	if got := labels(); got != "P0,P1,P2,P3,P4,P5" || st.HasMoreShortcuts() || st.DraftBody != "half a thought" {
+		t.Errorf("after More: chips %q more=%v draft %q", got, st.HasMoreShortcuts(), st.DraftBody)
+	}
+	if st, err = c.UseShortcut(st, useCtx("file-p4", "")); err != nil {
+		t.Fatal(err)
+	}
+	if st.DraftBody != "prompt 4" || st.CommentMode != "file" {
+		t.Errorf("a chip in an empty file box: draft %q mode %q", st.DraftBody, st.CommentMode)
+	}
+	resetToFileComment(&st)
+	if st.HasMoreShortcuts() != true {
+		t.Error("opening a file box again folds the chips back to four")
 	}
 }

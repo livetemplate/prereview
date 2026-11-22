@@ -72,6 +72,9 @@ type Learning struct {
 	// (#204): the label on the chip and the comment text it fills in.
 	ShortcutLabel string `json:"shortcut_label,omitempty"`
 	ShortcutBody  string `json:"shortcut_body,omitempty"`
+	// ShortcutScope is where the chip shows: "file" for the whole-file comment
+	// box, "" (line) for a line, text or block comment (#275).
+	ShortcutScope string `json:"shortcut_scope,omitempty"`
 	Replaces      string `json:"replaces,omitempty"` // the older learning this one would supersede
 	Status        string `json:"status"`
 	// Auto marks a learning accepted on arrival: proposed for a learning job

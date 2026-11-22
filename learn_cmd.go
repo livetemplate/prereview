@@ -65,13 +65,14 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 	judge := fs.String("judge", "", "optional: a file (or - for stdin) with the judge rubric Markdown this lesson becomes (kind: judge frontmatter + the rubric)")
 	shortcutLabel := fs.String("shortcut-label", "", "optional, with --shortcut-body: a comment-box chip this lesson adds, in the reviewer's own words (\"Why is this here?\")")
 	shortcutBody := fs.String("shortcut-body", "", "optional, with --shortcut-label: the comment text the chip fills in")
+	shortcutScope := fs.String("shortcut-scope", "", "optional, with --shortcut-label: where the chip shows: line (a line, text or block comment; the default) or file (the whole-file comment box)")
 	job := fs.String("job", "", "the `id` of the learning job this answers (printed by prereview learn wait); its evidence must come from the job's stores")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(),
 			"Usage: prereview learn propose --job <id> --text \"…\" --evidence <store>:<id> [--evidence …]\n"+
 				"                               [--scope \"…\"] [--glob <pattern>]… [--replaces <id>] [--produces instruction,checker,judge]\n"+
 				"                               [--checker <rule.yml|->] [--judge <rubric.md|->]\n"+
-				"                               [--shortcut-label \"…\" --shortcut-body \"…\"]\n\n"+
+				"                               [--shortcut-label \"…\" --shortcut-body \"…\" [--shortcut-scope line|file]]\n\n"+
 				"  Propose one learning drawn from your reviews, answering a learning job.\n"+
 				"  Every --evidence must name a real record in one of the job's stores, or\n"+
 				"  nothing is written. With \"Accept automatically\" on (the reviewer's\n"+
@@ -87,7 +88,7 @@ func runLearnPropose(dir string, args []string, stdout io.Writer) error {
 		return fmt.Errorf("unexpected argument %q (flags only)", fs.Arg(0))
 	}
 	p := library.Proposal{Text: *text, Scope: *scope, Globs: globs, Evidence: evidence, Replaces: *replaces,
-		ShortcutLabel: *shortcutLabel, ShortcutBody: *shortcutBody, Job: *job}
+		ShortcutLabel: *shortcutLabel, ShortcutBody: *shortcutBody, ShortcutScope: *shortcutScope, Job: *job}
 	for _, k := range strings.Split(*produces, ",") {
 		if k = strings.TrimSpace(k); k != "" {
 			p.Produces = append(p.Produces, k)

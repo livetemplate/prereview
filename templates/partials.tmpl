@@ -99,7 +99,7 @@
   >
     {{- /* #204 shortcut chips: submit WITH this form, so the tap carries what's typed
            (formnovalidate: the textarea is required, and a chip may start it). */ -}}
-    {{- if $.ShowShortcuts}}<div class="sc-chips" role="group" aria-label="Shortcuts">{{range $.Shortcuts}}<button type="submit" name="useShortcut" value="{{.Slug}}" class="sc-chip" formnovalidate title="{{.Body}}">{{.Label}}</button>{{end}}</div>{{end}}
+    {{- if $.ShowShortcuts}}<div class="sc-chips" role="group" aria-label="Shortcuts">{{range $.ComposerShortcuts}}<button type="submit" name="useShortcut" value="{{.Slug}}" class="sc-chip" formnovalidate title="{{.Body}}">{{.Label}}</button>{{end}}{{if $.HasMoreShortcuts}}<button type="submit" name="showMoreShortcutChips" class="sc-chip sc-more" formnovalidate>More…</button>{{end}}{{if eq $.CommentMode "file"}}<button type="submit" name="openShortcutLibrary" class="sc-add" formnovalidate>Add your own</button>{{end}}</div>{{end}}
     <textarea
       name="body"
       placeholder="
