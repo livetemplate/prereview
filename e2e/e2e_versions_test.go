@@ -127,9 +127,12 @@ func TestE2E_DeepLinkRefreshesVersionPanel(t *testing.T) {
 	}
 
 	// The panel's rows match the count — open it and confirm 2 rows render.
+	// The setURLHash round trip can re-render the header after the count
+	// lands, so chromedp.Click's node can go stale between resolving and
+	// clicking. Clicking from JS looks the trigger up when it fires.
 	var rows int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.versions-dropdown .versions-trigger`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.versions-dropdown .versions-trigger').click()`, nil),
 		chromedp.WaitVisible(`.versions-panel .version-row`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelectorAll('.version-row').length`, &rows),
 	); err != nil {
