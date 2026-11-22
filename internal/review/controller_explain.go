@@ -334,15 +334,16 @@ func groundImpact(rows []string, a ImpactAnchor) string {
 	return anchorOK
 }
 
-// The Understand page's tabs. "" picks one from what there is (UnderstandOnQuiz).
+// The Understand page's tabs. "" picks one from what there is (UnderstandTabOn).
 const (
 	understandTabWalkthrough = "walkthrough"
+	understandTabDiagrams    = "diagrams"
 	understandTabQuiz        = "quiz"
 )
 
 // understandTab is tab when it names a tab, else "" (the default).
 func understandTab(tab string) string {
-	if tab == understandTabWalkthrough || tab == understandTabQuiz {
+	if tab == understandTabWalkthrough || tab == understandTabDiagrams || tab == understandTabQuiz {
 		return tab
 	}
 	return ""

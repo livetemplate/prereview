@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -221,5 +222,42 @@ func TestE2E_UnderstandImpact(t *testing.T) {
 	}
 	if got := evalStr(t, p, `document.querySelector('.code .line.is-cursor .content').textContent`); !strings.Contains(got, "Old") {
 		t.Errorf("the cursor line must be history.go's func Old, got %q%s", got, diag())
+	}
+}
+
+// TestE2E_UnderstandDiagram (#115 A′4): a walkthrough's diagram arrives by a live
+// update, its tab appears, mermaid draws it, its cited line is a link, and a
+// revised walkthrough (the same id re-appended) redraws it with no reload.
+func TestE2E_UnderstandDiagram(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.openUnderstandTab("walkthrough")
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`window.__noReload = 1`, nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := func(label string) string {
+		return `{"id": "e-diag", "steps": [{"title": "The greeting", "anchors": [{"file": "edited.go", "from_line": 4}]}],
+  "diagrams": [{"id": "flow", "title": "Greeting flow", "mermaid": "graph TD\n  Caller --> ` + label + `", "anchors": [{"file": "edited.go", "from_line": 4}]}]}`
+	}
+	submitExplain(t, p, payload("Hello"))
+	waitJSTrueDiag(t, p.ctx, `!!document.querySelector("button[name='setUnderstandTab'][data-tab='diagrams']")`, 10*time.Second, "the Diagrams tab appears live", diag)
+	if err := chromedp.Run(p.ctx, chromedp.Click(`button[name="setUnderstandTab"][data-tab="diagrams"]`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("open the Diagrams tab: %v%s", err, diag())
+	}
+	svgHas := func(label string) string {
+		return `(() => { const s = document.querySelector('.diagram .md-mermaid svg'); return !!s && s.textContent.includes(` + strconv.Quote(label) + `); })()`
+	}
+	waitJSTrueDiag(t, p.ctx, svgHas("Hello"), 25*time.Second, "mermaid draws the diagram", diag)
+	if n := evalInt(t, p, `document.querySelectorAll(".diagram button[name='jumpToAnchor']").length`); n != 1 {
+		t.Errorf("the diagram's cited line must be one link, got %d%s", n, diag())
+	}
+
+	submitExplain(t, p, payload("Goodbye"))
+	waitJSTrueDiag(t, p.ctx, svgHas("Goodbye"), 15*time.Second, "the revised diagram is redrawn", diag)
+	if got := evalInt(t, p, `window.__noReload || 0`); got != 1 {
+		t.Fatalf("the diagram must update by a live update, not a reload%s", diag())
 	}
 }

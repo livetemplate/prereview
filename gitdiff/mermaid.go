@@ -50,7 +50,7 @@ func fencedCodeRaw(fcb *ast.FencedCodeBlock, src []byte) []byte {
 	return buf
 }
 
-// renderMermaidBlock wraps a diagram definition in the container the client
+// MermaidHTML wraps a diagram definition in the container the client
 // renderer turns into SVG. Three load-bearing pieces:
 //
 //   - lvt-ignore: livetemplate's morphdom skips this element and its whole
@@ -65,7 +65,7 @@ func fencedCodeRaw(fcb *ast.FencedCodeBlock, src []byte) []byte {
 //
 // The trailing newline goldmark leaves on the last fence line is trimmed so
 // the definition mermaid parses has no spurious blank final line.
-func renderMermaidBlock(raw []byte) string {
+func MermaidHTML(raw []byte) string {
 	def := strings.TrimRight(string(raw), "\n")
 	if def == "" {
 		return ""

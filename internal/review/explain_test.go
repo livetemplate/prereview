@@ -271,23 +271,23 @@ func TestJumpToAnchor(t *testing.T) {
 // walkthrough, unless there is none and the file has a quiz.
 func TestUnderstandTabs(t *testing.T) {
 	c, state := explainFixture(t)
-	if state.UnderstandOnQuiz() {
+	if state.UnderstandTabOn() == understandTabQuiz {
 		t.Error("nothing on the page: the walkthrough tab (with its Explain button) comes first")
 	}
 	state.Quizzes = []Quiz{{ID: "z", File: "a.go", Questions: []Question{{ID: "q", Kind: QuestionKindFile}}}}
-	if !state.UnderstandOnQuiz() {
+	if state.UnderstandTabOn() != understandTabQuiz {
 		t.Error("only a quiz: the page should open on it")
 	}
 	state.Explanations = []Explanation{{ID: "e"}}
-	if state.UnderstandOnQuiz() {
+	if state.UnderstandTabOn() == understandTabQuiz {
 		t.Error("a walkthrough exists: it comes first")
 	}
 	open, err := c.ToggleUnderstand(state, checksCtx("toggleUnderstand", map[string]interface{}{"tab": "quiz"}))
-	if err != nil || !open.ShowUnderstand || !open.UnderstandOnQuiz() {
-		t.Fatalf("Overview opens the quiz tab: err %v, open %v, quiz %v", err, open.ShowUnderstand, open.UnderstandOnQuiz())
+	if err != nil || !open.ShowUnderstand || open.UnderstandTabOn() != understandTabQuiz {
+		t.Fatalf("Overview opens the quiz tab: err %v, open %v, quiz %v", err, open.ShowUnderstand, open.UnderstandTabOn())
 	}
 	switched, _ := c.SetUnderstandTab(open, checksCtx("setUnderstandTab", map[string]interface{}{"tab": "walkthrough"}))
-	if !switched.ShowUnderstand || switched.UnderstandOnQuiz() {
+	if !switched.ShowUnderstand || switched.UnderstandTabOn() == understandTabQuiz {
 		t.Error("the Walkthrough tab must switch to the walkthrough")
 	}
 	if bogus, _ := c.SetUnderstandTab(open, checksCtx("setUnderstandTab", map[string]interface{}{"tab": "nope"})); bogus.UnderstandTab != "" {

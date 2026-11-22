@@ -491,6 +491,22 @@ func renderFixtures() []renderFixture {
 		},
 	}}
 
+	// #115 A′4: the Diagrams tab: one flow, drawn client-side from its escaped
+	// source, with the lines it cites (one doesn't resolve).
+	understandDiagrams := goBase()
+	understandDiagrams.ShowUnderstand, understandDiagrams.AgentMode = true, true
+	understandDiagrams.UnderstandTab = "diagrams"
+	understandDiagrams.Explanations = []review.Explanation{{
+		ID: "e3", CreatedAt: "2026-11-22T11:00:00Z",
+		Steps: []review.Step{{ID: "s1", Title: "Retry", Anchors: line(2)}},
+		Diagrams: []review.Diagram{{ID: "d1", Title: "Upload retry flow",
+			Mermaid: "graph TD\n  Send --> Fail{failed?}\n  Fail -->|yes| Backoff --> Send",
+			Anchors: []review.Anchor{
+				{File: "app.go", Kind: "line", Side: "new", FromLine: 2, ToLine: 3, Status: "ok"},
+				{File: "gone.go", Kind: "line", Side: "new", FromLine: 4, ToLine: 4, Status: "ungrounded"},
+			}}},
+	}}
+
 	// external (live-site) mode
 	external := review.PrereviewState{
 		RepoPath:     "/repo",
@@ -920,6 +936,7 @@ func renderFixtures() []renderFixture {
 		{"understand-walkthrough", understandWalk},
 		{"walk-bar", walkBar},
 		{"understand-concerns", understandConcerns},
+		{"understand-diagrams", understandDiagrams},
 		{"prompts-picker", promptsPicker},
 		{"shortcuts-composer", shortcuts},
 		{"ripple", ripple},

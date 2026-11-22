@@ -239,7 +239,7 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 			// Either way it stays one source-line-anchored block.
 			fcb := n.(*ast.FencedCodeBlock)
 			if isMermaidFence(fcb, src) {
-				emit(n, renderMermaidBlock(fencedCodeRaw(fcb, src)))
+				emit(n, MermaidHTML(fencedCodeRaw(fcb, src)))
 			} else {
 				emit(n, renderNode(n))
 			}

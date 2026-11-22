@@ -15,10 +15,11 @@
     </form>
   </header>
   <div class="lib-tabs understand-tabs" role="tablist">
-    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab{{if not $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}false{{else}}true{{end}}">Walkthrough{{with $.CurrentExplanation}} <span class="ck-pill">{{len .Steps}}</span>{{end}}</button></form>
-    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab{{if $.UnderstandOnQuiz}} is-on{{end}}" role="tab" aria-selected="{{if $.UnderstandOnQuiz}}true{{else}}false{{end}}">Quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</button></form>
+    <form method="POST"><input type="hidden" name="tab" value="walkthrough"><button type="submit" name="setUnderstandTab" data-tab="walkthrough" class="lib-tab{{if eq $.UnderstandTabOn "walkthrough"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "walkthrough"}}true{{else}}false{{end}}">Walkthrough{{with $.CurrentExplanation}} <span class="ck-pill">{{len .Steps}}</span>{{end}}</button></form>{{if $.HasDiagrams}}
+    <form method="POST"><input type="hidden" name="tab" value="diagrams"><button type="submit" name="setUnderstandTab" data-tab="diagrams" class="lib-tab{{if eq $.UnderstandTabOn "diagrams"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "diagrams"}}true{{else}}false{{end}}">Diagrams <span class="ck-pill">{{len $.CurrentExplanation.Diagrams}}</span></button></form>{{end}}
+    <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab{{if eq $.UnderstandTabOn "quiz"}} is-on{{end}}" role="tab" aria-selected="{{if eq $.UnderstandTabOn "quiz"}}true{{else}}false{{end}}">Quiz{{with $.QuizScoreLabel}} <span class="quiz-score">{{.}}</span>{{end}}</button></form>
   </div>
-  {{if $.UnderstandOnQuiz}}{{template "quizPanel" $}}{{else}}{{template "walkthroughPanel" $}}{{end}}
+  {{if eq $.UnderstandTabOn "quiz"}}{{template "quizPanel" $}}{{else if eq $.UnderstandTabOn "diagrams"}}{{template "diagramsPanel" $}}{{else}}{{template "walkthroughPanel" $}}{{end}}
 </section>
 {{- end}}
 
@@ -35,7 +36,7 @@
       {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}{{if .Risks}}<ul class="walk-risks">{{range .Risks}}<li><span class="ck-pill ck-fail risk-chip">{{.Kind}}</span>{{if .Note}} {{.Note}}{{end}}</li>{{end}}</ul>{{end}}
       <ul class="walk-anchors">
         {{range .Anchors}}
-        <li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, but the review has no such line — treat this step with suspicion">⚠ {{.Label}}, not in this review</span>{{else}}{{template "anchorJump" .}}{{end}}</li>
+        <li>{{template "anchorItem" .}}</li>
         {{end}}
       </ul>{{if .Impact}}<div class="walk-impact"><strong>Affects</strong><ul>{{range .Impact}}<li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough says the change affects {{.Label}}, but that line isn't in the files — treat it with suspicion">⚠ {{.Label}}, not found</span>{{else if .Linkable}}{{template "anchorJump" .}}{{else}}<span class="walk-impact-label" title="Outside this review">{{.Label}}</span>{{end}}{{if .Note}} <span class="walk-impact-note">— {{.Note}}</span>{{end}}</li>{{end}}</ul></div>{{end}}
     </li>
@@ -49,6 +50,20 @@
     {{if $.CanExplain}}{{template "explainButton" $}}{{else}}<p><small>Run prereview with <code>--agent</code> to ask an agent for one.</small></p>{{end}}
   </div>
 {{end}}
+{{- end}}
+
+{{/* The Diagrams tab (#115 A′4): the walkthrough's flow diagrams, drawn by
+     mermaid.js (mermaid-init.js), each with the lines it cites. */}}
+{{define "diagramsPanel" -}}
+  <ol class="walk-steps diagram-list">
+    {{range $.DiagramViews}}
+    <li class="walk-step diagram" data-key="diagram-{{.ID}}">
+      {{if .Title}}<div class="walk-title"><span class="walk-title-text">{{.Title}}</span></div>{{end}}
+      {{.HTML}}
+      {{if .Anchors}}<div class="walk-impact"><strong>Cites</strong><ul>{{range .Anchors}}<li>{{template "anchorItem" .}}</li>{{end}}</ul></div>{{end}}
+    </li>
+    {{end}}
+  </ol>
 {{- end}}
 
 {{define "explainButton"}}{{if $.ExplainPending}}<span class="request-pending" title="The request is queued — the agent will answer shortly">Walkthrough requested…</span>{{else}}<form method="POST" style="margin:0"><button type="submit" name="requestExplain" class="outline" title="Ask the agent to walk you through the whole change">{{if $.HasExplanation}}Explain again{{else}}Explain this change{{end}}</button></form>{{end}}{{end}}

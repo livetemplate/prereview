@@ -790,7 +790,7 @@ Check the default.</p>
         
         <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="logo.png"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="0"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">logo.png</button></form></li>
         
-        <li><span class="quiz-ungrounded" title="The walkthrough cites gone.go L9, but the review has no such line — treat this step with suspicion">⚠ gone.go L9, not in this review</span></li>
+        <li><span class="quiz-ungrounded" title="The walkthrough cites gone.go L9, but the review has no such line — treat it with suspicion">⚠ gone.go L9, not in this review</span></li>
         
       </ul>
     </li>

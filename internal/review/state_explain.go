@@ -2,6 +2,7 @@ package review
 
 import (
 	"fmt"
+	"html/template"
 	"slices"
 	"time"
 
@@ -53,16 +54,49 @@ func (s PrereviewState) ShowUnderstandEntry() bool {
 	return s.CanExplain() || len(s.QuizPrompts) > 0 || s.HasUnderstandContent()
 }
 
-// UnderstandOnQuiz picks the tab: the one asked for, else the walkthrough, unless
-// there is none and the open file has a quiz.
-func (s PrereviewState) UnderstandOnQuiz() bool {
+// UnderstandTabOn is the tab the page shows: the one asked for (Diagrams only
+// while there are diagrams), else the walkthrough, unless there is none and the
+// open file has a quiz.
+func (s PrereviewState) UnderstandTabOn() string {
 	switch s.UnderstandTab {
-	case "quiz":
-		return true
-	case "walkthrough":
-		return false
+	case understandTabQuiz, understandTabWalkthrough:
+		return s.UnderstandTab
+	case understandTabDiagrams:
+		if s.HasDiagrams() {
+			return understandTabDiagrams
+		}
 	}
-	return !s.HasExplanation() && s.HasQuiz()
+	if !s.HasExplanation() && s.HasQuiz() {
+		return understandTabQuiz
+	}
+	return understandTabWalkthrough
+}
+
+// HasDiagrams reports the walkthrough has flow diagrams, the gate for their tab.
+func (s PrereviewState) HasDiagrams() bool {
+	e := s.CurrentExplanation()
+	return e != nil && len(e.Diagrams) > 0
+}
+
+// DiagramView is a diagram as the Diagrams tab renders it.
+type DiagramView struct {
+	ID, Title string
+	HTML      template.HTML // gitdiff.MermaidHTML: the source, escaped, for mermaid.js
+	Anchors   []WalkAnchor
+}
+
+// DiagramViews is the walkthrough's diagrams, only while their tab is on screen.
+func (s PrereviewState) DiagramViews() []DiagramView {
+	if !s.ShowUnderstand || s.UnderstandTabOn() != understandTabDiagrams {
+		return nil
+	}
+	e := s.CurrentExplanation()
+	out := make([]DiagramView, 0, len(e.Diagrams))
+	for _, d := range e.Diagrams {
+		out = append(out, DiagramView{ID: d.ID, Title: d.Title, Anchors: walkAnchors(d.Anchors),
+			HTML: template.HTML(gitdiff.MermaidHTML([]byte(d.Mermaid)))})
+	}
+	return out
 }
 
 // WalkStep is one step as the page renders it.
@@ -109,7 +143,7 @@ type WalkAnchor struct {
 // it does nothing unless the Walkthrough tab is on screen.
 func (s PrereviewState) WalkSteps() []WalkStep {
 	steps := s.walkSteps()
-	if len(steps) == 0 || !s.ShowUnderstand || s.UnderstandOnQuiz() {
+	if len(steps) == 0 || !s.ShowUnderstand || s.UnderstandTabOn() != understandTabWalkthrough {
 		return nil
 	}
 	concerns := map[string]Concern{}
@@ -121,9 +155,7 @@ func (s PrereviewState) WalkSteps() []WalkStep {
 	for i, st := range steps {
 		ws := WalkStep{Num: i + 1, ID: st.ID, Title: st.Title, Body: st.Body, NotExplained: st.Derived,
 			Risks: st.Risks, InConcern: st.Concern != ""}
-		for _, a := range st.Anchors {
-			ws.Anchors = append(ws.Anchors, walkAnchor(a))
-		}
+		ws.Anchors = walkAnchors(st.Anchors)
 		for _, a := range st.Impact {
 			w := walkAnchor(a.anchor())
 			w.Ungrounded = a.Ungrounded()
@@ -140,6 +172,14 @@ func (s PrereviewState) WalkSteps() []WalkStep {
 			}
 		}
 		out[i] = ws
+	}
+	return out
+}
+
+func walkAnchors(as []Anchor) []WalkAnchor {
+	var out []WalkAnchor
+	for _, a := range as {
+		out = append(out, walkAnchor(a))
 	}
 	return out
 }
