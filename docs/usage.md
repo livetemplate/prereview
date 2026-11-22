@@ -84,15 +84,15 @@ never used to learn your preferences.
 **One-tap comments.** The comment box on a line, a text selection or a block has a
 row of chips. Each is an instruction you give often: *Drop this*, *Why is this here?*,
 *What does this mean?*, *Make this shorter* and more. A tap adds the chip's text after whatever
-you've typed, and you edit it before saving. The chips you tap most come first. Add
-your own as Markdown files in `~/.config/prereview/shortcuts/` (the format is under
-`PREREVIEW_SHORTCUTS_DIR` in
-[`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment)).
+you've typed, and you edit it before saving. The whole-file comment box (**Comment
+on file**) has its own chips: whole-file prompts such as *Fix grammar & spelling* or
+*Code review*.
 
-The whole-file comment box (**Comment on file**) has its own chips: whole-file
-prompts such as *Fix grammar & spelling* or *Code review*. It shows the four you use
-most, and **More…** shows the rest. **Add your own** opens the Library's Shortcuts
-tab, which lists both kinds.
+Each box shows the four chips you tap most, and **More…** shows the rest. **Add your
+own** opens the Library's Shortcuts tab, which lists both kinds. Your own line chips
+are Markdown files in `~/.config/prereview/shortcuts/`, and whole-file ones go in
+`~/.config/prereview/prompts/` (the format is under `PREREVIEW_SHORTCUTS_DIR` in
+[`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment)).
 
 **Step through what's open.** While anything is waiting on you (an unresolved
 comment, an undecided suggestion, an unanswered quiz question), a bar at the top

@@ -244,8 +244,8 @@ type PrereviewState struct {
 	// truth — not lvt:"persist"). Grouped by target ID in Threads() for render.
 	ThreadEntries []ThreadEntry `json:"thread_entries"`
 
-	// ShowMoreShortcuts shows every whole-file chip in the file comment box,
-	// past the first four (More, #275). Session view state.
+	// ShowMoreShortcuts shows every chip in the open comment box, past the first
+	// four (More, #275). Opening a box folds it back. Session view state.
 	ShowMoreShortcuts bool `json:"show_more_shortcuts"`
 
 	// QuizPrompts is the #191 quiz-prompt library — built-ins plus the user's

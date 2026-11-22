@@ -769,11 +769,7 @@ together. Do not modify files directly.">Drop this</button><button type="submit"
 Propose the move as `prereview suggest` edits that name this comment in `for`.">Lead with this</button><button type="submit" name="useShortcut" value="shorter" class="sc-chip" formnovalidate title="Make this shorter: keep what carries information and cut the rest. Propose the shorter
 version as a `prereview suggest` edit.">Make this shorter</button><button type="submit" name="useShortcut" value="appendix" class="sc-chip" formnovalidate title="Move this to the appendix and leave a one-line pointer where it was, so the main text
 keeps its flow. Propose both edits as `prereview suggest` edits that name this comment
-in `for`.">Move to the appendix</button><button type="submit" name="useShortcut" value="evidence" class="sc-chip" formnovalidate title="This needs evidence. Cite and link a source you have opened and checked, or mark the
-claim as an assumption if there is none. Propose the change as a `prereview suggest` edit.">Needs evidence</button><button type="submit" name="useShortcut" value="weave" class="sc-chip" formnovalidate title="This reads as an aside. Weave it into the surrounding prose so it carries the argument
-forward instead of interrupting it. Propose the rewrite as a `prereview suggest` edit.">Weave it into the narrative</button><button type="submit" name="useShortcut" value="unclear" class="sc-chip" formnovalidate title="What does this mean? Rewrite it in plain words a newcomer already knows, keeping the
-meaning. Propose the rewrite as a `prereview suggest` edit.">What does this mean?</button><button type="submit" name="useShortcut" value="defend" class="sc-chip" formnovalidate title="Why is this here? Reply with the case for keeping it: what the reader loses without it.
-If there isn&#39;t a good case, propose dropping it as a `prereview suggest` edit instead.">Why is this here?</button></div>
+in `for`.">Move to the appendix</button><button type="submit" name="showMoreShortcutChips" class="sc-chip sc-more" formnovalidate>More…</button><button type="submit" name="openShortcutLibrary" class="sc-add" formnovalidate>Add your own</button></div>
     <textarea
       name="body"
       placeholder="What's wrong with these lines?"

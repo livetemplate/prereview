@@ -200,15 +200,16 @@ func TestAllShortcutsScopes(t *testing.T) {
 	}
 }
 
-// TestComposerShortcuts (#275): the file comment box shows the first four
-// whole-file chips and More, which shows the rest; a line box shows line chips
-// only; a chip fills an empty file box and adds after typed text.
+// TestComposerShortcuts (#275): every comment box shows its first four chips and
+// More, which shows the rest; a line box shows line chips only and a file box
+// whole-file ones; opening another box folds More back; a chip fills an empty box.
 func TestComposerShortcuts(t *testing.T) {
 	st := PrereviewState{SelectedFile: "a.go"}
 	for i := range 6 {
-		st.Shortcuts = append(st.Shortcuts, Shortcut{Slug: fmt.Sprintf("file-p%d", i), Label: fmt.Sprintf("P%d", i), Body: fmt.Sprintf("prompt %d", i), Scope: ScopeFile})
+		st.Shortcuts = append(st.Shortcuts,
+			Shortcut{Slug: fmt.Sprintf("file-p%d", i), Label: fmt.Sprintf("P%d", i), Body: fmt.Sprintf("prompt %d", i), Scope: ScopeFile},
+			Shortcut{Slug: fmt.Sprintf("l%d", i), Label: fmt.Sprintf("L%d", i), Body: fmt.Sprintf("line %d", i), Scope: ScopeLine})
 	}
-	st.Shortcuts = append(st.Shortcuts, Shortcut{Slug: "drop", Label: "Drop", Body: "Drop this.", Scope: ScopeLine})
 	labels := func() string {
 		var out []string
 		for _, s := range st.ComposerShortcuts() {
@@ -216,21 +217,38 @@ func TestComposerShortcuts(t *testing.T) {
 		}
 		return strings.Join(out, ",")
 	}
-	if got := labels(); got != "Drop" || st.HasMoreShortcuts() {
-		t.Errorf("a line box: chips %q more=%v, want Drop and no More", got, st.HasMoreShortcuts())
+	c := &PrereviewController{}
+	var err error
+	if st, err = c.SelectLine(st, lineCtx(3, "new")); err != nil {
+		t.Fatal(err)
 	}
+	if got := labels(); got != "L0,L1,L2,L3" || !st.HasMoreShortcuts() || !st.ShowShortcuts() {
+		t.Errorf("a line box: chips %q more=%v, want the first four line chips and More", got, st.HasMoreShortcuts())
+	}
+	if st, err = c.ShowMoreShortcutChips(st, useCtx("", "a note")); err != nil {
+		t.Fatal(err)
+	}
+	if got := labels(); got != "L0,L1,L2,L3,L4,L5" || st.HasMoreShortcuts() || st.DraftBody != "a note" {
+		t.Errorf("a line box after More: chips %q more=%v draft %q", got, st.HasMoreShortcuts(), st.DraftBody)
+	}
+	if st, err = c.SelectLine(st, lineCtx(5, "new")); err != nil {
+		t.Fatal(err)
+	}
+	if !st.HasMoreShortcuts() {
+		t.Error("a new line box folds the chips back to four")
+	}
+
 	resetToFileComment(&st)
 	if got := labels(); got != "P0,P1,P2,P3" || !st.HasMoreShortcuts() || !st.ShowShortcuts() {
 		t.Errorf("a file box: chips %q more=%v show=%v, want the first four and More", got, st.HasMoreShortcuts(), st.ShowShortcuts())
 	}
-	c := &PrereviewController{}
-	var err error
 	if st, err = c.ShowMoreShortcutChips(st, useCtx("", "half a thought")); err != nil {
 		t.Fatal(err)
 	}
 	if got := labels(); got != "P0,P1,P2,P3,P4,P5" || st.HasMoreShortcuts() || st.DraftBody != "half a thought" {
 		t.Errorf("after More: chips %q more=%v draft %q", got, st.HasMoreShortcuts(), st.DraftBody)
 	}
+	st.DraftBody = ""
 	if st, err = c.UseShortcut(st, useCtx("file-p4", "")); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +256,7 @@ func TestComposerShortcuts(t *testing.T) {
 		t.Errorf("a chip in an empty file box: draft %q mode %q", st.DraftBody, st.CommentMode)
 	}
 	resetToFileComment(&st)
-	if st.HasMoreShortcuts() != true {
+	if !st.HasMoreShortcuts() {
 		t.Error("opening a file box again folds the chips back to four")
 	}
 }

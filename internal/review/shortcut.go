@@ -158,9 +158,8 @@ func (c *PrereviewController) setShortcutHidden(state PrereviewState, slug strin
 	return state, nil
 }
 
-// fileChipsShown is how many whole-file chips the file comment box shows before
-// More (#275).
-const fileChipsShown = 4
+// chipsShown is how many chips a comment box shows before More (#275).
+const chipsShown = 4
 
 // ShowShortcuts gates the chips: a line, block, text or file composer, not an area
 // or region one, and not while re-anchoring a comment.
@@ -189,22 +188,22 @@ func (s PrereviewState) composerScope() []Shortcut {
 	return out
 }
 
-// ComposerShortcuts is the chips the open comment box shows: every line chip, or
-// the first fileChipsShown whole-file ones until More is tapped.
+// ComposerShortcuts is the chips the open comment box shows: the first chipsShown
+// until More is tapped, then all of them.
 func (s PrereviewState) ComposerShortcuts() []Shortcut {
 	all := s.composerScope()
-	if s.CommentMode == "file" && !s.ShowMoreShortcuts && len(all) > fileChipsShown {
-		return all[:fileChipsShown]
+	if !s.ShowMoreShortcuts && len(all) > chipsShown {
+		return all[:chipsShown]
 	}
 	return all
 }
 
-// HasMoreShortcuts reports whole-file chips held back behind More.
+// HasMoreShortcuts reports chips held back behind More.
 func (s PrereviewState) HasMoreShortcuts() bool {
-	return s.CommentMode == "file" && !s.ShowMoreShortcuts && len(s.composerScope()) > fileChipsShown
+	return !s.ShowMoreShortcuts && len(s.composerScope()) > chipsShown
 }
 
-// ShowMoreShortcutChips shows every whole-file chip (More). The chip submits with the
+// ShowMoreShortcutChips shows every chip for the open box (More). The chip submits with the
 // composer's form, so what was typed is kept.
 func (c *PrereviewController) ShowMoreShortcutChips(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.ShowMoreShortcuts = true
@@ -213,8 +212,8 @@ func (c *PrereviewController) ShowMoreShortcutChips(state PrereviewState, ctx *l
 	return state, nil
 }
 
-// OpenShortcutLibrary opens the Library's Shortcuts tab: the file comment box's
-// "Add your own" (#275), where both folders are named.
+// OpenShortcutLibrary opens the Library's Shortcuts tab: a comment box's "Add your
+// own" (#275), where both folders are named.
 func (c *PrereviewController) OpenShortcutLibrary(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	if !state.ShowLibrary {
 		toggleFullView(&state, &state.ShowLibrary)

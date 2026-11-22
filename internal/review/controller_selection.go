@@ -25,6 +25,7 @@ func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate
 	if n <= 0 {
 		return state, fmt.Errorf("selectLine: missing or invalid 'line'")
 	}
+	state.ShowMoreShortcuts = false // a new or changed box starts with four chips (#275)
 	side := ctx.GetString("side")
 	if side == "" {
 		side = "new"
@@ -169,6 +170,7 @@ func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplat
 	if from <= 0 || to < from {
 		return state, fmt.Errorf("selectBlock: invalid range from=%d to=%d", from, to)
 	}
+	state.ShowMoreShortcuts = false // a new or changed box starts with four chips (#275)
 	side := ctx.GetString("side")
 	if side != "old" {
 		side = "new"
@@ -207,6 +209,7 @@ func (c *PrereviewController) SelectText(state PrereviewState, ctx *livetemplate
 	if fromLine <= 0 || toLine < fromLine {
 		return state, fmt.Errorf("selectText: invalid line range from=%d to=%d", fromLine, toLine)
 	}
+	state.ShowMoreShortcuts = false // a new or changed box starts with four chips (#275)
 	side := ctx.GetString("side")
 	if side != "old" {
 		side = "new"

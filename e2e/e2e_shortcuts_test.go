@@ -22,11 +22,32 @@ import (
 	"github.com/livetemplate/prereview/csv"
 )
 
+// showAllChips taps the comment box's More when it has one, so a chip past the first
+// four is on screen (#275), and waits for the box to remount without it.
+func showAllChips(t *testing.T, p *runningPrereview, diag func() string) {
+	t.Helper()
+	ctx, cancel := within(p, 10*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx, chromedp.WaitVisible(`.composer .sc-chips .sc-chip`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("the comment box has no chips: %v%s", err, diag())
+	}
+	if countSel(t, p, `.composer .sc-more`) == 0 {
+		return
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.composer .sc-more`, chromedp.ByQuery),
+		chromedp.WaitNotPresent(`.composer .sc-more`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("tap More: %v%s", err, diag())
+	}
+}
+
 // tapChip types typed into the focused composer, then fires the chip whose label is
 // label with a JS click: unlike chromedp.Click, that leaves focus in the textarea,
 // as a phone tap does. It returns the textarea's value once the chip's text is in.
 func tapChip(t *testing.T, p *runningPrereview, typed, label, want string, diag func() string) string {
 	t.Helper()
+	showAllChips(t, p, diag) // before typing: More remounts the box
 	ctx, cancel := within(p, 15*time.Second)
 	defer cancel()
 	var focused bool
@@ -88,8 +109,13 @@ func TestE2E_Shortcuts(t *testing.T) {
 	p.waitReadyAt(390, 844)
 	p.clickFile("demo.go")
 
-	// A line comment: typed text first, the shortcut after it, kind=line kept.
+	// A line comment box shows four line chips, More and Add your own, and none of
+	// the whole-file prompts (#275).
 	p.clickLine(0, 3)
+	waitJSTrueDiag(t, p.ctx, `document.querySelectorAll('.composer button[name="useShortcut"]').length === 4 && !!document.querySelector('.composer .sc-more') && !!document.querySelector('.composer button[name="openShortcutLibrary"]') && !document.querySelector('.composer button[value^="file-"]')`,
+		5*time.Second, "four line chips, More and Add your own", diag)
+
+	// A line comment: typed text first, the shortcut after it, kind=line kept.
 	got := tapChip(t, p, "my note", "Make this shorter", "Make this shorter", diag)
 	if !strings.HasPrefix(got, "my note\n\nMake this shorter") {
 		t.Errorf("composer = %q, want the typed text then the shortcut%s", got, diag())
@@ -185,6 +211,7 @@ func TestE2E_LibraryShortcuts(t *testing.T) {
 	}
 	p.clickFile("demo.go")
 	p.clickLine(0, 3)
+	showAllChips(t, p, diag) // a new chip has no uses, so it sits past the first four
 	if err := chromedp.Run(ctx, chromedp.WaitVisible(chip, chromedp.ByQuery)); err != nil {
 		t.Fatalf("the accepted shortcut isn't a chip: %v%s", err, diag())
 	}
@@ -202,9 +229,7 @@ func TestE2E_LibraryShortcuts(t *testing.T) {
 		t.Fatalf("hide: %v%s", err, diag())
 	}
 	p.clickLine(0, 4)
-	if err := chromedp.Run(ctx, chromedp.WaitVisible(`.composer .sc-chip`, chromedp.ByQuery)); err != nil {
-		t.Fatalf("composer: %v%s", err, diag())
-	}
+	showAllChips(t, p, diag) // or the check below passes for the wrong reason
 	if n := countSel(t, p, chip); n != 0 {
 		t.Errorf("a hidden shortcut is still a chip%s", diag())
 	}
