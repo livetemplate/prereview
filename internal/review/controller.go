@@ -628,6 +628,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 			c.showDiff(&state, nil)
 		} else {
 			c.showDiff(&state, diff)
+			c.recordLook(&state)
 		}
 	}
 	// Re-anchor the selected file's comments against the just-loaded

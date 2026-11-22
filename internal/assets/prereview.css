@@ -3652,6 +3652,24 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .walk-impact-note { color: var(--text-muted); }
 .code .step-mark .risk-chip { vertical-align: 1px; }
 
+/* #115 B4: the notice above a file that changed since your last look, and a bar
+   on the right edge of the gutter on each line added since (moved code's bar is
+   on the left edge, so both can show). */
+.since-look {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.5rem;
+  padding: 0.4rem 0.7rem; font-size: 0.85rem; border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--mark) 40%, transparent);
+  background: color-mix(in srgb, var(--mark) 8%, var(--surface));
+}
+.since-look > span { flex: 1 1 12rem; }
+.since-look button { margin: 0; padding: 0.2rem 0.6rem; font-size: 0.8rem; min-height: 0; width: auto; }
+@media (pointer: coarse) { .since-look button { min-height: 40px; } }
+.code .since-flag { display: none; }
+.code .line-row:has(> .since-flag) .gutter { box-shadow: inset -3px 0 0 color-mix(in srgb, var(--mark) 70%, transparent); }
+.code .line-row:has(> .moved-flag):has(> .since-flag) .gutter {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 60%, transparent), inset -3px 0 0 color-mix(in srgb, var(--mark) 70%, transparent);
+}
+
 /* #115 B3: a file marked viewed that changed since. */
 .file-label .viewed-changed { display: block; font-size: 0.7rem; font-weight: 500; color: var(--mark); white-space: normal; }
 

@@ -414,6 +414,13 @@ type PrereviewState struct {
 	// (applyViewed), so a mark survives a relaunch.
 	ViewedFiles        map[string]bool `json:"viewed_files"`
 	ChangedSinceViewed map[string]bool `json:"changed_since_viewed"`
+	// SinceLook is each file's baseline look this session (#115 B4): what it
+	// showed the last time it was on screen, when it has changed since. Kept
+	// across reconnects until dismissed. SinceLookAdded/Removed are the open
+	// file's lines added since and how many were removed (applySinceLook).
+	SinceLook        map[string]FileMark `json:"since_look" lvt:"persist"`
+	SinceLookAdded   []int               `json:"since_look_added"`
+	SinceLookRemoved int                 `json:"since_look_removed"`
 
 	// Read progress (#128), keyed by file path. ReadThrough is the furthest
 	// new-side line number the reviewer has scrolled past (a high-water mark →

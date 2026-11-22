@@ -850,3 +850,58 @@ func TestViewedByContent(t *testing.T) {
 		t.Errorf("after clearing: %s", got)
 	}
 }
+
+// TestSinceLook (#115 B4): the first look at a file records it with no notice;
+// after an edit, the next look marks exactly the lines added since and says how
+// many; a reconnect (same session) keeps that; Dismiss clears it; and what the
+// file showed at each look is kept as a blob.
+func TestSinceLook(t *testing.T) {
+	c, state := explainFixture(t)
+	vs, err := NewVersionStore(VersionsDir(c.CSVPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Versions = vs
+	state.SelectedFile = "b.go" // x y z w v u
+	c.recordLook(&state)
+	if n := state.SinceLookNotice(); n != nil {
+		t.Fatalf("a first look must not show a notice: %+v", n)
+	}
+	first := loadFileMarks(c.lastLookPath())["b.go"]
+	if _, err := vs.Blob(first.SHA); err != nil {
+		t.Fatalf("the first look's content wasn't kept: %v", err)
+	}
+
+	writeAt(t, c.RepoPath, "b.go", "x\ny\nNEW\nz\nw\nv\nU2\n") // line 3 added, u -> U2 (line 7)
+	d, err := gitdiff.LoadDiff(c.RepoPath, "HEAD", "b.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.CurrentDiff = d
+	c.recordLook(&state)
+	notice := state.SinceLookNotice()
+	if notice == nil || !strings.HasPrefix(notice.Label, "2 lines changed since you last looked at ") {
+		t.Fatalf("after an edit: notice %+v", notice)
+	}
+	var railed []string
+	for k, m := range state.RowMarks() {
+		if m.Since {
+			railed = append(railed, k)
+		}
+	}
+	slices.Sort(railed)
+	if got := strings.Join(railed, " "); got != "L0-3 L0-7" {
+		t.Errorf("railed rows = %q, want the two lines added since: L0-3 L0-7", got)
+	}
+
+	c.recordLook(&state) // a reconnect: same content, same session
+	if state.SinceLookNotice() == nil {
+		t.Error("a reconnect must keep the notice")
+	}
+	if state, err = c.DismissSinceLook(state, checksCtx("dismissSinceLook", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if n := state.SinceLookNotice(); n != nil {
+		t.Errorf("Dismiss must clear the notice: %+v", n)
+	}
+}

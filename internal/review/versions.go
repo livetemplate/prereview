@@ -252,6 +252,11 @@ func readContent(absPath string) ([]byte, string, error) {
 	return data, hex.EncodeToString(sum[:]), nil
 }
 
+// SaveBlob stores absPath's content as a blob, outside any checkpoint, and
+// returns its sha: the content-addressed store dedupes it, and the timeline is
+// untouched. A look at a file keeps what it showed this way (#115 B4).
+func (s *VersionStore) SaveBlob(absPath string) (string, error) { return s.writeBlob(absPath) }
+
 // writeBlob reads absPath, stores its content-addressed blob (deduped), and
 // returns the sha. A missing file yields ("", nil) — a tombstone, not an error —
 // so a checkpoint taken after the LLM deletes a file still records that state.

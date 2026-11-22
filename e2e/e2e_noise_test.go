@@ -134,3 +134,68 @@ func TestE2E_ChangedSinceViewed(t *testing.T) {
 		t.Errorf("a changed file must not read viewed%s", diag())
 	}
 }
+
+// TestE2E_SinceLastLook (#115 B4): after the agent edits a file you had open,
+// Refresh says how many lines changed since you last looked and marks them; a
+// marked line takes a comment; Show the full diff compares against your last
+// look; Dismiss clears the notice.
+func TestE2E_SinceLastLook(t *testing.T) {
+	t.Setenv("PREREVIEW_EDIT_SETTLE", "1s")
+	repo := setupFixtureRepo(t)
+	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("edited.go") // the first look
+	if n := evalInt(t, p, `document.querySelectorAll('.since-look').length`); n != 0 {
+		t.Fatalf("a first look must not show the notice%s", diag())
+	}
+
+	mustWrite(t, repo, "edited.go", "package edited\n\nfunc Hello() string {\n\treturn \"hello again\"\n}\n")
+	waitJSTrueDiag(t, p.ctx, refreshBtnVisibleJS, 15*time.Second, "the refresh nudge", diag)
+	ctx, cancel := within(p, 10*time.Second)
+	err := chromedp.Run(ctx, chromedp.Click(`.refresh-prompt button[name="refreshDiff"]`, chromedp.ByQuery))
+	cancel()
+	if err != nil {
+		t.Fatalf("refresh: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `(document.querySelector('.since-look span') || {}).textContent?.startsWith('1 line changed since you last looked at ')`, 5*time.Second,
+		"the notice counts the changed line", diag)
+	if got := evalStr(t, p, `[...document.querySelectorAll('.code .line-row:has(> .since-flag) .line')].map(l => l.dataset.key).join(',')`); got != "L0-4" {
+		t.Errorf("marked rows = %q, want the changed line L0-4%s", got, diag())
+	}
+
+	p.clickLine(0, 4)
+	ctx, cancel = within(p, 10*time.Second)
+	err = chromedp.Run(ctx,
+		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(`.composer textarea`, "why again", chromedp.ByQuery),
+		chromedp.Click(`button[name='addComment']`, chromedp.ByQuery),
+	)
+	cancel()
+	if err != nil {
+		t.Fatalf("comment on the marked line: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `document.querySelector('.code').textContent.includes('why again')`, 5*time.Second, "the comment on the marked line saves", diag)
+
+	ctx, cancel = within(p, 10*time.Second)
+	err = chromedp.Run(ctx, chromedp.Click(`.since-look button[name="diffSinceLook"]`, chromedp.ByQuery))
+	cancel()
+	if err != nil {
+		t.Fatalf("show the full diff: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `!!document.querySelector('.version-view-banner') && [...document.querySelectorAll('.code .line.del')].some(l => l.textContent.includes('hello world'))`, 5*time.Second,
+		"the full diff shows the line as it was at the last look", diag)
+	ctx, cancel = within(p, 10*time.Second)
+	err = chromedp.Run(ctx, chromedp.Click(`.version-view-banner button[name="exitVersionView"]`, chromedp.ByQuery))
+	cancel()
+	if err != nil {
+		t.Fatalf("back to current: %v%s", err, diag())
+	}
+	ctx, cancel = within(p, 10*time.Second)
+	err = chromedp.Run(ctx, chromedp.Click(`.since-look button[name="dismissSinceLook"]`, chromedp.ByQuery))
+	cancel()
+	if err != nil {
+		t.Fatalf("dismiss: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `!document.querySelector('.since-look') && !document.querySelector('.since-flag')`, 5*time.Second, "Dismiss clears the notice and the marks", diag)
+}

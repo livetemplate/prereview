@@ -2,9 +2,13 @@ package review
 
 import (
 	"fmt"
-	"github.com/livetemplate/livetemplate"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"slices"
+
+	"github.com/livetemplate/livetemplate"
+	"github.com/livetemplate/prereview/gitdiff"
 )
 
 // ToggleCommentList flips between the diff viewer and the all-comments
@@ -205,6 +209,34 @@ func (c *PrereviewController) ToggleHideWhitespace(state PrereviewState, ctx *li
 	state.HideWhitespace = !state.HideWhitespace
 	state.MoreMenuOpen = false
 	c.savePrefs(state)
+	return state, nil
+}
+
+// DismissSinceLook stops marking what changed in the open file since your last
+// look (#115 B4).
+func (c *PrereviewController) DismissSinceLook(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	delete(state.SinceLook, state.SelectedFile)
+	c.applySinceLook(&state)
+	return state, nil
+}
+
+// DiffSinceLook shows the full diff from your last look to the file now,
+// removed lines included: the read-only comparison view versions use.
+func (c *PrereviewController) DiffSinceLook(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	base, held := state.SinceLook[state.SelectedFile]
+	if !held || c.Versions == nil {
+		return state, nil
+	}
+	old, err := c.Versions.Blob(base.SHA)
+	if err != nil {
+		return state, fmt.Errorf("diff since look: %w", err)
+	}
+	cur, _ := os.ReadFile(filepath.Join(c.RepoPath, state.SelectedFile))
+	c.showHistoricalDiff(&state, gitdiff.DiffContents(state.SelectedFile, old, cur))
+	state.ViewingVersion, state.VersionViewDiff, state.VersionViewSeq = true, true, 0
+	state.SelectionAnchor, state.SelectionEnd = 0, 0
+	state.CommentMode = ""
+	c.applyVersionList(&state)
 	return state, nil
 }
 

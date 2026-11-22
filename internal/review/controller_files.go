@@ -114,6 +114,7 @@ func (c *PrereviewController) openFile(state *PrereviewState, path string, diff 
 	state.SelectedFile = path
 	c.showDiff(state, diff)
 	state.LiveView = false
+	c.recordLook(state)
 }
 
 // ToggleFiles flips the mobile file-drawer's open state. Bound to the
@@ -201,6 +202,8 @@ func (c *PrereviewController) ToggleViewed(state PrereviewState, ctx *livetempla
 		delete(marks, path)
 	} else if sha := c.fileSHA(path); sha != "" {
 		marks[path] = FileMark{SHA: sha, At: time.Now().UTC()}
+		delete(state.SinceLook, path) // viewing it settles what changed since
+		c.applySinceLook(&state)
 	}
 	if err := saveFileMarks(c.viewedPath(), marks); err != nil {
 		return state, fmt.Errorf("toggleViewed: %w", err)
