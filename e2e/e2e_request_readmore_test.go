@@ -27,7 +27,7 @@ func TestE2E_RequestReadMore(t *testing.T) {
 	card := `.file-comments .inline-comment`
 	prompt := card + ` details.req-prompt > .body`
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`.ck-strip button[name="runJudges"]`, chromedp.ByQuery),
+		runJudges(),
 		chromedp.WaitVisible(card+` details.req-prompt > summary`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("Run judges, then the request card: %v%s", err, diag())

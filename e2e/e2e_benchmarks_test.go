@@ -148,8 +148,8 @@ func TestE2E_JudgeCalibration(t *testing.T) {
 	ctx, cancel := within(p, 40*time.Second)
 	defer cancel()
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`.ck-strip button[name="runJudges"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.ck-strip .ck-waiting`, chromedp.ByQuery),
+		runJudges(),
+		chromedp.WaitVisible(judgesWaiting, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("run judges: %v%s", err, diag())
 	}

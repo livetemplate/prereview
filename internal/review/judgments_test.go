@@ -129,16 +129,26 @@ func TestCheckSummary_MergesJudges(t *testing.T) {
 	}
 }
 
-func TestCheckStrip_Judges(t *testing.T) {
+// TestCheckSummary_Judges (#279): Run judges and its states live on the header
+// button's CheckSummary; judges with nothing failing show no bar above the code.
+func TestCheckSummary_Judges(t *testing.T) {
 	c := judgeController(t)
 	s := judgedState(t, c, "", "", nil)
-	st := s.CheckStrip()
-	if st == nil || st.JudgesRun != 1 || st.NeedsAgent || st.JudgeWaiting != 0 {
-		t.Fatalf("idle bar offers Run judges (1): %+v", st)
+	if st := s.CheckStrip(); st == nil || st.FailingChecks != 1 || st.FailingJudges != 0 {
+		t.Errorf("the failing checker keeps the bar: %+v", st)
+	}
+	quiet := s
+	quiet.DisabledChecks = []string{"filler-intensifiers"}
+	if st := quiet.CheckStrip(); st != nil {
+		t.Errorf("judges with nothing failing show no bar: %+v", st)
+	}
+	cs := s.CheckSummary()
+	if cs.JudgesRun != 1 || cs.NeedsAgent || cs.JudgeWaiting != 0 {
+		t.Fatalf("the Checks menu offers Run judges (1): %+v", cs)
 	}
 	s.AgentMode = false
-	if !s.CheckStrip().NeedsAgent {
-		t.Error("without an agent the bar says Run judges needs one")
+	if !s.CheckSummary().NeedsAgent {
+		t.Error("without an agent the menu says Run judges needs one")
 	}
 	s.AgentMode = true
 
@@ -151,8 +161,8 @@ func TestCheckStrip_Judges(t *testing.T) {
 		!strings.Contains(last.Body, "--content-hash "+checks.ContentHash(sideContent(s.CurrentDiff, "new"))) {
 		t.Errorf("Run judges queues one file-level request naming the command and rubric: %+v", last)
 	}
-	if st := s.CheckStrip(); st.JudgeWaiting != 1 {
-		t.Errorf("after Run judges the bar waits: %+v", st)
+	if cs := s.CheckSummary(); cs.JudgeWaiting != 1 {
+		t.Errorf("after Run judges the menu waits: %+v", cs)
 	}
 	if last.Request != csv.RequestJudge {
 		t.Errorf("Run judges marks its comment a judge request: %q", last.Request)
@@ -161,23 +171,23 @@ func TestCheckStrip_Judges(t *testing.T) {
 	// words is not a request, so it never makes the bar wait.
 	said := last
 	said.Request = ""
-	if st := (PrereviewState{SelectedFile: s.SelectedFile, Comments: []Comment{said}, Checks: s.Checks, AgentMode: true}).CheckStrip(); st.JudgeWaiting != 0 {
-		t.Errorf("an unmarked comment that reads like a judge request made the bar wait: %+v", st)
+	if cs := (PrereviewState{SelectedFile: s.SelectedFile, Comments: []Comment{said}, Checks: s.Checks, AgentMode: true}).CheckSummary(); cs.JudgeWaiting != 0 {
+		t.Errorf("an unmarked comment that reads like a judge request made the menu wait: %+v", cs)
 	}
 	// Waiting is the queue's own: the open request comment, so another tab (or a
 	// reload) sees it too.
 	other := PrereviewState{SelectedFile: s.SelectedFile, Comments: s.Comments, Checks: s.Checks, AgentMode: true}
-	if st := other.CheckStrip(); st.JudgeWaiting != 1 {
-		t.Errorf("another tab sees the wait: %+v", st)
+	if cs := other.CheckSummary(); cs.JudgeWaiting != 1 {
+		t.Errorf("another tab sees the wait: %+v", cs)
 	}
 	req := len(s.Comments) - 1
 	s.Comments[req].Created = time.Now().Add(-11 * time.Minute)
-	if st := s.CheckStrip(); st.JudgeWaiting != 0 || !st.JudgeTimedOut {
-		t.Errorf("after 10 minutes with no answer it offers to run again: %+v", st)
+	if cs := s.CheckSummary(); cs.JudgeWaiting != 0 || !cs.JudgeTimedOut {
+		t.Errorf("after 10 minutes with no answer it offers to run again: %+v", cs)
 	}
 	s.Comments[req].Processed = true
-	if st := s.CheckStrip(); st.JudgeWaiting != 0 || st.JudgeTimedOut {
-		t.Errorf("a request the agent marked done stops the wait: %+v", st)
+	if cs := s.CheckSummary(); cs.JudgeWaiting != 0 || cs.JudgeTimedOut {
+		t.Errorf("a request the agent marked done stops the wait: %+v", cs)
 	}
 
 	// The agent answers (fail, with a quote): the judge joins the failing list,
@@ -186,13 +196,13 @@ func TestCheckStrip_Judges(t *testing.T) {
 	AppendJudgment(c.CSVPath, Judgment{File: s.SelectedFile, Judge: r.ID, Verdict: "fail", Critique: "Buries the action.",
 		Quote: "very good", ContentHash: checks.ContentHash(sideContent(s.CurrentDiff, "new")), RubricHash: r.RubricHash})
 	s, _ = c.ChecksUpdated(s, nil)
-	st = s.CheckStrip()
+	st := s.CheckStrip()
 	var judgePick bool
 	for _, p := range st.Failing {
 		judgePick = judgePick || (p.ID == "reader-first" && p.Judge)
 	}
-	if !judgePick || st.JudgeWaiting != 0 || st.JudgeTimedOut {
-		t.Errorf("the answered judge joins the failing list: %+v", st)
+	if cs := s.CheckSummary(); !judgePick || cs.JudgeWaiting != 0 || cs.JudgeTimedOut {
+		t.Errorf("the answered judge joins the failing list and the wait ends: %+v %+v", st, cs)
 	}
 	s, _ = c.SelectCheck(s, checksCtx("selectCheck", map[string]interface{}{"id": "reader-first"}))
 	st = s.CheckStrip()

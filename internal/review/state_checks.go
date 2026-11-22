@@ -23,6 +23,13 @@ type CheckSummary struct {
 	Total   int
 	Running int
 	Failing bool // any enabled check failed or errored
+
+	// Judges on this file, for the button's Run judges menu item (#279).
+	JudgesRun     int  // enabled judges that apply: "Run judges (n)"; 0 = a plain button, no menu
+	JudgesStale   int  // of those, verdicts from an older file/rubric: "Re-run judges (n stale)"
+	JudgeWaiting  int  // asked for and not answered yet
+	JudgeTimedOut bool // asked over judgeWaitTimeout ago and still unanswered
+	NeedsAgent    bool // judges exist but no agent is attached to answer
 }
 
 // checkStatusOff is the Checks page's status for a check you turned off.
@@ -91,6 +98,7 @@ func (s PrereviewState) CheckSummary() CheckSummary {
 			cs.Failing = true
 		}
 	}
+	s.addJudges(&cs)
 	return cs
 }
 

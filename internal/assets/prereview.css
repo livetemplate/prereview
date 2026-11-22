@@ -3803,6 +3803,17 @@ header.file-head .file-head-checks { margin: 0; }
 }
 .checks-trigger.is-passing .checks-count { background: color-mix(in srgb, var(--pr-add) 18%, transparent); color: var(--pr-add); }
 .checks-trigger.is-failing .checks-count { background: var(--mark-wash); color: var(--mark); }
+/* #279: with judges on the file the chip opens a menu (Run judges, All checks).
+   A dot on the chip shows judges waiting on the agent while the menu is closed. */
+.checks-trigger.is-waiting::after {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); opacity: 0.8;
+}
+.checks-menu-note { margin: 0; padding: 0.4rem 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
+.checks-menu-note a { margin-left: 0.25rem; }
+.checks-menu-note.is-waiting { display: flex; align-items: center; gap: 0.4rem; }
+.checks-menu-note.is-waiting::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); opacity: 0.7;
+}
 
 /* The toolbar's Library button; the badge counts proposed learnings (M3). */
 .library-form { margin: 0; }
@@ -4120,10 +4131,6 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
   border: 1px solid var(--border); border-left: 3px solid var(--pr-del); border-radius: var(--radius-sm);
   background: var(--surface); font-family: var(--sans);
 }
-.ck-strip-run { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0; }
-.ck-strip-run button.outline { font-size: 0.8rem; }
-.ck-waiting { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-muted); font-size: 0.8rem; }
-.ck-waiting::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); opacity: 0.7; }
 .ckp-trust {
   border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 0.55rem 0.7rem;
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem;

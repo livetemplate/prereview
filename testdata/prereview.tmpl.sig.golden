@@ -219,10 +219,17 @@
           </li>
 
 === checksButton ===
-{{with $.CheckSummary}}
-    <form method="POST" class="file-head-checks">
+{{with $.CheckSummary}}{{if .JudgesRun}}<div class="tb-dropdown file-head-checks checks-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="checks-trigger{{if .Failing}} is-failing{{else}}{{if .Running}} is-running{{else}} is-passing{{end}}{{end}}{{if .JudgeWaiting}} is-waiting{{end}}" aria-haspopup="menu" title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}{{if .JudgeWaiting}}, waiting on your agent for {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}{{end}}.">{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
+      <div class="tb-dropdown-panel checks-panel" role="menu" aria-label="Checks">
+        {{if .NeedsAgent}}<p class="checks-menu-note" role="none">Run judges — needs an agent. <a href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></p>
+        {{else}}{{if .JudgeWaiting}}<p class="checks-menu-note is-waiting" role="status">Asked your agent · {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}</p>
+        {{else}}<form method="POST"><button type="submit" name="runJudges" class="menu-item" role="menuitem"><span class="menu-label">{{if .JudgeTimedOut}}No answer yet — run judges again{{else}}{{if .JudgesStale}}Re-run judges ({{.JudgesStale}} stale){{else}}Run judges ({{.JudgesRun}}){{end}}{{end}}</span></button></form>
+        {{end}}{{end}}<form method="POST"><button type="submit" name="openChecks" class="menu-item" role="menuitem"><span class="menu-label">All checks</span></button></form>
+      </div>
+    </div>{{else}}<form method="POST" class="file-head-checks">
       <button type="submit" name="openChecks" class="checks-trigger{{if .Failing}} is-failing{{else}}{{if .Running}} is-running{{else}} is-passing{{end}}{{end}}" title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}. Opens the Checks page.">{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
-    </form>
+    </form>{{end}}
 {{end}}
 === checksStrip ===
 {{with $.CheckStrip}}
@@ -244,10 +251,7 @@
     <form method="POST" class="ck-strip-close"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline" aria-label="Stop showing this check">×</button></form>
     {{else}}
     {{if .Failing}}<form method="POST"><button type="submit" name="toggleCheckStrip" class="outline ck-strip-sum" aria-expanded="{{if .Open}}true{{else}}false{{end}}" title="{{if .Open}}Hide{{else}}Show{{end}} the failing checks">{{len .Failing}} failing{{if .FailingChecks}} · {{.FailingChecks}} check{{if ne .FailingChecks 1}}s{{end}}{{end}}{{if .FailingJudges}} · {{.FailingJudges}} judge{{if ne .FailingJudges 1}}s{{end}}{{end}}{{template "iconChevronDown"}}</button></form>
-    {{end}}{{if .JudgesRun}}{{if .NeedsAgent}}<span class="ck-strip-run"><button type="button" class="outline" disabled title="Judges are run by your coding agent">Run judges — needs an agent</button> <a class="ck-link" href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></span>
-    {{else}}{{if .JudgeWaiting}}<span class="ck-waiting" role="status">Asked your agent · {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}</span>
-    {{else}}<form method="POST" class="ck-strip-run"><button type="submit" name="runJudges" class="outline">{{if .JudgeTimedOut}}No answer yet — run judges again{{else}}{{if .JudgesStale}}Re-run judges ({{.JudgesStale}} stale){{else}}Run judges ({{.JudgesRun}}){{end}}{{end}}</button></form>
-    {{end}}{{end}}{{end}}<form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
+    {{end}}<form method="POST" class="ck-strip-all"><button type="submit" name="openChecks" class="ck-link">All checks</button></form>
     {{if and .Failing .Open}}<div class="ck-strip-list">{{range .Failing}}<form method="POST" class="ck-strip-pick"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="selectCheck" class="outline{{if .Judge}} is-judge{{end}}">{{.Name}} {{if .Judge}}<span class="ck-judge-tag">judge{{if .Advisory}} · advisory{{end}}</span>{{else}}<span class="ck-strip-n">{{.Count}}</span>{{end}}</button></form>
     {{end}}</div>{{end}}
     {{end}}{{end}}

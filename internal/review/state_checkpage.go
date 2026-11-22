@@ -622,10 +622,10 @@ func (s PrereviewState) pageFiles() []PathChecks {
 }
 
 // CheckStrip is the file view's one-line bar while the open file has failing
-// checks or judges to run: with none selected it lists the failing ones to pick
-// (judges tagged) and offers Run judges; with a checker selected it's that
-// check's finding stepper; with a judge selected it names it and Judge carries
-// the critique card.
+// checks: with none selected it lists the failing ones to pick (judges tagged);
+// with a checker selected it's that check's finding stepper; with a judge
+// selected it names it and Judge carries the critique card. Run judges lives on
+// the header's Checks button (CheckSummary, #279), so judges alone show no bar.
 type CheckStrip struct {
 	Selected   bool
 	ID, Name   string
@@ -641,13 +641,6 @@ type CheckStrip struct {
 	Open          bool
 	FailingChecks int
 	FailingJudges int
-
-	// Judges on this file (idle bar).
-	JudgesRun     int  // enabled judges that apply: "Run judges (n)"
-	JudgesStale   int  // of those, verdicts from an older file/rubric: "Re-run judges (n stale)"
-	JudgeWaiting  int  // asked for and not answered yet
-	JudgeTimedOut bool // asked over judgeWaitTimeout ago and still unanswered
-	NeedsAgent    bool // judges exist but no agent is attached to answer
 }
 
 // CheckPick is one failing check offered on the bar.
@@ -703,30 +696,37 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 		}
 		return st
 	}
-	st := &CheckStrip{NeedsAgent: !s.AgentMode, Open: s.CheckStripOpen}
+	st := &CheckStrip{Open: s.CheckStripOpen}
+	for _, r := range s.Checks.Results {
+		switch {
+		case s.checkDisabled(r.ID) || r.Status != checks.StatusFail:
+		case r.Type != checks.TypeJudge && len(r.Findings) > 0:
+			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Count: len(r.Findings)})
+			st.FailingChecks++
+		case r.Type == checks.TypeJudge && r.Err == "":
+			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Judge: true, Advisory: r.Advisory})
+			st.FailingJudges++
+		}
+	}
+	if len(st.Failing) == 0 {
+		return nil
+	}
+	return st
+}
+
+// addJudges fills the header button's Run judges state (#279) from the judges
+// that apply to the open file.
+func (s PrereviewState) addJudges(cs *CheckSummary) {
+	cs.NeedsAgent = !s.AgentMode
 	asked := s.openJudgeRequest()
 	unanswered := 0
 	for _, r := range s.Checks.Results {
-		if s.checkDisabled(r.ID) {
+		if r.Type != checks.TypeJudge || s.checkDisabled(r.ID) || r.Err != "" {
 			continue
 		}
-		if r.Type != checks.TypeJudge {
-			if r.Status == checks.StatusFail && len(r.Findings) > 0 {
-				st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Count: len(r.Findings)})
-				st.FailingChecks++
-			}
-			continue
-		}
-		if r.Err != "" {
-			continue
-		}
-		st.JudgesRun++
-		switch r.Status {
-		case checks.StatusFail:
-			st.Failing = append(st.Failing, CheckPick{ID: r.ID, Name: r.Name, Judge: true, Advisory: r.Advisory})
-			st.FailingJudges++
-		case checks.StatusStale:
-			st.JudgesStale++
+		cs.JudgesRun++
+		if r.Status == checks.StatusStale {
+			cs.JudgesStale++
 		}
 		if !asked.IsZero() {
 			if at, ok := judgedAt(r); !ok || at.Before(asked) {
@@ -736,15 +736,11 @@ func (s PrereviewState) CheckStrip() *CheckStrip {
 	}
 	if unanswered > 0 {
 		if time.Since(asked) < judgeWaitTimeout {
-			st.JudgeWaiting = unanswered
+			cs.JudgeWaiting = unanswered
 		} else {
-			st.JudgeTimedOut = true
+			cs.JudgeTimedOut = true
 		}
 	}
-	if len(st.Failing) == 0 && st.JudgesRun == 0 {
-		return nil
-	}
-	return st
 }
 
 // aggJudge folds one file's judge result into its row: counts per status, the

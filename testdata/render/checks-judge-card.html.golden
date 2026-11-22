@@ -735,18 +735,25 @@
     
     
     
-    
-    <form method="POST" class="file-head-checks">
+    <div
+      class="tb-dropdown file-head-checks checks-dropdown"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
       <button
-        type="submit"
-        name="openChecks"
+        type="button"
         class="checks-trigger is-failing"
-        title="Checks on this file: 1 of 5 passed, 1 running. Opens the Checks page."
+        aria-haspopup="menu"
+        title="Checks on this file: 1 of 5 passed, 1 running."
       ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
     d="M4 6.5l1.8 1.8L9 5M4 13.5l1.8 1.8L9 12M4 20l1.8-1.5M12 7h8M12 14h8M12 20h8"
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"
   /></svg><span class="checks-trigger-label">Checks</span><span class="checks-count">1/5</span></button>
-    </form>
+      <div class="tb-dropdown-panel checks-panel" role="menu" aria-label="Checks">
+        <form method="POST"><button type="submit" name="runJudges" class="menu-item" role="menuitem"><span class="menu-label">Run judges (1)</span></button></form>
+        <form method="POST"><button type="submit" name="openChecks" class="menu-item" role="menuitem"><span class="menu-label">All checks</span></button></form>
+      </div>
+    </div>
 
     
     

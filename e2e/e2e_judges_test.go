@@ -12,6 +12,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/device"
 	"github.com/livetemplate/prereview/csv"
 )
 
@@ -59,11 +61,11 @@ func TestE2E_Judges(t *testing.T) {
 			ctx, cancel := within(p, 30*time.Second)
 			defer cancel()
 
-			// Not run yet: offered on the bar, not counted in the header.
-			if err := chromedp.Run(ctx, chromedp.WaitVisible(`.ck-strip.is-idle button[name="runJudges"]`, chromedp.ByQuery)); err != nil {
-				t.Fatalf("no Run judges on the bar: %v%s", err, diag())
+			// Not run yet: offered in the Checks menu (#279), not counted in the header.
+			if err := chromedp.Run(ctx, chromedp.WaitVisible(`.checks-dropdown .checks-trigger`, chromedp.ByQuery)); err != nil {
+				t.Fatalf("no Checks menu: %v%s", err, diag())
 			}
-			if got := textOf(t, p, `.ck-strip button[name="runJudges"]`); got != "Run judges (1)" {
+			if got := textOf(t, p, runJudgesBtn); got != "Run judges (1)" {
 				t.Errorf("run button %q%s", got, diag())
 			}
 			if got := textOf(t, p, `.checks-trigger .checks-count`); got != "2/3" {
@@ -72,12 +74,12 @@ func TestE2E_Judges(t *testing.T) {
 
 			// Run judges: one queued file-level request, and the bar waits.
 			if err := chromedp.Run(ctx,
-				chromedp.Click(`.ck-strip button[name="runJudges"]`, chromedp.ByQuery),
-				chromedp.WaitVisible(`.ck-strip .ck-waiting`, chromedp.ByQuery),
+				runJudges(),
+				chromedp.WaitVisible(judgesWaiting, chromedp.ByQuery),
 			); err != nil {
 				t.Fatalf("Run judges: %v%s", err, diag())
 			}
-			if got := textOf(t, p, `.ck-strip .ck-waiting`); got != "Asked your agent · 1 judge" {
+			if got := textOf(t, p, `.checks-menu-note.is-waiting`); got != "Asked your agent · 1 judge" {
 				t.Errorf("waiting %q%s", got, diag())
 			}
 			request := onlyComment(t, p)
@@ -94,7 +96,7 @@ func TestE2E_Judges(t *testing.T) {
 			if err := chromedp.Run(ctx, openCheckStrip(), chromedp.WaitVisible(`.ck-strip .ck-strip-pick button.is-judge`, chromedp.ByQuery)); err != nil {
 				t.Fatalf("the verdict didn't render live: %v%s", err, diag())
 			}
-			if n := countSel(t, p, `.ck-strip .ck-waiting`); n != 0 {
+			if n := countSel(t, p, judgesWaiting); n != 0 {
 				t.Errorf("still waiting after the answer%s", diag())
 			}
 			// Not calibrated yet (M5): listed on the bar as advisory, not counted.
@@ -197,7 +199,7 @@ func TestE2E_Judges(t *testing.T) {
 			p.waitReadyAt(vp.w, vp.h) // a click before the socket connects is lost
 			_ = chromedp.Run(ctx, chromedp.Evaluate(`(() => { const b = document.querySelector('.lib-back button'); if (b) b.click(); })()`, nil))
 			_ = chromedp.Run(ctx, chromedp.Evaluate(`(() => { const b = document.querySelector('.ck-strip-close button'); if (b) b.click(); })()`, nil))
-			waitJSTrue(t, p.ctx, `(() => { const b = document.querySelector('.ck-strip button[name="runJudges"]'); return !!b && b.textContent.trim() === 'Re-run judges (1 stale)' })()`,
+			waitJSTrue(t, p.ctx, `(() => { const b = document.querySelector('.checks-panel button[name="runJudges"]'); return !!b && b.textContent.trim() === 'Re-run judges (1 stale)' })()`,
 				10*time.Second, "an edited file makes the verdict stale (Re-run judges (1 stale))")
 			if _, err := os.Stat(filepath.Join(p.store, "judge-labels.jsonl")); err != nil {
 				t.Errorf("labels file: %v", err)
@@ -304,8 +306,8 @@ func TestE2E_JudgeQueuedFileLevel(t *testing.T) {
 			defer cancel()
 
 			if err := chromedp.Run(ctx,
-				chromedp.Click(`.ck-strip button[name="runJudges"]`, chromedp.ByQuery),
-				chromedp.WaitVisible(`.ck-strip .ck-waiting`, chromedp.ByQuery),
+				runJudges(),
+				chromedp.WaitVisible(judgesWaiting, chromedp.ByQuery),
 			); err != nil {
 				t.Fatalf("Run judges: %v%s", err, diag())
 			}
@@ -331,5 +333,53 @@ func TestE2E_JudgeQueuedFileLevel(t *testing.T) {
 			p.waitReadyAt(vp.w, vp.h)
 			assertQueued(t, p, diag) // survives the reload
 		})
+	}
+}
+
+// TestE2E_JudgesFromChecksMenu (#279): on a file whose checkers all pass, Run
+// judges lives in the header's Checks menu and no bar sits above the code, before
+// or after asking; on a phone the open menu stays on screen.
+func TestE2E_JudgesFromChecksMenu(t *testing.T) {
+	repo := setupFixtureRepoChecks(t, "notes.md")
+	mustWrite(t, repo, "notes.md", "# Notes, edited\n\nPlain words only.\n")
+	writeRule(t, repo, "reader-first.md", readerFirstJudge)
+	p := bootChromeAgainstRepo(t, repo, 390, 844, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReadyAt(390, 844)
+	if err := chromedp.Run(p.ctx, chromedp.Emulate(device.IPhone11), chromedp.Sleep(300*time.Millisecond)); err != nil {
+		t.Fatalf("emulate phone: %v", err)
+	}
+	ctx, cancel := within(p, 30*time.Second)
+	defer cancel()
+
+	if err := chromedp.Run(ctx, chromedp.WaitVisible(`.checks-dropdown .checks-trigger`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("no Checks menu: %v%s", err, diag())
+	}
+	if n := countSel(t, p, `.ck-strip`); n != 0 {
+		t.Errorf("a file with only judges shows a bar above the code%s", diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.checks-dropdown .checks-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(runJudgesBtn, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("open the Checks menu: %v%s", err, diag())
+	}
+	got := evalStr(t, p, `(() => { const r = document.querySelector('.checks-panel').getBoundingClientRect();
+		return [Math.round(r.left), Math.round(r.right), window.innerWidth, document.documentElement.scrollWidth].join(',') })()`)
+	var l, r, w, sw int
+	if _, err := fmt.Sscanf(got, "%d,%d,%d,%d", &l, &r, &w, &sw); err != nil || l < 0 || r > w || sw > w {
+		t.Errorf("the open menu leaves the screen on a phone (left,right,width,scrollWidth = %s)%s", got, diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(runJudgesBtn, chromedp.ByQuery),
+		chromedp.WaitVisible(judgesWaiting, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("Run judges: %v%s", err, diag())
+	}
+	if got := textOf(t, p, `.checks-menu-note.is-waiting`); got != "Asked your agent · 1 judge" {
+		t.Errorf("the menu reads %q while waiting%s", got, diag())
+	}
+	if n := countSel(t, p, `.ck-strip`); n != 0 {
+		t.Errorf("asking for judges brought the bar back%s", diag())
 	}
 }

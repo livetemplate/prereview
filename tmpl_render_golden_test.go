@@ -802,6 +802,13 @@ func renderFixtures() []renderFixture {
 	judgeRun.SelectedCheck = ""
 	judgeRun.AgentMode = true
 	judgeRun.Checks = &review.FileChecks{Results: append(append([]checks.Result(nil), fileChecks.Results...), judgeRes("notrun", "", nil))}
+	// #279: judges with nothing failing — the Checks button is a menu (Run judges,
+	// All checks) and no bar renders above the code; without an agent the menu says
+	// Run judges needs one.
+	judgesOnly := judgeRun
+	judgesOnly.DisabledChecks = append([]string{"filler-intensifiers"}, judgeRun.DisabledChecks...)
+	judgeNoAgent := judgesOnly
+	judgeNoAgent.AgentMode = false
 	// The idle bar opened: a failing checker and a failing (advisory) judge as pills.
 	stripOpen := judgeRun
 	stripOpen.CheckStripOpen = true
@@ -1005,6 +1012,8 @@ func renderFixtures() []renderFixture {
 		{"checks-judge-card", judgeCard},
 		{"checks-judge-run", judgeRun},
 		{"checks-strip-open", stripOpen},
+		{"checks-judges-only", judgesOnly},
+		{"checks-judge-no-agent", judgeNoAgent},
 		{"learnings", learnings},
 		{"learnings-superseded", superseded},
 		{"learnings-accepted", acceptedL},
