@@ -261,3 +261,26 @@ func TestE2E_UnderstandDiagram(t *testing.T) {
 		t.Fatalf("the diagram must update by a live update, not a reload%s", diag())
 	}
 }
+
+// TestE2E_WalkCaretOnItsLine: after a walkthrough jump, the keyboard caret sits
+// on the cursor's line, not on the step marker above it. A row with a marker is
+// taller than content-visibility's size estimate, so measuring before it was laid
+// out put the caret a marker's height too high; marker rows are now laid out.
+func TestE2E_WalkCaretOnItsLine(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 390, 844, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReadyAt(390, 844)
+	p.clickFile("edited.go")
+	p.openUnderstandTab("walkthrough")
+	submitExplain(t, p, `{"steps": [{"title": "The greeting", "anchors": [{"file": "edited.go", "from_line": 4}]}, {"title": "Before it", "anchors": [{"file": "edited.go", "from_line": 3}]}]}`)
+	waitJSTrueDiag(t, p.ctx, `document.querySelectorAll('.walk-step').length >= 2`, 10*time.Second, "the steps arrive", diag)
+	if err := chromedp.Run(p.ctx, chromedp.Click(`.walk-start button`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("start the walkthrough: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `!!document.querySelector('.walk-bar') && !!document.querySelector('[data-lvt-text-caret]')`, 5*time.Second, "the walk starts with a caret", diag)
+	time.Sleep(500 * time.Millisecond) // a late layout must not move the line away from the caret
+	off := evalStr(t, p, `(() => { const c = document.querySelector('[data-lvt-text-caret]').getBoundingClientRect(), l = document.querySelector('.code .line.is-cursor .content').getBoundingClientRect(); return (l.top - c.top).toFixed(1); })()`)
+	if v, err := strconv.ParseFloat(off, 64); err != nil || v > 4 || v < -4 {
+		t.Errorf("the caret is %spx above its line's text, want within 4px%s", off, diag())
+	}
+}

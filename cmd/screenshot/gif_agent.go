@@ -238,16 +238,24 @@ func gifLearning(allocCtx context.Context, url, repo, bin, outDir string) {
 }
 
 // explainDemo is the stand-in agent's walkthrough of the demo change: the retry
-// loop, its error, then the guide. It leaves architecture.png out on purpose, so
-// the derived "Not explained" step shows the check catching it.
-const explainDemo = `{"id":"walk1","summary":"Charge now retries the gateway, and the guide states a charge limit.","steps":[
- {"title":"Charge retries the gateway","body":"Submit runs up to maxRetries times and returns on the first success. Check: every error is retried, card declines included.","anchors":[{"file":"payment.go","from_line":13,"to_line":17}]},
- {"title":"One error for every failure","body":"After the last attempt Charge returns a generic error, so the gateway's own error is lost.","anchors":[{"file":"payment.go","from_line":18,"to_line":18}]},
- {"title":"The guide states the limit","body":"A new Limits section: 100,000 cents per order. Nothing in the code enforces it yet.","anchors":[{"file":"guide.md","from_line":18,"to_line":20}]}]}`
+// loop and its error under one concern (with a risk, the code it affects and a
+// flow diagram), then the guide. It leaves architecture.png out on purpose, so
+// the derived "Not explained" step shows the check catching it. The demo change
+// has no mechanical part, so it shows no fold.
+const explainDemo = `{"id":"walk1","summary":"Charge now retries the gateway, and the guide states a charge limit.",
+"concerns":[{"id":"retry","title":"Retry the gateway"},{"id":"docs","title":"Document the limit"}],
+"steps":[
+ {"title":"Charge retries the gateway","concern":"retry","body":"Submit runs up to maxRetries times and returns on the first success. Check: every error is retried, card declines included.","anchors":[{"file":"payment.go","from_line":13,"to_line":17}],
+  "risks":[{"kind":"error-handling","note":"a card decline is retried like a timeout"}],
+  "impact":[{"file":"payment.go","from_line":22,"to_line":23,"contains":"gateway.Reverse","note":"Refund still calls the gateway once"}]},
+ {"title":"One error for every failure","concern":"retry","body":"After the last attempt Charge returns a generic error, so the gateway's own error is lost.","anchors":[{"file":"payment.go","from_line":18,"to_line":18}]},
+ {"title":"The guide states the limit","concern":"docs","body":"A new Limits section: 100,000 cents per order. Nothing in the code enforces it yet.","anchors":[{"file":"guide.md","from_line":18,"to_line":20}]}],
+"diagrams":[{"title":"How Charge retries","mermaid":"graph LR\n  Charge --> Submit{gateway.Submit}\n  Submit -->|ok| Done[return nil]\n  Submit -->|error| More{attempts left?}\n  More -->|yes| Submit\n  More -->|no| Fail[charge failed]","anchors":[{"file":"payment.go","from_line":13,"to_line":18}]}]}`
 
 // gifUnderstand — the Understand page (#115): Explain this change asks the agent
-// for a walkthrough, its steps arrive with every cited line checked and the
-// left-out change listed last, and the step bar walks the change file to file.
+// for a walkthrough, its steps arrive under their concerns with every cited line
+// checked and the left-out change listed last, the Diagrams tab draws the flow,
+// and the step bar walks the change file to file.
 func gifUnderstand(allocCtx context.Context, url, repo, bin, outDir string) {
 	withCtx(allocCtx, "gif:understand", func(ctx context.Context) error {
 		rec := &gifRec{}
@@ -282,9 +290,19 @@ func gifUnderstand(allocCtx context.Context, url, repo, bin, outDir string) {
 			chromedp.Sleep(300*time.Millisecond),
 		)
 		step(ctx, settled())
-		check(rec.capture(ctx, 260)) // the steps, and the change no step explains
+		check(rec.capture(ctx, 260)) // the steps under their concerns, and the change no step explains
 
 		step(ctx,
+			chromedp.Click(`button[name="setUnderstandTab"][data-tab="diagrams"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.diagram .md-mermaid svg`, chromedp.ByQuery),
+			chromedp.Sleep(300*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 220)) // the flow diagram, with the lines it cites
+
+		step(ctx,
+			chromedp.Click(`button[name="setUnderstandTab"][data-tab="walkthrough"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`.walk-start button[name="startWalkthrough"]`, chromedp.ByQuery),
 			chromedp.Click(`.walk-start button[name="startWalkthrough"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.walk-bar`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.code .step-mark`, chromedp.ByQuery),

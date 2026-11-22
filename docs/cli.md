@@ -208,7 +208,7 @@ prereview done      [--out <dir>] [--file <f>|-] [--all-open] <comment-id>...
 prereview status    [--out <dir>] <working|done> [message]
 prereview suggest   [--out <dir>] [--file <payload.json>]
 prereview import    [--out <dir>] [--file <payload.json>]
-- `prereview quiz` - submit a comprehension quiz about a file's diff for the
+- `prereview quiz` - submit a comprehension quiz about the change for the
   reviewer to answer; writes `.prereview/quiz.jsonl`.
 - `prereview explain` - submit a walkthrough of the whole change: steps in reading
   order, each citing the lines it explains, which the reviewer follows on the

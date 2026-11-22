@@ -1906,7 +1906,10 @@ header.file-head .file-head-comment button svg { display: block; }
    visibility kicks in.
 
    IMPORTANT: rows that hold the composer, ANY annotation (comment,
-   suggestion, quiz question — `.has-line-marks`) or a finding card are excluded.
+   suggestion, quiz question — `.has-line-marks`), a finding card or a
+   walkthrough step marker are excluded. A marker row is taller than the size
+   hint, so the client measured the keyboard caret against the estimate and drew
+   it a marker's height too high (TestE2E_WalkCaretOnItsLine).
    content-visibility: auto skips rendering their contents when
    off-screen, which makes the composer's textarea and the cards' action
    buttons unfocusable until scrolled in; and its paint containment clips
@@ -2136,7 +2139,7 @@ header.file-head .file-head-comment button svg { display: block; }
 }
 .code .mech-row .mech-fold:hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
 @media (pointer: coarse) { .code .mech-row .mech-fold { min-height: 44px; } }
-.code .line-row:not(:has(.composer)):not(.has-line-marks):not(:has(.finding-card)) {
+.code .line-row:not(:has(.composer)):not(.has-line-marks):not(:has(.finding-card)):not(:has(.step-mark)) {
   content-visibility: auto;
   contain-intrinsic-size: auto 16px;
 }
