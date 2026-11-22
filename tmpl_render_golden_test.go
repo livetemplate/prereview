@@ -460,9 +460,36 @@ func renderFixtures() []renderFixture {
 	// #115 A3: walking the walkthrough — the step bar in the stepper's slot, the
 	// step's marker on its first cited line, and the drawer in walkthrough order.
 	walkBar := goBase()
-	walkBar.Explanations = understandWalk.Explanations
+	// A risk on the first step: chips in the bar and on its diff marker (A′2).
+	walkBar.Explanations = []review.Explanation{understandWalk.Explanations[0]}
+	walkBar.Explanations[0].Steps = append([]review.Step(nil), understandWalk.Explanations[0].Steps...)
+	walkBar.Explanations[0].Steps[0].Risks = []review.Risk{{Kind: "concurrency", Note: "shared ctx"}}
 	walkBar.WalkExplanation, walkBar.WalkStep, walkBar.WalkAnchor = "e1", 0, 0
 	walkBar.DrawerWalkOrder = true
+
+	// #115 A′2: concern headings (one mechanical), risk chips with notes, and
+	// impact links: a jump, a ⚠ for one that doesn't resolve.
+	understandConcerns := goBase()
+	understandConcerns.ShowUnderstand, understandConcerns.AgentMode = true, true
+	understandConcerns.ExplainPrompts = understandEmpty.ExplainPrompts
+	line := func(from int) []review.Anchor {
+		return []review.Anchor{{File: "app.go", Kind: "line", Side: "new", FromLine: from, ToLine: from, Status: "ok"}}
+	}
+	understandConcerns.Explanations = []review.Explanation{{
+		ID: "e2", Summary: "Retries uploads, and renames the client.", CreatedAt: "2026-11-22T11:00:00Z",
+		Concerns: []review.Concern{{ID: "retry", Title: "Retry loop"}, {ID: "rename", Title: "Rename Client to Uploader", Mechanical: true}},
+		Steps: []review.Step{
+			{ID: "s1", Title: "Add the backoff loop", Anchors: line(2), Concern: "retry",
+				Risks: []review.Risk{{Kind: "concurrency", Note: "the loop shares ctx"}, {Kind: "error-handling"}},
+				Impact: []review.ImpactAnchor{
+					{File: "worker.go", FromLine: 88, ToLine: 88, Note: "the caller", Status: "ok"},
+					{File: "gone.go", FromLine: 4, ToLine: 4, Status: "ungrounded"},
+				}},
+			{ID: "s2", Title: "Cap the total wait", Anchors: line(3), Concern: "retry"},
+			{ID: "s3", Title: "Rename the type", Anchors: line(1), Concern: "rename"},
+			{ID: "s4", Title: "Bump the version", Anchors: line(5)},
+		},
+	}}
 
 	// external (live-site) mode
 	external := review.PrereviewState{
@@ -892,6 +919,7 @@ func renderFixtures() []renderFixture {
 		{"understand-empty", understandEmpty},
 		{"understand-walkthrough", understandWalk},
 		{"walk-bar", walkBar},
+		{"understand-concerns", understandConcerns},
 		{"prompts-picker", promptsPicker},
 		{"shortcuts-composer", shortcuts},
 		{"ripple", ripple},

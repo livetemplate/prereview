@@ -1018,7 +1018,7 @@ func (s PrereviewState) pinnedRows() func(gitdiff.DiffLine) bool {
 	marks := s.StepMarkLines()
 	return func(l gitdiff.DiffLine) bool {
 		k := rowKey(l)
-		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)] != ""
+		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)] != nil
 	}
 }
 

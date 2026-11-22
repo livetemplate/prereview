@@ -405,7 +405,7 @@ func TestStepMarkLines(t *testing.T) {
 	marks := state.StepMarkLines()
 	var key string
 	for k, v := range marks {
-		if v == "Step 1: far context" {
+		if v.Label == "Step 1: far context" {
 			key = k
 		}
 	}
@@ -625,5 +625,53 @@ func TestNotExplainedIgnoresImpactAndDiagrams(t *testing.T) {
 	}
 	if want := "b.go L3-L6"; strings.Join(got, ", ") != want {
 		t.Errorf("not explained = %v, want [%s]", got, want)
+	}
+}
+
+// TestWalkStepsConcernsAndImpact: a concern's heading sits on its run's first
+// step and counts the run; an impact anchor is a link, unless it doesn't resolve
+// or a single-file review doesn't hold its file.
+func TestWalkStepsConcernsAndImpact(t *testing.T) {
+	ok := []Anchor{{File: "a.go", Kind: AnchorKindLine, Side: "new", FromLine: 1, ToLine: 1, Status: anchorOK}}
+	state := PrereviewState{ShowUnderstand: true, UnderstandTab: understandTabWalkthrough, Explanations: []Explanation{{
+		ID:       "e",
+		Concerns: []Concern{{ID: "c1", Title: "Retry"}, {ID: "c2", Title: "Rename", Mechanical: true}},
+		Steps: []Step{
+			{ID: "s1", Title: "a", Anchors: ok, Concern: "c1", Impact: []ImpactAnchor{
+				{File: "a.go", FromLine: 3, ToLine: 3, Status: anchorOK},
+				{File: "w.go", FromLine: 8, ToLine: 8, Status: anchorOK},
+				{File: "a.go", FromLine: 99, ToLine: 99, Status: anchorUngrounded},
+			}},
+			{ID: "s2", Title: "b", Anchors: ok, Concern: "c1"},
+			{ID: "s3", Title: "c", Anchors: ok, Concern: "c2"},
+			{ID: "s4", Title: "d", Anchors: ok},
+		},
+	}}}
+	steps := state.WalkSteps()
+	heads := []string{}
+	for _, s := range steps {
+		if s.Concern != nil {
+			heads = append(heads, fmt.Sprintf("%d:%s×%d mech=%v", s.Num, s.Concern.Title, s.Concern.Steps, s.Concern.Mechanical))
+		}
+	}
+	if got, want := strings.Join(heads, " "), "1:Retry×2 mech=false 3:Rename×1 mech=true"; got != want {
+		t.Errorf("concern heads = %q, want %q", got, want)
+	}
+	if steps[3].InConcern || !steps[1].InConcern {
+		t.Errorf("InConcern: step 2 %v (want true), step 4 %v (want false)", steps[1].InConcern, steps[3].InConcern)
+	}
+	links := func() []bool {
+		var out []bool
+		for _, im := range state.WalkSteps()[0].Impact {
+			out = append(out, im.Linkable)
+		}
+		return out
+	}
+	if got := fmt.Sprint(links()); got != "[true true false]" {
+		t.Errorf("linkable = %s, want [true true false] (the ungrounded one is a warning)", got)
+	}
+	state.SingleFile = "a.go"
+	if got := fmt.Sprint(links()); got != "[true false false]" {
+		t.Errorf("single-file linkable = %s, want [true false false] (w.go is outside the review)", got)
 	}
 }

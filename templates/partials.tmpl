@@ -659,3 +659,7 @@
 {{define "processedBadge"}}<small class="processed-badge">worked on</small>{{end}}
 {{define "awaitingBadge"}}<small class="awaiting-badge" title="you replied — waiting on the agent">awaiting agent</small>{{end}}
 {{define "queuedBadge"}}<small class="queued-badge" title="queued for the agent">queued</small>{{end}}
+
+{{/* anchorJump (#115): the link to a place a walkthrough cites, a step's anchor
+     or an impact anchor (a WalkAnchor). It opens that file at the line. */}}
+{{define "anchorJump"}}<form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">{{.Label}}</button></form>{{end}}

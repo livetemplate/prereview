@@ -142,7 +142,7 @@
         <form method="POST"><button type="submit" name="endWalkthrough" class="outline" aria-label="Stop the walkthrough" title="Stop the walkthrough">×</button></form>
       </span>
     </div>
-    <div class="walk-bar-text"><strong class="walk-bar-title">{{.Title}}</strong>{{if .Anchor}}<span class="walk-bar-at">{{.Anchor}}</span>{{else}}<span class="walk-bar-at quiz-ungrounded">⚠ cites nothing in this review</span>{{end}}{{if .Body}}<span class="walk-bar-body">{{.Body}}</span>{{end}}</div>
+    <div class="walk-bar-text"><strong class="walk-bar-title">{{.Title}}</strong>{{if .Risks}}<span class="walk-bar-risks">{{range .Risks}}<span class="ck-pill ck-fail risk-chip">{{.Kind}}</span>{{end}}</span>{{end}}{{if .Anchor}}<span class="walk-bar-at">{{.Anchor}}</span>{{else}}<span class="walk-bar-at quiz-ungrounded">⚠ cites nothing in this review</span>{{end}}{{if .Body}}<span class="walk-bar-body">{{.Body}}</span>{{end}}</div>
   </div>
   {{- end}}
   {{/* #193 open-items stepper (state_nav.go). Sticky, and before the checks strip,

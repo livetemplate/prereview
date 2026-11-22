@@ -3598,7 +3598,8 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
   border: 1px solid color-mix(in srgb, var(--pr-del) 45%, transparent);
   background: color-mix(in srgb, var(--pr-del) 8%, var(--surface));
 }
-.walk-steps, .walk-steps > li, .walk-anchors, .walk-anchors > li { list-style: none; }
+.walk-steps, .walk-steps > li, .walk-anchors, .walk-anchors > li,
+.walk-risks, .walk-risks > li, .walk-impact ul, .walk-impact li { list-style: none; }
 .walk-steps { padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; }
 .walk-step { padding: 0.7rem; border: 1px solid var(--pr-comment-bd); border-radius: var(--radius-sm); background: var(--pr-comment-bg); }
 .walk-title { margin: 0 0 0.35rem; font-weight: 600; display: flex; gap: 0.5rem; align-items: baseline; }
@@ -3614,6 +3615,22 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .walk-title-text { flex: 1; }
 .walk-from { margin: 0 0 0 auto; }
 .walk-from button { margin: 0; padding: 0.1rem 0.5rem; font-size: 0.72rem; min-height: 0; width: auto; font-weight: 400; }
+/* #115 A′2: concern headings, risk chips and impact links on the Walkthrough tab.
+   A concern's steps share a left rule, so where a run ends is visible. */
+.walk-in-concern { border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.walk-concern, .walk-impact > strong { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.walk-concern { margin: 0 0 0.4rem; }
+.walk-concern-title { font-weight: 700; color: var(--text); }
+/* A risk is a .ck-pill.ck-fail with a border, so it reads as a flag, not a status. */
+.risk-chip { border-color: color-mix(in srgb, var(--pr-del) 40%, transparent); }
+.walk-risks { padding: 0; margin: 0 0 0.5rem; display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; }
+.walk-impact { margin: 0.5rem 0 0; font-size: 0.82rem; }
+.walk-impact ul { padding: 0; margin: 0.2rem 0 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.walk-impact li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem; }
+.walk-impact-label { font-size: 0.75rem; color: var(--text-muted); }
+.walk-impact-note { color: var(--text-muted); }
+.code .step-mark .risk-chip { vertical-align: 1px; }
+
 /* #115 A3: a step's marker above its first cited line (the step bar is after .ann-nav). */
 .code .step-mark {
   padding: 0.15rem 0.6rem; font-size: 0.75rem; font-weight: 600; line-height: 1.4;
@@ -3677,6 +3694,7 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .walk-bar-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; font-size: 0.82rem; line-height: 1.35; }
 .walk-bar-at { font-size: 0.75rem; color: var(--accent); overflow-wrap: anywhere; }
 .walk-bar-at.quiz-ungrounded { color: var(--pr-del); }
+.walk-bar-risks { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .walk-bar-body {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   color: var(--pico-muted-color); white-space: pre-wrap;

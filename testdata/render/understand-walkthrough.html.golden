@@ -776,9 +776,9 @@
 Check the default.</p>
       <ul class="walk-anchors">
         
-        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="2"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">app.go L2-L3</button></form></li>
+        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="2"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L2-L3</button></form></li>
         
-        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="old"><input type="hidden" name="line" value="1"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">app.go L1 (old)</button></form></li>
+        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="old"><input type="hidden" name="line" value="1"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L1 (old)</button></form></li>
         
       </ul>
     </li>
@@ -788,7 +788,7 @@ Check the default.</p>
       
       <ul class="walk-anchors">
         
-        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="logo.png"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="0"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">logo.png</button></form></li>
+        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="logo.png"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="0"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">logo.png</button></form></li>
         
         <li><span class="quiz-ungrounded" title="The walkthrough cites gone.go L9, but the review has no such line — treat this step with suspicion">⚠ gone.go L9, not in this review</span></li>
         
@@ -800,7 +800,7 @@ Check the default.</p>
       <p class="walk-body">Changes no step cites. Read them too: what a walkthrough leaves out is where a surprise hides.</p>
       <ul class="walk-anchors">
         
-        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="5"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">app.go L5</button></form></li>
+        <li><form method="POST" style="margin:0"><input type="hidden" name="file" value="app.go"><input type="hidden" name="side" value="new"><input type="hidden" name="line" value="5"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">app.go L5</button></form></li>
         
       </ul>
     </li>

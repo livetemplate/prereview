@@ -179,3 +179,47 @@ func TestE2E_UnderstandNotExplained(t *testing.T) {
 		t.Errorf("the left-out change must be marked in the diff, got %q%s", got, diag())
 	}
 }
+
+// TestE2E_UnderstandImpact (#115 A′2): a step's "Affects" link opens a file the
+// review doesn't list (history.go is committed and unchanged) at the cited line;
+// an impact anchor past the file's end reads ⚠; concern headings and risk chips
+// render.
+func TestE2E_UnderstandImpact(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("edited.go")
+	p.openUnderstandTab("walkthrough")
+
+	submitExplain(t, p, `{
+  "concerns": [{"id": "greet", "title": "Greeting"}],
+  "steps": [
+    {"title": "The greeting", "concern": "greet", "anchors": [{"file": "edited.go", "from_line": 4}],
+     "risks": [{"kind": "public-api", "note": "Hello's result changed"}],
+     "impact": [{"file": "history.go", "from_line": 3, "contains": "Old", "note": "an old caller"},
+                {"file": "history.go", "from_line": 9}]}
+  ]
+}`)
+	waitJSTrueDiag(t, p.ctx, `document.querySelectorAll('.walk-impact li').length === 2`, 10*time.Second, "the impact links appear live", diag)
+	if got := evalStr(t, p, `document.querySelector('.walk-concern').textContent`); got != "Greeting · 1 step" {
+		t.Errorf("concern heading = %q, want %q%s", got, "Greeting · 1 step", diag())
+	}
+	if got := evalStr(t, p, `document.querySelector('.walk-risks .risk-chip').textContent`); got != "public-api" {
+		t.Errorf("risk chip = %q, want public-api%s", got, diag())
+	}
+	if n := evalInt(t, p, `document.querySelectorAll('.walk-impact .quiz-ungrounded').length`); n != 1 {
+		t.Errorf("the line past history.go's end must read ⚠, got %d%s", n, diag())
+	}
+
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(
+		`document.querySelector('.walk-impact form:has(input[name="file"][value="history.go"]) button[name="jumpToAnchor"]').click()`, nil)); err != nil {
+		t.Fatalf("click the history.go impact link: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `!document.querySelector('.understand') && !!document.querySelector('.code .line.is-cursor')`, 5*time.Second, "the page closes and the cursor lands", diag)
+	if got := evalStr(t, p, `document.querySelector('.code .line.is-cursor').getAttribute('data-key')`); got != "L3-3" {
+		t.Errorf("the cursor must sit on history.go's line 3 (L3-3), got %q%s", got, diag())
+	}
+	if got := evalStr(t, p, `document.querySelector('.code .line.is-cursor .content').textContent`); !strings.Contains(got, "Old") {
+		t.Errorf("the cursor line must be history.go's func Old, got %q%s", got, diag())
+	}
+}

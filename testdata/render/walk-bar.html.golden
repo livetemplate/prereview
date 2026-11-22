@@ -721,7 +721,7 @@
         <form method="POST"><button type="submit" name="endWalkthrough" class="outline" aria-label="Stop the walkthrough" title="Stop the walkthrough">×</button></form>
       </span>
     </div>
-    <div class="walk-bar-text"><strong class="walk-bar-title">The retry budget</strong><span class="walk-bar-at">app.go L2-L3</span><span class="walk-bar-body">A new field caps the retries.
+    <div class="walk-bar-text"><strong class="walk-bar-title">The retry budget</strong><span class="walk-bar-risks"><span class="ck-pill ck-fail risk-chip">concurrency</span></span><span class="walk-bar-at">app.go L2-L3</span><span class="walk-bar-body">A new field caps the retries.
 Check the default.</span></div>
   </div>
   
@@ -748,7 +748,7 @@ Check the default.</span></div>
        data-path="app.go"
        lvt-fx:scroll="reset-on:data-path"
        lvt-fx:text-select="selectText"
-       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row" data-key="row-L1-1"><div class="step-mark">Step 1: The retry budget</div><div tabindex="0"
+       style="--diff-min-width: calc(20ch + 7ch)"><div class="line-row" data-key="row-L1-1"><div class="step-mark">Step 1: The retry budget <span class="ck-pill ck-fail risk-chip">concurrency</span></div><div tabindex="0"
               lvt-on:click="selectLine"
               lvt-on:keydown="selectLine"
               lvt-key="Enter"
@@ -764,7 +764,7 @@ Check the default.</span></div>
               data-side="old"
               class="line del"
               data-key="L2-0"><span class="gutter"><span class="gutter-mark">- </span>2</span><span class="content chroma" data-line-text>var x = 1</span></div></div>
-<div class="line-row" data-key="row-L0-2"><div class="step-mark">Step 1: The retry budget</div><div tabindex="0"
+<div class="line-row" data-key="row-L0-2"><div class="step-mark">Step 1: The retry budget <span class="ck-pill ck-fail risk-chip">concurrency</span></div><div tabindex="0"
               lvt-on:click="selectLine"
               lvt-on:keydown="selectLine"
               lvt-key="Enter"

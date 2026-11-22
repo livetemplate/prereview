@@ -3,7 +3,6 @@ package review
 import (
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/livetemplate/prereview/csv"
@@ -72,6 +71,27 @@ type WalkStep struct {
 	Title, Body  string
 	Anchors      []WalkAnchor
 	NotExplained bool // the derived last step, not the agent's
+	// Concern is set on the first step of a concern's run, for its heading;
+	// InConcern on every step of the run.
+	Concern   *ConcernHead
+	InConcern bool
+	Risks     []Risk
+	Impact    []WalkImpact
+}
+
+// ConcernHead is a concern's heading on the Walkthrough tab.
+type ConcernHead struct {
+	Title      string
+	Mechanical bool
+	Steps      int // how many steps the run holds
+}
+
+// WalkImpact is an impact anchor ready to render: a jump link, a plain label (a
+// file outside a single-file review), or a warning.
+type WalkImpact struct {
+	WalkAnchor
+	Note     string
+	Linkable bool
 }
 
 // WalkAnchor is a cited place, ready to render as a jump link (or a warning).
@@ -90,11 +110,32 @@ func (s PrereviewState) WalkSteps() []WalkStep {
 	if len(steps) == 0 || !s.ShowUnderstand || s.UnderstandOnQuiz() {
 		return nil
 	}
+	concerns := map[string]Concern{}
+	for _, c := range s.CurrentExplanation().Concerns {
+		concerns[c.ID] = c
+	}
 	out := make([]WalkStep, len(steps))
+	var run *ConcernHead // the heading of the concern run in progress
 	for i, st := range steps {
-		ws := WalkStep{Num: i + 1, ID: st.ID, Title: st.Title, Body: st.Body, NotExplained: st.Derived}
+		ws := WalkStep{Num: i + 1, ID: st.ID, Title: st.Title, Body: st.Body, NotExplained: st.Derived,
+			Risks: st.Risks, InConcern: st.Concern != ""}
 		for _, a := range st.Anchors {
 			ws.Anchors = append(ws.Anchors, walkAnchor(a))
+		}
+		for _, a := range st.Impact {
+			w := walkAnchor(a.anchor())
+			w.Ungrounded = a.Ungrounded()
+			ws.Impact = append(ws.Impact, WalkImpact{WalkAnchor: w, Note: a.Note, Linkable: !w.Ungrounded && s.inScope(a.File)})
+		}
+		// Validation keeps a concern's steps together: the heading opens where
+		// the concern changes, and counts its run as the steps go by.
+		if c, ok := concerns[st.Concern]; ok {
+			if i > 0 && steps[i-1].Concern == st.Concern {
+				run.Steps++
+			} else {
+				run = &ConcernHead{Title: c.Title, Mechanical: c.Mechanical, Steps: 1}
+				ws.Concern = run
+			}
 		}
 		out[i] = ws
 	}
@@ -175,6 +216,7 @@ func (s PrereviewState) walkPos() (steps []Step, stops []walkStop, i int, ok boo
 type WalkBarView struct {
 	Num, Total  int // the step, of how many
 	Title, Body string
+	Risks       []Risk
 	Anchor      string // the cited place this stop shows, "" when none resolves
 	HasPrev     bool
 	HasNext     bool
@@ -187,7 +229,7 @@ func (s PrereviewState) WalkBar() *WalkBarView {
 		return nil
 	}
 	at, st := stops[i], steps[stops[i].step]
-	v := &WalkBarView{Num: at.step + 1, Total: len(steps), Title: st.Title, Body: st.Body,
+	v := &WalkBarView{Num: at.step + 1, Total: len(steps), Title: st.Title, Body: st.Body, Risks: st.Risks,
 		HasPrev: i > 0, HasNext: i < len(stops)-1}
 	if at.anchor >= 0 {
 		v.Anchor = st.Anchors[at.anchor].Label()
@@ -195,10 +237,17 @@ func (s PrereviewState) WalkBar() *WalkBarView {
 	return v
 }
 
-// StepMarkLines labels the open file's rows that a step starts at, keyed like
+// StepMark is the marker above a row a step starts at: its label and the risk
+// kinds of the steps it names.
+type StepMark struct {
+	Label string
+	Risks []string
+}
+
+// StepMarkLines marks the open file's rows that a step starts at, keyed like
 // the row ("L<old>-<new>"): "Step 2: Retry loop", several joined by " · ". The
 // marker hangs on the first line of each grounded line anchor.
-func (s PrereviewState) StepMarkLines() map[string]string {
+func (s PrereviewState) StepMarkLines() map[string]*StepMark {
 	steps := s.walkSteps()
 	if len(steps) == 0 || s.CurrentDiff == nil {
 		return nil
@@ -225,22 +274,29 @@ func (s PrereviewState) StepMarkLines() map[string]string {
 	if len(want) == 0 {
 		return nil
 	}
-	out := map[string]string{}
+	out := map[string]*StepMark{}
 	for _, l := range s.CurrentDiff.Lines {
 		for _, k := range []at{{"new", l.NewNum}, {"old", l.OldNum}} {
 			idx := want[k]
 			if len(idx) == 0 || k.line == 0 {
 				continue
 			}
-			labels := make([]string, len(idx))
-			for n, i := range idx {
-				labels[n] = fmt.Sprintf("Step %d: %s", i+1, steps[i].Title)
-			}
 			row := lineCursorKey(l)
-			if prev := out[row]; prev != "" {
-				out[row] = prev + " · " + strings.Join(labels, " · ")
-			} else {
-				out[row] = strings.Join(labels, " · ")
+			m := out[row]
+			if m == nil {
+				m = &StepMark{}
+				out[row] = m
+			}
+			for _, i := range idx {
+				if m.Label != "" {
+					m.Label += " · "
+				}
+				m.Label += fmt.Sprintf("Step %d: %s", i+1, steps[i].Title)
+				for _, r := range steps[i].Risks {
+					if !slices.Contains(m.Risks, r.Kind) {
+						m.Risks = append(m.Risks, r.Kind)
+					}
+				}
 			}
 			delete(want, k) // first row with that number on that side, as findDiffLine
 		}

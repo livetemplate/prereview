@@ -30,14 +30,14 @@
   <form method="POST" class="walk-start"><button type="submit" name="startWalkthrough" title="Read the change step by step, file to file">Start the walkthrough</button></form>
   <ol class="walk-steps">
     {{range $.WalkSteps}}
-    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}" data-key="step-{{.ID}}">
+    <li class="walk-step{{if .NotExplained}} walk-step-unexplained{{end}}{{if .InConcern}} walk-in-concern{{end}}" data-key="step-{{.ID}}">{{if .Concern}}<div class="walk-concern"><span class="walk-concern-title">{{.Concern.Title}}</span> · {{.Concern.Steps}} step{{if ne .Concern.Steps 1}}s{{end}}{{if .Concern.Mechanical}} · mechanical{{end}}</div>{{end}}
       <div class="walk-title"><span class="ck-pill walk-num">{{.Num}}</span> <span class="walk-title-text">{{.Title}}</span><form method="POST" class="walk-from"><input type="hidden" name="step" value="{{.Num}}"><button type="submit" name="startWalkthrough" class="outline" title="Walk from this step">Walk from here</button></form></div>
-      {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}
+      {{if .Body}}<p class="walk-body">{{.Body}}</p>{{end}}{{if .Risks}}<ul class="walk-risks">{{range .Risks}}<li><span class="ck-pill ck-fail risk-chip">{{.Kind}}</span>{{if .Note}} {{.Note}}{{end}}</li>{{end}}</ul>{{end}}
       <ul class="walk-anchors">
         {{range .Anchors}}
-        <li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, but the review has no such line — treat this step with suspicion">⚠ {{.Label}}, not in this review</span>{{else}}<form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this step is about">{{.Label}}</button></form>{{end}}</li>
+        <li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, but the review has no such line — treat this step with suspicion">⚠ {{.Label}}, not in this review</span>{{else}}{{template "anchorJump" .}}{{end}}</li>
         {{end}}
-      </ul>
+      </ul>{{if .Impact}}<div class="walk-impact"><strong>Affects</strong><ul>{{range .Impact}}<li>{{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough says the change affects {{.Label}}, but that line isn't in the files — treat it with suspicion">⚠ {{.Label}}, not found</span>{{else if .Linkable}}{{template "anchorJump" .}}{{else}}<span class="walk-impact-label" title="Outside this review">{{.Label}}</span>{{end}}{{if .Note}} <span class="walk-impact-note">— {{.Note}}</span>{{end}}</li>{{end}}</ul></div>{{end}}
     </li>
     {{end}}
   </ol>
