@@ -3652,6 +3652,9 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .walk-impact-note { color: var(--text-muted); }
 .code .step-mark .risk-chip { vertical-align: 1px; }
 
+/* #115 B3: a file marked viewed that changed since. */
+.file-label .viewed-changed { display: block; font-size: 0.7rem; font-weight: 500; color: var(--mark); white-space: normal; }
+
 /* #115 B2: a moved block's label above its first row, linking to the other end,
    and a bar in the gutter on every moved row (left indicators go on the gutter:
    the sticky gutter would hide one on the row). */

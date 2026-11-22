@@ -530,6 +530,10 @@ func renderFixtures() []renderFixture {
 		{File: "app.go", Side: "new", From: 2, To: 2, Other: gitdiff.MoveEnd{File: "util.go", Line: 40}},
 	}
 
+	// #115 B3: a file marked viewed that changed since: the drawer says so.
+	changedSinceViewed := goBase()
+	changedSinceViewed.ChangedSinceViewed = map[string]bool{"app.go": true}
+
 	// external (live-site) mode
 	external := review.PrereviewState{
 		RepoPath:     "/repo",
@@ -962,6 +966,7 @@ func renderFixtures() []renderFixture {
 		{"understand-concerns", understandConcerns},
 		{"understand-diagrams", understandDiagrams},
 		{"moved-code", movedCode},
+		{"drawer-changed-since-viewed", changedSinceViewed},
 		{"prompts-picker", promptsPicker},
 		{"shortcuts-composer", shortcuts},
 		{"ripple", ripple},

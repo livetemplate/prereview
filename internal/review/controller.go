@@ -476,6 +476,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// loaded here on every connect (like applyLLMStatus). Applied before the
 	// external short-circuit so themed external-mode sessions pick up the scheme.
 	c.applyUIPrefs(&state)
+	c.applyViewed(&state)
 
 	// Overlay the agent's per-comment "worked on" markers (.prereview/
 	// processed.jsonl) onto the just-loaded comments — before the external

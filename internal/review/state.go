@@ -408,10 +408,12 @@ type PrereviewState struct {
 	// LastDeletedComment (clearUndo) and by closing the screen.
 	LastResolvedIDs []string `json:"last_resolved_ids"`
 
-	// ViewedFiles is a per-session set of files the user has marked as
-	// "reviewed" (GitHub PR convention). Persisted so the state survives
-	// browser refresh; not written to CSV (this is UX state, not a comment).
-	ViewedFiles map[string]bool `json:"viewed_files" lvt:"persist"`
+	// ViewedFiles are the files marked viewed whose content still matches what
+	// was viewed; ChangedSinceViewed the marked ones that changed since (#115
+	// B3, GitHub's convention). Derived from .prereview/viewed.json on Mount
+	// (applyViewed), so a mark survives a relaunch.
+	ViewedFiles        map[string]bool `json:"viewed_files"`
+	ChangedSinceViewed map[string]bool `json:"changed_since_viewed"`
 
 	// Read progress (#128), keyed by file path. ReadThrough is the furthest
 	// new-side line number the reviewer has scrolled past (a high-water mark →

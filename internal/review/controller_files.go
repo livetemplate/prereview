@@ -6,6 +6,7 @@ import (
 	"github.com/livetemplate/prereview/gitdiff"
 	"log/slog"
 	"strings"
+	"time"
 )
 
 // SetBase changes the comparison ref. The picker is a dropdown of refs
@@ -186,21 +187,25 @@ func (c *PrereviewController) CloseFiles(state PrereviewState, ctx *livetemplate
 	return state, nil
 }
 
-// ToggleViewed flips the "reviewed" flag for the file passed via the hidden
-// `path` input. Bound to a per-file checkbox/button in the drawer.
+// ToggleViewed marks the file passed via the hidden `path` input viewed, with
+// its content now, or clears the mark (#115 B3). A file that changed since it
+// was viewed is marked again with its new content. Bound to the drawer's
+// per-file button.
 func (c *PrereviewController) ToggleViewed(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	path := ctx.GetString("path")
 	if path == "" {
 		return state, fmt.Errorf("toggleViewed: missing path")
 	}
-	if state.ViewedFiles == nil {
-		state.ViewedFiles = map[string]bool{}
-	}
+	marks := loadFileMarks(c.viewedPath())
 	if state.ViewedFiles[path] {
-		delete(state.ViewedFiles, path)
-	} else {
-		state.ViewedFiles[path] = true
+		delete(marks, path)
+	} else if sha := c.fileSHA(path); sha != "" {
+		marks[path] = FileMark{SHA: sha, At: time.Now().UTC()}
 	}
+	if err := saveFileMarks(c.viewedPath(), marks); err != nil {
+		return state, fmt.Errorf("toggleViewed: %w", err)
+	}
+	c.applyViewed(&state)
 	return state, nil
 }
 

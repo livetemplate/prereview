@@ -101,3 +101,36 @@ func TestE2E_MovedCode(t *testing.T) {
 		t.Errorf("a.go's label = %q, want %q%s", got, "Moved to b.go L4", diag())
 	}
 }
+
+// TestE2E_ChangedSinceViewed (#115 B3): a file marked viewed shows as changed
+// since you viewed it once it is edited on disk and the review refreshes.
+func TestE2E_ChangedSinceViewed(t *testing.T) {
+	t.Setenv("PREREVIEW_EDIT_SETTLE", "1s")
+	repo := setupFixtureRepo(t)
+	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("edited.go")
+	row := `.file-row:has(input[name="path"][value="edited.go"])`
+	ctx, cancel := within(p, 10*time.Second)
+	err := chromedp.Run(ctx, chromedp.Click(row+` button[name="toggleViewed"]`, chromedp.ByQuery))
+	cancel()
+	if err != nil {
+		t.Fatalf("mark edited.go viewed: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `!!document.querySelector('`+row+`.is-viewed')`, 5*time.Second, "edited.go reads viewed", diag)
+
+	mustWrite(t, repo, "edited.go", "package edited\n\nfunc Hello() string {\n\treturn \"hello again\"\n}\n")
+	waitJSTrueDiag(t, p.ctx, refreshBtnVisibleJS, 15*time.Second, "the refresh nudge", diag)
+	ctx, cancel = within(p, 10*time.Second)
+	err = chromedp.Run(ctx, chromedp.Click(`.refresh-prompt button[name="refreshDiff"]`, chromedp.ByQuery))
+	cancel()
+	if err != nil {
+		t.Fatalf("refresh: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `(document.querySelector('`+row+` .viewed-changed') || {}).textContent === 'changed since you viewed it'`, 5*time.Second,
+		"the drawer says edited.go changed since you viewed it", diag)
+	if n := evalInt(t, p, `document.querySelectorAll('`+row+`.is-viewed').length`); n != 0 {
+		t.Errorf("a changed file must not read viewed%s", diag())
+	}
+}

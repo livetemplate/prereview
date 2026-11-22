@@ -806,3 +806,47 @@ func TestGroundQuizzesAcrossFiles(t *testing.T) {
 		}
 	}
 }
+
+// TestViewedByContent (#115 B3): a viewed mark holds while the file's content
+// matches what was viewed; an edit makes it "changed since you viewed it"; undoing
+// the edit makes it viewed again; the mark survives a relaunch; and the toggle
+// clears it.
+func TestViewedByContent(t *testing.T) {
+	c, state := explainFixture(t)
+	toggle := func() {
+		t.Helper()
+		var err error
+		if state, err = c.ToggleViewed(state, checksCtx("toggleViewed", map[string]interface{}{"path": "b.go"})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	marks := func() string { return fmt.Sprintf("viewed=%v changed=%v", state.ViewedFiles["b.go"], state.ChangedSinceViewed["b.go"]) }
+	toggle()
+	if got := marks(); got != "viewed=true changed=false" {
+		t.Fatalf("after marking: %s", got)
+	}
+	orig, err := os.ReadFile(filepath.Join(c.RepoPath, "b.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeAt(t, c.RepoPath, "b.go", string(orig)+"t\n")
+	c.applyViewed(&state)
+	if got := marks(); got != "viewed=false changed=true" {
+		t.Errorf("after an edit: %s", got)
+	}
+	writeAt(t, c.RepoPath, "b.go", string(orig))
+	c.applyViewed(&state)
+	if got := marks(); got != "viewed=true changed=false" {
+		t.Errorf("after undoing the edit: %s", got)
+	}
+	relaunched := &PrereviewController{RepoPath: c.RepoPath, CSVPath: c.CSVPath}
+	fresh := PrereviewState{}
+	relaunched.applyViewed(&fresh)
+	if !fresh.ViewedFiles["b.go"] {
+		t.Errorf("a relaunch lost the mark: %+v", fresh.ViewedFiles)
+	}
+	toggle()
+	if got := marks(); got != "viewed=false changed=false" {
+		t.Errorf("after clearing: %s", got)
+	}
+}
