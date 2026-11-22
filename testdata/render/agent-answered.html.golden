@@ -1121,7 +1121,7 @@
           type="button"
           command="close"
           commandfor="confirm-end-session"
-          class="secondary outline"
+          class="secondary"
         >Cancel</button>
         <button
           type="submit"

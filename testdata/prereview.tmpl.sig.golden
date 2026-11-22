@@ -346,7 +346,7 @@
   <p class="end-warn end-warn-pick" role="alert"><small><strong>{{.AwaitingPickCount}} fork{{if ne .AwaitingPickCount 1}}s{{end}} awaiting your pick.</strong> The agent offered alternatives and is waiting for you to accept one. Ending now leaves {{if eq .AwaitingPickCount 1}}that comment{{else}}those comments{{end}} unaddressed.</small></p>{{end}}<footer>
     <form method="POST">
       <fieldset role="group">
-        <button type="button" command="close" commandfor="confirm-end-session" class="secondary outline">Cancel</button>
+        <button type="button" command="close" commandfor="confirm-end-session" class="secondary">Cancel</button>
         <button type="submit" name="endSession" class="secondary">End session</button><button type="submit" name="approveAndEnd" class="contrast">Approve and end</button>
       </fieldset>
     </form>

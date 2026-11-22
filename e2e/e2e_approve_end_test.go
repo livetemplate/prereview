@@ -47,6 +47,31 @@ func TestE2E_ApproveAndEnd(t *testing.T) {
 		t.Errorf("on a phone the buttons should stack Approve, End, Cancel within the screen (tops a,e,c, left, right, width = %s)%s", got, diag())
 	}
 
+	// Every button's label is readable on its own background, in every scheme and
+	// mode (a filled .secondary rendered End session white on the pale surface).
+	for _, look := range []string{"solarized light", "solarized dark", "gruvbox light", "gruvbox dark", "catppuccin light", "catppuccin dark"} {
+		scheme, mode, _ := strings.Cut(look, " ")
+		if err := chromedp.Run(ctx,
+			chromedp.Evaluate(`(() => { const r = document.querySelector('.theme-root'); r.dataset.scheme = `+"`"+scheme+"`"+`; r.dataset.mode = `+"`"+mode+"`"+`; })()`, nil),
+			chromedp.Sleep(350*time.Millisecond), // the 100–140ms colour transitions
+		); err != nil {
+			t.Fatalf("switch to %s: %v", look, err)
+		}
+		if low := evalStr(t, p, `(() => {
+	  const lum = (c) => { const m = c.match(/[\d.]+/g); let [r,g,b] = m.map(Number);
+	    if (/^color\(/.test(c)) { r*=255; g*=255; b*=255; }
+	    const f = v => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
+	    return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b); };
+	  const opaque = c => { const m = c.match(/[\d.]+/g); return m && (m.length<4 || Number(m[3])>0.5); };
+	  const bg = el => { for (let n = el; n; n = n.parentElement) { const b = getComputedStyle(n).backgroundColor; if (opaque(b)) return b; } return 'rgb(255,255,255)'; };
+	  return [...document.querySelectorAll('#confirm-end-session footer button')].map(b => {
+	    const a = lum(getComputedStyle(b).color), c = lum(bg(b));
+	    const ratio = (Math.max(a,c)+0.05)/(Math.min(a,c)+0.05);
+	    return ratio < 4.5 ? b.textContent.trim() + ' ' + ratio.toFixed(2) : '' }).filter(Boolean).join('; ') })()`); low != "" {
+			t.Errorf("%s: dialog buttons below 4.5:1 contrast: %s%s", look, low, diag())
+		}
+	}
+
 	if err := chromedp.Run(ctx, chromedp.Click(`#confirm-end-session button[name='approveAndEnd']`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("tap Approve and end: %v%s", err, diag())
 	}
