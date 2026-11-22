@@ -116,6 +116,23 @@ func readJSONL(path string, each func([]byte)) {
 	}
 }
 
+// keepLastWrite dedupes an append-only file's records by id: the last write of
+// each id wins and takes its place, so a revised record (an old id re-appended)
+// is the newest.
+func keepLastWrite[T any](all []T, id func(T) string) []T {
+	last := make(map[string]int, len(all))
+	for i, v := range all {
+		last[id(v)] = i
+	}
+	var out []T
+	for i, v := range all {
+		if last[id(v)] == i {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // ValidVerdict reports one of the only verdicts: binary, with a critique (no scores).
 func ValidVerdict(v string) bool { return v == checks.StatusPass || v == checks.StatusFail }
 

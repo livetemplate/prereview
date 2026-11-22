@@ -87,38 +87,16 @@ func (s PrereviewState) navItems() []NavItem {
 			}
 		}
 	}
-	for _, q := range s.latestQuizzes() {
-		for i, qu := range q.Questions {
-			if _, answered := s.QuizAnswers[answerKey(q.ID, qu.ID)]; !answered {
-				out = append(out, NavItem{File: q.File, Side: qu.Side, Pos: NavPos{Body: qu.LineGrounded(), Line: qu.FromLine, Kind: navQuiz, Seq: i, ID: qu.ID}})
-			}
+	for _, it := range s.allQuizItems() {
+		if !it.Answered {
+			out = append(out, NavItem{File: it.File, Side: it.Side, Pos: NavPos{Body: it.LineGrounded(), Line: it.FromLine, Kind: navQuiz, Seq: it.Num, ID: it.ID}})
 		}
 	}
-	rank := map[string]int{}
-	for i, f := range s.scopedFiles() {
-		rank[f.Path] = i
-	}
+	rankOf := s.fileRank()
 	for i := range out {
-		r, ok := rank[out[i].File]
-		if !ok {
-			r = len(rank)
-		}
-		out[i].Pos.File = r
+		out[i].Pos.File = rankOf(out[i].File)
 	}
 	slices.SortFunc(out, func(a, b NavItem) int { return a.Pos.compare(b.Pos) })
-	return out
-}
-
-// latestQuizzes is the quiz each in-scope file shows (quizFor), one per file.
-func (s PrereviewState) latestQuizzes() []Quiz {
-	seen := map[string]bool{}
-	var out []Quiz
-	for _, q := range s.Quizzes {
-		if !seen[q.File] && s.inScope(q.File) {
-			seen[q.File] = true
-			out = append(out, *s.quizFor(q.File))
-		}
-	}
 	return out
 }
 
@@ -224,5 +202,20 @@ func (s PrereviewState) fileCovered() bool {
 func (s *PrereviewState) noteNav() {
 	if !s.NavSeen && len(s.navItems()) > 0 {
 		s.NavSeen = true
+	}
+}
+
+// fileRank is each file's place in the drawer, for ordering across files: files
+// the drawer doesn't list sort after it.
+func (s PrereviewState) fileRank() func(string) int {
+	rank := map[string]int{}
+	for i, f := range s.scopedFiles() {
+		rank[f.Path] = i
+	}
+	return func(path string) int {
+		if r, ok := rank[path]; ok {
+			return r
+		}
+		return len(rank)
 	}
 }

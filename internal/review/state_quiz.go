@@ -3,6 +3,8 @@ package review
 import (
 	"fmt"
 	"sort"
+
+	"github.com/livetemplate/prereview/csv"
 )
 
 // state_quiz.go holds the quiz view's read helpers.
@@ -38,70 +40,72 @@ type QuizItem struct {
 	Settled bool
 }
 
-// CurrentQuiz returns the quiz for the selected file, or nil. The agent can
-// revise a quiz by re-appending its id (the loader keeps the last write), and can
-// also submit a genuinely new one for the same file — in which case the newest
-// wins, since that is the one the reviewer just asked for.
-func (s PrereviewState) CurrentQuiz() *Quiz {
-	if s.SelectedFile == "" {
-		return nil
+// HasQuiz reports the review has quiz questions to show (#115 A′5: the quiz is
+// on the whole change, not the open file) — the gate for offering it at all.
+func (s PrereviewState) HasQuiz() bool {
+	for _, q := range s.Quizzes {
+		for _, qu := range q.Questions {
+			if s.inScope(q.fileOf(qu)) {
+				return true
+			}
+		}
 	}
-	return s.quizFor(s.SelectedFile)
+	return false
 }
 
-// quizFor is the quiz a file shows: the last one recorded for it, or nil.
-func (s PrereviewState) quizFor(file string) *Quiz {
-	for i := len(s.Quizzes) - 1; i >= 0; i-- {
-		if s.Quizzes[i].File == file {
-			return &s.Quizzes[i]
+// allQuizItems is every question the review shows, across files, with the
+// reviewer's progress folded in. A file shows the questions of the LAST quiz in
+// quiz.jsonl that asks about it (a re-appended quiz counts as the newest), so a
+// quiz on the whole change and an older per-file one never both show for a file.
+// Ordered and numbered like the drawer: by file, then the file head, then line.
+// It is the one list the Quiz tab, the inline cards, the stepper and Retake read.
+// The conversation is attached only by the views that render it (withThreads).
+func (s PrereviewState) allQuizItems() []QuizItem {
+	owner := map[string]int{} // file -> index of the quiz whose questions it shows
+	for i, q := range s.Quizzes {
+		for _, qu := range q.Questions {
+			if f := q.fileOf(qu); s.inScope(f) {
+				owner[f] = i
+			}
 		}
 	}
-	return nil
-}
-
-// HasQuiz reports whether the selected file has a quiz to show — the gate for
-// offering the quiz entry in the menus at all.
-func (s PrereviewState) HasQuiz() bool { return s.CurrentQuiz() != nil }
-
-// QuizItems is the current quiz's questions with the reviewer's progress folded
-// in. Empty when there is no quiz, so the template can range over it directly.
-func (s PrereviewState) QuizItems() []QuizItem {
-	q := s.CurrentQuiz()
-	if q == nil {
+	if len(owner) == 0 {
 		return nil
 	}
-	threads := s.Threads()
-	out := make([]QuizItem, 0, len(q.Questions))
-	for _, qu := range q.Questions {
-		tid := QuizThreadID(q.ID, qu.ID)
-		item := QuizItem{Question: qu, QuizID: q.ID, ThreadID: tid, Thread: threads[tid]}
-		if s.ReplyingID == tid {
-			item.Replying = true
-			item.ReplyDraft = s.ReplyDraft
+	rankOf := s.fileRank()
+	var out []QuizItem
+	for i, q := range s.Quizzes {
+		for _, qu := range q.Questions {
+			f := q.fileOf(qu)
+			if !s.inScope(f) || owner[f] != i {
+				continue
+			}
+			qu.File = f
+			item := QuizItem{Question: qu, QuizID: q.ID, ThreadID: QuizThreadID(q.ID, qu.ID)}
+			if a, ok := s.QuizAnswers[answerKey(q.ID, qu.ID)]; ok {
+				item.Answered = true
+				item.Choice = a.Choice
+				item.Correct = a.Choice == qu.Answer
+				item.Settled = !s.QuizJustAnswered[answerKey(q.ID, qu.ID)]
+			}
+			out = append(out, item)
 		}
-		if a, ok := s.QuizAnswers[answerKey(q.ID, qu.ID)]; ok {
-			item.Answered = true
-			item.Choice = a.Choice
-			item.Correct = a.Choice == qu.Answer
-			item.Settled = !s.QuizJustAnswered[answerKey(q.ID, qu.ID)]
-		}
-		out = append(out, item)
 	}
-	// Number and order the items by DOCUMENT position — head questions (which
-	// render at the file head, above the diff) first, then line-anchored ones by
-	// line — NOT by the agent's JSON order. So the navigator badges read 1..N
-	// top-to-bottom: at the bottom of the page the highlighted badge is the last
-	// number, which is what a reader expects. Numbering by JSON order made the
-	// badge at the bottom show whatever index the agent happened to give it.
+	// Number by DOCUMENT position, not the agent's JSON order, so the navigator
+	// badges read 1..N top to bottom: file by file, head questions (which render
+	// above the diff) first, then line-anchored ones by line.
 	sort.SliceStable(out, func(i, j int) bool {
-		hi, hj := !out[i].LineGrounded(), !out[j].LineGrounded()
-		if hi != hj {
-			return hi // head questions sort before line-anchored ones
+		a, b := out[i], out[j]
+		if ra, rb := rankOf(a.File), rankOf(b.File); ra != rb {
+			return ra < rb
 		}
-		if hi {
-			return false // both at the head — keep their existing (stable) order
+		if a.File != b.File {
+			return a.File < b.File
 		}
-		return out[i].FromLine < out[j].FromLine
+		if ha, hb := !a.LineGrounded(), !b.LineGrounded(); ha != hb || ha {
+			return ha && !hb // head questions first; two head questions keep their order
+		}
+		return a.FromLine < b.FromLine
 	})
 	for i := range out {
 		out[i].Num = i + 1
@@ -109,48 +113,106 @@ func (s PrereviewState) QuizItems() []QuizItem {
 	return out
 }
 
-// QuizQuestionCount is the number of questions in the current quiz.
-func (s PrereviewState) QuizQuestionCount() int {
-	if q := s.CurrentQuiz(); q != nil {
-		return len(q.Questions)
+// withThreads attaches each question's conversation, and the open reply form,
+// for a view that renders the cards.
+func (s PrereviewState) withThreads(items []QuizItem) []QuizItem {
+	if len(items) == 0 {
+		return items
 	}
-	return 0
+	threads := s.Threads()
+	for i := range items {
+		items[i].Thread = threads[items[i].ThreadID]
+		if s.ReplyingID == items[i].ThreadID {
+			items[i].Replying, items[i].ReplyDraft = true, s.ReplyDraft
+		}
+	}
+	return items
 }
 
-// QuizAnsweredCount is how many of them have been answered.
+// QuizItems is the open file's questions: the ones its diff renders inline.
+func (s PrereviewState) QuizItems() []QuizItem {
+	if s.SelectedFile == "" {
+		return nil
+	}
+	var out []QuizItem
+	for _, it := range s.allQuizItems() {
+		if it.File == s.SelectedFile {
+			out = append(out, it)
+		}
+	}
+	return s.withThreads(out)
+}
+
+// QuizFileGroup is one file's questions on the Quiz tab.
+type QuizFileGroup struct {
+	File  string
+	Items []QuizItem
+}
+
+// QuizFiles is the Quiz tab's questions, grouped by file in drawer order. Only
+// while the tab is on screen: livetemplate computes it on every render.
+func (s PrereviewState) QuizFiles() []QuizFileGroup {
+	if !s.ShowUnderstand || s.UnderstandTabOn() != understandTabQuiz {
+		return nil
+	}
+	var out []QuizFileGroup
+	for _, it := range s.withThreads(s.allQuizItems()) {
+		if n := len(out); n == 0 || out[n-1].File != it.File {
+			out = append(out, QuizFileGroup{File: it.File})
+		}
+		out[len(out)-1].Items = append(out[len(out)-1].Items, it)
+	}
+	return out
+}
+
+// quizTally counts the questions the review shows (allQuizItems' rule) and the
+// reviewer's answers, in one pass with nothing built or sorted: the score shows
+// in menus on every render.
+func (s PrereviewState) quizTally() (total, answered, correct int) {
+	owner := map[string]int{}
+	for i, q := range s.Quizzes {
+		for _, qu := range q.Questions {
+			if f := q.fileOf(qu); s.inScope(f) {
+				owner[f] = i
+			}
+		}
+	}
+	for i, q := range s.Quizzes {
+		for _, qu := range q.Questions {
+			if f := q.fileOf(qu); !s.inScope(f) || owner[f] != i {
+				continue
+			}
+			total++
+			if a, ok := s.QuizAnswers[answerKey(q.ID, qu.ID)]; ok {
+				answered++
+				if a.Choice == qu.Answer {
+					correct++
+				}
+			}
+		}
+	}
+	return total, answered, correct
+}
+
+// QuizAnsweredCount is how many questions have been answered.
 func (s PrereviewState) QuizAnsweredCount() int {
-	n := 0
-	for _, it := range s.QuizItems() {
-		if it.Answered {
-			n++
-		}
-	}
-	return n
-}
-
-// QuizCorrectCount is how many were answered correctly.
-func (s PrereviewState) QuizCorrectCount() int {
-	n := 0
-	for _, it := range s.QuizItems() {
-		if it.Correct {
-			n++
-		}
-	}
-	return n
+	_, answered, _ := s.quizTally()
+	return answered
 }
 
 // QuizComplete reports that every question has been answered.
 func (s PrereviewState) QuizComplete() bool {
-	n := s.QuizQuestionCount()
-	return n > 0 && s.QuizAnsweredCount() == n
+	total, answered, _ := s.quizTally()
+	return total > 0 && answered == total
 }
 
 // QuizScoreLabel renders the running score for the quiz header, e.g. "2/5".
 func (s PrereviewState) QuizScoreLabel() string {
-	if s.QuizQuestionCount() == 0 {
+	total, _, correct := s.quizTally()
+	if total == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d/%d", s.QuizCorrectCount(), s.QuizQuestionCount())
+	return fmt.Sprintf("%d/%d", correct, total)
 }
 
 // AnchorLabel is the badge for a question's line reference: "L42", "L42-L48", or
@@ -166,7 +228,7 @@ func (q Question) AnchorLabel() string {
 }
 
 // Jumpable reports whether this question offers a "jump to the code" link — only
-// when it both claims an anchor AND that anchor resolved in the current diff.
+// when it both claims an anchor AND that anchor resolved in its file.
 // An ungrounded question must never offer a jump: the link would land on code
 // that has nothing to do with the question.
 func (q Question) Jumpable() bool {
@@ -180,22 +242,22 @@ func (q Question) Jumpable() bool {
 // the whole point — an accept records that the reviewer clicked, and this is the
 // only signal that says whether they also understood.
 //
-// Unlike the view helpers it walks every quiz, not just the selected file's, since
-// the snapshot is not scoped to whatever file happens to be open — but it IS scoped
+// It reports every quiz, replaced or not (an older quiz's answers still count),
+// since the snapshot is not scoped to whatever file happens to be open — but it IS scoped
 // to the review (inScope), the same as scopedComments and scopedSuggestions. Without
 // that, a single-file review sharing a pre-#199 store reported the sibling file's
 // quizzes as this file's comprehension record.
 func (s PrereviewState) QuizResults() []StreamQuiz {
-	if len(s.Quizzes) == 0 {
-		return nil
-	}
-	out := make([]StreamQuiz, 0, len(s.Quizzes))
+	var out []StreamQuiz
 	for _, q := range s.Quizzes {
-		if !s.inScope(q.File) {
-			continue
-		}
-		r := StreamQuiz{File: q.File, QuizID: q.ID, Total: len(q.Questions)}
+		// File is "" for a quiz on the whole change; Total and Score count only the
+		// questions in the review's scope.
+		r := StreamQuiz{File: q.File, QuizID: q.ID}
 		for _, qu := range q.Questions {
+			if !s.inScope(q.fileOf(qu)) {
+				continue
+			}
+			r.Total++
 			if a, ok := s.QuizAnswers[answerKey(q.ID, qu.ID)]; ok {
 				r.Taken = true
 				if a.Choice == qu.Answer {
@@ -203,19 +265,26 @@ func (s PrereviewState) QuizResults() []StreamQuiz {
 				}
 			}
 		}
-		out = append(out, r)
+		if r.Total > 0 {
+			out = append(out, r)
+		}
 	}
 	return out
 }
 
-// QuizPending reports that a "Quiz me" request for the selected file is awaiting
-// an answer, so the control shows a disabled "Quiz requested…" rather than
-// inviting a second tap that would queue a duplicate.
+// QuizPending: a quiz request is still open in the queue and no quiz has arrived
+// since it was sent, so the control reads "Quiz requested…" instead of inviting a
+// second tap. Derived from the request row, as ExplainPending is.
 func (s PrereviewState) QuizPending() bool {
-	return s.QuizRequestedFile != "" && s.QuizRequestedFile == s.SelectedFile && !s.HasQuiz()
+	asked := s.openRequest(csv.RequestQuiz, "")
+	if asked.IsZero() {
+		return false
+	}
+	n := len(s.Quizzes)
+	return n == 0 || !answeredSince(s.Quizzes[n-1].CreatedAt, asked)
 }
 
-// QuizByEndLine groups the current quiz's LINE-anchored questions by the line
+// QuizByEndLine groups the open file's LINE-anchored questions by the line
 // they end on, so the diff view can render each one inline right under the code
 // it asks about — the same shape CommentsByEndLine and SuggestionsByEndLine use.
 //

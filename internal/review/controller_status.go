@@ -198,9 +198,15 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// ...and on an applied.jsonl change (#159): reload the applied set so an accepted
 	// suggestion flips to "applied" live.
 	state.Applied = loadAppliedSet(c.CSVPath)
-	// ...and on a quiz.jsonl change (#191): reload the quizzes and re-ground them
-	// against the live diff, so a freshly generated quiz appears with no reload.
-	c.applyQuiz(&state)
+	// ...and on a quiz.jsonl change (#191): reload and ground the quizzes, so a
+	// freshly generated quiz appears with no reload. Gated like the walkthrough:
+	// grounding builds the change index. Answers reload every time, so one given
+	// in another tab shows here.
+	if statusFingerprint(c.quizPath()) != state.QuizSeen {
+		c.applyQuiz(&state)
+	} else {
+		state.QuizAnswers = loadQuizAnswers(c.quizAnswersPath())
+	}
 	// ...and on an explain.jsonl change (#115): reload the walkthrough and ground
 	// it. Gated like judgments below: the fan-out fires for every agent signal.
 	// (Edits to the reviewed files reach it through RefreshDiff → Mount.)

@@ -68,19 +68,22 @@
 
 {{define "explainButton"}}{{if $.ExplainPending}}<span class="request-pending" title="The request is queued — the agent will answer shortly">Walkthrough requested…</span>{{else}}<form method="POST" style="margin:0"><button type="submit" name="requestExplain" class="outline" title="Ask the agent to walk you through the whole change">{{if $.HasExplanation}}Explain again{{else}}Explain this change{{end}}</button></form>{{end}}{{end}}
 
-{{/* The quiz tab: the open file's quiz (#191), and one button per quiz prompt to
-     ask for one. */}}
+{{/* The quiz tab: the quiz on the whole change (#191, #115 A′5), grouped by file,
+     and one button per quiz prompt to ask for one. */}}
 {{define "quizPanel" -}}
   {{if $.HasQuiz}}
-  <p class="quiz-sub"><small>on <code>{{$.SelectedFile}}</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
+  <p class="quiz-sub"><small>on the whole change — every question also sits inline next to the code it asks about; this is the overview</small></p>
+  {{range $.QuizFiles}}
+  <h4 class="quiz-file"><code>{{.File}}</code></h4>
   <ol class="quiz-list">
-    {{range $.QuizItems}}
+    {{range .Items}}
+    {{- /* .ID is unique here: a file's questions all come from one quiz. */}}
     <li class="quiz-q{{if .Answered}} is-answered{{end}}" data-key="{{.ID}}">
       <div class="quiz-q-head">
         <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>
         {{if .Jumpable}}
         <form method="POST" style="margin:0">
-          <input type="hidden" name="file" value="{{$.SelectedFile}}">
+          <input type="hidden" name="file" value="{{.File}}">
           <input type="hidden" name="line" value="{{.FromLine}}">
           <input type="hidden" name="side" value="{{.Side}}">
           <button type="submit" name="jumpToQuizLine" class="quiz-jump" title="Go read the code this asks about">{{.AnchorLabel}}</button>
@@ -102,7 +105,7 @@
           </div>
           {{else}}
           <form method="POST" style="margin:0">
-            <input type="hidden" name="quizId" value="{{$.CurrentQuiz.ID}}">
+            <input type="hidden" name="quizId" value="{{$item.QuizID}}">
             <input type="hidden" name="questionId" value="{{$item.ID}}">
             <input type="hidden" name="choice" value="{{$i}}">
             <button type="submit" name="answerQuestion" class="quiz-option quiz-option-btn">{{$opt}}</button>
@@ -117,6 +120,7 @@
     </li>
     {{end}}
   </ol>
+  {{end}}
   <footer class="quiz-foot">
     {{if $.QuizComplete}}<p class="quiz-done"><strong>{{$.QuizScoreLabel}}</strong> — every question answered.</p>{{end}}
     {{if gt $.QuizAnsweredCount 0}}
@@ -128,8 +132,8 @@
   </footer>
   {{else}}
   <div class="empty quiz-empty">
-    <p>No quiz for <code>{{$.SelectedFile}}</code> yet.</p>
-    <p><small>Ask the agent for a few questions about this file's diff, to check you understood it before you accept it.</small></p>
+    <p>No quiz yet.</p>
+    <p><small>Ask the agent for a few questions about the whole change, to check you understood it before you accept it.</small></p>
     {{template "quizAsk" $}}
   </div>
   {{end}}

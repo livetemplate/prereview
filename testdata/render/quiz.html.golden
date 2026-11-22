@@ -676,7 +676,9 @@
     <form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="setUnderstandTab" data-tab="quiz" class="lib-tab is-on" role="tab" aria-selected="true">Quiz <span class="quiz-score">1/4</span></button></form>
   </div>
   
-  <p class="quiz-sub"><small>on <code>app.go</code> — every question also sits inline next to the code it asks about; this is the overview</small></p>
+  <p class="quiz-sub"><small>on the whole change — every question also sits inline next to the code it asks about; this is the overview</small></p>
+  
+  <h4 class="quiz-file"><code>app.go</code></h4>
   <ol class="quiz-list">
     
     <li class="quiz-q" data-key="q3">
@@ -834,6 +836,7 @@
     </li>
     
   </ol>
+  
   <footer class="quiz-foot">
     
     

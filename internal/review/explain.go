@@ -377,22 +377,14 @@ func LoadExplanations(csvPath string) []Explanation {
 // boundary too, for a line written without the command.
 func loadExplanations(path string) []Explanation {
 	var all []Explanation
-	last := map[string]int{} // id -> index of its last write in all
 	readJSONL(path, func(line []byte) {
 		var e Explanation
 		if json.Unmarshal(line, &e) != nil || e.ID == "" || len(e.Steps) == 0 {
 			return
 		}
-		last[e.ID] = len(all)
 		all = append(all, NormalizeExplanation(e))
 	})
-	var out []Explanation
-	for i, e := range all {
-		if last[e.ID] == i {
-			out = append(out, e)
-		}
-	}
-	return out
+	return keepLastWrite(all, func(e Explanation) string { return e.ID })
 }
 
 //go:embed builtin_explain/*.md

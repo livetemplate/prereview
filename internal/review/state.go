@@ -447,7 +447,7 @@ type PrereviewState struct {
 	ShowAllComments bool `json:"show_all_comments"`
 
 	// ShowUnderstand shows the Understand page (#115): the walkthrough of the
-	// whole change and the selected file's quiz (#191), in place of the diff
+	// whole change and the quiz on it (#191), in place of the diff
 	// viewer like ShowAllComments. Not persisted, and reset by every navigation
 	// action: a view that survives a jump would strand the reviewer somewhere
 	// they didn't ask to be. UnderstandTab is "" (Walkthrough) or "quiz".
@@ -467,6 +467,9 @@ type PrereviewState struct {
 	// that load, so the watcher reloads only when the file moved.
 	Explanations []Explanation `json:"explanations"`
 	ExplainSeen  string        `json:"explain_seen"`
+	// QuizSeen is quiz.jsonl's fingerprint at the last load (applyQuiz), so the
+	// watcher reloads the quizzes only when the file moved.
+	QuizSeen string `json:"quiz_seen"`
 	// NotExplained is the current walkthrough's check (#115 A4): every changed
 	// hunk no step cites, as anchors (notExplained). walkSteps makes it the last
 	// step, so the walk visits what the agent left out.
@@ -523,16 +526,6 @@ type PrereviewState struct {
 	// away mid-quiz. Not ToggledRows: that is row-granular (it would hide an open
 	// question on the same row) and persisted (it would re-create #212).
 	QuizJustAnswered map[string]bool `json:"quiz_just_answered"`
-
-	// QuizRequestedFile is the file a "Quiz me" request was just sent for, so the
-	// control can show "Quiz requested…" instead of inviting a second tap. Cleared
-	// as soon as a quiz for that file arrives (applyQuiz).
-	//
-	// It exists because the first version gave NO feedback: the request saved a
-	// comment, nothing visibly changed, and a real reviewer on a phone tapped again
-	// and queued a duplicate. A UI hint, deliberately not persisted — worst case a
-	// reconnect re-offers the button, which is merely the old behaviour.
-	QuizRequestedFile string `json:"quiz_requested_file"`
 
 	// ScrollToCommentID, when non-empty for one render, drives the
 	// `lvt-fx:scroll="into-view"` directive on the matching inline-comment.

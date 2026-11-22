@@ -3538,6 +3538,9 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .quiz .quiz-head button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
 .quiz .quiz-score { color: var(--accent); font-variant-numeric: tabular-nums; }
 .quiz .quiz-sub { margin: 0 0.5rem 0.75rem; color: var(--pico-muted-color); }
+/* #115 A′5: the quiz on the whole change, one heading per file. */
+.quiz .quiz-file { margin: 1rem 0.5rem 0.5rem; font-size: 0.85rem; font-weight: 600; }
+.quiz .quiz-sub + .quiz-file { margin-top: 0; }
 /* list-style must be reset on the ITEMS too, not just the list: these are <ul>s
    nested inside other lists, and Pico re-asserts a marker on the nested level,
    which paints a stray square next to every item. A DOM test cannot see it — the

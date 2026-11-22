@@ -33,19 +33,22 @@ func (s PrereviewState) ExplainPending() bool {
 	if asked.IsZero() {
 		return false
 	}
-	if e := s.CurrentExplanation(); e != nil {
-		if at, err := time.Parse(time.RFC3339, e.CreatedAt); err == nil && !at.Before(asked.Truncate(time.Second)) {
-			return false
-		}
-	}
-	return true
+	e := s.CurrentExplanation()
+	return e == nil || !answeredSince(e.CreatedAt, asked)
+}
+
+// answeredSince reports that something the agent wrote at createdAt (RFC 3339,
+// whole seconds) came at or after the request asked at.
+func answeredSince(createdAt string, asked time.Time) bool {
+	at, err := time.Parse(time.RFC3339, createdAt)
+	return err == nil && !at.Before(asked.Truncate(time.Second))
 }
 
 // CanExplain reports an agent can be asked for a walkthrough.
 func (s PrereviewState) CanExplain() bool { return s.AgentMode && len(s.ExplainPrompts) > 0 }
 
 // HasUnderstandContent: the Understand page has something on it, a walkthrough
-// or the open file's quiz. Gates the menu entries.
+// or a quiz. Gates the menu entries.
 func (s PrereviewState) HasUnderstandContent() bool { return s.HasExplanation() || s.HasQuiz() }
 
 // ShowUnderstandEntry gates the file header's Understand button: there is
@@ -55,8 +58,8 @@ func (s PrereviewState) ShowUnderstandEntry() bool {
 }
 
 // UnderstandTabOn is the tab the page shows: the one asked for (Diagrams only
-// while there are diagrams), else the walkthrough, unless there is none and the
-// open file has a quiz.
+// while there are diagrams), else the walkthrough, unless there is none and there
+// is a quiz.
 func (s PrereviewState) UnderstandTabOn() string {
 	switch s.UnderstandTab {
 	case understandTabQuiz, understandTabWalkthrough:

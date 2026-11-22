@@ -109,7 +109,8 @@ const (
 	quizAnchorUngrounded = anchorUngrounded
 )
 
-// Quiz is one generated comprehension quiz about one file's diff.
+// Quiz is one generated comprehension quiz: about one file's diff (File set), or
+// about the whole change (File "", each question names its file).
 //
 // The JSON tags are the agent-facing schema written to quiz.jsonl by
 // `prereview quiz`. Fingerprint pins the quiz to the diff it was generated from
@@ -139,7 +140,11 @@ type Quiz struct {
 // ProbeDecision, whose subject can be an omission ("chose not to add a test for
 // the error path") with no lines to point at. Every other probe must anchor.
 type Question struct {
-	ID      string   `json:"id"`
+	ID string `json:"id"`
+	// File is the file the question is about (#115 A′5). Required on every
+	// question of a quiz on the whole change (Quiz.File ""); a per-file quiz's
+	// questions may leave it to the quiz (Quiz.fileOf).
+	File    string   `json:"file,omitempty"`
 	Kind    string   `json:"kind"` // line (default) | text | file | area | region
 	Probe   string   `json:"probe"`
 	Prompt  string   `json:"prompt"`
@@ -156,9 +161,34 @@ type Question struct {
 	Area     *Area  `json:"area,omitempty"` // area: {x,y,w,h} 0..1 fractions
 	URL      string `json:"url,omitempty"`  // region: the live page
 
-	// AnchorStatus is DERIVED at load time by applyQuiz against the live diff —
+	// AnchorStatus is DERIVED at load time by applyQuiz against the change index —
 	// kept off the JSON so the append-only file stays the agent's pure input.
 	AnchorStatus string `json:"-"`
+}
+
+// fileOf is the file question qu is about: its own, else its quiz's.
+func (q Quiz) fileOf(qu Question) string {
+	if qu.File != "" {
+		return qu.File
+	}
+	return q.File
+}
+
+// hasFiles reports that every question says which file it is about: the quiz
+// names one, or (a quiz on the whole change) each question does.
+func (q Quiz) hasFiles() bool {
+	if q.File != "" {
+		return true
+	}
+	if len(q.Questions) == 0 {
+		return false
+	}
+	for _, qu := range q.Questions {
+		if qu.File == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // LineAnchored reports that the question points at a line range — the kinds the
@@ -259,28 +289,15 @@ func LoadQuizzes(csvPath string) []Quiz { return loadQuizzes(QuizPath(csvPath)) 
 // the agent can revise a quiz by re-appending the same id). Tolerant by design,
 // exactly like loadSuggestions: a missing file yields nil and any torn or
 // unparseable line is skipped rather than failing the load — the file is
-// agent-appended and a review must never break on it. Order is stable (first-seen
-// id order) so the UI doesn't reshuffle on each poll.
+// agent-appended and a review must never break on it. Order is by LAST write, as
+// for explanations: a revised quiz (an old id re-appended) is the newest, which
+// is the one a file shows (allQuizItems).
 func loadQuizzes(path string) []Quiz {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil // missing (common) or unreadable → no quizzes
-	}
-	defer f.Close()
-	order := make([]string, 0, 8)
-	byID := make(map[string]Quiz)
-	sc := bufio.NewScanner(f)
-	// A quiz holds several questions with prose options and explanations, so give
-	// the scanner room — a long one must never silently truncate.
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for sc.Scan() {
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
-		}
+	var all []Quiz
+	readJSONL(path, func(line []byte) {
 		var q Quiz
-		if err := json.Unmarshal(line, &q); err != nil || q.ID == "" || q.File == "" {
-			continue // torn/partial/blank/id-less line — skip, next may be fine
+		if json.Unmarshal(line, &q) != nil || q.ID == "" || !q.hasFiles() {
+			return // torn/partial/id-less line — skip, next may be fine
 		}
 		// Default Side at the READ boundary too, not just in NormalizeQuiz on the
 		// write path (mirroring loadSuggestions). The file is agent-owned and
@@ -292,16 +309,9 @@ func loadQuizzes(path string) []Quiz {
 				q.Questions[i].Side = "new"
 			}
 		}
-		if _, seen := byID[q.ID]; !seen {
-			order = append(order, q.ID)
-		}
-		byID[q.ID] = q
-	}
-	out := make([]Quiz, 0, len(order))
-	for _, id := range order {
-		out = append(out, byID[id])
-	}
-	return out
+		all = append(all, q)
+	})
+	return keepLastWrite(all, func(q Quiz) string { return q.ID })
 }
 
 // LoadQuizAnswers reads the reviewer's answers for the store whose CSV lives at
@@ -388,11 +398,11 @@ func saveQuizAnswers(path string, answers map[string]QuizAnswer) error {
 // Errors name the offending question so a failure is actionable rather than a
 // bare "invalid", matching `prereview done`'s fail-loudly-with-the-id convention.
 func ValidateQuiz(q Quiz) error {
-	if q.File == "" {
-		return fmt.Errorf("missing \"file\"")
-	}
 	if len(q.Questions) == 0 {
 		return fmt.Errorf("quiz has no questions")
+	}
+	if !q.hasFiles() {
+		return fmt.Errorf("missing \"file\": set it on the quiz, or on every question of a quiz on the whole change")
 	}
 	seen := make(map[string]bool, len(q.Questions))
 	for i, qu := range q.Questions {
@@ -405,6 +415,9 @@ func ValidateQuiz(q Quiz) error {
 			return fmt.Errorf("%s: duplicate id", where)
 		}
 		seen[qu.ID] = true
+		if f := q.fileOf(qu); !filepath.IsLocal(f) {
+			return fmt.Errorf("%s: \"file\" %q must be a path relative to the repo, inside it", where, f)
+		}
 		if !slices.Contains(probeKinds, qu.Probe) {
 			return fmt.Errorf("%s: unknown probe %q (want one of %v)", where, qu.Probe, probeKinds)
 		}

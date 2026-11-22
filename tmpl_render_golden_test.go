@@ -382,6 +382,21 @@ func renderFixtures() []renderFixture {
 		"z1\x00q1": {QuizID: "z1", QuestionID: "q1", Choice: 1},
 	}
 
+	// #115 A′5: one quiz on the whole change, its questions grouped by file in
+	// drawer order (app.go is listed; lib.go is not, so it sorts after), with an
+	// older per-file quiz for app.go that the newer one replaces.
+	quizChange := goBase()
+	quizChange.ShowUnderstand, quizChange.UnderstandTab = true, "quiz"
+	quizChange.Quizzes = []review.Quiz{
+		{ID: "old", File: "app.go", Questions: []review.Question{
+			{ID: "q1", Kind: "line", Probe: "change-type", Prompt: "Replaced: you never see this", Options: []string{"a", "b"}, Why: "w", FromLine: 1, ToLine: 1, Side: "new", AnchorStatus: "ok"}}},
+		{ID: "whole", Questions: []review.Question{
+			{ID: "q1", File: "lib.go", Kind: "line", Probe: "consequence", Prompt: "What breaks if lib's loop exits early?", Options: []string{"Nothing", "The retry"}, Answer: 1, Why: "The retry depends on it.", FromLine: 4, ToLine: 4, Side: "new", AnchorStatus: "ok"},
+			{ID: "q2", File: "app.go", Kind: "line", Probe: "rationale", Prompt: "Why does app.go read the budget?", Options: []string{"To cap retries", "To log"}, Why: "It caps them.", FromLine: 2, ToLine: 3, Side: "new", AnchorStatus: "ok"},
+			{ID: "q3", File: "app.go", Kind: "file", Probe: "decision", Prompt: "Which test did the change not add?", Options: []string{"Timeout", "Happy path"}, Why: "No timeout test.", Side: "new", AnchorStatus: "absent"},
+		}},
+	}
+
 	// the Understand page's Quiz tab with no quiz yet: one button per prompt that
 	// asks for one (#115 moved them off the file header, which now shows a single
 	// Understand button — pinned here too).
@@ -929,6 +944,7 @@ func renderFixtures() []renderFixture {
 		{"request-readmore", requestCard},
 		{"request-all-comments", requestAll},
 		{"quiz", quiz},
+		{"quiz-change", quizChange},
 		{"quiz-empty", quizEmpty},
 		{"quiz-inline", quizInline},
 		{"quiz-ask", quizAsk},

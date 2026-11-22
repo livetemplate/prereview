@@ -786,3 +786,23 @@ func TestSearchJumpOpensMechanicalFold(t *testing.T) {
 		t.Errorf("the hit's fold stayed shut: revealed %v, mechanical %v", got.MechRevealed, got.Mechanical)
 	}
 }
+
+// TestGroundQuizzesAcrossFiles (#115 A′5): quiz questions ground against the
+// change index like walkthrough anchors, both ends of the range, in any file of
+// the review, open or not.
+func TestGroundQuizzesAcrossFiles(t *testing.T) {
+	c, state := explainFixture(t) // a.go open; b.go has 6 new lines
+	state.Quizzes = []Quiz{{ID: "w", Questions: []Question{
+		{ID: "ok", File: "b.go", Kind: QuestionKindLine, FromLine: 3, ToLine: 6, Side: "new"},
+		{ID: "end-past", File: "b.go", Kind: QuestionKindLine, FromLine: 5, ToLine: 9, Side: "new"},
+		{ID: "absent", File: "b.go", Kind: QuestionKindFile},
+		{ID: "outside", File: "z.go", Kind: QuestionKindLine, FromLine: 1, ToLine: 1, Side: "new"},
+	}}}
+	c.groundQuizzes(&state, c.lazyCitable(&state))
+	want := map[string]string{"ok": quizAnchorOK, "end-past": quizAnchorUngrounded, "absent": quizAnchorAbsent, "outside": quizAnchorUngrounded}
+	for _, qu := range state.Quizzes[0].Questions {
+		if qu.AnchorStatus != want[qu.ID] {
+			t.Errorf("%s: %q, want %q", qu.ID, qu.AnchorStatus, want[qu.ID])
+		}
+	}
+}
