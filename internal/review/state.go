@@ -486,6 +486,9 @@ type PrereviewState struct {
 	// (#115 B1), in VisibleLines only: CurrentDiff stays the real diff, so no
 	// anchor moves. A durable view pref (uiprefs.go).
 	HideWhitespace bool `json:"hide_whitespace"`
+	// Moves are the change's moved blocks, both ends (#115 B2), from the change
+	// index on each Mount.
+	Moves []gitdiff.Move `json:"moves"`
 	// The walkthrough in progress (#115 A3): WalkExplanation names the one being
 	// walked ("" = no walk), so a replaced walkthrough ends the walk instead of
 	// landing on a stranger's stop; WalkStep/WalkAnchor is the stop shown
@@ -992,9 +995,8 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	if s.CurrentDiff == nil {
 		return nil
 	}
-	// FileView (durable pref) OR Revealing() (a transient search-jump reveal)
-	// shows the whole file so an arbitrary target line is present.
-	if s.FileView || s.Revealing() {
+	// FileView (durable pref) shows the working-tree file: no deleted lines.
+	if s.FileView {
 		out := make([]gitdiff.DiffLine, 0, len(s.CurrentDiff.Lines))
 		for _, l := range s.CurrentDiff.Lines {
 			if l.NewNum > 0 { // exists in the working-tree file
@@ -1002,6 +1004,12 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 			}
 		}
 		return out
+	}
+	// Revealing() (a jump's transient reveal) shows every row, folds and all, so
+	// a target on either side is present: a jump to a deleted line (a move's old
+	// end, a walkthrough anchor on removed code) needs its row.
+	if s.Revealing() {
+		return s.CurrentDiff.Lines
 	}
 	// An annotation can sit on an unchanged line far from any change (the LLM
 	// emits arbitrary line numbers for suggestions, #98; a comment made in File
@@ -1030,10 +1038,10 @@ func (s PrereviewState) pinnedRows() func(gitdiff.DiffLine) bool {
 	cards := s.AnnotationCountLines()
 	hidden := s.HiddenSuggestionLines()
 	found := s.findingLines()
-	marks := s.StepMarkLines()
+	marks := s.RowMarks()
 	return func(l gitdiff.DiffLine) bool {
 		k := rowKey(l)
-		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)] != nil
+		return cards[k] > 0 || hidden[k] != nil || (l.Kind != "del" && found[l.NewNum]) || marks[lineCursorKey(l)].labelled()
 	}
 }
 

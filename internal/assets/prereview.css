@@ -1901,9 +1901,11 @@ header.file-head .file-head-comment button svg { display: block; }
 .code form { margin: 0; padding: 0; display: block; line-height: 1.2; }
 /* Performance: content-visibility: auto lets the browser skip painting
    off-screen rows entirely while scrolling a long diff — the dominant
-   cost in 500+ line files. The intrinsic-size hint is a soft floor for
-   unrendered rows so the scrollbar doesn't jitter as content-
-   visibility kicks in.
+   cost in 500+ line files. The intrinsic-size hint is one line height,
+   a plain row's real height: rows not laid out yet sit where they will,
+   so the scrollbar doesn't jitter and the client's keyboard caret,
+   measured right after a jump, lands on its line (16px put it 2.6px low
+   per such row above; TestE2E_WalkCaretOnItsLine).
 
    IMPORTANT: rows that hold the composer, ANY annotation (comment,
    suggestion, quiz question — `.has-line-marks`), a finding card or a
@@ -2139,9 +2141,9 @@ header.file-head .file-head-comment button svg { display: block; }
 }
 .code .mech-row .mech-fold:hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
 @media (pointer: coarse) { .code .mech-row .mech-fold { min-height: 44px; } }
-.code .line-row:not(:has(.composer)):not(.has-line-marks):not(:has(.finding-card)):not(:has(.step-mark)) {
+.code .line-row:not(:has(.composer)):not(.has-line-marks):not(:has(.finding-card)):not(:has(.step-mark)):not(:has(.move-mark)) {
   content-visibility: auto;
-  contain-intrinsic-size: auto 16px;
+  contain-intrinsic-size: auto 1lh;
 }
 /* Legacy horizontal-scroll-extent spacer. Lines wrap now, so .code
    has no horizontal scroll and this must contribute no width. */
@@ -3649,6 +3651,22 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 .walk-impact-label { font-size: 0.75rem; color: var(--text-muted); }
 .walk-impact-note { color: var(--text-muted); }
 .code .step-mark .risk-chip { vertical-align: 1px; }
+
+/* #115 B2: a moved block's label above its first row, linking to the other end,
+   and a bar in the gutter on every moved row (left indicators go on the gutter:
+   the sticky gutter would hide one on the row). */
+.code .move-mark { margin: 0; }
+.code .move-mark .move-jump {
+  display: block; width: 100%; margin: 0; padding: 0.15rem 0.6rem; min-height: 0;
+  border: 0; border-radius: 0; text-align: left; cursor: pointer;
+  font-family: var(--sans); font-size: 0.75rem; font-weight: 600; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-top: 1px dotted color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.code .move-mark .move-jump:hover { text-decoration: underline; }
+.code .moved-flag { display: none; }
+.code .line-row:has(> .moved-flag) .gutter { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+@media (pointer: coarse) { .code .move-mark .move-jump { min-height: 40px; } }
 
 /* #115 A3: a step's marker above its first cited line (the step bar is after .ann-nav). */
 .code .step-mark {

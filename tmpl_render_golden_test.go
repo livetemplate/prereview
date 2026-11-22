@@ -522,6 +522,14 @@ func renderFixtures() []renderFixture {
 			}}},
 	}}
 
+	// #115 B2: moved code: each end's first row carries a label linking to the
+	// other end, and every moved row is flagged for the gutter bar.
+	movedCode := goBase()
+	movedCode.Moves = []gitdiff.Move{
+		{File: "app.go", Side: "old", From: 2, To: 2, Other: gitdiff.MoveEnd{File: "lib.go", Line: 12}},
+		{File: "app.go", Side: "new", From: 2, To: 2, Other: gitdiff.MoveEnd{File: "util.go", Line: 40}},
+	}
+
 	// external (live-site) mode
 	external := review.PrereviewState{
 		RepoPath:     "/repo",
@@ -953,6 +961,7 @@ func renderFixtures() []renderFixture {
 		{"walk-bar", walkBar},
 		{"understand-concerns", understandConcerns},
 		{"understand-diagrams", understandDiagrams},
+		{"moved-code", movedCode},
 		{"prompts-picker", promptsPicker},
 		{"shortcuts-composer", shortcuts},
 		{"ripple", ripple},

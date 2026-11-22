@@ -437,3 +437,74 @@ func (s PrereviewState) foldedLines(concern string) int {
 	}
 	return n
 }
+
+// RowMark is what a diff row carries above or beside its code: a step's marker,
+// a move's label (on the first row of each end), and Moved on every row of a
+// moved block, for its tint. One map, so a row costs one slot on the wire.
+type RowMark struct {
+	Step  *StepMark
+	Move  *MoveMark
+	Moved bool
+}
+
+// MoveMark labels one end of a moved block and links to the other end.
+type MoveMark struct {
+	Label      string // "Moved from b.go L4" / "Moved to a.go L12"
+	File, Side string // the other end
+	Line       int
+}
+
+// labelled reports a row with a marker or a label above it: it never folds.
+func (m *RowMark) labelled() bool { return m != nil && (m.Step != nil || m.Move != nil) }
+
+// RowMarks is every mark on the open file's rows, keyed like the row
+// ("L<old>-<new>"): StepMarkLines' markers and the moved blocks (#115 B2).
+func (s PrereviewState) RowMarks() map[string]*RowMark {
+	steps := s.StepMarkLines()
+	var moves []gitdiff.Move
+	for _, m := range s.Moves {
+		if m.File == s.SelectedFile {
+			moves = append(moves, m)
+		}
+	}
+	if len(steps) == 0 && (len(moves) == 0 || s.CurrentDiff == nil) {
+		return nil
+	}
+	out := make(map[string]*RowMark, len(steps))
+	for k, m := range steps {
+		out[k] = &RowMark{Step: m}
+	}
+	if len(moves) == 0 {
+		return out
+	}
+	for _, l := range s.CurrentDiff.Lines {
+		side, n := "new", l.NewNum
+		switch l.Kind {
+		case "del":
+			side, n = "old", l.OldNum
+		case "add":
+		default:
+			continue
+		}
+		for _, m := range moves {
+			if m.Side != side || n < m.From || n > m.To {
+				continue
+			}
+			k := lineCursorKey(l)
+			r := out[k]
+			if r == nil {
+				r = &RowMark{}
+				out[k] = r
+			}
+			r.Moved = true
+			if n == m.From {
+				label, other := "Moved to", "new"
+				if side == "new" {
+					label, other = "Moved from", "old"
+				}
+				r.Move = &MoveMark{Label: fmt.Sprintf("%s %s L%d", label, m.Other.File, m.Other.Line), File: m.Other.File, Side: other, Line: m.Other.Line}
+			}
+		}
+	}
+	return out
+}

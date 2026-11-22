@@ -17,7 +17,7 @@ func TestPairWhitespace(t *testing.T) {
 		{Kind: "del", OldNum: 3, Content: "  b := 2"},
 		{Kind: "del", OldNum: 4, Content: "  return a"},
 		{Kind: "add", NewNum: 2, Content: "\ta := 1"},
-		{Kind: "add", NewNum: 3, Content: "\tb := 3"},    // a real change
+		{Kind: "add", NewNum: 3, Content: "\tb := 3"},   // a real change
 		{Kind: "add", NewNum: 4, Content: "\treturn a"}, // kept: never pairs
 		{Kind: "ctx", OldNum: 5, NewNum: 5, Content: "}"},
 		{Kind: "del", OldNum: 6, Content: "x()"},

@@ -62,3 +62,42 @@ func TestE2E_HideWhitespace(t *testing.T) {
 	p.waitReady()
 	waitJSTrueDiag(t, p.ctx, paired, 5*time.Second, "the setting survives a reload", diag)
 }
+
+// TestE2E_MovedCode (#115 B2): a block moved from a.go into a new file is
+// labelled at both ends; the label opens the other end at its first line.
+func TestE2E_MovedCode(t *testing.T) {
+	dir := t.TempDir()
+	runCmd(t, dir, "git", "init", "-q", "-b", "main")
+	runCmd(t, dir, "git", "config", "user.email", "test@example.com")
+	runCmd(t, dir, "git", "config", "user.name", "Test")
+	runCmd(t, dir, "git", "config", "commit.gpgsign", "false")
+	block := "\tif err := charge(order); err != nil {\n\t\treturn fmt.Errorf(\"charge: %w\", err)\n\t}\n\tlog.Printf(\"charged %s\", order.ID)\n"
+	mustWrite(t, dir, "a.go", "package a\n\nfunc A() {\n"+block+"}\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-q", "-m", "seed")
+	mustWrite(t, dir, "a.go", "package a\n\nfunc A() {\n}\n")
+	mustWrite(t, dir, "b.go", "package b\n\nfunc B() {\n"+block+"}\n")
+
+	p := bootChromeAgainstRepo(t, dir, 1200, 800)
+	diag := captureDiag(t, p)
+	p.waitReady()
+	p.clickFile("b.go")
+	waitJSTrueDiag(t, p.ctx, `!!document.querySelector('.code .move-mark')`, 5*time.Second, "b.go shows the move's label", diag)
+	if got := evalStr(t, p, `document.querySelector('.code .move-mark').textContent.trim()`); got != "Moved from a.go L4" {
+		t.Errorf("b.go's label = %q, want %q%s", got, "Moved from a.go L4", diag())
+	}
+	if n := evalInt(t, p, `document.querySelectorAll('.code .moved-flag').length`); n != 4 {
+		t.Errorf("all 4 moved rows must be flagged, got %d%s", n, diag())
+	}
+
+	ctx, cancel := within(p, 10*time.Second)
+	err := chromedp.Run(ctx, chromedp.Click(`.code .move-mark button[name="jumpToAnchor"]`, chromedp.ByQuery))
+	cancel()
+	if err != nil {
+		t.Fatalf("tap the label: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `!!document.querySelector('.code .line.is-cursor[data-key="L4-0"]')`, 5*time.Second, "the label opens a.go at the deleted line 4", diag)
+	if got := evalStr(t, p, `document.querySelector('.code .move-mark').textContent.trim()`); got != "Moved to b.go L4" {
+		t.Errorf("a.go's label = %q, want %q%s", got, "Moved to b.go L4", diag())
+	}
+}

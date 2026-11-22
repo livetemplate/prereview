@@ -11,7 +11,8 @@ import (
 )
 
 // hunksOf derives the hunks the reviewer sees: each maximal run of del/add rows
-// in LoadDiff's view, plus the highest line number on each side.
+// in LoadDiff's view, with their text, plus the highest line number on each side.
+// The index must carry the same text: move detection reads it (#115 B2).
 func hunksOf(fd *FileDiff) (hunks []Hunk, oldLen, newLen int) {
 	var cur *Hunk
 	for _, l := range fd.Lines {
@@ -29,11 +30,13 @@ func hunksOf(fd *FileDiff) (hunks []Hunk, oldLen, newLen int) {
 				cur.OldStart = l.OldNum
 			}
 			cur.OldCount++
+			cur.Old = append(cur.Old, l.Content)
 		} else {
 			if cur.NewCount == 0 {
 				cur.NewStart = l.NewNum
 			}
 			cur.NewCount++
+			cur.New = append(cur.New, l.Content)
 		}
 	}
 	return hunks, oldLen, newLen
@@ -205,7 +208,7 @@ func TestChangedIndexNoGit(t *testing.T) {
 	write(t, dir, "a.md", "# A\n\ntext")
 	write(t, dir, "b.bin", "\x00x")
 	idx := LoadChangedIndexNoGit(dir, []string{"a.md", "b.bin"})
-	if got := idx.Files["a.md"]; got == nil || got.NewLen != 3 || !sameHunks(got.Hunks, []Hunk{{NewStart: 1, NewCount: 3}}) {
+	if got := idx.Files["a.md"]; got == nil || got.NewLen != 3 || !sameHunks(got.Hunks, []Hunk{{NewStart: 1, NewCount: 3, New: []string{"# A", "", "text"}}}) {
 		t.Errorf("a.md = %+v, want one 3-line added hunk", got)
 	}
 	if got := idx.Files["b.bin"]; got == nil || !got.Opaque {
