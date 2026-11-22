@@ -147,8 +147,9 @@ hand-written CSV parser:
     "seq":N,"files":[…],"version":V,"cause":"edit"|"rollback"}`. It adds
     `"agent_watching":true` when a blocking `watch` was attached for every edit
     (so none were the agent's own). The agent re-reads the listed files.
-  - **`end`** — once, on **End session**; the only terminator. The server shuts
-    down right after.
+  - **`end`** — once, on **End session** or **Approve and end**; the only
+    terminator. The server shuts down right after. Approve and end adds
+    `"approved": true`.
   Every event carries a monotonic `seq`. The CSV stays the authoritative store;
   the stream is a convenience layer over it. Works in repo, no-git, and
   `--external` modes.

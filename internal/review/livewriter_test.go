@@ -146,7 +146,7 @@ func TestEventStream_DurableWhenLiveWedged(t *testing.T) {
 				t.Errorf("EmitSnapshot: %v", err)
 			}
 		}
-		if err := es.EmitEnd(fixedTS); err != nil {
+		if err := es.EmitEnd(fixedTS, false); err != nil {
 			t.Errorf("EmitEnd: %v", err)
 		}
 	})
@@ -165,7 +165,7 @@ func TestEventStream_DurableWhenLiveWedged(t *testing.T) {
 func TestEventStream_DurableBeforeLiveError(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "events.jsonl")
 	es := NewEventStream(&failWriter{}, file)
-	if err := es.EmitEnd(fixedTS); err == nil {
+	if err := es.EmitEnd(fixedTS, false); err == nil {
 		t.Fatal("want the live write error reported")
 	}
 	b, err := os.ReadFile(file)

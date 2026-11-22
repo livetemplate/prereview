@@ -109,6 +109,11 @@ type StreamEvent struct {
 	Version       int      `json:"version,omitempty"`        // files_changed
 	Cause         string   `json:"cause,omitempty"`          // files_changed: FilesChangedEdit | FilesChangedRollback
 	AgentWatching bool     `json:"agent_watching,omitempty"` // files_changed
+
+	// Approved is set on `end` when the reviewer chose Approve and end (#278): they
+	// approved the reviewed plan or change. A plain End session omits it, so that
+	// `end` line is the same as before; the agent then asks the reviewer.
+	Approved bool `json:"approved,omitempty"` // end
 }
 
 // files_changed causes (#213).
@@ -432,7 +437,7 @@ func (e *EventStream) EmitFilesChanged(files []string, version int, cause string
 }
 
 // EmitEnd emits the single terminator — the only event the consumer
-// loop should treat as "stop".
-func (e *EventStream) EmitEnd(ts time.Time) error {
-	return e.emit(StreamEvent{Event: "end"}, ts)
+// loop should treat as "stop". approved marks Approve and end (#278).
+func (e *EventStream) EmitEnd(ts time.Time, approved bool) error {
+	return e.emit(StreamEvent{Event: "end", Approved: approved}, ts)
 }

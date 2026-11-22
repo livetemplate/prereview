@@ -111,9 +111,9 @@ non-zero without printing `READY`.
 | `1` | Argument validation failed (missing repo, port already in use, etc.) |
 | `1` | Runtime error during shutdown |
 
-In agent mode, clicking **End session** emits the `end` event and shuts the server
-down, so a backgrounded launch's job exits on its own — the agent does not need to kill
-it.
+In agent mode, clicking **End session** or **Approve and end** emits the `end`
+event (with `"approved": true` for the second) and shuts the server down. A
+backgrounded launch's job then exits on its own; the agent does not need to kill it.
 
 ## Filesystem layout
 
@@ -221,8 +221,11 @@ Four event types:
   only ones you just changed yourself, carry on. Not queue work: it carries no
   comments and arrives even while the queue is paused. A run you close with
   `status done` is treated as your own batch and sends nothing.
-- **`end`** — emitted once on **End session**. The **only** terminator: stop consuming.
-  The server shuts down right after (so a backgrounded launch's job completes too).
+- **`end`** — emitted once on **End session** or **Approve and end**. The **only**
+  terminator: stop consuming. The server shuts down right after (so a backgrounded
+  launch's job completes too). **`approved: true`** means the reviewer chose Approve
+  and end: they approved the plan or change. Without it, ask them (SKILL.md, agent
+  loop step 6).
 
 Every event has `event`, a monotonic `seq`, and an RFC-3339 `ts`. Each comment in a
 `snapshot` mirrors the CSV columns **minus** the opaque `anchor` fingerprint and
@@ -253,7 +256,7 @@ interpret them.
    "proposed":"The API may return an error.","anchor_status":"ok"}
 ]}
 {"event":"files_changed","seq":2,"ts":"…","files":["docs/readme.md"],"version":3,"cause":"edit","agent_watching":true}
-{"event":"end","seq":3,"ts":"…"}
+{"event":"end","seq":3,"ts":"…","approved":true}
 ```
 
 `events.jsonl` is append-only and reset on each fresh launch. The CSV stays the

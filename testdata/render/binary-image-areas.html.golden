@@ -1142,7 +1142,7 @@
 
 
 
-<dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Emits the final <code>session_end</code> event and stops the prereview server — your agent stops consuming the stream. This can't be undone.</small></p><footer>
+<dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Your agent stops watching and prereview stops. <strong>Approve and end</strong> tells your agent the plan or change is approved; <strong>End session</strong> makes it ask you. This can't be undone.</small></p><footer>
     <form method="POST">
       <fieldset role="group">
         <button
@@ -1154,8 +1154,12 @@
         <button
           type="submit"
           name="endSession"
+          class="secondary"
+        >End session</button><button
+          type="submit"
+          name="approveAndEnd"
           class="contrast"
-        >End session</button>
+        >Approve and end</button>
       </fieldset>
     </form>
   </footer></article></dialog>

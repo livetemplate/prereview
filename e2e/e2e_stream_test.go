@@ -268,6 +268,9 @@ func TestE2E_StreamHandoff(t *testing.T) {
 	waitStream(t, stdoutBuf, func(evs []review.StreamEvent) bool {
 		return len(evs) > 0 && evs[len(evs)-1].Event == "end"
 	}, "end terminator", diag)
+	if evs := parseStreamEvents(stdoutBuf.String()); evs[len(evs)-1].Approved {
+		t.Errorf("a plain End session must not mark the end approved (#278)%s", diag())
+	}
 
 	select {
 	case <-waitCh:

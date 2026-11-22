@@ -85,7 +85,7 @@
 
 {{if .SessionEnded}}
 <div class="banner-stopping" role="status">
-  Session ended — Claude has been notified. You can close this tab.
+  {{if .SessionApproved}}Approved. {{end}}Session ended — Claude has been notified. You can close this tab.
 </div>
 {{end}}
 

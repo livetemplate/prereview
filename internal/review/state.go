@@ -376,6 +376,9 @@ type PrereviewState struct {
 	// banner wording differs ("session ended") and EndSession also emits the
 	// terminating end stream event before shutting down.
 	SessionEnded bool `json:"session_ended"`
+	// SessionApproved is set with SessionEnded by Approve and end (#278); it picks
+	// the banner wording.
+	SessionApproved bool `json:"session_approved"`
 
 	// EditingCommentID is set when the user has tapped Edit on an existing
 	// comment. The composer label changes to "Editing comment on L28"

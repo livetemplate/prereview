@@ -91,6 +91,11 @@
   --pico-code-background-color: #ece4ce;
   --pico-form-element-background-color: #fbf4e0;
   --pico-secondary-background: var(--surface-muted);
+  /* #278: a filled .secondary button's label and hover. Pico keeps its white
+     inverse and dark-slate hover, so the label was white on the pale surface. */
+  --pico-secondary-inverse: var(--text-strong);
+  --pico-secondary-hover-background: var(--soft-bg-hover);
+  --pico-secondary-hover-border: var(--soft-bg-hover);
   --pico-color: var(--text);
   --pico-h1-color: var(--text-strong);
   /* h2–h6 + form/inline-code text/border default to Pico's LIGHT-mode tones
@@ -299,6 +304,11 @@
   --pico-code-background-color: #f2e5bc;
   --pico-form-element-background-color: #fcf6d8;
   --pico-secondary-background: var(--surface-muted);
+  /* #278: a filled .secondary button's label and hover. Pico keeps its white
+     inverse and dark-slate hover, so the label was white on the pale surface. */
+  --pico-secondary-inverse: var(--text-strong);
+  --pico-secondary-hover-background: var(--soft-bg-hover);
+  --pico-secondary-hover-border: var(--soft-bg-hover);
   --pico-color: var(--text);
   --pico-h1-color: var(--text-strong);
   --pico-h2-color: var(--text-strong);
@@ -480,6 +490,11 @@
   --pico-code-background-color: #e6e9ef;
   --pico-form-element-background-color: #f3f5f8;
   --pico-secondary-background: var(--surface-muted);
+  /* #278: a filled .secondary button's label and hover. Pico keeps its white
+     inverse and dark-slate hover, so the label was white on the pale surface. */
+  --pico-secondary-inverse: var(--text-strong);
+  --pico-secondary-hover-background: var(--soft-bg-hover);
+  --pico-secondary-hover-border: var(--soft-bg-hover);
   --pico-color: var(--text);
   --pico-h1-color: var(--text-strong);
   --pico-h2-color: var(--text-strong);
@@ -1306,6 +1321,12 @@ header.file-head .file-head-actions {
   background: color-mix(in srgb, var(--pr-open, #c9a000) 12%, transparent);
   border-left: 2px solid var(--pr-open, #c9a000);
   border-radius: 3px;
+}
+/* #278: Cancel · End session · Approve and end. On a phone the three stack, the
+   primary Approve and end on top (column-reverse keeps Cancel last in the DOM). */
+@media (max-width: 640px) {
+  #confirm-end-session fieldset[role="group"] { display: flex; flex-direction: column-reverse; gap: 0.4rem; }
+  #confirm-end-session fieldset[role="group"] > button { width: 100%; margin: 0; border-radius: var(--pico-border-radius); }
 }
 .queue-row { margin: 0; display: flex; align-items: center; gap: 0.15rem; }
 .queue-jump-form { margin: 0; flex: 1 1 auto; min-width: 0; }

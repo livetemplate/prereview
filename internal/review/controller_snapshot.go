@@ -44,6 +44,18 @@ func (c *PrereviewController) flushSnapshot(state *PrereviewState) error {
 // "session ended" banner before the WebSocket is torn down. The LLM's
 // background job completing is the second, redundant terminator.
 func (c *PrereviewController) EndSession(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.endSession(state, false)
+}
+
+// ApproveAndEnd ends the session as EndSession does, telling the agent the
+// reviewer approved the plan or change (#278): the `end` event carries
+// approved:true.
+func (c *PrereviewController) ApproveAndEnd(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.endSession(state, true)
+}
+
+// endSession is EndSession and ApproveAndEnd: final snapshot, then the one `end`.
+func (c *PrereviewController) endSession(state PrereviewState, approved bool) (PrereviewState, error) {
 	// Stop the debounced emitter and block new emits BEFORE the final flush, so a
 	// queued snapshot can't fire AFTER end — the skill's only stop signal.
 	// The synchronous flushSnapshot below is the last, authoritative snapshot.
@@ -53,11 +65,12 @@ func (c *PrereviewController) EndSession(state PrereviewState, ctx *livetemplate
 		return state, err
 	}
 	if c.Emitter != nil {
-		if err := c.Emitter.EmitEnd(time.Now()); err != nil {
+		if err := c.Emitter.EmitEnd(time.Now(), approved); err != nil {
 			return state, fmt.Errorf("emit end event: %w", err)
 		}
 	}
 	state.SessionEnded = true
+	state.SessionApproved = approved
 	clearUndo(&state)
 	c.requestShutdown()
 	return state, nil
