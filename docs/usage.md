@@ -89,6 +89,11 @@ your own as Markdown files in `~/.config/prereview/shortcuts/` (the format is un
 `PREREVIEW_SHORTCUTS_DIR` in
 [`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment)).
 
+The whole-file comment box (**Comment on file**) has its own chips: whole-file
+prompts such as *Fix grammar & spelling* or *Code review*. It shows the four you use
+most, and **More…** shows the rest. **Add your own** opens the Library's Shortcuts
+tab, which lists both kinds.
+
 **Step through what's open.** While anything is waiting on you (an unresolved
 comment, an undecided suggestion, an unanswered quiz question), a bar at the top
 of the file reads "N open". **‹** and **›** (or <kbd>p</kbd> and <kbd>n</kbd>)
@@ -152,12 +157,11 @@ committed.
 
 The loop also runs the other way: your agent can *propose* edits and you decide
 on them. Ask it to review something and suggest edits, for example "review the doc
-for ambiguity and suggest edits in prereview", or use the file header's **Ask for
-suggestions** menu of ready-made prompts. It submits them with `prereview
-suggest`, and each appears inline as a **before → after** box, visually distinct
-from a comment.
+for ambiguity and suggest edits in prereview", or open **Comment on file** and tap
+one of its ready-made prompts. It submits them with `prereview suggest`, and each
+appears inline as a **before → after** box, visually distinct from a comment.
 
-To add your own prompts to that menu, put one Markdown file per prompt in
+To add your own prompts to those chips, put one Markdown file per prompt in
 `~/.config/prereview/prompts/`. The file format is under `PREREVIEW_PROMPTS_DIR`
 in [`docs/cli.md`](https://github.com/livetemplate/prereview/blob/main/docs/cli.md#environment).
 
@@ -413,9 +417,12 @@ your Accept (an import, or everything with the switch off), it opens on
   you can **Restore**. The status chips and the scope picker filter the list.
 - **Shortcuts**: when you give the same instruction in three or more comments, the
   agent can propose a lesson that adds it to your comment box as a chip ("Shortcut
-  it adds" on the card). Accepting it adds the chip at once. The **Shortcuts** tab
-  lists every chip (built-in, from your folder, or learned) with how often you've
-  used it, and **Hide** takes one out of the comment box without deleting it.
+  it adds" on the card). When those comments are about whole files, the chip goes
+  in the whole-file comment box ("Whole-file shortcut it adds"). Accepting it adds
+  the chip at once. The **Shortcuts** tab lists every chip in two groups, **On a
+  line** and **On the whole file**, each built-in, from your folder, or learned. It
+  shows how often you've used each, and **Hide** takes one out of the comment box
+  without deleting it.
 - **Learn after each review** (on by default): when your agent goes idle with five
   or more new comments, replies or decisions in the review, prereview hands them
   to your agent's **background learner**. That's a helper agent it starts with the
