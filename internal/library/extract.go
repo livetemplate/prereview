@@ -114,14 +114,14 @@ func ExtractionPrompt(j Job, existing []Learning) string {
 		"\nAlready in the library: don't propose these again. When the signals contradict one, propose the new lesson with `--replaces <id>` (newer wins):\n")
 	listLearnings(&b, existing, func(l Learning) bool { return l.Status == StatusRejected },
 		"\nRejected by the reviewer: never propose these again, in any wording:\n")
-	fmt.Fprintf(&b, "\nOne call per lesson:\n\n```\nprereview learn propose --job %s --text \"<one instruction>\" --scope \"<where it applies, e.g. Technical docs>\" --evidence <store>:<id> [--evidence …] [--glob 'docs/**/*.md'] [--replaces <id>] [--checker rule.yml] [--judge rubric.md] [--shortcut-label \"…\" --shortcut-body \"…\"]\n```\n\n", j.ID)
+	fmt.Fprintf(&b, "\nOne call per lesson:\n\n```\nprereview learn propose --job %s --text \"<one instruction>\" --scope \"<where it applies, e.g. Technical docs>\" --evidence <store>:<id> [--evidence …] [--glob 'docs/**/*.md'] [--replaces <id>] [--checker rule.yml] [--judge rubric.md] [--shortcut-label \"…\" --shortcut-body \"…\" [--shortcut-scope file]]\n```\n\n", j.ID)
 	accept := "each waits for the reviewer to accept it in Library → Learnings"
 	if j.AutoAccept {
 		accept = "each is accepted as you propose it (the reviewer is told and can undo it)"
 	}
 	b.WriteString("Propose only what the signals support, and cite every signal a lesson rests on: a citation that doesn't resolve, or that names a store this job doesn't list, is refused. Prefer a few general lessons over many narrow ones; " + accept + ", and an accepted lesson becomes a line in the reviewer's skills.\n\n" +
 		"When a lesson can be checked mechanically (banned words, a preferred spelling), also draft a checker and pass it with `--checker <file>`: a rule YAML with `extends: existence` (`tokens: [...]`), `substitution` (`swap: {bad: good}`), `occurrence` or `vocab`, plus `name` and `message`. Never `extends: command`: it is refused. When it takes judgment (\"lead with what changed for the reader\"), draft a judge instead with `--judge <file>`: `---\\nkind: judge\\nname: …\\n---` followed by one yes/no rubric question. Both are validated before anything is written.\n\n" +
-		"When the reviewer gives the same instruction in three or more comments (\"why is this here?\", \"make this shorter\"), also add a one-tap chip for it in their comment box: `--shortcut-label \"<their own words, short>\" --shortcut-body \"<the comment text the chip fills in>\"`, citing those comments as evidence.\n")
+		"When the reviewer gives the same instruction in three or more comments (\"why is this here?\", \"make this shorter\"), also add a one-tap chip for it in their comment box: `--shortcut-label \"<their own words, short>\" --shortcut-body \"<the comment text the chip fills in>\"`, citing those comments as evidence. When those comments are about whole files (`kind` is `file`: \"tighten this doc\", \"check the examples run\"), add `--shortcut-scope file`: the chip then shows in the whole-file comment box instead.\n")
 	return b.String()
 }
 

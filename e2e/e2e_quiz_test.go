@@ -316,18 +316,6 @@ func TestE2E_QuizMeRequestsAQuiz(t *testing.T) {
 	p.waitReady()
 	p.clickFile("edited.go")
 
-	// REGRESSION GUARD. "Quiz me" and "Ask for suggestions" sit side by side in the
-	// file header. They looked alike, so the quiz control first reused the
-	// `.prompts-trigger` class — which made that selector ambiguous and silently
-	// re-pointed TestE2E_PromptPicker's click at the wrong button. It did not fail:
-	// it HUNG, waiting forever for a dropdown that never opened, and took the whole
-	// suite past its timeout. Assert the selector still resolves to exactly one
-	// element so the next person gets an instant, explained failure instead.
-	if n := evalInt(t, p, `document.querySelectorAll('.prompts-trigger').length`); n != 1 {
-		t.Fatalf(".prompts-trigger must match exactly the suggestions trigger, got %d —\n"+
-			"a second element sharing that class hangs TestE2E_PromptPicker rather than failing it", n)
-	}
-
 	p.openUnderstandTab("quiz")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`button[name='requestQuiz']`, chromedp.ByQuery),

@@ -589,7 +589,8 @@
     <form method="POST"><input type="hidden" name="tab" value="benchmarks"><button type="submit" name="setLibraryTab" class="lib-tab" role="tab" aria-selected="false">Benchmarks</button></form>
   </div>
   <section class="lib-shortcuts">
-  <p class="sc-intro">One-tap comments for a line, a text selection or a block. The ones you use most come first. Add your own as Markdown files in <code>~/.config/prereview/shortcuts/</code>; an accepted learning can add one too.</p>
+  <p class="sc-intro">One-tap comments. The ones you use most come first. Add your own as Markdown files: line shortcuts in <code>~/.config/prereview/shortcuts/</code>, whole-file ones in <code>~/.config/prereview/prompts/</code>. An accepted learning can add either.</p>
+  <h3 class="sc-group">On a line</h3>
   <ul class="lib-list">
     <li class="lib-card sc-row" data-key="sc-shorter">
       <header><b class="sc-label">Make this shorter</b><span class="ck-pill">built-in</span><span class="sc-uses">3 uses</span><form method="POST" class="sc-toggle"><button type="submit" name="hideShortcut" value="shorter" class="outline secondary">Hide</button></form></header>
@@ -600,6 +601,13 @@
     </li><li class="lib-card sc-row is-hidden" data-key="sc-learned-l9">
       <header><b class="sc-label">Why is this here?</b><span class="ck-pill">learned</span><span class="sc-uses">0 uses</span><form method="POST" class="sc-toggle"><button type="submit" name="showShortcut" value="learned-l9" class="outline secondary">Show</button></form></header>
       <p class="sc-body">Why is this here?</p>
+    </li>
+  </ul>
+  <h3 class="sc-group">On the whole file</h3>
+  <ul class="lib-list">
+    <li class="lib-card sc-row" data-key="sc-file-grammar">
+      <header><b class="sc-label">Fix grammar &amp; spelling</b><span class="ck-pill">built-in</span><span class="sc-uses">2 uses</span><form method="POST" class="sc-toggle"><button type="submit" name="hideShortcut" value="file-grammar" class="outline secondary">Hide</button></form></header>
+      <p class="sc-body">Proofread this file.</p>
     </li>
   </ul>
 </section>

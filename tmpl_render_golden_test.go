@@ -407,16 +407,19 @@ func renderFixtures() []renderFixture {
 		{Slug: "security", Title: "Quiz me like a security reviewer", Body: "security quiz"},
 	}
 
-	// #147/#211: the "Ask for suggestions" picker with the real built-in library, so
-	// the golden pins every shipped prompt row and the "Add your own prompts" link.
-	promptsPicker := goBase()
-	promptsPicker.Prompts = review.LoadPrompts("")
+	// #275: the file comment box with the real built-in prompts as whole-file
+	// chips: the first four, More, and "Add your own".
+	fileComposer := goBase()
+	fileComposer.CommentMode = "file"
+	for _, p := range review.LoadPrompts("") {
+		fileComposer.Shortcuts = append(fileComposer.Shortcuts, review.Shortcut{Slug: "file-" + p.Slug, Label: p.Title, Body: p.Body, Scope: review.ScopeFile})
+	}
 
 	// #204: a line composer with the shortcut chips (every built-in, file order).
 	shortcuts := goBase()
 	shortcuts.SelectionAnchor, shortcuts.SelectionEnd, shortcuts.SelectionSide = 2, 2, "new"
 	for _, p := range review.LoadShortcuts("") {
-		shortcuts.Shortcuts = append(shortcuts.Shortcuts, review.Shortcut{Slug: p.Slug, Label: p.Title, Body: p.Body})
+		shortcuts.Shortcuts = append(shortcuts.Shortcuts, review.Shortcut{Slug: p.Slug, Label: p.Title, Body: p.Body, Scope: review.ScopeLine})
 	}
 
 	// #204 ripple: a comment with three follow-on suggestions, two of them
@@ -848,14 +851,24 @@ func renderFixtures() []renderFixture {
 	shortcutLearn.Learnings = []library.Learning{{ID: "l9", Text: "Ask why a passage is there before keeping it.", Scope: library.DefaultScope,
 		Status: "proposed", Produces: []string{"instruction", "shortcut"}, ShortcutLabel: "Why is this here?",
 		ShortcutBody: "Why is this here? Reply with the case for keeping it.", CreatedAt: "2026-11-15T09:00:00Z", UpdatedAt: "2026-11-15T09:00:00Z",
-		Evidence: []library.Evidence{ev("/repo/.prereview", "comment", "plan.md", 12, "why is this here", "2026-11-15T08:00:00Z")}}}
+		Evidence: []library.Evidence{ev("/repo/.prereview", "comment", "plan.md", 12, "why is this here", "2026-11-15T08:00:00Z")}},
+		// #275: a whole-file shortcut, for the file comment box.
+		{ID: "l10", Text: "Tighten a whole doc before it goes out.", Scope: library.DefaultScope,
+			Status: "proposed", Produces: []string{"instruction", "shortcut"}, ShortcutLabel: "Tighten it", ShortcutScope: "file",
+			ShortcutBody: "Tighten this doc: cut repeats and filler.", CreatedAt: "2026-11-15T09:05:00Z", UpdatedAt: "2026-11-15T09:05:00Z",
+			Evidence: []library.Evidence{ev("/repo/.prereview", "comment", "plan.md", 0, "tighten this doc", "2026-11-15T08:05:00Z")}}}
 	shortcutsTab := repoBase()
 	shortcutsTab.ShowLibrary, shortcutsTab.LibraryTab = true, "shortcuts"
-	shortcutsTab.ShortcutsTab = &review.ShortcutsTab{Rows: []review.Shortcut{
-		{Slug: "shorter", Label: "Make this shorter", Body: "Make this shorter.", Source: "built-in", Uses: 3},
-		{Slug: "tone", Label: "Warmer", Body: "Make the tone warmer.", Source: "yours", Uses: 1},
-		{Slug: "learned-l9", Label: "Why is this here?", Body: "Why is this here?", Source: "learned", Hidden: true},
-	}}
+	shortcutsTab.ShortcutsTab = &review.ShortcutsTab{
+		Line: []review.Shortcut{
+			{Slug: "shorter", Label: "Make this shorter", Body: "Make this shorter.", Source: "built-in", Uses: 3, Scope: review.ScopeLine},
+			{Slug: "tone", Label: "Warmer", Body: "Make the tone warmer.", Source: "yours", Uses: 1, Scope: review.ScopeLine},
+			{Slug: "learned-l9", Label: "Why is this here?", Body: "Why is this here?", Source: "learned", Hidden: true, Scope: review.ScopeLine},
+		},
+		File: []review.Shortcut{
+			{Slug: "file-grammar", Label: "Fix grammar & spelling", Body: "Proofread this file.", Source: "built-in", Uses: 2, Scope: review.ScopeFile},
+		},
+	}
 
 	// checks M4: the Skills tab — a generated Writing skill installed for Claude
 	// but not set up for Cursor, edited by you, with its history; a scope proposal.
@@ -967,7 +980,7 @@ func renderFixtures() []renderFixture {
 		{"understand-diagrams", understandDiagrams},
 		{"moved-code", movedCode},
 		{"drawer-changed-since-viewed", changedSinceViewed},
-		{"prompts-picker", promptsPicker},
+		{"file-composer-shortcuts", fileComposer},
 		{"shortcuts-composer", shortcuts},
 		{"ripple", ripple},
 		{"external", external},

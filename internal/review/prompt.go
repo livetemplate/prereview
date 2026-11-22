@@ -8,19 +8,19 @@ import (
 	"strings"
 )
 
-// prompt.go is the #147 "ask for suggestions" prompt library: a set of prebuilt
-// instructions the reviewer picks and sends to the agent to get inline suggestions
-// back. A picked prompt pre-fills the ordinary file-comment composer (its Body
-// becomes the comment), so it rides the existing comment → `prereview suggest` path —
+// prompt.go is the #147 prompt library: prebuilt instructions for a whole file,
+// such as asking the agent for inline suggestions. Since #275 each prompt is a
+// whole-file shortcut (shortcut.go): a chip in the file comment box whose Body
+// fills the box, so it rides the ordinary comment → `prereview suggest` path, with
 // no new comment kind. Built-ins are embedded; a user overlay lives at
 // ~/.config/prereview/prompts/*.md and overrides/extends them by slug.
 
 //go:embed builtin_prompts/*.md
 var builtinPromptsFS embed.FS
 
-// Prompt is one "ask for suggestions" template. Slug is the stable id (the filename
-// without .md); Title is shown in the picker; Body pre-fills the file-comment
-// composer and, once saved, is the instruction the agent acts on.
+// Prompt is one prompt file. Slug is the stable id (the filename without .md);
+// Title is the chip's label; Body fills the comment box and, once saved, is the
+// instruction the agent acts on. Shortcut and quiz/explain prompts share it.
 type Prompt struct {
 	Slug  string
 	Title string
@@ -30,8 +30,8 @@ type Prompt struct {
 
 // LoadPrompts returns the embedded built-in prompts overlaid with the user's library
 // at userDir. A user file with the same slug (filename) OVERRIDES the built-in; new
-// slugs are added. Sorted by title for a stable picker. Tolerant by design: a missing
-// user dir, or an unreadable / title-only file, is skipped — the picker must never
+// slugs are added. Sorted by title for a stable order. Tolerant by design: a missing
+// user dir, or an unreadable / title-only file, is skipped — a prompt file must never
 // break a review.
 func LoadPrompts(userDir string) []Prompt {
 	return loadPromptLibrary(builtinPromptsFS, "builtin_prompts", userDir)

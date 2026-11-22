@@ -27,6 +27,9 @@ type Proposal struct {
 	// the instruction the reviewer keeps typing, as one tap.
 	ShortcutLabel string
 	ShortcutBody  string
+	// ShortcutScope is where the chip shows: "file" for the whole-file comment box,
+	// "line" or "" for a line, text or block comment (#275).
+	ShortcutScope string
 	// Job is the learning job this answers (`--job`). Its evidence must come from
 	// the stores the job names, and a job queued with auto-accept makes the
 	// learning accepted on arrival. Without one, a learning arrives proposed.
@@ -54,6 +57,15 @@ func Propose(dir string, p Proposal) (Learning, error) {
 	label, body := strings.TrimSpace(p.ShortcutLabel), strings.TrimSpace(p.ShortcutBody)
 	if (label == "") != (body == "") || (slices.Contains(p.Produces, "shortcut") && label == "") {
 		return Learning{}, errors.New("learn propose: a shortcut needs both --shortcut-label and --shortcut-body")
+	}
+	shortcutScope := strings.TrimSpace(p.ShortcutScope)
+	switch {
+	case shortcutScope != "" && shortcutScope != "line" && shortcutScope != "file":
+		return Learning{}, fmt.Errorf("learn propose: --shortcut-scope %q: want line or file", shortcutScope)
+	case shortcutScope != "" && label == "":
+		return Learning{}, errors.New("learn propose: --shortcut-scope needs --shortcut-label and --shortcut-body")
+	case shortcutScope == "line":
+		shortcutScope = "" // the default, stored as empty
 	}
 	// No --produces means an instruction; a drafted checker, judge or shortcut is
 	// added on top, never instead (that's what --produces checker alone says).
@@ -92,7 +104,7 @@ func Propose(dir string, p Proposal) (Learning, error) {
 	}
 	l := Learning{ID: NewID(), Text: text, Scope: scope, Globs: p.Globs, Evidence: ev,
 		Produces: p.Produces, Replaces: p.Replaces, Status: StatusProposed,
-		Checker: trimFile(p.Checker), Judge: trimFile(p.Judge), ShortcutLabel: label, ShortcutBody: body}
+		Checker: trimFile(p.Checker), Judge: trimFile(p.Judge), ShortcutLabel: label, ShortcutBody: body, ShortcutScope: shortcutScope}
 	err := update(dir, func(have map[string]Learning) ([]Learning, error) {
 		if old, ok := have[p.Replaces]; p.Replaces != "" && (!ok || old.Status == StatusDeleted) {
 			return nil, fmt.Errorf("learn propose: --replaces %s: no such learning", p.Replaces)

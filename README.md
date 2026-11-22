@@ -76,7 +76,8 @@ whether an agent is connected and where each comment stands.
 
 <p align="center"><img src="docs/thread.gif" alt="A reviewer comments on a retry loop; the agent replies asking a question; the reviewer answers in the thread" width="820"></p>
 
-**Take the agent's edits.** Ask for suggestions and each one appears as a before →
+**Take the agent's edits.** Ask for suggestions, in your own words or with a
+ready-made prompt in the file comment box, and each one appears as a before →
 after box you accept or reject. prereview never edits your files: the agent applies
 what you accept.
 

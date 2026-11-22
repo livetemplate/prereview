@@ -25,6 +25,7 @@ func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate
 	if n <= 0 {
 		return state, fmt.Errorf("selectLine: missing or invalid 'line'")
 	}
+	state.ShowMoreShortcuts = false // a new or changed box starts with four chips (#275)
 	side := ctx.GetString("side")
 	if side == "" {
 		side = "new"
@@ -169,6 +170,7 @@ func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplat
 	if from <= 0 || to < from {
 		return state, fmt.Errorf("selectBlock: invalid range from=%d to=%d", from, to)
 	}
+	state.ShowMoreShortcuts = false // a new or changed box starts with four chips (#275)
 	side := ctx.GetString("side")
 	if side != "old" {
 		side = "new"
@@ -207,6 +209,7 @@ func (c *PrereviewController) SelectText(state PrereviewState, ctx *livetemplate
 	if fromLine <= 0 || toLine < fromLine {
 		return state, fmt.Errorf("selectText: invalid line range from=%d to=%d", fromLine, toLine)
 	}
+	state.ShowMoreShortcuts = false // a new or changed box starts with four chips (#275)
 	side := ctx.GetString("side")
 	if side != "old" {
 		side = "new"
@@ -445,9 +448,8 @@ func (c *PrereviewController) OpenFileComment(state PrereviewState, ctx *livetem
 }
 
 // resetToFileComment clears every selection/edit field and opens a fresh whole-file
-// composer (CommentMode=file). Shared by OpenFileComment and PickPrompt. It does NOT
-// touch DraftBody — OpenFileComment leaves an in-progress draft intact; PickPrompt
-// overwrites it with the prompt afterwards.
+// composer (CommentMode=file), with its chips folded back to the first four. It
+// does NOT touch DraftBody, so an in-progress draft is kept.
 func resetToFileComment(state *PrereviewState) {
 	state.CommentMode = commentKindFile
 	state.SelectionAnchor = 0
@@ -458,31 +460,7 @@ func resetToFileComment(state *PrereviewState) {
 	state.EditingCommentID = ""
 	state.ReanchorCommentID = ""
 	state.MoreMenuOpen = false
-}
-
-// PickPrompt opens a file-level comment PRE-FILLED with a chosen "ask for suggestions"
-// prompt (#147): it mirrors OpenFileComment, then seeds DraftBody with the prompt's
-// body, so the reviewer sees the instruction in the composer, can tweak/scope it, and
-// hits Save — creating an ordinary kind=file comment the agent answers with
-// `prereview suggest`. An unknown slug is a no-op (a stale picker click).
-func (c *PrereviewController) PickPrompt(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	if state.SelectedFile == "" {
-		return state, fmt.Errorf("pickPrompt: no file selected")
-	}
-	slug := ctx.GetString("slug")
-	var body string
-	for _, p := range state.Prompts {
-		if p.Slug == slug {
-			body = p.Body
-			break
-		}
-	}
-	if body == "" {
-		return state, nil // unknown/stale slug
-	}
-	resetToFileComment(&state)
-	state.DraftBody = body // pre-fill the composer with the prompt
-	return state, nil
+	state.ShowMoreShortcuts = false
 }
 
 // SelectImageArea opens the composer in "area" mode with a captured

@@ -292,7 +292,7 @@
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>
 === composer ===
-<div class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}" data-key="composer{{if $.ComposerNonce}}-{{$.ComposerNonce}}{{end}}"{{if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}><strong>{{if eq $.CommentMode "region"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small>{{else}}{{if eq $.CommentMode "file"}}{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "area"}}{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "text"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}} · “<span class="selection-snippet">{{$.SelectionText}}</span>”{{else}}{{if $.ReanchorCommentID}}Re-anchoring comment to {{else}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{end}}{{$.SelectionLabel}}{{end}}{{end}}{{end}}{{end}}</strong>{{if and (eq $.CommentMode "") (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID) (not $.ShowRenderedMarkdown) (not $.ShowRenderedHTML)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form" lvt-on:keydown="addComment" lvt-key="Mod+Enter">{{if $.ShowShortcuts}}<div class="sc-chips" role="group" aria-label="Shortcuts">{{range $.Shortcuts}}<button type="submit" name="useShortcut" value="{{.Slug}}" class="sc-chip" formnovalidate title="{{.Body}}">{{.Label}}</button>{{end}}</div>{{end}}
+<div class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}" data-key="composer{{if $.ComposerNonce}}-{{$.ComposerNonce}}{{end}}"{{if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}><strong>{{if eq $.CommentMode "region"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}region · <small>{{$.CurrentURL}}</small>{{else}}{{if eq $.CommentMode "file"}}{{if $.EditingCommentID}}Editing comment on file{{else}}Comment on file{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "area"}}{{if $.EditingCommentID}}Editing comment on area of{{else}}Comment on area of{{end}} <code>{{$.CurrentDiff.Path}}</code>{{else}}{{if eq $.CommentMode "text"}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{$.SelectionLabel}} · “<span class="selection-snippet">{{$.SelectionText}}</span>”{{else}}{{if $.ReanchorCommentID}}Re-anchoring comment to {{else}}{{if $.EditingCommentID}}Editing comment on {{else}}Comment on {{end}}{{end}}{{$.SelectionLabel}}{{end}}{{end}}{{end}}{{end}}</strong>{{if and (eq $.CommentMode "") (ne $.SelectionAnchor 0) (eq $.SelectionAnchor $.SelectionEnd) (not $.EditingCommentID) (not $.ShowRenderedMarkdown) (not $.ShowRenderedHTML)}} <small class="selection-hint">tap another line to extend, or save now for a single line</small>{{end}}<form method="POST" lvt-form:preserve class="composer-add" id="composer-add-form" lvt-on:keydown="addComment" lvt-key="Mod+Enter">{{if $.ShowShortcuts}}<div class="sc-chips" role="group" aria-label="Shortcuts">{{range $.ComposerShortcuts}}<button type="submit" name="useShortcut" value="{{.Slug}}" class="sc-chip" formnovalidate title="{{.Body}}">{{.Label}}</button>{{end}}{{if $.HasMoreShortcuts}}<button type="submit" name="showMoreShortcutChips" class="sc-chip sc-more" formnovalidate>More…</button>{{end}}<button type="submit" name="openShortcutLibrary" class="sc-add" formnovalidate>Add your own</button></div>{{end}}
     <textarea name="body" placeholder="{{if eq $.CommentMode "region"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "file"}}What's wrong with this file?{{else}}{{if eq $.CommentMode "area"}}What's wrong with this region?{{else}}{{if eq $.CommentMode "text"}}What's wrong with this text?{{else}}What's wrong with these lines?{{end}}{{end}}{{end}}{{end}}" required lvt-autofocus lvt-on:input="saveDraft" lvt-mod:debounce="150" data-nonce="{{$.ComposerNonce}}">{{$.DraftBody}}</textarea>
   </form><form method="POST" class="composer-cancel" id="composer-cancel-form"></form><div class="c-actions">
     <button type="submit" name="clearSelection" form="composer-cancel-form" class="cancel-btn">Cancel{{with index $.KeyHint "clearSelection"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
@@ -464,19 +464,7 @@
     {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.ShowUnderstandEntry}}
     <form method="POST" style="margin:0"><button type="submit" name="toggleUnderstand" class="quiz-trigger" title="Walk through the whole change, and quiz yourself on it">{{template "iconQuiz"}}<span class="quiz-trigger-label">Understand</span></button></form>
     {{end}}
-    
-    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.Prompts}}
-    <div class="tb-dropdown prompts-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="prompts-trigger" aria-haspopup="menu" title="Ask the agent for suggestions using a prebuilt prompt">{{template "iconSuggestion"}}<span class="prompts-trigger-label">Ask for suggestions</span></button>
-      <div class="tb-dropdown-panel prompts-panel" role="menu" aria-label="Suggestion prompts">
-        {{range $.Prompts}}
-        <form method="POST"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" name="pickPrompt" class="prompt-row" title="{{.Body}}">{{.Title}}</button></form>
-        {{end}}
-        
-        <a class="prompts-more" role="menuitem" href="/_usage#suggested-edits" target="_blank" rel="noopener">Add your own prompts</a>
-      </div>
-    </div>
-    {{end}}{{if $.ShowChecks}}{{template "checksButton" $}}{{end}}
+    {{if $.ShowChecks}}{{template "checksButton" $}}{{end}}
     
     {{if $.Versions}}
     <div class="tb-dropdown versions-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
@@ -627,7 +615,7 @@
       {{$accepted := eq .Status "accepted"}}{{with .Produces}}<div class="lc-row"><span>{{if $accepted}}became{{else}}would become{{end}}: <b>{{.}}</b></span></div>{{end}}
       {{with .Checker}}<details class="lc-drafted"><summary>Checker it adds</summary><pre>{{.}}</pre></details>{{end}}
       {{with .Judge}}<details class="lc-drafted"><summary>Judge it adds</summary><pre>{{.}}</pre></details>{{end}}
-      {{with .Shortcut}}<details class="lc-drafted"><summary>Shortcut it adds</summary><p><b>{{.Label}}</b></p><pre>{{.Body}}</pre></details>{{end}}
+      {{with .Shortcut}}<details class="lc-drafted"><summary>{{if .File}}Whole-file shortcut it adds{{else}}Shortcut it adds{{end}}</summary><p><b>{{.Label}}</b></p><pre>{{.Body}}</pre></details>{{end}}
       {{if not .Editing}}<div class="lc-actions">
         {{$id := .ID}}{{range .Actions}}<form method="POST"><input type="hidden" name="id" value="{{$id}}">{{with .Act}}<input type="hidden" name="act" value="{{.}}">{{end}}<button type="submit" name="{{.Name}}" class="{{.Class}}">{{.Label}}</button></form>
         {{end}}
@@ -1285,6 +1273,8 @@
 
 
 
+
+
 === processedBadge ===
 <small class="processed-badge">worked on</small>
 === queuedBadge ===
@@ -1450,14 +1440,21 @@
   </div>
   {{end}}
 </div>
-=== shortcutsTab ===
-<section class="lib-shortcuts">
-  <p class="sc-intro">One-tap comments for a line, a text selection or a block. The ones you use most come first. Add your own as Markdown files in <code>~/.config/prereview/shortcuts/</code>; an accepted learning can add one too.</p>
-  <ul class="lib-list">
-    {{range .Rows}}<li class="lib-card sc-row{{if .Hidden}} is-hidden{{end}}" data-key="sc-{{.Slug}}">
+=== shortcutRow ===
+<li class="lib-card sc-row{{if .Hidden}} is-hidden{{end}}" data-key="sc-{{.Slug}}">
       <header><b class="sc-label">{{.Label}}</b><span class="ck-pill">{{.Source}}</span><span class="sc-uses">{{.Uses}} use{{if ne .Uses 1}}s{{end}}</span><form method="POST" class="sc-toggle"><button type="submit" name="{{if .Hidden}}showShortcut{{else}}hideShortcut{{end}}" value="{{.Slug}}" class="outline secondary">{{if .Hidden}}Show{{else}}Hide{{end}}</button></form></header>
       <p class="sc-body">{{.Body}}</p>
-    </li>{{end}}
+    </li>
+=== shortcutsTab ===
+<section class="lib-shortcuts">
+  <p class="sc-intro">One-tap comments. The ones you use most come first. Add your own as Markdown files: line shortcuts in <code>~/.config/prereview/shortcuts/</code>, whole-file ones in <code>~/.config/prereview/prompts/</code>. An accepted learning can add either.</p>
+  <h3 class="sc-group">On a line</h3>
+  <ul class="lib-list">
+    {{range .Line}}{{template "shortcutRow" .}}{{end}}
+  </ul>
+  <h3 class="sc-group">On the whole file</h3>
+  <ul class="lib-list">
+    {{range .File}}{{template "shortcutRow" .}}{{end}}
   </ul>
 </section>
 === skillNotice ===

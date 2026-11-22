@@ -614,6 +614,34 @@ func TestPropose_Shortcut(t *testing.T) {
 	}
 }
 
+// TestPropose_ShortcutScope (#275): a learning's shortcut can be for the whole-file
+// comment box; line is the default and is stored empty; an unknown scope, or a
+// scope with no shortcut, is refused; the learner's instructions name the flag.
+func TestPropose_ShortcutScope(t *testing.T) {
+	dir, store := t.TempDir(), seedStore(t, t.TempDir())
+	ev := []string{store + ":c1"}
+	chip := func(scope string) Proposal {
+		return Proposal{Text: "Tighten whole docs", Evidence: ev, ShortcutLabel: "Tighten it", ShortcutBody: "Tighten this doc.", ShortcutScope: scope}
+	}
+	for _, bad := range []Proposal{chip("page"), {Text: "x", Evidence: ev, ShortcutScope: "file"}} {
+		if _, err := Propose(dir, bad); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+	for scope, want := range map[string]string{"file": "file", "line": "", "": ""} {
+		l, err := Propose(dir, chip(scope))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if l.ShortcutScope != want {
+			t.Errorf("--shortcut-scope %q stored %q, want %q", scope, l.ShortcutScope, want)
+		}
+	}
+	if p := ExtractionPrompt(Job{ID: "j1", Stores: []string{store}}, nil); !strings.Contains(p, "--shortcut-scope file") {
+		t.Error("the extraction prompt doesn't name --shortcut-scope file")
+	}
+}
+
 // TestPropose_AgentTextCheckScope: a lesson about the agent's own text may carry
 // a checker or judge with no `files:` (generation scopes it to the kind's file),
 // but not one whose `files:` leave that file out.

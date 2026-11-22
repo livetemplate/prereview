@@ -71,9 +71,9 @@ type PrereviewController struct {
 	SkillSyncs     []skills.ClientSync
 	skillNoticeOff atomic.Bool
 
-	// PromptsDir is the user's "ask for suggestions" prompt overlay directory
-	// (~/.config/prereview/prompts), set once by main.go. Read every Mount and
-	// merged with the embedded built-ins in LoadPrompts. "" = built-ins only.
+	// PromptsDir is the user's whole-file shortcut (prompt) overlay directory
+	// (~/.config/prereview/prompts), set once by main.go. Merged with the embedded
+	// built-ins in LoadPrompts by allShortcuts (#275). "" = built-ins only.
 	PromptsDir string
 
 	// QuizzesDir is the user overlay for #191 quiz prompts
@@ -510,10 +510,9 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// append-only read, like applySuggestions; the files are the source of truth.
 	state.ThreadEntries = loadThreads(c.CSVPath)
 
-	// Load the #147 "ask for suggestions" prompts (embedded built-ins + the user's
-	// overlay dir) for the file-header picker. Cheap; refreshed each connect so a
-	// user's edits to their prompt files show without a relaunch.
-	state.Prompts = LoadPrompts(c.PromptsDir)
+	// Load the quiz and walkthrough prompts (embedded built-ins + the user's overlay
+	// dirs). Cheap; refreshed each connect so a user's edits to their prompt files
+	// show without a relaunch. (The whole-file prompts load with the shortcuts.)
 	state.QuizPrompts = LoadQuizPrompts(c.QuizzesDir)
 	state.ExplainPrompts = LoadExplainPrompts(c.ExplainDir)
 	// Loads the quizzes and the reviewer's answers. They are grounded below

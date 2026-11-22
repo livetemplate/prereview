@@ -366,8 +366,8 @@ edits", "propose tighter wording". Each suggestion renders as an inline box (a
 before→after mini-diff) that the user acts on; their decision comes back in the next
 snapshot's `suggestions[]`.
 
-**Prompts (`#147`).** The reviewer can also send a prebuilt prompt from the file header
-("Ask for suggestions"). It arrives as a normal `kind=file` comment whose body asks you
+**Prompts (`#147`).** The reviewer can also send a prebuilt prompt: a whole-file chip in
+the file comment box (#275). It arrives as a normal `kind=file` comment whose body asks you
 to *suggest* edits (e.g. "review this file's grammar … propose each change as a
 `prereview suggest` edit — do not modify files directly"). Treat it as a suggest
 request. Read the file and propose the edits with `prereview suggest` (**do not edit the

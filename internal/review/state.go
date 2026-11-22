@@ -244,11 +244,9 @@ type PrereviewState struct {
 	// truth — not lvt:"persist"). Grouped by target ID in Threads() for render.
 	ThreadEntries []ThreadEntry `json:"thread_entries"`
 
-	// Prompts is the #147 "ask for suggestions" library — built-in templates plus the
-	// user's ~/.config/prereview/prompts/ overlay — loaded every Mount (not
-	// lvt:"persist"). Rendered in the file-header picker; picking one pre-fills the
-	// file-comment composer.
-	Prompts []Prompt `json:"prompts"`
+	// ShowMoreShortcuts shows every chip in the open comment box, past the first
+	// four (More, #275). Opening a box folds it back. Session view state.
+	ShowMoreShortcuts bool `json:"show_more_shortcuts"`
 
 	// QuizPrompts is the #191 quiz-prompt library — built-ins plus the user's
 	// ~/.config/prereview/quizzes/ overlay — loaded every Mount like Prompts.

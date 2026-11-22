@@ -307,9 +307,12 @@ prereview check     [--json] <file>...
   prereview learn propose --job <id> --text "…" --evidence <store>:<id> [--evidence …]
     [--scope "…"] [--glob <pattern>]… [--replaces <id>]
     [--produces instruction,checker,judge] [--checker <rule.yml|->] [--judge <rubric.md|->]
+    [--shortcut-label "…" --shortcut-body "…" [--shortcut-scope line|file]]
   ```
 
-  `--checker`/`--judge` attach a
+  `--shortcut-label`/`--shortcut-body` add a one-tap chip to your comment box;
+  `--shortcut-scope file` puts it in the whole-file comment box instead of the line
+  one. `--checker`/`--judge` attach a
   drafted rule or rubric (validated; never a command check) that lands in your
   checks folder when the lesson is accepted. A check with no `files:` runs on the
   lesson's `--glob`, and a lesson about the agent's replies, suggestions, quiz
@@ -409,11 +412,11 @@ second, random port. prereview refuses `--external` with `--public-url`.
 
 ## Environment
 
-- `PREREVIEW_PROMPTS_DIR` - override the suggestion-prompt overlay directory
-  (default `~/.config/prereview/prompts`). Each `*.md` file there adds a row to the
-  file header's **Ask for suggestions** menu. The filename minus `.md` is its id,
-  the first `# Heading` is the menu title, and the rest is the prompt text that
-  pre-fills the comment box. Reuse a built-in's filename (see
+- `PREREVIEW_PROMPTS_DIR` - override the whole-file prompt overlay directory
+  (default `~/.config/prereview/prompts`). Each `*.md` file there adds a chip to the
+  whole-file comment box (**Comment on file**). The filename minus `.md` is its id,
+  the first `# Heading` is the chip's label, and the rest is the prompt text that
+  fills the comment box. Reuse a built-in's filename (see
   [`internal/review/builtin_prompts/`](../internal/review/builtin_prompts/)) to
   replace it. A file with no text is skipped. prereview re-reads the folder each time a tab connects,
   so reload the tab after editing. End the prompt by asking for `prereview suggest`

@@ -66,6 +66,7 @@ var (
 // LearnShortcut is the chip a learning adds to the comment box.
 type LearnShortcut struct {
 	Label, Body string
+	File        bool // a whole-file shortcut (#275)
 }
 
 // LearnEvidence is one cited record on a card.
@@ -185,7 +186,7 @@ func (s PrereviewState) learnCard(l library.Learning, byID map[string]library.Le
 	c.Produces = strings.Join(l.Produces, " · ")
 	c.Checker, c.Judge = l.Checker, l.Judge
 	if l.ShortcutBody != "" {
-		c.Shortcut = &LearnShortcut{Label: l.ShortcutLabel, Body: l.ShortcutBody}
+		c.Shortcut = &LearnShortcut{Label: l.ShortcutLabel, Body: l.ShortcutBody, File: shortcutScope(l.ShortcutScope) == ScopeFile}
 	}
 	for _, e := range l.Evidence {
 		c.Evidence = append(c.Evidence, LearnEvidence{Where: s.evidenceWhere(e), Quote: e.Quote})
