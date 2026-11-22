@@ -1255,3 +1255,18 @@ func (s PrereviewState) SelectionLabel() string {
 	}
 	return fmt.Sprintf("L%d-L%d", lo, hi)
 }
+
+// ShowsDiffRows reports the open file shows diff rows with changes, the view the
+// whitespace setting applies to: not the file view, a rendered preview or a file
+// with nothing changed.
+func (s PrereviewState) ShowsDiffRows() bool {
+	if s.CurrentDiff == nil || s.FileView || s.ShowRenderedMarkdown() || s.ShowRenderedHTML() {
+		return false
+	}
+	for _, l := range s.CurrentDiff.Lines {
+		if l.Kind == "add" || l.Kind == "del" {
+			return true
+		}
+	}
+	return false
+}

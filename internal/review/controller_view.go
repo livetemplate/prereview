@@ -199,6 +199,15 @@ func (c *PrereviewController) ToggleFileView(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
+// ToggleHideWhitespace shows or stops showing whitespace-only changes as
+// unchanged (#115 B1). A durable view pref.
+func (c *PrereviewController) ToggleHideWhitespace(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.HideWhitespace = !state.HideWhitespace
+	state.MoreMenuOpen = false
+	c.savePrefs(state)
+	return state, nil
+}
+
 // ToggleFileScope flips the drawer file list between changed-only
 // (default) and all tracked files. See PrereviewState.ShowAllFiles and
 // scopedFiles. Lives in the drawer, so no overflow-menu interaction.

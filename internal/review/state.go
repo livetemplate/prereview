@@ -482,6 +482,10 @@ type PrereviewState struct {
 	Mechanical       map[string][]MechHunk `json:"mechanical"`
 	MechRevealed     map[string]bool       `json:"mech_revealed"`
 	UnfoldMechanical bool                  `json:"unfold_mechanical"`
+	// HideWhitespace shows lines that changed only in whitespace as unchanged
+	// (#115 B1), in VisibleLines only: CurrentDiff stays the real diff, so no
+	// anchor moves. A durable view pref (uiprefs.go).
+	HideWhitespace bool `json:"hide_whitespace"`
 	// The walkthrough in progress (#115 A3): WalkExplanation names the one being
 	// walked ("" = no walk), so a replaced walkthrough ends the walk instead of
 	// landing on a stranger's stop; WalkStep/WalkAnchor is the stop shown
@@ -1005,7 +1009,12 @@ func (s PrereviewState) VisibleLines() []gitdiff.DiffLine {
 	// row, so the row must survive folding (#231). This used to reveal the whole
 	// file for suggestions, which also dropped every del row.
 	pinned := s.pinnedRows()
-	lines := gitdiff.CollapseToHunks(s.CurrentDiff.Lines, diffContextLines, pinned)
+	lines := s.CurrentDiff.Lines
+	if s.HideWhitespace {
+		// Before the collapse, so paired rows fold with the unchanged ones.
+		lines = gitdiff.PairWhitespace(lines, pinned)
+	}
+	lines = gitdiff.CollapseToHunks(lines, diffContextLines, pinned)
 	if group := s.mechGroup(); group != nil {
 		lines = gitdiff.FoldRanges(lines, group, pinned)
 	}
