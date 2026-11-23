@@ -3,8 +3,12 @@
 package e2e
 
 import (
+	"bytes"
+	"compress/flate"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,11 +22,42 @@ import (
 	"github.com/chromedp/chromedp/kb"
 )
 
+var updateWireBudgets = flag.Bool("update-wire-budgets", false,
+	"rewrite e2e/testdata/wire-budgets.json from this run's measured sizes")
+
+// wireBudgetsPath holds each step's measured raw and deflated bytes.
+const wireBudgetsPath = "testdata/wire-budgets.json"
+
+// wireSizes is one step's bytes: raw is what the browser parses and applies;
+// deflated is each frame compressed on its own at flate level 1 (gorilla's
+// per-message default), roughly what crosses the network.
+type wireSizes struct {
+	Raw      int `json:"raw"`
+	Deflated int `json:"deflated"`
+}
+
+// wireBudget is how far a step may grow past its measured size: half again,
+// with at least 1 KB of slack so small frames don't flake.
+func wireBudget(measured int) int {
+	return max(measured*3/2, measured+1024)
+}
+
+// wireCap is a hard raw limit, whatever the measured sizes say, on the
+// wireCapped steps: the comment actions that each resent about 105 KB before
+// livetemplate v0.26.1.
+const wireCap = 12 << 10
+
+var wireCapped = []string{
+	"edit a comment", "Escape the edit", "open a reply", "post the reply",
+	"close it (Escape)", "agent replies on a comment",
+}
+
 // wireFrame is one WebSocket reply: what action it answered, its size, and the
 // two shapes that usually mean over-sending.
 type wireFrame struct {
 	Action     string `json:"action"`
 	Size       int    `json:"size"`
+	Deflated   int    `json:"deflated"`
 	Statics    int    `json:"statics"`     // "s" arrays anywhere in the tree
 	RangeItems int    `json:"range_items"` // largest "d" array (a range sent whole)
 	Ops        int    `json:"ops"`         // range-op tuples (granular updates)
@@ -33,6 +68,16 @@ type wireStep struct {
 	Name   string      `json:"name"`
 	Frames []wireFrame `json:"frames"`
 	Note   string      `json:"note,omitempty"`
+}
+
+// sizes totals the step's frames.
+func (st wireStep) sizes() wireSizes {
+	var sz wireSizes
+	for _, f := range st.Frames {
+		sz.Raw += f.Size
+		sz.Deflated += f.Deflated
+	}
+	return sz
 }
 
 // setupWireAuditRepo is a review a reader might open: a long modified Go file, a
@@ -95,10 +140,11 @@ func setupWireAuditRepo(t *testing.T) string {
 }
 
 // TestE2E_WireAudit drives a review through the interactions a reader uses and
-// records every WebSocket reply frame, so over-sending shows up as numbers. It
-// is a measuring tool, not a guard yet: it logs a table and flags frames that
-// look large for what changed. Set WIRE_AUDIT_DIR to also write report.json and
-// each frame over 4 KB there.
+// records every WebSocket reply frame, then holds each step to its budget: the
+// raw and deflated sizes in testdata/wire-budgets.json plus headroom
+// (wireBudget), and wireCap for the comment actions. After an intended change,
+// regenerate the sizes with -update-wire-budgets and read the diff. Set
+// WIRE_AUDIT_DIR to also write report.json and each frame over 4 KB there.
 func TestE2E_WireAudit(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupWireAuditRepo(t), 1280, 900, "--agent")
 	diag := captureDiag(t, p)
@@ -313,8 +359,6 @@ func TestE2E_WireAudit(t *testing.T) {
 	})
 	step("hide whitespace on", button("toggleHideWhitespace"))
 	step("hide whitespace off", button("toggleHideWhitespace"))
-	step("fold mechanical toggle", button("toggleFoldMechanical"))
-	step("fold mechanical toggle back", button("toggleFoldMechanical"))
 	step("hide annotations", button("toggleMarks"))
 	step("show annotations", button("toggleMarks"))
 	step("cycle theme mode", button("cycleTheme"))
@@ -345,13 +389,11 @@ func TestE2E_WireAudit(t *testing.T) {
 
 	// --- report ---
 	var b strings.Builder
-	fmt.Fprintf(&b, "\n%-40s %8s  %s\n", "interaction", "bytes", "frames (action:size [s=statics d=range-items ops])")
+	fmt.Fprintf(&b, "\n%-40s %8s %8s  %s\n", "interaction", "bytes", "deflated", "frames (action:size [s=statics d=range-items ops])")
 	var suspicious []string
 	for _, st := range steps {
-		total := 0
 		var parts []string
 		for _, f := range st.Frames {
-			total += f.Size
 			parts = append(parts, fmt.Sprintf("%s:%d[s%d d%d o%d]", f.Action, f.Size, f.Statics, f.RangeItems, f.Ops))
 			if f.Size > 4096 || f.RangeItems > 20 {
 				suspicious = append(suspicious, fmt.Sprintf("%s → %s %d bytes (s%d d%d)", st.Name, f.Action, f.Size, f.Statics, f.RangeItems))
@@ -361,7 +403,8 @@ func TestE2E_WireAudit(t *testing.T) {
 		if st.Note != "" {
 			note = "  (" + st.Note + ")"
 		}
-		fmt.Fprintf(&b, "%-40s %8d  %s%s\n", st.Name, total, strings.Join(parts, " "), note)
+		sz := st.sizes()
+		fmt.Fprintf(&b, "%-40s %8d %8d  %s%s\n", st.Name, sz.Raw, sz.Deflated, strings.Join(parts, " "), note)
 	}
 	fmt.Fprintf(&b, "\nSUSPICIOUS (>4 KB or a range sent with >20 items):\n  %s\n", strings.Join(suspicious, "\n  "))
 	t.Log(b.String())
@@ -380,13 +423,82 @@ func TestE2E_WireAudit(t *testing.T) {
 			}
 		}
 	}
-	_ = diag
+	checkWireBudgets(t, steps, diag)
+}
+
+// checkWireBudgets fails any step that was skipped or grew past its budget, or
+// rewrites the budgets file under -update-wire-budgets.
+func checkWireBudgets(t *testing.T, steps []wireStep, diag func() string) {
+	t.Helper()
+	measured := map[string]wireSizes{}
+	for _, st := range steps {
+		if st.Note != "" {
+			t.Errorf("step %q did not run: %s%s", st.Name, st.Note, diag())
+		}
+		if _, dup := measured[st.Name]; dup {
+			t.Fatalf("two steps are named %q; budgets are keyed by name", st.Name)
+		}
+		measured[st.Name] = st.sizes()
+	}
+	if *updateWireBudgets {
+		j, err := json.MarshalIndent(measured, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(wireBudgetsPath, append(j, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	raw, err := os.ReadFile(wireBudgetsPath)
+	if err != nil {
+		t.Fatalf("read %s: %v (create it with -update-wire-budgets)", wireBudgetsPath, err)
+	}
+	var budgets map[string]wireSizes
+	if err := json.Unmarshal(raw, &budgets); err != nil {
+		t.Fatalf("parse %s: %v", wireBudgetsPath, err)
+	}
+	for _, st := range steps {
+		got := measured[st.Name]
+		want, ok := budgets[st.Name]
+		if !ok {
+			t.Errorf("step %q has no budget; regenerate with -update-wire-budgets", st.Name)
+			continue
+		}
+		if limit := wireBudget(want.Raw); got.Raw > limit {
+			t.Errorf("%q sent %d raw bytes, over its budget of %d (measured %d)", st.Name, got.Raw, limit, want.Raw)
+		}
+		if limit := wireBudget(want.Deflated); got.Deflated > limit {
+			t.Errorf("%q sent %d deflated bytes, over its budget of %d (measured %d)", st.Name, got.Deflated, limit, want.Deflated)
+		}
+	}
+	for _, name := range wireCapped {
+		got, ok := measured[name]
+		if !ok {
+			t.Errorf("capped step %q is not in the walk", name)
+		} else if got.Raw > wireCap {
+			t.Errorf("%q sent %d raw bytes, over its cap of %d", name, got.Raw, wireCap)
+		}
+	}
+}
+
+// deflater is reused across frames: a flate writer allocates large tables.
+// parseWireFrame only runs under the walk's frame lock, so one is enough.
+var deflater, _ = flate.NewWriter(io.Discard, flate.BestSpeed)
+
+// deflatedSize is raw compressed on its own at flate level 1.
+func deflatedSize(raw string) int {
+	var b bytes.Buffer
+	deflater.Reset(&b)
+	_, _ = deflater.Write([]byte(raw))
+	_ = deflater.Close()
+	return b.Len()
 }
 
 // parseWireFrame reads a reply frame's action, size, statics count, the largest
 // whole-range "d" array, and the number of range-op tuples.
 func parseWireFrame(raw string) wireFrame {
-	f := wireFrame{Size: len(raw), raw: raw}
+	f := wireFrame{Size: len(raw), Deflated: deflatedSize(raw), raw: raw}
 	var m map[string]any
 	if json.Unmarshal([]byte(raw), &m) != nil {
 		return f

@@ -116,8 +116,8 @@ func openThreadOnLine(state PrereviewState, line int, side string) (PrereviewSta
 // openThreadOnBlock is openThreadOnLine's rendered-view twin: a click on a Markdown/HTML
 // block that ALREADY carries a comment opens that thread rather than composing a second one.
 //
-// It iterates FileComments() — literally the list the "blockComments" partial renders — and
-// uses the partial's own membership rule (a comment belongs to the block when its ToLine
+// It iterates FileComments() — the list BlockComments groups for the "blockComments"
+// partial — with the same membership rule (a comment belongs to the block when its ToLine
 // falls inside the block's source range), so what the reviewer clicked and what opens can
 // never drift apart. Resolved / outdated comments are skipped for the same reason as on a
 // line: a closed thread must not swallow a click meant to start a fresh comment.

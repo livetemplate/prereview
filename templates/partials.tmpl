@@ -1,7 +1,7 @@
 {{define "blockComments" -}}
-{{$bs := .StartLine}}{{$be := .EndLine}}
-{{- range $.FileComments -}}
-  {{- if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "commentCardFull" .}}{{end -}}
+{{$bs := .StartLine}}{{$be := .EndLine}}{{$key := printf "MB-%d-%d" $bs $be}}
+{{- range index $.BlockComments $key -}}
+  {{- template "commentCardFull" . -}}
 {{- end -}}
 {{- if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be) -}}
 {{template "composer" $}}
@@ -30,14 +30,14 @@
 
 {{/* blockSuggestions — the suggestion parallel of blockComments for the rendered
      Markdown / HTML block views (#98). Same shape: `.` is the block (StartLine/
-     EndLine), `$` stays the root state, so it inlines each of $.FileSuggestions
-     whose ToLine falls in the block's source range. */}}
+     EndLine), `$` stays the root state, so it inlines the block's own entry of
+     $.BlockSuggestions: the suggestions whose ToLine falls in its source range. */}}
 {{define "blockSuggestions" -}}
-{{$bs := .StartLine}}{{$be := .EndLine}}
-{{- range $.FileSuggestions -}}
-  {{- if and (ge .ToLine $bs) (le .ToLine $be)}}{{template "suggestionCard" .}}{{end -}}
+{{$key := printf "MB-%d-%d" .StartLine .EndLine}}
+{{- range index $.BlockSuggestions $key -}}
+  {{- template "suggestionCard" . -}}
 {{- end -}}
-{{- with index $.HiddenSuggestionBlocks (printf "MB-%d-%d" $bs $be)}}{{template "hiddenMarker" .}}{{end -}}
+{{- with index $.HiddenSuggestionBlocks $key}}{{template "hiddenMarker" .}}{{end -}}
 {{- end}}
 
 {{/* hiddenMarker (#233) — left where hidden suggestions would render, so they can be
