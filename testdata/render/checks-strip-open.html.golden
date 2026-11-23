@@ -677,28 +677,54 @@
   <div class="file-row" style="--depth:0">
     <form method="POST" class="file-select-form">
       <input type="hidden" name="path" value="app.go">
-      <button type="submit" name="selectFile" class="file-btn outline contrast" title="app.go"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <button type="submit" name="selectFile" class="file-btn outline contrast" title="app.go"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M6 3h8l4 4v14H6z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /><path
+    d="M14 3v4h4"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg></span>
         <span class="file-label"><span class="file-name">app</span><span class="file-ext">.go</span></span>
         <span class="file-meta"><small class="diff-stats"><span class="add">+3</span><span class="del">-1</span></small></span>
       </button>
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="app.go">
-      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.5"
+  fill="none"
+/></svg></button>
     </form>
   </div>
 </li><li class="tree-file" data-key="README.md">
   <div class="file-row" style="--depth:0">
     <form method="POST" class="file-select-form">
       <input type="hidden" name="path" value="README.md">
-      <button type="submit" name="selectFile" class="file-btn outline contrast" title="README.md"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <button type="submit" name="selectFile" class="file-btn outline contrast" title="README.md"><span class="status-badge M">M</span><span class="tree-file-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M6 3h8l4 4v14H6z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /><path
+    d="M14 3v4h4"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg></span>
         <span class="file-label"><span class="file-name">README</span><span class="file-ext">.md</span></span>
         <span class="file-meta"><small class="diff-stats"><span class="add">+2</span></small></span>
       </button>
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="README.md">
-      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.5"
+  fill="none"
+/></svg></button>
     </form>
   </div>
 </li></ul>

@@ -12,8 +12,8 @@
     "deflated": 183
   },
   "Diff → File view": {
-    "raw": 278199,
-    "deflated": 21331
+    "raw": 278201,
+    "deflated": 21318
   },
   "Escape": {
     "raw": 73,
@@ -21,11 +21,11 @@
   },
   "Escape the edit": {
     "raw": 5294,
-    "deflated": 1799
+    "deflated": 1800
   },
   "File → Diff view": {
-    "raw": 53636,
-    "deflated": 6718
+    "raw": 53638,
+    "deflated": 6725
   },
   "Library: checks tab": {
     "raw": 4118,
@@ -45,11 +45,11 @@
   },
   "Preview → Raw": {
     "raw": 26550,
-    "deflated": 5001
+    "deflated": 4997
   },
   "Raw → Preview": {
     "raw": 38788,
-    "deflated": 6645
+    "deflated": 6643
   },
   "agent edits big.go on disk": {
     "raw": 310,
@@ -60,12 +60,12 @@
     "deflated": 53
   },
   "agent replies on a comment": {
-    "raw": 872,
-    "deflated": 399
+    "raw": 947,
+    "deflated": 468
   },
   "agent status done": {
-    "raw": 682,
-    "deflated": 432
+    "raw": 609,
+    "deflated": 363
   },
   "agent status working": {
     "raw": 495,
@@ -76,12 +76,12 @@
     "deflated": 1588
   },
   "all comments off": {
-    "raw": 62741,
-    "deflated": 9146
+    "raw": 62743,
+    "deflated": 9143
   },
   "all comments on": {
     "raw": 5351,
-    "deflated": 1628
+    "deflated": 1624
   },
   "click a Markdown block": {
     "raw": 3446,
@@ -100,20 +100,20 @@
     "deflated": 1960
   },
   "close Library": {
-    "raw": 62593,
-    "deflated": 9125
+    "raw": 62595,
+    "deflated": 9117
   },
   "close Queue dropdown": {
     "raw": 0,
     "deflated": 0
   },
   "close Understand": {
-    "raw": 62556,
-    "deflated": 9097
+    "raw": 62558,
+    "deflated": 9089
   },
   "close it (Escape)": {
     "raw": 1963,
-    "deflated": 888
+    "deflated": 890
   },
   "close search": {
     "raw": 109,
@@ -133,7 +133,7 @@
   },
   "edit a comment": {
     "raw": 8468,
-    "deflated": 2971
+    "deflated": 2973
   },
   "hide annotations": {
     "raw": 529,
@@ -173,7 +173,7 @@
   },
   "open a reply": {
     "raw": 1054,
-    "deflated": 542
+    "deflated": 543
   },
   "open big.go": {
     "raw": 225,
@@ -185,19 +185,19 @@
   },
   "open the file-comment box (c)": {
     "raw": 4681,
-    "deflated": 1920
+    "deflated": 1923
   },
   "post the reply": {
-    "raw": 1591,
-    "deflated": 675
+    "raw": 1592,
+    "deflated": 676
   },
   "prev file (k)": {
-    "raw": 58213,
-    "deflated": 7813
+    "raw": 58215,
+    "deflated": 7817
   },
   "resolve a comment": {
     "raw": 2521,
-    "deflated": 841
+    "deflated": 840
   },
   "save the block comment": {
     "raw": 5600,
@@ -205,7 +205,7 @@
   },
   "save the comment": {
     "raw": 14012,
-    "deflated": 3792
+    "deflated": 3789
   },
   "save the second comment": {
     "raw": 6206,
@@ -224,8 +224,8 @@
     "deflated": 366
   },
   "switch back to big.go": {
-    "raw": 58347,
-    "deflated": 7958
+    "raw": 58349,
+    "deflated": 7959
   },
   "switch to guide.md": {
     "raw": 36188,
@@ -249,7 +249,7 @@
   },
   "type a reply": {
     "raw": 254,
-    "deflated": 157
+    "deflated": 158
   },
   "type a search query": {
     "raw": 5416,
@@ -265,6 +265,6 @@
   },
   "unresolve it": {
     "raw": 1107,
-    "deflated": 545
+    "deflated": 544
   }
 }

@@ -506,14 +506,14 @@
   <div class="file-row{{if .IsViewed}} is-viewed{{end}}" style="{{.DepthStyle}}">
     <form method="POST" class="file-select-form">
       <input type="hidden" name="path" value="{{.Path}}">
-      <button type="submit" name="selectFile" class="file-btn outline contrast{{if .IsSelected}} is-selected{{end}}" title="{{.Path}}">{{if .Entry.Status}}<span class="status-badge {{.Entry.Status}}">{{.Entry.Status}}</span>{{end}}<span class="tree-file-icon">{{template "treeIconFile"}}</span>
+      <button type="submit" name="selectFile" class="file-btn outline contrast{{if .IsSelected}} is-selected{{end}}" title="{{.Path}}">{{if .Entry.Status}}<span class="status-badge {{.Entry.Status}}">{{.Entry.Status}}</span>{{end}}<span class="tree-file-icon">{{template "iconFile"}}</span>
         <span class="file-label"><span class="file-name">{{.NameStem}}</span><span class="file-ext">{{.Ext}}</span></span>
         <span class="file-meta">{{if or (gt .Entry.Added 0) (gt .Entry.Deleted 0)}}<small class="diff-stats">{{if gt .Entry.Added 0}}<span class="add">+{{.Entry.Added}}</span>{{end}}{{if gt .Entry.Deleted 0}}<span class="del">-{{.Entry.Deleted}}</span>{{end}}</small>{{end}}{{if gt .Entry.CommentCount 0}}<mark class="file-count">{{.Entry.CommentCount}}</mark>{{end}}</span>
       </button>
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="{{.Path}}">
-      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark as not viewed{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed{{else}}{{if .ChangedSinceViewed}}Changed since you viewed it: mark viewed again{{else}}Mark viewed{{end}}{{end}}">{{if .IsViewed}}{{template "treeIconViewedCheck"}}{{else}}{{template "treeIconViewedCircle"}}{{end}}</button>
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark as not viewed{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed{{else}}{{if .ChangedSinceViewed}}Changed since you viewed it: mark viewed again{{else}}Mark viewed{{end}}{{end}}">{{if .IsViewed}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end}}</button>
     </form>{{if .ChangedSinceViewed}}<small class="viewed-changed">changed since you viewed it</small>{{end}}
   </div>
 </li>
@@ -564,6 +564,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconFocus ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" /></svg>
+=== iconFolder ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/></svg>
 === iconHamburger ===
 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" /></svg>
 === iconHistory14 ===
@@ -1718,22 +1720,12 @@
     </button>
   </form>
 </header>
-=== treeIconChevronRight ===
-<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-=== treeIconFile ===
-<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>
-=== treeIconFolder ===
-<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/></svg>
-=== treeIconViewedCheck ===
-<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
-=== treeIconViewedCircle ===
-<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
 === treeNode ===
 {{if .IsDir}}<li class="tree-dir" data-key="dir:{{.Path}}">
   <details data-key="{{.Path}}" lvt-ignore-attrs{{if .DefaultOpen}} open{{end}}>
     <summary class="dir-row" style="{{.DepthStyle}}" title="{{.Path}}">
-      <span class="tree-twisty">{{template "treeIconChevronRight"}}</span>
-      <span class="tree-folder-icon">{{template "treeIconFolder"}}</span>
+      <span class="tree-twisty">{{template "iconChevronRight"}}</span>
+      <span class="tree-folder-icon">{{template "iconFolder"}}</span>
       <span class="tree-label">{{.Name}}</span>
       {{if gt .CommentCount 0}}<mark class="file-count">{{.CommentCount}}</mark>{{end}}
     </summary>
