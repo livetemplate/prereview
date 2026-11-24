@@ -150,7 +150,7 @@
   </form>
   
   <div class="title">
-    <span class="title-main"><span class="title-page">localhost:3000/</span> <button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+    <span class="title-main"><button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
     d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"
   /></svg>1<span class="live-count-word"> annotation</span></button></span>
@@ -731,6 +731,7 @@
 </form>
     <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"
+         data-page="/"
          data-key="ext-stage">
       
       <iframe

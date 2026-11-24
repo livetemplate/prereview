@@ -793,7 +793,7 @@
 
 === liveStage ===
     {{template "regionToggle" $}}
-    <div class="preview-stage ext-stage{{if $.ShowLiveBoxes}} show-boxes{{end}}" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+    <div class="preview-stage ext-stage{{if $.ShowLiveBoxes}} show-boxes{{end}}" lvt-fx:proxy-bridge="setProxyURL" data-page="{{$.CurrentURL}}" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
       
       <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
       <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"><button type="button" class="pin-btn" lvt-on:click="{{if $.Combined}}openAnnotations{{else}}editComment{{end}}" data-id="{{.ID}}" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}" aria-label="{{if $.Combined}}Open{{else}}Edit{{end}} annotation {{index $.AnnotationNumbers .ID}}">{{index $.AnnotationNumbers .ID}}</button></div>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
@@ -1671,7 +1671,7 @@
   </form>
   {{end}}
   <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<span class="title-page">{{.LivePageLabel}}</span> <button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations">{{template "iconChat14"}}{{len .RegionComments}}<span class="live-count-word"> annotation{{if ne (len .RegionComments) 1}}s{{end}}</span></button>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
+    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations">{{template "iconChat14"}}{{len .RegionComments}}<span class="live-count-word"> annotation{{if ne (len .RegionComments) 1}}s{{end}}</span></button>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
   </div>
   
   <div class="toolbar-inline">

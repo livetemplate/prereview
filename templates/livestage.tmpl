@@ -10,6 +10,7 @@
 {{define "liveStage"}}    {{template "regionToggle" $}}
     <div class="preview-stage ext-stage{{if $.ShowLiveBoxes}} show-boxes{{end}}"
          lvt-fx:proxy-bridge="setProxyURL"
+         data-page="{{$.CurrentURL}}"
          data-key="ext-stage"
          {{- with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
       {{/* lvt-ignore: morphdom must never re-process this iframe. Its src is

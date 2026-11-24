@@ -709,6 +709,7 @@
 </form>
     <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"
+         data-page="/"
          data-key="ext-stage">
       
       <iframe
