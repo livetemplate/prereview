@@ -189,6 +189,10 @@ func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplat
 	state.SelectionAnchor = from
 	state.SelectionEnd = to
 	state.SelectionSide = side
+	// A drawn box (fractions of the preview page) rides along with the lines;
+	// a tap on a block carries none. It waits in SelectionArea, whose readers
+	// all key on an area or region CommentMode, so it can't leak into those.
+	state.SelectionArea = drawnBox(ctx)
 	// Capturing a region disarms the overlay so scrolling returns and the
 	// composer is reachable (mirror of SelectImageArea).
 	state.RegionSelectArmed = false
@@ -556,4 +560,14 @@ func (c *PrereviewController) SelectRegion(state PrereviewState, ctx *livetempla
 	// again (scroll / click / navigate) and the composer is reachable.
 	state.RegionSelectArmed = false
 	return state, nil
+}
+
+// drawnBox reads the box selectBlock's drag sends with the lines (bx/by/bw/bh,
+// fractions of the preview page). Zero when there is none or it is out of range.
+func drawnBox(ctx *livetemplate.Context) Area {
+	a := Area{X: ctx.GetFloat("bx"), Y: ctx.GetFloat("by"), W: ctx.GetFloat("bw"), H: ctx.GetFloat("bh")}
+	if a.W <= 0 || a.H <= 0 || a.X < 0 || a.Y < 0 || a.X+a.W > 1.0001 || a.Y+a.H > 1.0001 {
+		return Area{}
+	}
+	return a
 }

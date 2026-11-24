@@ -24,12 +24,18 @@
       {{- /* One marker per commented block, showing its count: an invisible box
              the preview-bridge directive places over the block (from the rects
              the preview posts), with the marker at its corner. Tapping it
-             scrolls the block's cards below into view. */ -}}
-      {{- with $.HTMLMarkers}}<div class="pin-layer preview-pins" data-key="preview-pins">
-        {{- range . -}}
+             scrolls the block's cards below into view and shows the boxes its
+             comments were drawn with, each in its annotation colour; the
+             block itself is outlined only for a comment with no box. The
+             drawn boxes are placed by percentage: the layer covers the
+             preview, which is sized to its page. */ -}}
+      {{- if or $.HTMLMarkers $.PreviewPendingBox}}<div class="pin-layer preview-pins" data-key="preview-pins">
+        {{- range $.HTMLMarkers -}}
+        {{- $mk := .Key -}}
         <div class="area-overlay
                 {{- if .Acted}} is-acted{{else if not .Open}} is-resolved{{end}}
-                {{- if eq $.FocusedHTMLBlock .Key}} is-focused{{end -}}
+                {{- if .Unboxed}} is-unboxed{{end}}
+                {{- if and .Unboxed (eq $.FocusedHTMLBlock .Key)}} is-focused{{end -}}
                 "
                 data-id="{{.Key}}"
                 data-from="{{.From}}"
@@ -38,6 +44,19 @@
                 lvt-on:click="focusHTMLBlock"
                 data-id="{{.Key}}"
                 aria-label="Show the comments on this block">{{.Total}}</button></div>
+        {{- range .Boxes -}}
+        <div class="area-overlay drawn-box {{.Color}}
+                {{- if .Resolved}} is-resolved{{else if .Acted}} is-acted{{end}}
+                {{- if eq $.FocusedHTMLBlock $mk}} is-focused{{end -}}
+                "
+                data-box="{{.ID}}"
+                style="left:{{.PercentX}};top:{{.PercentY}};width:{{.PercentW}};height:{{.PercentH}};"></div>
+        {{- end -}}
+        {{- end -}}
+        {{- with $.PreviewPendingBox -}}
+        <div class="area-overlay area-overlay-pending"
+                data-box="pending"
+                style="left:{{.PercentX}};top:{{.PercentY}};width:{{.PercentW}};height:{{.PercentH}};"></div>
         {{- end -}}
       </div>{{end}}
       {{- if $.RegionSelectArmed -}}

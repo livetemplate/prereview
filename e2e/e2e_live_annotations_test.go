@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -197,23 +198,33 @@ func TestE2E_LiveMarkers(t *testing.T) {
 			}
 			waitJSDiag(t, p, `!document.querySelector('.ext-stage.show-boxes')`, "Show boxes off", diag)
 
-			// The marker's label stays readable on its colour: open, then worked on
-			// in dark mode in every scheme (the accent and its inverse vary). The
-			// colours don't depend on the viewport, so desktop checks them.
+			// The marker's label stays readable on every annotation colour, open
+			// and worked on. The colours sit on the reviewed page, not the theme,
+			// and don't depend on the viewport, so desktop checks them once.
 			if !vp.touch {
 				markerContrast := func(label string) {
 					t.Helper()
-					var ratio float64
+					var ratios []float64
 					if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
 						`+wcagLumJS+`
-						const cs = getComputedStyle(document.querySelector('.pin-layer .pin-btn'));
-						const a = lum(cs.color), b = lum(cs.backgroundColor);
-						return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-					})()`, &ratio)); err != nil {
+						const box = document.querySelector('.pin-layer .area-overlay[data-id]');
+						const saved = box.className;
+						const out = [];
+						for (let n = 1; n <= 6; n++) {
+							box.className = saved.replace(/\bann-c\d\b/, 'ann-c' + n);
+							const cs = getComputedStyle(box.querySelector('.pin-btn'));
+							const a = lum(cs.color), b = lum(cs.backgroundColor);
+							out.push((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05));
+						}
+						box.className = saved;
+						return out;
+					})()`, &ratios)); err != nil {
 						t.Fatalf("marker contrast (%s): %v", label, err)
 					}
-					if ratio < 3 {
-						t.Errorf("%s marker label contrast %.2f:1, want at least 3:1", label, ratio)
+					for n, ratio := range ratios {
+						if ratio < 4.5 {
+							t.Errorf("%s marker label on ann-c%d: contrast %.2f:1, want at least 4.5:1", label, n+1, ratio)
+						}
 					}
 				}
 				markerContrast("open")
@@ -223,21 +234,7 @@ func TestE2E_LiveMarkers(t *testing.T) {
 				}
 				mustCLI(t, p, "done", "--out", p.store, id)
 				waitJSDiag(t, p, `!!document.querySelector('.pin-layer .area-overlay.is-acted')`, "the marker shows worked on", diag)
-				for i := 0; i < 2; i++ { // System → Light → Dark
-					if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="cycleTheme"]').click(), true`, nil)); err != nil {
-						t.Fatalf("cycle theme: %v", err)
-					}
-				}
-				waitThemeSettled(t, p, `.theme-root[data-mode="dark"]`)
-				for i := 0; i < 3; i++ {
-					var scheme string
-					_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.theme-root').dataset.scheme`, &scheme))
-					markerContrast("worked-on " + scheme + " dark")
-					if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="cycleScheme"]').click(), true`, nil)); err != nil {
-						t.Fatalf("cycle scheme: %v", err)
-					}
-					waitThemeSettled(t, p, `.theme-root:not([data-scheme="`+scheme+`"])`)
-				}
+				markerContrast("worked-on")
 			}
 
 			// Overlap: a box drawn starting inside the saved one.
@@ -250,6 +247,28 @@ func TestE2E_LiveMarkers(t *testing.T) {
 				t.Fatalf("tap marker 1: %v%s", err, diag())
 			}
 			waitJSDiag(t, p, `((document.querySelector('.ac-item.is-target .anno-label')||{}).textContent||'').trim() === 'annotation 1'`, "the card labelled annotation 1", diag)
+
+			// The two overlapping boxes have different colours, and each card in
+			// All comments has its box's colour.
+			var colours struct{ Markers, Cards []string }
+			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+				const colour = el => [...el.classList].find(c => c.startsWith('ann-c')) || '';
+				const boxes = [...document.querySelectorAll('.pin-layer .area-overlay[data-id]')];
+				return {
+					Markers: boxes.map(b => getComputedStyle(b.querySelector('.pin-btn')).backgroundColor),
+					Cards: boxes.map(b => { const c = document.querySelector('.ac-item[data-key="' + b.dataset.id + '"]'); return colour(b) + '=' + (c ? colour(c) : 'missing'); }),
+				};
+			})()`, &colours)); err != nil {
+				t.Fatalf("read the colours: %v", err)
+			}
+			if len(colours.Markers) != 2 || colours.Markers[0] == colours.Markers[1] {
+				t.Errorf("the two markers' colours = %v, want two different%s", colours.Markers, diag())
+			}
+			for _, pair := range colours.Cards {
+				if l, r, _ := strings.Cut(pair, "="); l == "" || l != r {
+					t.Errorf("a box and its All comments card differ: %s%s", pair, diag())
+				}
+			}
 		})
 	}
 }

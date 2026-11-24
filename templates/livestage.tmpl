@@ -31,7 +31,7 @@
                the marker takes the tap, so the box never covers the page or a
                new drag. The number is AnnotationNumbers', shown on its card too. */ -}}
         {{- range $.RegionComments -}}
-        <div class="area-overlay
+        <div class="area-overlay {{index $.AnnotationColors .ID}}
                 {{- if .Resolved}} is-resolved{{end}}
                 {{- if index $.AgentActedLabels .ID}} is-acted{{end}}
                 {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}

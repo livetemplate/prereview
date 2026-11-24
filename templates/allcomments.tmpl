@@ -30,7 +30,7 @@
   <ul class="ac-list">
     {{range .VisibleComments}}
     <li
-      class="ac-item{{if .Resolved}} is-resolved{{end}}{{if eq $.ScrollToCommentID .ID}} is-target{{end}}"
+      class="ac-item{{if .Resolved}} is-resolved{{end}}{{if eq $.ScrollToCommentID .ID}} is-target{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}"
       data-key="{{.ID}}"
       {{- if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}
     >

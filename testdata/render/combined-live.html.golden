@@ -740,7 +740,7 @@
         title="Live preview of http://localhost:3000"
         lvt-ignore
       ></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer"><div class="area-overlay"
+      <div class="pin-layer" data-pin-layer data-key="pin-layer"><div class="area-overlay ann-c1"
                 data-id="r1"
                 data-key="pin-r1"
                 style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"><button type="button"

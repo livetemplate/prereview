@@ -3,7 +3,7 @@
  * in-iframe bridge posts. Content blocks union; `wrap` blocks (pure page
  * wrappers) only answer when the box hits no content block.
  */
-import { lineRangeFromBlocks, PreviewBlock } from "../src/directives";
+import { lineRangeFromBlocks, previewBoxFraction, PreviewBlock } from "../src/directives";
 
 const block = (from: number, to: number, top: number, bottom: number, wrap = false): PreviewBlock => ({
   from,
@@ -61,5 +61,25 @@ describe("lineRangeFromBlocks", () => {
   it("treats blocks without the flag as content (older bridges)", () => {
     const old = blocks.map(({ wrap: _w, ...b }) => b);
     expect(lineRangeFromBlocks(old, box(130, 150), 0, 0)).toEqual({ from: 1, to: 40 });
+  });
+});
+
+describe("previewBoxFraction", () => {
+  const frame = { left: 100, top: 50, width: 400, height: 1000 };
+
+  it("gives the drawn box as fractions of the preview page", () => {
+    const got = previewBoxFraction({ left: 140, top: 150, right: 340, bottom: 350 }, frame) as Record<string, number>;
+    const want = { bx: 0.1, by: 0.1, bw: 0.5, bh: 0.2 };
+    for (const [k, v] of Object.entries(want)) expect(got[k]).toBeCloseTo(v, 9);
+  });
+
+  it("clips a box that runs off the preview", () => {
+    const got = previewBoxFraction({ left: 0, top: 0, right: 300, bottom: 150 }, frame);
+    expect(got).toEqual({ bx: 0, by: 0, bw: 0.5, bh: 0.1 });
+  });
+
+  it("gives nothing for a box outside the preview or an unsized frame", () => {
+    expect(previewBoxFraction({ left: 600, top: 0, right: 700, bottom: 40 }, frame)).toEqual({});
+    expect(previewBoxFraction({ left: 140, top: 150, right: 340, bottom: 350 }, { ...frame, width: 0 })).toEqual({});
   });
 });

@@ -124,6 +124,11 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 	if from > to {
 		from, to = to, from
 	}
+	// The box drawn on an HTML preview, if this selection came from one.
+	var box Area
+	if state.ShowRenderedHTML() {
+		box = state.SelectionArea
+	}
 
 	// Re-anchor mode: the user picked a NEW location for an outdated
 	// comment. Re-point it and re-capture its anchor at the chosen
@@ -138,6 +143,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 			state.Comments[idx].ToLine = to
 			state.Comments[idx].Side = state.SelectionSide
 			state.Comments[idx].Anchor = captureAnchor(state.CurrentDiff, from, to, state.SelectionSide)
+			state.Comments[idx].Anchor.Box = box
 			state.Comments[idx].AnchorStatus = anchorOK
 			if err := c.persist(state.Comments); err != nil {
 				state.Comments[idx] = prev
@@ -146,6 +152,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 			state.SelectionAnchor = 0
 			state.SelectionEnd = 0
 			state.SelectionSide = ""
+			state.SelectionArea = Area{}
 			state.DraftBody = ""
 			state.ReanchorCommentID = ""
 			state.EditingCommentID = ""
@@ -188,6 +195,12 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 				// Re-capture at the (possibly new) range — else a later
 				// relocate would drag the edited comment back.
 				state.Comments[idx].Anchor = captureAnchor(state.CurrentDiff, from, to, state.SelectionSide)
+				state.Comments[idx].Anchor.Box = box
+				// An edit made without a new box (the source view, or the same
+				// lines) keeps the box it was drawn with.
+				if box.Empty() && from == prev.FromLine && to == prev.ToLine {
+					state.Comments[idx].Anchor.Box = prev.Anchor.Box
+				}
 				state.Comments[idx].AnchorStatus = anchorOK
 			}
 			rollback = func() { state.Comments[idx] = prev }
@@ -205,6 +218,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 			Anchor:       captureAnchor(state.CurrentDiff, from, to, state.SelectionSide),
 			AnchorStatus: anchorOK,
 		}
+		cm.Anchor.Box = box
 		state.Comments = append(state.Comments, cm)
 		noteEnqueue(&state) // #129: a new saved comment enters the queue → pulse
 		// Land scroll + focus on the just-saved comment so a keyboard user
@@ -225,6 +239,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
+	state.SelectionArea = Area{}
 	state.DraftBody = ""
 	state.EditingCommentID = ""
 	clearUndo(&state)
@@ -551,7 +566,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 		state.SelectionAnchor = cm.FromLine
 		state.SelectionEnd = cm.ToLine
 		state.SelectionSide = cm.Side
-		state.SelectionArea = Area{}
+		state.SelectionArea = cm.Anchor.Box // a preview comment keeps its box
 	}
 	state.DraftBody = cm.Body
 	state.EditingCommentID = cm.ID

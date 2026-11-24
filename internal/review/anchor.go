@@ -69,6 +69,12 @@ type CommentAnchor struct {
 	// Empty for every other kind. Used to re-locate the character range
 	// after edits and to disambiguate a substring that repeats on a line.
 	Snippet string `json:"snippet,omitempty"`
+	// Box is the box drawn for a comment on an HTML file's preview, as
+	// fractions of the preview page. A line comment there is anchored to
+	// the block's source lines; the box only says where on the block the
+	// reviewer pointed, so the preview can show it. Zero when the comment
+	// was made by tapping a block or in the source view.
+	Box Area `json:"box,omitzero"`
 }
 
 // Empty reports whether there is nothing to re-locate against (legacy
@@ -78,7 +84,7 @@ func (a CommentAnchor) Empty() bool { return a.Text == "" }
 // JSON serializes the anchor for the opaque `anchor` CSV column.
 // Empty anchor → "" (keeps legacy/zero rows clean).
 func (a CommentAnchor) JSON() string {
-	if a.Empty() {
+	if a.Empty() && a.Box.Empty() {
 		return ""
 	}
 	b, err := json.Marshal(a)

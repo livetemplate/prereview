@@ -302,7 +302,7 @@
 {{define "sourceBadge"}}<small class="source-badge" title="Imported from {{.Name}}">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{with .Author}} · {{.}}{{end}}</small>{{end}}
 
 {{define "commentCardFull" -}}
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}"
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}"
      data-key="{{.ID}}"
      lvt-fx:animate="fade"
      {{- /* the targeted comment (just saved, or jumped to via n/p) scrolls into

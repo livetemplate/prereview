@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -15,7 +16,8 @@ import (
 // marker per commented block, with the block's count, placed over the block
 // from the rects the preview posts. The block stays readable and clickable;
 // the marker ticks once the agent has worked on every open comment; tapping it
-// scrolls the block's cards into view and outlines the block; Show boxes and
+// scrolls the block's cards into view and shows each comment's box where it
+// was drawn, each in its own colour, which its card shares; Show boxes and
 // Hide annotations apply; and the marker follows the block when the preview
 // resizes.
 func TestE2E_HTMLMarkers(t *testing.T) {
@@ -34,12 +36,22 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			p.clickFile("region.html")
 			waitPreviewBridgeReady(t, p)
 
-			// Two comments on the top section (line 4).
-			drawHTMLRegion(t, p, "Heading too small", diag)
-			drawHTMLRegion(t, p, "Needs more contrast", diag)
+			// Three comments on the top section (line 4, the first 240px), each
+			// drawn on a different part of it.
+			drawn := []previewBox{{0.05, 10, 0.4, 90}, {0.5, 30, 0.95, 120}, {0.2, 140, 0.7, 220}}
+			for i, b := range drawn {
+				drawHTMLRegionAt(t, p, fmt.Sprintf("Note %d", i+1), b, diag)
+			}
 
 			box := `.preview-pins .area-overlay[data-id="MB-4-4"]`
-			waitJSDiag(t, p, `(() => { const b = document.querySelector('`+box+`'); return !!b && getComputedStyle(b).visibility === 'visible' && b.querySelector('.pin-btn').textContent.trim() === '2'; })()`, "one marker reading 2 on the top section", diag)
+			waitJSDiag(t, p, `(() => { const b = document.querySelector('`+box+`'); return !!b && getComputedStyle(b).visibility === 'visible' && b.querySelector('.pin-btn').textContent.trim() === '3'; })()`, "one marker reading 3 on the top section", diag)
+			var shown int
+			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('.preview-pins .drawn-box')].filter(b => getComputedStyle(b).display !== 'none').length`, &shown)); err != nil {
+				t.Fatalf("count the drawn boxes: %v", err)
+			}
+			if shown != 0 {
+				t.Errorf("%d drawn boxes show before the marker is tapped; want none%s", shown, diag())
+			}
 
 			// The fixture's top section is the first 240px of the page, full width.
 			onBlock := func(when string) {
@@ -83,7 +95,11 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			); err != nil {
 				t.Fatalf("tap the marker: %v%s", err, diag())
 			}
-			waitJSDiag(t, p, `!!document.querySelector('`+box+`.is-focused') && (() => { const r = document.querySelector('.html-block[data-key="HB-4-4"]').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the box outlined and its cards in view", diag)
+			waitJSDiag(t, p, `document.querySelectorAll('.preview-pins .drawn-box.is-focused').length === 3 && (() => { const r = document.querySelector('.html-block[data-key="HB-4-4"]').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the three boxes shown and the cards in view", diag)
+			checkDrawnBoxes(t, p, drawn, diag)
+			if countSel(t, p, box+`.is-focused`) != 0 {
+				t.Errorf("the block is outlined although every comment on it has its own box%s", diag())
+			}
 
 			// Show boxes, then Hide annotations.
 			if err := chromedp.Run(p.ctx, chromedp.KeyEvent("b")); err != nil {
@@ -116,6 +132,17 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 // comment with body.
 func drawHTMLRegion(t *testing.T, p *runningPrereview, body string, diag func() string) {
 	t.Helper()
+	drawHTMLRegionAt(t, p, body, previewBox{0.1, 12, 0.8, 100}, diag)
+}
+
+// previewBox is a box to draw on an HTML preview: X1/X2 as fractions of its
+// width, Y1/Y2 in pixels from its top.
+type previewBox struct{ X1, Y1, X2, Y2 float64 }
+
+// drawHTMLRegionAt arms Annotate on an HTML file's preview, drags box and saves
+// a comment with body.
+func drawHTMLRegionAt(t *testing.T, p *runningPrereview, body string, box previewBox, diag func() string) {
+	t.Helper()
 	var ir struct{ Left, Top, Width, Height float64 }
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
@@ -130,7 +157,7 @@ func drawHTMLRegion(t *testing.T, p *runningPrereview, body string, diag func() 
 	if ir.Width < 50 || ir.Height < 200 {
 		t.Fatalf("the preview's rect looks wrong: %+v%s", ir, diag())
 	}
-	x1, y1, x2, y2 := ir.Left+ir.Width*0.1, ir.Top+12, ir.Left+ir.Width*0.8, ir.Top+100
+	x1, y1, x2, y2 := ir.Left+ir.Width*box.X1, ir.Top+box.Y1, ir.Left+ir.Width*box.X2, ir.Top+box.Y2
 	if err := chromedp.Run(p.ctx,
 		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).WithButton(cdpinput.Left).WithClickCount(1),
 		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).WithButton(cdpinput.Left),
@@ -149,4 +176,60 @@ func drawHTMLRegion(t *testing.T, p *runningPrereview, body string, diag func() 
 		t.Fatalf("save %q: %v%s", body, err, diag())
 	}
 	waitJSDiag(t, p, `!document.querySelector('.composer textarea')`, "the composer closes after saving", diag)
+}
+
+// checkDrawnBoxes checks the preview's drawn boxes after a marker tap: one per
+// box in want, shown where it was drawn, each in a different colour, and each
+// card under the preview in its box's colour.
+func checkDrawnBoxes(t *testing.T, p *runningPrereview, want []previewBox, diag func() string) {
+	t.Helper()
+	var got struct {
+		Frame struct{ Left, Top, Width float64 }
+		Boxes []struct {
+			ID, Class, Color         string
+			Left, Top, Right, Bottom float64
+			Shown                    bool
+		}
+		Cards map[string]string
+	}
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+		const f = document.querySelector('iframe.html-preview').getBoundingClientRect();
+		const colour = el => [...el.classList].find(c => c.startsWith('ann-c')) || '';
+		const cards = {};
+		for (const c of document.querySelectorAll('.html-block .inline-comment')) cards[c.dataset.key] = colour(c);
+		return {
+			Frame: { Left: f.left, Top: f.top, Width: f.width },
+			Boxes: [...document.querySelectorAll('.preview-pins .drawn-box')].map(b => {
+				const r = b.getBoundingClientRect();
+				return { ID: b.dataset.box, Class: colour(b), Color: getComputedStyle(b).borderTopColor,
+					Left: r.left, Top: r.top, Right: r.right, Bottom: r.bottom,
+					Shown: getComputedStyle(b).display !== 'none' };
+			}),
+			Cards: cards,
+		};
+	})()`, &got)); err != nil {
+		t.Fatalf("read the drawn boxes: %v%s", err, diag())
+	}
+	if len(got.Boxes) != len(want) {
+		t.Fatalf("%d drawn boxes, want %d%s", len(got.Boxes), len(want), diag())
+	}
+	colours := map[string]bool{}
+	for i, b := range got.Boxes {
+		w := want[i] // boxes render in creation order
+		f := got.Frame
+		if !b.Shown {
+			t.Errorf("box %d is hidden after the tap", i+1)
+		}
+		if math.Abs(b.Left-(f.Left+f.Width*w.X1)) > 3 || math.Abs(b.Top-(f.Top+w.Y1)) > 3 ||
+			math.Abs(b.Right-(f.Left+f.Width*w.X2)) > 3 || math.Abs(b.Bottom-(f.Top+w.Y2)) > 3 {
+			t.Errorf("box %d at (%.0f,%.0f)-(%.0f,%.0f), drawn at %+v over the frame %+v%s", i+1, b.Left, b.Top, b.Right, b.Bottom, w, f, diag())
+		}
+		if b.Class == "" || colours[b.Color] {
+			t.Errorf("box %d has no colour of its own (class %q, colour %s)", i+1, b.Class, b.Color)
+		}
+		colours[b.Color] = true
+		if got.Cards[b.ID] != b.Class {
+			t.Errorf("box %d is %q but its card is %q", i+1, b.Class, got.Cards[b.ID])
+		}
+	}
 }

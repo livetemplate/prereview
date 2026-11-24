@@ -2417,7 +2417,7 @@ type LineRange = { from: number; to: number; side?: string };
 // not a line range — a live app has no source markers). Survives scroll
 // because it's anchored to the document, not the viewport.
 type RectPayload = { x: number; y: number; w: number; h: number };
-type RegionPayload = LineRange | RectPayload;
+type RegionPayload = LineRange | RectPayload | (LineRange & { bx?: number; by?: number; bw?: number; bh?: number });
 
 // PageMetrics is the proxied page's scroll + document size, reported by the
 // injected beacon (proxy.go) via postMessage. External mode frames exactly
@@ -2461,7 +2461,10 @@ function resolveRegion(el: HTMLElement, box: BoxDragResult): RegionPayload | nul
     const blocks = previewBlockRects.get(iframe);
     if (!blocks || blocks.length === 0) return null;
     const fr = iframe.getBoundingClientRect();
-    return lineRangeFromBlocks(blocks, box, fr.left, fr.top);
+    const range = lineRangeFromBlocks(blocks, box, fr.left, fr.top);
+    if (!range) return null;
+    // The drawn box rides along so the preview can show where you pointed.
+    return { ...range, ...previewBoxFraction(box, fr) };
   }
   if (surface === "code") {
     const root: ParentNode = el.parentElement || document;
@@ -2604,6 +2607,22 @@ export function lineRangeFromBox(
  * no content block, the smallest wrapper it touches is the answer instead, so a
  * drag over empty space still resolves. Returns null when nothing overlaps.
  */
+// previewBoxFraction converts a box drawn over an HTML preview (viewport
+// pixels) into fractions of the preview page as bx/by/bw/bh. The iframe is
+// sized to its content, so its rect is the whole page. Exported for tests.
+export function previewBoxFraction(
+  box: { left: number; top: number; right: number; bottom: number },
+  frame: { left: number; top: number; width: number; height: number }
+): { bx: number; by: number; bw: number; bh: number } | Record<string, never> {
+  if (frame.width <= 0 || frame.height <= 0) return {};
+  const x1 = clampUnit((box.left - frame.left) / frame.width);
+  const y1 = clampUnit((box.top - frame.top) / frame.height);
+  const x2 = clampUnit((box.right - frame.left) / frame.width);
+  const y2 = clampUnit((box.bottom - frame.top) / frame.height);
+  if (x2 <= x1 || y2 <= y1) return {};
+  return { bx: x1, by: y1, bw: x2 - x1, bh: y2 - y1 };
+}
+
 export function lineRangeFromBlocks(
   blocks: PreviewBlock[],
   box: { left: number; top: number; right: number; bottom: number },
