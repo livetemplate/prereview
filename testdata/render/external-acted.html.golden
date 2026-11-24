@@ -63,7 +63,8 @@
     name="toggleRegionSelect"
     class="outline secondary"
     aria-pressed="false"
-  >▭ Select a region to comment</button>
+    title="Drag a box on the page to comment on that part"
+  >▭ Annotate</button>
 </form>
     <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"

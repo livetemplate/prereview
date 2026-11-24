@@ -717,7 +717,8 @@
     name="toggleRegionSelect"
     class="outline secondary"
     aria-pressed="false"
-  >▭ Select a region to comment</button>
+    title="Drag a box on the page to comment on that part"
+  >▭ Annotate</button>
 </form><small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small><div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-logo.png">
     <img
       src="/logo.png"

@@ -705,7 +705,8 @@
     name="toggleRegionSelect"
     class="contrast"
     aria-pressed="true"
-  >Selecting region — tap to cancel</button>
+    title="Drag a box on the page to comment on that part"
+  >Annotating — tap to cancel</button>
 </form>
     <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"
@@ -825,7 +826,8 @@
     name="toggleRegionSelect"
     class="contrast"
     aria-pressed="true"
-  >Selecting region — tap to cancel</button>
+    title="Drag a box on the page to comment on that part"
+  >Annotating — tap to cancel</button>
 </form><div class="preview-stage"><iframe
       class="html-preview"
       sandbox="allow-scripts"

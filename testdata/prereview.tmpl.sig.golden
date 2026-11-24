@@ -395,7 +395,7 @@
     </form>{{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}{{if not .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="editComment" class="outline">Edit</button>
-    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
+    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap Annotate, then drag a box on the page.</small></p>{{end}}</div>
   </aside>
 </div>
 <footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
@@ -1429,7 +1429,7 @@
   {{end}}
 === regionToggle ===
 <form method="POST" class="region-toggle">
-  <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
+  <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}" title="Drag a box on the page to comment on that part">{{if $.RegionSelectArmed}}Annotating — tap to cancel{{else}}▭ Annotate{{end}}</button>
 </form>
 === replyButton ===
 <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>

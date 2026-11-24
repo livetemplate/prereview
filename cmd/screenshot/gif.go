@@ -737,7 +737,7 @@ func gifImage(allocCtx context.Context, url, outDir string) {
 			chromedp.WaitVisible(`.image-with-areas.is-armed`, chromedp.ByQuery),
 			chromedp.Sleep(200*time.Millisecond),
 		)
-		check(rec.capture(ctx, 80)) // armed — "Select a region to comment" engaged
+		check(rec.capture(ctx, 80)) // armed — "Annotate" engaged
 		// Drag a rectangle → pending box + composer.
 		step(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 			return mouseDrag(ctx, r.X+r.W*0.15, r.Y+r.H*0.15, r.X+r.W*0.62, r.Y+r.H*0.58)
