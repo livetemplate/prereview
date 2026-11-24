@@ -3,7 +3,6 @@
 package e2e
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -250,13 +249,16 @@ func TestE2E_LiveMarkers(t *testing.T) {
 
 			// The two overlapping boxes have different colours, and each card in
 			// All comments has its box's colour.
-			var colours struct{ Markers, Cards []string }
+			var colours struct {
+				Markers []string
+				Pairs   []struct{ Box, Card string }
+			}
 			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
-				const colour = el => [...el.classList].find(c => c.startsWith('ann-c')) || '';
+				`+annColourJS+`
 				const boxes = [...document.querySelectorAll('.pin-layer .area-overlay[data-id]')];
 				return {
 					Markers: boxes.map(b => getComputedStyle(b.querySelector('.pin-btn')).backgroundColor),
-					Cards: boxes.map(b => { const c = document.querySelector('.ac-item[data-key="' + b.dataset.id + '"]'); return colour(b) + '=' + (c ? colour(c) : 'missing'); }),
+					Pairs: boxes.map(b => { const c = document.querySelector('.ac-item[data-key="' + b.dataset.id + '"]'); return { Box: colour(b), Card: c ? colour(c) : 'missing' }; }),
 				};
 			})()`, &colours)); err != nil {
 				t.Fatalf("read the colours: %v", err)
@@ -264,9 +266,9 @@ func TestE2E_LiveMarkers(t *testing.T) {
 			if len(colours.Markers) != 2 || colours.Markers[0] == colours.Markers[1] {
 				t.Errorf("the two markers' colours = %v, want two different%s", colours.Markers, diag())
 			}
-			for _, pair := range colours.Cards {
-				if l, r, _ := strings.Cut(pair, "="); l == "" || l != r {
-					t.Errorf("a box and its All comments card differ: %s%s", pair, diag())
+			for _, pr := range colours.Pairs {
+				if pr.Box == "" || pr.Box != pr.Card {
+					t.Errorf("a box (%q) and its All comments card (%q) differ%s", pr.Box, pr.Card, diag())
 				}
 			}
 		})

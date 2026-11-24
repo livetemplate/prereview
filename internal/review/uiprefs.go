@@ -181,7 +181,7 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		TocCollapsed:     state.TocCollapsed,
 		HideMarks:        state.HideMarks,
 		FileView:         state.FileView,
-		ShowBoxes:    state.ShowBoxes,
+		ShowBoxes:        state.ShowBoxes,
 		UnfoldMechanical: state.UnfoldMechanical,
 		HideWhitespace:   state.HideWhitespace,
 		RawMarkdown:      state.RawMarkdown,

@@ -942,25 +942,16 @@ type BlockAnn struct {
 // HTMLMarker is one commented block of an HTML file's preview: its marker shows
 // the block's annotation count, and a tick once the agent has acted on every
 // open comment in it (AgentActedLabels, the live site's rule). Tapping it shows
-// Boxes, the boxes its comments were drawn with; Unboxed means some comment has
-// none (tapped on a block, or made in the source view), so the block itself is
-// outlined too.
+// the boxes its comments were drawn with (Boxed); Unboxed means some comment
+// has none (made in the source view, or before boxes were kept), so the block
+// itself is outlined too.
 type HTMLMarker struct {
 	Key      string // markdownBlockKey, the block's cards' scroll target
 	From, To int    // source lines: the preview's data-from/data-to
 	BlockAnn
 	Acted   bool
 	Unboxed bool
-	Boxes   []PreviewBox
-}
-
-// PreviewBox is one comment's drawn box on an HTML file's preview, in its
-// annotation colour (AnnotationColors).
-type PreviewBox struct {
-	ID    string
-	Color string
-	Area
-	Resolved, Acted bool
+	Boxed   []Comment
 }
 
 // HTMLMarkers lists the preview's commented blocks, in order. Zero-arg for the
@@ -970,7 +961,7 @@ func (s PrereviewState) HTMLMarkers() []HTMLMarker {
 	if len(anns) == 0 {
 		return nil
 	}
-	comments, acted, colors := s.BlockComments(), s.AgentActedLabels(), s.AnnotationColors()
+	comments, acted := s.BlockComments(), s.AgentActedLabels()
 	var out []HTMLMarker
 	for _, b := range s.RenderedHTML() {
 		key := markdownBlockKey(b.StartLine, b.EndLine)
@@ -989,9 +980,9 @@ func (s PrereviewState) HTMLMarkers() []HTMLMarker {
 			}
 			if c.Anchor.Box.Empty() {
 				m.Unboxed = true
-				continue
+			} else {
+				m.Boxed = append(m.Boxed, c)
 			}
-			m.Boxes = append(m.Boxes, PreviewBox{ID: c.ID, Color: colors[c.ID], Area: c.Anchor.Box, Resolved: c.Resolved, Acted: acted[c.ID] != ""})
 		}
 		m.Acted = open > 0 && open == openActed
 		out = append(out, m)
@@ -1206,45 +1197,47 @@ func (s PrereviewState) RegionComments() []Comment {
 	return out
 }
 
-// AnnotationNumbers numbers each live-site annotation within its page, in the
-// order they were made, keyed by ID: the number on its marker and on its card
-// in All comments. Resolved and hidden annotations keep their numbers, so
-// resolving one never renumbers the rest. Zero-arg for the template.
+// AnnotationNumbers numbers each annotation that has a box on screen within
+// its surface, in the order they were made, keyed by ID: a live-site annotation
+// within its page (the number on its marker and on its card in All comments),
+// and a comment drawn on an HTML preview within its file. Resolved and hidden
+// annotations keep their numbers, so resolving one never renumbers the rest.
+// Zero-arg for the template.
 func (s PrereviewState) AnnotationNumbers() map[string]int {
+	type surface struct {
+		live bool
+		key  string // the page's URL, or the file's path
+	}
 	out := map[string]int{}
-	perPage := map[string]int{}
+	per := map[surface]int{}
 	for _, c := range s.Comments {
-		if c.IsRegionLevel() {
-			perPage[c.URL]++
-			out[c.ID] = perPage[c.URL]
+		var at surface
+		switch {
+		case c.IsRegionLevel():
+			at = surface{true, c.URL}
+		case !c.Anchor.Box.Empty():
+			at = surface{false, c.File}
+		default:
+			continue
 		}
+		per[at]++
+		out[c.ID] = per[at]
 	}
 	return out
 }
 
-// annotationPalette is how many annotation colours there are (.ann-c1 to
-// .ann-c6 in prereview.css).
-const annotationPalette = 6
+// annotationColors are the colour classes, in prereview.css: ann marks a
+// coloured annotation, ann-cN picks its colour.
+var annotationColors = [...]string{"ann ann-c1", "ann ann-c2", "ann ann-c3", "ann ann-c4", "ann ann-c5", "ann ann-c6"}
 
 // AnnotationColors gives each annotation the colour its box, marker and card
-// share, so overlapping boxes are easy to tell apart: on the live site by its
-// number on the page (AnnotationNumbers), on an HTML file by its order among
-// that file's comments. The colour is a class, ann-c1 to ann-c6.
+// share, so overlapping boxes are easy to tell apart: its number
+// (AnnotationNumbers) cycles through the palette.
 func (s PrereviewState) AnnotationColors() map[string]string {
-	out := map[string]string{}
-	perGroup := map[string]int{}
-	for _, c := range s.Comments {
-		var group string
-		switch {
-		case c.IsRegionLevel():
-			group = "page " + c.URL
-		case gitdiff.IsHTMLPath(c.File) && !c.IsFileLevel() && !c.IsAreaLevel():
-			group = "file " + c.File
-		default:
-			continue
-		}
-		out[c.ID] = fmt.Sprintf("ann-c%d", perGroup[group]%annotationPalette+1)
-		perGroup[group]++
+	nums := s.AnnotationNumbers()
+	out := make(map[string]string, len(nums))
+	for id, n := range nums {
+		out[id] = annotationColors[(n-1)%len(annotationColors)]
 	}
 	return out
 }
@@ -1252,7 +1245,7 @@ func (s PrereviewState) AnnotationColors() map[string]string {
 // PreviewPendingBox is the box just drawn on an HTML file's preview while its
 // composer is open, so it stays on screen as you type. Nil otherwise.
 func (s PrereviewState) PreviewPendingBox() *Area {
-	if s.SelectionAnchor == 0 || s.CommentMode != "" || s.SelectionArea.Empty() || !s.ShowRenderedHTML() {
+	if s.SelectionAnchor == 0 || s.CommentMode != "" || s.SelectionArea.Empty() {
 		return nil
 	}
 	a := s.SelectionArea

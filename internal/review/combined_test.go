@@ -206,4 +206,3 @@ func TestOpenFileComment_FromLive(t *testing.T) {
 		t.Errorf("c from Live: err=%v liveView=%v mode=%q", err, st.LiveView, st.CommentMode)
 	}
 }
-

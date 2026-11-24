@@ -2887,9 +2887,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    clicks and drags through to the page), and the box is never filled: it is
    outlined while focused, while its marker is hovered, and for every box while
    Show boxes is on. */
-.pin-layer .area-overlay[data-id] { border: 2px dashed transparent; background: none; }
+.pin-layer .area-overlay[data-id] { border: 2px dashed transparent; background: none; box-shadow: none; }
 .pin-layer .area-overlay[data-id]:has(> .pin-btn:hover),
-.show-boxes .pin-layer .area-overlay[data-id] { border-color: var(--ann, #4cc2ff); }
+.show-boxes .pin-layer .area-overlay[data-id] { border-color: var(--ann, #4cc2ff); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
 /* Annotation colours (AnnotationColors): an annotation's box, marker and card
    share one, so overlapping boxes are easy to tell apart. The boxes sit on the
    reviewed page, not the theme, so the palette is the same in every scheme:
@@ -2901,27 +2901,24 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .ann-c4 { --ann: #3ddc97; }
 .ann-c5 { --ann: #b99aff; }
 .ann-c6 { --ann: #ff9a5c; }
-.pin-layer .area-overlay[class*="ann-c"]:has(> .pin-btn:hover),
-.show-boxes .pin-layer .area-overlay[class*="ann-c"] { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
-.inline-comment[class*="ann-c"],
-.all-comments .ac-item[class*="ann-c"] { border-left: 4px solid var(--ann); }
-/* The HTML preview's markers: the layer covers the stage, and each block box
-   stays hidden until lvt-fx:preview-bridge places it over its block. A block
-   is outlined (Show boxes, or its marker tapped) only when one of its comments
-   has no drawn box; the drawn boxes show on a tap or with Show boxes. */
-.preview-pins { right: 0; bottom: 0; }
-.preview-pins .area-overlay[data-id] { visibility: hidden; }
-.show-boxes .preview-pins .area-overlay[data-id]:not(.is-unboxed) { border-color: transparent; }
-.preview-pins .pin-btn { background: #fff; border-color: #062433; }
-.preview-pins .drawn-box {
-  display: none;
-  border: 2px solid var(--ann, #4cc2ff);
-  background: color-mix(in srgb, var(--ann, #4cc2ff) 14%, transparent);
+.area-overlay.ann {
+  border-color: var(--ann);
+  background: color-mix(in srgb, var(--ann) 14%, transparent);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
-.preview-pins .drawn-box.is-focused,
+.inline-comment.ann,
+.all-comments .ac-item.ann { border-left: 4px solid var(--ann); }
+/* The HTML preview's markers: the layer covers the stage, and each block box
+   stays hidden until lvt-fx:preview-bridge places it over its block. A block
+   is outlined (hovered, tapped or Show boxes) only when one of its comments has
+   no drawn box; the drawn boxes show on a tap or with Show boxes. */
+.preview-pins { right: 0; bottom: 0; }
+.preview-pins .area-overlay[data-id] { visibility: hidden; }
+.preview-pins .area-overlay[data-id]:not(.is-unboxed) { border-width: 0; }
+.preview-pins .pin-btn { background: #fff; border-color: #062433; }
+.preview-pins .drawn-box { display: none; }
+.preview-pins .drawn-box.is-shown,
 .show-boxes .preview-pins .drawn-box { display: block; }
-.preview-pins .drawn-box.is-acted { border-style: dashed; }
 .layout.marks-hidden .preview-pins .drawn-box,
 .layout.marks-hidden .pin-layer .area-overlay[data-id] { display: none; }
 .pin-btn {

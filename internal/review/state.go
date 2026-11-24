@@ -188,12 +188,13 @@ type PrereviewState struct {
 	// the file head.
 	CommentMode string `json:"comment_mode" lvt:"persist"`
 
-	// SelectionArea holds the in-progress rectangle for a kind=area
-	// comment: 0..1 fractions of the image's rendered size. Set by
-	// SelectImageArea (dispatched from the client's lvt-fx:area-select
-	// directive on pointerup) and cleared by AddComment / ClearSelection
-	// / SelectFile. Persisted so the pending overlay re-appears after a
-	// WebSocket reconnect.
+	// SelectionArea holds the in-progress rectangle, as 0..1 fractions:
+	// of the image for a kind=area comment (SelectImageArea), of the page
+	// for a live-site region (SelectRegion), or of an HTML preview for a
+	// box drawn with a line comment (SelectBlock; saved in the anchor).
+	// Cleared by AddComment / ClearSelection / SelectFile, and a box by any
+	// other line selection. Persisted so the pending overlay re-appears
+	// after a WebSocket reconnect.
 	SelectionArea Area `json:"selection_area" lvt:"persist"`
 
 	// RegionSelectArmed gates the "draw a box to comment" overlay over a

@@ -45,11 +45,7 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 
 			box := `.preview-pins .area-overlay[data-id="MB-4-4"]`
 			waitJSDiag(t, p, `(() => { const b = document.querySelector('`+box+`'); return !!b && getComputedStyle(b).visibility === 'visible' && b.querySelector('.pin-btn').textContent.trim() === '3'; })()`, "one marker reading 3 on the top section", diag)
-			var shown int
-			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`[...document.querySelectorAll('.preview-pins .drawn-box')].filter(b => getComputedStyle(b).display !== 'none').length`, &shown)); err != nil {
-				t.Fatalf("count the drawn boxes: %v", err)
-			}
-			if shown != 0 {
+			if shown := evalInt(t, p, `[...document.querySelectorAll('.preview-pins .drawn-box')].filter(b => getComputedStyle(b).display !== 'none').length`); shown != 0 {
 				t.Errorf("%d drawn boxes show before the marker is tapped; want none%s", shown, diag())
 			}
 
@@ -95,10 +91,10 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			); err != nil {
 				t.Fatalf("tap the marker: %v%s", err, diag())
 			}
-			waitJSDiag(t, p, `document.querySelectorAll('.preview-pins .drawn-box.is-focused').length === 3 && (() => { const r = document.querySelector('.html-block[data-key="HB-4-4"]').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the three boxes shown and the cards in view", diag)
+			waitJSDiag(t, p, `document.querySelectorAll('.preview-pins .drawn-box.is-shown').length === 3 && (() => { const r = document.querySelector('.html-block[data-key="HB-4-4"]').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the three boxes shown and the cards in view", diag)
 			checkDrawnBoxes(t, p, drawn, diag)
-			if countSel(t, p, box+`.is-focused`) != 0 {
-				t.Errorf("the block is outlined although every comment on it has its own box%s", diag())
+			if w := evalInt(t, p, `parseInt(getComputedStyle(document.querySelector('`+box+`')).borderTopWidth)`); w != 0 {
+				t.Errorf("the block is outlined (%dpx) although every comment on it has its own box%s", w, diag())
 			}
 
 			// Show boxes, then Hide annotations.
@@ -178,6 +174,10 @@ func drawHTMLRegionAt(t *testing.T, p *runningPrereview, body string, box previe
 	waitJSDiag(t, p, `!document.querySelector('.composer textarea')`, "the composer closes after saving", diag)
 }
 
+// annColourJS defines colour(el): the annotation colour class (ann-cN) an
+// element carries, or ”.
+const annColourJS = `const colour = el => [...el.classList].find(c => c.startsWith('ann-c')) || '';`
+
 // checkDrawnBoxes checks the preview's drawn boxes after a marker tap: one per
 // box in want, shown where it was drawn, each in a different colour, and each
 // card under the preview in its box's colour.
@@ -194,7 +194,7 @@ func checkDrawnBoxes(t *testing.T, p *runningPrereview, want []previewBox, diag 
 	}
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
 		const f = document.querySelector('iframe.html-preview').getBoundingClientRect();
-		const colour = el => [...el.classList].find(c => c.startsWith('ann-c')) || '';
+		`+annColourJS+`
 		const cards = {};
 		for (const c of document.querySelectorAll('.html-block .inline-comment')) cards[c.dataset.key] = colour(c);
 		return {

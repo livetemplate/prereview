@@ -35,7 +35,7 @@
         <div class="area-overlay
                 {{- if .Acted}} is-acted{{else if not .Open}} is-resolved{{end}}
                 {{- if .Unboxed}} is-unboxed{{end}}
-                {{- if and .Unboxed (eq $.FocusedHTMLBlock .Key)}} is-focused{{end -}}
+                {{- if eq $.FocusedHTMLBlock .Key}} is-focused{{end -}}
                 "
                 data-id="{{.Key}}"
                 data-from="{{.From}}"
@@ -44,13 +44,13 @@
                 lvt-on:click="focusHTMLBlock"
                 data-id="{{.Key}}"
                 aria-label="Show the comments on this block">{{.Total}}</button></div>
-        {{- range .Boxes -}}
-        <div class="area-overlay drawn-box {{.Color}}
-                {{- if .Resolved}} is-resolved{{else if .Acted}} is-acted{{end}}
-                {{- if eq $.FocusedHTMLBlock $mk}} is-focused{{end -}}
+        {{- range .Boxed -}}
+        <div class="area-overlay drawn-box {{index $.AnnotationColors .ID}}
+                {{- if .Resolved}} is-resolved{{else if index $.AgentActedLabels .ID}} is-acted{{end}}
+                {{- if eq $.FocusedHTMLBlock $mk}} is-shown{{end -}}
                 "
                 data-box="{{.ID}}"
-                style="left:{{.PercentX}};top:{{.PercentY}};width:{{.PercentW}};height:{{.PercentH}};"></div>
+                style="left:{{.Anchor.Box.PercentX}};top:{{.Anchor.Box.PercentY}};width:{{.Anchor.Box.PercentW}};height:{{.Anchor.Box.PercentH}};"></div>
         {{- end -}}
         {{- end -}}
         {{- with $.PreviewPendingBox -}}

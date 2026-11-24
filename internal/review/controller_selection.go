@@ -62,7 +62,18 @@ func (c *PrereviewController) SelectLine(state PrereviewState, ctx *livetemplate
 		state.SelectionEnd = n
 		state.SelectionSide = side
 	}
+	dropDrawnBox(&state)
 	return state, nil
+}
+
+// dropDrawnBox forgets the box drawn on an HTML preview when the line selection
+// changes some other way: the box belongs to the selection SelectBlock made.
+// Only in line mode, where SelectionArea holds that box; an area or live-region
+// composer keeps its rectangle there.
+func dropDrawnBox(state *PrereviewState) {
+	if state.CommentMode == "" {
+		state.SelectionArea = Area{}
+	}
 }
 
 // openThreadOnLine handles a click on a line that ALREADY carries a comment (#174): a line
@@ -190,8 +201,9 @@ func (c *PrereviewController) SelectBlock(state PrereviewState, ctx *livetemplat
 	state.SelectionEnd = to
 	state.SelectionSide = side
 	// A drawn box (fractions of the preview page) rides along with the lines;
-	// a tap on a block carries none. It waits in SelectionArea, whose readers
-	// all key on an area or region CommentMode, so it can't leak into those.
+	// a tap on a block carries none. It waits in SelectionArea, which the area
+	// and region composers read only in their own CommentMode; any other line
+	// selection drops it (dropDrawnBox).
 	state.SelectionArea = drawnBox(ctx)
 	// Capturing a region disarms the overlay so scrolling returns and the
 	// composer is reachable (mirror of SelectImageArea).
@@ -409,6 +421,7 @@ func (c *PrereviewController) SetURLHash(state PrereviewState, ctx *livetemplate
 		// add/ctx rows; user can still manually re-select if they
 		// want the old side.
 		state.SelectionSide = "new"
+		dropDrawnBox(&state)
 		state.URLHashScrollAnchor = ""
 	} else if parsed.Anchor != "" {
 		state.SelectionAnchor = 0
@@ -562,11 +575,11 @@ func (c *PrereviewController) SelectRegion(state PrereviewState, ctx *livetempla
 	return state, nil
 }
 
-// drawnBox reads the box selectBlock's drag sends with the lines (bx/by/bw/bh,
+// drawnBox reads the box selectBlock's drag sends with the lines (x/y/w/h,
 // fractions of the preview page). Zero when there is none or it is out of range.
 func drawnBox(ctx *livetemplate.Context) Area {
-	a := Area{X: ctx.GetFloat("bx"), Y: ctx.GetFloat("by"), W: ctx.GetFloat("bw"), H: ctx.GetFloat("bh")}
-	if a.W <= 0 || a.H <= 0 || a.X < 0 || a.Y < 0 || a.X+a.W > 1.0001 || a.Y+a.H > 1.0001 {
+	a := Area{X: ctx.GetFloat("x"), Y: ctx.GetFloat("y"), W: ctx.GetFloat("w"), H: ctx.GetFloat("h")}
+	if !validUnitRect(a) {
 		return Area{}
 	}
 	return a
