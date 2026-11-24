@@ -950,8 +950,6 @@ can accept or reject it. Do not modify files directly.">Fix grammar &amp; spelli
 </div>
 </div><script defer src="/livetemplate-client.js"></script>
 <script defer src="/prereview-handlers.js"></script>
-
-<script defer src="/mermaid-init.js"></script>
 </body>
 </html>
 

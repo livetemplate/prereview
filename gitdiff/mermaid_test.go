@@ -1,6 +1,7 @@
 package gitdiff
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -99,5 +100,38 @@ func TestRenderMarkdownBlocks_NonMermaidFenceStillHighlights(t *testing.T) {
 	}
 	if !strings.Contains(h, `class="chroma"`) || !strings.Contains(h, `<span class="`) {
 		t.Errorf("go fence not chroma-highlighted: %q", h)
+	}
+}
+
+// TestRenderMarkdownBlocks_MermaidKeys pins the data-key contract: identical
+// diagrams get distinct keys (morphdom indexes keys across the patch root, so a
+// shared key leaves a stale copy behind when one is edited), an unrelated line
+// moving leaves every key alone, and editing a definition changes its key.
+func TestRenderMarkdownBlocks_MermaidKeys(t *testing.T) {
+	fence := "```mermaid\ngraph TD\n  A-->B\n```\n"
+	keys := func(src, path string) []string {
+		var out []string
+		for _, b := range RenderMarkdownBlocks([]byte(src), path) {
+			h := string(b.HTML)
+			if i := strings.Index(h, `data-key="`); i >= 0 {
+				out = append(out, strings.SplitN(h[i+len(`data-key="`):], `"`, 2)[0])
+			}
+		}
+		return out
+	}
+
+	twin := keys(fence+"\n"+fence, "a.md")
+	if len(twin) != 2 || twin[0] == twin[1] {
+		t.Fatalf("identical diagrams need distinct keys, got %v", twin)
+	}
+	if shifted := keys("# Title\n\nIntro.\n\n"+fence+"\n"+fence, "a.md"); !slices.Equal(shifted, twin) {
+		t.Errorf("an unrelated line moved the keys: %v, want %v", shifted, twin)
+	}
+	if other := keys(fence, "b.md"); other[0] == twin[0] {
+		t.Errorf("the same diagram in another file shares key %s", other[0])
+	}
+	edited := keys(strings.Replace(fence, "A-->B", "A-->C", 1)+"\n"+fence, "a.md")
+	if edited[0] == twin[0] {
+		t.Errorf("editing a definition kept its key %s", edited[0])
 	}
 }
