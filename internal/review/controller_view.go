@@ -35,6 +35,14 @@ func (c *PrereviewController) OpenAnnotations(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
+// FocusHTMLBlock answers a tap on an HTML preview marker: the block's cards
+// under the preview scroll into view and its box is outlined.
+func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	clearScrollTargets(&state)
+	state.FocusedHTMLBlock = ctx.GetString("id")
+	return state, nil
+}
+
 // SetCommentFilter switches the All comments screen between every comment
 // ("") and the live site's annotations.
 func (c *PrereviewController) SetCommentFilter(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
@@ -486,6 +494,7 @@ func showLive(state *PrereviewState, on bool) {
 // clearScrollTargets drops every one-render scroll nudge, so a jump that sets none
 // (or a different one) leaves no stale target behind.
 func clearScrollTargets(state *PrereviewState) {
+	state.FocusedHTMLBlock = ""
 	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
 	state.ScrollToItemKey = ""

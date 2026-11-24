@@ -147,7 +147,15 @@
   
   <div class="title">
     <span class="title-main"><span class="title-file">index.html</span></span>
-  </div>
+  </div><form method="POST" class="region-toggle">
+  <button
+    type="submit"
+    name="toggleRegionSelect"
+    class="contrast"
+    aria-pressed="true"
+    title="Drag a box on the page to comment on that part"
+  ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span class="annotate-word"> Annotating — tap to cancel</span></button>
+</form>
   
   <div class="toolbar-inline">
     <div class="tb-group tb-counters">
@@ -699,16 +707,7 @@
 
 <main class="viewer"
       lvt-fx:viewport-report="reportViewport"
-      data-lvt-viewport-items=".line, .md-block"><div class="live-wrap live-hidden" data-key="live-wrap">    <form method="POST" class="region-toggle">
-  <button
-    type="submit"
-    name="toggleRegionSelect"
-    class="contrast"
-    aria-pressed="true"
-    title="Drag a box on the page to comment on that part"
-  >Annotating — tap to cancel</button>
-</form>
-    <div class="preview-stage ext-stage"
+      data-lvt-viewport-items=".line, .md-block"><div class="live-wrap live-hidden" data-key="live-wrap">    <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"
          data-page="/"
          data-key="ext-stage">
@@ -820,15 +819,7 @@
   
   
   
-  <div class="html-view" data-key="html-index.html"><form method="POST" class="region-toggle">
-  <button
-    type="submit"
-    name="toggleRegionSelect"
-    class="contrast"
-    aria-pressed="true"
-    title="Drag a box on the page to comment on that part"
-  >Annotating — tap to cancel</button>
-</form><div class="preview-stage"><iframe
+  <div class="html-view" data-key="html-index.html"><div class="preview-stage"><iframe
       class="html-preview"
       sandbox="allow-scripts"
       srcdoc="&lt;body&gt;&lt;p data-from=&#34;1&#34; data-to=&#34;1&#34;&gt;hi&lt;/p&gt;&lt;/body&gt;"

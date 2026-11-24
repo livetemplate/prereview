@@ -150,7 +150,7 @@
     class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}"
     aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}"
     title="Drag a box on the page to comment on that part"
-  >{{if $.RegionSelectArmed}}Annotating — tap to cancel{{else}}▭ Annotate{{end}}</button>
+  >{{template "iconAnnotate"}}<span class="annotate-word">{{if $.RegionSelectArmed}} Annotating — tap to cancel{{else}} Annotate{{end}}</span></button>
 </form>
 {{- end}}
 

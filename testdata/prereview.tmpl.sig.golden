@@ -112,8 +112,7 @@
 {{with $.CurrentDiff}}  
   {{$kind := $.BinaryKind}}
   {{if eq $kind "image"}}
-  
-  {{template "regionToggle" $}}{{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
+  {{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; tap Annotate to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
     <img src="/{{.Path}}" alt="{{.Path}}" {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}>
     {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"></div>{{end}}
     {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
@@ -366,7 +365,7 @@
 
 <header class="bar bar-external">
   <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
-  <span class="bar-actions"><form method="POST" style="margin:0">
+  <span class="bar-actions">{{template "regionToggle" $}}<form method="POST" style="margin:0">
       <button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button>
     </form>{{if .AgentMode}}
     <form method="POST" style="margin:0">
@@ -542,7 +541,9 @@
 <form method="POST" class="sg-hidden-marker"><input type="hidden" name="ids" value="{{.IDs}}"><span class="sg-hidden-label">{{.Label}}</span> <button type="submit" name="unhideSuggestions" class="sg-hide-btn">Show</button></form>
 === htmlView ===
 {{with $.CurrentDiff}}  
-  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
+  <div class="html-view" data-key="html-{{.Path}}"><div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
+=== iconAnnotate ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg>
 === iconBook ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconChat14 ===
@@ -792,7 +793,6 @@
   </form>
 
 === liveStage ===
-    {{template "regionToggle" $}}
     <div class="preview-stage ext-stage{{if $.ShowLiveBoxes}} show-boxes{{end}}" lvt-fx:proxy-bridge="setProxyURL" data-page="{{$.CurrentURL}}" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
       
       <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
@@ -1429,7 +1429,7 @@
   {{end}}
 === regionToggle ===
 <form method="POST" class="region-toggle">
-  <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}" title="Drag a box on the page to comment on that part">{{if $.RegionSelectArmed}}Annotating — tap to cancel{{else}}▭ Annotate{{end}}</button>
+  <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}" title="Drag a box on the page to comment on that part">{{template "iconAnnotate"}}<span class="annotate-word">{{if $.RegionSelectArmed}} Annotating — tap to cancel{{else}} Annotate{{end}}</span></button>
 </form>
 === replyButton ===
 <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
@@ -1672,7 +1672,7 @@
   {{end}}
   <div class="title">
     <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations">{{template "iconChat14"}}{{len .RegionComments}}<span class="live-count-word"> annotation{{if ne (len .RegionComments) 1}}s{{end}}</span></button>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
-  </div>
+  </div>{{if .CanAnnotate}}{{template "regionToggle" $}}{{end}}
   
   <div class="toolbar-inline">
     {{if not .LiveShowing}}<div class="tb-group tb-counters">

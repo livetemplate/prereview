@@ -932,32 +932,49 @@ func groupByBlock[T any](s PrereviewState, items []T, line func(T) int) map[stri
 // gutter, so each block carries ONE state badge at its top-right: Total annotations,
 // coloured yellow when Open (unresolved comment / undecided suggestion), accentuated
 // yellow when Accepted (an accepted-but-unapplied suggestion, nothing open), else green.
-// Open wins over Accepted, matching the diff-row ladder.
+// Open wins over Accepted, matching the diff-row ladder. WorkedOn means every
+// open comment in the block has been worked on by the agent (the HTML preview's
+// marker shows a tick).
 type BlockAnn struct {
 	Total    int
 	Open     bool
 	Accepted bool
+	WorkedOn bool
 }
 
 // BlockAnnotations aggregates the selected file's inline annotations into each rendered
-// Markdown block by source line range, keyed "MB-<start>-<end>" (the template's $mbkey).
+// Markdown block, or each block of the HTML preview, by source line range, keyed
+// "MB-<start>-<end>" (the Markdown view's badge and the HTML preview's marker).
 // Zero-arg; nil when none.
 func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
-	blocks := s.RenderedMarkdown()
+	type span struct{ start, end int }
+	var blocks []span
+	for _, b := range s.RenderedMarkdown() {
+		blocks = append(blocks, span{b.StartLine, b.EndLine})
+	}
+	for _, b := range s.RenderedHTML() {
+		blocks = append(blocks, span{b.StartLine, b.EndLine})
+	}
 	if len(blocks) == 0 {
 		return nil
 	}
 	comments, suggestions := s.BlockComments(), s.BlockSuggestions()
 	out := map[string]BlockAnn{}
 	for _, blk := range blocks {
-		key := markdownBlockKey(blk.StartLine, blk.EndLine)
+		key := markdownBlockKey(blk.start, blk.end)
 		var ba BlockAnn
+		openComments, workedOn := 0, 0
 		for _, c := range comments[key] {
 			ba.Total++
 			if !c.Resolved {
 				ba.Open = true
+				openComments++
+				if c.Processed {
+					workedOn++
+				}
 			}
 		}
+		ba.WorkedOn = openComments > 0 && workedOn == openComments
 		for _, sg := range suggestions[key] {
 			ba.Total++
 			if s.suggestionUndecided(sg.ID) {
@@ -1178,6 +1195,19 @@ func (s PrereviewState) LiveShowing() bool {
 		return true
 	}
 	return s.Combined() && s.LiveView && !s.ShowAllComments && !s.ShowUnderstand && !s.ShowLibrary
+}
+
+// CanAnnotate reports whether a surface you can draw a box on is showing in the
+// main view: the live site, an HTML file's preview or an image. The header's
+// Annotate toggle shows only then.
+func (s PrereviewState) CanAnnotate() bool {
+	if s.LiveShowing() {
+		return true
+	}
+	if !s.FileShowing() || s.ShowAllComments || s.ShowUnderstand || s.ShowLibrary {
+		return false
+	}
+	return s.ShowRenderedHTML() || (s.CurrentDiff.IsBinary && s.BinaryKind() == "image")
 }
 
 // FileShowing reports that a file is loaded and on screen. A combined session

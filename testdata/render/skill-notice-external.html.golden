@@ -29,7 +29,15 @@
 
 <header class="bar bar-external">
   <span class="ext-target">prereview · annotating <code>http://localhost:3000</code> <span class="ext-page">http://localhost:3000/</span></span>
-  <span class="bar-actions"><form method="POST" style="margin:0">
+  <span class="bar-actions"><form method="POST" class="region-toggle">
+  <button
+    type="submit"
+    name="toggleRegionSelect"
+    class="outline secondary"
+    aria-pressed="false"
+    title="Drag a box on the page to comment on that part"
+  ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span class="annotate-word"> Annotate</span></button>
+</form><form method="POST" style="margin:0">
       <button
         type="submit"
         name="toggleAnnotations"
@@ -68,15 +76,6 @@
   </form>
 </div><div class="layout layout-external">
   <main class="viewer ext-viewer">
-    <form method="POST" class="region-toggle">
-  <button
-    type="submit"
-    name="toggleRegionSelect"
-    class="outline secondary"
-    aria-pressed="false"
-    title="Drag a box on the page to comment on that part"
-  >▭ Annotate</button>
-</form>
     <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"
          data-page="http://localhost:3000/"

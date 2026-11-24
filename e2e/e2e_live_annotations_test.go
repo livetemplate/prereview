@@ -156,6 +156,23 @@ func TestE2E_LiveMarkers(t *testing.T) {
 				return pr
 			}
 
+			// Annotate sits in the header, and the header keeps the annotation
+			// count whole (on a phone it has to share the bar with Annotate).
+			var header struct{ AnnotateInHeader, CountWhole bool }
+			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+				const c = document.querySelector('header.bar .live-count');
+				const title = c && c.closest('.title');
+				return {
+					AnnotateInHeader: !!document.querySelector('header.bar button[name="toggleRegionSelect"]'),
+					CountWhole: !!c && title.getBoundingClientRect().right >= c.getBoundingClientRect().right - 1 && c.getBoundingClientRect().width >= 30,
+				};
+			})()`, &header)); err != nil {
+				t.Fatalf("read the header: %v", err)
+			}
+			if !header.AnnotateInHeader || !header.CountWhole {
+				t.Errorf("header: Annotate in it = %v, count shown whole = %v%s", header.AnnotateInHeader, header.CountWhole, diag())
+			}
+
 			got := look()
 			if got.HitsPin {
 				t.Errorf("a tap at the box's centre lands on the annotation, not the page%s", diag())

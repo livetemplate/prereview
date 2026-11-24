@@ -13,8 +13,6 @@
        listeners. Comments and the composer render in a list BELOW the preview
        (they can't interleave into the iframe document). */}}
   <div class="html-view" data-key="html-{{.Path}}">
-    {{- /* region-select toggle */ -}}
-    {{template "regionToggle" $}}
     {{- /* sandboxed iframe preview + draw-a-region overlay */ -}}
     <div class="preview-stage"><iframe
       class="html-preview"

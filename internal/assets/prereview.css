@@ -2840,8 +2840,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   background: rgba(76, 194, 255, 0.06);
   z-index: 5;
 }
-.region-toggle { margin: 0 0 0.5rem; }
-.region-toggle button { font-size: 0.85rem; padding: 0.25rem 0.6rem; width: auto; }
+/* The Annotate toggle sits in the header, beside the page's own controls. */
+.region-toggle { margin: 0; }
+.region-toggle button { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; padding: 0.2rem 0.55rem; width: auto; margin: 0; white-space: nowrap; }
 .area-overlay {
   position: absolute;
   border: 2px solid var(--lvt-area-select-color, #4cc2ff);
@@ -2943,7 +2944,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   header.bar .nav-prev,
   header.bar .nav-next,
   header.bar .title-file,
-  header.bar .live-count-word { display: none; }
+  header.bar .live-count-word,
+  header.bar .annotate-word { display: none; }
+  /* With Annotate in the bar too there's no room for the Queue's label: its
+     dot, counts and chevron stay, and the annotation count keeps its width. */
+  header.bar:has(.region-toggle) .queue-trigger .tb-label { display: none; }
+  header.bar .title:has(.live-count) { flex-shrink: 0; }
   /* The external bar has no overflow menu — keep its actions compact so
      💬 + Hand off + End session fit on one row. */
   .bar-external .bar-actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }

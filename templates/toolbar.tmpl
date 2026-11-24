@@ -36,6 +36,7 @@
       {{- end -}}
     </span>
   </div>
+  {{- if .CanAnnotate}}{{template "regionToggle" $}}{{end}}
   {{/* Desktop-only inline chip group. On mobile these same actions live
        in the 3-dots overflow menu below — single source of truth, just
        presented in the layout that fits.

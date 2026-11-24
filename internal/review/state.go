@@ -456,6 +456,11 @@ type PrereviewState struct {
 	// back in the diff view.
 	ShowAllComments bool `json:"show_all_comments"`
 
+	// FocusedHTMLBlock is the HTML preview block (its markdownBlockKey) whose
+	// marker was just tapped: its cards scroll into view and its box is
+	// outlined for one render (cleared with the other scroll targets).
+	FocusedHTMLBlock string `json:"focused_html_block"`
+
 	// CommentListFilter narrows the All comments screen: "" lists every
 	// comment, CommentFilterAnnotations only the live site's (region) ones.
 	CommentListFilter string `json:"comment_list_filter"`

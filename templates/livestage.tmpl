@@ -1,14 +1,13 @@
 {{/* The live site (#114): the proxied site in a cross-origin iframe, its pin
-     layer, and the region toggle, overlay and composer. Rendered by the
-     live-only view (externalBody) and, in a combined session, inside the repo
-     view's <main> in a .live-wrap that stays mounted while the files show, so
-     the framed site keeps its route, scroll and state; only the wrapper hides
-     (live-hidden). The overlay and composer render only while LiveShowing,
-     which is always true in live-only. The region toggle always renders: a
-     node appearing BEFORE the keyed stage makes morphdom re-insert the stage,
-     and moving an iframe reloads it. */}}
-{{define "liveStage"}}    {{template "regionToggle" $}}
-    <div class="preview-stage ext-stage{{if $.ShowLiveBoxes}} show-boxes{{end}}"
+     layer, and the region overlay and composer. Rendered by the live-only view
+     (externalBody) and, in a combined session, inside the repo view's <main> in
+     a .live-wrap that stays mounted while the files show, so the framed site
+     keeps its route, scroll and state; only the wrapper hides (live-hidden).
+     The overlay and composer render only while LiveShowing, which is always
+     true in live-only. The Annotate toggle lives in the header (regionToggle).
+     Nothing may render conditionally BEFORE the keyed stage: a node appearing
+     there makes morphdom re-insert the stage, and moving an iframe reloads it. */}}
+{{define "liveStage"}}    <div class="preview-stage ext-stage{{if $.ShowLiveBoxes}} show-boxes{{end}}"
          lvt-fx:proxy-bridge="setProxyURL"
          data-page="{{$.CurrentURL}}"
          data-key="ext-stage"

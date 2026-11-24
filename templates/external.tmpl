@@ -11,6 +11,7 @@
     {{- if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end -}}
   </span>
   <span class="bar-actions">
+    {{- template "regionToggle" $ -}}
     {{- /* annotation-count toggle */ -}}
     <form method="POST" style="margin:0">
       <button
