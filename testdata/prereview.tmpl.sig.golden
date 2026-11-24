@@ -2,6 +2,10 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments ({{.CommentCount}})</strong>
+    {{if .AnnotationsListed}}<div class="ac-filter">
+      <form method="POST"><input type="hidden" name="filter" value=""><button type="submit" name="setCommentFilter" class="{{if eq .CommentListFilter ""}}contrast{{else}}outline contrast{{end}}" aria-pressed="{{if eq .CommentListFilter ""}}true{{else}}false{{end}}">All</button></form>
+      <form method="POST"><input type="hidden" name="filter" value="annotations"><button type="submit" name="setCommentFilter" class="{{if eq .CommentListFilter "annotations"}}contrast{{else}}outline contrast{{end}}" aria-pressed="{{if eq .CommentListFilter "annotations"}}true{{else}}false{{end}}" title="Only the live site's annotations">Annotations {{.AnnotationsListed}}</button></form>
+    </div>{{end}}
     {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
       <button type="submit" name="resolveAll" class="outline" title="Resolve every comment listed here">Resolve all {{.UnresolvedListed}}</button>
     </form>{{end}}
@@ -12,16 +16,21 @@
   {{if .VisibleComments}}
   <ul class="ac-list">
     {{range .VisibleComments}}
-    <li class="ac-item{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}">
+    <li class="ac-item{{if .Resolved}} is-resolved{{end}}{{if eq $.ScrollToCommentID .ID}} is-target{{end}}" data-key="{{.ID}}"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}>
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}{{with .Source}} {{template "sourceBadge" .}}{{end}}</div>
+          <div class="ac-where">{{if .IsRegionLevel}}<small class="anno-label">annotation</small> <code>{{.Location}}</code>{{else}}<code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{end}}{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} {{template "awaitingBadge"}}{{end}}{{with .Source}} {{template "sourceBadge" .}}{{end}}</div>
           <div class="ac-body">{{.Headline}}</div>
         </button>
       </form>
-      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
+      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}
       <div class="ac-actions">
+        {{if .IsRegionLevel}}<form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="jumpToComment" class="outline" title="Back to the live site, with this annotation's box outlined">Show on page</button>
+        </form>{{end}}
+        {{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}
         <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -787,7 +796,7 @@
     <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
       
       <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="{{if $.Combined}}openAnnotations{{else}}editComment{{end}}" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}" aria-label="{{if $.Combined}}Open annotation{{else}}Edit annotation{{end}}"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
       {{if and .RegionSelectArmed $.LiveShowing}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
     </div>
     {{if and $.LiveShowing (eq $.CommentMode "region")}}{{template "composer" $}}{{end}}
@@ -1657,7 +1666,7 @@
   </form>
   {{end}}
   <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<span class="title-page">{{.LivePageLabel}}</span> <small class="live-count">· {{len .RegionComments}} annotation{{if ne (len .RegionComments) 1}}s{{end}}</small>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
+    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<span class="title-page">{{.LivePageLabel}}</span> <button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations">{{template "iconChat14"}}{{len .RegionComments}}<span class="live-count-word"> annotation{{if ne (len .RegionComments) 1}}s{{end}}</span></button>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
   </div>
   
   <div class="toolbar-inline">

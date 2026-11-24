@@ -812,6 +812,7 @@
   <header class="ac-head">
     <strong>All comments (2)</strong>
     
+    
     <form method="POST" style="margin:0">
       <button
         type="submit"
@@ -837,6 +838,8 @@
       </form>
       
       <div class="ac-actions">
+        
+        <form method="POST"><input type="hidden" name="id" value="c1"><button type="submit" name="openReply" class="outline">Reply</button></form>
         <form method="POST">
       <input type="hidden" name="id" value="c1">
       <button
@@ -895,6 +898,8 @@
       </form>
       
       <div class="ac-actions">
+        
+        <form method="POST"><input type="hidden" name="id" value="c2"><button type="submit" name="openReply" class="outline">Reply</button></form>
         <form method="POST">
       <input type="hidden" name="id" value="c2">
       <button

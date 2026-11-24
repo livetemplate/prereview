@@ -456,6 +456,10 @@ type PrereviewState struct {
 	// back in the diff view.
 	ShowAllComments bool `json:"show_all_comments"`
 
+	// CommentListFilter narrows the All comments screen: "" lists every
+	// comment, CommentFilterAnnotations only the live site's (region) ones.
+	CommentListFilter string `json:"comment_list_filter"`
+
 	// ShowUnderstand shows the Understand page (#115): the walkthrough of the
 	// whole change and the quiz on it (#191), in place of the diff
 	// viewer like ShowAllComments. Not persisted, and reset by every navigation
@@ -797,9 +801,28 @@ func (s PrereviewState) VisibleComments() []Comment {
 		if s.commentHiddenFromView(c) {
 			continue
 		}
+		if s.CommentListFilter == CommentFilterAnnotations && !c.IsRegionLevel() {
+			continue
+		}
 		out = append(out, c)
 	}
 	return out
+}
+
+// CommentFilterAnnotations is the All comments filter that lists only the
+// live site's annotations (region comments).
+const CommentFilterAnnotations = "annotations"
+
+// AnnotationsListed is how many live-site annotations the All comments screen
+// would list with the Annotations filter: the count on that filter's button.
+func (s PrereviewState) AnnotationsListed() int {
+	n := 0
+	for _, c := range s.scopedComments() {
+		if c.IsRegionLevel() && !s.commentHiddenFromView(c) {
+			n++
+		}
+	}
+	return n
 }
 
 // UnresolvedListed is how many comments the All comments screen lists that
@@ -814,10 +837,15 @@ func (s PrereviewState) UnresolvedListed() int {
 	return n
 }
 
-// resolvable reports whether Resolve all resolves c: in scope and open. The
-// screen lists every such comment (commentHiddenFromView hides only resolved
-// ones).
-func (s PrereviewState) resolvable(c Comment) bool { return !c.Resolved && s.inScope(c.File) }
+// resolvable reports whether Resolve all resolves c: in scope, open, and
+// passing the screen's filter. The screen lists every such comment
+// (commentHiddenFromView hides only resolved ones).
+func (s PrereviewState) resolvable(c Comment) bool {
+	if s.CommentListFilter == CommentFilterAnnotations && !c.IsRegionLevel() {
+		return false
+	}
+	return !c.Resolved && s.inScope(c.File)
+}
 
 // CommentCount is the number of in-scope comments — the all-comments view's header
 // total. Zero-arg because livetemplate only pre-computes zero-arg methods; the

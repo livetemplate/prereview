@@ -715,12 +715,12 @@
       ></iframe>
       <div class="pin-layer" data-pin-layer data-key="pin-layer"><button type="button"
                 class="area-overlay pin-btn"
-                lvt-on:click="editComment"
+                lvt-on:click="openAnnotations"
                 data-id="r1"
                 data-key="pin-r1"
                 style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"
                 title="CTA too faint"
-                aria-label="Edit annotation"></button></div>
+                aria-label="Open annotation"></button></div>
       
     </div>
     </div>

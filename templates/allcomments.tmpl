@@ -2,6 +2,21 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments ({{.CommentCount}})</strong>
+    {{if .AnnotationsListed}}<div class="ac-filter">
+      <form method="POST"><input type="hidden" name="filter" value=""><button
+        type="submit"
+        name="setCommentFilter"
+        class="{{if eq .CommentListFilter ""}}contrast{{else}}outline contrast{{end}}"
+        aria-pressed="{{if eq .CommentListFilter ""}}true{{else}}false{{end}}"
+      >All</button></form>
+      <form method="POST"><input type="hidden" name="filter" value="annotations"><button
+        type="submit"
+        name="setCommentFilter"
+        class="{{if eq .CommentListFilter "annotations"}}contrast{{else}}outline contrast{{end}}"
+        aria-pressed="{{if eq .CommentListFilter "annotations"}}true{{else}}false{{end}}"
+        title="Only the live site's annotations"
+      >Annotations {{.AnnotationsListed}}</button></form>
+    </div>{{end}}
     {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
       <button
         type="submit"
@@ -23,26 +38,44 @@
   <ul class="ac-list">
     {{range .VisibleComments}}
     <li
-      class="ac-item{{if .Resolved}} is-resolved{{end}}"
+      class="ac-item{{if .Resolved}} is-resolved{{end}}{{if eq $.ScrollToCommentID .ID}} is-target{{end}}"
       data-key="{{.ID}}"
+      {{- if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}
     >
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}
+          <div class="ac-where">{{if .IsRegionLevel}}<small class="anno-label">annotation</small> <code>{{.Location}}</code>{{else}}<code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{end}}
             {{- if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}
             {{- if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}
             {{- if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}
             {{- if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}
             {{- if .Processed}} {{template "processedBadge"}}{{end}}
             {{- if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}
+            {{- if index $.AwaitingAgent .ID}} {{template "awaitingBadge"}}{{end}}
             {{- with .Source}} {{template "sourceBadge" .}}{{end -}}
           </div>
           <div class="ac-body">{{.Headline}}</div>
         </button>
       </form>
       {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
+      {{- template "thread" (index $.Threads .ID) -}}
+      {{- if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}
       <div class="ac-actions">
+        {{if .IsRegionLevel -}}
+        <form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button
+            type="submit"
+            name="jumpToComment"
+            class="outline"
+            title="Back to the live site, with this annotation's box outlined"
+          >Show on page</button>
+        </form>
+        {{- end}}
+        {{if ne $.ReplyingID .ID -}}
+        <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
+        {{- end}}
         <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button

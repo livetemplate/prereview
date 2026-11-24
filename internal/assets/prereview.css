@@ -783,6 +783,12 @@ header.bar .title {
 header.bar .title small { color: var(--pico-muted-color); font-weight: normal; }
 header.bar .title { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
 header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The live page's annotation count opens All comments on the annotations. */
+header.bar .live-count {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  margin: 0 0 0 0.25rem; padding: 0.1rem 0.5rem; width: auto;
+  font-size: 0.8rem; line-height: 1.4; vertical-align: middle;
+}
 
 /* Inline chip group — only shown on desktop where the toolbar has room.
    Mobile users get the same controls inside the 3-dots overflow menu. */
@@ -1621,6 +1627,26 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
 .all-comments .ac-item.is-resolved .ac-body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
 .all-comments .ac-where { font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.25rem; }
 .all-comments .ac-body { white-space: pre-wrap; word-break: break-word; }
+/* All / Annotations filter: beside the title, or on its own row on a phone. */
+.all-comments .ac-head { flex-wrap: wrap; gap: 0.4rem; }
+.all-comments .ac-head strong,
+.all-comments .ac-head button { white-space: nowrap; }
+.all-comments .ac-filter { display: flex; gap: 0.3rem; margin: 0 auto 0 0.6rem; }
+.all-comments .ac-filter form { margin: 0; }
+.all-comments .ac-filter ~ .ac-resolve-all { margin-left: 0; }
+@media (max-width: 600px) {
+  .all-comments .ac-filter { order: 1; flex-basis: 100%; margin: 0; }
+  .all-comments .ac-filter ~ .ac-resolve-all { margin-left: auto; }
+}
+/* A live-site annotation's label, where a line comment shows its file:line. */
+.all-comments .anno-label {
+  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+  border: 1px solid var(--pico-muted-color); color: var(--pico-muted-color);
+}
+/* The card a marker tap opened. */
+.all-comments .ac-item.is-target .ac-jump-btn { outline: 2px solid var(--accent); outline-offset: 1px; }
+.all-comments .ac-item .thread { margin: 0.3rem 0 0.2rem 0.6rem; }
 /* Per-item edit/resolve/delete row — mirrors .inline-comment
    .ic-actions (that selector is descendant-scoped so it can't be
    reused here). flex-wrap keeps the three buttons usable on a narrow
@@ -2906,7 +2932,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   header.bar .nav-next,
   header.bar .title-file,
   header.bar .title-page,
-  header.bar .live-count { display: none; }
+  header.bar .live-count-word { display: none; }
   /* The external bar has no overflow menu — keep its actions compact so
      💬 + Hand off + End session fit on one row. */
   .bar-external .bar-actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }

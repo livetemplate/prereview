@@ -15,19 +15,54 @@ import (
 // overview pane. Bound to the "N comments" entry in the overflow menu.
 // Closes the menu so the user sees the result immediately.
 func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	toggleFullView(&state, &state.ShowAllComments)
+	if state.ShowAllComments {
+		toggleFullView(&state, &state.ShowAllComments)
+		state.MoreMenuOpen = false
+		state.LastResolvedIDs = nil // Resolve all's Undo belongs to the screen (a deleted comment's stays)
+		return state, nil
+	}
+	c.openCommentList(&state, "")
+	return state, nil
+}
+
+// OpenAnnotations opens All comments on the live site's annotations, from the
+// live page's count or a tap on an annotation's marker. With an id, that
+// annotation's card scrolls into view.
+func (c *PrereviewController) OpenAnnotations(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	c.openCommentList(&state, CommentFilterAnnotations)
+	clearScrollTargets(&state)
+	state.ScrollToCommentID = ctx.GetString("id")
+	return state, nil
+}
+
+// SetCommentFilter switches the All comments screen between every comment
+// ("") and the live site's annotations.
+func (c *PrereviewController) SetCommentFilter(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	switch f := ctx.GetString("filter"); f {
+	case "", CommentFilterAnnotations:
+		state.CommentListFilter = f
+	default:
+		return state, fmt.Errorf("setCommentFilter: unknown filter %q", f)
+	}
+	state.LastResolvedIDs = nil // Undo belongs to the list it resolved
+	return state, nil
+}
+
+// openCommentList opens the All comments screen (closing the other full-page
+// views) with filter applied.
+func (c *PrereviewController) openCommentList(state *PrereviewState, filter string) {
+	closeFullViews(state)
+	state.ShowAllComments = true
+	state.CommentListFilter = filter
 	state.MoreMenuOpen = false
 	state.LastResolvedIDs = nil // Resolve all's Undo belongs to the screen (a deleted comment's stays)
 	// Opening the overview must show accurate badges/snippets for every
 	// commented file, including ones never opened this session.
-	if state.ShowAllComments {
-		if c.relocateAll(&state) {
-			if err := c.persist(state.Comments); err != nil {
-				slog.Warn("self-heal persist (all comments)", "err", err)
-			}
+	if c.relocateAll(state) {
+		if err := c.persist(state.Comments); err != nil {
+			slog.Warn("self-heal persist (all comments)", "err", err)
 		}
 	}
-	return state, nil
 }
 
 // ToggleShowResolved flips whether resolved comments are visible in the

@@ -767,6 +767,7 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments (1)</strong>
+    
     <form method="POST" class="ac-resolve-all">
       <button
         type="submit"
@@ -800,6 +801,8 @@
       </form>
       
       <div class="ac-actions">
+        
+        <form method="POST"><input type="hidden" name="id" value="c1"><button type="submit" name="openReply" class="outline">Reply</button></form>
         <form method="POST">
       <input type="hidden" name="id" value="c1">
       <button

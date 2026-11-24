@@ -33,12 +33,12 @@
                 {{- if index $.AgentActedLabels .ID}} is-acted{{end}}
                 {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}
                 "
-                lvt-on:click="editComment"
+                lvt-on:click="{{if $.Combined}}openAnnotations{{else}}editComment{{end}}"
                 data-id="{{.ID}}"
                 data-key="pin-{{.ID}}"
                 style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
                 title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"
-                aria-label="Edit annotation"></button>
+                aria-label="{{if $.Combined}}Open annotation{{else}}Edit annotation{{end}}"></button>
         {{- end -}}
         {{- if eq $.CommentMode "region" -}}
         <div class="area-overlay area-overlay-pending"

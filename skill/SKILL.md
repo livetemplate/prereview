@@ -220,7 +220,10 @@ then look across it for:
 3. **One pass per file**: `kind=file` comments first (see *Relationships* above), then
    line/text comments by ascending `from_line`. Across files, start with the one whose
    change constrains the others; otherwise keep the review's file order.
-4. **`area`/`region` last**: they are feedback with no line to edit at.
+4. **`area`/`region` last**: they are feedback with no line to edit at. Once you
+   change what they point at, mark them `done` and `reply` with what changed on
+   the page, like any other comment. A box on a live site has no diff for the
+   reviewer to check, so your reply is the only record of what you did.
 5. **Say the order** in one status line naming files only:
    `prereview status --out "<STORE>" working "api.go, then README.md"`.
 6. **Execute it**, marking each id as you go (see *Mark each comment* below).
