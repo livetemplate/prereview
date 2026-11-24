@@ -894,7 +894,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>l</kbd></dt><dd>Switch between the files and the live site</dd></div>
-    <div class="kbd-row"><dt><kbd>b</kbd></dt><dd>Show / hide the live site&#39;s annotation boxes</dd></div>
+    <div class="kbd-row"><dt><kbd>b</kbd></dt><dd>Show / hide annotation boxes</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
     <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>

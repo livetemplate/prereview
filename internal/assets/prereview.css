@@ -2889,7 +2889,11 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    Show boxes is on. */
 .pin-layer .area-overlay[data-id] { border: 2px dashed transparent; background: none; }
 .pin-layer .area-overlay[data-id]:has(> .pin-btn:hover),
-.ext-stage.show-boxes .pin-layer .area-overlay[data-id] { border-color: var(--lvt-area-select-color, #4cc2ff); }
+.show-boxes .pin-layer .area-overlay[data-id] { border-color: var(--lvt-area-select-color, #4cc2ff); }
+/* The HTML preview's markers: the layer covers the stage, and each box stays
+   hidden until lvt-fx:preview-bridge places it over its block. */
+.preview-pins { right: 0; bottom: 0; }
+.preview-pins .area-overlay[data-id] { visibility: hidden; }
 .layout.marks-hidden .pin-layer .area-overlay[data-id] { display: none; }
 .pin-btn {
   position: absolute; top: 2px; left: 2px;

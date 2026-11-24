@@ -420,6 +420,36 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
   const applyHeight = () => {
     if (lastHeight > 0) iframe.style.height = `${lastHeight}px`;
   };
+  // placeMarkers puts each commented block's box (the stage's
+  // `.preview-pins .area-overlay[data-from]`) over the posted rect with the same
+  // source range — the outermost one when a wrapper shares its child's range.
+  // The preview has no scroll of its own (it is auto-heighted), so the posted
+  // viewport rects are its document rects; the iframe's offset places them in
+  // the stage. Inline styles are what morphdom wipes on every render, so sync()
+  // re-applies them like the height.
+  const placeMarkers = () => {
+    const layer = iframe.parentElement?.querySelector<HTMLElement>(".preview-pins");
+    if (!layer) return;
+    const blocks = previewBlockRects.get(iframe) ?? [];
+    const area = (b: PreviewBlock) => (b.right - b.left) * (b.bottom - b.top);
+    for (const box of layer.querySelectorAll<HTMLElement>(".area-overlay[data-from]")) {
+      const from = Number(box.dataset.from);
+      const to = Number(box.dataset.to);
+      let best: PreviewBlock | undefined;
+      for (const b of blocks) {
+        if (b.from === from && b.to === to && (!best || area(b) > area(best))) best = b;
+      }
+      if (!best) {
+        box.style.visibility = "hidden";
+        continue;
+      }
+      box.style.left = `${iframe.offsetLeft + best.left}px`;
+      box.style.top = `${iframe.offsetTop + best.top}px`;
+      box.style.width = `${best.right - best.left}px`;
+      box.style.height = `${best.bottom - best.top}px`;
+      box.style.visibility = "visible";
+    }
+  };
 
   const onMessage = (e: MessageEvent) => {
     // The preview iframe is an opaque-origin srcdoc, so e.origin is "null" and
@@ -462,6 +492,7 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
         clean.push(block);
       }
       previewBlockRects.set(iframe, clean);
+      placeMarkers();
     }
   };
   window.addEventListener("message", onMessage);
@@ -472,7 +503,10 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
       previewBlockRects.delete(iframe);
       previewBridgeArmed.delete(iframe);
     },
-    sync: () => applyHeight(),
+    sync: () => {
+      applyHeight();
+      placeMarkers();
+    },
   };
 }
 
