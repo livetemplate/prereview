@@ -45,17 +45,18 @@ func TestE2E_ExternalAgentStates(t *testing.T) {
 	var title string
 	if err := run(
 		chromedp.WaitVisible(pin+`.is-acted`, chromedp.ByQuery),
-		chromedp.AttributeValue(pin, "title", &title, nil, chromedp.ByQuery),
+		chromedp.AttributeValue(pin+` .pin-btn`, "title", &title, nil, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("a worked-on region's box must be drawn acted-on with no reload: %v%s", err, diag())
+		t.Fatalf("a worked-on region's marker must show it with no reload: %v%s", err, diag())
 	}
 	if !strings.HasPrefix(title, "Worked on — ") {
-		t.Errorf("box tooltip = %q, want it to start with \"Worked on — \"", title)
+		t.Errorf("marker tooltip = %q, want it to start with \"Worked on — \"", title)
 	}
-	// The ✓ must not catch taps meant for the box (it opens the annotation).
-	var tickPE string
-	if err := run(chromedp.Evaluate(`getComputedStyle(document.querySelector('`+pin+`'), '::after').pointerEvents`, &tickPE)); err != nil || tickPE != "none" {
-		t.Errorf("the ✓ tick's pointer-events = %q (%v), want none", tickPE, err)
+	// The marker carries the ✓ (it is part of the marker, so a tap on it opens
+	// the annotation like the rest of the marker).
+	var tick string
+	if err := run(chromedp.Evaluate(`getComputedStyle(document.querySelector('`+pin+` .pin-btn'), '::after').content`, &tick)); err != nil || !strings.Contains(tick, "✓") {
+		t.Errorf("the worked-on marker's ✓ = %q (%v), want a tick", tick, err)
 	}
 
 	// The sidebar card shows the badge and the agent's reply.

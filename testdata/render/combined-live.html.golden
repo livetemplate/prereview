@@ -269,6 +269,25 @@
         <form method="POST">
           <button
             type="submit"
+            name="toggleMarks"
+            class="menu-item is-on"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span>
+            <span class="menu-label">Hide annotations</span>
+          </button>
+        </form>
+        
+        <form method="POST">
+          <button
+            type="submit"
             name="toggleLiveBoxes"
             class="menu-item"
             role="menuitem"
@@ -507,6 +526,25 @@
   
   
   
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleMarks"
+      class="menu-item is-on"
+      role="menuitem"
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span>
+      <span class="menu-label">Hide annotations</span>
+    </button>
+  </form>
+  
   
   
   
@@ -704,12 +742,12 @@
       <div class="pin-layer" data-pin-layer data-key="pin-layer"><div class="area-overlay"
                 data-id="r1"
                 data-key="pin-r1"
-                style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"
-                title="CTA too faint"><button type="button"
+                style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"><button type="button"
                 class="pin-btn"
                 lvt-on:click="openAnnotations"
                 data-id="r1"
-                aria-label="Open annotation: CTA too faint"></button></div></div>
+                title="CTA too faint"
+                aria-label="Open annotation 1">1</button></div></div>
       
     </div>
     </div>

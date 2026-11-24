@@ -2858,7 +2858,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 /* #248: the agent worked on or answered this region; it stays open (same colour) until
    the reviewer resolves it, marked by a dashed border and a corner tick. */
 .area-overlay.is-acted { border-style: dashed; }
-.area-overlay.is-acted::after {
+.image-with-areas .area-overlay.is-acted::after {
   content: "\2713";
   position: absolute; top: 2px; right: 2px;
   width: 1.1rem; height: 1.1rem; line-height: 1.1rem;
@@ -2886,12 +2886,10 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    clicks and drags through to the page), and the box is never filled: it is
    outlined while focused, while its marker is hovered, and for every box while
    Show boxes is on. */
-.pin-layer { counter-reset: pin; }
-.pin-layer .area-overlay { counter-increment: pin; border: 2px dashed transparent; background: none; }
-.pin-layer .area-overlay.is-acted::after { content: none; }
-.pin-layer .area-overlay:has(> .pin-btn:hover),
-.ext-stage.show-boxes .pin-layer .area-overlay { border-color: var(--lvt-area-select-color, #4cc2ff); }
-.pin-layer .area-overlay.is-focused { border-style: solid; background: none; }
+.pin-layer .area-overlay[data-id] { border: 2px dashed transparent; background: none; }
+.pin-layer .area-overlay[data-id]:has(> .pin-btn:hover),
+.ext-stage.show-boxes .pin-layer .area-overlay[data-id] { border-color: var(--lvt-area-select-color, #4cc2ff); }
+.layout.marks-hidden .pin-layer .area-overlay[data-id] { display: none; }
 .pin-btn {
   position: absolute; top: 2px; left: 2px;
   min-width: 22px; height: 22px; padding: 0 6px; margin: 0;
@@ -2901,12 +2899,11 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   pointer-events: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
 }
-.pin-btn::before { content: counter(pin); }
 .pin-btn:hover { filter: brightness(1.1); }
 /* --pico-primary-inverse is each scheme's label colour on its accent (dark on
    the light dark-mode accents of gruvbox and catppuccin). */
 .pin-layer .area-overlay.is-acted .pin-btn { background: var(--accent, #4361ee); color: var(--pico-primary-inverse, #fff); }
-.pin-layer .area-overlay.is-acted .pin-btn::before { content: counter(pin) " \2713"; }
+.pin-layer .area-overlay.is-acted .pin-btn::after { content: " \2713"; }
 .pin-layer .area-overlay.is-resolved .pin-btn { background: var(--pico-muted-color, #888); color: #fff; }
 /* Annotations sidebar: collapsed by default (full width for the live site);
    the header "💬 N" button toggles AnnoDrawerOpen → .is-open. */
@@ -2924,7 +2921,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .ext-page-link { font-family: var(--jbm); }
 /* Focused pin: bright ring + a one-shot pulse so a tapped annotation is
    obvious on the page once the iframe scrolls it into view. */
-.area-overlay.is-focused { border-color: var(--accent, #4361ee); border-width: 3px; background: rgba(67, 97, 238, 0.28); z-index: 6; animation: pin-pulse 1.4s ease-out 2; }
+.pin-layer .area-overlay.is-focused { border: 3px solid var(--accent, #4361ee); z-index: 6; animation: pin-pulse 1.4s ease-out 2; }
 @keyframes pin-pulse { 0% { box-shadow: 0 0 0 0 rgba(67,97,238,0.55); } 70% { box-shadow: 0 0 0 12px rgba(67,97,238,0); } 100% { box-shadow: 0 0 0 0 rgba(67,97,238,0); } }
 .ext-composer { margin-top: 0.6rem; }
 .bar-external { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0.8rem; }
@@ -3200,11 +3197,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .composer .composer-cancel { display: none; }
 .composer .c-actions { display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.4rem; }
 .composer .save-btn { margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 30px; }
-/* Narrow screens: Cancel and Save stay one row, without the key hints. */
-@media (max-width: 600px) {
-  .composer .c-actions .kbd-hint { display: none; }
-  .composer .c-actions button { width: auto; white-space: nowrap; }
-}
+.composer .c-actions button { width: auto; white-space: nowrap; }
 .composer .cancel-btn {
   margin: 0; padding: 0.3rem 0.7rem; font-size: 0.78rem; min-height: 28px;
   flex: 0 0 auto;

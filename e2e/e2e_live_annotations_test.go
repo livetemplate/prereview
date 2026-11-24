@@ -131,11 +131,10 @@ func TestE2E_LiveMarkers(t *testing.T) {
 			drawRegionAt(t, p, "Hero heading is too close to the top", 0.20, 0.20, 0.80, 0.60, false, diag)
 
 			type probe struct {
-				HitsPin       bool
-				BorderClear   bool
-				MarkerW       float64
-				MarkerH       float64
-				BoxesOutlined bool
+				HitsPin     bool
+				BorderClear bool
+				MarkerW     float64
+				MarkerH     float64
 			}
 			look := func() probe {
 				t.Helper()
@@ -150,7 +149,6 @@ func TestE2E_LiveMarkers(t *testing.T) {
 						HitsPin: !!(hit && hit.closest('.pin-layer')),
 						BorderClear: cs.borderTopColor === 'rgba(0, 0, 0, 0)',
 						MarkerW: m.width, MarkerH: m.height,
-						BoxesOutlined: !!document.querySelector('.ext-stage.show-boxes'),
 					};
 				})()`, &pr)); err != nil {
 					t.Fatalf("probe the saved box: %v%s", err, diag())
@@ -183,48 +181,58 @@ func TestE2E_LiveMarkers(t *testing.T) {
 			waitJSDiag(t, p, `!document.querySelector('.ext-stage.show-boxes')`, "Show boxes off", diag)
 
 			// The marker's label stays readable on its colour: open, then worked on
-			// in dark mode in every scheme (the accent and its inverse vary).
-			markerContrast := func(label string) {
-				t.Helper()
-				var ratio float64
-				if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
-					const lum = c => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
-					const cs = getComputedStyle(document.querySelector('.pin-layer .pin-btn'));
-					const a = lum(cs.color), b = lum(cs.backgroundColor);
-					return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-				})()`, &ratio)); err != nil {
-					t.Fatalf("marker contrast (%s): %v", label, err)
+			// in dark mode in every scheme (the accent and its inverse vary). The
+			// colours don't depend on the viewport, so desktop checks them.
+			if !vp.touch {
+				markerContrast := func(label string) {
+					t.Helper()
+					var ratio float64
+					if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+						`+wcagLumJS+`
+						const cs = getComputedStyle(document.querySelector('.pin-layer .pin-btn'));
+						const a = lum(cs.color), b = lum(cs.backgroundColor);
+						return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+					})()`, &ratio)); err != nil {
+						t.Fatalf("marker contrast (%s): %v", label, err)
+					}
+					if ratio < 3 {
+						t.Errorf("%s marker label contrast %.2f:1, want at least 3:1", label, ratio)
+					}
 				}
-				if ratio < 3 {
-					t.Errorf("%s marker label contrast %.2f:1, want at least 3:1", label, ratio)
+				markerContrast("open")
+				var id string
+				if err := chromedp.Run(p.ctx, chromedp.AttributeValue(`.pin-layer .area-overlay[data-id]`, "data-id", &id, nil, chromedp.ByQuery)); err != nil {
+					t.Fatalf("read the id: %v", err)
 				}
-			}
-			markerContrast("open")
-			var id string
-			if err := chromedp.Run(p.ctx, chromedp.AttributeValue(`.pin-layer .area-overlay[data-id]`, "data-id", &id, nil, chromedp.ByQuery)); err != nil {
-				t.Fatalf("read the id: %v", err)
-			}
-			mustCLI(t, p, "done", "--out", p.store, id)
-			waitJSDiag(t, p, `!!document.querySelector('.pin-layer .area-overlay.is-acted')`, "the marker shows worked on", diag)
-			for i := 0; i < 2; i++ { // System → Light → Dark
-				if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="cycleTheme"]').click(), true`, nil)); err != nil {
-					t.Fatalf("cycle theme: %v", err)
+				mustCLI(t, p, "done", "--out", p.store, id)
+				waitJSDiag(t, p, `!!document.querySelector('.pin-layer .area-overlay.is-acted')`, "the marker shows worked on", diag)
+				for i := 0; i < 2; i++ { // System → Light → Dark
+					if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="cycleTheme"]').click(), true`, nil)); err != nil {
+						t.Fatalf("cycle theme: %v", err)
+					}
 				}
-				time.Sleep(400 * time.Millisecond)
-			}
-			for i := 0; i < 3; i++ {
-				var scheme string
-				_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.theme-root').dataset.scheme + '/' + document.querySelector('.theme-root').dataset.mode`, &scheme))
-				markerContrast("worked-on " + scheme)
-				if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="cycleScheme"]').click(), true`, nil)); err != nil {
-					t.Fatalf("cycle scheme: %v", err)
+				waitThemeSettled(t, p, `.theme-root[data-mode="dark"]`)
+				for i := 0; i < 3; i++ {
+					var scheme string
+					_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.theme-root').dataset.scheme`, &scheme))
+					markerContrast("worked-on " + scheme + " dark")
+					if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="cycleScheme"]').click(), true`, nil)); err != nil {
+						t.Fatalf("cycle scheme: %v", err)
+					}
+					waitThemeSettled(t, p, `.theme-root:not([data-scheme="`+scheme+`"])`)
 				}
-				time.Sleep(400 * time.Millisecond)
 			}
 
 			// Overlap: a box drawn starting inside the saved one.
 			drawRegionAt(t, p, "This word inside the first box", 0.40, 0.35, 0.60, 0.45, vp.touch, diag)
-			waitJSDiag(t, p, `document.querySelectorAll('.pin-layer .area-overlay[data-id]').length === 2`, "two annotations", diag)
+
+			// Markers are numbered per page in the order the annotations were made,
+			// and the card in All comments carries the same number.
+			waitJSDiag(t, p, `[...document.querySelectorAll('.pin-layer .pin-btn')].map(b => b.textContent.trim()).join(',') === '1,2'`, "markers numbered 1 and 2", diag)
+			if err := chromedp.Run(p.ctx, chromedp.Click(`.pin-layer .area-overlay[data-id]:first-child .pin-btn`, chromedp.ByQuery)); err != nil {
+				t.Fatalf("tap marker 1: %v%s", err, diag())
+			}
+			waitJSDiag(t, p, `((document.querySelector('.ac-item.is-target .anno-label')||{}).textContent||'').trim() === 'annotation 1'`, "the card labelled annotation 1", diag)
 		})
 	}
 }

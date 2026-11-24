@@ -1139,6 +1139,22 @@ func (s PrereviewState) RegionComments() []Comment {
 	return out
 }
 
+// AnnotationNumbers numbers each live-site annotation within its page, in the
+// order they were made, keyed by ID: the number on its marker and on its card
+// in All comments. Resolved and hidden annotations keep their numbers, so
+// resolving one never renumbers the rest. Zero-arg for the template.
+func (s PrereviewState) AnnotationNumbers() map[string]int {
+	out := map[string]int{}
+	perPage := map[string]int{}
+	for _, c := range s.Comments {
+		if c.IsRegionLevel() {
+			perPage[c.URL]++
+			out[c.ID] = perPage[c.URL]
+		}
+	}
+	return out
+}
+
 // regionVisible reports whether c is a live-site annotation that shows: the
 // rule the page's boxes, the live-only sidebar and the Annotations filter share.
 func (s PrereviewState) regionVisible(c Comment) bool {

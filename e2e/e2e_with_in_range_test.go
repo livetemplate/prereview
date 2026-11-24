@@ -86,8 +86,8 @@ func TestE2E_WithInRangeRegionTooltips(t *testing.T) {
 	var t1, t2 string
 	if err := chromedp.Run(ctx,
 		chromedp.WaitVisible(second+`.is-acted`, chromedp.ByQuery),
-		chromedp.AttributeValue(`.pin-layer .area-overlay[data-id="`+ids[0]+`"]`, "title", &t1, nil, chromedp.ByQuery),
-		chromedp.AttributeValue(second, "title", &t2, nil, chromedp.ByQuery),
+		chromedp.AttributeValue(`.pin-layer .area-overlay[data-id="`+ids[0]+`"] .pin-btn`, "title", &t1, nil, chromedp.ByQuery),
+		chromedp.AttributeValue(second+` .pin-btn`, "title", &t2, nil, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("the acted-on box never updated: %v%s", err, diag())
 	}

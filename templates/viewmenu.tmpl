@@ -165,7 +165,7 @@
         {{end}}
         {{/* #151: hide/show the per-line count badges + their inline cards on this
              file, so the diff reads clean. Only when the file has badges. */}}
-        {{if $.HasMarks}}
+        {{if or $.HasMarks (and $.LiveShowing $.RegionComments)}}
         <form method="POST">
           <button
             type="submit"

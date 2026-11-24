@@ -29,7 +29,7 @@
         {{- /* A saved annotation is an invisible box (outlined only when focused,
                hovered or Show boxes is on) with a numbered marker at its corner:
                the marker takes the tap, so the box never covers the page or a
-               new drag. */ -}}
+               new drag. The number is AnnotationNumbers', shown on its card too. */ -}}
         {{- range $.RegionComments -}}
         <div class="area-overlay
                 {{- if .Resolved}} is-resolved{{end}}
@@ -38,12 +38,12 @@
                 "
                 data-id="{{.ID}}"
                 data-key="pin-{{.ID}}"
-                style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
-                title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"><button type="button"
+                style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"><button type="button"
                 class="pin-btn"
                 lvt-on:click="{{if $.Combined}}openAnnotations{{else}}editComment{{end}}"
                 data-id="{{.ID}}"
-                aria-label="{{if $.Combined}}Open annotation{{else}}Edit annotation{{end}}: {{.Body}}"></button></div>
+                title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"
+                aria-label="{{if $.Combined}}Open{{else}}Edit{{end}} annotation {{index $.AnnotationNumbers .ID}}">{{index $.AnnotationNumbers .ID}}</button></div>
         {{- end -}}
         {{- if eq $.CommentMode "region" -}}
         <div class="area-overlay area-overlay-pending"

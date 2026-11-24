@@ -720,12 +720,12 @@
       <div class="pin-layer" data-pin-layer data-key="pin-layer"><div class="area-overlay"
                 data-id="r1"
                 data-key="pin-r1"
-                style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"
-                title="CTA too faint"><button type="button"
+                style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"><button type="button"
                 class="pin-btn"
                 lvt-on:click="openAnnotations"
                 data-id="r1"
-                aria-label="Open annotation: CTA too faint"></button></div></div>
+                title="CTA too faint"
+                aria-label="Open annotation 1">1</button></div></div>
       
     </div>
     </div>

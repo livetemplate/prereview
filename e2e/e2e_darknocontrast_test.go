@@ -10,6 +10,21 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+// wcagLumJS defines lum(c) in a page script: a computed colour's WCAG relative
+// luminance, or null when it is fully transparent. getComputedStyle returns
+// rgb()/rgba() as 0-255 but color-mix() results as color(srgb 0..1 ...), so
+// those floats are scaled to 0-255 first; without that a color(srgb ...) colour
+// reads as near-black and reports a false low ratio. Shared by every contrast
+// check.
+const wcagLumJS = `const lum = (c) => {
+	    const m = c.match(/\d+(\.\d+)?/g); if(!m) return null;
+	    let [r,g,b,a] = m.map(Number);
+	    if (/^color\(/.test(c)) { r*=255; g*=255; b*=255; }
+	    if (a===0) return null;
+	    const f = (v)=>{v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4);};
+	    return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
+	  };`
+
 // TestE2E_DarkNoLowContrast is the comprehensive regression guard for #124: in
 // dark mode, EVERY visible text element must clear a readable WCAG contrast against
 // its effective background. It renders a rich UI state (comment card + actions,
@@ -64,18 +79,7 @@ func TestE2E_DarkNoLowContrast(t *testing.T) {
 	waitThemeSettled(t, p, `.theme-root[data-mode="dark"]`)
 
 	walk := `(() => {
-	  const lum = (c) => {
-	    const m = c.match(/\d+(\.\d+)?/g); if(!m) return null;
-	    let [r,g,b,a] = m.map(Number);
-	    // getComputedStyle returns rgb()/rgba() as 0-255, but color-mix() results
-	    // come back as color(srgb 0..1 ...) — scale those floats to 0-255 so the
-	    // WCAG math below (which divides by 255) is correct for both. Without this
-	    // a color(srgb ...) fg reads as near-black and reports a false low ratio.
-	    if (/^color\(/.test(c)) { r*=255; g*=255; b*=255; }
-	    if (a===0) return null;
-	    const f = (v)=>{v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4);};
-	    return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
-	  };
+	  ` + wcagLumJS + `
 	  const opaque = (c) => { const m=c.match(/[\d.]+/g); return m && (m.length<4 || Number(m[3])>0.5); };
 	  const effBg = (el) => { let n=el; while(n && n!==document.documentElement){ const bg=getComputedStyle(n).backgroundColor; if(opaque(bg)) return bg; n=n.parentElement; } return getComputedStyle(document.body).backgroundColor; };
 	  const hasText = (el) => [...el.childNodes].some(n=>n.nodeType===3 && n.textContent.trim().length>1);
