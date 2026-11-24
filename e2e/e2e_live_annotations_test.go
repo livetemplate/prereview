@@ -271,6 +271,18 @@ func TestE2E_LiveMarkers(t *testing.T) {
 					t.Errorf("a box (%q) and its All comments card (%q) differ%s", pr.Box, pr.Card, diag())
 				}
 			}
+
+			// Show on page focuses the box, which gets the corner bar; its Hide
+			// unfocuses it.
+			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.ac-item.is-target .ac-show-on-page').click(), true`, nil)); err != nil {
+				t.Fatalf("show on page: %v%s", err, diag())
+			}
+			focusedBar := `.pin-layer .area-overlay.is-focused .anno-bar`
+			waitJSDiag(t, p, `(() => { const b = document.querySelector('`+focusedBar+`'); return !!b && b.getBoundingClientRect().width > 0 && document.querySelectorAll('.pin-layer .anno-bar').length === 1; })()`, "the focused box has the bar", diag)
+			if err := chromedp.Run(p.ctx, chromedp.Click(focusedBar+` .anno-act[aria-label="Hide"]`, chromedp.ByQuery)); err != nil {
+				t.Fatalf("hide from the bar: %v%s", err, diag())
+			}
+			waitJSDiag(t, p, `!document.querySelector('.pin-layer .area-overlay.is-focused') && !document.querySelector('.pin-layer .anno-bar')`, "Hide unfocuses the box", diag)
 		})
 	}
 }

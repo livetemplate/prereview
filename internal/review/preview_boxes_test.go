@@ -152,3 +152,23 @@ func TestDrawnBox(t *testing.T) {
 		}
 	}
 }
+
+// TestFocusHTMLBlock_Toggles: a second tap on a preview marker closes its
+// boxes, and Hide on a corner bar closes them and unfocuses a live annotation.
+func TestFocusHTMLBlock_Toggles(t *testing.T) {
+	c := &PrereviewController{}
+	tap := regionCtx("focusHTMLBlock", map[string]interface{}{"id": "MB-1-1"})
+	s, _ := c.FocusHTMLBlock(PrereviewState{}, tap)
+	if s.FocusedHTMLBlock != "MB-1-1" {
+		t.Fatalf("first tap: FocusedHTMLBlock = %q", s.FocusedHTMLBlock)
+	}
+	s, _ = c.FocusHTMLBlock(s, tap)
+	if s.FocusedHTMLBlock != "" {
+		t.Errorf("second tap left %q open", s.FocusedHTMLBlock)
+	}
+	s.FocusedHTMLBlock, s.FocusedCommentID = "MB-1-1", "c1"
+	s, _ = c.UnfocusAnnotation(s, regionCtx("unfocusAnnotation", nil))
+	if s.FocusedHTMLBlock != "" || s.FocusedCommentID != "" {
+		t.Errorf("after Hide: block %q, live %q; want both cleared", s.FocusedHTMLBlock, s.FocusedCommentID)
+	}
+}

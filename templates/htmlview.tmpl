@@ -50,7 +50,9 @@
                 {{- if eq $.FocusedHTMLBlock $mk}} is-shown{{end -}}
                 "
                 data-box="{{.ID}}"
-                style="left:{{.Anchor.Box.PercentX}};top:{{.Anchor.Box.PercentY}};width:{{.Anchor.Box.PercentW}};height:{{.Anchor.Box.PercentH}};"></div>
+                style="left:{{.Anchor.Box.PercentX}};top:{{.Anchor.Box.PercentY}};width:{{.Anchor.Box.PercentW}};height:{{.Anchor.Box.PercentH}};">
+          {{- if eq $.FocusedHTMLBlock $mk}}{{template "annotationBar" .}}{{end -}}
+        </div>
         {{- end -}}
         {{- end -}}
         {{- with $.PreviewPendingBox -}}

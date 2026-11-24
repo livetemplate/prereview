@@ -43,7 +43,9 @@
                 lvt-on:click="{{if $.Combined}}openAnnotations{{else}}editComment{{end}}"
                 data-id="{{.ID}}"
                 title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"
-                aria-label="{{if $.Combined}}Open{{else}}Edit{{end}} annotation {{index $.AnnotationNumbers .ID}}">{{index $.AnnotationNumbers .ID}}</button></div>
+                aria-label="{{if $.Combined}}Open{{else}}Edit{{end}} annotation {{index $.AnnotationNumbers .ID}}">{{index $.AnnotationNumbers .ID}}</button>
+          {{- if eq $.FocusedCommentID .ID}}{{template "annotationBar" .}}{{end -}}
+        </div>
         {{- end -}}
         {{- if eq $.CommentMode "region" -}}
         <div class="area-overlay area-overlay-pending"

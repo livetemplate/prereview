@@ -36,10 +36,25 @@ func (c *PrereviewController) OpenAnnotations(state PrereviewState, ctx *livetem
 }
 
 // FocusHTMLBlock answers a tap on an HTML preview marker: the block's cards
-// under the preview scroll into view and its box is outlined.
+// under the preview scroll into view and its comments' boxes show.
 func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id == state.FocusedHTMLBlock {
+		// A second tap on the same marker hides its boxes again.
+		state.FocusedHTMLBlock = ""
+		return state, nil
+	}
 	clearScrollTargets(&state)
-	state.FocusedHTMLBlock = ctx.GetString("id")
+	state.FocusedHTMLBlock = id
+	return state, nil
+}
+
+// UnfocusAnnotation answers Hide on an annotation's corner bar: the boxes a
+// preview marker opened close, and a focused live-site annotation is no longer
+// outlined.
+func (c *PrereviewController) UnfocusAnnotation(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FocusedHTMLBlock = ""
+	state.FocusedCommentID = ""
 	return state, nil
 }
 

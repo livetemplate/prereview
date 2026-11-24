@@ -138,6 +138,28 @@
 </div>
 {{- end}}
 
+{{/* annotationBar — the corner bar on a shown annotation box (the live site's focused
+     box, or a box a preview marker opened): Hide, Resolve or Reopen, and Delete
+     (which shows the Undo notice). Called with the comment as the dot. Only the bar
+     takes taps; the box under it stays see-through to the page. */}}
+{{define "annotationBar" -}}
+<span class="anno-bar"><button type="button"
+        class="anno-act"
+        lvt-on:click="unfocusAnnotation"
+        title="Hide"
+        aria-label="Hide">{{template "iconEyeOff"}}</button><button type="button"
+        class="anno-act"
+        lvt-on:click="toggleResolved"
+        data-id="{{.ID}}"
+        title="{{if .Resolved}}Reopen{{else}}Resolve{{end}}"
+        aria-label="{{if .Resolved}}Reopen{{else}}Resolve{{end}}">{{if .Resolved}}{{template "iconReopen"}}{{else}}{{template "iconCheck"}}{{end}}</button><button type="button"
+        class="anno-act"
+        lvt-on:click="deleteComment"
+        data-id="{{.ID}}"
+        title="Delete"
+        aria-label="Delete">{{template "iconTrash"}}</button></span>
+{{- end}}
+
 {{/* The Annotate toggle (region select): in the repo-mode header whenever a surface you can
      draw on shows (CanAnnotate: the live site, an HTML preview or an image) and in the
      live-only bar. Reads $.RegionSelectArmed; invoke as {{template "regionToggle" $}}. Each

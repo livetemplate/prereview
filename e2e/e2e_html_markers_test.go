@@ -18,8 +18,8 @@ import (
 // the marker ticks once the agent has worked on every open comment; tapping it
 // scrolls the block's cards into view and shows each comment's box where it
 // was drawn, each in its own colour, which its card shares; Show boxes and
-// Hide annotations apply; and the marker follows the block when the preview
-// resizes.
+// Hide annotations apply; the marker follows the block when the preview
+// resizes; and each shown box's corner bar resolves, deletes and hides.
 func TestE2E_HTMLMarkers(t *testing.T) {
 	for _, vp := range []struct {
 		name string
@@ -119,6 +119,8 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 				t.Fatalf("resize: %v", err)
 			}
 			onBlock("after a resize")
+
+			checkAnnotationBar(t, p, box, vp.h > vp.w, diag)
 		})
 	}
 }
@@ -232,4 +234,61 @@ func checkDrawnBoxes(t *testing.T, p *runningPrereview, want []previewBox, diag 
 			t.Errorf("box %d is %q but its card is %q", i+1, b.Class, got.Cards[b.ID])
 		}
 	}
+}
+
+// checkAnnotationBar drives the corner bar on the boxes a preview marker opens:
+// every shown box has one, with tap-sized buttons; Resolve and Reopen flip the
+// comment; Delete removes it and Undo brings it back; Hide closes the boxes, as
+// does a second tap on the marker.
+func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, phone bool, diag func() string) {
+	t.Helper()
+	tap := func(sel, what string) {
+		t.Helper()
+		if err := chromedp.Run(p.ctx,
+			chromedp.Evaluate(`document.querySelector('`+sel+`').scrollIntoView({block: 'center'}), true`, nil),
+			chromedp.Click(sel, chromedp.ByQuery),
+		); err != nil {
+			t.Fatalf("%s: %v%s", what, err, diag())
+		}
+	}
+	shown := `document.querySelectorAll('.preview-pins .drawn-box.is-shown').length`
+	if evalInt(t, p, shown) == 0 {
+		tap(marker+` .pin-btn`, "open the boxes")
+	}
+	waitJSDiag(t, p, shown+` === 3 && document.querySelectorAll('.preview-pins .drawn-box .anno-bar').length === 3`, "a bar on each shown box", diag)
+	if small := evalInt(t, p, `[...document.querySelectorAll('.preview-pins .anno-act')].filter(b => { const r = b.getBoundingClientRect(); return r.width < 28 || r.height < 28 || !b.getAttribute('aria-label'); }).length`); small != 0 {
+		t.Errorf("%d bar buttons are under 28px or unlabelled (phone=%v)%s", small, phone, diag())
+	}
+	// The box's centre still reaches the page: only the bar takes taps.
+	if hits := evalInt(t, p, `(() => { const r = document.querySelector('.preview-pins .drawn-box.is-shown').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el && el.closest('.pin-layer') ? 1 : 0; })()`); hits != 0 {
+		t.Errorf("a tap at a shown box's centre lands on the box, not the page%s", diag())
+	}
+
+	var first string
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.preview-pins .drawn-box').dataset.box`, &first)); err != nil {
+		t.Fatalf("read a box id: %v", err)
+	}
+	bar := `.preview-pins .drawn-box[data-box="` + first + `"] .anno-bar`
+	card := `.html-block .inline-comment[data-key="` + first + `"]`
+
+	tap(bar+` .anno-act[aria-label="Resolve"]`, "resolve from the bar")
+	waitJSDiag(t, p, `!!document.querySelector('`+card+`.is-resolved') && !!document.querySelector('`+bar+` .anno-act[aria-label="Reopen"]')`, "resolved, and the bar offers Reopen", diag)
+	tap(bar+` .anno-act[aria-label="Reopen"]`, "reopen from the bar")
+	waitJSDiag(t, p, `!!document.querySelector('`+card+`') && !document.querySelector('`+card+`.is-resolved')`, "reopened", diag)
+
+	tap(bar+` .anno-act[aria-label="Delete"]`, "delete from the bar")
+	waitJSDiag(t, p, `!document.querySelector('`+card+`') && !!document.querySelector('.undo-toast button[name="undoDelete"]')`, "deleted, with the Undo notice", diag)
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.undo-toast button[name="undoDelete"]').click(), true`, nil)); err != nil {
+		t.Fatalf("undo: %v", err)
+	}
+	waitJSDiag(t, p, `!!document.querySelector('`+card+`')`, "Undo brings the comment back", diag)
+
+	waitJSDiag(t, p, shown+` === 3`, "the boxes still shown", diag)
+	tap(`.preview-pins .drawn-box.is-shown .anno-act[aria-label="Hide"]`, "hide from the bar")
+	waitJSDiag(t, p, shown+` === 0`, "Hide closes the boxes", diag)
+
+	tap(marker+` .pin-btn`, "open the boxes again")
+	waitJSDiag(t, p, shown+` === 3`, "the marker opens them", diag)
+	tap(marker+` .pin-btn`, "tap the marker again")
+	waitJSDiag(t, p, shown+` === 0`, "a second marker tap closes them", diag)
 }

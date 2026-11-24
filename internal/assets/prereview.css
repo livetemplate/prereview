@@ -2919,6 +2919,20 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .preview-pins .drawn-box { display: none; }
 .preview-pins .drawn-box.is-shown,
 .show-boxes .preview-pins .drawn-box { display: block; }
+/* The corner bar on a shown box (annotationBar): only its buttons take taps. */
+.anno-bar {
+  position: absolute; top: 2px; right: 2px;
+  display: flex; gap: 2px; padding: 2px;
+  border-radius: 8px; background: rgba(6, 36, 51, 0.85);
+  pointer-events: auto;
+}
+.anno-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; margin: 0;
+  border: 0; border-radius: 6px; background: none; color: #fff;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+.anno-act:hover, .anno-act:focus-visible { background: rgba(255, 255, 255, 0.2); }
 .layout.marks-hidden .preview-pins .drawn-box,
 .layout.marks-hidden .pin-layer .area-overlay[data-id] { display: none; }
 .pin-btn {
