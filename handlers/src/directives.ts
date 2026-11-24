@@ -430,21 +430,25 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
   const placeMarkers = () => {
     const layer = iframe.parentElement?.querySelector<HTMLElement>(".preview-pins");
     if (!layer) return;
-    const blocks = previewBlockRects.get(iframe) ?? [];
     const area = (b: PreviewBlock) => (b.right - b.left) * (b.bottom - b.top);
+    const byRange = new Map<string, PreviewBlock>();
+    for (const b of previewBlockRects.get(iframe) ?? []) {
+      const key = `${b.from}-${b.to}`;
+      const seen = byRange.get(key);
+      if (!seen || area(b) > area(seen)) byRange.set(key, b);
+    }
+    // Read the iframe's offset once, before any write: reading it after a
+    // style write would force a layout per marker.
+    const ox = iframe.offsetLeft;
+    const oy = iframe.offsetTop;
     for (const box of layer.querySelectorAll<HTMLElement>(".area-overlay[data-from]")) {
-      const from = Number(box.dataset.from);
-      const to = Number(box.dataset.to);
-      let best: PreviewBlock | undefined;
-      for (const b of blocks) {
-        if (b.from === from && b.to === to && (!best || area(b) > area(best))) best = b;
-      }
+      const best = byRange.get(`${box.dataset.from}-${box.dataset.to}`);
       if (!best) {
         box.style.visibility = "hidden";
         continue;
       }
-      box.style.left = `${iframe.offsetLeft + best.left}px`;
-      box.style.top = `${iframe.offsetTop + best.top}px`;
+      box.style.left = `${ox + best.left}px`;
+      box.style.top = `${oy + best.top}px`;
       box.style.width = `${best.right - best.left}px`;
       box.style.height = `${best.bottom - best.top}px`;
       box.style.visibility = "visible";

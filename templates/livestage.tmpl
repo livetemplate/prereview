@@ -7,7 +7,7 @@
      true in live-only. The Annotate toggle lives in the header (regionToggle).
      Nothing may render conditionally BEFORE the keyed stage: a node appearing
      there makes morphdom re-insert the stage, and moving an iframe reloads it. */}}
-{{define "liveStage"}}    <div class="preview-stage ext-stage{{if $.ShowLiveBoxes}} show-boxes{{end}}"
+{{define "liveStage"}}    <div class="preview-stage ext-stage{{if $.ShowBoxes}} show-boxes{{end}}"
          lvt-fx:proxy-bridge="setProxyURL"
          data-page="{{$.CurrentURL}}"
          data-key="ext-stage"

@@ -932,14 +932,50 @@ func groupByBlock[T any](s PrereviewState, items []T, line func(T) int) map[stri
 // gutter, so each block carries ONE state badge at its top-right: Total annotations,
 // coloured yellow when Open (unresolved comment / undecided suggestion), accentuated
 // yellow when Accepted (an accepted-but-unapplied suggestion, nothing open), else green.
-// Open wins over Accepted, matching the diff-row ladder. WorkedOn means every
-// open comment in the block has been worked on by the agent (the HTML preview's
-// marker shows a tick).
+// Open wins over Accepted, matching the diff-row ladder.
 type BlockAnn struct {
 	Total    int
 	Open     bool
 	Accepted bool
-	WorkedOn bool
+}
+
+// HTMLMarker is one commented block of an HTML file's preview: its marker shows
+// the block's annotation count, and a tick once the agent has acted on every
+// open comment in it (AgentActedLabels, the live site's rule).
+type HTMLMarker struct {
+	Key      string // markdownBlockKey, the block's cards' scroll target
+	From, To int    // source lines: the preview's data-from/data-to
+	BlockAnn
+	Acted bool
+}
+
+// HTMLMarkers lists the preview's commented blocks, in order. Zero-arg for the
+// template, which only ranges over these instead of every block.
+func (s PrereviewState) HTMLMarkers() []HTMLMarker {
+	anns := s.BlockAnnotations()
+	if len(anns) == 0 {
+		return nil
+	}
+	comments, acted := s.BlockComments(), s.AgentActedLabels()
+	var out []HTMLMarker
+	for _, b := range s.RenderedHTML() {
+		key := markdownBlockKey(b.StartLine, b.EndLine)
+		ba, ok := anns[key]
+		if !ok {
+			continue
+		}
+		m := HTMLMarker{Key: key, From: b.StartLine, To: b.EndLine, BlockAnn: ba}
+		for _, c := range comments[key] {
+			if !c.Resolved {
+				m.Acted = acted[c.ID] != ""
+				if !m.Acted {
+					break
+				}
+			}
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 // BlockAnnotations aggregates the selected file's inline annotations into each rendered
@@ -963,18 +999,12 @@ func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
 	for _, blk := range blocks {
 		key := markdownBlockKey(blk.start, blk.end)
 		var ba BlockAnn
-		openComments, workedOn := 0, 0
 		for _, c := range comments[key] {
 			ba.Total++
 			if !c.Resolved {
 				ba.Open = true
-				openComments++
-				if c.Processed {
-					workedOn++
-				}
 			}
 		}
-		ba.WorkedOn = openComments > 0 && workedOn == openComments
 		for _, sg := range suggestions[key] {
 			ba.Total++
 			if s.suggestionUndecided(sg.ID) {
@@ -1204,10 +1234,10 @@ func (s PrereviewState) CanAnnotate() bool {
 	if s.LiveShowing() {
 		return true
 	}
-	if !s.FileShowing() || s.ShowAllComments || s.ShowUnderstand || s.ShowLibrary {
+	if s.CurrentDiff == nil || s.fileCovered() {
 		return false
 	}
-	return s.ShowRenderedHTML() || (s.CurrentDiff.IsBinary && s.BinaryKind() == "image")
+	return s.ShowRenderedHTML() || s.BinaryKind() == "image"
 }
 
 // FileShowing reports that a file is loaded and on screen. A combined session

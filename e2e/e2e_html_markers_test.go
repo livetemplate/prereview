@@ -34,50 +34,21 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			p.clickFile("region.html")
 			waitPreviewBridgeReady(t, p)
 
-			// Two comments on the top section (line 4): drag over its top part.
-			for _, body := range []string{"Heading too small", "Needs more contrast"} {
-				var ir struct{ Left, Top, Width float64 }
-				if err := chromedp.Run(p.ctx,
-					chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
-					chromedp.WaitVisible(`.region-overlay[data-surface="html"]`, chromedp.ByQuery),
-					// Let the region-select directive attach before the drag (as
-					// checkHTMLRegionSelect does); a drag that beats it is lost.
-					chromedp.Sleep(300*time.Millisecond),
-					chromedp.Evaluate(`(() => { const r = document.querySelector('iframe.html-preview').getBoundingClientRect(); return { Left: r.left, Top: r.top, Width: r.width }; })()`, &ir),
-				); err != nil {
-					t.Fatalf("arm Annotate: %v%s", err, diag())
-				}
-				x1, y1, x2, y2 := ir.Left+ir.Width*0.1, ir.Top+12, ir.Left+ir.Width*0.8, ir.Top+100
-				if err := chromedp.Run(p.ctx,
-					cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).WithButton(cdpinput.Left).WithClickCount(1),
-					cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, x2, y2).WithButton(cdpinput.Left),
-					cdpinput.DispatchMouseEvent(cdpinput.MouseReleased, x2, y2).WithButton(cdpinput.Left).WithClickCount(1),
-				); err != nil {
-					t.Fatalf("drag: %v", err)
-				}
-				// Poll a fresh query: a re-render can replace the textarea right after
-				// the drag, and WaitVisible would keep polling the detached node.
-				waitJSDiag(t, p, `(() => { const ta = document.querySelector('.composer textarea'); return !!ta && ta.offsetParent !== null; })()`, "the composer for "+body, diag)
-				if err := chromedp.Run(p.ctx,
-					chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
-					chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
-				); err != nil {
-					t.Fatalf("comment %q: %v%s", body, err, diag())
-				}
-				waitJSDiag(t, p, `!document.querySelector('.composer textarea')`, "the composer closes after saving", diag)
-			}
+			// Two comments on the top section (line 4).
+			drawHTMLRegion(t, p, "Heading too small", diag)
+			drawHTMLRegion(t, p, "Needs more contrast", diag)
 
 			box := `.preview-pins .area-overlay[data-id="MB-4-4"]`
 			waitJSDiag(t, p, `(() => { const b = document.querySelector('`+box+`'); return !!b && getComputedStyle(b).visibility === 'visible' && b.querySelector('.pin-btn').textContent.trim() === '2'; })()`, "one marker reading 2 on the top section", diag)
 
-			type geom struct {
-				BoxLeft, BoxTop, BoxW, BoxH float64
-				FrameLeft, FrameTop, FrameW float64
-				HitsPin                     bool
-			}
-			measure := func() geom {
+			// The fixture's top section is the first 240px of the page, full width.
+			onBlock := func(when string) {
 				t.Helper()
-				var g geom
+				var g struct {
+					BoxLeft, BoxTop, BoxW, BoxH float64
+					FrameLeft, FrameTop, FrameW float64
+					HitsPin                     bool
+				}
 				if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
 					const b = document.querySelector('`+box+`').getBoundingClientRect();
 					const f = document.querySelector('iframe.html-preview').getBoundingClientRect();
@@ -86,16 +57,10 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 						FrameLeft: f.left, FrameTop: f.top, FrameW: f.width,
 						HitsPin: !!(hit && hit.closest('.pin-layer')) };
 				})()`, &g)); err != nil {
-					t.Fatalf("measure the marker box: %v%s", err, diag())
+					t.Fatalf("%s: measure the marker box: %v%s", when, err, diag())
 				}
-				return g
-			}
-			// The fixture's top section is the first 240px of the page, full width.
-			onBlock := func(when string) {
-				t.Helper()
-				g := measure()
 				if math.Abs(g.BoxLeft-g.FrameLeft) > 2 || math.Abs(g.BoxTop-g.FrameTop) > 2 || math.Abs(g.BoxW-g.FrameW) > 2 || math.Abs(g.BoxH-240) > 3 {
-					t.Errorf("%s: box %+v is not over the top section (frame at %v,%v width %v)%s", when, g, g.FrameLeft, g.FrameTop, g.FrameW, diag())
+					t.Errorf("%s: box %+v is not over the top section%s", when, g, diag())
 				}
 				if g.HitsPin {
 					t.Errorf("%s: a tap at the block's centre lands on the marker box, not the preview", when)
@@ -144,4 +109,44 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			onBlock("after a resize")
 		})
 	}
+}
+
+// drawHTMLRegion arms Annotate on an HTML file's preview, drags a box over the
+// top ~100px of the preview (the top block of the region fixtures) and saves a
+// comment with body.
+func drawHTMLRegion(t *testing.T, p *runningPrereview, body string, diag func() string) {
+	t.Helper()
+	var ir struct{ Left, Top, Width, Height float64 }
+	if err := chromedp.Run(p.ctx,
+		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.region-overlay[data-surface="html"]`, chromedp.ByQuery),
+		// Let the region-select directive attach first: a drag that beats it is lost.
+		chromedp.Sleep(300*time.Millisecond),
+		// The preview is an opaque-origin frame, but its own rect is readable.
+		chromedp.Evaluate(`(() => { const r = document.querySelector('iframe.html-preview').getBoundingClientRect(); return { Left: r.left, Top: r.top, Width: r.width, Height: r.height }; })()`, &ir),
+	); err != nil {
+		t.Fatalf("arm Annotate on the preview: %v%s", err, diag())
+	}
+	if ir.Width < 50 || ir.Height < 200 {
+		t.Fatalf("the preview's rect looks wrong: %+v%s", ir, diag())
+	}
+	x1, y1, x2, y2 := ir.Left+ir.Width*0.1, ir.Top+12, ir.Left+ir.Width*0.8, ir.Top+100
+	if err := chromedp.Run(p.ctx,
+		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).WithButton(cdpinput.Left).WithClickCount(1),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).WithButton(cdpinput.Left),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, x2, y2).WithButton(cdpinput.Left),
+		cdpinput.DispatchMouseEvent(cdpinput.MouseReleased, x2, y2).WithButton(cdpinput.Left).WithClickCount(1),
+	); err != nil {
+		t.Fatalf("drag over the preview: %v%s", err, diag())
+	}
+	// Poll a fresh query: a re-render can replace the textarea right after the
+	// drag, and WaitVisible would keep polling the detached node.
+	waitJSDiag(t, p, `(() => { const ta = document.querySelector('.composer textarea'); return !!ta && ta.offsetParent !== null; })()`, "the composer for "+body, diag)
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
+		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("save %q: %v%s", body, err, diag())
+	}
+	waitJSDiag(t, p, `!document.querySelector('.composer textarea')`, "the composer closes after saving", diag)
 }

@@ -457,8 +457,8 @@ type PrereviewState struct {
 	ShowAllComments bool `json:"show_all_comments"`
 
 	// FocusedHTMLBlock is the HTML preview block (its markdownBlockKey) whose
-	// marker was just tapped: its cards scroll into view and its box is
-	// outlined for one render (cleared with the other scroll targets).
+	// marker was tapped: its cards scroll into view and its box stays outlined
+	// until another jump or a file switch clears it.
 	FocusedHTMLBlock string `json:"focused_html_block"`
 
 	// CommentListFilter narrows the All comments screen: "" lists every
@@ -680,10 +680,11 @@ type PrereviewState struct {
 	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
 	HideMarks bool `json:"hide_marks"`
 
-	// ShowLiveBoxes outlines every saved annotation's box on the live site. Off,
-	// a saved annotation is only its corner marker, so it never covers the page;
-	// its box is outlined while focused or hovered. Durable per-user view pref.
-	ShowLiveBoxes bool `json:"show_live_boxes"`
+	// ShowBoxes outlines every annotation's box on the live site and on an HTML
+	// file's preview. Off, an annotation is only its corner marker, so it never
+	// covers the page; its box is outlined while focused or hovered. Durable
+	// per-user view pref (saved as show_live_boxes, its first name).
+	ShowBoxes bool `json:"show_live_boxes"`
 
 	// ToggledRows flips a row's annotation cards away from their DEFAULT visibility
 	// (#174). Keyed by the same row key the badge renders under: "<line>-<side>" in the

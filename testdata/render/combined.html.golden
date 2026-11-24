@@ -72,7 +72,7 @@
     lvt-key="l"
     lvt-mod:skip-when-typing
   ></span><span
-    lvt-on:window:keydown="toggleLiveBoxes"
+    lvt-on:window:keydown="toggleBoxes"
     lvt-key="b"
     lvt-mod:skip-when-typing
   ></span><span

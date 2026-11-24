@@ -164,10 +164,10 @@ func (c *PrereviewController) ToggleMarks(state PrereviewState, ctx *livetemplat
 	return state, nil
 }
 
-// ToggleLiveBoxes shows or hides the outline of every saved annotation's box on
-// the live site.
-func (c *PrereviewController) ToggleLiveBoxes(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.ShowLiveBoxes = !state.ShowLiveBoxes
+// ToggleBoxes shows or hides the outline of every annotation's box on the live
+// site and the HTML preview.
+func (c *PrereviewController) ToggleBoxes(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.ShowBoxes = !state.ShowBoxes
 	state.MoreMenuOpen = false
 	c.savePrefs(state)
 	return state, nil

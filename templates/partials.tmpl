@@ -138,10 +138,11 @@
 </div>
 {{- end}}
 
-{{/* Region-select toggle button — identical in the external-site view and the rendered-HTML
-     view (only the caller's dot differs), so read $.RegionSelectArmed and invoke as
-     {{template "regionToggle" $}}. The region-overlay element (whose selectRegion/selectBlock
-     action differs) lives outside this form and is unaffected. */}}
+{{/* The Annotate toggle (region select): in the repo-mode header whenever a surface you can
+     draw on shows (CanAnnotate: the live site, an HTML preview or an image) and in the
+     live-only bar. Reads $.RegionSelectArmed; invoke as {{template "regionToggle" $}}. Each
+     surface's region-overlay element (whose selectRegion/selectBlock action differs) lives
+     with that surface. */}}
 {{define "regionToggle" -}}
 <form method="POST" class="region-toggle">
   <button

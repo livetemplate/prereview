@@ -165,7 +165,7 @@
         {{end}}
         {{/* #151: hide/show the per-line count badges + their inline cards on this
              file, so the diff reads clean. Only when the file has badges. */}}
-        {{if or $.HasMarks (and $.LiveShowing $.RegionComments)}}
+        {{if or $.HasMarks (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
         <form method="POST">
           <button
             type="submit"
@@ -178,18 +178,18 @@
           </button>
         </form>
         {{end}}
-        {{- /* Outline every saved annotation's box on the live site; off, each is
-             only its corner marker. Only while the live page has annotations. */ -}}
-        {{if and $.LiveShowing $.RegionComments}}
+        {{- /* Outline every annotation's box on the live site or the HTML preview;
+             off, each is only its corner marker. Only while one has markers. */ -}}
+        {{if or (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
         <form method="POST">
           <button
             type="submit"
-            name="toggleLiveBoxes"
-            class="menu-item{{if .ShowLiveBoxes}} is-on{{end}}"
+            name="toggleBoxes"
+            class="menu-item{{if .ShowBoxes}} is-on{{end}}"
             role="menuitem"
           >
-            <span class="menu-icon">{{if .ShowLiveBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
-            <span class="menu-label">Show boxes{{with index $.KeyHint "toggleLiveBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+            <span class="menu-icon">{{if .ShowBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+            <span class="menu-label">Show boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
           </button>
         </form>
         {{end}}

@@ -4668,58 +4668,9 @@ func checkHTMLRegionSelect(t *testing.T, repo string, wantFrom, wantTo int) {
 	// rects, so region-select has rects to hit-test).
 	waitPreviewBridgeReady(t, p)
 
-	// Arm the "Select region" toggle → the parent overlay appears.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.region-overlay[data-surface="html"]`, chromedp.ByQuery),
-		chromedp.Sleep(200*time.Millisecond),
-	); err != nil {
-		t.Fatalf("arm region toggle: %v%s", err, diag())
-	}
-
-	// Read the iframe's OWN viewport rect (parent-readable — no contentDocument
-	// needed). The fixture's top block is the first 240px of content, so a box
-	// over the iframe's top ~100px always resolves to it.
-	var ir struct{ Left, Top, Width, Height float64 }
-	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
-		const r = document.querySelector('iframe.html-preview').getBoundingClientRect();
-		return { Left: r.left, Top: r.top, Width: r.width, Height: r.height };
-	})()`, &ir)); err != nil {
-		t.Fatalf("read iframe rect: %v%s", err, diag())
-	}
-	if ir.Width < 50 || ir.Height < 200 {
-		t.Fatalf("iframe rect looks wrong: %+v%s", ir, diag())
-	}
-
-	// Drag a box over the top block: wide, and from just inside the top down to
-	// ~100px (well within the 240px top section), clearing the click threshold.
-	x1 := ir.Left + ir.Width*0.10
-	y1 := ir.Top + 12
-	x2 := ir.Left + ir.Width*0.80
-	y2 := ir.Top + 100
-	dragCtx, dragCancel := context.WithTimeout(p.ctx, 15*time.Second) // a missed drag must fail, not hang
-	defer dragCancel()
-	if err := chromedp.Run(dragCtx,
-		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).
-			WithButton(cdpinput.Left).WithClickCount(1),
-		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).
-			WithButton(cdpinput.Left),
-		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, x2, y2).
-			WithButton(cdpinput.Left),
-		cdpinput.DispatchMouseEvent(cdpinput.MouseReleased, x2, y2).
-			WithButton(cdpinput.Left).WithClickCount(1),
-		chromedp.WaitVisible(`.composer textarea`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("region drag + composer: %v%s", err, diag())
-	}
-
-	// Type + save → comment persists and renders inline.
-	if err := chromedp.Run(p.ctx,
-		chromedp.SendKeys(`.composer textarea`, "comment from a drawn region", chromedp.ByQuery),
-		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.inline-comment .body`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("save region comment: %v%s", err, diag())
+	drawHTMLRegion(t, p, "comment from a drawn region", diag)
+	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.inline-comment .body`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("the comment renders inline: %v%s", err, diag())
 	}
 
 	// CSV: a line-anchored row (NOT kind=area) whose range overlaps the
