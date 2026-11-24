@@ -618,6 +618,9 @@ func (c *PrereviewController) DeleteComment(state PrereviewState, ctx *livetempl
 	}
 	deleted := state.Comments[idx]
 	state.Comments = slices.Delete(state.Comments, idx, idx+1)
+	if state.FocusedCommentID == id {
+		state.FocusedCommentID = "" // its box is gone; an undo brings it back unfocused
+	}
 	c.setDeleted(id, true) // so a stale copy in another tab can't bring it back
 	if err := c.persist(state.Comments); err != nil {
 		return state, fmt.Errorf("persist after delete: %w", err)

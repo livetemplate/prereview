@@ -458,8 +458,9 @@ type PrereviewState struct {
 	ShowAllComments bool `json:"show_all_comments"`
 
 	// FocusedHTMLBlock is the HTML preview block (its markdownBlockKey) whose
-	// marker was tapped: its cards scroll into view and its box stays outlined
-	// until another jump or a file switch clears it.
+	// marker was tapped: its cards scroll into view and its comments' boxes
+	// show, with their corner bars, until a second tap on the marker, Hide,
+	// another jump or a file switch clears it.
 	FocusedHTMLBlock string `json:"focused_html_block"`
 
 	// CommentListFilter narrows the All comments screen: "" lists every

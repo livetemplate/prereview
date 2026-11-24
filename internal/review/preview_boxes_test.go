@@ -154,7 +154,8 @@ func TestDrawnBox(t *testing.T) {
 }
 
 // TestFocusHTMLBlock_Toggles: a second tap on a preview marker closes its
-// boxes, and Hide on a corner bar closes them and unfocuses a live annotation.
+// boxes; Hide on a corner bar clears only its own surface's focus; deleting
+// the focused live annotation unfocuses it.
 func TestFocusHTMLBlock_Toggles(t *testing.T) {
 	c := &PrereviewController{}
 	tap := regionCtx("focusHTMLBlock", map[string]interface{}{"id": "MB-1-1"})
@@ -166,9 +167,25 @@ func TestFocusHTMLBlock_Toggles(t *testing.T) {
 	if s.FocusedHTMLBlock != "" {
 		t.Errorf("second tap left %q open", s.FocusedHTMLBlock)
 	}
-	s.FocusedHTMLBlock, s.FocusedCommentID = "MB-1-1", "c1"
-	s, _ = c.UnfocusAnnotation(s, regionCtx("unfocusAnnotation", nil))
-	if s.FocusedHTMLBlock != "" || s.FocusedCommentID != "" {
-		t.Errorf("after Hide: block %q, live %q; want both cleared", s.FocusedHTMLBlock, s.FocusedCommentID)
+	s.FocusedHTMLBlock, s.FocusedCommentID = "MB-1-1", "live1"
+	s, _ = c.UnfocusAnnotation(s, regionCtx("unfocusAnnotation", map[string]interface{}{"id": "box1"}))
+	if s.FocusedHTMLBlock != "" || s.FocusedCommentID != "live1" {
+		t.Errorf("Hide on a preview box: block %q, live %q; want the block cleared only", s.FocusedHTMLBlock, s.FocusedCommentID)
+	}
+	s.FocusedHTMLBlock = "MB-1-1"
+	s, _ = c.UnfocusAnnotation(s, regionCtx("unfocusAnnotation", map[string]interface{}{"id": "live1"}))
+	if s.FocusedHTMLBlock != "MB-1-1" || s.FocusedCommentID != "" {
+		t.Errorf("Hide on the live box: block %q, live %q; want the live focus cleared only", s.FocusedHTMLBlock, s.FocusedCommentID)
+	}
+
+	csvPath := filepath.Join(t.TempDir(), "comments.csv")
+	c = &PrereviewController{CSVPath: csvPath, CSVWriter: csv.NewWriter(csvPath)}
+	s = PrereviewState{FocusedCommentID: "live1", Comments: []Comment{{ID: "live1", Kind: commentKindRegion, URL: "http://x/"}}}
+	s, err := c.DeleteComment(s, regionCtx("deleteComment", map[string]interface{}{"id": "live1"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.FocusedCommentID != "" {
+		t.Errorf("the deleted annotation is still focused")
 	}
 }

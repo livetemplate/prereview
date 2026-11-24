@@ -85,12 +85,7 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			// Tap: the box is outlined and the block's cards scroll into view.
 			// Centre the marker first: scrolled just into view it sits under the
 			// sticky file header, which would take the click.
-			if err := chromedp.Run(p.ctx,
-				chromedp.Evaluate(`document.querySelector('`+box+` .pin-btn').scrollIntoView({block: 'center'}), true`, nil),
-				chromedp.Click(box+` .pin-btn`, chromedp.ByQuery),
-			); err != nil {
-				t.Fatalf("tap the marker: %v%s", err, diag())
-			}
+			tapCentred(t, p, box+` .pin-btn`, "tap the marker", diag)
 			waitJSDiag(t, p, `document.querySelectorAll('.preview-pins .drawn-box.is-shown').length === 3 && (() => { const r = document.querySelector('.html-block[data-key="HB-4-4"]').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the three boxes shown and the cards in view", diag)
 			checkDrawnBoxes(t, p, drawn, diag)
 			if w := evalInt(t, p, `parseInt(getComputedStyle(document.querySelector('`+box+`')).borderTopWidth)`); w != 0 {
@@ -120,7 +115,7 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			}
 			onBlock("after a resize")
 
-			checkAnnotationBar(t, p, box, vp.h > vp.w, diag)
+			checkAnnotationBar(t, p, box, diag)
 		})
 	}
 }
@@ -240,24 +235,13 @@ func checkDrawnBoxes(t *testing.T, p *runningPrereview, want []previewBox, diag 
 // every shown box has one, with tap-sized buttons; Resolve and Reopen flip the
 // comment; Delete removes it and Undo brings it back; Hide closes the boxes, as
 // does a second tap on the marker.
-func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, phone bool, diag func() string) {
+func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, diag func() string) {
 	t.Helper()
-	tap := func(sel, what string) {
-		t.Helper()
-		if err := chromedp.Run(p.ctx,
-			chromedp.Evaluate(`document.querySelector('`+sel+`').scrollIntoView({block: 'center'}), true`, nil),
-			chromedp.Click(sel, chromedp.ByQuery),
-		); err != nil {
-			t.Fatalf("%s: %v%s", what, err, diag())
-		}
-	}
+	tap := func(sel, what string) { t.Helper(); tapCentred(t, p, sel, what, diag) }
 	shown := `document.querySelectorAll('.preview-pins .drawn-box.is-shown').length`
-	if evalInt(t, p, shown) == 0 {
-		tap(marker+` .pin-btn`, "open the boxes")
-	}
 	waitJSDiag(t, p, shown+` === 3 && document.querySelectorAll('.preview-pins .drawn-box .anno-bar').length === 3`, "a bar on each shown box", diag)
 	if small := evalInt(t, p, `[...document.querySelectorAll('.preview-pins .anno-act')].filter(b => { const r = b.getBoundingClientRect(); return r.width < 28 || r.height < 28 || !b.getAttribute('aria-label'); }).length`); small != 0 {
-		t.Errorf("%d bar buttons are under 28px or unlabelled (phone=%v)%s", small, phone, diag())
+		t.Errorf("%d bar buttons are under 28px or unlabelled%s", small, diag())
 	}
 	// The box's centre still reaches the page: only the bar takes taps.
 	if hits := evalInt(t, p, `(() => { const r = document.querySelector('.preview-pins .drawn-box.is-shown').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el && el.closest('.pin-layer') ? 1 : 0; })()`); hits != 0 {
@@ -291,4 +275,16 @@ func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, phone 
 	waitJSDiag(t, p, shown+` === 3`, "the marker opens them", diag)
 	tap(marker+` .pin-btn`, "tap the marker again")
 	waitJSDiag(t, p, shown+` === 0`, "a second marker tap closes them", diag)
+}
+
+// tapCentred scrolls sel to the middle of the viewport, clear of the sticky
+// header, and clicks it.
+func tapCentred(t *testing.T, p *runningPrereview, sel, what string, diag func() string) {
+	t.Helper()
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('`+sel+`').scrollIntoView({block: 'center'}), true`, nil),
+		chromedp.Click(sel, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("%s: %v%s", what, err, diag())
+	}
 }

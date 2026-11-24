@@ -49,12 +49,16 @@ func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
-// UnfocusAnnotation answers Hide on an annotation's corner bar: the boxes a
-// preview marker opened close, and a focused live-site annotation is no longer
-// outlined.
+// UnfocusAnnotation answers Hide on an annotation's corner bar: on the live
+// site's focused box it unfocuses that annotation; on a preview box it closes
+// the boxes the marker opened. Each surface keeps the other's focus, as both
+// can be set in a combined session.
 func (c *PrereviewController) UnfocusAnnotation(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.FocusedHTMLBlock = ""
-	state.FocusedCommentID = ""
+	if id := ctx.GetString("id"); id != "" && id == state.FocusedCommentID {
+		state.FocusedCommentID = ""
+	} else {
+		state.FocusedHTMLBlock = ""
+	}
 	return state, nil
 }
 

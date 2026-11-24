@@ -2881,7 +2881,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .ext-viewer { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 0.8rem; }
 .ext-stage { height: calc(100vh - 9rem); overflow: hidden; border: 1px solid var(--pico-muted-border-color, #d9d9d9); border-radius: 6px; background: #fff; }
 .ext-frame { width: 100%; height: 100%; border: 0; display: block; }
-.pin-layer { position: absolute; top: 0; left: 0; pointer-events: none; transform-origin: 0 0; z-index: 4; }
+/* --pin-ink is the dark of the marker labels and bars: they sit on the
+   reviewed page, not the theme, so it is the same in every scheme. */
+.pin-layer { position: absolute; top: 0; left: 0; pointer-events: none; transform-origin: 0 0; z-index: 4; --pin-ink: #062433; }
 /* A saved live-site annotation is an invisible box with a numbered marker in
    its top-left corner. Only the marker takes a tap (the layer and the box pass
    clicks and drags through to the page), and the box is never filled: it is
@@ -2915,7 +2917,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .preview-pins { right: 0; bottom: 0; }
 .preview-pins .area-overlay[data-id] { visibility: hidden; }
 .preview-pins .area-overlay[data-id]:not(.is-unboxed) { border-width: 0; }
-.preview-pins .pin-btn { background: #fff; border-color: #062433; }
+.preview-pins .pin-btn { background: #fff; border-color: var(--pin-ink); }
 .preview-pins .drawn-box { display: none; }
 .preview-pins .drawn-box.is-shown,
 .show-boxes .preview-pins .drawn-box { display: block; }
@@ -2923,7 +2925,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .anno-bar {
   position: absolute; top: 2px; right: 2px;
   display: flex; gap: 2px; padding: 2px;
-  border-radius: 8px; background: rgba(6, 36, 51, 0.85);
+  border-radius: 8px; background: color-mix(in srgb, var(--pin-ink) 85%, transparent);
   pointer-events: auto;
 }
 .anno-act {
@@ -2939,7 +2941,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   position: absolute; top: 2px; left: 2px;
   min-width: 22px; height: 22px; padding: 0 6px; margin: 0;
   border-radius: 11px; border: 2px solid #fff;
-  background: var(--ann, #4cc2ff); color: #062433;
+  background: var(--ann, #4cc2ff); color: var(--pin-ink, #062433);
   font-family: inherit; font-size: 0.7rem; font-weight: 700; line-height: 18px; text-align: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   pointer-events: auto; cursor: pointer; appearance: none; -webkit-appearance: none;

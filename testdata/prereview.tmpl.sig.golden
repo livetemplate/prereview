@@ -68,7 +68,7 @@
 === anchorJump ===
 <form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">{{.Label}}</button></form>
 === annotationBar ===
-<span class="anno-bar"><button type="button" class="anno-act" lvt-on:click="unfocusAnnotation" title="Hide" aria-label="Hide">{{template "iconEyeOff"}}</button><button type="button" class="anno-act" lvt-on:click="toggleResolved" data-id="{{.ID}}" title="{{if .Resolved}}Reopen{{else}}Resolve{{end}}" aria-label="{{if .Resolved}}Reopen{{else}}Resolve{{end}}">{{if .Resolved}}{{template "iconReopen"}}{{else}}{{template "iconCheck"}}{{end}}</button><button type="button" class="anno-act" lvt-on:click="deleteComment" data-id="{{.ID}}" title="Delete" aria-label="Delete">{{template "iconTrash"}}</button></span>
+<span class="anno-bar"><button type="button" class="anno-act" lvt-on:click="unfocusAnnotation" data-id="{{.ID}}" title="Hide" aria-label="Hide">{{template "iconEyeOff"}}</button><button type="button" class="anno-act" lvt-on:click="toggleResolved" data-id="{{.ID}}" title="{{if .Resolved}}Reopen{{else}}Resolve{{end}}" aria-label="{{if .Resolved}}Reopen{{else}}Resolve{{end}}">{{if .Resolved}}{{template "iconReopen"}}{{else}}{{template "iconCheck"}}{{end}}</button><button type="button" class="anno-act" lvt-on:click="deleteComment" data-id="{{.ID}}" title="Delete" aria-label="Delete">{{template "iconTrash"}}</button></span>
 === answeredBadge ===
 <small class="answered-badge" title="the agent replied with no edit — read its answer, then resolve or reply">answered</small>
 === awaitingBadge ===
