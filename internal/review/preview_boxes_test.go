@@ -178,6 +178,24 @@ func TestFocusHTMLBlock_Toggles(t *testing.T) {
 		t.Errorf("Hide on the live box: block %q, live %q; want the live focus cleared only", s.FocusedHTMLBlock, s.FocusedCommentID)
 	}
 
+	// Hide on a preview box hides that box; hiding the last one closes the
+	// marker, and opening it again shows them all.
+	box := CommentAnchor{Text: "x", Box: Area{X: 0.1, Y: 0.1, W: 0.2, H: 0.1}}
+	s = previewState()
+	s.Comments = []Comment{
+		{ID: "b1", File: "index.html", FromLine: 1, ToLine: 1, Side: "new", Anchor: box},
+		{ID: "b2", File: "index.html", FromLine: 1, ToLine: 1, Side: "new", Anchor: box},
+	}
+	s, _ = c.FocusHTMLBlock(s, tap)
+	s, _ = c.UnfocusAnnotation(s, regionCtx("unfocusAnnotation", map[string]interface{}{"id": "b1"}))
+	if s.FocusedHTMLBlock != "MB-1-1" || !s.HiddenBoxes["b1"] || s.HiddenBoxes["b2"] {
+		t.Errorf("after hiding b1: block %q, hidden %v; want the marker open with only b1 hidden", s.FocusedHTMLBlock, s.HiddenBoxes)
+	}
+	s, _ = c.UnfocusAnnotation(s, regionCtx("unfocusAnnotation", map[string]interface{}{"id": "b2"}))
+	if s.FocusedHTMLBlock != "" || s.HiddenBoxes != nil {
+		t.Errorf("after hiding both: block %q, hidden %v; want the marker closed", s.FocusedHTMLBlock, s.HiddenBoxes)
+	}
+
 	csvPath := filepath.Join(t.TempDir(), "comments.csv")
 	c = &PrereviewController{CSVPath: csvPath, CSVWriter: csv.NewWriter(csvPath)}
 	s = PrereviewState{FocusedCommentID: "live1", Comments: []Comment{{ID: "live1", Kind: commentKindRegion, URL: "http://x/"}}}

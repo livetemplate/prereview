@@ -28,7 +28,8 @@
              comments were drawn with, each in its annotation colour; the
              block itself is outlined only for a comment with no box. The
              drawn boxes are placed by percentage: the layer covers the
-             preview, which is sized to its page. */ -}}
+             preview, which is sized to its page. A box the marker opened
+             takes a tap, which brings it to the front (FrontBoxID). */ -}}
       {{- if or $.HTMLMarkers $.PreviewPendingBox}}<div class="pin-layer preview-pins" data-key="preview-pins">
         {{- range $.HTMLMarkers -}}
         {{- $mk := .Key -}}
@@ -47,11 +48,13 @@
         {{- range .Boxed -}}
         <div class="area-overlay drawn-box {{index $.AnnotationColors .ID}}
                 {{- if .Resolved}} is-resolved{{else if index $.AgentActedLabels .ID}} is-acted{{end}}
-                {{- if eq $.FocusedHTMLBlock $mk}} is-shown{{end -}}
+                {{- if and (eq $.FocusedHTMLBlock $mk) (not (index $.HiddenBoxes .ID))}} is-shown{{end}}
+                {{- if eq $.FrontBoxID .ID}} is-front{{end -}}
                 "
                 data-box="{{.ID}}"
+                lvt-on:click="raiseBox"
                 style="left:{{.Anchor.Box.PercentX}};top:{{.Anchor.Box.PercentY}};width:{{.Anchor.Box.PercentW}};height:{{.Anchor.Box.PercentH}};">
-          {{- if eq $.FocusedHTMLBlock $mk}}{{template "annotationBar" .}}{{end -}}
+          {{- if and (eq $.FocusedHTMLBlock $mk) (not (index $.HiddenBoxes .ID))}}{{template "annotationBar" .}}{{end -}}
         </div>
         {{- end -}}
         {{- end -}}

@@ -463,6 +463,13 @@ type PrereviewState struct {
 	// another jump or a file switch clears it.
 	FocusedHTMLBlock string `json:"focused_html_block"`
 
+	// FrontBoxID is the preview box the reviewer tapped last, drawn above the
+	// others so overlapping boxes can each be reached. HiddenBoxes are the
+	// boxes of the open marker hidden one at a time with Hide; opening or
+	// closing a marker clears them. Session only.
+	FrontBoxID  string          `json:"front_box_id"`
+	HiddenBoxes map[string]bool `json:"hidden_boxes"`
+
 	// CommentListFilter narrows the All comments screen: "" lists every
 	// comment, CommentFilterAnnotations only the live site's (region) ones.
 	CommentListFilter string `json:"comment_list_filter"`

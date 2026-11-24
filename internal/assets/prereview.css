@@ -2921,6 +2921,10 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .preview-pins .drawn-box { display: none; }
 .preview-pins .drawn-box.is-shown,
 .show-boxes .preview-pins .drawn-box { display: block; }
+/* A box a marker opened takes a tap that brings it to the front, so a box
+   under another can be reached; with Show boxes alone they stay see-through. */
+.preview-pins .drawn-box.is-shown { pointer-events: auto; cursor: pointer; }
+.preview-pins .drawn-box.is-front { z-index: 2; border-width: 3px; }
 /* The corner bar on a shown box (annotationBar): only its buttons take taps. */
 .anno-bar {
   position: absolute; top: 2px; right: 2px;

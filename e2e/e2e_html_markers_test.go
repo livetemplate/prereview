@@ -36,9 +36,9 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			p.clickFile("region.html")
 			waitPreviewBridgeReady(t, p)
 
-			// Three comments on the top section (line 4, the first 240px), each
-			// drawn on a different part of it.
-			drawn := []previewBox{{0.05, 10, 0.4, 90}, {0.5, 30, 0.95, 120}, {0.2, 140, 0.7, 220}}
+			// Three comments on the top section (line 4, the first 240px), on
+			// different parts of it; the second overlaps the first.
+			drawn := []previewBox{{0.05, 10, 0.4, 90}, {0.3, 30, 0.95, 120}, {0.2, 140, 0.7, 220}}
 			for i, b := range drawn {
 				drawHTMLRegionAt(t, p, fmt.Sprintf("Note %d", i+1), b, diag)
 			}
@@ -232,9 +232,10 @@ func checkDrawnBoxes(t *testing.T, p *runningPrereview, want []previewBox, diag 
 }
 
 // checkAnnotationBar drives the corner bar on the boxes a preview marker opens:
-// every shown box has one, with tap-sized buttons; Resolve and Reopen flip the
-// comment; Delete removes it and Undo brings it back; Hide closes the boxes, as
-// does a second tap on the marker.
+// every shown box has one, with tap-sized buttons; a tap on the first box,
+// which the second overlaps, brings it to the front; Resolve and Reopen flip
+// the comment; Delete removes it and Undo brings it back; Hide hides one box;
+// a second tap on the marker closes them all, and the next shows them all.
 func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, diag func() string) {
 	t.Helper()
 	tap := func(sel, what string) { t.Helper(); tapCentred(t, p, sel, what, diag) }
@@ -243,16 +244,25 @@ func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, diag f
 	if small := evalInt(t, p, `[...document.querySelectorAll('.preview-pins .anno-act')].filter(b => { const r = b.getBoundingClientRect(); return r.width < 28 || r.height < 28 || !b.getAttribute('aria-label'); }).length`); small != 0 {
 		t.Errorf("%d bar buttons are under 28px or unlabelled%s", small, diag())
 	}
-	// The box's centre still reaches the page: only the bar takes taps.
-	if hits := evalInt(t, p, `(() => { const r = document.querySelector('.preview-pins .drawn-box.is-shown').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el && el.closest('.pin-layer') ? 1 : 0; })()`); hits != 0 {
-		t.Errorf("a tap at a shown box's centre lands on the box, not the page%s", diag())
-	}
-
 	var first string
 	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.preview-pins .drawn-box').dataset.box`, &first)); err != nil {
 		t.Fatalf("read a box id: %v", err)
 	}
-	bar := `.preview-pins .drawn-box[data-box="` + first + `"] .anno-bar`
+	firstBox := `.preview-pins .drawn-box[data-box="` + first + `"]`
+	bar := firstBox + ` .anno-bar`
+
+	// Where the first two boxes overlap, the second is on top until the
+	// first is tapped.
+	onTop := `(() => { const a = document.querySelector('` + firstBox + `').getBoundingClientRect(); const el = document.elementFromPoint(a.right - 4, a.bottom - 4); const b = el && el.closest('.drawn-box'); return b ? b.dataset.box : ''; })()`
+	var top string
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.querySelector('`+firstBox+`').scrollIntoView({block: 'center'}), true`, nil),
+		chromedp.Evaluate(onTop, &top),
+	); err != nil || top == "" || top == first {
+		t.Fatalf("before the tap, the overlap shows %q (err %v), want the second box%s", top, err, diag())
+	}
+	tapCentred(t, p, firstBox, "tap the first box", diag)
+	waitJSDiag(t, p, onTop+` === '`+first+`' && !!document.querySelector('`+firstBox+`.is-front')`, "the tapped box comes to the front", diag)
 	card := `.html-block .inline-comment[data-key="` + first + `"]`
 
 	tap(bar+` .anno-act[aria-label="Resolve"]`, "resolve from the bar")
@@ -268,13 +278,13 @@ func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, diag f
 	waitJSDiag(t, p, `!!document.querySelector('`+card+`')`, "Undo brings the comment back", diag)
 
 	waitJSDiag(t, p, shown+` === 3`, "the boxes still shown", diag)
-	tap(`.preview-pins .drawn-box.is-shown .anno-act[aria-label="Hide"]`, "hide from the bar")
-	waitJSDiag(t, p, shown+` === 0`, "Hide closes the boxes", diag)
+	tap(bar+` .anno-act[aria-label="Hide"]`, "hide one box from its bar")
+	waitJSDiag(t, p, shown+` === 2 && !document.querySelector('`+firstBox+`.is-shown')`, "Hide hides only that box", diag)
 
-	tap(marker+` .pin-btn`, "open the boxes again")
-	waitJSDiag(t, p, shown+` === 3`, "the marker opens them", diag)
+	tap(marker+` .pin-btn`, "tap the marker")
+	waitJSDiag(t, p, shown+` === 0`, "a marker tap closes the rest", diag)
 	tap(marker+` .pin-btn`, "tap the marker again")
-	waitJSDiag(t, p, shown+` === 0`, "a second marker tap closes them", diag)
+	waitJSDiag(t, p, shown+` === 3`, "the next tap shows all three again", diag)
 }
 
 // tapCentred scrolls sel to the middle of the viewport, clear of the sticky

@@ -3,6 +3,7 @@ package review
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,6 +40,7 @@ func (c *PrereviewController) OpenAnnotations(state PrereviewState, ctx *livetem
 // under the preview scroll into view and its comments' boxes show.
 func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	id := ctx.GetString("id")
+	state.HiddenBoxes = nil // opening or closing a marker shows all its boxes next time
 	if id == state.FocusedHTMLBlock {
 		// A second tap on the same marker hides its boxes again.
 		state.FocusedHTMLBlock = ""
@@ -49,16 +51,47 @@ func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
+// RaiseBox answers a tap on a preview box a marker opened: it comes to the
+// front, above the boxes it overlaps.
+func (c *PrereviewController) RaiseBox(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FrontBoxID = ctx.GetString("box")
+	return state, nil
+}
+
 // UnfocusAnnotation answers Hide on an annotation's corner bar: on the live
-// site's focused box it unfocuses that annotation; on a preview box it closes
-// the boxes the marker opened. Each surface keeps the other's focus, as both
-// can be set in a combined session.
+// site's focused box it unfocuses that annotation; on a preview box it hides
+// that box, and once the open marker has nothing left showing, closes it. Each
+// surface keeps the other's focus, as both can be set in a combined session.
 func (c *PrereviewController) UnfocusAnnotation(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	if id := ctx.GetString("id"); id != "" && id == state.FocusedCommentID {
+	id := ctx.GetString("id")
+	if id != "" && id == state.FocusedCommentID {
 		state.FocusedCommentID = ""
-	} else {
-		state.FocusedHTMLBlock = ""
+		return state, nil
 	}
+	if id == "" {
+		state.FocusedHTMLBlock, state.HiddenBoxes = "", nil
+		return state, nil
+	}
+	hidden := maps.Clone(state.HiddenBoxes)
+	if hidden == nil {
+		hidden = map[string]bool{}
+	}
+	hidden[id] = true
+	state.HiddenBoxes = hidden
+	for _, m := range state.HTMLMarkers() {
+		if m.Key != state.FocusedHTMLBlock {
+			continue
+		}
+		if m.Unboxed {
+			return state, nil // the block's outline still shows; the marker closes it
+		}
+		for _, b := range m.Boxed {
+			if !hidden[b.ID] {
+				return state, nil // a box of the open marker still shows
+			}
+		}
+	}
+	state.FocusedHTMLBlock, state.HiddenBoxes = "", nil
 	return state, nil
 }
 
