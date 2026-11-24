@@ -1,0 +1,270 @@
+{
+  "ArrowDown": {
+    "raw": 332,
+    "deflated": 232
+  },
+  "ArrowDown again": {
+    "raw": 320,
+    "deflated": 183
+  },
+  "ArrowUp": {
+    "raw": 318,
+    "deflated": 183
+  },
+  "Diff → File view": {
+    "raw": 278201,
+    "deflated": 21318
+  },
+  "Escape": {
+    "raw": 73,
+    "deflated": 69
+  },
+  "Escape the edit": {
+    "raw": 5294,
+    "deflated": 1800
+  },
+  "File → Diff view": {
+    "raw": 53638,
+    "deflated": 6725
+  },
+  "Library: checks tab": {
+    "raw": 4118,
+    "deflated": 1362
+  },
+  "Library: learnings tab": {
+    "raw": 2933,
+    "deflated": 1170
+  },
+  "Library: shortcuts tab": {
+    "raw": 7141,
+    "deflated": 2410
+  },
+  "Library: skills tab": {
+    "raw": 571,
+    "deflated": 326
+  },
+  "Preview → Raw": {
+    "raw": 26550,
+    "deflated": 4997
+  },
+  "Raw → Preview": {
+    "raw": 38788,
+    "deflated": 6643
+  },
+  "agent edits big.go on disk": {
+    "raw": 310,
+    "deflated": 222
+  },
+  "agent inserts 6 lines mid-file in big.go": {
+    "raw": 49,
+    "deflated": 53
+  },
+  "agent replies on a comment": {
+    "raw": 947,
+    "deflated": 468
+  },
+  "agent status done": {
+    "raw": 609,
+    "deflated": 363
+  },
+  "agent status working": {
+    "raw": 495,
+    "deflated": 301
+  },
+  "agent suggests an edit on guide.md": {
+    "raw": 6217,
+    "deflated": 1588
+  },
+  "all comments off": {
+    "raw": 62743,
+    "deflated": 9143
+  },
+  "all comments on": {
+    "raw": 5351,
+    "deflated": 1624
+  },
+  "click a Markdown block": {
+    "raw": 3446,
+    "deflated": 1494
+  },
+  "click a line": {
+    "raw": 4588,
+    "deflated": 1842
+  },
+  "click a nearby line (extend)": {
+    "raw": 5013,
+    "deflated": 1912
+  },
+  "click another line": {
+    "raw": 4757,
+    "deflated": 1960
+  },
+  "close Library": {
+    "raw": 62595,
+    "deflated": 9117
+  },
+  "close Queue dropdown": {
+    "raw": 0,
+    "deflated": 0
+  },
+  "close Understand": {
+    "raw": 62558,
+    "deflated": 9089
+  },
+  "close it (Escape)": {
+    "raw": 1963,
+    "deflated": 890
+  },
+  "close search": {
+    "raw": 109,
+    "deflated": 88
+  },
+  "cycle scheme": {
+    "raw": 169,
+    "deflated": 118
+  },
+  "cycle theme mode": {
+    "raw": 642,
+    "deflated": 360
+  },
+  "delete a comment": {
+    "raw": 1782,
+    "deflated": 822
+  },
+  "edit a comment": {
+    "raw": 8468,
+    "deflated": 2973
+  },
+  "hide annotations": {
+    "raw": 529,
+    "deflated": 339
+  },
+  "hide whitespace off": {
+    "raw": 392,
+    "deflated": 247
+  },
+  "hide whitespace on": {
+    "raw": 469,
+    "deflated": 307
+  },
+  "keyboard help off (?)": {
+    "raw": 103,
+    "deflated": 92
+  },
+  "keyboard help on (?)": {
+    "raw": 145,
+    "deflated": 136
+  },
+  "next file (j)": {
+    "raw": 156770,
+    "deflated": 9039
+  },
+  "open Library": {
+    "raw": 7219,
+    "deflated": 2348
+  },
+  "open Queue dropdown (client-only)": {
+    "raw": 0,
+    "deflated": 0
+  },
+  "open Understand": {
+    "raw": 2067,
+    "deflated": 761
+  },
+  "open a reply": {
+    "raw": 1054,
+    "deflated": 543
+  },
+  "open big.go": {
+    "raw": 225,
+    "deflated": 145
+  },
+  "open search": {
+    "raw": 2220,
+    "deflated": 850
+  },
+  "open the file-comment box (c)": {
+    "raw": 4681,
+    "deflated": 1923
+  },
+  "post the reply": {
+    "raw": 1592,
+    "deflated": 676
+  },
+  "prev file (k)": {
+    "raw": 58215,
+    "deflated": 7817
+  },
+  "resolve a comment": {
+    "raw": 2521,
+    "deflated": 840
+  },
+  "save the block comment": {
+    "raw": 5600,
+    "deflated": 1821
+  },
+  "save the comment": {
+    "raw": 14012,
+    "deflated": 3789
+  },
+  "save the second comment": {
+    "raw": 6206,
+    "deflated": 2092
+  },
+  "scroll back up": {
+    "raw": 0,
+    "deflated": 0
+  },
+  "scroll down (viewport report)": {
+    "raw": 220,
+    "deflated": 126
+  },
+  "show annotations": {
+    "raw": 572,
+    "deflated": 366
+  },
+  "switch back to big.go": {
+    "raw": 58349,
+    "deflated": 7959
+  },
+  "switch to guide.md": {
+    "raw": 36188,
+    "deflated": 6216
+  },
+  "switch to small.go": {
+    "raw": 6269,
+    "deflated": 1862
+  },
+  "toggle file drawer": {
+    "raw": 449,
+    "deflated": 272
+  },
+  "toggle file drawer back": {
+    "raw": 422,
+    "deflated": 262
+  },
+  "type a block comment": {
+    "raw": 192,
+    "deflated": 125
+  },
+  "type a reply": {
+    "raw": 254,
+    "deflated": 158
+  },
+  "type a search query": {
+    "raw": 5416,
+    "deflated": 1133
+  },
+  "type a second comment": {
+    "raw": 222,
+    "deflated": 143
+  },
+  "type in the composer": {
+    "raw": 220,
+    "deflated": 144
+  },
+  "unresolve it": {
+    "raw": 1107,
+    "deflated": 544
+  }
+}

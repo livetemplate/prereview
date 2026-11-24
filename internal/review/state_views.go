@@ -209,7 +209,7 @@ func (s PrereviewState) scopedSuggestions() []Suggestion {
 }
 
 // visibleSuggestions is the SINGLE source every render surface iterates —
-// SuggestionsByEndLine (line view), FileSuggestions (block view), and
+// SuggestionsByEndLine (line view), BlockSuggestions (block view), and
 // SuggestionGroups (the "N of M" count) all go through it, so a suggestion
 // excluded here can never leak into one view while showing in another. It is
 // scopedSuggestions minus the suggestions the reviewer has individually hidden
@@ -333,18 +333,10 @@ func (s PrereviewState) HiddenSuggestionBlocks() map[string]*HiddenMark {
 		return nil
 	}
 	out := map[string]*HiddenMark{}
-	mark := func(start, end int) {
-		for _, sg := range sgs {
-			if sg.ToLine >= start && sg.ToLine <= end {
-				markAt(out, markdownBlockKey(start, end), sg.ID)
-			}
+	for key, in := range groupByBlock(s, sgs, func(sg Suggestion) int { return sg.ToLine }) {
+		for _, sg := range in {
+			markAt(out, key, sg.ID)
 		}
-	}
-	for _, b := range s.RenderedMarkdown() {
-		mark(b.StartLine, b.EndLine)
-	}
-	for _, b := range s.RenderedHTML() {
-		mark(b.StartLine, b.EndLine)
 	}
 	return out
 }
@@ -848,9 +840,8 @@ func groupByKey(sugs []Suggestion) [][]Suggestion {
 }
 
 // FileSuggestions returns the selected file's suggestions as a flat slice (nil
-// when toggled off), so the rendered-Markdown view can, per block, show the
-// suggestions whose ToLine falls in that block's source range — the parallel of
-// FileComments for the block view. The line/code view uses SuggestionsByEndLine.
+// when toggled off): the input BlockSuggestions groups per block. The line/code
+// view uses SuggestionsByEndLine.
 func (s PrereviewState) FileSuggestions() []Suggestion {
 	if s.SelectedFile == "" || s.HideSuggestions {
 		return nil
@@ -865,10 +856,9 @@ func (s PrereviewState) FileSuggestions() []Suggestion {
 }
 
 // FileComments returns the selected file's visible LINE-anchored
-// comments (honoring ShowResolved) as a flat slice. Zero-arg so the
-// rendered-Markdown view can, per block, show the comments whose
-// ToLine falls in that block's source range — the line-view path
-// uses CommentsByEndLine (exact-line map) instead.
+// comments (honoring ShowResolved) as a flat slice: the input BlockComments
+// groups per block. The line-view path uses CommentsByEndLine (exact-line
+// map) instead.
 //
 // File-level (Kind=="file") and area-level (Kind=="area") comments
 // are excluded here so they don't accidentally try to anchor at line
@@ -896,6 +886,49 @@ func (s PrereviewState) FileComments() []Comment {
 	return out
 }
 
+// BlockComments is FileComments grouped by rendered block, keyed by
+// markdownBlockKey: each block's list holds the comments whose ToLine falls in
+// its source range. A block ranges over its own list, so a new comment changes
+// one block instead of every block's copy of the whole file's list. Zero-arg;
+// nil when none.
+func (s PrereviewState) BlockComments() map[string][]Comment {
+	return groupByBlock(s, s.FileComments(), func(c Comment) int { return c.ToLine })
+}
+
+// BlockSuggestions is BlockComments for FileSuggestions.
+func (s PrereviewState) BlockSuggestions() map[string][]Suggestion {
+	return groupByBlock(s, s.FileSuggestions(), func(sg Suggestion) int { return sg.ToLine })
+}
+
+// groupByBlock files each item under every block of the showing block view
+// (rendered Markdown, or the HTML preview's comment anchors) whose source range
+// holds its line, keyed by markdownBlockKey, in the items' order. Blocks with no
+// items have no entry. This is the one place the block-membership rule lives.
+func groupByBlock[T any](s PrereviewState, items []T, line func(T) int) map[string][]T {
+	if len(items) == 0 {
+		return nil
+	}
+	out := map[string][]T{}
+	add := func(start, end int) {
+		var in []T
+		for _, it := range items {
+			if l := line(it); l >= start && l <= end {
+				in = append(in, it)
+			}
+		}
+		if in != nil {
+			out[markdownBlockKey(start, end)] = in
+		}
+	}
+	for _, b := range s.RenderedMarkdown() {
+		add(b.StartLine, b.EndLine)
+	}
+	for _, b := range s.RenderedHTML() {
+		add(b.StartLine, b.EndLine)
+	}
+	return out
+}
+
 // BlockAnn is the per-Markdown-block annotation summary (#165) — the md-view has no
 // gutter, so each block carries ONE state badge at its top-right: Total annotations,
 // coloured yellow when Open (unresolved comment / undecided suggestion), accentuated
@@ -915,30 +948,27 @@ func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
 	if len(blocks) == 0 {
 		return nil
 	}
-	comments, suggestions := s.FileComments(), s.FileSuggestions()
+	comments, suggestions := s.BlockComments(), s.BlockSuggestions()
 	out := map[string]BlockAnn{}
 	for _, blk := range blocks {
+		key := markdownBlockKey(blk.StartLine, blk.EndLine)
 		var ba BlockAnn
-		for _, c := range comments {
-			if c.ToLine >= blk.StartLine && c.ToLine <= blk.EndLine {
-				ba.Total++
-				if !c.Resolved {
-					ba.Open = true
-				}
+		for _, c := range comments[key] {
+			ba.Total++
+			if !c.Resolved {
+				ba.Open = true
 			}
 		}
-		for _, sg := range suggestions {
-			if sg.ToLine >= blk.StartLine && sg.ToLine <= blk.EndLine {
-				ba.Total++
-				if s.suggestionUndecided(sg.ID) {
-					ba.Open = true
-				} else if s.suggestionAcceptedPending(sg.ID) {
-					ba.Accepted = true
-				}
+		for _, sg := range suggestions[key] {
+			ba.Total++
+			if s.suggestionUndecided(sg.ID) {
+				ba.Open = true
+			} else if s.suggestionAcceptedPending(sg.ID) {
+				ba.Accepted = true
 			}
 		}
 		if ba.Total > 0 {
-			out[fmt.Sprintf("MB-%d-%d", blk.StartLine, blk.EndLine)] = ba
+			out[key] = ba
 		}
 	}
 	if len(out) == 0 {

@@ -1,8 +1,6 @@
 package review
 
 import (
-	"bytes"
-	_ "embed"
 	"fmt"
 	"html/template"
 	"math"
@@ -13,40 +11,14 @@ import (
 	"github.com/livetemplate/prereview/gitdiff"
 )
 
-//go:embed filetree.tmpl
-var fileTreeTmplSrc string
-
-// fileBrowserTmpl is a standalone html/template (NOT processed by livetemplate)
-// that renders the drawer's file browser. It lives outside prereview.tmpl
-// because the folder tree is self-recursive ({{template "treeNode"}} calls
-// itself) and livetemplate flattens {{template}} calls at parse time, which
-// overflows on recursion. Standard html/template executes recursion fine; the
-// rendered markup is injected back into prereview.tmpl as template.HTML — the
-// same native-<details> approach tinkerdown uses for its nested nav.
-var fileBrowserTmpl = template.Must(template.New("filetree").Parse(fileTreeTmplSrc))
-
-// FileBrowserHTML renders the drawer file browser (folder tree when unfiltered,
-// flat path list while filtering) for injection into prereview.tmpl. Zero-arg so
-// the template can emit `{{.FileBrowserHTML}}`; re-executed each render so
-// selection / viewed / filter stay current.
-func (s PrereviewState) FileBrowserHTML() template.HTML {
-	var buf bytes.Buffer
-	if err := fileBrowserTmpl.ExecuteTemplate(&buf, "fileBrowser", s); err != nil {
-		return template.HTML(fmt.Sprintf(
-			`<p class="empty"><small>file browser render error: %s</small></p>`,
-			template.HTMLEscapeString(err.Error())))
-	}
-	return template.HTML(buf.String())
-}
-
 // TreeNode is one node in the file-browser tree: a directory (IsDir, with
 // Children) or a file leaf (Entry set). The recursive template renders nested
 // <details>/<summary> for directories and the existing file row for leaves.
 //
 // All display state (IsSelected, IsViewed, DefaultOpen) and roll-up counts are
 // resolved here at build time so the recursive template needs no access to the
-// root state ($) — Go templates drop $ when a template calls itself with a
-// child node as the new dot.
+// root state: a {{template}} call rebinds $ to its argument, so inside
+// "treeNode" called with a child node, $ is that node.
 type TreeNode struct {
 	Name     string      // last path segment, the row label
 	Path     string      // full path from repo root (the directory path for dirs)
@@ -108,11 +80,16 @@ func (n *TreeNode) DepthStyle() template.CSS {
 // FileTree builds the directory tree from the scoped file list (so the
 // Changed/All scope toggle applies exactly as it does to FilteredFiles). The
 // search filter is intentionally NOT applied here: the template shows the flat
-// FilteredFiles list while a filter is active and the tree only when it's empty.
+// FilteredFiles list while a filter is active and the tree only when it's empty,
+// so it returns nil while filtering (livetemplate computes every zero-arg method
+// the templates name on each render, whichever branch shows).
 //
 // Zero-arg so the framework pre-computes it once per render and the template can
 // range `$.FileTree`. Returns the top-level nodes (depth 0).
 func (s PrereviewState) FileTree() []*TreeNode {
+	if s.FileFilter != "" {
+		return nil
+	}
 	files := s.scopedFiles()
 
 	root := &TreeNode{IsDir: true}
@@ -177,8 +154,12 @@ func (s PrereviewState) FileTree() []*TreeNode {
 // the full path here — the flat list shows full paths so a search reveals where
 // each match lives; the tree sets Name to just the final segment.
 //
-// Zero-arg so the template can range `$.FilteredFileNodes`.
+// Zero-arg so the template can range `$.FilteredFileNodes`; nil without a
+// filter, when the tree shows instead (see FileTree).
 func (s PrereviewState) FilteredFileNodes() []*TreeNode {
+	if s.FileFilter == "" {
+		return nil
+	}
 	files := s.FilteredFiles()
 	out := make([]*TreeNode, 0, len(files))
 	for i := range files {

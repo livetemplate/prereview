@@ -103,14 +103,9 @@
   </div>
   {{- end}}
   <div class="drawer-body">
-    {{/* The file browser (folder tree when unfiltered, flat path list while
-         filtering) is rendered in Go and injected here. livetemplate flattens
-         {{template}} calls at parse time and so cannot host a self-recursive
-         tree template; rendering the recursive markup in Go and injecting it
-         as template.HTML is the same native-<details> pattern tinkerdown uses
-         for its nested nav. The <details lvt-ignore-attrs> open state survives
-         re-renders via the upstream morphdom durability fix. */}}
-    {{.FileBrowserHTML}}
+    {{/* The file browser (filetree.tmpl). The <details lvt-ignore-attrs> open
+         state survives re-renders via the upstream morphdom durability fix. */}}
+    {{template "fileBrowser" $}}
   </div>
   {{/* Drag handle on the drawer's right edge — the lvt-fx:resize directive
        (livetemplate client) makes it resize the sidebar live, persisting the

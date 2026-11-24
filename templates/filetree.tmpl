@@ -1,7 +1,9 @@
-{{/* Standalone html/template for the drawer file browser. Rendered in Go and
-     injected into prereview.tmpl as template.HTML (see FileBrowserHTML). It is
-     NOT processed by livetemplate, so the self-recursive {{template "treeNode"}}
-     is safe here. Entry point: "fileBrowser" with a PrereviewState as dot. */}}
+{{/* The drawer's file browser: the folder tree when unfiltered, the flat path
+     list while filtering. "treeNode" calls itself for each folder's children;
+     livetemplate evaluates recursive {{template}} calls into nested tree nodes
+     (since v0.19.0), so a change to one row is diffed as that row's update
+     instead of resending the whole drawer. Entry point: "fileBrowser", called
+     with the root state. */}}
 {{- define "fileBrowser" -}}
 {{- if .Files -}}
   {{- if .FileFilter -}}
@@ -75,22 +77,4 @@
     </form>{{if .ChangedSinceViewed}}<small class="viewed-changed">changed since you viewed it</small>{{end}}
   </div>
 </li>
-{{- end -}}
-
-{{/* SVG icon partials — mirror the same-named partials in prereview.tmpl so the
-     injected tree looks identical to the rest of the UI. */}}
-{{- define "iconChevronRight" -}}
-<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-{{- end -}}
-{{- define "iconFolder" -}}
-<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/></svg>
-{{- end -}}
-{{- define "iconFile" -}}
-<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>
-{{- end -}}
-{{- define "iconViewedCheck" -}}
-<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-11" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
-{{- end -}}
-{{- define "iconViewedCircle" -}}
-<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
 {{- end -}}
