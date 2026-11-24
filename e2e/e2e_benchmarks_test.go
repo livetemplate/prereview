@@ -94,8 +94,10 @@ func TestE2E_Benchmark(t *testing.T) {
 
 	runOnce := func(n int, verdict string) {
 		t.Helper()
+		// Click through a fresh query: the card re-renders as the checks watcher
+		// ticks, and chromedp.Click on a replaced node fails "could not find node".
 		if err := chromedp.Run(ctx,
-			chromedp.Click(card+` button[name="runBenchmark"]`, chromedp.ByQuery),
+			chromedp.Evaluate(`document.querySelector('`+card+` button[name="runBenchmark"]').click(), true`, nil),
 			chromedp.WaitVisible(card+` td.bm-wait`, chromedp.ByQuery), // the judge waits for the agent
 			chromedp.WaitVisible(card+` td.bm-no`, chromedp.ByQuery),   // the fixture's "very" fails a checker at once
 		); err != nil {
@@ -115,7 +117,7 @@ func TestE2E_Benchmark(t *testing.T) {
 	writeRule(t, repo, "reader-first.md", strings.Replace(readerFirstJudge, "Does the text lead", "Does the very first paragraph lead", 1))
 	time.Sleep(1500 * time.Millisecond) // the checks watcher's tick reloads the rule
 	runOnce(2, "fail")
-	if err := chromedp.Run(ctx, chromedp.Click(card+` .bm-runs > summary`, chromedp.ByQuery)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('`+card+` .bm-runs > summary').click(), true`, nil)); err != nil {
 		t.Fatal(err)
 	}
 	if n := countSel(t, p, card+` .bm-runs tr.bm-incomparable`); n != 1 {
