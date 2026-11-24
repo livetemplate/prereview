@@ -798,10 +798,7 @@ func (s PrereviewState) VisibleComments() []Comment {
 	scoped := s.scopedComments()
 	out := make([]Comment, 0, len(scoped))
 	for _, c := range scoped {
-		if s.commentHiddenFromView(c) {
-			continue
-		}
-		if s.CommentListFilter == CommentFilterAnnotations && !c.IsRegionLevel() {
+		if s.commentHiddenFromView(c) || !s.passesListFilter(c) {
 			continue
 		}
 		out = append(out, c)
@@ -813,12 +810,17 @@ func (s PrereviewState) VisibleComments() []Comment {
 // live site's annotations (region comments).
 const CommentFilterAnnotations = "annotations"
 
+// passesListFilter reports whether the All comments screen's filter keeps c.
+func (s PrereviewState) passesListFilter(c Comment) bool {
+	return s.CommentListFilter != CommentFilterAnnotations || c.IsRegionLevel()
+}
+
 // AnnotationsListed is how many live-site annotations the All comments screen
 // would list with the Annotations filter: the count on that filter's button.
 func (s PrereviewState) AnnotationsListed() int {
 	n := 0
 	for _, c := range s.scopedComments() {
-		if c.IsRegionLevel() && !s.commentHiddenFromView(c) {
+		if s.regionVisible(c) {
 			n++
 		}
 	}
@@ -841,10 +843,7 @@ func (s PrereviewState) UnresolvedListed() int {
 // passing the screen's filter. The screen lists every such comment
 // (commentHiddenFromView hides only resolved ones).
 func (s PrereviewState) resolvable(c Comment) bool {
-	if s.CommentListFilter == CommentFilterAnnotations && !c.IsRegionLevel() {
-		return false
-	}
-	return !c.Resolved && s.inScope(c.File)
+	return !c.Resolved && s.inScope(c.File) && s.passesListFilter(c)
 }
 
 // CommentCount is the number of in-scope comments — the all-comments view's header

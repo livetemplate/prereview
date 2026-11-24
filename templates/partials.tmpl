@@ -354,7 +354,7 @@
     </form>
     {{- /* #149 Reply — opens the inline reply form to steer the agent. */ -}}
     {{- if ne $.ReplyingID .ID -}}
-    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
+    {{template "replyButton" .}}
     {{- end -}}
     {{- /* Re-enqueue a WORKED-ON comment (#119): put it back on the agent's queue to
            redo. This is the only per-card queue action — a draft is enqueued simply
@@ -473,7 +473,7 @@
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
   {{- else -}}
-  <div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>
+  <div class="sg-reply-open">{{template "replyButton" .}}</div>
   {{- end -}}
   {{- /* decision surface. The applied branch is FIRST and OUTSIDE the not-outdated
          gate: an applied edit is always anchor-outdated, so it'd otherwise be hidden
@@ -549,7 +549,7 @@
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
     {{- if ne $.ReplyingID .ID -}}
-    <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
+    {{template "replyButton" .}}
     {{- end -}}
     {{- if .Resolved -}}
     <form method="POST">
@@ -643,6 +643,9 @@
      reply (comment, suggestion, simple comment, external annotation). Called with the
      root state and only rendered while $.ReplyingID is the card's id, so that is the
      id it posts. The quiz's form differs (composite id) and stays inline. */}}
+{{/* replyButton — opens the reply form on a comment's card; `.` is the comment. */}}
+{{define "replyButton"}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}
+
 {{define "replyForm"}}<form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
     <input type="hidden" name="id" value="{{.ReplyingID}}">
     <textarea

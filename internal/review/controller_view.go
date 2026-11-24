@@ -16,7 +16,7 @@ import (
 // Closes the menu so the user sees the result immediately.
 func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	if state.ShowAllComments {
-		toggleFullView(&state, &state.ShowAllComments)
+		closeFullViews(&state)
 		state.MoreMenuOpen = false
 		state.LastResolvedIDs = nil // Resolve all's Undo belongs to the screen (a deleted comment's stays)
 		return state, nil

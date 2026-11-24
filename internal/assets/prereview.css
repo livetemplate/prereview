@@ -1632,17 +1632,10 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
 .all-comments .ac-head strong,
 .all-comments .ac-head button { white-space: nowrap; }
 .all-comments .ac-filter { display: flex; gap: 0.3rem; margin: 0 auto 0 0.6rem; }
-.all-comments .ac-filter form { margin: 0; }
 .all-comments .ac-filter ~ .ac-resolve-all { margin-left: 0; }
 @media (max-width: 600px) {
   .all-comments .ac-filter { order: 1; flex-basis: 100%; margin: 0; }
   .all-comments .ac-filter ~ .ac-resolve-all { margin-left: auto; }
-}
-/* A live-site annotation's label, where a line comment shows its file:line. */
-.all-comments .anno-label {
-  padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
-  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
-  border: 1px solid var(--pico-muted-color); color: var(--pico-muted-color);
 }
 /* The card a marker tap opened. */
 .all-comments .ac-item.is-target .ac-jump-btn { outline: 2px solid var(--accent); outline-offset: 1px; }

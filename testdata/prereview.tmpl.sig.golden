@@ -2,9 +2,9 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments ({{.CommentCount}})</strong>
-    {{if .AnnotationsListed}}<div class="ac-filter">
-      <form method="POST"><input type="hidden" name="filter" value=""><button type="submit" name="setCommentFilter" class="{{if eq .CommentListFilter ""}}contrast{{else}}outline contrast{{end}}" aria-pressed="{{if eq .CommentListFilter ""}}true{{else}}false{{end}}">All</button></form>
-      <form method="POST"><input type="hidden" name="filter" value="annotations"><button type="submit" name="setCommentFilter" class="{{if eq .CommentListFilter "annotations"}}contrast{{else}}outline contrast{{end}}" aria-pressed="{{if eq .CommentListFilter "annotations"}}true{{else}}false{{end}}" title="Only the live site's annotations">Annotations {{.AnnotationsListed}}</button></form>
+    {{if .AnnotationsListed}}{{$annos := eq .CommentListFilter "annotations"}}<div class="ac-filter">
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="" class="lib-chip{{if not $annos}} is-on{{end}}" aria-pressed="{{not $annos}}">All</button>
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="annotations" class="lib-chip{{if $annos}} is-on{{end}}" aria-pressed="{{$annos}}" title="Only the live site's annotations">Annotations {{.AnnotationsListed}}</button>
     </div>{{end}}
     {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
       <button type="submit" name="resolveAll" class="outline" title="Resolve every comment listed here">Resolve all {{.UnresolvedListed}}</button>
@@ -20,7 +20,7 @@
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where">{{if .IsRegionLevel}}<small class="anno-label">annotation</small> <code>{{.Location}}</code>{{else}}<code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{end}}{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} {{template "awaitingBadge"}}{{end}}{{with .Source}} {{template "sourceBadge" .}}{{end}}</div>
+          <div class="ac-where">{{if .IsRegionLevel}}<small class="anno-label ck-judge-tag">annotation</small> {{end}}<code>{{.Location}}</code>{{if not .IsRegionLevel}} · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{end}}{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} {{template "awaitingBadge"}}{{end}}{{with .Source}} {{template "sourceBadge" .}}{{end}}</div>
           <div class="ac-body">{{.Headline}}</div>
         </button>
       </form>
@@ -28,9 +28,9 @@
       <div class="ac-actions">
         {{if .IsRegionLevel}}<form method="POST">
           <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="jumpToComment" class="outline" title="Back to the live site, with this annotation's box outlined">Show on page</button>
+          <button type="submit" name="jumpToComment" class="outline ac-show-on-page" title="Back to the live site, with this annotation's box outlined">Show on page</button>
         </form>{{end}}
-        {{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}
+        {{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}
         <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -279,7 +279,7 @@
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}{{if and $.AgentMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
+    </form>{{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}{{if and $.AgentMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Re-enqueue — ask the agent to redo this">Re-enqueue</button>
     </form>{{end}}{{if .Resolved}}<form method="POST">
@@ -297,7 +297,7 @@
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}{{if .Resolved}}<form method="POST">
+    </form>{{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}{{if .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="hideComment" class="outline">Hide</button>
     </form>{{end}}{{if not .Resolved}}<form method="POST">
@@ -392,7 +392,7 @@
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}{{if not .Resolved}}<form method="POST">
+    </form>{{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}{{if not .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="editComment" class="outline">Edit</button>
     </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
@@ -1310,6 +1310,9 @@
 
 
 
+
+
+
 === processedBadge ===
 <small class="processed-badge">worked on</small>
 === queuedBadge ===
@@ -1428,6 +1431,8 @@
 <form method="POST" class="region-toggle">
   <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
 </form>
+=== replyButton ===
+<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
 === replyForm ===
 <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
     <input type="hidden" name="id" value="{{.ReplyingID}}">
@@ -1606,7 +1611,7 @@
 {{$d := index $.DecisionsBySuggestion .ID}}{{$applied := index $.Applied .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}" data-key="sg-{{.ID}}"{{if eq $.ScrollToItemKey (printf "sg:%s" .ID)}} lvt-fx:scroll="into-view"{{end}} lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{with .For}} · <form method="POST" class="sg-for"><input type="hidden" name="id" value="{{.}}"><button type="submit" name="jumpToComment" class="sg-for-btn" title="Part of a change your comment asked for: go to it">for your comment</button></form>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
     </span>
   </header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff{{if not .ProposedText}} is-deletion{{end}}">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}{{if .ProposedText}}<pre class="sg-new">{{.ProposedText}}</pre>{{else}}<p class="sg-del-note">delete — accepting removes {{.LineSpan}}</p>{{end}}
-  </div>{{if and .AnchorOutdated (not $applied)}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{else}}<div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>{{end}}{{if $applied}}{{if $d.Revert}}<div class="sg-actions"><small class="sg-applied-status sg-reverting">Reverting — the agent will restore the original text.</small></div>{{else}}<div class="sg-actions">
+  </div>{{if and .AnchorOutdated (not $applied)}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{else}}<div class="sg-reply-open">{{template "replyButton" .}}</div>{{end}}{{if $applied}}{{if $d.Revert}}<div class="sg-actions"><small class="sg-applied-status sg-reverting">Reverting — the agent will restore the original text.</small></div>{{else}}<div class="sg-actions">
     <small class="sg-applied-status">Edit applied to the file.</small>
     <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevert" class="outline sg-revert-btn">Revert</button></form>
   </div>{{end}}{{else}}{{if not .AnchorOutdated}}{{if $d.Verdict}}<div class="sg-actions">

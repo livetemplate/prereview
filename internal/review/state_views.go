@@ -1132,15 +1132,17 @@ func (s PrereviewState) RegionComments() []Comment {
 	}
 	var out []Comment
 	for _, c := range s.Comments {
-		if !c.IsRegionLevel() || c.URL != s.CurrentURL {
-			continue
+		if c.URL == s.CurrentURL && s.regionVisible(c) {
+			out = append(out, c)
 		}
-		if s.commentHiddenFromView(c) {
-			continue
-		}
-		out = append(out, c)
 	}
 	return out
+}
+
+// regionVisible reports whether c is a live-site annotation that shows: the
+// rule the page's boxes, the live-only sidebar and the Annotations filter share.
+func (s PrereviewState) regionVisible(c Comment) bool {
+	return c.IsRegionLevel() && !s.commentHiddenFromView(c)
 }
 
 // LiveAvailable reports that the session has a live site: live-only, or a
@@ -1205,13 +1207,9 @@ func (s PrereviewState) AllRegionComments() []Comment {
 	}
 	var out []Comment
 	for _, c := range s.Comments {
-		if !c.IsRegionLevel() {
-			continue
+		if s.regionVisible(c) {
+			out = append(out, c)
 		}
-		if s.commentHiddenFromView(c) {
-			continue
-		}
-		out = append(out, c)
 	}
 	return out
 }

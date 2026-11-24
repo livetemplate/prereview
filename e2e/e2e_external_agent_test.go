@@ -29,12 +29,7 @@ func TestE2E_ExternalAgentStates(t *testing.T) {
 		defer cancel()
 		return chromedp.Run(ctx, actions...)
 	}
-	agent := func(args ...string) {
-		t.Helper()
-		if _, stderr, code := runCLI(t, 10*time.Second, p.binary, args...); code != 0 {
-			t.Fatalf("prereview %v: exit %d\n%s", args, code, stderr)
-		}
-	}
+	agent := func(args ...string) { t.Helper(); mustCLI(t, p, args...) }
 
 	annotateRegion(t, p, "CTA too low contrast", diag)
 	var id string

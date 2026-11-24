@@ -2,20 +2,12 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments ({{.CommentCount}})</strong>
-    {{if .AnnotationsListed}}<div class="ac-filter">
-      <form method="POST"><input type="hidden" name="filter" value=""><button
-        type="submit"
-        name="setCommentFilter"
-        class="{{if eq .CommentListFilter ""}}contrast{{else}}outline contrast{{end}}"
-        aria-pressed="{{if eq .CommentListFilter ""}}true{{else}}false{{end}}"
-      >All</button></form>
-      <form method="POST"><input type="hidden" name="filter" value="annotations"><button
-        type="submit"
-        name="setCommentFilter"
-        class="{{if eq .CommentListFilter "annotations"}}contrast{{else}}outline contrast{{end}}"
-        aria-pressed="{{if eq .CommentListFilter "annotations"}}true{{else}}false{{end}}"
-        title="Only the live site's annotations"
-      >Annotations {{.AnnotationsListed}}</button></form>
+    {{if .AnnotationsListed}}{{$annos := eq .CommentListFilter "annotations"}}<div class="ac-filter">
+      <button type="button" lvt-on:click="setCommentFilter" data-filter=""
+        class="lib-chip{{if not $annos}} is-on{{end}}" aria-pressed="{{not $annos}}">All</button>
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="annotations"
+        class="lib-chip{{if $annos}} is-on{{end}}" aria-pressed="{{$annos}}"
+        title="Only the live site's annotations">Annotations {{.AnnotationsListed}}</button>
     </div>{{end}}
     {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
       <button
@@ -45,7 +37,7 @@
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where">{{if .IsRegionLevel}}<small class="anno-label">annotation</small> <code>{{.Location}}</code>{{else}}<code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{end}}
+          <div class="ac-where">{{if .IsRegionLevel}}<small class="anno-label ck-judge-tag">annotation</small> {{end}}<code>{{.Location}}</code>{{if not .IsRegionLevel}} · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{end}}
             {{- if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}
             {{- if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}
             {{- if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}
@@ -68,13 +60,13 @@
           <button
             type="submit"
             name="jumpToComment"
-            class="outline"
+            class="outline ac-show-on-page"
             title="Back to the live site, with this annotation's box outlined"
           >Show on page</button>
         </form>
         {{- end}}
         {{if ne $.ReplyingID .ID -}}
-        <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
+        {{template "replyButton" .}}
         {{- end}}
         <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">

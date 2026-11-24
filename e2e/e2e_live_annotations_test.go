@@ -31,12 +31,6 @@ func TestE2E_LiveAnnotationsList(t *testing.T) {
 					t.Fatalf("%s: %v%s", what, err, diag())
 				}
 			}
-			agent := func(args ...string) {
-				t.Helper()
-				if _, stderr, code := runCLI(t, 10*time.Second, p.binary, args...); code != 0 {
-					t.Fatalf("prereview %v: exit %d\n%s", args, code, stderr)
-				}
-			}
 
 			// Past the beacon's start-up reports (see TestE2E_CombinedStageSurvivesToggle).
 			time.Sleep(3500 * time.Millisecond)
@@ -46,8 +40,8 @@ func TestE2E_LiveAnnotationsList(t *testing.T) {
 			run("read the pin id", chromedp.AttributeValue(`.pin-layer .area-overlay[data-id]`, "data-id", &id, nil, chromedp.ByQuery))
 			card := `.all-comments .ac-item[data-key="` + id + `"]`
 
-			agent("done", "--out", p.store, id)
-			agent("reply", "--out", p.store, id, "--body", "Moved the heading down 24px.")
+			mustCLI(t, p, "done", "--out", p.store, id)
+			mustCLI(t, p, "reply", "--out", p.store, id, "--body", "Moved the heading down 24px.")
 
 			// The count opens All comments on the annotations: labelled, worked on,
 			// with the agent's reply.
@@ -73,7 +67,7 @@ func TestE2E_LiveAnnotationsList(t *testing.T) {
 			waitJSDiag(t, p, `!!document.querySelector('`+card+`.is-target')`, "the box's card, marked as the target", diag)
 
 			// Show on page: the live site, the box focused, the site not reloaded.
-			run("show on page", chromedp.Click(card+` button[name="jumpToComment"]`, chromedp.ByQuery))
+			run("show on page", chromedp.Click(card+` button.ac-show-on-page`, chromedp.ByQuery))
 			waitJSDiag(t, p, `!document.querySelector('.all-comments') && !!document.querySelector('.pin-layer .area-overlay.is-focused[data-id="`+id+`"]')`, "the live page with the box focused", diag)
 			if got := app.hitCount("/"); got != rootHits {
 				t.Errorf("the live site reloaded going to the list and back (%d → %d hits on /)%s", rootHits, got, diag())
@@ -103,9 +97,7 @@ func TestE2E_AllCommentsThreads(t *testing.T) {
 		t.Fatalf("no comment saved%s", diag())
 	}
 	id := rows[1][0]
-	if _, stderr, code := runCLI(t, 10*time.Second, p.binary, "reply", "--out", p.store, id, "--body", "Renamed to userToken."); code != 0 {
-		t.Fatalf("prereview reply: exit %d\n%s", code, stderr)
-	}
+	mustCLI(t, p, "reply", "--out", p.store, id, "--body", "Renamed to userToken.")
 	ctx, cancel := within(p, 20*time.Second)
 	defer cancel()
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('button[name="toggleCommentList"]').click(), true`, nil)); err != nil {
