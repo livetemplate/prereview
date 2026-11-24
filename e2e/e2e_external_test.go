@@ -351,6 +351,14 @@ func annotateRegion(t *testing.T, p *runningPrereview, body string, diag func() 
 // pin is on the page.
 func drawRegion(t *testing.T, p *runningPrereview, body string, diag func() string) {
 	t.Helper()
+	drawRegionAt(t, p, body, 0.30, 0.30, 0.60, 0.55, false, diag)
+}
+
+// drawRegionAt is drawRegion with the box's corners as fractions of the page
+// overlay, dragged with the mouse or (touch) a finger. It waits for one more
+// saved pin than before.
+func drawRegionAt(t *testing.T, p *runningPrereview, body string, fx1, fy1, fx2, fy2 float64, touch bool, diag func() string) {
+	t.Helper()
 	// Arm the toggle → the page-surface region overlay appears.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
@@ -360,40 +368,49 @@ func drawRegion(t *testing.T, p *runningPrereview, body string, diag func() stri
 		t.Fatalf("arm region toggle: %v%s", err, diag())
 	}
 
-	// Read the overlay rect and drag a box well inside it.
+	// Read the overlay rect and the pins already saved.
 	var ov struct{ X, Y, Width, Height float64 }
-	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+	var before int
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`(() => {
 		const b = document.querySelector('.region-overlay[data-surface="page"]').getBoundingClientRect();
 		return { X: b.left, Y: b.top, Width: b.width, Height: b.height };
-	})()`, &ov)); err != nil {
+	})()`, &ov),
+		chromedp.Evaluate(`document.querySelectorAll('.pin-layer .area-overlay[data-id]:not([data-id=""])').length`, &before),
+	); err != nil {
 		t.Fatalf("read overlay rect: %v%s", err, diag())
 	}
 	if ov.Width < 50 || ov.Height < 50 {
 		t.Fatalf("overlay too small: %+v%s", ov, diag())
 	}
-	x1 := ov.X + ov.Width*0.30
-	y1 := ov.Y + ov.Height*0.30
-	x2 := ov.X + ov.Width*0.60
-	y2 := ov.Y + ov.Height*0.55
-	if err := chromedp.Run(p.ctx,
+	x1, y1 := ov.X+ov.Width*fx1, ov.Y+ov.Height*fy1
+	x2, y2 := ov.X+ov.Width*fx2, ov.Y+ov.Height*fy2
+	drag := []chromedp.Action{
 		cdpinput.DispatchMouseEvent(cdpinput.MousePressed, x1, y1).WithButton(cdpinput.Left).WithClickCount(1),
 		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, (x1+x2)/2, (y1+y2)/2).WithButton(cdpinput.Left),
 		cdpinput.DispatchMouseEvent(cdpinput.MouseMoved, x2, y2).WithButton(cdpinput.Left),
 		cdpinput.DispatchMouseEvent(cdpinput.MouseReleased, x2, y2).WithButton(cdpinput.Left).WithClickCount(1),
-		chromedp.WaitVisible(`.ext-composer textarea`, chromedp.ByQuery),
-	); err != nil {
+	}
+	if touch {
+		drag = []chromedp.Action{
+			cdpinput.DispatchTouchEvent(cdpinput.TouchStart, []*cdpinput.TouchPoint{{X: x1, Y: y1}}),
+			cdpinput.DispatchTouchEvent(cdpinput.TouchMove, []*cdpinput.TouchPoint{{X: (x1 + x2) / 2, Y: (y1 + y2) / 2}}),
+			cdpinput.DispatchTouchEvent(cdpinput.TouchMove, []*cdpinput.TouchPoint{{X: x2, Y: y2}}),
+			cdpinput.DispatchTouchEvent(cdpinput.TouchEnd, []*cdpinput.TouchPoint{}),
+		}
+	}
+	if err := chromedp.Run(p.ctx, append(drag, chromedp.WaitVisible(`.ext-composer textarea`, chromedp.ByQuery))...); err != nil {
 		t.Fatalf("region drag + composer: %v%s", err, diag())
 	}
 
-	// Type + save → persists and re-pins on the page. The on-page pin appears
-	// immediately; the annotations drawer is collapsed by default. Wait for a pin
-	// carrying its comment id: a pin can paint before data-id is filled in, and
-	// callers read that id next.
+	// Type + save → persists and re-pins on the page. Wait for a pin carrying
+	// its comment id: a pin can paint before data-id is filled in, and callers
+	// read that id next.
 	if err := chromedp.Run(p.ctx,
 		chromedp.SendKeys(`.ext-composer textarea`, body, chromedp.ByQuery),
 		chromedp.Click(`.ext-composer button[name="addComment"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.pin-layer .area-overlay[data-id]:not([data-id=""])`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("save region comment: %v%s", err, diag())
 	}
+	waitJSDiag(t, p, fmt.Sprintf(`document.querySelectorAll('.pin-layer .area-overlay[data-id]:not([data-id=""])').length > %d`, before), "the new annotation's pin", diag)
 }

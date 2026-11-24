@@ -89,6 +89,7 @@ func TestSavePrefsWritesOnlyViewFields(t *testing.T) {
 		"toc_collapsed":     true, // #137: desktop TOC column collapse — a durable view pref
 		"unfold_mechanical": true, // #115 A′3: turn the walkthrough's mechanical folds off
 		"hide_whitespace":   true, // #115 B1: show whitespace-only changes as unchanged
+		"show_live_boxes":   true, // outline every live-site annotation's box (Show boxes)
 	}
 	for k := range m {
 		if !wantKeys[k] {

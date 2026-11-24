@@ -675,6 +675,11 @@ type PrereviewState struct {
 	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
 	HideMarks bool `json:"hide_marks"`
 
+	// ShowLiveBoxes outlines every saved annotation's box on the live site. Off,
+	// a saved annotation is only its corner marker, so it never covers the page;
+	// its box is outlined while focused or hovered. Durable per-user view pref.
+	ShowLiveBoxes bool `json:"show_live_boxes"`
+
 	// ToggledRows flips a row's annotation cards away from their DEFAULT visibility
 	// (#174). Keyed by the same row key the badge renders under: "<line>-<side>" in the
 	// diff, "MB-<start>-<end>" in the md-view.

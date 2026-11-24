@@ -156,6 +156,15 @@ func (c *PrereviewController) ToggleMarks(state PrereviewState, ctx *livetemplat
 	return state, nil
 }
 
+// ToggleLiveBoxes shows or hides the outline of every saved annotation's box on
+// the live site.
+func (c *PrereviewController) ToggleLiveBoxes(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.ShowLiveBoxes = !state.ShowLiveBoxes
+	state.MoreMenuOpen = false
+	c.savePrefs(state)
+	return state, nil
+}
+
 // CycleTheme advances the Light/Dark/System color mode (issue #60), cycling
 // System → Light → Dark → System. Persisted per-user; the page re-renders with
 // the new data-mode attribute (omitted for System) and the cascade does the

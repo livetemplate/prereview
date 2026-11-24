@@ -8,7 +8,7 @@
      node appearing BEFORE the keyed stage makes morphdom re-insert the stage,
      and moving an iframe reloads it. */}}
 {{define "liveStage"}}    {{template "regionToggle" $}}
-    <div class="preview-stage ext-stage"
+    <div class="preview-stage ext-stage{{if $.ShowLiveBoxes}} show-boxes{{end}}"
          lvt-fx:proxy-bridge="setProxyURL"
          data-key="ext-stage"
          {{- with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
@@ -26,19 +26,24 @@
         lvt-ignore
       ></iframe>
       <div class="pin-layer" data-pin-layer data-key="pin-layer">
+        {{- /* A saved annotation is an invisible box (outlined only when focused,
+               hovered or Show boxes is on) with a numbered marker at its corner:
+               the marker takes the tap, so the box never covers the page or a
+               new drag. */ -}}
         {{- range $.RegionComments -}}
-        <button type="button"
-                class="area-overlay pin-btn
+        <div class="area-overlay
                 {{- if .Resolved}} is-resolved{{end}}
                 {{- if index $.AgentActedLabels .ID}} is-acted{{end}}
                 {{- if eq $.FocusedCommentID .ID}} is-focused{{end -}}
                 "
-                lvt-on:click="{{if $.Combined}}openAnnotations{{else}}editComment{{end}}"
                 data-id="{{.ID}}"
                 data-key="pin-{{.ID}}"
                 style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"
-                title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"
-                aria-label="{{if $.Combined}}Open annotation{{else}}Edit annotation{{end}}"></button>
+                title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"><button type="button"
+                class="pin-btn"
+                lvt-on:click="{{if $.Combined}}openAnnotations{{else}}editComment{{end}}"
+                data-id="{{.ID}}"
+                aria-label="{{if $.Combined}}Open annotation{{else}}Edit annotation{{end}}: {{.Body}}"></button></div>
         {{- end -}}
         {{- if eq $.CommentMode "region" -}}
         <div class="area-overlay area-overlay-pending"

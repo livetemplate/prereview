@@ -2881,11 +2881,33 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .ext-stage { height: calc(100vh - 9rem); overflow: hidden; border: 1px solid var(--pico-muted-border-color, #d9d9d9); border-radius: 6px; background: #fff; }
 .ext-frame { width: 100%; height: 100%; border: 0; display: block; }
 .pin-layer { position: absolute; top: 0; left: 0; pointer-events: none; transform-origin: 0 0; z-index: 4; }
-/* Saved pins are buttons: clicking one opens its comment in the editor. They
-   re-enable pointer events (the layer itself passes clicks through to the live
-   page); gaps between pins stay click-through so the page is still usable. */
-.pin-btn { pointer-events: auto; cursor: pointer; padding: 0; appearance: none; -webkit-appearance: none; }
-.pin-btn:hover { background: rgba(76, 194, 255, 0.30); }
+/* A saved live-site annotation is an invisible box with a numbered marker in
+   its top-left corner. Only the marker takes a tap (the layer and the box pass
+   clicks and drags through to the page), and the box is never filled: it is
+   outlined while focused, while its marker is hovered, and for every box while
+   Show boxes is on. */
+.pin-layer { counter-reset: pin; }
+.pin-layer .area-overlay { counter-increment: pin; border: 2px dashed transparent; background: none; }
+.pin-layer .area-overlay.is-acted::after { content: none; }
+.pin-layer .area-overlay:has(> .pin-btn:hover),
+.ext-stage.show-boxes .pin-layer .area-overlay { border-color: var(--lvt-area-select-color, #4cc2ff); }
+.pin-layer .area-overlay.is-focused { border-style: solid; background: none; }
+.pin-btn {
+  position: absolute; top: 2px; left: 2px;
+  min-width: 22px; height: 22px; padding: 0 6px; margin: 0;
+  border-radius: 11px; border: 2px solid #fff;
+  background: var(--lvt-area-select-color, #4cc2ff); color: #062433;
+  font-family: inherit; font-size: 0.7rem; font-weight: 700; line-height: 18px; text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+.pin-btn::before { content: counter(pin); }
+.pin-btn:hover { filter: brightness(1.1); }
+/* --pico-primary-inverse is each scheme's label colour on its accent (dark on
+   the light dark-mode accents of gruvbox and catppuccin). */
+.pin-layer .area-overlay.is-acted .pin-btn { background: var(--accent, #4361ee); color: var(--pico-primary-inverse, #fff); }
+.pin-layer .area-overlay.is-acted .pin-btn::before { content: counter(pin) " \2713"; }
+.pin-layer .area-overlay.is-resolved .pin-btn { background: var(--pico-muted-color, #888); color: #fff; }
 /* Annotations sidebar: collapsed by default (full width for the live site);
    the header "💬 N" button toggles AnnoDrawerOpen → .is-open. */
 .ext-sidebar { display: none; flex: 0 0 320px; border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); overflow-y: auto; }
@@ -3178,6 +3200,11 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .composer .composer-cancel { display: none; }
 .composer .c-actions { display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.4rem; }
 .composer .save-btn { margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 30px; }
+/* Narrow screens: Cancel and Save stay one row, without the key hints. */
+@media (max-width: 600px) {
+  .composer .c-actions .kbd-hint { display: none; }
+  .composer .c-actions button { width: auto; white-space: nowrap; }
+}
 .composer .cancel-btn {
   margin: 0; padding: 0.3rem 0.7rem; font-size: 0.78rem; min-height: 28px;
   flex: 0 0 auto;

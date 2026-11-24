@@ -72,6 +72,10 @@
     lvt-key="l"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="toggleLiveBoxes"
+    lvt-key="b"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleCommentList"
     lvt-key="a"
     lvt-mod:skip-when-typing
@@ -261,6 +265,25 @@
         </form>
         
         
+        
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleLiveBoxes"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+            <span class="menu-label">Show boxes <kbd class="kbd-hint" aria-hidden="true">b</kbd></span>
+          </button>
+        </form>
         
         
         
@@ -678,14 +701,15 @@
         title="Live preview of http://localhost:3000"
         lvt-ignore
       ></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer"><button type="button"
-                class="area-overlay pin-btn"
-                lvt-on:click="openAnnotations"
+      <div class="pin-layer" data-pin-layer data-key="pin-layer"><div class="area-overlay"
                 data-id="r1"
                 data-key="pin-r1"
                 style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"
-                title="CTA too faint"
-                aria-label="Open annotation"></button></div>
+                title="CTA too faint"><button type="button"
+                class="pin-btn"
+                lvt-on:click="openAnnotations"
+                data-id="r1"
+                aria-label="Open annotation: CTA too faint"></button></div></div>
       
     </div>
     </div>
@@ -746,6 +770,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>l</kbd></dt><dd>Switch between the files and the live site</dd></div>
+    <div class="kbd-row"><dt><kbd>b</kbd></dt><dd>Show / hide the live site&#39;s annotation boxes</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
     <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>

@@ -37,6 +37,8 @@ type UIPrefs struct {
 	TocCollapsed bool `json:"toc_collapsed"`
 	HideMarks    bool `json:"hide_marks"`
 	FileView     bool `json:"file_view"`
+	// ShowLiveBoxes outlines every saved annotation's box on the live site.
+	ShowLiveBoxes bool `json:"show_live_boxes"`
 	// UnfoldMechanical turns off the walkthrough's mechanical folds (#115 A′3).
 	// Default false: lines a mechanical concern explains fold.
 	UnfoldMechanical bool `json:"unfold_mechanical"`
@@ -149,6 +151,7 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	state.TocCollapsed = p.TocCollapsed
 	state.HideMarks = p.HideMarks
 	state.FileView = p.FileView
+	state.ShowLiveBoxes = p.ShowLiveBoxes
 	state.UnfoldMechanical = p.UnfoldMechanical
 	state.HideWhitespace = p.HideWhitespace
 	state.RawMarkdown = p.RawMarkdown
@@ -177,6 +180,7 @@ func (c *PrereviewController) savePrefs(state PrereviewState) {
 		TocCollapsed:     state.TocCollapsed,
 		HideMarks:        state.HideMarks,
 		FileView:         state.FileView,
+		ShowLiveBoxes:    state.ShowLiveBoxes,
 		UnfoldMechanical: state.UnfoldMechanical,
 		HideWhitespace:   state.HideWhitespace,
 		RawMarkdown:      state.RawMarkdown,

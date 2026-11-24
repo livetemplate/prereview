@@ -178,6 +178,21 @@
           </button>
         </form>
         {{end}}
+        {{- /* Outline every saved annotation's box on the live site; off, each is
+             only its corner marker. Only while the live page has annotations. */ -}}
+        {{if and $.LiveShowing $.RegionComments}}
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleLiveBoxes"
+            class="menu-item{{if .ShowLiveBoxes}} is-on{{end}}"
+            role="menuitem"
+          >
+            <span class="menu-icon">{{if .ShowLiveBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+            <span class="menu-label">Show boxes{{with index $.KeyHint "toggleLiveBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+          </button>
+        </form>
+        {{end}}
         {{/* Show individually-hidden suggestions on this file (hide feature). Only
              when at least one suggestion is hidden. */}}
         {{if gt .HiddenSuggestionCount 0}}

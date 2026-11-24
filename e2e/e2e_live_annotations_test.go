@@ -63,7 +63,7 @@ func TestE2E_LiveAnnotationsList(t *testing.T) {
 			run("back", chromedp.Click(`.all-comments button[name="toggleCommentList"]`, chromedp.ByQuery))
 			waitJSDiag(t, p, `!document.querySelector('.all-comments') && !!document.querySelector('.live-wrap:not(.live-hidden) .pin-layer .area-overlay[data-id="`+id+`"]')`, "the live page with the box", diag)
 			rootHits := app.hitCount("/")
-			run("tap the box", chromedp.Evaluate(`document.querySelector('.pin-layer .area-overlay[data-id="`+id+`"]').click(), true`, nil))
+			run("tap the marker", chromedp.Click(`.pin-layer .area-overlay[data-id="`+id+`"] .pin-btn`, chromedp.ByQuery))
 			waitJSDiag(t, p, `!!document.querySelector('`+card+`.is-target')`, "the box's card, marked as the target", diag)
 
 			// Show on page: the live site, the box focused, the site not reloaded.
@@ -108,5 +108,123 @@ func TestE2E_AllCommentsThreads(t *testing.T) {
 	var filter bool
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`!!document.querySelector('.ac-filter')`, &filter)); err != nil || filter {
 		t.Errorf("with no annotations, the All/Annotations filter should not show (err %v)%s", err, diag())
+	}
+}
+
+// TestE2E_LiveMarkers: a saved live annotation stays out of the way. Its box
+// is invisible and lets taps and drags through to the page; only a small
+// numbered marker at its corner remains. Show boxes (b) outlines every box
+// without making them catch taps, and a new box can be drawn starting inside
+// an existing one, by mouse on desktop and by touch on a phone.
+func TestE2E_LiveMarkers(t *testing.T) {
+	for _, vp := range []struct {
+		name  string
+		w, h  int
+		touch bool
+	}{{"desktop", 1280, 800, false}, {"phone", 390, 844, true}} {
+		t.Run(vp.name, func(t *testing.T) {
+			app := newLiveApp(t)
+			p := bootChromeCombined(t, setupFixtureRepo(t), app.srv.URL, vp.w, vp.h, "--agent")
+			diag := captureDiag(t, p)
+			time.Sleep(3500 * time.Millisecond)
+			pickSurface(t, p, true, diag)
+			drawRegionAt(t, p, "Hero heading is too close to the top", 0.20, 0.20, 0.80, 0.60, false, diag)
+
+			type probe struct {
+				HitsPin       bool
+				BorderClear   bool
+				MarkerW       float64
+				MarkerH       float64
+				BoxesOutlined bool
+			}
+			look := func() probe {
+				t.Helper()
+				var pr probe
+				if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+					const box = document.querySelector('.pin-layer .area-overlay[data-id]');
+					const r = box.getBoundingClientRect();
+					const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+					const m = box.querySelector('.pin-btn').getBoundingClientRect();
+					const cs = getComputedStyle(box);
+					return {
+						HitsPin: !!(hit && hit.closest('.pin-layer')),
+						BorderClear: cs.borderTopColor === 'rgba(0, 0, 0, 0)',
+						MarkerW: m.width, MarkerH: m.height,
+						BoxesOutlined: !!document.querySelector('.ext-stage.show-boxes'),
+					};
+				})()`, &pr)); err != nil {
+					t.Fatalf("probe the saved box: %v%s", err, diag())
+				}
+				return pr
+			}
+
+			got := look()
+			if got.HitsPin {
+				t.Errorf("a tap at the box's centre lands on the annotation, not the page%s", diag())
+			}
+			if !got.BorderClear {
+				t.Errorf("the saved box is drawn with Show boxes off%s", diag())
+			}
+			if got.MarkerH > 28 || got.MarkerW > 40 {
+				t.Errorf("marker is %vx%v px, want at most 40x28", got.MarkerW, got.MarkerH)
+			}
+
+			// Show boxes (b): outlined, still not catching taps; b again hides them.
+			if err := chromedp.Run(p.ctx, chromedp.KeyEvent("b")); err != nil {
+				t.Fatalf("press b: %v", err)
+			}
+			waitJSDiag(t, p, `!!document.querySelector('.ext-stage.show-boxes')`, "Show boxes on", diag)
+			if got := look(); got.BorderClear || got.HitsPin {
+				t.Errorf("with Show boxes on, want an outline that lets taps through; got outline=%v hitsPin=%v%s", !got.BorderClear, got.HitsPin, diag())
+			}
+			if err := chromedp.Run(p.ctx, chromedp.KeyEvent("b")); err != nil {
+				t.Fatalf("press b again: %v", err)
+			}
+			waitJSDiag(t, p, `!document.querySelector('.ext-stage.show-boxes')`, "Show boxes off", diag)
+
+			// The marker's label stays readable on its colour: open, then worked on
+			// in dark mode in every scheme (the accent and its inverse vary).
+			markerContrast := func(label string) {
+				t.Helper()
+				var ratio float64
+				if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(() => {
+					const lum = c => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+					const cs = getComputedStyle(document.querySelector('.pin-layer .pin-btn'));
+					const a = lum(cs.color), b = lum(cs.backgroundColor);
+					return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+				})()`, &ratio)); err != nil {
+					t.Fatalf("marker contrast (%s): %v", label, err)
+				}
+				if ratio < 3 {
+					t.Errorf("%s marker label contrast %.2f:1, want at least 3:1", label, ratio)
+				}
+			}
+			markerContrast("open")
+			var id string
+			if err := chromedp.Run(p.ctx, chromedp.AttributeValue(`.pin-layer .area-overlay[data-id]`, "data-id", &id, nil, chromedp.ByQuery)); err != nil {
+				t.Fatalf("read the id: %v", err)
+			}
+			mustCLI(t, p, "done", "--out", p.store, id)
+			waitJSDiag(t, p, `!!document.querySelector('.pin-layer .area-overlay.is-acted')`, "the marker shows worked on", diag)
+			for i := 0; i < 2; i++ { // System → Light → Dark
+				if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="cycleTheme"]').click(), true`, nil)); err != nil {
+					t.Fatalf("cycle theme: %v", err)
+				}
+				time.Sleep(400 * time.Millisecond)
+			}
+			for i := 0; i < 3; i++ {
+				var scheme string
+				_ = chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('.theme-root').dataset.scheme + '/' + document.querySelector('.theme-root').dataset.mode`, &scheme))
+				markerContrast("worked-on " + scheme)
+				if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="cycleScheme"]').click(), true`, nil)); err != nil {
+					t.Fatalf("cycle scheme: %v", err)
+				}
+				time.Sleep(400 * time.Millisecond)
+			}
+
+			// Overlap: a box drawn starting inside the saved one.
+			drawRegionAt(t, p, "This word inside the first box", 0.40, 0.35, 0.60, 0.45, vp.touch, diag)
+			waitJSDiag(t, p, `document.querySelectorAll('.pin-layer .area-overlay[data-id]').length === 2`, "two annotations", diag)
+		})
 	}
 }
