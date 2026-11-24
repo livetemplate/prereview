@@ -549,6 +549,7 @@
 </div>
 
 
+<div class="banner-slot" data-key="banners">
 
 
 
@@ -573,16 +574,17 @@
   fill="none"
 /></svg></button>
   </form>
-</div>
+</div></div>
 
 
 <div
   class="drawer-backdrop"
+  data-key="drawer-backdrop"
   lvt-on:click="closeFiles"
   aria-label="Close file list"
 ></div>
 
-<div class="layout">
+<div class="layout" data-key="layout">
 <dialog
   id="files-drawer"
   open

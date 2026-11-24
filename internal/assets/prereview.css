@@ -737,6 +737,9 @@ body { padding: 0; display: flex; flex-direction: column; height: 100dvh; font-f
    no box, so there is no such context and the horizontal axis
    behaves exactly as it did before this rule existed. */
 body > [data-lvt-id] { display: contents; }
+/* The banners' wrapper (page.tmpl) is boxless, so each banner stays a flex
+   child of <body> as it was before the wrapper. */
+.banner-slot { display: contents; }
 /* .theme-root carries data-scheme/data-mode and re-skins the UI by setting the
    semantic + --pico-* tokens (see the [data-scheme] block above). It is
    display:contents — no box — for the same reason the data-lvt-id wrapper is
