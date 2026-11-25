@@ -24,7 +24,7 @@
       {{- /* One marker per commented block, showing its count: an invisible box
              the preview-bridge directive places over the block (from the rects
              the preview posts), with the marker at its corner. Tapping it
-             scrolls the block's cards below into view and shows the boxes its
+             opens the block's card (previewCard) and shows the boxes its
              comments were drawn with, each in its annotation colour; the
              block itself is outlined only for a comment with no box. The
              drawn boxes are placed by percentage: the layer covers the
@@ -70,12 +70,12 @@
                does the markers, and opens under the marker. */ -}}
         {{- with $.PreviewCard -}}
         {{- if .Box -}}
-        {{template "previewCard" .}}
+        {{template "previewCard" $}}
         {{- else -}}
-        <div class="area-overlay preview-card-anchor"
+        <div class="preview-card-anchor"
                 data-key="preview-card-anchor"
                 data-from="{{.Block.StartLine}}"
-                data-to="{{.Block.EndLine}}">{{template "previewCard" .}}</div>
+                data-to="{{.Block.EndLine}}">{{template "previewCard" $}}</div>
         {{- end -}}
         {{- end -}}
       </div>{{end}}
@@ -90,10 +90,11 @@
     </div>
   </div>{{end}}{{end}}
 
-{{/* previewCard is the card PreviewCard describes; `.` is the PreviewCardView. */}}
-{{define "previewCard"}}<div class="preview-card{{if .Box}} on-box{{if .Right}} is-right{{end}}{{end}}"
+{{/* previewCard is the card PreviewCard describes. The × (no composer open)
+     sits in its own row, above the positioned comment cards. */}}
+{{define "previewCard"}}{{with $.PreviewCard}}<div class="preview-card{{if .Box}} on-box{{if .Right}} is-right{{end}}{{end}}"
           data-key="preview-card-{{.Block.StartLine}}-{{.Block.EndLine}}"
           {{- with .Box}} style="--card-top:{{.PercentBottom}};--card-left:{{.PercentX}};--card-right:{{.PercentRight}};"{{end}}>
-            {{- if eq $.SelectionEndMax 0}}<button type="button" class="preview-card-close" lvt-on:click="closePreviewCard" title="Close" aria-label="Close">&times;</button>{{end -}}
+            {{- if eq $.SelectionEndMax 0}}<div class="preview-card-head"><button type="button" class="outline close-btn" lvt-on:click="closePreviewCard" aria-label="Close">{{template "iconClose16"}}</button></div>{{end -}}
             {{template "blockComments" .Block}}{{template "blockSuggestions" .Block}}
-          </div>{{end}}
+          </div>{{end}}{{end}}

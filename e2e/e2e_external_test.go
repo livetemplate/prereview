@@ -359,25 +359,6 @@ func drawRegion(t *testing.T, p *runningPrereview, body string, diag func() stri
 // saved pin than before.
 func drawRegionAt(t *testing.T, p *runningPrereview, body string, fx1, fy1, fx2, fy2 float64, touch bool, diag func() string) {
 	t.Helper()
-	before := openRegionComposer(t, p, fx1, fy1, fx2, fy2, touch, diag)
-
-	// Type + save → persists and re-pins on the page. Wait for a pin carrying
-	// its comment id: a pin can paint before data-id is filled in, and callers
-	// read that id next.
-	if err := chromedp.Run(p.ctx,
-		chromedp.SendKeys(`.ext-composer textarea`, body, chromedp.ByQuery),
-		chromedp.Click(`.ext-composer button[name="addComment"]`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("save region comment: %v%s", err, diag())
-	}
-	waitJSDiag(t, p, fmt.Sprintf(`document.querySelectorAll('.pin-layer .area-overlay[data-id]:not([data-id=""])').length > %d`, before), "the new annotation's pin", diag)
-}
-
-// openRegionComposer arms Annotate, drags a box (corners as fractions of the
-// page overlay) and waits for the region composer. It returns how many pins
-// were saved before the drag.
-func openRegionComposer(t *testing.T, p *runningPrereview, fx1, fy1, fx2, fy2 float64, touch bool, diag func() string) int {
-	t.Helper()
 	// Arm the toggle → the page-surface region overlay appears.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
@@ -421,5 +402,15 @@ func openRegionComposer(t *testing.T, p *runningPrereview, fx1, fy1, fx2, fy2 fl
 	if err := chromedp.Run(p.ctx, append(drag, chromedp.WaitVisible(`.ext-composer textarea`, chromedp.ByQuery))...); err != nil {
 		t.Fatalf("region drag + composer: %v%s", err, diag())
 	}
-	return before
+
+	// Type + save → persists and re-pins on the page. Wait for a pin carrying
+	// its comment id: a pin can paint before data-id is filled in, and callers
+	// read that id next.
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`.ext-composer textarea`, body, chromedp.ByQuery),
+		chromedp.Click(`.ext-composer button[name="addComment"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("save region comment: %v%s", err, diag())
+	}
+	waitJSDiag(t, p, fmt.Sprintf(`document.querySelectorAll('.pin-layer .area-overlay[data-id]:not([data-id=""])').length > %d`, before), "the new annotation's pin", diag)
 }

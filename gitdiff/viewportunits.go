@@ -31,7 +31,7 @@ var viewportUnitRe = regexp.MustCompile(`(?i)(^|[^\w.#-])(-?(?:\d+(?:\.\d+)?|\.\
 // (a <style> body or a style attribute) to a fixed basis. It never adds or
 // removes a newline, so the preview's source line ranges stay put.
 func rewriteViewportUnits(css string) string {
-	if !strings.Contains(strings.ToLower(css), "v") {
+	if !strings.ContainsAny(css, "vV") {
 		return css
 	}
 	return viewportUnitRe.ReplaceAllStringFunc(css, func(m string) string {

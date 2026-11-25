@@ -2283,10 +2283,9 @@ header.file-head .file-head-comment button svg { display: block; }
    composer, floating over the page. Under a box (.on-box) it is placed by
    percentage of the preview, like the boxes, and spans the preview on a
    phone. Otherwise it opens under the block's marker, inside an invisible
-   anchor that lvt-fx:preview-bridge places over the block (as .area-overlay,
-   which it then strips of the overlay's border and fill). Only the card takes
-   taps. */
-.preview-pins .preview-card-anchor { border: 0; background: none; box-shadow: none; pointer-events: none; z-index: 5; }
+   anchor that lvt-fx:preview-bridge places over the block (any [data-from]
+   in the layer). Only the card takes taps. */
+.preview-pins .preview-card-anchor { position: absolute; pointer-events: none; z-index: 5; }
 .preview-card {
   position: absolute; top: 30px; left: 0; z-index: 5;
   width: min(26rem, calc(100vw - 2rem)); max-height: 60vh; overflow-y: auto;
@@ -2299,18 +2298,10 @@ header.file-head .file-head-comment button svg { display: block; }
 @media (max-width: 640px) {
   .preview-card.on-box, .preview-card.on-box.is-right { left: 0; right: 0; width: auto; }
 }
+.preview-card-head { display: flex; justify-content: flex-end; margin-bottom: 0.2rem; }
+.preview-card-head .close-btn { width: auto; margin: 0; padding: 0.2rem 0.4rem; }
 .preview-card .composer { position: static; margin: 0.3rem 0 0; box-shadow: none; }
 .preview-card .inline-comment:first-of-type { margin-top: 0; }
-/* The × sits in its own strip above the comments: they are positioned, so a
-   floated button would paint under them and lose its taps. */
-.preview-card:has(> .preview-card-close) { padding-top: 34px; }
-.preview-card-close {
-  position: absolute; top: 4px; right: 4px; z-index: 1;
-  width: 28px; height: 28px; padding: 0; margin: 0;
-  border: 0; border-radius: 6px; background: none; color: var(--pico-muted-color);
-  font-size: 1.2rem; line-height: 1; cursor: pointer;
-}
-.preview-card-close:hover { background: var(--pico-muted-border-color); }
 /* Sticky top bar (var(--pr-bar-h)) would otherwise obscure the anchored
    heading when the browser jumps to "#id". scroll-padding-top reserves
    that gap so the heading lands just below the bar. Smooth scroll is

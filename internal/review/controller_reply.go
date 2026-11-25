@@ -27,9 +27,14 @@ func (c *PrereviewController) SaveReplyDraft(state PrereviewState, ctx *livetemp
 
 // CancelReply closes the reply form without posting.
 func (c *PrereviewController) CancelReply(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	closeReply(&state)
+	return state, nil
+}
+
+// closeReply closes the open reply form and drops its draft.
+func closeReply(state *PrereviewState) {
 	state.ReplyingID = ""
 	state.ReplyDraft = ""
-	return state, nil
 }
 
 // PostReply records the reviewer's reply on a comment/suggestion (#149): appends a

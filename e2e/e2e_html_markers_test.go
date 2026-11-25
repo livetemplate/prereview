@@ -26,15 +26,7 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 		w, h int
 	}{{"desktop", 1200, 800}, {"phone", 390, 844}} {
 		t.Run(vp.name, func(t *testing.T) {
-			p := bootChromeAgainstRepo(t, setupFixtureHTMLRegionRepo(t), vp.w, vp.h, "--agent")
-			// Bound the browser work so a stuck step fails with the diag dump.
-			ctx, cancel := within(p, 90*time.Second)
-			t.Cleanup(cancel)
-			p.ctx = ctx
-			p.waitReadyAt(vp.w, vp.h)
-			diag := captureDiag(t, p)
-			p.clickFile("region.html")
-			waitPreviewBridgeReady(t, p)
+			p, diag := bootHTMLPreview(t, setupFixtureHTMLRegionRepo(t), vp.w, vp.h)
 
 			// Three comments on the top section (line 4, the first 240px), on
 			// different parts of it; the second overlaps the first.

@@ -45,14 +45,7 @@ func TestE2E_HTMLPreviewViewportUnits(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			p := bootChromeAgainstRepo(t, setupFixtureHTMLRegionRepoBody(t, tc.body), 1200, 800, "--agent")
-			ctx, cancel := within(p, 90*time.Second)
-			t.Cleanup(cancel)
-			p.ctx = ctx
-			p.waitReadyAt(1200, 800)
-			diag := captureDiag(t, p)
-			p.clickFile("region.html")
-			waitPreviewBridgeReady(t, p)
+			p, diag := bootHTMLPreview(t, setupFixtureHTMLRegionRepoBody(t, tc.body), 1200, 800)
 
 			// Past the beacon's last start-up post (3s), then two samples 1s apart.
 			frameH := func() float64 {

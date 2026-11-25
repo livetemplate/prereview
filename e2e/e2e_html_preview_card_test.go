@@ -4,14 +4,14 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
 )
 
 // TestE2E_HTMLPreviewCard: an HTML preview's comments open in a card over the
 // page, by the box they belong to, instead of in a list under the preview.
-//   - Drawing a box opens the card under it, with the comment box.
+//   - Drawing a box opens the card under it, with the comment box on screen
+//     (it once opened in a list under the page-tall preview, out of sight).
 //   - Saving closes it and leaves a marker.
 //   - Tapping the marker opens the card under the drawn box, with the thread
 //     and Reply; × closes it.
@@ -22,14 +22,7 @@ func TestE2E_HTMLPreviewCard(t *testing.T) {
 		w, h int
 	}{{"desktop", 1200, 800}, {"phone", 390, 844}} {
 		t.Run(vp.name, func(t *testing.T) {
-			p := bootChromeAgainstRepo(t, setupFixtureHTMLRegionRepo(t), vp.w, vp.h, "--agent")
-			ctx, cancel := within(p, 90*time.Second)
-			t.Cleanup(cancel)
-			p.ctx = ctx
-			p.waitReadyAt(vp.w, vp.h)
-			diag := captureDiag(t, p)
-			p.clickFile("region.html")
-			waitPreviewBridgeReady(t, p)
+			p, diag := bootHTMLPreview(t, setupFixtureHTMLRegionRepo(t), vp.w, vp.h)
 
 			// cardUnder: the card starts on screen, just under the box (pending
 			// or the drawn one), and fits the screen's width.
@@ -43,6 +36,7 @@ func TestE2E_HTMLPreviewCard(t *testing.T) {
 			openHTMLComposer(t, p, previewBox{0.1, 12, 0.6, 90}, "the composer", diag)
 			waitJSDiag(t, p, `!!document.querySelector('.preview-card .composer textarea') && !document.querySelector('.html-block')`, "the composer in the card, and no list under the preview", diag)
 			waitJSDiag(t, p, cardUnder(`.preview-pins .area-overlay-pending`), "the card under the box being drawn", diag)
+			waitJSDiag(t, p, `(() => { const r = document.querySelector('.preview-card .composer').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()`, "the whole composer on screen", diag)
 
 			if err := chromedp.Run(p.ctx,
 				chromedp.SendKeys(`.preview-card .composer textarea`, "Make the heading bigger", chromedp.ByQuery),
@@ -57,7 +51,7 @@ func TestE2E_HTMLPreviewCard(t *testing.T) {
 			waitJSDiag(t, p, `(() => { const c = document.querySelector('.preview-card'); return !!c && c.textContent.includes('Make the heading bigger') && !!c.querySelector('button[name="openReply"]'); })()`, "the card with the comment and Reply", diag)
 			waitJSDiag(t, p, cardUnder(`.preview-pins .drawn-box.is-shown`), "the card under the drawn box", diag)
 
-			tapCentred(t, p, `.preview-card-close`, "close the card", diag)
+			tapCentred(t, p, `.preview-card .close-btn`, "close the card", diag)
 			waitJSDiag(t, p, `!document.querySelector('.preview-card')`, "× closes the card", diag)
 
 			if err := chromedp.Run(p.ctx, chromedp.KeyEvent("a")); err != nil {
