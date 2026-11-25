@@ -26,15 +26,7 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 		w, h int
 	}{{"desktop", 1200, 800}, {"phone", 390, 844}} {
 		t.Run(vp.name, func(t *testing.T) {
-			p := bootChromeAgainstRepo(t, setupFixtureHTMLRegionRepo(t), vp.w, vp.h, "--agent")
-			// Bound the browser work so a stuck step fails with the diag dump.
-			ctx, cancel := within(p, 90*time.Second)
-			t.Cleanup(cancel)
-			p.ctx = ctx
-			p.waitReadyAt(vp.w, vp.h)
-			diag := captureDiag(t, p)
-			p.clickFile("region.html")
-			waitPreviewBridgeReady(t, p)
+			p, diag := bootHTMLPreview(t, setupFixtureHTMLRegionRepo(t), vp.w, vp.h)
 
 			// Three comments on the top section (line 4, the first 240px), on
 			// different parts of it; the second overlaps the first.
@@ -82,11 +74,11 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			}
 			waitJSDiag(t, p, `!!document.querySelector('`+box+`.is-acted')`, "the marker ticks once both are worked on", diag)
 
-			// Tap: the box is outlined and the block's cards scroll into view.
+			// Tap: the boxes show, and the block's card opens under them.
 			// Centre the marker first: scrolled just into view it sits under the
 			// sticky file header, which would take the click.
 			tapCentred(t, p, box+` .pin-btn`, "tap the marker", diag)
-			waitJSDiag(t, p, `document.querySelectorAll('.preview-pins .drawn-box.is-shown').length === 3 && (() => { const r = document.querySelector('.html-block[data-key="HB-4-4"]').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the three boxes shown and the cards in view", diag)
+			waitJSDiag(t, p, `document.querySelectorAll('.preview-pins .drawn-box.is-shown').length === 3 && (() => { const c = document.querySelector('.preview-card'); if (!c) return false; const r = c.getBoundingClientRect(); return c.querySelectorAll('.inline-comment').length === 3 && r.top < innerHeight && r.bottom > 0; })()`, "the three boxes shown and the card with their comments", diag)
 			checkDrawnBoxes(t, p, drawn, diag)
 			if w := evalInt(t, p, `parseInt(getComputedStyle(document.querySelector('`+box+`')).borderTopWidth)`); w != 0 {
 				t.Errorf("the block is outlined (%dpx) although every comment on it has its own box%s", w, diag())
@@ -136,6 +128,20 @@ type previewBox struct{ X1, Y1, X2, Y2 float64 }
 // a comment with body.
 func drawHTMLRegionAt(t *testing.T, p *runningPrereview, body string, box previewBox, diag func() string) {
 	t.Helper()
+	openHTMLComposer(t, p, box, "the composer for "+body, diag)
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
+		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("save %q: %v%s", body, err, diag())
+	}
+	waitJSDiag(t, p, `!document.querySelector('.composer textarea')`, "the composer closes after saving", diag)
+}
+
+// openHTMLComposer arms Annotate on an HTML file's preview, drags box and waits
+// for the composer.
+func openHTMLComposer(t *testing.T, p *runningPrereview, box previewBox, what string, diag func() string) {
+	t.Helper()
 	var ir struct{ Left, Top, Width, Height float64 }
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
@@ -161,14 +167,7 @@ func drawHTMLRegionAt(t *testing.T, p *runningPrereview, body string, box previe
 	}
 	// Poll a fresh query: a re-render can replace the textarea right after the
 	// drag, and WaitVisible would keep polling the detached node.
-	waitJSDiag(t, p, `(() => { const ta = document.querySelector('.composer textarea'); return !!ta && ta.offsetParent !== null; })()`, "the composer for "+body, diag)
-	if err := chromedp.Run(p.ctx,
-		chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
-		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("save %q: %v%s", body, err, diag())
-	}
-	waitJSDiag(t, p, `!document.querySelector('.composer textarea')`, "the composer closes after saving", diag)
+	waitJSDiag(t, p, `(() => { const ta = document.querySelector('.composer textarea'); return !!ta && ta.offsetParent !== null; })()`, what, diag)
 }
 
 // annColourJS defines colour(el): the annotation colour class (ann-cN) an
@@ -193,7 +192,7 @@ func checkDrawnBoxes(t *testing.T, p *runningPrereview, want []previewBox, diag 
 		const f = document.querySelector('iframe.html-preview').getBoundingClientRect();
 		`+annColourJS+`
 		const cards = {};
-		for (const c of document.querySelectorAll('.html-block .inline-comment')) cards[c.dataset.key] = colour(c);
+		for (const c of document.querySelectorAll('.preview-card .inline-comment')) cards[c.dataset.key] = colour(c);
 		return {
 			Frame: { Left: f.left, Top: f.top, Width: f.width },
 			Boxes: [...document.querySelectorAll('.preview-pins .drawn-box')].map(b => {
@@ -263,7 +262,7 @@ func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, diag f
 	}
 	tapCentred(t, p, firstBox, "tap the first box", diag)
 	waitJSDiag(t, p, onTop+` === '`+first+`' && !!document.querySelector('`+firstBox+`.is-front')`, "the tapped box comes to the front", diag)
-	card := `.html-block .inline-comment[data-key="` + first + `"]`
+	card := `.preview-card .inline-comment[data-key="` + first + `"]`
 
 	tap(bar+` .anno-act[aria-label="Resolve"]`, "resolve from the bar")
 	waitJSDiag(t, p, `!!document.querySelector('`+card+`.is-resolved') && !!document.querySelector('`+bar+` .anno-act[aria-label="Reopen"]')`, "resolved, and the bar offers Reopen", diag)

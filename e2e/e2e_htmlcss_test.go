@@ -65,6 +65,22 @@ func setupFixtureCSSRepo(t *testing.T) string {
 // the bridge (the in-iframe beacon posted its height → parent set style.height).
 // A positive style.height proves the postMessage round-trip completed, so the
 // document has laid out and the screenshot will be meaningful.
+// bootHTMLPreview boots prereview on repo at w×h with --agent, bounds the
+// browser work to 90s so a stuck step fails with the diag dump, opens
+// region.html and waits for the preview bridge to size it.
+func bootHTMLPreview(t *testing.T, repo string, w, h int) (*runningPrereview, func() string) {
+	t.Helper()
+	p := bootChromeAgainstRepo(t, repo, w, h, "--agent")
+	ctx, cancel := within(p, 90*time.Second)
+	t.Cleanup(cancel)
+	p.ctx = ctx
+	p.waitReadyAt(w, h)
+	diag := captureDiag(t, p)
+	p.clickFile("region.html")
+	waitPreviewBridgeReady(t, p)
+	return p, diag
+}
+
 func waitPreviewBridgeReady(t *testing.T, p *runningPrereview) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(p.ctx, 12*time.Second)

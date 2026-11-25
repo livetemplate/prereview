@@ -420,8 +420,9 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
   const applyHeight = () => {
     if (lastHeight > 0) iframe.style.height = `${lastHeight}px`;
   };
-  // placeMarkers puts each commented block's box (the stage's
-  // `.preview-pins .area-overlay[data-from]`) over the posted rect with the same
+  // placeMarkers puts each element of the stage's `.preview-pins` that names a
+  // block (`[data-from]`: a commented block's marker box, or the open card's
+  // anchor) over the posted rect with the same
   // source range — the outermost one when a wrapper shares its child's range.
   // The preview has no scroll of its own (it is auto-heighted), so the posted
   // viewport rects are its document rects; the iframe's offset places them in
@@ -441,7 +442,7 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
     // style write would force a layout per marker.
     const ox = iframe.offsetLeft;
     const oy = iframe.offsetTop;
-    for (const box of layer.querySelectorAll<HTMLElement>(".area-overlay[data-from]")) {
+    for (const box of layer.querySelectorAll<HTMLElement>("[data-from]")) {
       const best = byRange.get(`${box.dataset.from}-${box.dataset.to}`);
       if (!best) {
         box.style.visibility = "hidden";

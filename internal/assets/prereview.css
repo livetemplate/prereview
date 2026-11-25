@@ -2274,16 +2274,34 @@ header.file-head .file-head-comment button svg { display: block; }
    not pool entirely in the gutters. Focus mode goes wider still (below). */
 .md-view { padding: 0.6rem 1.8rem 2rem; max-width: 60rem; margin-inline: auto; }
 /* HTML preview: the whole file renders in one sandboxed iframe (full
-   document fidelity), with the comments list stacked below it. The
-   client auto-heights .html-preview from its content; the fallback
-   min-height avoids a zero-height flash before the directive runs.
-   .html-block now wraps only a block's comments + composer; .selected
-   marks the block being commented on (the visual highlight lives inside
-   the iframe). */
+   document fidelity). The client auto-heights .html-preview from its
+   content; the fallback min-height avoids a zero-height flash before the
+   directive runs. Comments open in a card over it (.preview-card). */
 .html-view { padding: 0.6rem 1.8rem 2rem; max-width: 56rem; margin-inline: auto; }
 .html-preview { display: block; width: 100%; border: 0; min-height: 60vh; background: #fff; color-scheme: light; }
-.html-block { position: relative; border-radius: 6px; }
-.html-block.selected { outline: 2px solid var(--primary, currentColor); outline-offset: 4px; }
+/* The preview's card (PreviewCard): one block's comments, suggestions and
+   composer, floating over the page. Under a box (.on-box) it is placed by
+   percentage of the preview, like the boxes, and spans the preview on a
+   phone. Otherwise it opens under the block's marker, inside an invisible
+   anchor that lvt-fx:preview-bridge places over the block (any [data-from]
+   in the layer). Only the card takes taps. */
+.preview-pins .preview-card-anchor { position: absolute; pointer-events: none; z-index: 5; }
+.preview-card {
+  position: absolute; top: 30px; left: 0; z-index: 5;
+  width: min(26rem, calc(100vw - 2rem)); max-height: 60vh; overflow-y: auto;
+  padding: 0.4rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  background: var(--surface-card); box-shadow: var(--shadow-md);
+  pointer-events: auto; visibility: visible; color: var(--pico-color);
+}
+.preview-card.on-box { top: calc(var(--card-top) + 6px); left: var(--card-left); }
+.preview-card.on-box.is-right { left: auto; right: var(--card-right); }
+@media (max-width: 640px) {
+  .preview-card.on-box, .preview-card.on-box.is-right { left: 0; right: 0; width: auto; }
+}
+.preview-card-head { display: flex; justify-content: flex-end; margin-bottom: 0.2rem; }
+.preview-card-head .close-btn { width: auto; margin: 0; padding: 0.2rem 0.4rem; }
+.preview-card .composer { position: static; margin: 0.3rem 0 0; box-shadow: none; }
+.preview-card .inline-comment:first-of-type { margin-top: 0; }
 /* Sticky top bar (var(--pr-bar-h)) would otherwise obscure the anchored
    heading when the browser jumps to "#id". scroll-padding-top reserves
    that gap so the heading lands just below the bar. Smooth scroll is

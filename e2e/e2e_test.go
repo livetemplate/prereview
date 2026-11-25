@@ -4669,9 +4669,12 @@ func checkHTMLRegionSelect(t *testing.T, repo string, wantFrom, wantTo int) {
 	waitPreviewBridgeReady(t, p)
 
 	drawHTMLRegion(t, p, "comment from a drawn region", diag)
-	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.inline-comment .body`, chromedp.ByQuery)); err != nil {
-		t.Fatalf("the comment renders inline: %v%s", err, diag())
-	}
+	// Saving closes the card and leaves a marker; tapping it opens the card
+	// with the comment.
+	marker := `.preview-pins .area-overlay[data-id] .pin-btn`
+	waitJSDiag(t, p, `(() => { const b = document.querySelector('`+marker+`'); return !!b && getComputedStyle(b.parentElement).visibility === 'visible'; })()`, "the new comment's marker", diag)
+	tapCentred(t, p, marker, "tap the marker", diag)
+	waitJSDiag(t, p, `[...document.querySelectorAll('.preview-card .inline-comment .body')].some(b => b.textContent.includes('comment from a drawn region'))`, "the card with the comment", diag)
 
 	// CSV: a line-anchored row (NOT kind=area) whose range overlaps the
 	// block we dragged over — proving the box resolved to source lines.

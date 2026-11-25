@@ -36,8 +36,8 @@ func (c *PrereviewController) OpenAnnotations(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
-// FocusHTMLBlock answers a tap on an HTML preview marker: the block's cards
-// under the preview scroll into view and its comments' boxes show.
+// FocusHTMLBlock answers a tap on an HTML preview marker: the block's card
+// opens (PreviewCard) and its comments' boxes show.
 func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	id := ctx.GetString("id")
 	state.HiddenBoxes = nil // opening or closing a marker shows all its boxes next time
@@ -48,6 +48,16 @@ func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemp
 	}
 	clearScrollTargets(&state)
 	state.FocusedHTMLBlock = id
+	return state, nil
+}
+
+// ClosePreviewCard answers the × on the HTML preview's card (PreviewCard): it
+// clears everything that keeps a card open, short of a composer, which closes
+// with its own Cancel.
+func (c *PrereviewController) ClosePreviewCard(state PrereviewState, _ *livetemplate.Context) (PrereviewState, error) {
+	state.HiddenBoxes = nil
+	closeReply(&state)
+	clearScrollTargets(&state) // clears FocusedHTMLBlock too
 	return state, nil
 }
 
@@ -467,7 +477,7 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 	if err != nil {
 		return state, err
 	}
-	state.ScrollToCommentID = id
+	state.scrollToComment(id, state.Comments[idx].ToLine)
 	return state, nil
 }
 
@@ -484,7 +494,7 @@ func (c *PrereviewController) JumpToSuggestion(state PrereviewState, ctx *livete
 	}
 	state, err := c.selectFileForJump(state, sg.File)
 	if err == nil {
-		state.ScrollToItemKey = "sg:" + id
+		state.scrollToSuggestion(id, sg.ToLine)
 	}
 	return state, err
 }

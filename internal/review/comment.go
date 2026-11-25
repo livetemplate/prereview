@@ -64,6 +64,11 @@ func (a Area) PercentY() string { return fmt.Sprintf("%.4f%%", a.Y*100) }
 func (a Area) PercentW() string { return fmt.Sprintf("%.4f%%", a.W*100) }
 func (a Area) PercentH() string { return fmt.Sprintf("%.4f%%", a.H*100) }
 
+// PercentBottom is how far down the area's bottom edge is, and PercentRight
+// how far in from the right its right edge is: where a card opens under it.
+func (a Area) PercentBottom() string { return fmt.Sprintf("%.4f%%", (a.Y+a.H)*100) }
+func (a Area) PercentRight() string  { return fmt.Sprintf("%.4f%%", (1-a.X-a.W)*100) }
+
 // Comment is one row in the CSV output (and one entry in state).
 type Comment struct {
 	ID       string `json:"id"`
