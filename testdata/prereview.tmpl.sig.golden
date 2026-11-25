@@ -348,7 +348,7 @@
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
           <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
-      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{with index $.HiddenSuggestionLines $rowkey}}{{template "hiddenMarker" .}}{{end}}{{range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end}}{{range (index $.FindingsByRow $rowkey)}}{{template "findingCard" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
+      </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{with index $.HiddenSuggestionLines $rowkey}}{{template "hiddenMarker" .}}{{end}}{{range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end}}{{range (index $.QuestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "questionCard" .}}{{end}}{{end}}{{range (index $.FindingsByRow $rowkey)}}{{template "findingCard" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
 {{end}}{{end}}<div class="code-sentinel" aria-hidden="true"></div></div>{{end}}
 === endSessionDialog ===
 <dialog id="confirm-end-session"><article><header><strong>End session?</strong></header><p><small>Your agent stops watching and prereview stops. <strong>Approve and end</strong> tells your agent the plan or change is approved; <strong>End session</strong> makes it ask you. This can't be undone.</small></p>{{if .AwaitingApplyCount}}
@@ -1130,7 +1130,7 @@
     </div>
     {{end}}
     <div class="file-head-cards">
-      {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}
+      {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}{{range $.FileQuestionCards}}{{template "questionCard" .}}{{end}}
   
   {{if or $fcs $acs (eq $.CommentMode "area")}}
   <section class="file-comments" data-key="file-comments-{{.Path}}">
@@ -1326,11 +1326,46 @@
 
 
 
+
+
+
 === previewCard ===
 {{with $.PreviewCard}}<div class="preview-card{{if .Box}} on-box{{if .Right}} is-right{{end}}{{end}}" data-key="preview-card-{{.Block.StartLine}}-{{.Block.EndLine}}"{{with .Box}} style="--card-top:{{.PercentBottom}};--card-left:{{.PercentX}};--card-right:{{.PercentRight}};"{{end}}>{{if eq $.SelectionEndMax 0}}<div class="preview-card-head"><button type="button" class="outline close-btn" lvt-on:click="closePreviewCard" aria-label="Close">{{template "iconClose16"}}</button></div>{{end}}{{template "blockComments" .Block}}{{template "blockSuggestions" .Block}}
           </div>{{end}}
 === processedBadge ===
 <small class="processed-badge">worked on</small>
+=== questionCard ===
+{{$card := .}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}">
+  <div class="question-head"><span class="question-who">Agent asks</span><span class="question-chip{{if .Sent}} is-answered{{end}}">{{if .Sent}}Answered{{else}}{{if gt .StepCount 1}}{{.StepCount}} questions{{else}}Question{{end}}{{end}}</span><span class="question-where">{{.AnchorLabel}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>{{if .Sent}}
+  <div class="question-answer">You picked <b>{{.Answer}}</b>{{if not .Done}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="changeQuestionAnswers" class="question-link">Change</button></form>{{end}}</div>{{else}}{{if .Reviewing}}
+  <p class="question-prompt">Your answers</p>
+  <div class="question-summary">{{range .Summary}}
+    <div class="question-summary-row"><span class="question-summary-label">{{.Label}}</span><span class="question-summary-answer">{{.Answer}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{$card.ID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="questionStepTo" class="question-link">Change</button></form></span></div>{{end}}
+  </div>
+  <div class="question-actions"><form method="POST"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="sendQuestionAnswers" class="question-send">Send to agent</button></form></div>{{else}}{{if gt .StepCount 1}}
+  <div class="question-steps">{{range .Chips}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{$card.ID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="questionStepTo" class="question-step{{if .Current}} is-current{{end}}{{if .Answered}} is-answered{{end}}"{{if .Current}} aria-current="step"{{end}}>{{if .Answered}}✓ {{end}}{{.Label}}</button></form>{{end}}</div>{{end}}
+  <p class="question-prompt">{{.Step.Prompt}}{{if .Step.Multi}} <small class="question-hint">Pick any.</small>{{end}}</p>
+  <div class="question-options">{{range .Options}}
+    <form method="POST" class="question-option-form"><input type="hidden" name="set" value="{{$card.ID}}"><input type="hidden" name="step" value="{{$card.Step.ID}}"><input type="hidden" name="choice" value="{{.Index}}"><button type="submit" name="pickQuestionOption" class="question-option{{if .Recommended}} is-recommended{{end}}{{if .Picked}} is-picked{{end}}"{{if $card.Step.Multi}} aria-pressed="{{if .Picked}}true{{else}}false{{end}}"{{end}}>{{if $card.Step.Multi}}<span class="question-box" aria-hidden="true"></span>{{end}}<span class="question-option-label">{{.Label}}</span>{{if .Recommended}}<span class="question-rec">Recommended</span>{{end}}{{if .Detail}}<span class="question-option-detail">{{.Detail}}</span>{{end}}</button></form>{{end}}{{if .OtherOpen}}
+    <form method="POST" class="question-other" lvt-on:keydown="answerQuestionOther" lvt-key="Mod+Enter"><input type="hidden" name="set" value="{{.ID}}"><input type="hidden" name="step" value="{{.Step.ID}}"><label class="question-option-label" for="qo-{{.ID}}">Something else</label>
+      <textarea id="qo-{{.ID}}" name="body" required lvt-autofocus placeholder="Your answer">{{.Other}}</textarea>
+      <div class="question-actions"><button type="submit" name="closeQuestionOther" class="secondary outline" formnovalidate>Cancel</button><button type="submit" name="answerQuestionOther" class="question-send">Send</button></div>
+    </form>{{else}}
+    <form method="POST" class="question-option-form"><input type="hidden" name="set" value="{{.ID}}"><input type="hidden" name="step" value="{{.Step.ID}}"><button type="submit" name="openQuestionOther" class="question-option is-other{{if .Other}} is-picked{{end}}"><span class="question-option-label">{{if .Other}}{{.Other}}{{else}}Something else…{{end}}</span></button></form>{{end}}
+  </div>{{if or (gt .StepCount 1) .Step.Multi}}
+  <div class="question-actions"><span class="question-count">{{.StepNum}} of {{.StepCount}}</span>{{if gt .StepIndex 0}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><input type="hidden" name="index" value="{{.PrevIndex}}"><button type="submit" name="questionStepTo" class="secondary outline">Back</button></form>{{end}}{{if .Step.Multi}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><input type="hidden" name="index" value="{{.NextIndex}}"><button type="submit" name="questionStepTo" class="question-send"{{if not .StepAnswered}} disabled{{end}}>{{if .IsLast}}Review{{else}}Next{{end}}</button></form>{{end}}
+  </div>{{end}}{{end}}{{end}}{{template "thread" .Thread}}{{if .Replying}}
+  <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
+    <input type="hidden" name="id" value="{{.ID}}">
+    <textarea name="body" placeholder="Reply to the agent…" lvt-on:input="saveReplyDraft" lvt-mod:debounce="200" lvt-autofocus>{{.ReplyDraft}}</textarea>
+    <div class="reply-actions">
+      <button type="submit" name="cancelReply" class="secondary outline">Cancel</button>
+      <button type="submit" name="postReply">Send reply</button>
+    </div>
+  </form>{{else}}
+  <form method="POST" class="question-card-actions"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}
+</div>
+
 === queuedBadge ===
 <small class="queued-badge" title="queued for the agent">queued</small>
 === quitDialog ===

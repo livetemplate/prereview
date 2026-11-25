@@ -498,6 +498,12 @@ type PrereviewState struct {
 	QuestionAnswers map[string]QuestionAnswer `json:"question_answers"`
 	QuestionsDone   map[string]bool           `json:"questions_done"`
 	QuestionsSeen   string                    `json:"questions_seen"`
+	// QuestionView is the step each set's card shows, by set id (len(steps) is
+	// the Review list), and QuestionOther the step whose "Something else" box is
+	// open. Session-only, like QuizJustAnswered: a reload lands on the first
+	// unanswered step.
+	QuestionView  map[string]int    `json:"question_view"`
+	QuestionOther map[string]string `json:"question_other"`
 
 	// Explanations are the agent's walkthroughs of the change (#115,
 	// .prereview/explain.jsonl), newest last, grounded by applyExplain. Re-read
