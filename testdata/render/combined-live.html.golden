@@ -72,6 +72,10 @@
     lvt-key="l"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="toggleBoxes"
+    lvt-key="b"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleCommentList"
     lvt-key="a"
     lvt-mod:skip-when-typing
@@ -146,8 +150,19 @@
   </form>
   
   <div class="title">
-    <span class="title-main"><span class="title-page">localhost:3000/</span> <small class="live-count">· 1 annotation</small></span>
-  </div>
+    <span class="title-main"><button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+    d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"
+    stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"
+  /></svg>1<span class="live-count-word"> annotation</span></button></span>
+  </div><form method="POST" class="region-toggle">
+  <button
+    type="submit"
+    name="toggleRegionSelect"
+    class="outline secondary"
+    aria-pressed="false"
+    title="Drag a box on the page to comment on that part"
+  ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span class="annotate-word"> Annotate</span></button>
+</form>
   
   <div class="toolbar-inline">
     
@@ -258,6 +273,44 @@
         </form>
         
         
+        
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleMarks"
+            class="menu-item is-on"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span>
+            <span class="menu-label">Hide annotations</span>
+          </button>
+        </form>
+        
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleBoxes"
+            class="menu-item"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+            <span class="menu-label">Show boxes <kbd class="kbd-hint" aria-hidden="true">b</kbd></span>
+          </button>
+        </form>
         
         
         
@@ -481,6 +534,25 @@
   
   
   
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleMarks"
+      class="menu-item is-on"
+      role="menuitem"
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span>
+      <span class="menu-label">Hide annotations</span>
+    </button>
+  </form>
+  
   
   
   
@@ -659,16 +731,9 @@
 
 <main class="viewer"
       lvt-fx:viewport-report="reportViewport"
-      data-lvt-viewport-items=".line, .md-block"><div class="live-wrap" data-key="live-wrap">    <form method="POST" class="region-toggle">
-  <button
-    type="submit"
-    name="toggleRegionSelect"
-    class="outline secondary"
-    aria-pressed="false"
-  >▭ Select a region to comment</button>
-</form>
-    <div class="preview-stage ext-stage"
+      data-lvt-viewport-items=".line, .md-block"><div class="live-wrap" data-key="live-wrap">    <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"
+         data-page="/"
          data-key="ext-stage">
       
       <iframe
@@ -677,14 +742,15 @@
         title="Live preview of http://localhost:3000"
         lvt-ignore
       ></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer"><button type="button"
-                class="area-overlay pin-btn"
-                lvt-on:click="editComment"
+      <div class="pin-layer" data-pin-layer data-key="pin-layer"><div class="area-overlay ann ann-c1"
                 data-id="r1"
                 data-key="pin-r1"
-                style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"
+                style="left:10.0000%;top:20.0000%;width:30.0000%;height:10.0000%;"><button type="button"
+                class="pin-btn"
+                lvt-on:click="openAnnotations"
+                data-id="r1"
                 title="CTA too faint"
-                aria-label="Edit annotation"></button></div>
+                aria-label="Open annotation 1">1</button></div></div>
       
     </div>
     </div>
@@ -745,6 +811,7 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>l</kbd></dt><dd>Switch between the files and the live site</dd></div>
+    <div class="kbd-row"><dt><kbd>b</kbd></dt><dd>Show / hide annotation boxes</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
     <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>

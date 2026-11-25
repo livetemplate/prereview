@@ -124,6 +124,10 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 	if from > to {
 		from, to = to, from
 	}
+	// One anchor for every branch below, with the box drawn on an HTML preview
+	// if this selection came from one (SelectBlock; an edit reloads it).
+	anchor := captureAnchor(state.CurrentDiff, from, to, state.SelectionSide)
+	anchor.Box = state.SelectionArea
 
 	// Re-anchor mode: the user picked a NEW location for an outdated
 	// comment. Re-point it and re-capture its anchor at the chosen
@@ -137,7 +141,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 			state.Comments[idx].FromLine = from
 			state.Comments[idx].ToLine = to
 			state.Comments[idx].Side = state.SelectionSide
-			state.Comments[idx].Anchor = captureAnchor(state.CurrentDiff, from, to, state.SelectionSide)
+			state.Comments[idx].Anchor = anchor
 			state.Comments[idx].AnchorStatus = anchorOK
 			if err := c.persist(state.Comments); err != nil {
 				state.Comments[idx] = prev
@@ -146,6 +150,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 			state.SelectionAnchor = 0
 			state.SelectionEnd = 0
 			state.SelectionSide = ""
+			state.SelectionArea = Area{}
 			state.DraftBody = ""
 			state.ReanchorCommentID = ""
 			state.EditingCommentID = ""
@@ -187,7 +192,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 				state.Comments[idx].Side = state.SelectionSide
 				// Re-capture at the (possibly new) range — else a later
 				// relocate would drag the edited comment back.
-				state.Comments[idx].Anchor = captureAnchor(state.CurrentDiff, from, to, state.SelectionSide)
+				state.Comments[idx].Anchor = anchor
 				state.Comments[idx].AnchorStatus = anchorOK
 			}
 			rollback = func() { state.Comments[idx] = prev }
@@ -202,7 +207,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 			Side:         state.SelectionSide,
 			Body:         body,
 			Created:      time.Now().UTC(),
-			Anchor:       captureAnchor(state.CurrentDiff, from, to, state.SelectionSide),
+			Anchor:       anchor,
 			AnchorStatus: anchorOK,
 		}
 		state.Comments = append(state.Comments, cm)
@@ -225,6 +230,7 @@ func (c *PrereviewController) addCommentBody(state PrereviewState, body string) 
 	state.SelectionAnchor = 0
 	state.SelectionEnd = 0
 	state.SelectionSide = ""
+	state.SelectionArea = Area{}
 	state.DraftBody = ""
 	state.EditingCommentID = ""
 	clearUndo(&state)
@@ -551,7 +557,7 @@ func (c *PrereviewController) EditComment(state PrereviewState, ctx *livetemplat
 		state.SelectionAnchor = cm.FromLine
 		state.SelectionEnd = cm.ToLine
 		state.SelectionSide = cm.Side
-		state.SelectionArea = Area{}
+		state.SelectionArea = cm.Anchor.Box // a preview comment keeps its box
 	}
 	state.DraftBody = cm.Body
 	state.EditingCommentID = cm.ID
@@ -612,6 +618,9 @@ func (c *PrereviewController) DeleteComment(state PrereviewState, ctx *livetempl
 	}
 	deleted := state.Comments[idx]
 	state.Comments = slices.Delete(state.Comments, idx, idx+1)
+	if state.FocusedCommentID == id {
+		state.FocusedCommentID = "" // its box is gone; an undo brings it back unfocused
+	}
 	c.setDeleted(id, true) // so a stale copy in another tab can't bring it back
 	if err := c.persist(state.Comments); err != nil {
 		return state, fmt.Errorf("persist after delete: %w", err)

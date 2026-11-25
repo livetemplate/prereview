@@ -43,6 +43,15 @@ func runCLI(t *testing.T, timeout time.Duration, binary string, args ...string) 
 	return out.String(), errb.String(), exit
 }
 
+// mustCLI runs a prereview subcommand the way an agent would and fails the
+// test if it exits non-zero.
+func mustCLI(t *testing.T, p *runningPrereview, args ...string) {
+	t.Helper()
+	if _, stderr, code := runCLI(t, 10*time.Second, p.binary, args...); code != 0 {
+		t.Fatalf("prereview %v: exit %d\n%s", args, code, stderr)
+	}
+}
+
 func TestE2E_AgentSubcommands(t *testing.T) {
 	p, _, _ := bootChromeStream(t)
 	p.waitReady()

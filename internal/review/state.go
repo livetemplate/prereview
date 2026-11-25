@@ -188,12 +188,13 @@ type PrereviewState struct {
 	// the file head.
 	CommentMode string `json:"comment_mode" lvt:"persist"`
 
-	// SelectionArea holds the in-progress rectangle for a kind=area
-	// comment: 0..1 fractions of the image's rendered size. Set by
-	// SelectImageArea (dispatched from the client's lvt-fx:area-select
-	// directive on pointerup) and cleared by AddComment / ClearSelection
-	// / SelectFile. Persisted so the pending overlay re-appears after a
-	// WebSocket reconnect.
+	// SelectionArea holds the in-progress rectangle, as 0..1 fractions:
+	// of the image for a kind=area comment (SelectImageArea), of the page
+	// for a live-site region (SelectRegion), or of an HTML preview for a
+	// box drawn with a line comment (SelectBlock; saved in the anchor).
+	// Cleared by AddComment / ClearSelection / SelectFile, and a box by any
+	// other line selection. Persisted so the pending overlay re-appears
+	// after a WebSocket reconnect.
 	SelectionArea Area `json:"selection_area" lvt:"persist"`
 
 	// RegionSelectArmed gates the "draw a box to comment" overlay over a
@@ -456,6 +457,23 @@ type PrereviewState struct {
 	// back in the diff view.
 	ShowAllComments bool `json:"show_all_comments"`
 
+	// FocusedHTMLBlock is the HTML preview block (its markdownBlockKey) whose
+	// marker was tapped: its cards scroll into view and its comments' boxes
+	// show, with their corner bars, until a second tap on the marker, Hide,
+	// another jump or a file switch clears it.
+	FocusedHTMLBlock string `json:"focused_html_block"`
+
+	// FrontBoxID is the preview box the reviewer tapped last, drawn above the
+	// others so overlapping boxes can each be reached. HiddenBoxes are the
+	// boxes of the open marker hidden one at a time with Hide; opening or
+	// closing a marker clears them. Session only.
+	FrontBoxID  string          `json:"front_box_id"`
+	HiddenBoxes map[string]bool `json:"hidden_boxes"`
+
+	// CommentListFilter narrows the All comments screen: "" lists every
+	// comment, CommentFilterAnnotations only the live site's (region) ones.
+	CommentListFilter string `json:"comment_list_filter"`
+
 	// ShowUnderstand shows the Understand page (#115): the walkthrough of the
 	// whole change and the quiz on it (#191), in place of the diff
 	// viewer like ShowAllComments. Not persisted, and reset by every navigation
@@ -671,6 +689,12 @@ type PrereviewState struct {
 	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
 	HideMarks bool `json:"hide_marks"`
 
+	// ShowBoxes outlines every annotation's box on the live site and on an HTML
+	// file's preview. Off, an annotation is only its corner marker, so it never
+	// covers the page; its box is outlined while focused or hovered. Durable
+	// per-user view pref (saved as show_live_boxes, its first name).
+	ShowBoxes bool `json:"show_live_boxes"`
+
 	// ToggledRows flips a row's annotation cards away from their DEFAULT visibility
 	// (#174). Keyed by the same row key the badge renders under: "<line>-<side>" in the
 	// diff, "MB-<start>-<end>" in the md-view.
@@ -794,12 +818,33 @@ func (s PrereviewState) VisibleComments() []Comment {
 	scoped := s.scopedComments()
 	out := make([]Comment, 0, len(scoped))
 	for _, c := range scoped {
-		if s.commentHiddenFromView(c) {
+		if s.commentHiddenFromView(c) || !s.passesListFilter(c) {
 			continue
 		}
 		out = append(out, c)
 	}
 	return out
+}
+
+// CommentFilterAnnotations is the All comments filter that lists only the
+// live site's annotations (region comments).
+const CommentFilterAnnotations = "annotations"
+
+// passesListFilter reports whether the All comments screen's filter keeps c.
+func (s PrereviewState) passesListFilter(c Comment) bool {
+	return s.CommentListFilter != CommentFilterAnnotations || c.IsRegionLevel()
+}
+
+// AnnotationsListed is how many live-site annotations the All comments screen
+// would list with the Annotations filter: the count on that filter's button.
+func (s PrereviewState) AnnotationsListed() int {
+	n := 0
+	for _, c := range s.scopedComments() {
+		if s.regionVisible(c) {
+			n++
+		}
+	}
+	return n
 }
 
 // UnresolvedListed is how many comments the All comments screen lists that
@@ -814,10 +859,12 @@ func (s PrereviewState) UnresolvedListed() int {
 	return n
 }
 
-// resolvable reports whether Resolve all resolves c: in scope and open. The
-// screen lists every such comment (commentHiddenFromView hides only resolved
-// ones).
-func (s PrereviewState) resolvable(c Comment) bool { return !c.Resolved && s.inScope(c.File) }
+// resolvable reports whether Resolve all resolves c: in scope, open, and
+// passing the screen's filter. The screen lists every such comment
+// (commentHiddenFromView hides only resolved ones).
+func (s PrereviewState) resolvable(c Comment) bool {
+	return !c.Resolved && s.inScope(c.File) && s.passesListFilter(c)
+}
 
 // CommentCount is the number of in-scope comments — the all-comments view's header
 // total. Zero-arg because livetemplate only pre-computes zero-arg methods; the

@@ -63,3 +63,4 @@ describe("lineRangeFromBlocks", () => {
     expect(lineRangeFromBlocks(old, box(130, 150), 0, 0)).toEqual({ from: 1, to: 40 });
   });
 });
+

@@ -29,7 +29,15 @@
 
 <header class="bar bar-external">
   <span class="ext-target">prereview · annotating <code>http://localhost:3000</code> <span class="ext-page">http://localhost:3000/</span></span>
-  <span class="bar-actions"><form method="POST" style="margin:0">
+  <span class="bar-actions"><form method="POST" class="region-toggle">
+  <button
+    type="submit"
+    name="toggleRegionSelect"
+    class="outline secondary"
+    aria-pressed="false"
+    title="Drag a box on the page to comment on that part"
+  ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span class="annotate-word"> Annotate</span></button>
+</form><form method="POST" style="margin:0">
       <button
         type="submit"
         name="toggleAnnotations"
@@ -57,16 +65,9 @@
 </header>
 <div class="banner-slot" data-key="banners"></div><div class="layout layout-external" data-key="layout">
   <main class="viewer ext-viewer">
-    <form method="POST" class="region-toggle">
-  <button
-    type="submit"
-    name="toggleRegionSelect"
-    class="outline secondary"
-    aria-pressed="false"
-  >▭ Select a region to comment</button>
-</form>
     <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"
+         data-page="http://localhost:3000/"
          data-key="ext-stage">
       
       <iframe
@@ -75,35 +76,39 @@
         title="Live preview of http://localhost:3000"
         lvt-ignore
       ></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer"><button type="button"
-                class="area-overlay pin-btn is-acted"
-                lvt-on:click="editComment"
+      <div class="pin-layer" data-pin-layer data-key="pin-layer"><div class="area-overlay ann ann-c1 is-acted"
                 data-id="r1"
                 data-key="pin-r1"
-                style="left:10.0000%;top:10.0000%;width:30.0000%;height:10.0000%;"
-                title="Worked on — fix r1"
-                aria-label="Edit annotation"></button><button type="button"
-                class="area-overlay pin-btn is-acted"
+                style="left:10.0000%;top:10.0000%;width:30.0000%;height:10.0000%;"><button type="button"
+                class="pin-btn"
                 lvt-on:click="editComment"
+                data-id="r1"
+                title="Worked on — fix r1"
+                aria-label="Edit annotation 1">1</button></div><div class="area-overlay ann ann-c2 is-acted"
                 data-id="r2"
                 data-key="pin-r2"
-                style="left:10.0000%;top:25.0000%;width:30.0000%;height:10.0000%;"
-                title="Answered — fix r2"
-                aria-label="Edit annotation"></button><button type="button"
-                class="area-overlay pin-btn"
+                style="left:10.0000%;top:25.0000%;width:30.0000%;height:10.0000%;"><button type="button"
+                class="pin-btn"
                 lvt-on:click="editComment"
+                data-id="r2"
+                title="Answered — fix r2"
+                aria-label="Edit annotation 2">2</button></div><div class="area-overlay ann ann-c3"
                 data-id="r3"
                 data-key="pin-r3"
-                style="left:10.0000%;top:40.0000%;width:30.0000%;height:10.0000%;"
-                title="fix r3"
-                aria-label="Edit annotation"></button><button type="button"
-                class="area-overlay pin-btn"
+                style="left:10.0000%;top:40.0000%;width:30.0000%;height:10.0000%;"><button type="button"
+                class="pin-btn"
                 lvt-on:click="editComment"
+                data-id="r3"
+                title="fix r3"
+                aria-label="Edit annotation 3">3</button></div><div class="area-overlay ann ann-c5"
                 data-id="r5"
                 data-key="pin-r5"
-                style="left:10.0000%;top:70.0000%;width:30.0000%;height:10.0000%;"
+                style="left:10.0000%;top:70.0000%;width:30.0000%;height:10.0000%;"><button type="button"
+                class="pin-btn"
+                lvt-on:click="editComment"
+                data-id="r5"
                 title="fix r5"
-                aria-label="Edit annotation"></button></div>
+                aria-label="Edit annotation 5">5</button></div></div>
       
     </div>
     

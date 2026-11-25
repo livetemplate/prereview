@@ -786,6 +786,12 @@ header.bar .title {
 header.bar .title small { color: var(--pico-muted-color); font-weight: normal; }
 header.bar .title { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
 header.bar .title .title-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The live page's annotation count opens All comments on the annotations. */
+header.bar .live-count {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  margin: 0 0 0 0.25rem; padding: 0.1rem 0.5rem; width: auto;
+  font-size: 0.8rem; line-height: 1.4; vertical-align: middle;
+}
 
 /* Inline chip group — only shown on desktop where the toolbar has room.
    Mobile users get the same controls inside the 3-dots overflow menu. */
@@ -1624,6 +1630,19 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
 .all-comments .ac-item.is-resolved .ac-body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
 .all-comments .ac-where { font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.25rem; }
 .all-comments .ac-body { white-space: pre-wrap; word-break: break-word; }
+/* All / Annotations filter: beside the title, or on its own row on a phone. */
+.all-comments .ac-head { flex-wrap: wrap; gap: 0.4rem; }
+.all-comments .ac-head strong,
+.all-comments .ac-head button { white-space: nowrap; }
+.all-comments .ac-filter { display: flex; gap: 0.3rem; margin: 0 auto 0 0.6rem; }
+.all-comments .ac-filter ~ .ac-resolve-all { margin-left: 0; }
+@media (max-width: 600px) {
+  .all-comments .ac-filter { order: 1; flex-basis: 100%; margin: 0; }
+  .all-comments .ac-filter ~ .ac-resolve-all { margin-left: auto; }
+}
+/* The card a marker tap opened. */
+.all-comments .ac-item.is-target .ac-jump-btn { outline: 2px solid var(--accent); outline-offset: 1px; }
+.all-comments .ac-item .thread { margin: 0.3rem 0 0.2rem 0.6rem; }
 /* Per-item edit/resolve/delete row — mirrors .inline-comment
    .ic-actions (that selector is descendant-scoped so it can't be
    reused here). flex-wrap keeps the three buttons usable on a narrow
@@ -2824,8 +2843,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   background: rgba(76, 194, 255, 0.06);
   z-index: 5;
 }
-.region-toggle { margin: 0 0 0.5rem; }
-.region-toggle button { font-size: 0.85rem; padding: 0.25rem 0.6rem; width: auto; }
+/* The Annotate toggle sits in the header, beside the page's own controls. */
+.region-toggle { margin: 0; }
+.region-toggle button { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; padding: 0.2rem 0.55rem; width: auto; margin: 0; white-space: nowrap; }
 .area-overlay {
   position: absolute;
   border: 2px solid var(--lvt-area-select-color, #4cc2ff);
@@ -2842,7 +2862,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 /* #248: the agent worked on or answered this region; it stays open (same colour) until
    the reviewer resolves it, marked by a dashed border and a corner tick. */
 .area-overlay.is-acted { border-style: dashed; }
-.area-overlay.is-acted::after {
+.image-with-areas .area-overlay.is-acted::after {
   content: "\2713";
   position: absolute; top: 2px; right: 2px;
   width: 1.1rem; height: 1.1rem; line-height: 1.1rem;
@@ -2864,12 +2884,80 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .ext-viewer { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 0.8rem; }
 .ext-stage { height: calc(100vh - 9rem); overflow: hidden; border: 1px solid var(--pico-muted-border-color, #d9d9d9); border-radius: 6px; background: #fff; }
 .ext-frame { width: 100%; height: 100%; border: 0; display: block; }
-.pin-layer { position: absolute; top: 0; left: 0; pointer-events: none; transform-origin: 0 0; z-index: 4; }
-/* Saved pins are buttons: clicking one opens its comment in the editor. They
-   re-enable pointer events (the layer itself passes clicks through to the live
-   page); gaps between pins stay click-through so the page is still usable. */
-.pin-btn { pointer-events: auto; cursor: pointer; padding: 0; appearance: none; -webkit-appearance: none; }
-.pin-btn:hover { background: rgba(76, 194, 255, 0.30); }
+/* --pin-ink is the dark of the marker labels and bars: they sit on the
+   reviewed page, not the theme, so it is the same in every scheme. */
+.pin-layer { position: absolute; top: 0; left: 0; pointer-events: none; transform-origin: 0 0; z-index: 4; --pin-ink: #062433; }
+/* A saved live-site annotation is an invisible box with a numbered marker in
+   its top-left corner. Only the marker takes a tap (the layer and the box pass
+   clicks and drags through to the page), and the box is never filled: it is
+   outlined while focused, while its marker is hovered, and for every box while
+   Show boxes is on. */
+.pin-layer .area-overlay[data-id] { border: 2px dashed transparent; background: none; box-shadow: none; }
+.pin-layer .area-overlay[data-id]:has(> .pin-btn:hover),
+.show-boxes .pin-layer .area-overlay[data-id] { border-color: var(--ann, #4cc2ff); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
+/* Annotation colours (AnnotationColors): an annotation's box, marker and card
+   share one, so overlapping boxes are easy to tell apart. The boxes sit on the
+   reviewed page, not the theme, so the palette is the same in every scheme:
+   light enough for the dark marker label, with a dark halo on each box so it
+   shows on a white page too. */
+.ann-c1 { --ann: #4cc2ff; }
+.ann-c2 { --ann: #ffb000; }
+.ann-c3 { --ann: #ff7eb6; }
+.ann-c4 { --ann: #3ddc97; }
+.ann-c5 { --ann: #b99aff; }
+.ann-c6 { --ann: #ff9a5c; }
+.area-overlay.ann {
+  border-color: var(--ann);
+  background: color-mix(in srgb, var(--ann) 14%, transparent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.inline-comment.ann,
+.all-comments .ac-item.ann { border-left: 4px solid var(--ann); }
+/* The HTML preview's markers: the layer covers the stage, and each block box
+   stays hidden until lvt-fx:preview-bridge places it over its block. A block
+   is outlined (hovered, tapped or Show boxes) only when one of its comments has
+   no drawn box; the drawn boxes show on a tap or with Show boxes. */
+.preview-pins { right: 0; bottom: 0; }
+.preview-pins .area-overlay[data-id] { visibility: hidden; }
+.preview-pins .area-overlay[data-id]:not(.is-unboxed) { border-width: 0; }
+.preview-pins .pin-btn { background: #fff; border-color: var(--pin-ink); }
+.preview-pins .drawn-box { display: none; }
+.preview-pins .drawn-box.is-shown,
+.show-boxes .preview-pins .drawn-box { display: block; }
+/* A box a marker opened takes a tap that brings it to the front, so a box
+   under another can be reached; with Show boxes alone they stay see-through. */
+.preview-pins .drawn-box.is-shown { pointer-events: auto; cursor: pointer; }
+.preview-pins .drawn-box.is-front { z-index: 2; border-width: 3px; }
+/* The corner bar on a shown box (annotationBar): only its buttons take taps. */
+.anno-bar {
+  position: absolute; top: 2px; right: 2px;
+  display: flex; gap: 2px; padding: 2px;
+  border-radius: 8px; background: color-mix(in srgb, var(--pin-ink) 85%, transparent);
+  pointer-events: auto;
+}
+.anno-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; margin: 0;
+  border: 0; border-radius: 6px; background: none; color: #fff;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+.anno-act:hover, .anno-act:focus-visible { background: rgba(255, 255, 255, 0.2); }
+.layout.marks-hidden .preview-pins .drawn-box,
+.layout.marks-hidden .pin-layer .area-overlay[data-id] { display: none; }
+.pin-btn {
+  position: absolute; top: 2px; left: 2px;
+  min-width: 22px; height: 22px; padding: 0 6px; margin: 0;
+  border-radius: 11px; border: 2px solid #fff;
+  background: var(--ann, #4cc2ff); color: var(--pin-ink, #062433);
+  font-family: inherit; font-size: 0.7rem; font-weight: 700; line-height: 18px; text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: auto; cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+.pin-btn:hover { filter: brightness(1.1); }
+/* Acted on: the marker keeps its colour, so it still matches its box and card,
+   and gains a tick. */
+.pin-layer .area-overlay.is-acted .pin-btn::after { content: " \2713"; }
+.pin-layer .area-overlay.is-resolved .pin-btn { background: var(--pico-muted-color, #888); color: #fff; }
 /* Annotations sidebar: collapsed by default (full width for the live site);
    the header "💬 N" button toggles AnnoDrawerOpen → .is-open. */
 .ext-sidebar { display: none; flex: 0 0 320px; border-left: 1px solid var(--pico-muted-border-color, #d9d9d9); overflow-y: auto; }
@@ -2886,7 +2974,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .ext-page-link { font-family: var(--jbm); }
 /* Focused pin: bright ring + a one-shot pulse so a tapped annotation is
    obvious on the page once the iframe scrolls it into view. */
-.area-overlay.is-focused { border-color: var(--accent, #4361ee); border-width: 3px; background: rgba(67, 97, 238, 0.28); z-index: 6; animation: pin-pulse 1.4s ease-out 2; }
+.pin-layer .area-overlay.is-focused { border: 3px solid var(--ann, var(--accent, #4361ee)); z-index: 6; animation: pin-pulse 1.4s ease-out 2; }
 @keyframes pin-pulse { 0% { box-shadow: 0 0 0 0 rgba(67,97,238,0.55); } 70% { box-shadow: 0 0 0 12px rgba(67,97,238,0); } 100% { box-shadow: 0 0 0 0 rgba(67,97,238,0); } }
 .ext-composer { margin-top: 0.6rem; }
 .bar-external { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0.8rem; }
@@ -2908,8 +2996,12 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   header.bar .nav-prev,
   header.bar .nav-next,
   header.bar .title-file,
-  header.bar .title-page,
-  header.bar .live-count { display: none; }
+  header.bar .live-count-word,
+  header.bar .annotate-word { display: none; }
+  /* With Annotate in the bar too there's no room for the Queue's label: its
+     dot, counts and chevron stay, and the annotation count keeps its width. */
+  header.bar:has(.region-toggle) .queue-trigger .tb-label { display: none; }
+  header.bar .title:has(.live-count) { flex-shrink: 0; }
   /* The external bar has no overflow menu — keep its actions compact so
      💬 + Hand off + End session fit on one row. */
   .bar-external .bar-actions button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
@@ -3162,6 +3254,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .composer .composer-cancel { display: none; }
 .composer .c-actions { display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.4rem; }
 .composer .save-btn { margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 30px; }
+.composer .c-actions button { width: auto; white-space: nowrap; }
 .composer .cancel-btn {
   margin: 0; padding: 0.3rem 0.7rem; font-size: 0.78rem; min-height: 28px;
   flex: 0 0 auto;

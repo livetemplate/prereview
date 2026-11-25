@@ -13,16 +13,57 @@
        listeners. Comments and the composer render in a list BELOW the preview
        (they can't interleave into the iframe document). */}}
   <div class="html-view" data-key="html-{{.Path}}">
-    {{- /* region-select toggle */ -}}
-    {{template "regionToggle" $}}
     {{- /* sandboxed iframe preview + draw-a-region overlay */ -}}
-    <div class="preview-stage"><iframe
+    <div class="preview-stage{{if $.ShowBoxes}} show-boxes{{end}}"><iframe
       class="html-preview"
       sandbox="allow-scripts"
       srcdoc="{{$.RenderedHTMLDoc}}"
       lvt-fx:preview-bridge
       title="HTML preview of {{.Path}}"
     ></iframe>
+      {{- /* One marker per commented block, showing its count: an invisible box
+             the preview-bridge directive places over the block (from the rects
+             the preview posts), with the marker at its corner. Tapping it
+             scrolls the block's cards below into view and shows the boxes its
+             comments were drawn with, each in its annotation colour; the
+             block itself is outlined only for a comment with no box. The
+             drawn boxes are placed by percentage: the layer covers the
+             preview, which is sized to its page. A box the marker opened
+             takes a tap, which brings it to the front (FrontBoxID). */ -}}
+      {{- if or $.HTMLMarkers $.PreviewPendingBox}}<div class="pin-layer preview-pins" data-key="preview-pins">
+        {{- range $.HTMLMarkers -}}
+        {{- $mk := .Key -}}
+        <div class="area-overlay
+                {{- if .Acted}} is-acted{{else if not .Open}} is-resolved{{end}}
+                {{- if .Unboxed}} is-unboxed{{end}}
+                {{- if eq $.FocusedHTMLBlock .Key}} is-focused{{end -}}
+                "
+                data-id="{{.Key}}"
+                data-from="{{.From}}"
+                data-to="{{.To}}"><button type="button"
+                class="pin-btn"
+                lvt-on:click="focusHTMLBlock"
+                data-id="{{.Key}}"
+                aria-label="Show the comments on this block">{{.Total}}</button></div>
+        {{- range .Boxed -}}
+        <div class="area-overlay drawn-box {{index $.AnnotationColors .ID}}
+                {{- if .Resolved}} is-resolved{{else if index $.AgentActedLabels .ID}} is-acted{{end}}
+                {{- if and (eq $.FocusedHTMLBlock $mk) (not (index $.HiddenBoxes .ID))}} is-shown{{end}}
+                {{- if eq $.FrontBoxID .ID}} is-front{{end -}}
+                "
+                data-box="{{.ID}}"
+                lvt-on:click="raiseBox"
+                style="left:{{.Anchor.Box.PercentX}};top:{{.Anchor.Box.PercentY}};width:{{.Anchor.Box.PercentW}};height:{{.Anchor.Box.PercentH}};">
+          {{- if and (eq $.FocusedHTMLBlock $mk) (not (index $.HiddenBoxes .ID))}}{{template "annotationBar" .}}{{end -}}
+        </div>
+        {{- end -}}
+        {{- end -}}
+        {{- with $.PreviewPendingBox -}}
+        <div class="area-overlay area-overlay-pending"
+                data-box="pending"
+                style="left:{{.PercentX}};top:{{.PercentY}};width:{{.PercentW}};height:{{.PercentH}};"></div>
+        {{- end -}}
+      </div>{{end}}
       {{- if $.RegionSelectArmed -}}
       <div
         class="region-overlay"
@@ -34,7 +75,7 @@
     </div>
     {{- /* per-block comment anchors, keyed to source line range */ -}}
     {{- range $.RenderedHTML -}}
-    {{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be -}}
+    {{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}{{$mbkey := printf "MB-%d-%d" $bs $be -}}
     <div
       class="html-block
       {{- if and
@@ -43,6 +84,7 @@
           (le $.SelectionEndMax $be)}} selected{{end -}}
       "
       data-key="{{$hbkey}}"
+      {{- if eq $.FocusedHTMLBlock $mbkey}} lvt-fx:scroll="into-view"{{end}}
     >{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>
     {{- end -}}
   </div>{{end}}{{end}}

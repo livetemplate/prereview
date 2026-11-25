@@ -58,10 +58,7 @@ func TestE2E_ApproveAndEnd(t *testing.T) {
 			t.Fatalf("switch to %s: %v", look, err)
 		}
 		if low := evalStr(t, p, `(() => {
-	  const lum = (c) => { const m = c.match(/[\d.]+/g); let [r,g,b] = m.map(Number);
-	    if (/^color\(/.test(c)) { r*=255; g*=255; b*=255; }
-	    const f = v => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
-	    return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b); };
+	  `+wcagLumJS+`
 	  const opaque = c => { const m = c.match(/[\d.]+/g); return m && (m.length<4 || Number(m[3])>0.5); };
 	  const bg = el => { for (let n = el; n; n = n.parentElement) { const b = getComputedStyle(n).backgroundColor; if (opaque(b)) return b; } return 'rgb(255,255,255)'; };
 	  return [...document.querySelectorAll('#confirm-end-session footer button')].map(b => {

@@ -420,6 +420,40 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
   const applyHeight = () => {
     if (lastHeight > 0) iframe.style.height = `${lastHeight}px`;
   };
+  // placeMarkers puts each commented block's box (the stage's
+  // `.preview-pins .area-overlay[data-from]`) over the posted rect with the same
+  // source range — the outermost one when a wrapper shares its child's range.
+  // The preview has no scroll of its own (it is auto-heighted), so the posted
+  // viewport rects are its document rects; the iframe's offset places them in
+  // the stage. Inline styles are what morphdom wipes on every render, so sync()
+  // re-applies them like the height.
+  const placeMarkers = () => {
+    const layer = iframe.parentElement?.querySelector<HTMLElement>(".preview-pins");
+    if (!layer) return;
+    const area = (b: PreviewBlock) => (b.right - b.left) * (b.bottom - b.top);
+    const byRange = new Map<string, PreviewBlock>();
+    for (const b of previewBlockRects.get(iframe) ?? []) {
+      const key = `${b.from}-${b.to}`;
+      const seen = byRange.get(key);
+      if (!seen || area(b) > area(seen)) byRange.set(key, b);
+    }
+    // Read the iframe's offset once, before any write: reading it after a
+    // style write would force a layout per marker.
+    const ox = iframe.offsetLeft;
+    const oy = iframe.offsetTop;
+    for (const box of layer.querySelectorAll<HTMLElement>(".area-overlay[data-from]")) {
+      const best = byRange.get(`${box.dataset.from}-${box.dataset.to}`);
+      if (!best) {
+        box.style.visibility = "hidden";
+        continue;
+      }
+      box.style.left = `${ox + best.left}px`;
+      box.style.top = `${oy + best.top}px`;
+      box.style.width = `${best.right - best.left}px`;
+      box.style.height = `${best.bottom - best.top}px`;
+      box.style.visibility = "visible";
+    }
+  };
 
   const onMessage = (e: MessageEvent) => {
     // The preview iframe is an opaque-origin srcdoc, so e.origin is "null" and
@@ -462,6 +496,7 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
         clean.push(block);
       }
       previewBlockRects.set(iframe, clean);
+      placeMarkers();
     }
   };
   window.addEventListener("message", onMessage);
@@ -472,7 +507,10 @@ function attachPreviewBridge(iframe: HTMLIFrameElement): PreviewBridgeEntry {
       previewBlockRects.delete(iframe);
       previewBridgeArmed.delete(iframe);
     },
-    sync: () => applyHeight(),
+    sync: () => {
+      applyHeight();
+      placeMarkers();
+    },
   };
 }
 
@@ -2379,7 +2417,7 @@ type LineRange = { from: number; to: number; side?: string };
 // not a line range — a live app has no source markers). Survives scroll
 // because it's anchored to the document, not the viewport.
 type RectPayload = { x: number; y: number; w: number; h: number };
-type RegionPayload = LineRange | RectPayload;
+type RegionPayload = LineRange | (LineRange & RectPayload) | RectPayload;
 
 // PageMetrics is the proxied page's scroll + document size, reported by the
 // injected beacon (proxy.go) via postMessage. External mode frames exactly
@@ -2423,7 +2461,12 @@ function resolveRegion(el: HTMLElement, box: BoxDragResult): RegionPayload | nul
     const blocks = previewBlockRects.get(iframe);
     if (!blocks || blocks.length === 0) return null;
     const fr = iframe.getBoundingClientRect();
-    return lineRangeFromBlocks(blocks, box, fr.left, fr.top);
+    const range = lineRangeFromBlocks(blocks, box, fr.left, fr.top);
+    if (!range) return null;
+    // The drawn box rides along so the preview can show where you pointed. The
+    // overlay covers the preview stage, as the pin layer that shows the box
+    // does, so the drag's own fractions of its host are the box's place.
+    return { ...range, x: box.x, y: box.y, w: box.w, h: box.h };
   }
   if (surface === "code") {
     const root: ParentNode = el.parentElement || document;

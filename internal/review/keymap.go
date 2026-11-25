@@ -67,6 +67,7 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"t"}, Display: "t", Action: "toggleTOC", Label: "Toggle table of contents"},
 	{Keys: []string{"Mod+k"}, Display: "⌘/Ctrl + K", Action: "openSearch", Label: "Search files"},
 	{Keys: []string{"l"}, Display: "l", Action: "toggleLiveView", Label: "Switch between the files and the live site", LiveOnly: true},
+	{Keys: []string{"b"}, Display: "b", Action: "toggleBoxes", Label: "Show / hide annotation boxes"},
 	{Keys: []string{"a"}, Display: "a", Action: "toggleCommentList", Label: "All comments"},
 	{Keys: []string{"z"}, Display: "z", Action: "toggleUnderstand", Label: "Understand this change"},
 	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved comments"},

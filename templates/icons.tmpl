@@ -261,6 +261,9 @@
   stroke-linecap="round"
 /></svg>
 {{- end -}}
+{{- define "iconAnnotate" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg>
+{{- end -}}
 {{- define "iconSearch" -}}
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
     cx="11" cy="11" r="7"
@@ -283,3 +286,36 @@
   /></svg>
 {{- end -}}
 {{define "iconQuiz"}}<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>{{end}}
+
+{{- define "iconEyeOff" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.4 5.2A9.8 9.8 0 0 1 12 5c5 0 8.5 4.5 9.5 7a13 13 0 0 1-2.6 3.6M6.4 6.4C4.4 7.7 3 9.8 2.5 12c1 2.5 4.5 7 9.5 7a9.6 9.6 0 0 0 4.2-1"
+  stroke="currentColor"
+  stroke-width="2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg>
+{{- end -}}
+
+{{- define "iconReopen" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M4 4v6h6M4.5 15a8 8 0 1 0 1.9-8.3L4 10"
+  stroke="currentColor"
+  stroke-width="2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg>
+{{- end -}}
+
+{{- define "iconTrash" -}}
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"
+  stroke="currentColor"
+  stroke-width="2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg>
+{{- end -}}

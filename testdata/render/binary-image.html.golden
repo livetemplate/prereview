@@ -68,6 +68,10 @@
     lvt-key="Mod&#43;k"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="toggleBoxes"
+    lvt-key="b"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleCommentList"
     lvt-key="a"
     lvt-mod:skip-when-typing
@@ -131,7 +135,15 @@
   
   <div class="title">
     <span class="title-main"><span class="title-file">logo.png</span></span>
-  </div>
+  </div><form method="POST" class="region-toggle">
+  <button
+    type="submit"
+    name="toggleRegionSelect"
+    class="outline secondary"
+    aria-pressed="false"
+    title="Drag a box on the page to comment on that part"
+  ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span class="annotate-word"> Annotate</span></button>
+</form>
   
   <div class="toolbar-inline">
     <div class="tb-group tb-counters">
@@ -712,15 +724,7 @@
   
   
   
-  
-  <form method="POST" class="region-toggle">
-  <button
-    type="submit"
-    name="toggleRegionSelect"
-    class="outline secondary"
-    aria-pressed="false"
-  >▭ Select a region to comment</button>
-</form><small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small><div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-logo.png">
+  <small class="region-hint">Pinch or scroll to zoom; tap Annotate to comment on a region.</small><div class="binary-preview binary-image"><div class="image-with-areas" data-key="iwa-logo.png">
     <img
       src="/logo.png"
       alt="logo.png"
@@ -789,6 +793,7 @@
     <div class="kbd-row"><dt><kbd>f</kbd></dt><dd>Toggle file tree</dd></div>
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
+    <div class="kbd-row"><dt><kbd>b</kbd></dt><dd>Show / hide annotation boxes</dd></div>
     <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
     <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>

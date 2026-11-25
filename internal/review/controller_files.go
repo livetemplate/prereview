@@ -93,6 +93,7 @@ func (c *PrereviewController) enterFile(state *PrereviewState, path string, diff
 	state.SelectionSide = ""
 	state.SelectionArea = Area{}    // pending image rectangle from the prior file is cancelled
 	state.RegionSelectArmed = false // the region-select overlay is per-preview; disarm on file switch
+	state.FocusedHTMLBlock = ""     // a marker tap belongs to the preview it was on
 	state.CommentMode = ""          // any file-level / area composer from the prior file is cancelled
 	state.URLHashScrollAnchor = ""  // anchor target was for the previous file; let the new file pick its own
 	state.CursorKey = ""            // line cursor was for the previous file's lines

@@ -3,6 +3,7 @@ package review
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,19 +16,113 @@ import (
 // overview pane. Bound to the "N comments" entry in the overflow menu.
 // Closes the menu so the user sees the result immediately.
 func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	toggleFullView(&state, &state.ShowAllComments)
+	if state.ShowAllComments {
+		closeFullViews(&state)
+		state.MoreMenuOpen = false
+		state.LastResolvedIDs = nil // Resolve all's Undo belongs to the screen (a deleted comment's stays)
+		return state, nil
+	}
+	c.openCommentList(&state, "")
+	return state, nil
+}
+
+// OpenAnnotations opens All comments on the live site's annotations, from the
+// live page's count or a tap on an annotation's marker. With an id, that
+// annotation's card scrolls into view.
+func (c *PrereviewController) OpenAnnotations(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	c.openCommentList(&state, CommentFilterAnnotations)
+	clearScrollTargets(&state)
+	state.ScrollToCommentID = ctx.GetString("id")
+	return state, nil
+}
+
+// FocusHTMLBlock answers a tap on an HTML preview marker: the block's cards
+// under the preview scroll into view and its comments' boxes show.
+func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	state.HiddenBoxes = nil // opening or closing a marker shows all its boxes next time
+	if id == state.FocusedHTMLBlock {
+		// A second tap on the same marker hides its boxes again.
+		state.FocusedHTMLBlock = ""
+		return state, nil
+	}
+	clearScrollTargets(&state)
+	state.FocusedHTMLBlock = id
+	return state, nil
+}
+
+// RaiseBox answers a tap on a preview box a marker opened: it comes to the
+// front, above the boxes it overlaps.
+func (c *PrereviewController) RaiseBox(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.FrontBoxID = ctx.GetString("box")
+	return state, nil
+}
+
+// UnfocusAnnotation answers Hide on an annotation's corner bar: on the live
+// site's focused box it unfocuses that annotation; on a preview box it hides
+// that box, and once the open marker has nothing left showing, closes it. Each
+// surface keeps the other's focus, as both can be set in a combined session.
+func (c *PrereviewController) UnfocusAnnotation(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	id := ctx.GetString("id")
+	if id != "" && id == state.FocusedCommentID {
+		state.FocusedCommentID = ""
+		return state, nil
+	}
+	if id == "" {
+		state.FocusedHTMLBlock, state.HiddenBoxes = "", nil
+		return state, nil
+	}
+	hidden := maps.Clone(state.HiddenBoxes)
+	if hidden == nil {
+		hidden = map[string]bool{}
+	}
+	hidden[id] = true
+	state.HiddenBoxes = hidden
+	for _, m := range state.HTMLMarkers() {
+		if m.Key != state.FocusedHTMLBlock {
+			continue
+		}
+		if m.Unboxed {
+			return state, nil // the block's outline still shows; the marker closes it
+		}
+		for _, b := range m.Boxed {
+			if !hidden[b.ID] {
+				return state, nil // a box of the open marker still shows
+			}
+		}
+	}
+	state.FocusedHTMLBlock, state.HiddenBoxes = "", nil
+	return state, nil
+}
+
+// SetCommentFilter switches the All comments screen between every comment
+// ("") and the live site's annotations.
+func (c *PrereviewController) SetCommentFilter(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	switch f := ctx.GetString("filter"); f {
+	case "", CommentFilterAnnotations:
+		state.CommentListFilter = f
+	default:
+		return state, fmt.Errorf("setCommentFilter: unknown filter %q", f)
+	}
+	state.LastResolvedIDs = nil // Undo belongs to the list it resolved
+	return state, nil
+}
+
+// openCommentList opens the All comments screen (closing the other full-page
+// views) with filter applied.
+func (c *PrereviewController) openCommentList(state *PrereviewState, filter string) {
+	closeFullViews(state)
+	state.ShowAllComments = true
+	state.CommentListFilter = filter
 	state.MoreMenuOpen = false
 	state.LastResolvedIDs = nil // Resolve all's Undo belongs to the screen (a deleted comment's stays)
 	// Opening the overview must show accurate badges/snippets for every
 	// commented file, including ones never opened this session.
-	if state.ShowAllComments {
-		if c.relocateAll(&state) {
-			if err := c.persist(state.Comments); err != nil {
-				slog.Warn("self-heal persist (all comments)", "err", err)
-			}
+	if c.relocateAll(state) {
+		if err := c.persist(state.Comments); err != nil {
+			slog.Warn("self-heal persist (all comments)", "err", err)
 		}
 	}
-	return state, nil
 }
 
 // ToggleShowResolved flips whether resolved comments are visible in the
@@ -116,6 +211,15 @@ func (c *PrereviewController) ToggleRow(state PrereviewState, ctx *livetemplate.
 // per-user. Closes the overflow menu so the effect is visible immediately.
 func (c *PrereviewController) ToggleMarks(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.HideMarks = !state.HideMarks
+	state.MoreMenuOpen = false
+	c.savePrefs(state)
+	return state, nil
+}
+
+// ToggleBoxes shows or hides the outline of every annotation's box on the live
+// site and the HTML preview.
+func (c *PrereviewController) ToggleBoxes(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.ShowBoxes = !state.ShowBoxes
 	state.MoreMenuOpen = false
 	c.savePrefs(state)
 	return state, nil
@@ -442,6 +546,7 @@ func showLive(state *PrereviewState, on bool) {
 // clearScrollTargets drops every one-render scroll nudge, so a jump that sets none
 // (or a different one) leaves no stale target behind.
 func clearScrollTargets(state *PrereviewState) {
+	state.FocusedHTMLBlock = ""
 	state.ScrollToCommentID = ""
 	state.ScrollToHeadingID = ""
 	state.ScrollToItemKey = ""

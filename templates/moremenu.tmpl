@@ -244,7 +244,7 @@
   </form>
   {{end}}
   {{/* #151: hide/show the per-line count badges + inline cards — more-menu mirror. */}}
-  {{if $.HasMarks}}
+  {{if or $.HasMarks (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
   <form method="POST">
     <button
       type="submit"

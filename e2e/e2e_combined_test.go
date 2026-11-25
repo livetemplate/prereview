@@ -138,14 +138,14 @@ func TestE2E_CombinedStageSurvivesToggle(t *testing.T) {
 			// gives the region overlay a page size to draw against.
 			time.Sleep(3500 * time.Millisecond)
 			pickSurface(t, p, true, diag)
-			waitJSDiag(t, p, `((document.querySelector('.bar .title-page')||{}).textContent||'').endsWith('/')`, "the header shows the framed page", diag)
+			waitFramedPage(t, p, "/", diag)
 			drawRegion(t, p, "Button too low", diag)
 
 			// Move the framed site to /page2, then switch back and forth.
 			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`(()=>{const f=document.querySelector('iframe.ext-frame');window.__frame=f;f.src=new URL('/page2',f.src).href;})()`, nil)); err != nil {
 				t.Fatalf("navigate the frame: %v%s", err, diag())
 			}
-			waitJSDiag(t, p, `((document.querySelector('.bar .title-page')||{}).textContent||'').endsWith('/page2')`, "the beacon reports /page2", diag)
+			waitFramedPage(t, p, "/page2", diag)
 			home, page2 := app.hitCount("/"), app.hitCount("/page2")
 
 			pickSurface(t, p, false, diag)
@@ -163,9 +163,7 @@ func TestE2E_CombinedStageSurvivesToggle(t *testing.T) {
 			if app.hitCount("/") != home || app.hitCount("/page2") != page2 {
 				t.Errorf("the framed site reloaded: / %d→%d, /page2 %d→%d%s", home, app.hitCount("/"), page2, app.hitCount("/page2"), diag())
 			}
-			if got := textOf(t, p, `.bar .title-page`); !strings.HasSuffix(got, "/page2") {
-				t.Errorf("the framed route was lost: header shows %q%s", got, diag())
-			}
+			waitFramedPage(t, p, "/page2", diag)
 		})
 	}
 }
@@ -202,7 +200,7 @@ func TestE2E_CombinedOneQueue(t *testing.T) {
 	p.clickFile("edited.go")
 	addLineComment(t, p, 0, 4, "Rename this")
 	pickSurface(t, p, true, diag)
-	waitJSDiag(t, p, `((document.querySelector('.bar .title-page')||{}).textContent||'').endsWith('/')`, "the header shows the framed page", diag)
+	waitFramedPage(t, p, "/", diag)
 	drawRegion(t, p, "CTA too faint", diag)
 	pickSurface(t, p, false, diag)
 
@@ -260,7 +258,7 @@ func TestE2E_CombinedFrameFollowsPageHost(t *testing.T) {
 	p.waitReadyAt(1200, 900)
 	waitJSDiag(t, p, `new URL(document.querySelector('iframe.ext-frame').src).hostname === 'localhost'`, "the frame uses the page's host", diag)
 	pickSurface(t, p, true, diag)
-	waitJSDiag(t, p, `((document.querySelector('.bar .title-page')||{}).textContent||'').endsWith('/')`, "the framed site loads and its beacon reports /", diag)
+	waitFramedPage(t, p, "/", diag)
 }
 
 // waitJSDiag is waitJSTrue that fails with the diag dump (server log, console,
@@ -270,4 +268,11 @@ func waitJSDiag(t *testing.T, p *runningPrereview, js, label string, diag func()
 	if err := chromedp.Run(p.ctx, chromedp.Poll(js, nil, chromedp.WithPollingTimeout(15*time.Second))); err != nil {
 		t.Fatalf("%s: %v%s", label, err, diag())
 	}
+}
+
+// waitFramedPage waits until the live stage reports that the framed site is on
+// a page whose path ends with suffix (the beacon's report, as data-page).
+func waitFramedPage(t *testing.T, p *runningPrereview, suffix string, diag func() string) {
+	t.Helper()
+	waitJSDiag(t, p, `((document.querySelector('.ext-stage')||{dataset:{}}).dataset.page||'').endsWith(`+"`"+suffix+"`"+`)`, "the framed site is on "+suffix, diag)
 }

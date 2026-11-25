@@ -36,6 +36,8 @@ Each entry has `file` + `from_line`/`to_line` to locate the anchor and `body` fo
 Interpret `kind`: `line`/`text` = an edit at those lines; `file` = whole-file
 guidance; `area` = a rectangle on an image (`area` = {x,y,w,h} fractions);
 `region` = a spot on a live page (`url`), which is feedback, not a file edit.
+Once you change what an `area` or `region` points at, mark it done and reply
+with what changed on the page: there is no diff for the reviewer to check.
 
 After every edit that addresses a comment, mark it done (the id is validated
 against the review — an unknown id fails):

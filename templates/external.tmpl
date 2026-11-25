@@ -11,6 +11,7 @@
     {{- if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end -}}
   </span>
   <span class="bar-actions">
+    {{- template "regionToggle" $ -}}
     {{- /* annotation-count toggle */ -}}
     <form method="POST" style="margin:0">
       <button
@@ -117,7 +118,7 @@
       >{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
     </form>
           {{- if ne $.ReplyingID .ID -}}
-          <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
+          {{template "replyButton" .}}
           {{- end -}}
           {{- if not .Resolved -}}
           <form method="POST">
@@ -138,7 +139,7 @@
           {{- template "deleteDialogTagged" . -}}
         </div></div>
       {{- else -}}
-      <p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>
+      <p class="empty"><small>No annotations yet — tap Annotate, then drag a box on the page.</small></p>
       {{- end -}}
     </div>
   </aside>

@@ -16,8 +16,7 @@
        gate their capture overlay. The saved-area overlays render in BOTH modes
        so existing comments stay visible while zooming; only NEW capture is
        gated. position:relative on .image-with-areas anchors the % overlays. */}}
-  {{template "regionToggle" $}}
-  {{- if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end -}}
+  {{- if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; tap Annotate to comment on a region.</small>{{end -}}
   <div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
     <img
       src="/{{.Path}}"

@@ -3,7 +3,6 @@ package review
 import (
 	"fmt"
 	"html/template"
-	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -940,18 +939,77 @@ type BlockAnn struct {
 	Accepted bool
 }
 
+// HTMLMarker is one commented block of an HTML file's preview: its marker shows
+// the block's annotation count, and a tick once the agent has acted on every
+// open comment in it (AgentActedLabels, the live site's rule). Tapping it shows
+// the boxes its comments were drawn with (Boxed); Unboxed means some comment
+// has none (made in the source view, or before boxes were kept), so the block
+// itself is outlined too.
+type HTMLMarker struct {
+	Key      string // markdownBlockKey, the block's cards' scroll target
+	From, To int    // source lines: the preview's data-from/data-to
+	BlockAnn
+	Acted   bool
+	Unboxed bool
+	Boxed   []Comment
+}
+
+// HTMLMarkers lists the preview's commented blocks, in order. Zero-arg for the
+// template, which only ranges over these instead of every block.
+func (s PrereviewState) HTMLMarkers() []HTMLMarker {
+	anns := s.BlockAnnotations()
+	if len(anns) == 0 {
+		return nil
+	}
+	comments, acted := s.BlockComments(), s.AgentActedLabels()
+	var out []HTMLMarker
+	for _, b := range s.RenderedHTML() {
+		key := markdownBlockKey(b.StartLine, b.EndLine)
+		ba, ok := anns[key]
+		if !ok {
+			continue
+		}
+		m := HTMLMarker{Key: key, From: b.StartLine, To: b.EndLine, BlockAnn: ba}
+		open, openActed := 0, 0
+		for _, c := range comments[key] {
+			if !c.Resolved {
+				open++
+				if acted[c.ID] != "" {
+					openActed++
+				}
+			}
+			if c.Anchor.Box.Empty() {
+				m.Unboxed = true
+			} else {
+				m.Boxed = append(m.Boxed, c)
+			}
+		}
+		m.Acted = open > 0 && open == openActed
+		out = append(out, m)
+	}
+	return out
+}
+
 // BlockAnnotations aggregates the selected file's inline annotations into each rendered
-// Markdown block by source line range, keyed "MB-<start>-<end>" (the template's $mbkey).
+// Markdown block, or each block of the HTML preview, by source line range, keyed
+// "MB-<start>-<end>" (the Markdown view's badge and the HTML preview's marker).
 // Zero-arg; nil when none.
 func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
-	blocks := s.RenderedMarkdown()
+	type span struct{ start, end int }
+	var blocks []span
+	for _, b := range s.RenderedMarkdown() {
+		blocks = append(blocks, span{b.StartLine, b.EndLine})
+	}
+	for _, b := range s.RenderedHTML() {
+		blocks = append(blocks, span{b.StartLine, b.EndLine})
+	}
 	if len(blocks) == 0 {
 		return nil
 	}
 	comments, suggestions := s.BlockComments(), s.BlockSuggestions()
 	out := map[string]BlockAnn{}
 	for _, blk := range blocks {
-		key := markdownBlockKey(blk.StartLine, blk.EndLine)
+		key := markdownBlockKey(blk.start, blk.end)
 		var ba BlockAnn
 		for _, c := range comments[key] {
 			ba.Total++
@@ -1132,15 +1190,72 @@ func (s PrereviewState) RegionComments() []Comment {
 	}
 	var out []Comment
 	for _, c := range s.Comments {
-		if !c.IsRegionLevel() || c.URL != s.CurrentURL {
-			continue
+		if c.URL == s.CurrentURL && s.regionVisible(c) {
+			out = append(out, c)
 		}
-		if s.commentHiddenFromView(c) {
-			continue
-		}
-		out = append(out, c)
 	}
 	return out
+}
+
+// AnnotationNumbers numbers each annotation that has a box on screen within
+// its surface, in the order they were made, keyed by ID: a live-site annotation
+// within its page (the number on its marker and on its card in All comments),
+// and a comment drawn on an HTML preview within its file. Resolved and hidden
+// annotations keep their numbers, so resolving one never renumbers the rest.
+// Zero-arg for the template.
+func (s PrereviewState) AnnotationNumbers() map[string]int {
+	type surface struct {
+		live bool
+		key  string // the page's URL, or the file's path
+	}
+	out := map[string]int{}
+	per := map[surface]int{}
+	for _, c := range s.Comments {
+		var at surface
+		switch {
+		case c.IsRegionLevel():
+			at = surface{true, c.URL}
+		case !c.Anchor.Box.Empty():
+			at = surface{false, c.File}
+		default:
+			continue
+		}
+		per[at]++
+		out[c.ID] = per[at]
+	}
+	return out
+}
+
+// annotationColors are the colour classes, in prereview.css: ann marks a
+// coloured annotation, ann-cN picks its colour.
+var annotationColors = [...]string{"ann ann-c1", "ann ann-c2", "ann ann-c3", "ann ann-c4", "ann ann-c5", "ann ann-c6"}
+
+// AnnotationColors gives each annotation the colour its box, marker and card
+// share, so overlapping boxes are easy to tell apart: its number
+// (AnnotationNumbers) cycles through the palette.
+func (s PrereviewState) AnnotationColors() map[string]string {
+	nums := s.AnnotationNumbers()
+	out := make(map[string]string, len(nums))
+	for id, n := range nums {
+		out[id] = annotationColors[(n-1)%len(annotationColors)]
+	}
+	return out
+}
+
+// PreviewPendingBox is the box just drawn on an HTML file's preview while its
+// composer is open, so it stays on screen as you type. Nil otherwise.
+func (s PrereviewState) PreviewPendingBox() *Area {
+	if s.SelectionAnchor == 0 || s.CommentMode != "" || s.SelectionArea.Empty() {
+		return nil
+	}
+	a := s.SelectionArea
+	return &a
+}
+
+// regionVisible reports whether c is a live-site annotation that shows: the
+// rule the page's boxes, the live-only sidebar and the Annotations filter share.
+func (s PrereviewState) regionVisible(c Comment) bool {
+	return c.IsRegionLevel() && !s.commentHiddenFromView(c)
 }
 
 // LiveAvailable reports that the session has a live site: live-only, or a
@@ -1163,15 +1278,17 @@ func (s PrereviewState) LiveShowing() bool {
 	return s.Combined() && s.LiveView && !s.ShowAllComments && !s.ShowUnderstand && !s.ShowLibrary
 }
 
-// LivePageLabel names the framed page in a combined session's header: the
-// live site's host and the page's path (localhost:3000/pricing), as a bare
-// path ("/") reads as noise. Just the host until the frame reports its page.
-func (s PrereviewState) LivePageLabel() string {
-	host := s.TargetURL
-	if u, err := url.Parse(s.TargetURL); err == nil && u.Host != "" {
-		host = u.Host
+// CanAnnotate reports whether a surface you can draw a box on is showing in the
+// main view: the live site, an HTML file's preview or an image. The header's
+// Annotate toggle shows only then.
+func (s PrereviewState) CanAnnotate() bool {
+	if s.LiveShowing() {
+		return true
 	}
-	return host + s.CurrentURL
+	if s.CurrentDiff == nil || s.fileCovered() {
+		return false
+	}
+	return s.ShowRenderedHTML() || s.BinaryKind() == "image"
 }
 
 // FileShowing reports that a file is loaded and on screen. A combined session
@@ -1205,13 +1322,9 @@ func (s PrereviewState) AllRegionComments() []Comment {
 	}
 	var out []Comment
 	for _, c := range s.Comments {
-		if !c.IsRegionLevel() {
-			continue
+		if s.regionVisible(c) {
+			out = append(out, c)
 		}
-		if s.commentHiddenFromView(c) {
-			continue
-		}
-		out = append(out, c)
 	}
 	return out
 }

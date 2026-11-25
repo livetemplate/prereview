@@ -2,6 +2,10 @@
 <section class="all-comments">
   <header class="ac-head">
     <strong>All comments ({{.CommentCount}})</strong>
+    {{if .AnnotationsListed}}{{$annos := eq .CommentListFilter "annotations"}}<div class="ac-filter">
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="" class="lib-chip{{if not $annos}} is-on{{end}}" aria-pressed="{{not $annos}}">All</button>
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="annotations" class="lib-chip{{if $annos}} is-on{{end}}" aria-pressed="{{$annos}}" title="Only the live site's annotations">Annotations {{.AnnotationsListed}}</button>
+    </div>{{end}}
     {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
       <button type="submit" name="resolveAll" class="outline" title="Resolve every comment listed here">Resolve all {{.UnresolvedListed}}</button>
     </form>{{end}}
@@ -12,16 +16,21 @@
   {{if .VisibleComments}}
   <ul class="ac-list">
     {{range .VisibleComments}}
-    <li class="ac-item{{if .Resolved}} is-resolved{{end}}" data-key="{{.ID}}">
+    <li class="ac-item{{if .Resolved}} is-resolved{{end}}{{if eq $.ScrollToCommentID .ID}} is-target{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}" data-key="{{.ID}}"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}>
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
         <button type="submit" name="jumpToComment" class="ac-jump-btn">
-          <div class="ac-where"><code>{{.Location}}</code> · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}{{with .Source}} {{template "sourceBadge" .}}{{end}}</div>
+          <div class="ac-where">{{if .IsRegionLevel}}<small class="anno-label ck-judge-tag">annotation {{index $.AnnotationNumbers .ID}}</small> {{end}}<code>{{.Location}}</code>{{if not .IsRegionLevel}} · {{.LineSpan}}{{with .Side}} <small>({{.}})</small>{{end}}{{end}}{{if .Resolved}} <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} <small class="outdated-badge">outdated</small>{{end}}{{if .Processed}} {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} {{template "answeredBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} {{template "awaitingBadge"}}{{end}}{{with .Source}} {{template "sourceBadge" .}}{{end}}</div>
           <div class="ac-body">{{.Headline}}</div>
         </button>
       </form>
-      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
+      {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}
       <div class="ac-actions">
+        {{if .IsRegionLevel}}<form method="POST">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" name="jumpToComment" class="outline ac-show-on-page" title="Back to the live site, with this annotation's box outlined">Show on page</button>
+        </form>{{end}}
+        {{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}
         <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -58,6 +67,8 @@
 {{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, which isn't in this review. The agent may have it wrong.">⚠ {{.Label}} isn't in this review</span>{{else}}{{template "anchorJump" .}}{{end}}
 === anchorJump ===
 <form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">{{.Label}}</button></form>
+=== annotationBar ===
+<span class="anno-bar"><button type="button" class="anno-act" lvt-on:click="unfocusAnnotation" data-id="{{.ID}}" title="Hide" aria-label="Hide">{{template "iconEyeOff"}}</button><button type="button" class="anno-act" lvt-on:click="toggleResolved" data-id="{{.ID}}" title="{{if .Resolved}}Reopen{{else}}Resolve{{end}}" aria-label="{{if .Resolved}}Reopen{{else}}Resolve{{end}}">{{if .Resolved}}{{template "iconReopen"}}{{else}}{{template "iconCheck"}}{{end}}</button><button type="button" class="anno-act" lvt-on:click="deleteComment" data-id="{{.ID}}" title="Delete" aria-label="Delete">{{template "iconTrash"}}</button></span>
 === answeredBadge ===
 <small class="answered-badge" title="the agent replied with no edit — read its answer, then resolve or reply">answered</small>
 === awaitingBadge ===
@@ -103,8 +114,7 @@
 {{with $.CurrentDiff}}  
   {{$kind := $.BinaryKind}}
   {{if eq $kind "image"}}
-  
-  {{template "regionToggle" $}}{{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; use the button above to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
+  {{if not $.RegionSelectArmed}}<small class="region-hint">Pinch or scroll to zoom; tap Annotate to comment on a region.</small>{{end}}<div class="binary-preview binary-image"><div class="image-with-areas{{if $.RegionSelectArmed}} is-armed{{end}}" data-key="iwa-{{.Path}}">
     <img src="/{{.Path}}" alt="{{.Path}}" {{if $.RegionSelectArmed}}lvt-fx:area-select="selectImageArea" style="touch-action:none;user-select:none;-webkit-user-select:none;"{{else}}style="user-select:none;-webkit-user-select:none;"{{end}}>
     {{range $.AreaComments}}<div class="area-overlay{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}" data-key="ao-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}"></div>{{end}}
     {{if eq $.CommentMode "area"}}<div class="area-overlay area-overlay-pending" data-key="ao-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}
@@ -266,11 +276,11 @@
   </div>{{end}}
 {{end}}
 === commentCardFull ===
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} · <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}{{with .Source}} · {{template "sourceBadge" .}}{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}{{with index $.RippleByComment .ID}}<div class="ripple-row" role="group" aria-label="Follow-on edits"><span class="ripple-count">Follow-on edits: {{.Open}} open of {{.Total}}</span>{{if .Acceptable}}<form method="POST"><button type="submit" name="acceptRipple" value="{{.CommentID}}" class="accept">Accept all</button></form>{{end}}{{if .Open}}<form method="POST"><button type="submit" name="rejectRipple" value="{{.CommentID}}" class="outline reject">Reject all</button></form>{{end}}{{if .NeedPick}}<small class="ripple-pick">{{.NeedPick}} set{{if gt .NeedPick 1}}s{{end}} of alternatives need{{if eq .NeedPick 1}}s{{end}} your pick</small>{{end}}</div>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}<div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} · <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}{{with .Source}} · {{template "sourceBadge" .}}{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}{{with index $.RippleByComment .ID}}<div class="ripple-row" role="group" aria-label="Follow-on edits"><span class="ripple-count">Follow-on edits: {{.Open}} open of {{.Total}}</span>{{if .Acceptable}}<form method="POST"><button type="submit" name="acceptRipple" value="{{.CommentID}}" class="accept">Accept all</button></form>{{end}}{{if .Open}}<form method="POST"><button type="submit" name="rejectRipple" value="{{.CommentID}}" class="outline reject">Reject all</button></form>{{end}}{{if .NeedPick}}<small class="ripple-pick">{{.NeedPick}} set{{if gt .NeedPick 1}}s{{end}} of alternatives need{{if eq .NeedPick 1}}s{{end}} your pick</small>{{end}}</div>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}{{if and $.AgentMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
+    </form>{{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}{{if and $.AgentMode (not .Resolved) (not .AnchorOutdated) .Processed}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="enqueueComment" class="outline enqueue-btn" title="Re-enqueue — ask the agent to redo this">Re-enqueue</button>
     </form>{{end}}{{if .Resolved}}<form method="POST">
@@ -288,7 +298,7 @@
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}{{if .Resolved}}<form method="POST">
+    </form>{{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}{{if .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="hideComment" class="outline">Hide</button>
     </form>{{end}}{{if not .Resolved}}<form method="POST">
@@ -357,7 +367,7 @@
 
 <header class="bar bar-external">
   <span class="ext-target">prereview · annotating <code>{{.TargetURL}}</code>{{if .CurrentURL}} <span class="ext-page">{{.CurrentURL}}</span>{{end}}</span>
-  <span class="bar-actions"><form method="POST" style="margin:0">
+  <span class="bar-actions">{{template "regionToggle" $}}<form method="POST" style="margin:0">
       <button type="submit" name="toggleAnnotations" class="outline secondary anno-toggle" aria-pressed="{{if .AnnoDrawerOpen}}true{{else}}false{{end}}" title="Show/hide annotations">💬 {{len $.AllRegionComments}}</button>
     </form>{{if .AgentMode}}
     <form method="POST" style="margin:0">
@@ -383,10 +393,10 @@
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
-    </form>{{if ne $.ReplyingID .ID}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>{{end}}{{if not .Resolved}}<form method="POST">
+    </form>{{if ne $.ReplyingID .ID}}{{template "replyButton" .}}{{end}}{{if not .Resolved}}<form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="editComment" class="outline">Edit</button>
-    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap “Select a region”, then drag a box on the page.</small></p>{{end}}</div>
+    </form>{{end}}<button type="button" class="secondary outline" command="show-modal" commandfor="confirm-delete-{{.ID}}">Delete</button>{{template "deleteDialogTagged" .}}</div></div>{{else}}<p class="empty"><small>No annotations yet — tap Annotate, then drag a box on the page.</small></p>{{end}}</div>
   </aside>
 </div>
 <footer class="app-footer" role="contentinfo"><small>prereview{{if ne .Version "dev"}} v{{.Version}}{{end}} · external mode · <code>{{.TargetURL}}</code></small></footer>
@@ -533,7 +543,9 @@
 <form method="POST" class="sg-hidden-marker"><input type="hidden" name="ids" value="{{.IDs}}"><span class="sg-hidden-label">{{.Label}}</span> <button type="submit" name="unhideSuggestions" class="sg-hide-btn">Show</button></form>
 === htmlView ===
 {{with $.CurrentDiff}}  
-  <div class="html-view" data-key="html-{{.Path}}">{{template "regionToggle" $}}<div class="preview-stage"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}">{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
+  <div class="html-view" data-key="html-{{.Path}}"><div class="preview-stage{{if $.ShowBoxes}} show-boxes{{end}}"><iframe class="html-preview" sandbox="allow-scripts" srcdoc="{{$.RenderedHTMLDoc}}" lvt-fx:preview-bridge title="HTML preview of {{.Path}}"></iframe>{{if or $.HTMLMarkers $.PreviewPendingBox}}<div class="pin-layer preview-pins" data-key="preview-pins">{{range $.HTMLMarkers}}{{$mk := .Key}}<div class="area-overlay{{if .Acted}} is-acted{{else}}{{if not .Open}} is-resolved{{end}}{{end}}{{if .Unboxed}} is-unboxed{{end}}{{if eq $.FocusedHTMLBlock .Key}} is-focused{{end}}" data-id="{{.Key}}" data-from="{{.From}}" data-to="{{.To}}"><button type="button" class="pin-btn" lvt-on:click="focusHTMLBlock" data-id="{{.Key}}" aria-label="Show the comments on this block">{{.Total}}</button></div>{{range .Boxed}}<div class="area-overlay drawn-box {{index $.AnnotationColors .ID}}{{if .Resolved}} is-resolved{{else}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}{{end}}{{if and (eq $.FocusedHTMLBlock $mk) (not (index $.HiddenBoxes .ID))}} is-shown{{end}}{{if eq $.FrontBoxID .ID}} is-front{{end}}" data-box="{{.ID}}" lvt-on:click="raiseBox" style="left:{{.Anchor.Box.PercentX}};top:{{.Anchor.Box.PercentY}};width:{{.Anchor.Box.PercentW}};height:{{.Anchor.Box.PercentH}};">{{if and (eq $.FocusedHTMLBlock $mk) (not (index $.HiddenBoxes .ID))}}{{template "annotationBar" .}}{{end}}</div>{{end}}{{end}}{{with $.PreviewPendingBox}}<div class="area-overlay area-overlay-pending" data-box="pending" style="left:{{.PercentX}};top:{{.PercentY}};width:{{.PercentW}};height:{{.PercentH}};"></div>{{end}}</div>{{end}}{{if $.RegionSelectArmed}}<div class="region-overlay" lvt-fx:region-select="selectBlock" data-surface="html" data-key="region-html-{{.Path}}"></div>{{end}}</div>{{range $.RenderedHTML}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}{{$mbkey := printf "MB-%d-%d" $bs $be}}<div class="html-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}" data-key="{{$hbkey}}"{{if eq $.FocusedHTMLBlock $mbkey}} lvt-fx:scroll="into-view"{{end}}>{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
+=== iconAnnotate ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg>
 === iconBook ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconChat14 ===
@@ -560,6 +572,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconDiff ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 4h7v16H4zM13 4h7v16h-7z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M6 11h3M6 13h3M16 9v6M14 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+=== iconEyeOff ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.4 5.2A9.8 9.8 0 0 1 12 5c5 0 8.5 4.5 9.5 7a13 13 0 0 1-2.6 3.6M6.4 6.4C4.4 7.7 3 9.8 2.5 12c1 2.5 4.5 7 9.5 7a9.6 9.6 0 0 0 4.2-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
 === iconFile ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
 === iconFocus ===
@@ -578,6 +592,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 === iconRendered ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16M4 10h10M4 15h16M4 20h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+=== iconReopen ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 4v6h6M4.5 15a8 8 0 1 0 1.9-8.3L4 10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
 === iconSearch ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7" fill="none" /><path d="M16 16l5 5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" /></svg>
 === iconStop ===
@@ -592,6 +608,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8" fill="none" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
 === iconThemeSystem ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8" fill="none" /><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg>
+=== iconTrash ===
+<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
 === iconViewRaw ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M9 9h4M9 12h6M9 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
 === iconViewedCheck ===
@@ -783,11 +801,10 @@
   </form>
 
 === liveStage ===
-    {{template "regionToggle" $}}
-    <div class="preview-stage ext-stage" lvt-fx:proxy-bridge="setProxyURL" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
+    <div class="preview-stage ext-stage{{if $.ShowBoxes}} show-boxes{{end}}" lvt-fx:proxy-bridge="setProxyURL" data-page="{{$.CurrentURL}}" data-key="ext-stage"{{with $.FocusedComment}} data-focus-token="{{$.FocusSeq}}" data-focus-url="{{.URL}}" data-focus-y="{{.Area.Y}}"{{end}}>
       
       <iframe class="ext-frame" src="{{.ProxyBaseURL}}" title="Live preview of {{.TargetURL}}" lvt-ignore></iframe>
-      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<button type="button" class="area-overlay pin-btn{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" lvt-on:click="editComment" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}" aria-label="Edit annotation"></button>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
+      <div class="pin-layer" data-pin-layer data-key="pin-layer">{{range $.RegionComments}}<div class="area-overlay {{index $.AnnotationColors .ID}}{{if .Resolved}} is-resolved{{end}}{{if index $.AgentActedLabels .ID}} is-acted{{end}}{{if eq $.FocusedCommentID .ID}} is-focused{{end}}" data-id="{{.ID}}" data-key="pin-{{.ID}}" style="left:{{.Area.PercentX}};top:{{.Area.PercentY}};width:{{.Area.PercentW}};height:{{.Area.PercentH}};"><button type="button" class="pin-btn" lvt-on:click="{{if $.Combined}}openAnnotations{{else}}editComment{{end}}" data-id="{{.ID}}" title="{{with index $.AgentActedLabels .ID}}{{.}} — {{end}}{{.Body}}" aria-label="{{if $.Combined}}Open{{else}}Edit{{end}} annotation {{index $.AnnotationNumbers .ID}}">{{index $.AnnotationNumbers .ID}}</button>{{if eq $.FocusedCommentID .ID}}{{template "annotationBar" .}}{{end}}</div>{{end}}{{if eq $.CommentMode "region"}}<div class="area-overlay area-overlay-pending" data-key="pin-pending" style="left:{{$.SelectionArea.PercentX}};top:{{$.SelectionArea.PercentY}};width:{{$.SelectionArea.PercentW}};height:{{$.SelectionArea.PercentH}};"></div>{{end}}</div>
       {{if and .RegionSelectArmed $.LiveShowing}}<div class="region-overlay" lvt-fx:region-select="selectRegion" data-surface="page" data-key="ext-region-overlay"></div>{{end}}
     </div>
     {{if and $.LiveShowing (eq $.CommentMode "region")}}{{template "composer" $}}{{end}}
@@ -960,7 +977,7 @@
   </form>
   {{end}}
   
-  {{if $.HasMarks}}
+  {{if or $.HasMarks (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
   <form method="POST">
     <button type="submit" name="toggleMarks" class="menu-item{{if not .HideMarks}} is-on{{end}}" role="menuitem">
       <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
@@ -1300,6 +1317,11 @@
 
 
 
+
+
+
+
+
 === processedBadge ===
 <small class="processed-badge">worked on</small>
 === queuedBadge ===
@@ -1416,8 +1438,10 @@
   {{end}}
 === regionToggle ===
 <form method="POST" class="region-toggle">
-  <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}">{{if $.RegionSelectArmed}}Selecting region — tap to cancel{{else}}▭ Select a region to comment{{end}}</button>
+  <button type="submit" name="toggleRegionSelect" class="{{if $.RegionSelectArmed}}contrast{{else}}outline secondary{{end}}" aria-pressed="{{if $.RegionSelectArmed}}true{{else}}false{{end}}" title="Drag a box on the page to comment on that part">{{template "iconAnnotate"}}<span class="annotate-word">{{if $.RegionSelectArmed}} Annotating — tap to cancel{{else}} Annotate{{end}}</span></button>
 </form>
+=== replyButton ===
+<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form>
 === replyForm ===
 <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
     <input type="hidden" name="id" value="{{.ReplyingID}}">
@@ -1596,7 +1620,7 @@
 {{$d := index $.DecisionsBySuggestion .ID}}{{$applied := index $.Applied .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}" data-key="sg-{{.ID}}"{{if eq $.ScrollToItemKey (printf "sg:%s" .ID)}} lvt-fx:scroll="into-view"{{end}} lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{with .For}} · <form method="POST" class="sg-for"><input type="hidden" name="id" value="{{.}}"><button type="submit" name="jumpToComment" class="sg-for-btn" title="Part of a change your comment asked for: go to it">for your comment</button></form>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
     </span>
   </header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff{{if not .ProposedText}} is-deletion{{end}}">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}{{if .ProposedText}}<pre class="sg-new">{{.ProposedText}}</pre>{{else}}<p class="sg-del-note">delete — accepting removes {{.LineSpan}}</p>{{end}}
-  </div>{{if and .AnchorOutdated (not $applied)}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{else}}<div class="sg-reply-open"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="openReply" class="outline">Reply</button></form></div>{{end}}{{if $applied}}{{if $d.Revert}}<div class="sg-actions"><small class="sg-applied-status sg-reverting">Reverting — the agent will restore the original text.</small></div>{{else}}<div class="sg-actions">
+  </div>{{if and .AnchorOutdated (not $applied)}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{template "thread" (index $.Threads .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{else}}<div class="sg-reply-open">{{template "replyButton" .}}</div>{{end}}{{if $applied}}{{if $d.Revert}}<div class="sg-actions"><small class="sg-applied-status sg-reverting">Reverting — the agent will restore the original text.</small></div>{{else}}<div class="sg-actions">
     <small class="sg-applied-status">Edit applied to the file.</small>
     <form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="requestRevert" class="outline sg-revert-btn">Revert</button></form>
   </div>{{end}}{{else}}{{if not .AnchorOutdated}}{{if $d.Verdict}}<div class="sg-actions">
@@ -1656,8 +1680,8 @@
   </form>
   {{end}}
   <div class="title">
-    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<span class="title-page">{{.LivePageLabel}}</span> <small class="live-count">· {{len .RegionComments}} annotation{{if ne (len .RegionComments) 1}}s{{end}}</small>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
-  </div>
+    <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations">{{template "iconChat14"}}{{len .RegionComments}}<span class="live-count-word"> annotation{{if ne (len .RegionComments) 1}}s{{end}}</span></button>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
+  </div>{{if .CanAnnotate}}{{template "regionToggle" $}}{{end}}
   
   <div class="toolbar-inline">
     {{if not .LiveShowing}}<div class="tb-group tb-counters">
@@ -1843,11 +1867,18 @@
         </form>
         {{end}}
         
-        {{if $.HasMarks}}
+        {{if or $.HasMarks (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
         <form method="POST">
           <button type="submit" name="toggleMarks" class="menu-item{{if not .HideMarks}} is-on{{end}}" role="menuitem">
             <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
             <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}{{with index $.KeyHint "toggleMarks"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+          </button>
+        </form>
+        {{end}}{{if or (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
+        <form method="POST">
+          <button type="submit" name="toggleBoxes" class="menu-item{{if .ShowBoxes}} is-on{{end}}" role="menuitem">
+            <span class="menu-icon">{{if .ShowBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+            <span class="menu-label">Show boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
           </button>
         </form>
         {{end}}
