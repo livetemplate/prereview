@@ -82,11 +82,11 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			}
 			waitJSDiag(t, p, `!!document.querySelector('`+box+`.is-acted')`, "the marker ticks once both are worked on", diag)
 
-			// Tap: the box is outlined and the block's cards scroll into view.
+			// Tap: the boxes show, and the block's card opens under them.
 			// Centre the marker first: scrolled just into view it sits under the
 			// sticky file header, which would take the click.
 			tapCentred(t, p, box+` .pin-btn`, "tap the marker", diag)
-			waitJSDiag(t, p, `document.querySelectorAll('.preview-pins .drawn-box.is-shown').length === 3 && (() => { const r = document.querySelector('.html-block[data-key="HB-4-4"]').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the three boxes shown and the cards in view", diag)
+			waitJSDiag(t, p, `document.querySelectorAll('.preview-pins .drawn-box.is-shown').length === 3 && (() => { const c = document.querySelector('.preview-card'); if (!c) return false; const r = c.getBoundingClientRect(); return c.querySelectorAll('.inline-comment').length === 3 && r.top < innerHeight && r.bottom > 0; })()`, "the three boxes shown and the card with their comments", diag)
 			checkDrawnBoxes(t, p, drawn, diag)
 			if w := evalInt(t, p, `parseInt(getComputedStyle(document.querySelector('`+box+`')).borderTopWidth)`); w != 0 {
 				t.Errorf("the block is outlined (%dpx) although every comment on it has its own box%s", w, diag())
@@ -200,7 +200,7 @@ func checkDrawnBoxes(t *testing.T, p *runningPrereview, want []previewBox, diag 
 		const f = document.querySelector('iframe.html-preview').getBoundingClientRect();
 		`+annColourJS+`
 		const cards = {};
-		for (const c of document.querySelectorAll('.html-block .inline-comment')) cards[c.dataset.key] = colour(c);
+		for (const c of document.querySelectorAll('.preview-card .inline-comment')) cards[c.dataset.key] = colour(c);
 		return {
 			Frame: { Left: f.left, Top: f.top, Width: f.width },
 			Boxes: [...document.querySelectorAll('.preview-pins .drawn-box')].map(b => {
@@ -270,7 +270,7 @@ func checkAnnotationBar(t *testing.T, p *runningPrereview, marker string, diag f
 	}
 	tapCentred(t, p, firstBox, "tap the first box", diag)
 	waitJSDiag(t, p, onTop+` === '`+first+`' && !!document.querySelector('`+firstBox+`.is-front')`, "the tapped box comes to the front", diag)
-	card := `.html-block .inline-comment[data-key="` + first + `"]`
+	card := `.preview-card .inline-comment[data-key="` + first + `"]`
 
 	tap(bar+` .anno-act[aria-label="Resolve"]`, "resolve from the bar")
 	waitJSDiag(t, p, `!!document.querySelector('`+card+`.is-resolved') && !!document.querySelector('`+bar+` .anno-act[aria-label="Reopen"]')`, "resolved, and the bar offers Reopen", diag)

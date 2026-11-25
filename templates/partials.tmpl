@@ -53,7 +53,7 @@
      is identical everywhere. Reads only $ (root state), so invoke as {{template "composer" $}}. */}}
 {{define "composer" -}}
 <div
-  class="composer{{if eq $.CommentMode "region"}} ext-composer{{else if and (eq $.CommentMode "") $.ShowRenderedHTML}} composer-pinned{{end}}"
+  class="composer{{if eq $.CommentMode "region"}} ext-composer{{end}}"
   data-key="composer{{if $.ComposerNonce}}-{{$.ComposerNonce}}{{end}}"
   {{- if eq $.CommentMode "region"}} lvt-fx:scroll="into-view"{{end}}
 >

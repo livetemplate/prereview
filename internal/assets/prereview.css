@@ -2274,16 +2274,43 @@ header.file-head .file-head-comment button svg { display: block; }
    not pool entirely in the gutters. Focus mode goes wider still (below). */
 .md-view { padding: 0.6rem 1.8rem 2rem; max-width: 60rem; margin-inline: auto; }
 /* HTML preview: the whole file renders in one sandboxed iframe (full
-   document fidelity), with the comments list stacked below it. The
-   client auto-heights .html-preview from its content; the fallback
-   min-height avoids a zero-height flash before the directive runs.
-   .html-block now wraps only a block's comments + composer; .selected
-   marks the block being commented on (the visual highlight lives inside
-   the iframe). */
+   document fidelity). The client auto-heights .html-preview from its
+   content; the fallback min-height avoids a zero-height flash before the
+   directive runs. Comments open in a card over it (.preview-card). */
 .html-view { padding: 0.6rem 1.8rem 2rem; max-width: 56rem; margin-inline: auto; }
 .html-preview { display: block; width: 100%; border: 0; min-height: 60vh; background: #fff; color-scheme: light; }
-.html-block { position: relative; border-radius: 6px; }
-.html-block.selected { outline: 2px solid var(--primary, currentColor); outline-offset: 4px; }
+/* The preview's card (PreviewCard): one block's comments, suggestions and
+   composer, floating over the page. Under a box (.on-box) it is placed by
+   percentage of the preview, like the boxes, and spans the preview on a
+   phone. Otherwise it opens under the block's marker, inside an invisible
+   anchor that lvt-fx:preview-bridge places over the block (as .area-overlay,
+   which it then strips of the overlay's border and fill). Only the card takes
+   taps. */
+.preview-pins .preview-card-anchor { border: 0; background: none; box-shadow: none; pointer-events: none; z-index: 5; }
+.preview-card {
+  position: absolute; top: 30px; left: 0; z-index: 5;
+  width: min(26rem, calc(100vw - 2rem)); max-height: 60vh; overflow-y: auto;
+  padding: 0.4rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  background: var(--surface-card); box-shadow: var(--shadow-md);
+  pointer-events: auto; visibility: visible; color: var(--pico-color);
+}
+.preview-card.on-box { top: calc(var(--card-top) + 6px); left: var(--card-left); }
+.preview-card.on-box.is-right { left: auto; right: var(--card-right); }
+@media (max-width: 640px) {
+  .preview-card.on-box, .preview-card.on-box.is-right { left: 0; right: 0; width: auto; }
+}
+.preview-card .composer { position: static; margin: 0.3rem 0 0; box-shadow: none; }
+.preview-card .inline-comment:first-of-type { margin-top: 0; }
+/* The × sits in its own strip above the comments: they are positioned, so a
+   floated button would paint under them and lose its taps. */
+.preview-card:has(> .preview-card-close) { padding-top: 34px; }
+.preview-card-close {
+  position: absolute; top: 4px; right: 4px; z-index: 1;
+  width: 28px; height: 28px; padding: 0; margin: 0;
+  border: 0; border-radius: 6px; background: none; color: var(--pico-muted-color);
+  font-size: 1.2rem; line-height: 1; cursor: pointer;
+}
+.preview-card-close:hover { background: var(--pico-muted-border-color); }
 /* Sticky top bar (var(--pr-bar-h)) would otherwise obscure the anchored
    heading when the browser jumps to "#id". scroll-padding-top reserves
    that gap so the heading lands just below the bar. Smooth scroll is
@@ -3218,14 +3245,6 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   box-shadow: var(--shadow-sm);
   font-family: var(--sans);
   display: flex; flex-direction: column;
-}
-/* An HTML preview's composer renders in the cards below the preview, which is
-   as tall as its page, so it floats at the bottom of the screen while open:
-   the box just drawn stays in sight above it. */
-.composer.composer-pinned {
-  position: fixed; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
-  width: min(40rem, calc(100vw - 1.5rem)); max-height: 60vh; overflow-y: auto;
-  margin: 0; z-index: 30; box-shadow: var(--shadow-md);
 }
 .composer strong { font-size: 0.78rem; color: var(--text-strong); }
 /* The selected-text preview in a kind=text composer heading: a compact,

@@ -27,9 +27,9 @@ func readComposerRect(t *testing.T, p *runningPrereview, composer, box string, d
 }
 
 // TestE2E_HTMLComposerInView: drawing a box on an HTML preview opens its
-// composer on screen, with the box still in sight above it. The composer
-// renders in the cards below the preview, which is as tall as its page, so
-// unpinned it opened below the fold.
+// composer on screen, with the box still in sight above it. The preview is as
+// tall as its page, and the composer once opened in a list below it, out of
+// sight; it now opens in the card under the box (TestE2E_HTMLPreviewCard).
 func TestE2E_HTMLComposerInView(t *testing.T) {
 	for _, vp := range []struct {
 		name string

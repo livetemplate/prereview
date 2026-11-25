@@ -832,10 +832,8 @@
         lvt-fx:region-select="selectBlock"
         data-surface="html"
         data-key="region-html-index.html"
-      ></div></div><div
-      class="html-block"
-      data-key="HB-1-1"
-    ></div></div>
+      ></div></div>
+  </div>
   
 </article>
 

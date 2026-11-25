@@ -10,8 +10,8 @@
        block rects the in-iframe beacon (previewBridgeJS) posts out. Selecting
        a region to comment on is driven by a parent-document overlay, not from
        inside the iframe — iOS does not deliver iframe-internal events to parent
-       listeners. Comments and the composer render in a list BELOW the preview
-       (they can't interleave into the iframe document). */}}
+       listeners. Comments and the composer open in a card over the preview, by
+       the box or marker they belong to (PreviewCard). */}}
   <div class="html-view" data-key="html-{{.Path}}">
     {{- /* sandboxed iframe preview + draw-a-region overlay */ -}}
     <div class="preview-stage{{if $.ShowBoxes}} show-boxes{{end}}"><iframe
@@ -30,7 +30,7 @@
              drawn boxes are placed by percentage: the layer covers the
              preview, which is sized to its page. A box the marker opened
              takes a tap, which brings it to the front (FrontBoxID). */ -}}
-      {{- if or $.HTMLMarkers $.PreviewPendingBox}}<div class="pin-layer preview-pins" data-key="preview-pins">
+      {{- if or $.HTMLMarkers $.PreviewPendingBox $.PreviewCard}}<div class="pin-layer preview-pins" data-key="preview-pins">
         {{- range $.HTMLMarkers -}}
         {{- $mk := .Key -}}
         <div class="area-overlay
@@ -63,6 +63,21 @@
                 data-box="pending"
                 style="left:{{.PercentX}};top:{{.PercentY}};width:{{.PercentW}};height:{{.PercentH}};"></div>
         {{- end -}}
+        {{- /* The open card (PreviewCard): a block's comments, suggestions and
+               composer. Under a box (being drawn, or the block's drawn boxes)
+               it is placed by percentage like the boxes; else it rides an
+               anchor that lvt-fx:preview-bridge places over the block, as it
+               does the markers, and opens under the marker. */ -}}
+        {{- with $.PreviewCard -}}
+        {{- if .Box -}}
+        {{template "previewCard" .}}
+        {{- else -}}
+        <div class="area-overlay preview-card-anchor"
+                data-key="preview-card-anchor"
+                data-from="{{.Block.StartLine}}"
+                data-to="{{.Block.EndLine}}">{{template "previewCard" .}}</div>
+        {{- end -}}
+        {{- end -}}
       </div>{{end}}
       {{- if $.RegionSelectArmed -}}
       <div
@@ -73,18 +88,12 @@
       ></div>
       {{- end -}}
     </div>
-    {{- /* per-block comment anchors, keyed to source line range */ -}}
-    {{- range $.RenderedHTML -}}
-    {{$bs := .StartLine}}{{$be := .EndLine}}{{$hbkey := printf "HB-%d-%d" $bs $be}}{{$mbkey := printf "MB-%d-%d" $bs $be -}}
-    <div
-      class="html-block
-      {{- if and
-          (ne $.SelectionEndMax 0)
-          (ge $.SelectionEndMax $bs)
-          (le $.SelectionEndMax $be)}} selected{{end -}}
-      "
-      data-key="{{$hbkey}}"
-      {{- if eq $.FocusedHTMLBlock $mbkey}} lvt-fx:scroll="into-view"{{end}}
-    >{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>
-    {{- end -}}
   </div>{{end}}{{end}}
+
+{{/* previewCard is the card PreviewCard describes; `.` is the PreviewCardView. */}}
+{{define "previewCard"}}<div class="preview-card{{if .Box}} on-box{{if .Right}} is-right{{end}}{{end}}"
+          data-key="preview-card-{{.Block.StartLine}}-{{.Block.EndLine}}"
+          {{- with .Box}} style="--card-top:{{.PercentBottom}};--card-left:{{.PercentX}};--card-right:{{.PercentRight}};"{{end}}>
+            {{- if eq $.SelectionEndMax 0}}<button type="button" class="preview-card-close" lvt-on:click="closePreviewCard" title="Close" aria-label="Close">&times;</button>{{end -}}
+            {{template "blockComments" .Block}}{{template "blockSuggestions" .Block}}
+          </div>{{end}}

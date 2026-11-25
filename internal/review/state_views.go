@@ -1252,6 +1252,111 @@ func (s PrereviewState) PreviewPendingBox() *Area {
 	return &a
 }
 
+// PreviewCardView is the one card open over an HTML preview: a block's
+// comments, suggestions and composer, shown by the box or marker they belong
+// to instead of in a list under the page, so the reviewer never scrolls away
+// from what they are commenting on.
+type PreviewCardView struct {
+	Block gitdiff.HTMLBlock
+	// Box is the box being drawn, which the card opens under. Nil when the card
+	// opens under the block's marker.
+	Box *Area
+	// Right opens the card leftwards from the box's right edge, for a box on
+	// the right half of the page, so it stays inside the preview.
+	Right bool
+}
+
+// PreviewCard is the card open over the HTML preview, or nil. It shows the
+// block of, first match wins: the open composer, the thread being replied to,
+// then the focused marker (a tap, or a jump: focusPreviewBlock). A save opens
+// none, so the reviewer is back on the page with the new marker, as on the
+// live site.
+func (s PrereviewState) PreviewCard() *PreviewCardView {
+	if !s.ShowRenderedHTML() {
+		return nil
+	}
+	if line := s.SelectionEndMax(); line != 0 && s.CommentMode == "" {
+		card := s.previewCardAt(line)
+		if card != nil {
+			if box := s.PreviewPendingBox(); box != nil {
+				card.Box, card.Right = box, box.X+box.W/2 > 0.5
+			}
+		}
+		return card
+	}
+	commentLine := func(id string) int {
+		if id == "" {
+			return 0
+		}
+		for _, c := range s.FileComments() {
+			if c.ID == id {
+				return c.ToLine
+			}
+		}
+		return 0
+	}
+	var card *PreviewCardView
+	if line := commentLine(s.ReplyingID); line != 0 {
+		card = s.previewCardAt(line)
+	} else if s.FocusedHTMLBlock != "" {
+		for _, b := range s.RenderedHTML() {
+			if markdownBlockKey(b.StartLine, b.EndLine) == s.FocusedHTMLBlock {
+				card = &PreviewCardView{Block: b}
+				break
+			}
+		}
+	}
+	if card != nil {
+		// Under the boxes the block's comments were drawn with, not over them,
+		// so their bars and taps stay reachable. A block with no boxes opens
+		// under its marker.
+		if box := s.blockBoxes(card.Block); box != nil {
+			card.Box, card.Right = box, box.X+box.W/2 > 0.5
+		}
+	}
+	return card
+}
+
+// blockBoxes is the smallest area holding every box drawn for a comment on the
+// preview block b, or nil when none has one.
+func (s PrereviewState) blockBoxes(b gitdiff.HTMLBlock) *Area {
+	var out *Area
+	for _, c := range s.BlockComments()[markdownBlockKey(b.StartLine, b.EndLine)] {
+		a := c.Anchor.Box
+		if a.Empty() {
+			continue
+		}
+		if out == nil {
+			out = &a
+			continue
+		}
+		x2, y2 := max(out.X+out.W, a.X+a.W), max(out.Y+out.H, a.Y+a.H)
+		out.X, out.Y = min(out.X, a.X), min(out.Y, a.Y)
+		out.W, out.H = x2-out.X, y2-out.Y
+	}
+	return out
+}
+
+// focusPreviewBlock focuses the HTML preview's block holding line, the way a
+// marker tap does, so a jump to a comment or suggestion opens its card. It does
+// nothing outside the HTML preview.
+func (s *PrereviewState) focusPreviewBlock(line int) {
+	if card := s.previewCardAt(line); card != nil {
+		s.FocusedHTMLBlock = markdownBlockKey(card.Block.StartLine, card.Block.EndLine)
+		s.HiddenBoxes = nil
+	}
+}
+
+// previewCardAt is a card for the preview block whose source range holds line.
+func (s PrereviewState) previewCardAt(line int) *PreviewCardView {
+	for _, b := range s.RenderedHTML() {
+		if line >= b.StartLine && line <= b.EndLine {
+			return &PreviewCardView{Block: b}
+		}
+	}
+	return nil
+}
+
 // regionVisible reports whether c is a live-site annotation that shows: the
 // rule the page's boxes, the live-only sidebar and the Annotations filter share.
 func (s PrereviewState) regionVisible(c Comment) bool {

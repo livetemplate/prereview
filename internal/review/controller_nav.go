@@ -30,8 +30,10 @@ func (c *PrereviewController) navGo(state PrereviewState, delta int) (PrereviewS
 		switch pos.Kind {
 		case navComment:
 			state.ScrollToCommentID = pos.ID
+			state.focusPreviewBlock(pos.Line)
 		case navSuggestion:
 			state.ScrollToItemKey = "sg:" + pos.ID
+			state.focusPreviewBlock(pos.Line)
 		case navQuiz:
 			state.ScrollToItemKey = "qz:" + pos.ID
 		}

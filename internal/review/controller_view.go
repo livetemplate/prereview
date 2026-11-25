@@ -51,6 +51,16 @@ func (c *PrereviewController) FocusHTMLBlock(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
+// ClosePreviewCard answers the × on the HTML preview's card (PreviewCard): it
+// clears everything that keeps a card open, short of a composer, which closes
+// with its own Cancel.
+func (c *PrereviewController) ClosePreviewCard(state PrereviewState, _ *livetemplate.Context) (PrereviewState, error) {
+	state.FocusedHTMLBlock, state.HiddenBoxes = "", nil
+	state.ReplyingID, state.ReplyDraft = "", ""
+	clearScrollTargets(&state)
+	return state, nil
+}
+
 // RaiseBox answers a tap on a preview box a marker opened: it comes to the
 // front, above the boxes it overlaps.
 func (c *PrereviewController) RaiseBox(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
@@ -468,6 +478,7 @@ func (c *PrereviewController) JumpToComment(state PrereviewState, ctx *livetempl
 		return state, err
 	}
 	state.ScrollToCommentID = id
+	state.focusPreviewBlock(state.Comments[idx].ToLine)
 	return state, nil
 }
 
@@ -485,6 +496,7 @@ func (c *PrereviewController) JumpToSuggestion(state PrereviewState, ctx *livete
 	state, err := c.selectFileForJump(state, sg.File)
 	if err == nil {
 		state.ScrollToItemKey = "sg:" + id
+		state.focusPreviewBlock(sg.ToLine)
 	}
 	return state, err
 }
