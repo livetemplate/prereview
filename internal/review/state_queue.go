@@ -146,6 +146,8 @@ func (s PrereviewState) suggestionQueueState(sg Suggestion) string {
 // ("").
 func (s PrereviewState) questionQueueState(set QuestionSet) string {
 	switch {
+	case s.QuestionStatus[set.ID].Resolved:
+		return "" // closed by the reviewer, like a resolved comment
 	case s.QuestionsDone[set.ID]:
 		return queueDone
 	case questionSetSent(set, s.QuestionAnswers):

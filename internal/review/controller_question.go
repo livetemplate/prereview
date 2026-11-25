@@ -48,18 +48,19 @@ func (c *PrereviewController) groundQuestions(state *PrereviewState, citableFile
 // neither file.
 func (c *PrereviewController) applyQuestionAnswers(state *PrereviewState) {
 	if len(state.QuestionSets) == 0 {
-		state.QuestionAnswers, state.QuestionsDone = nil, nil
+		state.QuestionAnswers, state.QuestionsDone, state.QuestionStatus = nil, nil, nil
 		return
 	}
 	state.QuestionAnswers = loadQuestionAnswers(QuestionAnswersPath(c.CSVPath))
 	state.QuestionsDone = doneMarks(c.CSVPath)
+	state.QuestionStatus = loadQuestionStatus(QuestionStatusPath(c.CSVPath))
 }
 
 // emitSnapshotOf emits state's snapshot: the one argument list both the
 // debounced emit and the final flush send.
 func (c *PrereviewController) emitSnapshotOf(st *PrereviewState) error {
 	threads := st.Threads()
-	questions := actionableQuestions(st.scopedQuestionSets(), st.QuestionAnswers, st.QuestionsDone, threads)
+	questions := actionableQuestions(st.scopedQuestionSets(), st.QuestionAnswers, st.QuestionStatus, st.QuestionsDone, threads)
 	return c.Emitter.EmitSnapshot(st.scopedComments(), st.scopedSuggestions(), st.DecisionsBySuggestion(), threads, st.Applied, st.QuizResults(), questions, c.WriteWith(), c.isPaused(), time.Now())
 }
 
@@ -252,4 +253,41 @@ func (c *PrereviewController) markQuestionSent(state PrereviewState, setID strin
 	state.QuestionView = withEntry(state.QuestionView, setID, 0)
 	c.scheduleEmit()
 	return state, nil
+}
+
+// setQuestionStatus changes one set's status with edit, saves the file and
+// re-emits, so a resolve reaches the agent.
+func (c *PrereviewController) setQuestionStatus(state PrereviewState, id string, edit func(*QuestionStatus)) (PrereviewState, error) {
+	set, err := findQuestionSet(&state, id)
+	if err != nil {
+		return state, err
+	}
+	st := state.QuestionStatus[set.ID]
+	st.SetID = set.ID
+	edit(&st)
+	st.At = time.Now().UnixNano()
+	next := withEntry(state.QuestionStatus, set.ID, st)
+	if err := saveJSONLMap(QuestionStatusPath(c.CSVPath), next); err != nil {
+		return state, err
+	}
+	state.QuestionStatus = next
+	c.scheduleEmit()
+	return state, nil
+}
+
+// ToggleQuestionResolved is Resolve and Reopen on a question card, as on a
+// comment's. A resolved set leaves the queue; the agent is told once (until it
+// marks the set done) so it stops waiting on it.
+func (c *PrereviewController) ToggleQuestionResolved(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.setQuestionStatus(state, ctx.GetString("id"), func(st *QuestionStatus) { st.Resolved = !st.Resolved })
+}
+
+// HideQuestion and ShowQuestion take a card out of view and bring it back, as
+// for a suggestion. View-only: the agent is not told.
+func (c *PrereviewController) HideQuestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.setQuestionStatus(state, ctx.GetString("id"), func(st *QuestionStatus) { st.Hidden = true })
+}
+
+func (c *PrereviewController) ShowQuestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	return c.setQuestionStatus(state, ctx.GetString("id"), func(st *QuestionStatus) { st.Hidden = false })
 }

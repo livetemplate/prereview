@@ -264,3 +264,38 @@ func TestE2E_QuestionQueued(t *testing.T) {
 	mustCLI(t, p, "done", "--out", p.repo, "q1")
 	waitJSDiag(t, p, `(document.querySelector("`+card+` .queue-badge") || {}).textContent === 'done'`, "done on the card", diag)
 }
+
+// TestE2E_QuestionResolveHide: a question card has a comment's Resolve and
+// Reopen and a suggestion's Hide. Resolving an unanswered set tells the agent
+// (resolved, no answers) and hides the card unless "Show resolved" is on;
+// Hide leaves a marker whose Show brings the card back.
+func TestE2E_QuestionResolveHide(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	diag := captureDiag(t, p)
+	p.clickFile("edited.go")
+	runAgentVerb(t, p, "ask", oneTapSet)
+	card := `.question-card[data-key='question-q1']`
+	waitJSDiag(t, p, `!!document.querySelector("`+card+`")`, "the question", diag)
+
+	// Hide → marker → Show.
+	tapIn(t, p, card+` button[name='hideQuestion']`, "Hide", diag)
+	waitJSDiag(t, p, `!document.querySelector("`+card+`") && !!document.querySelector(".question-hidden-marker button[name='showQuestion']")`, "Hide leaves a marker", diag)
+	if qs := lastQuestions(t, p); len(qs) != 0 {
+		t.Fatalf("hiding told the agent: %+v", qs)
+	}
+	tapIn(t, p, `.question-hidden-marker button[name='showQuestion']`, "Show", diag)
+	waitJSDiag(t, p, `!!document.querySelector("`+card+`")`, "Show brings the card back", diag)
+
+	// Resolve: the agent is told; the card goes, unless Show resolved is on.
+	tapIn(t, p, card+` button[name='toggleQuestionResolved']`, "Resolve", diag)
+	waitQuestions(t, p, "after Resolve", func(qs []review.StreamQuestion) bool {
+		return len(qs) == 1 && qs[0].ID == "q1" && qs[0].Resolved && len(qs[0].Answers) == 0
+	}, diag)
+	waitJSDiag(t, p, `!document.querySelector("`+card+`")`, "a resolved card is hidden like a resolved comment", diag)
+	p.openViewItem("toggleShowResolved")
+	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+card+`"); return !!c && c.classList.contains('is-resolved') && c.querySelector("button[name='toggleQuestionResolved']").textContent === 'Reopen'; })()`, "Show resolved shows it, with Reopen", diag)
+	tapIn(t, p, card+` button[name='toggleQuestionResolved']`, "Reopen", diag)
+	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+card+`"); return !!c && !c.classList.contains('is-resolved') && !!c.querySelector("button[name='pickQuestionOption']"); })()`, "Reopen brings the options back", diag)
+	waitQuestions(t, p, "after Reopen", func(qs []review.StreamQuestion) bool { return len(qs) == 0 }, diag)
+}

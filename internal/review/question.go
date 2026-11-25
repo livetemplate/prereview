@@ -23,6 +23,9 @@ import (
 const (
 	QuestionsFileName       = "questions.jsonl"
 	QuestionAnswersFileName = "question-answers.jsonl"
+	// QuestionStatusFileName is the reviewer's resolve and hide per set,
+	// server-owned like the answers.
+	QuestionStatusFileName = "question-status.jsonl"
 )
 
 // The limits follow Claude Code's own options picker (AskUserQuestion): up to
@@ -94,6 +97,34 @@ type QuestionAnswer struct {
 // OneTap reports whether a pick sends the set at once: one question, pick one.
 // Every other set is sent with Submit.
 func (s QuestionSet) OneTap() bool { return len(s.Steps) == 1 && !s.Steps[0].Multi }
+
+// QuestionStatus is what the reviewer did to a set besides answering it, as for
+// a comment: Resolved closes it (the agent is told, then it leaves the queue);
+// Hidden takes its card out of view, leaving a marker (view-only, like hiding a
+// suggestion).
+type QuestionStatus struct {
+	SetID    string `json:"set_id"`
+	Resolved bool   `json:"resolved,omitempty"`
+	Hidden   bool   `json:"hidden,omitempty"`
+	At       int64  `json:"at"`
+}
+
+// QuestionStatusPath is the status file beside the CSV.
+func QuestionStatusPath(csvPath string) string {
+	return filepath.Join(filepath.Dir(csvPath), QuestionStatusFileName)
+}
+
+// loadQuestionStatus reads the reviewer's resolve and hide marks, by set id.
+func loadQuestionStatus(path string) map[string]QuestionStatus {
+	out := map[string]QuestionStatus{}
+	readJSONL(path, func(line []byte) {
+		var st QuestionStatus
+		if json.Unmarshal(line, &st) == nil && st.SetID != "" {
+			out[st.SetID] = st
+		}
+	})
+	return out
+}
 
 // answered reports whether a carries an answer: a pick or a typed one.
 func (a QuestionAnswer) answered() bool { return len(a.Picked) > 0 || a.Other != "" }
@@ -242,7 +273,10 @@ type StreamQuestion struct {
 	ToLine       int                    `json:"to_line"`
 	Side         string                 `json:"side"`
 	AnchorStatus string                 `json:"anchor_status,omitempty"`
-	Answers      []StreamQuestionAnswer `json:"answers"`
+	// Resolved: the reviewer closed the set. Build nothing new for it, and
+	// `done` it so it stops coming.
+	Resolved bool                   `json:"resolved,omitempty"`
+	Answers  []StreamQuestionAnswer `json:"answers"`
 	Thread       []StreamReply          `json:"thread,omitempty"`
 }
 
@@ -256,19 +290,20 @@ type StreamQuestionAnswer struct {
 }
 
 // actionableQuestions is what the agent must act on: every set the reviewer has
-// sent and the agent has not marked done, plus any set whose thread ends with
-// the reviewer. A set that is not sent yet never ships: its answers may still
-// change.
-func actionableQuestions(sets []QuestionSet, answers map[string]QuestionAnswer, done map[string]bool, threadByID map[string][]ThreadEntry) []StreamQuestion {
+// sent or resolved and the agent has not marked done, plus any set whose thread
+// ends with the reviewer. A set that is neither sent nor resolved never ships:
+// its answers may still change.
+func actionableQuestions(sets []QuestionSet, answers map[string]QuestionAnswer, status map[string]QuestionStatus, done map[string]bool, threadByID map[string][]ThreadEntry) []StreamQuestion {
 	var out []StreamQuestion
 	for _, s := range sets {
 		thread := threadByID[s.ID]
 		sent := questionSetSent(s, answers)
-		if !hasUnreadReviewerReply(thread) && (!sent || done[s.ID]) {
+		resolved := status[s.ID].Resolved
+		if !hasUnreadReviewerReply(thread) && ((!sent && !resolved) || done[s.ID]) {
 			continue
 		}
 		q := StreamQuestion{ID: s.ID, For: s.For, File: s.File, FromLine: s.FromLine, ToLine: s.ToLine,
-			Side: s.Side, AnchorStatus: s.AnchorStatus, Answers: []StreamQuestionAnswer{}, Thread: toStreamThread(thread)}
+			Side: s.Side, AnchorStatus: s.AnchorStatus, Resolved: resolved, Answers: []StreamQuestionAnswer{}, Thread: toStreamThread(thread)}
 		if sent {
 			for _, st := range s.Steps {
 				a := answers[questionAnswerKey(s.ID, st.ID)]

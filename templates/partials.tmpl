@@ -668,10 +668,23 @@
      screen with its options, a tab per question and Submit, or once sent, the answer in one line.
      `.` is a QuestionCard; $card keeps it inside the ranges. Each option is its own
      POST form, as on the quiz card. */}}
-{{define "questionCard"}}{{$card := .}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}">
-  <div class="question-head"{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}><span class="question-who">Agent asks</span><span class="question-chip">{{if gt .StepCount 1}}{{.StepCount}} questions{{else}}Question{{end}}</span>{{with .QueueState}}<span class="queue-badge queue-badge-{{.}}">{{.}}</span>{{end}}<span>{{.AnchorLabel}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>
+{{define "questionCard"}}{{$card := .}}{{- if .Hidden}}<form method="POST" class="sg-hidden-marker question-hidden-marker" data-key="question-{{.ID}}"><input type="hidden" name="id" value="{{.ID}}"><span class="sg-hidden-label">1 hidden question</span> <button type="submit" name="showQuestion" class="sg-hide-btn">Show</button></form>
+{{- else}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}{{if .Resolved}} is-resolved{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}">
+  {{- /* label · step count · line span · status badges, Hide at the right: the
+         suggestion card's header, since the agent wrote this card too */ -}}
+  <header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}><span class="sg-label">{{template "iconQuiz"}} question</span>
+    {{- if gt .StepCount 1}} <small class="sg-group-tag">{{.StepCount}} questions</small>{{end}} · <small>{{.AnchorLabel}}</small>
+    {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
+    {{- with .QueueState}} · <small class="queue-badge queue-badge-{{.}}">{{.}}</small>{{end}}
+    {{- if .Ungrounded}} · <small class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ not in this diff</small>{{end}}
+    <span class="sg-hide-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideQuestion" class="sg-hide-btn" title="Hide this question from view">Hide</button></form></span>
+  </header>
+  {{- if or .Sent .Resolved}}
   {{- if .Sent}}
-  <div class="question-answer">You picked <b>{{.Answer}}</b>{{if not .Done}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="changeQuestionAnswers" class="ck-link question-link">Change</button></form>{{end}}</div>
+  <div class="question-answer">You picked <b>{{.Answer}}</b>{{if and (not .Done) (not .Resolved)}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="changeQuestionAnswers" class="ck-link question-link">Change</button></form>{{end}}</div>
+  {{- else}}
+  <p class="question-prompt">{{.FirstPrompt}}</p>
+  {{- end}}
   {{- else}}
   {{- if gt .StepCount 1}}
   <div class="question-steps" role="tablist" aria-label="Questions">
@@ -697,8 +710,13 @@
   {{- end}}
   {{- end}}
   {{- template "thread" .Thread -}}
-  {{- if .ReplyingID}}{{template "replyForm" .}}{{else}}<div class="question-reply">{{template "replyButton" .}}</div>{{end}}
+  {{- if .ReplyingID}}{{template "replyForm" .}}{{end}}
+  {{- /* resolve / reply: the comment card's action row */ -}}
+  <div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleQuestionResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>
+    {{- if not .ReplyingID}}{{template "replyButton" .}}{{end -}}
+  </div>
 </div>
+{{- end}}
 {{end}}
 
 {{/* replyForm — the #149 reviewer reply form, shared by every card that takes a

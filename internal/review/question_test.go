@@ -116,20 +116,29 @@ func TestActionableQuestions(t *testing.T) {
 		// q-two: one of two steps answered, not sent
 		questionAnswerKey("q-two", "on-fail"): {SetID: "q-two", StepID: "on-fail", Picked: []int{1}},
 	}
-	got := actionableQuestions(sets, answers, nil, nil)
+	got := actionableQuestions(sets, answers, nil, nil, nil)
 	if len(got) != 1 || got[0].ID != "q-refresh" {
 		t.Fatalf("got %+v, want only the sent set", got)
 	}
 	if a := got[0].Answers; len(a) != 1 || !slices.Equal(a[0].Picked, []string{"Retry twice, then sign out"}) {
 		t.Fatalf("answers = %+v, want the picked label", a)
 	}
-	if got := actionableQuestions(sets, answers, map[string]bool{"q-refresh": true}, nil); len(got) != 0 {
+	if got := actionableQuestions(sets, answers, nil, map[string]bool{"q-refresh": true}, nil); len(got) != 0 {
 		t.Fatalf("a set marked done still ships: %+v", got)
 	}
 	reply := map[string][]ThreadEntry{"q-two": {{TargetID: "q-two", Author: AuthorReviewer, Body: "None of these fit", At: 1}}}
-	got = actionableQuestions(sets, answers, map[string]bool{"q-refresh": true}, reply)
+	got = actionableQuestions(sets, answers, nil, map[string]bool{"q-refresh": true}, reply)
 	if len(got) != 1 || got[0].ID != "q-two" || len(got[0].Answers) != 0 || len(got[0].Thread) != 1 {
 		t.Fatalf("a reviewer reply on an unsent set: got %+v, want it with its thread and no answers", got)
+	}
+	// Resolving an unanswered set tells the agent, until it marks the set done.
+	resolved := map[string]QuestionStatus{"q-two": {SetID: "q-two", Resolved: true}}
+	got = actionableQuestions(sets, answers, resolved, map[string]bool{"q-refresh": true}, nil)
+	if len(got) != 1 || got[0].ID != "q-two" || !got[0].Resolved || len(got[0].Answers) != 0 {
+		t.Fatalf("a resolved unanswered set: got %+v, want it once, resolved, with no answers", got)
+	}
+	if got := actionableQuestions(sets, answers, resolved, map[string]bool{"q-refresh": true, "q-two": true}, nil); len(got) != 0 {
+		t.Fatalf("a resolved set the agent marked done still ships: %+v", got)
 	}
 }
 

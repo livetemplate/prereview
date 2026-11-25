@@ -2133,7 +2133,9 @@ header.file-head .file-head-comment button svg { display: block; }
 .layout.marks-hidden .code .inline-suggestion,
 .layout.focus-mode .code .inline-suggestion,
 .layout.marks-hidden .code .sg-hidden-marker,
-.layout.focus-mode .code .sg-hidden-marker { display: none; }
+.layout.focus-mode .code .sg-hidden-marker,
+.layout.marks-hidden .code .question-card,
+.layout.focus-mode .code .question-card { display: none; }
 /* With the badges gone, reclaim their reserved right padding. */
 .layout.marks-hidden .code .line-row.has-line-marks .content,
 .layout.focus-mode .code .line-row.has-line-marks .content { padding-right: 0; }
@@ -2643,7 +2645,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    red→green before/after mini-diff shows the change. Read-only in Phase 1 — the
    accept/reject action row arrives in Phase 2. Themes across schemes×modes
    via the --accent / --pr-add / --pr-del tokens (never hard-coded). */
-.inline-suggestion {
+.inline-suggestion,
+.question-card {
   margin: 0.45rem 0.4rem; padding: 0.5rem 0.7rem;
   background: color-mix(in srgb, var(--accent) 8%, var(--pr-comment-bg));
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--pr-comment-bd));
@@ -2653,15 +2656,18 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   font-family: var(--sans);
   font-size: 0.82rem; line-height: 1.5;
 }
-.inline-suggestion > header {
+.inline-suggestion > header,
+.question-card > header {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem;
   color: var(--text-muted); margin-bottom: 0.4rem;
 }
-.inline-suggestion .sg-label {
+.inline-suggestion .sg-label,
+.question-card .sg-label {
   display: inline-flex; align-items: center; gap: 0.3rem;
   font-weight: 600; color: var(--accent);
 }
-.inline-suggestion .sg-label svg { flex: none; }
+.inline-suggestion .sg-label svg,
+.question-card .sg-label svg { flex: none; }
 .inline-suggestion .sg-note { margin-bottom: 0.45rem; }
 .inline-suggestion .sg-diff {
   display: flex; flex-direction: column; gap: 2px;
@@ -2690,7 +2696,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border-left-width: 4px;
   background: color-mix(in srgb, var(--accent) 13%, var(--pr-comment-bg));
 }
-.inline-suggestion .sg-group-tag {
+.inline-suggestion .sg-group-tag,
+.question-card .sg-group-tag {
   font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -2698,16 +2705,20 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 /* Hide controls — a quiet declutter affordance floated to the header's right edge,
    so it never competes with the accept/reject buttons below. */
-.inline-suggestion .sg-hide-actions {
+.inline-suggestion .sg-hide-actions,
+.question-card .sg-hide-actions {
   float: right; display: inline-flex; gap: 0.5rem; margin-left: 0.5rem;
 }
-.inline-suggestion .sg-hide-actions form { display: inline; margin: 0; }
+.inline-suggestion .sg-hide-actions form,
+.question-card .sg-hide-actions form { display: inline; margin: 0; }
 .inline-suggestion .sg-hide-btn,
+.question-card .sg-hide-btn,
 .sg-hidden-marker .sg-hide-btn {
   width: auto; margin: 0; padding: 0; border: 0; background: none; box-shadow: none;
   font-size: 0.72rem; color: var(--pico-muted-color); cursor: pointer; line-height: 1.2;
 }
 .inline-suggestion .sg-hide-btn:hover,
+.question-card .sg-hide-btn:hover,
 .sg-hidden-marker .sg-hide-btn:hover { color: var(--accent); text-decoration: underline; }
 /* #204 ripple: the comment's follow-on suggestions, one row of actions. */
 .ripple-row {
@@ -3049,7 +3060,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   opacity: 0.7;
 }
 .inline-comment.is-resolved .body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
-.inline-comment .resolved-badge {
+.inline-comment .resolved-badge,
+.question-card .resolved-badge {
   background: var(--pr-add-bg); color: var(--pr-add);
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
@@ -3071,12 +3083,15 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .inline-comment .req-prompt .req-more { color: var(--pico-primary); font-size: 0.85em; white-space: nowrap; }
 .inline-comment .req-prompt .req-more::after { content: "Read more"; }
 .inline-comment .req-prompt[open] .req-more::after { content: "Show less"; }
-.inline-comment .ic-actions { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
-.inline-comment .ic-actions button {
+.inline-comment .ic-actions,
+.question-card .ic-actions { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
+.inline-comment .ic-actions button,
+.question-card .ic-actions button {
   padding: 0.15rem 0.5rem; font-size: 0.72rem; margin: 0;
   min-height: 26px; min-width: auto; line-height: 1.2;
 }
-.inline-comment .ic-actions form { margin: 0; }
+.inline-comment .ic-actions form,
+.question-card .ic-actions form { margin: 0; }
 /* #149 conversation thread — agent replies (and, later, reviewer replies) rendered
    under a comment/suggestion. Each entry is a small card indented from the left with
    an author-coloured rail; the agent's uses --accent, the reviewer's the muted colour. */
@@ -3895,16 +3910,8 @@ dialog#files-drawer .file-row > .viewed-changed {
 /* The agent's question (questionCard, `prereview ask`): a card like a quiz
    question's, with options sized as 44px tap targets, the recommended one
    outlined, and a step row when the set has several questions. */
-.question-card {
-  margin: 0.4rem; padding: 0.55rem 0.7rem;
-  background: var(--surface-card); border: 1px solid var(--border-strong);
-  border-left: 3px solid var(--accent); border-radius: var(--radius-md);
-  font-family: var(--sans); font-size: 0.88rem; scroll-margin-top: 7rem; white-space: normal;
-}
-.question-card.is-sent { border-left-color: var(--pico-muted-color); }
-.question-head { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.3rem; }
-.question-who { font-weight: 700; color: var(--accent); }
-.question-chip { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0 0.35rem; border-radius: 4px; border: 1px solid currentColor; }
+.question-card { white-space: normal; scroll-margin-top: 7rem; }
+.question-card.is-resolved { opacity: 0.7; border-left-color: var(--pico-muted-color); }
 .question-prompt { font-weight: 600; margin: 0.2rem 0 0.45rem; color: var(--text-strong); }
 .question-hint { font-weight: 400; color: var(--pico-muted-color); }
 .question-options { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -3936,10 +3943,6 @@ dialog#files-drawer .file-row > .viewed-changed {
 .question-actions button { width: auto; margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 36px; }
 .question-card button.question-link { margin-left: 0.5rem; font-size: 0.8rem; }
 .question-answer { margin: 0.1rem 0 0.2rem; }
-/* Reply: a small button like the comment card's, not a full-width one. */
-.question-reply { margin-top: 0.45rem; }
-.question-reply form { margin: 0; }
-.question-reply button { width: auto; margin: 0; padding: 0.15rem 0.6rem; font-size: 0.75rem; min-height: 28px; }
 
 
 /* The file-head annotation group. It reuses .line-marks — the same badge a diff

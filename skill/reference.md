@@ -205,8 +205,9 @@ Four event types:
   `questions` (omitted when empty) holds the question sets you asked (`prereview ask`)
   that need you. That is each set the reviewer sent and you haven't marked `done`, and
   each set whose thread ends with the reviewer. Each is `{id, for?, file, from_line,
-  to_line, side, answers: [{step, prompt, picked?: [option labels], other?: "typed
-  answer"}], thread?}`. `answers` is `[]` when
+  to_line, side, resolved?, answers: [{step, prompt, picked?: [option labels], other?:
+  "typed answer"}], thread?}`. `resolved: true` means the reviewer closed the set:
+  build nothing new for it, and `done` it. `answers` is `[]` when
   the reviewer replied without sending. Done marks reset on a fresh launch, so a set you
   closed comes back once after a relaunch, like a done comment.
   `comments[]` is in **queue order, oldest first** (an edited comment keeps its place):

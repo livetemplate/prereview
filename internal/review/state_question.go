@@ -25,6 +25,9 @@ type QuestionCard struct {
 	Sent       bool
 	Done       bool
 	QueueState string
+	// Resolved and Hidden are the reviewer's resolve and hide (QuestionStatus).
+	Resolved bool
+	Hidden   bool
 	// Answer is the sent answers in one line, for the folded card.
 	Answer string
 
@@ -51,6 +54,9 @@ type QuestionOptionView struct {
 	Recommended bool
 	Picked      bool
 }
+
+// FirstPrompt is the set's first question, shown on a resolved, unanswered card.
+func (c QuestionCard) FirstPrompt() string { return c.Steps[0].Prompt }
 
 // StepCount is how many questions the set holds.
 func (c QuestionCard) StepCount() int { return len(c.Steps) }
@@ -117,7 +123,8 @@ func answerText(st QuestionStep, a QuestionAnswer) string {
 func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]ThreadEntry, awaiting map[string]bool) QuestionCard {
 	c := QuestionCard{QuestionSet: set, Sent: questionSetSent(set, s.QuestionAnswers),
 		Done: s.QuestionsDone[set.ID], Thread: threads[set.ID],
-		QueueState: reopenIfReplied(s.questionQueueState(set), set.ID, awaiting)}
+		QueueState: reopenIfReplied(s.questionQueueState(set), set.ID, awaiting),
+		Resolved:   s.QuestionStatus[set.ID].Resolved, Hidden: s.QuestionStatus[set.ID].Hidden}
 	if s.ReplyingID == set.ID {
 		c.ReplyingID, c.ReplyDraft = set.ID, s.ReplyDraft
 	}
@@ -160,7 +167,8 @@ func (s PrereviewState) questionCards() []QuestionCard {
 	threads, awaiting := s.Threads(), s.AwaitingAgent()
 	var out []QuestionCard
 	for _, set := range s.QuestionSets {
-		if set.File == s.SelectedFile {
+		// A resolved set follows "Show resolved", as a resolved comment does.
+		if set.File == s.SelectedFile && (!s.QuestionStatus[set.ID].Resolved || s.ShowResolved) {
 			out = append(out, s.questionCard(set, threads, awaiting))
 		}
 	}

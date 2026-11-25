@@ -497,6 +497,7 @@ type PrereviewState struct {
 	QuestionSets    []QuestionSet             `json:"question_sets"`
 	QuestionAnswers map[string]QuestionAnswer `json:"question_answers"`
 	QuestionsDone   map[string]bool           `json:"questions_done"`
+	QuestionStatus  map[string]QuestionStatus `json:"question_status"`
 	QuestionsSeen   string                    `json:"questions_seen"`
 	// QuestionView is the question (tab) each set's card shows, by set id, and
 	// QuestionOther the question whose "Something else" box is
@@ -894,6 +895,12 @@ func (s PrereviewState) ResolvedCount() int {
 	n := 0
 	for _, c := range s.scopedComments() {
 		if c.Resolved {
+			n++
+		}
+	}
+	// Resolved question sets follow the same toggle (questionCards).
+	for _, set := range s.scopedQuestionSets() {
+		if s.QuestionStatus[set.ID].Resolved {
 			n++
 		}
 	}

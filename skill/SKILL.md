@@ -519,7 +519,8 @@ each question's `picked` option labels, or `other`, their typed answer. Then:
    and `prereview done --out "<STORE>" <set-id>`. `done` the comment too, if the set was
    `for` one.
 
-A set keeps coming back until you `done` it. A set whose `thread` ends with the reviewer
+A set with `"resolved": true` is one the reviewer closed: build nothing new for it, and
+`done` it. A set keeps coming back until you `done` it. A set whose `thread` ends with the reviewer
 means they replied instead of picking, or with a follow-up: act on the reply. They can
 change an answer until you `done` it; the set then comes back with the new answers, so
 undo what the old one built and build the new one. Re-asking an open set's id revises it;
