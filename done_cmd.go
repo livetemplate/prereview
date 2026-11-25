@@ -103,7 +103,7 @@ func runDone(args []string) error {
 	if err := appendMarks(dir, review.ProcessedFileName, ids); err != nil {
 		return err
 	}
-	fmt.Printf("marked %d item(s) as worked on\n", len(ids))
+	fmt.Printf("marked %d comment(s) as worked on\n", len(ids))
 	printNote(note)
 	return nil
 }
