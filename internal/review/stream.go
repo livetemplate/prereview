@@ -93,6 +93,10 @@ type StreamEvent struct {
 	// without one. Omitted entirely when no quiz exists, so the snapshot shape is
 	// unchanged for every review that doesn't use the feature.
 	Quizzes []StreamQuiz `json:"quizzes,omitempty"` // ready / snapshot
+	// Questions are the agent's question sets the reviewer has answered and the
+	// agent has not marked done (actionableQuestions). Omitted when there are
+	// none, so a review that never asks keeps the snapshot it had.
+	Questions []StreamQuestion `json:"questions,omitempty"` // snapshot
 	// SkillUpdated is set on the `ready` event when this launch refreshed the
 	// installed prereview skill to match the (possibly self-updated) binary — so
 	// the agent's loaded skill is now stale. The agent should re-read the skill
@@ -423,10 +427,10 @@ func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool,
 // (`[]` when nothing is actionable). decided is the fingerprint-matched decision
 // map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
 // writeWith is the skills per kind of agent text (skills.WriteWith).
-func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, quizzes []StreamQuiz, writeWith map[string][]string, paused bool, ts time.Time) error {
+func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, quizzes []StreamQuiz, questions []StreamQuestion, writeWith map[string][]string, paused bool, ts time.Time) error {
 	csnap := actionableComments(comments, threadByID)
 	dsnap := actionableDecisions(suggestions, decided, threadByID, applied)
-	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Quizzes: quizzes, WriteWith: writeWith, Paused: paused}, ts)
+	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Quizzes: quizzes, Questions: questions, WriteWith: writeWith, Paused: paused}, ts)
 }
 
 // EmitFilesChanged tells the agent that reviewed files changed under it (#213),

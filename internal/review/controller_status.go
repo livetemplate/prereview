@@ -49,6 +49,7 @@ func signalFingerprint(statusFP string, c *PrereviewController) string {
 		statusFingerprint(AppliedPath(c.CSVPath)) + "|" +
 		statusFingerprint(RevertedPath(c.CSVPath)) + "|" +
 		statusFingerprint(c.quizPath()) + "|" +
+		statusFingerprint(QuestionsPath(c.CSVPath)) + "|" +
 		statusFingerprint(ExplainPath(c.CSVPath)) + "|" +
 		statusFingerprint(JudgmentsPath(c.CSVPath))
 }
@@ -206,6 +207,13 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 		c.applyQuiz(&state)
 	} else {
 		state.QuizAnswers = loadQuizAnswers(c.quizAnswersPath())
+	}
+	// ...and on a questions.jsonl change: reload and ground the agent's question
+	// sets, gated like the quiz. The answers and done marks reload every time.
+	if statusFingerprint(QuestionsPath(c.CSVPath)) != state.QuestionsSeen {
+		c.applyQuestions(&state)
+	} else {
+		c.applyQuestionAnswers(&state)
 	}
 	// ...and on an explain.jsonl change (#115): reload the walkthrough and ground
 	// it. Gated like judgments below: the fan-out fires for every agent signal.

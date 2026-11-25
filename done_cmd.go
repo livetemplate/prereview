@@ -94,8 +94,12 @@ func runDone(args []string) error {
 			fs.Usage()
 			return fmt.Errorf("no comment id given")
 		}
-		if err := validateIDs(csvPath, ids); err != nil {
-			return err
+		// A question set the agent asked (`prereview ask`) is closed the same
+		// way; only the rest must be comments.
+		if rest := withoutQuestionSets(csvPath, ids); len(rest) > 0 {
+			if err := validateIDs(csvPath, rest); err != nil {
+				return err
+			}
 		}
 	}
 	ids = dedupe(ids)
@@ -103,9 +107,24 @@ func runDone(args []string) error {
 	if err := appendMarks(dir, review.ProcessedFileName, ids); err != nil {
 		return err
 	}
-	fmt.Printf("marked %d comment(s) as worked on\n", len(ids))
+	fmt.Printf("marked %d item(s) as worked on\n", len(ids))
 	printNote(note)
 	return nil
+}
+
+// withoutQuestionSets returns ids minus the agent's question set ids.
+func withoutQuestionSets(csvPath string, ids []string) []string {
+	sets := map[string]bool{}
+	for _, s := range review.LoadQuestionSets(csvPath) {
+		sets[s.ID] = true
+	}
+	var rest []string
+	for _, id := range ids {
+		if !sets[id] {
+			rest = append(rest, id)
+		}
+	}
+	return rest
 }
 
 // printNote emits a non-empty skip note on its own line.

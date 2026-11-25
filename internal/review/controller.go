@@ -518,6 +518,7 @@ func (c *PrereviewController) Mount(state PrereviewState, ctx *livetemplate.Cont
 	// Loads the quizzes and the reviewer's answers. They are grounded below
 	// (groundUnderstand), once the file list is in.
 	c.applyQuiz(&state)
+	c.applyQuestions(&state) // grounded with the quizzes, below
 
 	// AgentMode is mirror-only: refresh from the controller every connect so a
 	// binary launched with --agent renders the right button even after a

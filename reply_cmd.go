@@ -163,12 +163,19 @@ func validateReplyTarget(csvPath, id string) (isComment bool, err error) {
 			}
 		}
 	}
+	// ...or a question set the agent asked (`prereview ask`).
+	sets := review.LoadQuestionSets(csvPath)
+	for _, s := range sets {
+		if s.ID == id {
+			known = true
+		}
+	}
 	if known {
 		return false, nil
 	}
-	if (cerr != nil || len(rows) == 0) && len(sugs) == 0 && len(quizzes) == 0 {
-		return false, fmt.Errorf("no comments, suggestions or quizzes found at %s — is --out the review's directory?", filepath.Dir(csvPath))
+	if (cerr != nil || len(rows) == 0) && len(sugs) == 0 && len(quizzes) == 0 && len(sets) == 0 {
+		return false, fmt.Errorf("no comments, suggestions, quizzes or questions found at %s — is --out the review's directory?", filepath.Dir(csvPath))
 	}
-	return false, fmt.Errorf("unknown id %q — not a comment, suggestion, or quiz question "+
-		"(a question is addressed as \"<quizID>:<questionID>\"; use `prereview comments --json` to list comment ids)", id)
+	return false, fmt.Errorf("unknown id %q — not a comment, suggestion, quiz question or question set "+
+		"(a quiz question is addressed as \"<quizID>:<questionID>\"; use `prereview comments --json` to list comment ids)", id)
 }

@@ -41,7 +41,7 @@ func TestEventStream_SeqMonotonicAndDualSink(t *testing.T) {
 	if err := es.EmitReady("/repo", "/repo/.prereview/comments.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("EmitReady: %v", err)
 	}
-	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
 		t.Fatalf("EmitSnapshot: %v", err)
 	}
 	if err := es.EmitEnd(fixedTS, false); err != nil {
@@ -105,7 +105,7 @@ func TestEventStream_CommentsKeyPresence(t *testing.T) {
 	if err := es.EmitReady("/r", "/r/c.csv", false, false, fixedTS); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
-	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil { // no actionable comments
 		t.Fatalf("handoff: %v", err)
 	}
 	if err := es.EmitEnd(fixedTS, false); err != nil {
@@ -354,11 +354,11 @@ func TestActionableComments_PreservesQueueOrder(t *testing.T) {
 func TestEmitSnapshot_WriteWith(t *testing.T) {
 	var out bytes.Buffer
 	es := NewEventStream(&out, filepath.Join(t.TempDir(), "events.jsonl"))
-	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
 		t.Fatal(err)
 	}
 	ww := map[string][]string{"reply": {"learned-writing", "learned-agent-replies"}}
-	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, ww, false, fixedTS); err != nil {
+	if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, ww, false, fixedTS); err != nil {
 		t.Fatal(err)
 	}
 	lines := bytes.Split(bytes.TrimSpace(out.Bytes()), []byte("\n"))

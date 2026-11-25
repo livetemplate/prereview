@@ -142,7 +142,7 @@ func TestEventStream_DurableWhenLiveWedged(t *testing.T) {
 
 	returnsWithin(t, 2*time.Second, "emitting against a wedged stdout", func() {
 		for range 20 {
-			if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
+			if err := es.EmitSnapshot(nil, nil, nil, nil, nil, nil, nil, nil, false, fixedTS); err != nil {
 				t.Errorf("EmitSnapshot: %v", err)
 			}
 		}

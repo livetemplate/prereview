@@ -115,7 +115,8 @@ func (c *PrereviewController) emitSnapshot() {
 	}
 	c.relocateSuggestionsAll(st) // re-anchor suggestions likewise
 	c.applyQuiz(st)              // #191: advisory quiz results (never gates)
-	if err := c.Emitter.EmitSnapshot(st.scopedComments(), st.scopedSuggestions(), st.DecisionsBySuggestion(), st.Threads(), st.Applied, st.QuizResults(), c.WriteWith(), c.isPaused(), time.Now()); err != nil {
+	c.applyQuestions(st)
+	if err := c.Emitter.EmitSnapshot(st.scopedComments(), st.scopedSuggestions(), st.DecisionsBySuggestion(), st.Threads(), st.Applied, st.QuizResults(), st.actionableQuestions(), c.WriteWith(), c.isPaused(), time.Now()); err != nil {
 		slog.Warn("emit snapshot", "err", err)
 	}
 }

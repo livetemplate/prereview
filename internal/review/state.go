@@ -489,6 +489,16 @@ type PrereviewState struct {
 	Quizzes     []Quiz                `json:"quizzes"`
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
 
+	// QuestionSets are the agent's questions (.prereview/questions.jsonl) and
+	// QuestionAnswers the reviewer's picks keyed questionAnswerKey; QuestionsDone
+	// holds the sets the agent marked done (processed.jsonl). Re-read like
+	// Quizzes, never persisted. QuestionsSeen is questions.jsonl's fingerprint
+	// at the last grounding, so the watcher grounds again only when it moved.
+	QuestionSets    []QuestionSet             `json:"question_sets"`
+	QuestionAnswers map[string]QuestionAnswer `json:"question_answers"`
+	QuestionsDone   map[string]bool           `json:"questions_done"`
+	QuestionsSeen   string                    `json:"questions_seen"`
+
 	// Explanations are the agent's walkthroughs of the change (#115,
 	// .prereview/explain.jsonl), newest last, grounded by applyExplain. Re-read
 	// like Quizzes, never persisted. ExplainSeen is explain.jsonl's fingerprint at
