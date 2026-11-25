@@ -60,7 +60,7 @@ func (c *PrereviewController) applyQuestionAnswers(state *PrereviewState) {
 // debounced emit and the final flush send.
 func (c *PrereviewController) emitSnapshotOf(st *PrereviewState) error {
 	threads := st.Threads()
-	questions := actionableQuestions(st.scopedQuestionSets(), st.QuestionAnswers, st.QuestionStatus, st.QuestionsDone, threads)
+	questions := actionableQuestions(st.scopedQuestionSets(), st.QuestionAnswers, st.questionsResolved(), st.QuestionsDone, threads)
 	return c.Emitter.EmitSnapshot(st.scopedComments(), st.scopedSuggestions(), st.DecisionsBySuggestion(), threads, st.Applied, st.QuizResults(), questions, c.WriteWith(), c.isPaused(), time.Now())
 }
 

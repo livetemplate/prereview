@@ -3911,6 +3911,12 @@ dialog#files-drawer .file-row > .viewed-changed {
    question's, with options sized as 44px tap targets, the recommended one
    outlined, and a step row when the set has several questions. */
 .question-card { white-space: normal; scroll-margin-top: 7rem; }
+/* In a comment's thread the card is the agent's reply: flush with the thread,
+   no outer margin or shadow of its own. */
+.inline-comment .question-card { margin: 0.4rem 0 0.2rem; box-shadow: none; }
+/* ...and its header keeps the question card's layout, not the comment
+   header's space-between. */
+.inline-comment .question-card > header { justify-content: flex-start; font-weight: 400; }
 .question-card.is-resolved { opacity: 0.7; border-left-color: var(--pico-muted-color); }
 .question-prompt { font-weight: 600; margin: 0.2rem 0 0.45rem; color: var(--text-strong); }
 .question-hint { font-weight: 400; color: var(--pico-muted-color); }

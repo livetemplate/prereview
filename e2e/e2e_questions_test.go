@@ -299,3 +299,57 @@ func TestE2E_QuestionResolveHide(t *testing.T) {
 	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+card+`"); return !!c && !c.classList.contains('is-resolved') && !!c.querySelector("button[name='pickQuestionOption']"); })()`, "Reopen brings the options back", diag)
 	waitQuestions(t, p, "after Reopen", func(qs []review.StreamQuestion) bool { return len(qs) == 0 }, diag)
 }
+
+// TestE2E_QuestionInThread: a set asked `for` a comment renders inside that
+// comment's card, after the thread, as the agent's reply, and nowhere else.
+// Answering it there reaches the agent with the comment's id.
+func TestE2E_QuestionInThread(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 390, 844, "--agent")
+	p.waitReadyAt(390, 844)
+	diag := captureDiag(t, p)
+	p.clickFile("edited.go")
+	addLineComment(t, p, 3, 3, "make the limit configurable")
+	cid := evalStr(t, p, `document.querySelector('.inline-comment').dataset.key`)
+	runAgentVerb(t, p, "ask", `{"id":"q-cfg","for":"`+cid+`","file":"edited.go","from_line":3,"to_line":3,
+	 "steps":[{"id":"where","prompt":"ASK-CFG Configurable from where?",
+	   "options":[{"label":"An environment variable"},{"label":"The config file"}],"recommended":0}]}`)
+
+	inThread := `.inline-comment[data-key='` + cid + `'] .question-card[data-key='question-q-cfg']`
+	waitJSDiag(t, p, `!!document.querySelector("`+inThread+`")`, "the question inside the comment's card", diag)
+	if n := evalInt(t, p, `document.querySelectorAll(".question-card[data-key='question-q-cfg']").length`); n != 1 {
+		t.Fatalf("the question renders %d times, want once (in the thread)%s", n, diag())
+	}
+	// In the thread the comment's own Resolve, Reply and Hide stand in.
+	if n := evalInt(t, p, `document.querySelectorAll("`+inThread+` button[name='toggleQuestionResolved'], `+inThread+` button[name='hideQuestion'], `+inThread+` button[name='openReply']").length`); n != 0 {
+		t.Errorf("the in-thread card repeats the comment's actions (%d buttons)%s", n, diag())
+	}
+	tapIn(t, p, inThread+` button[name='pickQuestionOption']`, "pick in the thread", diag)
+	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+inThread+`"); return !!c && c.innerText.includes('An environment variable'); })()`, "the answer folds in the thread", diag)
+	waitQuestions(t, p, "after the pick", func(qs []review.StreamQuestion) bool {
+		return len(qs) == 1 && qs[0].For == cid && qs[0].Answers[0].Picked[0] == "An environment variable"
+	}, diag)
+
+	// Resolving the comment resolves its question: the agent is told.
+	tapIn(t, p, `.inline-comment[data-key='`+cid+`'] > .ic-actions button[name='toggleResolved']`, "resolve the comment", diag)
+	waitQuestions(t, p, "after resolving the comment", func(qs []review.StreamQuestion) bool {
+		return len(qs) == 1 && qs[0].ID == "q-cfg" && qs[0].Resolved
+	}, diag)
+}
+
+// TestE2E_QuestionNav: an unanswered question is an open item in the ‹ › bar,
+// like an undecided suggestion; stepping lands on its card, and once it is
+// submitted it no longer counts.
+func TestE2E_QuestionNav(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	diag := captureDiag(t, p)
+	p.clickFile("edited.go")
+	runAgentVerb(t, p, "ask", oneTapSet)
+	card := `.question-card[data-key='question-q1']`
+	waitJSDiag(t, p, `!!document.querySelector("`+card+`")`, "the question", diag)
+	waitJSDiag(t, p, `/\b1 open\b/.test((document.querySelector('.ann-nav-label') || {}).textContent || '')`, "the bar counts the question as open", diag)
+	tapIn(t, p, `button[name='navNext']`, "step", diag)
+	waitJSDiag(t, p, `(() => { const r = document.querySelector("`+card+`").getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the step lands on the card", diag)
+	tapIn(t, p, card+` button[name='pickQuestionOption']`, "answer it", diag)
+	waitJSDiag(t, p, `!document.querySelector('.ann-nav-label') || !/\b1 open\b/.test(document.querySelector('.ann-nav-label').textContent)`, "a submitted question leaves the count", diag)
+}

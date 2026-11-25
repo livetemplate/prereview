@@ -293,12 +293,12 @@ type StreamQuestionAnswer struct {
 // sent or resolved and the agent has not marked done, plus any set whose thread
 // ends with the reviewer. A set that is neither sent nor resolved never ships:
 // its answers may still change.
-func actionableQuestions(sets []QuestionSet, answers map[string]QuestionAnswer, status map[string]QuestionStatus, done map[string]bool, threadByID map[string][]ThreadEntry) []StreamQuestion {
+func actionableQuestions(sets []QuestionSet, answers map[string]QuestionAnswer, resolvedByID map[string]bool, done map[string]bool, threadByID map[string][]ThreadEntry) []StreamQuestion {
 	var out []StreamQuestion
 	for _, s := range sets {
 		thread := threadByID[s.ID]
 		sent := questionSetSent(s, answers)
-		resolved := status[s.ID].Resolved
+		resolved := resolvedByID[s.ID]
 		if !hasUnreadReviewerReply(thread) && ((!sent && !resolved) || done[s.ID]) {
 			continue
 		}

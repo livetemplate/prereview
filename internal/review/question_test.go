@@ -132,7 +132,7 @@ func TestActionableQuestions(t *testing.T) {
 		t.Fatalf("a reviewer reply on an unsent set: got %+v, want it with its thread and no answers", got)
 	}
 	// Resolving an unanswered set tells the agent, until it marks the set done.
-	resolved := map[string]QuestionStatus{"q-two": {SetID: "q-two", Resolved: true}}
+	resolved := map[string]bool{"q-two": true}
 	got = actionableQuestions(sets, answers, resolved, map[string]bool{"q-refresh": true}, nil)
 	if len(got) != 1 || got[0].ID != "q-two" || !got[0].Resolved || len(got[0].Answers) != 0 {
 		t.Fatalf("a resolved unanswered set: got %+v, want it once, resolved, with no answers", got)

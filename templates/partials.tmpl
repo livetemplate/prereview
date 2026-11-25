@@ -363,6 +363,9 @@
   {{- /* #149 conversation thread — the agent's replies ("what I did") + the
          reviewer's follow-ups, rendered under the body. Empty → nothing renders. */ -}}
   {{- template "thread" (index $.Threads .ID) -}}
+  {{- /* the agent's questions for this comment (prereview ask --for): a reply
+         with options, after the thread */ -}}
+  {{- range index $.QuestionsByComment .ID}}{{template "questionCard" .}}{{end -}}
   {{- /* #149 reviewer reply — the inline form when open on this card. */ -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
@@ -677,7 +680,7 @@
     {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
     {{- with .QueueState}} · <small class="queue-badge queue-badge-{{.}}">{{.}}</small>{{end}}
     {{- if .Ungrounded}} · <small class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ not in this diff</small>{{end}}
-    <span class="sg-hide-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideQuestion" class="sg-hide-btn" title="Hide this question from view">Hide</button></form></span>
+    {{- if not .InThread}}<span class="sg-hide-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideQuestion" class="sg-hide-btn" title="Hide this question from view">Hide</button></form></span>{{end}}
   </header>
   {{- if or .Sent .Resolved}}
   {{- if .Sent}}
@@ -710,11 +713,14 @@
   {{- end}}
   {{- end}}
   {{- template "thread" .Thread -}}
+  {{- /* resolve / reply: the comment card's action row. In a comment's thread
+         the comment's own row stands in for it. */ -}}
+  {{- if not .InThread}}
   {{- if .ReplyingID}}{{template "replyForm" .}}{{end}}
-  {{- /* resolve / reply: the comment card's action row */ -}}
   <div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleQuestionResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>
     {{- if not .ReplyingID}}{{template "replyButton" .}}{{end -}}
   </div>
+  {{- end}}
 </div>
 {{- end}}
 {{end}}

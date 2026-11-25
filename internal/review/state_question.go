@@ -26,8 +26,11 @@ type QuestionCard struct {
 	Done       bool
 	QueueState string
 	// Resolved and Hidden are the reviewer's resolve and hide (QuestionStatus).
+	// InThread: the card renders in its comment's thread, where the comment's
+	// own Resolve, Reply and Hide stand in for the card's.
 	Resolved bool
 	Hidden   bool
+	InThread bool
 	// Answer is the sent answers in one line, for the folded card.
 	Answer string
 
@@ -124,7 +127,8 @@ func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]Threa
 	c := QuestionCard{QuestionSet: set, Sent: questionSetSent(set, s.QuestionAnswers),
 		Done: s.QuestionsDone[set.ID], Thread: threads[set.ID],
 		QueueState: reopenIfReplied(s.questionQueueState(set), set.ID, awaiting),
-		Resolved:   s.QuestionStatus[set.ID].Resolved, Hidden: s.QuestionStatus[set.ID].Hidden}
+		Resolved:   s.questionResolved(set), Hidden: s.QuestionStatus[set.ID].Hidden,
+		InThread:   s.inThread(set)}
 	if s.ReplyingID == set.ID {
 		c.ReplyingID, c.ReplyDraft = set.ID, s.ReplyDraft
 	}
@@ -159,16 +163,67 @@ func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]Threa
 	return c
 }
 
-// questionCards is the cards for the open file's sets.
+// questionCards is the cards for the open file's sets that stand on their own:
+// a set asked `for` a comment renders in that comment's thread instead
+// (QuestionsByComment).
 func (s PrereviewState) questionCards() []QuestionCard {
 	if s.SelectedFile == "" || len(s.QuestionSets) == 0 {
 		return nil
 	}
+	return s.questionCardsWhere(func(set QuestionSet) bool {
+		return set.File == s.SelectedFile && !s.inThread(set)
+	})
+}
+
+// QuestionsByComment is the question cards asked `for` each comment, by comment
+// id: the comment card renders them after its thread, as the agent's reply.
+// Every file's, so the All comments view has them too.
+func (s PrereviewState) QuestionsByComment() map[string][]QuestionCard {
+	if len(s.QuestionSets) == 0 {
+		return nil
+	}
+	out := map[string][]QuestionCard{}
+	for _, c := range s.questionCardsWhere(s.inThread) {
+		out[c.For] = append(out[c.For], c)
+	}
+	return out
+}
+
+// inThread reports whether set renders in a comment's thread: it names a
+// comment that exists.
+func (s PrereviewState) inThread(set QuestionSet) bool {
+	return set.For != "" && slices.ContainsFunc(s.Comments, func(c Comment) bool { return c.ID == set.For })
+}
+
+// questionResolved reports whether set is closed: the reviewer resolved it, or
+// it is in a comment's thread and that comment is resolved (the comment's
+// Resolve covers the question asked on it).
+func (s PrereviewState) questionResolved(set QuestionSet) bool {
+	if s.QuestionStatus[set.ID].Resolved {
+		return true
+	}
+	return set.For != "" && slices.ContainsFunc(s.Comments, func(c Comment) bool { return c.ID == set.For && c.Resolved })
+}
+
+// questionsResolved is questionResolved for every in-scope set, by id: what the
+// snapshot reports as "resolved".
+func (s PrereviewState) questionsResolved() map[string]bool {
+	out := map[string]bool{}
+	for _, set := range s.scopedQuestionSets() {
+		if s.questionResolved(set) {
+			out[set.ID] = true
+		}
+	}
+	return out
+}
+
+// questionCardsWhere builds the cards for the in-scope sets keep accepts. A
+// resolved set follows "Show resolved", as a resolved comment does.
+func (s PrereviewState) questionCardsWhere(keep func(QuestionSet) bool) []QuestionCard {
 	threads, awaiting := s.Threads(), s.AwaitingAgent()
 	var out []QuestionCard
-	for _, set := range s.QuestionSets {
-		// A resolved set follows "Show resolved", as a resolved comment does.
-		if set.File == s.SelectedFile && (!s.QuestionStatus[set.ID].Resolved || s.ShowResolved) {
+	for _, set := range s.scopedQuestionSets() {
+		if keep(set) && (!s.questionResolved(set) || s.ShowResolved) {
 			out = append(out, s.questionCard(set, threads, awaiting))
 		}
 	}
