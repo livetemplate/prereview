@@ -126,6 +126,7 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 		return bytes.Count(src[:off], []byte{'\n'}) + 1
 	}
 
+	diagrams := NewMermaidKeys("md:" + currentPath)
 	renderNode := func(n ast.Node) string {
 		var buf bytes.Buffer
 		if err := mdRenderer.Renderer().Render(&buf, src, n); err != nil {
@@ -239,7 +240,7 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 			// Either way it stays one source-line-anchored block.
 			fcb := n.(*ast.FencedCodeBlock)
 			if isMermaidFence(fcb, src) {
-				emit(n, MermaidHTML(fencedCodeRaw(fcb, src)))
+				emit(n, diagrams.HTML(fencedCodeRaw(fcb, src)))
 			} else {
 				emit(n, renderNode(n))
 			}

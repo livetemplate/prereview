@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -115,9 +116,10 @@ func TestE2E_Benchmark(t *testing.T) {
 	writeRule(t, repo, "reader-first.md", strings.Replace(readerFirstJudge, "Does the text lead", "Does the very first paragraph lead", 1))
 	time.Sleep(1500 * time.Millisecond) // the checks watcher's tick reloads the rule
 	runOnce(2, "fail")
-	if err := chromedp.Run(ctx, chromedp.Click(card+` .bm-runs > summary`, chromedp.ByQuery)); err != nil {
-		t.Fatal(err)
-	}
+	// An in-page click: the run's patch can replace the <summary> between
+	// chromedp.Click's node lookup and its click ("Could not find node").
+	waitJSTrueDiag(t, ctx, `(() => { const s = document.querySelector(`+strconv.Quote(card+` .bm-runs > summary`)+`); if (s) s.click(); return !!s; })()`,
+		5*time.Second, "open the runs list", diag)
 	if n := countSel(t, p, card+` .bm-runs tr.bm-incomparable`); n != 1 {
 		t.Errorf("the run before the rubric edit isn't marked not comparable (%d)%s", n, diag())
 	}

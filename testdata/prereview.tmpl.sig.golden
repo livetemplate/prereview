@@ -1180,8 +1180,6 @@
 </div>
 <script defer src="/livetemplate-client.js"></script>
 <script defer src="/prereview-handlers.js"></script>
-
-<script defer src="/mermaid-init.js"></script>
 </body>
 </html>
 

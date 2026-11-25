@@ -10,7 +10,7 @@
 // script runs first: before the client, the client drains the queue when it
 // starts; after it, push() registers at once and the registry runs the handler
 // against the live page.
-import type { LowLevelHandler } from "@livetemplate/client";
+import type { DeclarativeHandler, LowLevelHandler } from "@livetemplate/client";
 import {
   handleAreaSelectDirectives,
   handleAutoClickDirectives,
@@ -29,6 +29,7 @@ import {
   teardownURLHashForRoot,
   teardownViewportReportForRoot,
 } from "./directives";
+import { mermaidHandler } from "./mermaid";
 import { handleResizeDirectives, teardownResizeForRoot } from "./resize";
 import { setupSpy, teardownSpy } from "./spy";
 
@@ -108,6 +109,8 @@ export const handlers: LowLevelHandler[] = [
   },
 ];
 
+export const declarativeHandlers: DeclarativeHandler[] = [mermaidHandler];
+
 export function register(): void {
-  (window.lvtAttributes ||= []).push(...handlers);
+  (window.lvtAttributes ||= []).push(...handlers, ...declarativeHandlers);
 }

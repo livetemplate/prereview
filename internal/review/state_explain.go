@@ -84,7 +84,7 @@ func (s PrereviewState) HasDiagrams() bool {
 // DiagramView is a diagram as the Diagrams tab renders it.
 type DiagramView struct {
 	ID, Title string
-	HTML      template.HTML // gitdiff.MermaidHTML: the source, escaped, for mermaid.js
+	HTML      template.HTML // gitdiff.MermaidKeys.HTML: the source, escaped, for mermaid.js
 	Anchors   []WalkAnchor
 }
 
@@ -95,9 +95,10 @@ func (s PrereviewState) DiagramViews() []DiagramView {
 	}
 	e := s.CurrentExplanation()
 	out := make([]DiagramView, 0, len(e.Diagrams))
+	keys := gitdiff.NewMermaidKeys("walkthrough")
 	for _, d := range e.Diagrams {
 		out = append(out, DiagramView{ID: d.ID, Title: d.Title, Anchors: walkAnchors(d.Anchors),
-			HTML: template.HTML(gitdiff.MermaidHTML([]byte(d.Mermaid)))})
+			HTML: template.HTML(keys.HTML([]byte(d.Mermaid)))})
 	}
 	return out
 }

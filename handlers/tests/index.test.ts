@@ -1,4 +1,4 @@
-import { handlers, register } from "../src/index";
+import { declarativeHandlers, handlers, register } from "../src/index";
 
 afterEach(() => {
   delete window.lvtAttributes;
@@ -41,13 +41,13 @@ describe("prereview's handler registration", () => {
 
   it("queues every handler when it loads before the client", () => {
     register();
-    expect(window.lvtAttributes).toEqual(handlers);
+    expect(window.lvtAttributes).toEqual([...handlers, ...declarativeHandlers]);
   });
 
   it("pushes into the client's installed queue when it loads after the client", () => {
     const push = jest.fn((...h: unknown[]) => h.length);
     window.lvtAttributes = { push };
     register();
-    expect(push).toHaveBeenCalledWith(...handlers);
+    expect(push).toHaveBeenCalledWith(...handlers, ...declarativeHandlers);
   });
 });
