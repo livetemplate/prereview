@@ -3219,6 +3219,14 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   font-family: var(--sans);
   display: flex; flex-direction: column;
 }
+/* An HTML preview's composer renders in the cards below the preview, which is
+   as tall as its page, so it floats at the bottom of the screen while open:
+   the box just drawn stays in sight above it. */
+.composer.composer-pinned {
+  position: fixed; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
+  width: min(40rem, calc(100vw - 1.5rem)); max-height: 60vh; overflow-y: auto;
+  margin: 0; z-index: 30; box-shadow: var(--shadow-md);
+}
 .composer strong { font-size: 0.78rem; color: var(--text-strong); }
 /* The selected-text preview in a kind=text composer heading: a compact,
    single-line snippet with an ellipsis — a multi-line or long selection must

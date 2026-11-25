@@ -136,6 +136,20 @@ type previewBox struct{ X1, Y1, X2, Y2 float64 }
 // a comment with body.
 func drawHTMLRegionAt(t *testing.T, p *runningPrereview, body string, box previewBox, diag func() string) {
 	t.Helper()
+	openHTMLComposer(t, p, box, "the composer for "+body, diag)
+	if err := chromedp.Run(p.ctx,
+		chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
+		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("save %q: %v%s", body, err, diag())
+	}
+	waitJSDiag(t, p, `!document.querySelector('.composer textarea')`, "the composer closes after saving", diag)
+}
+
+// openHTMLComposer arms Annotate on an HTML file's preview, drags box and waits
+// for the composer.
+func openHTMLComposer(t *testing.T, p *runningPrereview, box previewBox, what string, diag func() string) {
+	t.Helper()
 	var ir struct{ Left, Top, Width, Height float64 }
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
@@ -161,14 +175,7 @@ func drawHTMLRegionAt(t *testing.T, p *runningPrereview, body string, box previe
 	}
 	// Poll a fresh query: a re-render can replace the textarea right after the
 	// drag, and WaitVisible would keep polling the detached node.
-	waitJSDiag(t, p, `(() => { const ta = document.querySelector('.composer textarea'); return !!ta && ta.offsetParent !== null; })()`, "the composer for "+body, diag)
-	if err := chromedp.Run(p.ctx,
-		chromedp.SendKeys(`.composer textarea`, body, chromedp.ByQuery),
-		chromedp.Click(`.composer button[name="addComment"]`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("save %q: %v%s", body, err, diag())
-	}
-	waitJSDiag(t, p, `!document.querySelector('.composer textarea')`, "the composer closes after saving", diag)
+	waitJSDiag(t, p, `(() => { const ta = document.querySelector('.composer textarea'); return !!ta && ta.offsetParent !== null; })()`, what, diag)
 }
 
 // annColourJS defines colour(el): the annotation colour class (ann-cN) an
