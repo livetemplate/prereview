@@ -23,10 +23,12 @@ const (
 	queueDone     = "done"     // the agent marked it worked-on (processed.jsonl / applied.jsonl)
 )
 
-// Queue item kinds — a queue row is either a comment or an accepted suggestion.
+// Queue item kinds — a queue row is a comment, an accepted suggestion, or a
+// question set the reviewer submitted.
 const (
 	queueKindComment    = "comment"
 	queueKindSuggestion = "suggestion"
+	queueKindQuestion   = "question"
 )
 
 // QueueState classifies a comment for the queue view. A comment leaves the queue ("")
@@ -138,6 +140,36 @@ func (s PrereviewState) suggestionQueueState(sg Suggestion) string {
 	return "" // undecided
 }
 
+// questionQueueState classifies a question set like an accepted suggestion: a
+// set the reviewer submitted is the agent's work, queued until the agent marks
+// it done. An unsubmitted set is the reviewer's own work, so it is not queued
+// ("").
+func (s PrereviewState) questionQueueState(set QuestionSet) string {
+	switch {
+	case s.QuestionsDone[set.ID]:
+		return queueDone
+	case questionSetSent(set, s.QuestionAnswers):
+		return queueQueued
+	}
+	return ""
+}
+
+// queueQuestionSets is the queue panel's question sets: this file's, or with
+// QueueGlobal the whole review's, like queueSuggestions.
+func (s PrereviewState) queueQuestionSets() []QuestionSet {
+	scoped := s.scopedQuestionSets()
+	if s.QueueGlobal {
+		return scoped
+	}
+	var out []QuestionSet
+	for _, set := range scoped {
+		if set.File == s.SelectedFile {
+			out = append(out, set)
+		}
+	}
+	return out
+}
+
 // queueComments / queueSuggestions are what the QUEUE PANEL shows: by default the work
 // that will be — or has been — applied to the file you are looking at (#171). The queue
 // answers "what is happening to the document in front of me", which is what it's for in a
@@ -215,6 +247,11 @@ func (s PrereviewState) QueueHiddenCount() int {
 			n++
 		}
 	}
+	for _, set := range s.scopedQuestionSets() {
+		if set.File != s.SelectedFile && reopenIfReplied(s.questionQueueState(set), set.ID, awaiting) != "" {
+			n++
+		}
+	}
 	return n
 }
 
@@ -228,6 +265,11 @@ func (s PrereviewState) countQueue(state string) int {
 	}
 	for _, sg := range s.queueSuggestions() {
 		if reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting) == state {
+			n++
+		}
+	}
+	for _, set := range s.queueQuestionSets() {
+		if reopenIfReplied(s.questionQueueState(set), set.ID, awaiting) == state {
 			n++
 		}
 	}
@@ -378,7 +420,7 @@ func (s PrereviewState) AgentWorkingLabel() string {
 // marker and route its jump to the right target).
 type QueueItem struct {
 	ID    string
-	Kind  string // queueKindComment | queueKindSuggestion
+	Kind  string // queueKindComment | queueKindSuggestion | queueKindQuestion
 	File  string // the row's location: the file, or a live-site annotation's page URL
 	Line  int    // new-side line (0 for file/region/area comments)
 	Body  string // the comment text (a request's summary) / suggestion note, shown truncated by CSS
@@ -407,6 +449,17 @@ func (s PrereviewState) QueueItems() []QueueItem {
 			continue
 		}
 		add(QueueItem{ID: sg.ID, Kind: queueKindSuggestion, File: sg.File, Line: sg.ToLine, Body: suggestionQueueBody(sg), State: st})
+	}
+	for _, set := range s.queueQuestionSets() {
+		st := reopenIfReplied(s.questionQueueState(set), set.ID, awaiting)
+		if st == "" {
+			continue
+		}
+		line := set.ToLine
+		if set.Kind == QuestionKindFile {
+			line = 0
+		}
+		add(QueueItem{ID: set.ID, Kind: queueKindQuestion, File: set.File, Line: line, Body: set.Steps[0].Prompt, State: st})
 	}
 	var out []QueueItem
 	for _, st := range queueOrder { // a "" state (resolved, un-queued) has no bucket here
@@ -506,6 +559,11 @@ func (s PrereviewState) outstandingAgentWork() int {
 	}
 	for _, sg := range s.scopedSuggestions() {
 		if st := reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting); st == queueQueued || st == queueBlocked {
+			n++
+		}
+	}
+	for _, set := range s.scopedQuestionSets() {
+		if reopenIfReplied(s.questionQueueState(set), set.ID, awaiting) == queueQueued {
 			n++
 		}
 	}

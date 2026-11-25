@@ -21,8 +21,10 @@ type QuestionCard struct {
 	// Complete: every question is answered, so Submit can send the set.
 	Complete bool
 	// Sent: the reviewer sent the answers; Done: the agent marked the set done.
-	Sent bool
-	Done bool
+	// QueueState is the set's queue row state (queued, done), "" before Submit.
+	Sent       bool
+	Done       bool
+	QueueState string
 	// Answer is the sent answers in one line, for the folded card.
 	Answer string
 
@@ -112,9 +114,10 @@ func answerText(st QuestionStep, a QuestionAnswer) string {
 }
 
 // questionCard builds set's card from the review state.
-func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]ThreadEntry) QuestionCard {
+func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]ThreadEntry, awaiting map[string]bool) QuestionCard {
 	c := QuestionCard{QuestionSet: set, Sent: questionSetSent(set, s.QuestionAnswers),
-		Done: s.QuestionsDone[set.ID], Thread: threads[set.ID]}
+		Done: s.QuestionsDone[set.ID], Thread: threads[set.ID],
+		QueueState: reopenIfReplied(s.questionQueueState(set), set.ID, awaiting)}
 	if s.ReplyingID == set.ID {
 		c.ReplyingID, c.ReplyDraft = set.ID, s.ReplyDraft
 	}
@@ -154,11 +157,11 @@ func (s PrereviewState) questionCards() []QuestionCard {
 	if s.SelectedFile == "" || len(s.QuestionSets) == 0 {
 		return nil
 	}
-	threads := s.Threads()
+	threads, awaiting := s.Threads(), s.AwaitingAgent()
 	var out []QuestionCard
 	for _, set := range s.QuestionSets {
 		if set.File == s.SelectedFile {
-			out = append(out, s.questionCard(set, threads))
+			out = append(out, s.questionCard(set, threads, awaiting))
 		}
 	}
 	return out

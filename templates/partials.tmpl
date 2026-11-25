@@ -669,7 +669,7 @@
      `.` is a QuestionCard; $card keeps it inside the ranges. Each option is its own
      POST form, as on the quiz card. */}}
 {{define "questionCard"}}{{$card := .}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}">
-  <div class="question-head"><span class="question-who">Agent asks</span><span class="question-chip">{{if .Sent}}Answered{{else if gt .StepCount 1}}{{.StepCount}} questions{{else}}Question{{end}}</span><span>{{.AnchorLabel}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>
+  <div class="question-head"{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}><span class="question-who">Agent asks</span><span class="question-chip">{{if gt .StepCount 1}}{{.StepCount}} questions{{else}}Question{{end}}</span>{{with .QueueState}}<span class="queue-badge queue-badge-{{.}}">{{.}}</span>{{end}}<span>{{.AnchorLabel}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>
   {{- if .Sent}}
   <div class="question-answer">You picked <b>{{.Answer}}</b>{{if not .Done}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="changeQuestionAnswers" class="ck-link question-link">Change</button></form>{{end}}</div>
   {{- else}}

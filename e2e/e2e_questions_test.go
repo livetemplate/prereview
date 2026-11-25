@@ -218,3 +218,49 @@ func TestE2E_QuestionOther(t *testing.T) {
 	}, diag)
 	waitJSDiag(t, p, `document.querySelector("`+card+`").innerText.includes('Back off for a minute')`, "the card shows the typed answer", diag)
 }
+
+// TestE2E_QuestionQueued: a submitted set is queue work like a comment. It
+// reads queued on its card and in the Queue, the row jumps to the card, the
+// agent's done turns both to done, and while the queue is paused a submitted
+// set waits for Resume.
+func TestE2E_QuestionQueued(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	diag := captureDiag(t, p)
+	p.clickFile("edited.go")
+	runAgentVerb(t, p, "ask", oneTapSet)
+	card := `.question-card[data-key='question-q1']`
+	waitJSDiag(t, p, `!!document.querySelector("`+card+`")`, "the question", diag)
+	if n := evalInt(t, p, `document.querySelectorAll("`+card+` .queue-badge").length`); n != 0 {
+		t.Fatalf("an unanswered set has a queue badge%s", diag())
+	}
+
+	// Paused: the submit is held, like a comment queued while paused.
+	if err := chromedp.Run(p.ctx,
+		chromedp.Evaluate(`document.activeElement&&document.activeElement.blur&&document.activeElement.blur()`, nil),
+		chromedp.KeyEvent("q"),
+	); err != nil {
+		t.Fatal(err)
+	}
+	waitJSDiag(t, p, `!!document.querySelector('.queue-dropdown.is-paused')`, "paused", diag)
+	tapIn(t, p, card+` button[name='pickQuestionOption']`, "tap an option", diag)
+	waitJSDiag(t, p, `(document.querySelector("`+card+` .queue-badge") || {}).textContent === 'queued'`, "the card reads queued", diag)
+	time.Sleep(800 * time.Millisecond) // past the emit debounce
+	if qs := lastQuestions(t, p); len(qs) != 0 {
+		t.Fatalf("a paused queue handed the agent the set: %+v", qs)
+	}
+	if err := chromedp.Run(p.ctx, chromedp.KeyEvent("q")); err != nil {
+		t.Fatal(err)
+	}
+	waitQuestions(t, p, "after Resume", func(qs []review.StreamQuestion) bool { return len(qs) == 1 && qs[0].ID == "q1" }, diag)
+
+	// The Queue lists it, and its row jumps to the card.
+	tapIn(t, p, `.queue-dropdown .queue-trigger`, "open the Queue", diag)
+	row := `.queue-row.queue-kind-question`
+	waitJSDiag(t, p, `(() => { const r = document.querySelector("`+row+`"); return !!r && r.classList.contains('queue-queued') && r.innerText.includes('ASK-ONE'); })()`, "a queued question row", diag)
+	tapIn(t, p, row+` button[name='jumpToQuestion']`, "jump to the question", diag)
+	waitJSDiag(t, p, `(() => { const r = document.querySelector("`+card+`").getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; })()`, "the jump shows the card", diag)
+
+	mustCLI(t, p, "done", "--out", p.repo, "q1")
+	waitJSDiag(t, p, `(document.querySelector("`+card+` .queue-badge") || {}).textContent === 'done'`, "done on the card", diag)
+}

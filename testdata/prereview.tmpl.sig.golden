@@ -1336,7 +1336,7 @@
 <small class="processed-badge">worked on</small>
 === questionCard ===
 {{$card := .}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}">
-  <div class="question-head"><span class="question-who">Agent asks</span><span class="question-chip">{{if .Sent}}Answered{{else}}{{if gt .StepCount 1}}{{.StepCount}} questions{{else}}Question{{end}}{{end}}</span><span>{{.AnchorLabel}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>{{if .Sent}}
+  <div class="question-head"{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}><span class="question-who">Agent asks</span><span class="question-chip">{{if gt .StepCount 1}}{{.StepCount}} questions{{else}}Question{{end}}</span>{{with .QueueState}}<span class="queue-badge queue-badge-{{.}}">{{.}}</span>{{end}}<span>{{.AnchorLabel}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}</div>{{if .Sent}}
   <div class="question-answer">You picked <b>{{.Answer}}</b>{{if not .Done}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="changeQuestionAnswers" class="ck-link question-link">Change</button></form>{{end}}</div>{{else}}{{if gt .StepCount 1}}
   <div class="question-steps" role="tablist" aria-label="Questions">{{range .Chips}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{$card.ID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="questionStepTo" role="tab" aria-selected="{{if .Current}}true{{else}}false{{end}}" class="question-step{{if .Current}} is-current{{end}}{{if .Answered}} is-answered{{end}}">{{if .Answered}}✓ {{end}}{{.Label}}</button></form>{{end}}</div>{{end}}
   <p class="question-prompt">{{.Step.Prompt}}{{if .Step.Multi}} <small class="question-hint">Pick any.</small>{{end}}</p>
@@ -2068,8 +2068,8 @@
       <div class="queue-row queue-{{.State}} queue-kind-{{.Kind}}">
         <form method="POST" class="queue-jump-form">
           <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="{{if eq .Kind "suggestion"}}jumpToSuggestion{{else}}jumpToComment{{end}}" class="queue-item" title="Go to this {{.Kind}}">
-            {{if eq .Kind "suggestion"}}<span class="queue-kind-icon" aria-hidden="true">✦</span>{{end}}
+          <button type="submit" name="{{if eq .Kind "suggestion"}}jumpToSuggestion{{else}}{{if eq .Kind "question"}}jumpToQuestion{{else}}jumpToComment{{end}}{{end}}" class="queue-item" title="Go to this {{.Kind}}">
+            {{if eq .Kind "suggestion"}}<span class="queue-kind-icon" aria-hidden="true">✦</span>{{else}}{{if eq .Kind "question"}}<span class="queue-kind-icon" aria-hidden="true">?</span>{{end}}{{end}}
             <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
             <span class="queue-body">{{.Body}}</span>
             <span class="queue-loc" title="{{.File}}{{if .Line}}:{{.Line}}{{end}}">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>
