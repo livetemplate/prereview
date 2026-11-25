@@ -54,6 +54,13 @@ the reviewer's audience, tone or product scope, not on anything in the code. Don
 one silently. Ask with `reply --answered`, naming both options, and edit nothing until
 they answer.
 
+If you read the queue with `prereview watch`, ask with clickable options instead, also when
+data you need is missing. Run `prereview ask --out <STORE> --file -` with a set of one to
+four questions, each with two to four options and a `recommended` one (`prereview ask
+--help` shows the format). The reviewer taps an answer, and the next snapshot's `questions`
+carries it (`picked` labels, or `other`, a typed answer). Build it, `reply` on the set id,
+then `prereview done --out <STORE> <set-id>`.
+
 Re-run `prereview comments --json` for more (the reviewer can keep commenting);
 dedupe by `id`. Stop when the reviewer clicks End session. If your harness can
 block on a stream, `prereview watch --out <STORE> --since <seq>` delivers each new
