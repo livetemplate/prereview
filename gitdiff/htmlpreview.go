@@ -127,6 +127,9 @@ type rawAttr struct {
 //   - The preview bridge beacon (previewBridgeJS) is injected so the iframe can
 //     post its height + block rects out (the iframe is opaque-origin, so the
 //     parent can't read its contentDocument).
+//   - Viewport-height units in <style> text and style attributes are pinned
+//     to a fixed basis (rewriteViewportUnits), or a page with a 100vh hero
+//     would grow with the auto-heighted iframe without end.
 //   - on* event-handler attributes and javascript: URLs are still stripped
 //     (serializeTag). <script> elements are NOT stripped — the page's own
 //     scripts must run (that is the whole point: JS-generated CSS like the
@@ -183,6 +186,8 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 		// ranges are spliced in at the end. Linear in the input at any depth.
 		stack   []openElement
 		patches []rangePatch
+		// inStyle is set inside a <style> element, whose text is CSS.
+		inStyle bool
 	)
 
 	// sink is where passthrough bytes go: always the single output buffer.
@@ -282,8 +287,15 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 		line += bytes.Count(raw, []byte("\n"))
 
 		switch tt {
-		case html.DoctypeToken, html.CommentToken, html.TextToken:
+		case html.DoctypeToken, html.CommentToken:
 			sink().Write(raw)
+
+		case html.TextToken:
+			if inStyle {
+				sink().WriteString(rewriteViewportUnits(string(raw)))
+			} else {
+				sink().Write(raw)
+			}
 
 		case html.StartTagToken, html.SelfClosingTagToken:
 			selfClosing := tt == html.SelfClosingTagToken
@@ -291,7 +303,10 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 			name := string(nameBytes)
 			var attrs []rawAttr
 			if hasAttr {
-				attrs = prefixRootURLs(readAttrs(z))
+				attrs = rewriteStyleAttrs(prefixRootURLs(readAttrs(z)))
+			}
+			if name == "style" && !selfClosing {
+				inStyle = true
 			}
 
 			if !selfClosing && !inHead && !inBody && name == "head" {
@@ -333,6 +348,9 @@ func RenderHTMLPreview(src []byte, currentPath string) (string, []HTMLBlock) {
 		case html.EndTagToken:
 			nameBytes, _ := z.TagName()
 			name := string(nameBytes)
+			if name == "style" {
+				inStyle = false
+			}
 			if inBody && name == "body" {
 				for len(stack) > 0 { // unclosed elements end with the body
 					closeTop(line, nil)
