@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+
+	"github.com/livetemplate/prereview/csv"
 )
 
 // Agent questions: the agent asks the reviewer to pick a direction, or to fill
@@ -178,10 +180,8 @@ func LoadQuestionSets(csvPath string) []QuestionSet {
 		if json.Unmarshal(line, &s) != nil || s.ID == "" || len(s.Steps) == 0 {
 			return
 		}
-		if s.Side == "" {
-			s.Side = "new"
-		}
-		all = append(all, s)
+		// The writer normalizes too; a hand-written line gets the same defaults.
+		all = append(all, NormalizeQuestionSet(s))
 	})
 	return keepLastWrite(all, func(s QuestionSet) string { return s.ID })
 }
@@ -203,19 +203,26 @@ func loadQuestionAnswers(path string) map[string]QuestionAnswer {
 	return out
 }
 
-// saveQuestionAnswers rewrites the answers file atomically, sorted by key so it
-// is stable and diffable. Safe because the server is its only writer.
+// saveQuestionAnswers rewrites the answers file atomically. Safe because the
+// server is its only writer.
 func saveQuestionAnswers(path string, answers map[string]QuestionAnswer) error {
-	keys := make([]string, 0, len(answers))
-	for k := range answers {
+	return saveJSONLMap(path, answers)
+}
+
+// saveJSONLMap rewrites path as one JSON line per map value, sorted by key so
+// the file is stable and diffable, through a temp file and a rename. For the
+// server-owned answer files, which have one writer.
+func saveJSONLMap[T any](path string, m map[string]T) error {
+	keys := make([]string, 0, len(m))
+	for k := range m {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	for _, k := range keys {
-		if err := enc.Encode(answers[k]); err != nil {
-			return fmt.Errorf("encode answer %s: %w", k, err)
+		if err := enc.Encode(m[k]); err != nil {
+			return fmt.Errorf("encode %s: %w", k, err)
 		}
 	}
 	return writeFileAtomicVersions(path, buf.Bytes())
@@ -285,4 +292,40 @@ func questionSetSent(s QuestionSet, answers map[string]QuestionAnswer) bool {
 		}
 	}
 	return true
+}
+
+// The kinds of item an id can name in a review store. Comments, suggestions,
+// quiz questions and question sets share one id space: threads and done marks
+// key on the bare id.
+const (
+	TargetComment      = "comment"
+	TargetSuggestion   = "suggestion"
+	TargetQuizQuestion = "quiz question" // addressed "<quizID>:<questionID>"
+	TargetQuestionSet  = "question set"
+)
+
+// ResolveTarget reports which kind of item id names in the store whose CSV is
+// at csvPath, or "" for none. empty reports that the store holds no item of
+// any kind, which nearly always means a wrong --out.
+func ResolveTarget(csvPath, id string) (kind string, empty bool) {
+	comments, _ := csv.Read(csvPath)
+	sugs := LoadSuggestions(csvPath)
+	quizzes := LoadQuizzes(csvPath)
+	sets := LoadQuestionSets(csvPath)
+	switch {
+	case slices.ContainsFunc(comments, func(r csv.Row) bool { return r.ID == id }):
+		return TargetComment, false
+	case slices.ContainsFunc(sugs, func(s Suggestion) bool { return s.ID == id }):
+		return TargetSuggestion, false
+	case slices.ContainsFunc(sets, func(s QuestionSet) bool { return s.ID == id }):
+		return TargetQuestionSet, false
+	}
+	if qid, quest, ok := SplitQuizThreadID(id); ok {
+		for _, q := range quizzes {
+			if q.ID == qid && slices.ContainsFunc(q.Questions, func(qu Question) bool { return qu.ID == quest }) {
+				return TargetQuizQuestion, false
+			}
+		}
+	}
+	return "", len(comments) == 0 && len(sugs) == 0 && len(quizzes) == 0 && len(sets) == 0
 }

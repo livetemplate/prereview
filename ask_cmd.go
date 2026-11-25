@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -48,7 +46,8 @@ func runAsk(args []string) error {
 				"    }\n\n"+
 				"  The reviewer can always type their own answer instead. When they send\n"+
 				"  it, the next snapshot carries it in \"questions\"; `prereview done <id>`\n"+
-				"  closes it.\n")
+				"  closes it. Re-asking an open id revises the set; after done, ask with a\n"+
+				"  new id.\n")
 	}
 	if err := parseInterspersed(fs, args); err != nil {
 		return err
@@ -69,7 +68,15 @@ func runAsk(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := checkAskFor(sets, filepath.Join(dir, review.CommentsFileName)); err != nil {
+	csvPath := filepath.Join(dir, review.CommentsFileName)
+	var fors []string
+	for _, s := range sets {
+		if kind, _ := review.ResolveTarget(csvPath, s.ID); kind != "" && kind != review.TargetQuestionSet {
+			return fmt.Errorf("id %q is already a %s in this review; pick another", s.ID, kind)
+		}
+		fors = append(fors, s.For)
+	}
+	if err := checkForIDs(csvPath, fors); err != nil {
 		return err
 	}
 	verb := "asked"
@@ -89,22 +96,11 @@ func runAsk(args []string) error {
 	if *check {
 		return nil
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("mkdir %s: %w", dir, err)
-	}
-	path := filepath.Join(dir, review.QuestionsFileName)
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("open %s: %w", path, err)
-	}
-	defer f.Close()
-	enc := json.NewEncoder(f)
+	vs := make([]any, len(sets))
 	for i := range sets {
-		if err := enc.Encode(sets[i]); err != nil {
-			return fmt.Errorf("append question set %s: %w", sets[i].ID, err)
-		}
+		vs[i] = sets[i]
 	}
-	return nil
+	return review.AppendJSONL(filepath.Join(dir, review.QuestionsFileName), vs...)
 }
 
 // parseAskInput decodes, normalizes and validates every set before the caller
@@ -126,22 +122,4 @@ func parseAskInput(raw []byte) ([]review.QuestionSet, error) {
 		out = append(out, s)
 	}
 	return out, nil
-}
-
-// checkAskFor refuses a set whose "for" names a comment the review doesn't
-// have: its options would hang off a thread that isn't there.
-func checkAskFor(sets []review.QuestionSet, csvPath string) error {
-	var ids []string
-	for _, s := range sets {
-		if s.For != "" {
-			ids = append(ids, s.For)
-		}
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	if err := validateIDs(csvPath, ids); err != nil {
-		return fmt.Errorf("\"for\": %w", err)
-	}
-	return nil
 }

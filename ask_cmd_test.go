@@ -59,6 +59,7 @@ func TestAsk_RefusesBadPayloads(t *testing.T) {
 		{"one option", strings.Replace(askPayload, `,{"label":"Sign out at once"}`, "", 1), "2 to 4 options"},
 		{"bad second set", "[" + askPayload + `,{"file":"a.go","from_line":1,"steps":[]}]`, "question set 2"},
 		{"unknown for", strings.Replace(askPayload, `"file"`, `"for":"nope","file"`, 1), "unknown comment id"},
+		{"id taken by a comment", strings.Replace(askPayload, `"id":"q-refresh"`, `"id":"c1"`, 1), "already a comment"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()

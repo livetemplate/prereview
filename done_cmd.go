@@ -94,12 +94,8 @@ func runDone(args []string) error {
 			fs.Usage()
 			return fmt.Errorf("no comment id given")
 		}
-		// A question set the agent asked (`prereview ask`) is closed the same
-		// way; only the rest must be comments.
-		if rest := withoutQuestionSets(csvPath, ids); len(rest) > 0 {
-			if err := validateIDs(csvPath, rest); err != nil {
-				return err
-			}
+		if err := validateDoneIDs(csvPath, ids); err != nil {
+			return err
 		}
 	}
 	ids = dedupe(ids)
@@ -112,19 +108,25 @@ func runDone(args []string) error {
 	return nil
 }
 
-// withoutQuestionSets returns ids minus the agent's question set ids.
-func withoutQuestionSets(csvPath string, ids []string) []string {
-	sets := map[string]bool{}
-	for _, s := range review.LoadQuestionSets(csvPath) {
-		sets[s.ID] = true
-	}
-	var rest []string
+// validateDoneIDs accepts the ids `done` can close: comments, and question
+// sets the agent asked (`prereview ask`). Anything else fails, named.
+func validateDoneIDs(csvPath string, ids []string) error {
+	var unknown []string
+	empty := false
 	for _, id := range ids {
-		if !sets[id] {
-			rest = append(rest, id)
+		kind, none := review.ResolveTarget(csvPath, id)
+		if kind != review.TargetComment && kind != review.TargetQuestionSet {
+			unknown = append(unknown, id)
+			empty = none
 		}
 	}
-	return rest
+	switch {
+	case len(unknown) == 0:
+		return nil
+	case empty:
+		return fmt.Errorf("no comments found at %s — is --out the review's directory?", csvPath)
+	}
+	return fmt.Errorf("unknown comment or question set id(s): %s (use `prereview comments --json` to list comment ids)", strings.Join(unknown, ", "))
 }
 
 // printNote emits a non-empty skip note on its own line.

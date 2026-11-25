@@ -29,7 +29,7 @@ func (c *PrereviewController) flushSnapshot(state *PrereviewState) error {
 		// persist() above deliberately saves the FULL state.Comments: it's the tab's
 		// copy of every row, and scoping it would hide other files' rows from this tab.
 		c.applyQuestionAnswers(state) // the agent's latest done marks
-		if err := c.Emitter.EmitSnapshot(state.scopedComments(), state.scopedSuggestions(), state.DecisionsBySuggestion(), state.Threads(), state.Applied, state.QuizResults(), state.actionableQuestions(), c.WriteWith(), c.isPaused(), time.Now()); err != nil {
+		if err := c.emitSnapshotOf(state); err != nil {
 			return fmt.Errorf("emit snapshot event: %w", err)
 		}
 	}
