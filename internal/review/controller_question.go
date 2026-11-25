@@ -78,59 +78,65 @@ func (s PrereviewState) scopedQuestionSets() []QuestionSet {
 	return out
 }
 
-// questionTarget reads the set and step a card's form names and returns them,
-// with the step's index.
+// findQuestionSet returns the set with id.
+func findQuestionSet(state *PrereviewState, id string) (*QuestionSet, error) {
+	i := slices.IndexFunc(state.QuestionSets, func(s QuestionSet) bool { return s.ID == id })
+	if i < 0 {
+		return nil, fmt.Errorf("no question set %q", id)
+	}
+	return &state.QuestionSets[i], nil
+}
+
+// questionTarget returns the set and the index of the step a card's form names.
 func questionTarget(state *PrereviewState, setID, stepID string) (*QuestionSet, int, error) {
-	for i := range state.QuestionSets {
-		set := &state.QuestionSets[i]
-		if set.ID != setID {
-			continue
-		}
-		for j, st := range set.Steps {
-			if st.ID == stepID {
-				return set, j, nil
-			}
-		}
+	set, err := findQuestionSet(state, setID)
+	if err != nil {
+		return nil, 0, err
+	}
+	j := slices.IndexFunc(set.Steps, func(st QuestionStep) bool { return st.ID == stepID })
+	if j < 0 {
 		return nil, 0, fmt.Errorf("question set %s has no step %q", setID, stepID)
 	}
-	return nil, 0, fmt.Errorf("no question set %q", setID)
+	return set, j, nil
 }
 
-// setQuestionView moves set's card to step i (len(steps) is the Review list).
-func setQuestionView(state *PrereviewState, setID string, i int) {
-	view := maps.Clone(state.QuestionView)
-	if view == nil {
-		view = map[string]int{}
+// withEntry and withoutEntry return a copy of m with k set or removed: a map
+// the page rendered from is never changed in place, or livetemplate can't see
+// the change.
+func withEntry[V any](m map[string]V, k string, v V) map[string]V {
+	out := maps.Clone(m)
+	if out == nil {
+		out = map[string]V{}
 	}
-	view[setID] = i
-	state.QuestionView = view
+	out[k] = v
+	return out
 }
 
-// saveAnswer records a for a set's step and saves the answers file. A one-tap set
-// (one step, pick one) is sent at once; any other moves on to the next step,
-// or to the Review list after the last.
-func (c *PrereviewController) saveAnswer(state *PrereviewState, set *QuestionSet, step int, a QuestionAnswer, advance bool) error {
-	answers := maps.Clone(state.QuestionAnswers)
-	if answers == nil {
-		answers = map[string]QuestionAnswer{}
-	}
+func withoutEntry[V any](m map[string]V, k string) map[string]V {
+	out := maps.Clone(m)
+	delete(out, k)
+	return out
+}
+
+// saveAnswer records a for a set's step and saves the answers file. A one-tap
+// set is sent at once. Otherwise a pick-one answer or a typed one moves the
+// card to the next step (or the Review list after the last); a pick-any toggle
+// stays.
+func (c *PrereviewController) saveAnswer(state *PrereviewState, set *QuestionSet, step int, a QuestionAnswer) error {
 	a.SetID, a.StepID, a.At = set.ID, set.Steps[step].ID, time.Now().UnixNano()
-	oneTap := len(set.Steps) == 1 && !set.Steps[0].Multi
-	a.Sent = oneTap
-	answers[questionAnswerKey(set.ID, a.StepID)] = a
+	a.Sent = set.OneTap()
+	answers := withEntry(state.QuestionAnswers, questionAnswerKey(set.ID, a.StepID), a)
 	if err := saveQuestionAnswers(QuestionAnswersPath(c.CSVPath), answers); err != nil {
 		return err
 	}
 	state.QuestionAnswers = answers
-	state.QuestionOther = maps.Clone(state.QuestionOther) // never mutate a rendered map in place
-	delete(state.QuestionOther, set.ID)
+	state.QuestionOther = withoutEntry(state.QuestionOther, set.ID)
 	switch {
-	case oneTap:
-		state.QuestionView = maps.Clone(state.QuestionView)
-		delete(state.QuestionView, set.ID)
+	case set.OneTap():
+		state.QuestionView = withoutEntry(state.QuestionView, set.ID)
 		c.scheduleEmit()
-	case advance:
-		setQuestionView(state, set.ID, step+1)
+	case !set.Steps[step].Multi || a.Other != "":
+		state.QuestionView = withEntry(state.QuestionView, set.ID, step+1)
 	}
 	return nil
 }
@@ -147,7 +153,7 @@ func (c *PrereviewController) PickQuestionOption(state PrereviewState, ctx *live
 		return state, fmt.Errorf("option %d is out of range", choice)
 	}
 	if !set.Steps[step].Multi {
-		return state, c.saveAnswer(&state, set, step, QuestionAnswer{Picked: []int{choice}}, true)
+		return state, c.saveAnswer(&state, set, step, QuestionAnswer{Picked: []int{choice}})
 	}
 	picked := slices.Clone(state.QuestionAnswers[questionAnswerKey(set.ID, set.Steps[step].ID)].Picked)
 	if i := slices.Index(picked, choice); i >= 0 {
@@ -156,7 +162,7 @@ func (c *PrereviewController) PickQuestionOption(state PrereviewState, ctx *live
 		picked = append(picked, choice)
 		slices.Sort(picked)
 	}
-	return state, c.saveAnswer(&state, set, step, QuestionAnswer{Picked: picked}, false)
+	return state, c.saveAnswer(&state, set, step, QuestionAnswer{Picked: picked})
 }
 
 // OpenQuestionOther and CloseQuestionOther show and hide a step's "Something
@@ -166,18 +172,12 @@ func (c *PrereviewController) OpenQuestionOther(state PrereviewState, ctx *livet
 	if err != nil {
 		return state, err
 	}
-	other := maps.Clone(state.QuestionOther)
-	if other == nil {
-		other = map[string]string{}
-	}
-	other[set.ID] = set.Steps[step].ID
-	state.QuestionOther = other
+	state.QuestionOther = withEntry(state.QuestionOther, set.ID, set.Steps[step].ID)
 	return state, nil
 }
 
 func (c *PrereviewController) CloseQuestionOther(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.QuestionOther = maps.Clone(state.QuestionOther)
-	delete(state.QuestionOther, ctx.GetString("set"))
+	state.QuestionOther = withoutEntry(state.QuestionOther, ctx.GetString("set"))
 	return state, nil
 }
 
@@ -191,24 +191,22 @@ func (c *PrereviewController) AnswerQuestionOther(state PrereviewState, ctx *liv
 	if body == "" {
 		return state, fmt.Errorf("the answer is empty")
 	}
-	return state, c.saveAnswer(&state, set, step, QuestionAnswer{Other: body}, true)
+	return state, c.saveAnswer(&state, set, step, QuestionAnswer{Other: body})
 }
 
-// QuestionStepTo moves a card to a step (Back, a chip, Change on the Review
-// list), or with step = the step count, to the Review list.
+// QuestionStepTo moves a card to a step (Back, a chip, Next, Change on the
+// Review list), or with index = the step count, to the Review list.
 func (c *PrereviewController) QuestionStepTo(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	setID := ctx.GetString("set")
-	i := ctx.GetInt("index")
-	for _, set := range state.QuestionSets {
-		if set.ID == setID {
-			if i < 0 || i > len(set.Steps) {
-				return state, fmt.Errorf("step %d is out of range", i)
-			}
-			setQuestionView(&state, setID, i)
-			return state, nil
-		}
+	set, err := findQuestionSet(&state, ctx.GetString("set"))
+	if err != nil {
+		return state, err
 	}
-	return state, fmt.Errorf("no question set %q", setID)
+	i := ctx.GetInt("index")
+	if i < 0 || i > len(set.Steps) {
+		return state, fmt.Errorf("step %d is out of range", i)
+	}
+	state.QuestionView = withEntry(state.QuestionView, set.ID, i)
+	return state, nil
 }
 
 // SendQuestionAnswers sends a set's answers to the agent: every step must be
@@ -224,25 +222,17 @@ func (c *PrereviewController) ChangeQuestionAnswers(state PrereviewState, ctx *l
 	if state.QuestionsDone[setID] {
 		return state, fmt.Errorf("the agent has already handled %s", setID)
 	}
-	state, err := c.markQuestionSent(state, setID, false)
-	if err == nil {
-		for _, set := range state.QuestionSets {
-			if set.ID == setID {
-				setQuestionView(&state, setID, len(set.Steps))
-			}
-		}
-	}
-	return state, err
+	return c.markQuestionSent(state, setID, false)
 }
 
 // markQuestionSent sets or clears Sent on every step of a set, saves, and
-// re-emits so the agent's snapshot follows.
+// re-emits so the agent's snapshot follows. Sending closes the card's view;
+// taking it back opens the Review list.
 func (c *PrereviewController) markQuestionSent(state PrereviewState, setID string, sent bool) (PrereviewState, error) {
-	i := slices.IndexFunc(state.QuestionSets, func(s QuestionSet) bool { return s.ID == setID })
-	if i < 0 {
-		return state, fmt.Errorf("no question set %q", setID)
+	set, err := findQuestionSet(&state, setID)
+	if err != nil {
+		return state, err
 	}
-	set := state.QuestionSets[i]
 	answers := maps.Clone(state.QuestionAnswers)
 	for _, st := range set.Steps {
 		k := questionAnswerKey(set.ID, st.ID)
@@ -260,8 +250,9 @@ func (c *PrereviewController) markQuestionSent(state PrereviewState, setID strin
 	}
 	state.QuestionAnswers = answers
 	if sent {
-		state.QuestionView = maps.Clone(state.QuestionView)
-		delete(state.QuestionView, setID)
+		state.QuestionView = withoutEntry(state.QuestionView, setID)
+	} else {
+		state.QuestionView = withEntry(state.QuestionView, setID, len(set.Steps))
 	}
 	c.scheduleEmit()
 	return state, nil

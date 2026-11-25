@@ -10,16 +10,14 @@ import (
 // or the Review list, or the folded answer once sent.
 type QuestionCard struct {
 	QuestionSet
-	// StepIndex is the step on screen; StepIndex == StepCount is the Review list.
+	// StepIndex is the step on screen; len(Steps) is the Review list.
 	StepIndex int
-	StepCount int
 	Step      QuestionStep
 	Chips     []QuestionChip
 	Options   []QuestionOptionView
 	// Other is the step's typed answer; OtherOpen shows its text box.
 	Other     string
 	OtherOpen bool
-	Reviewing bool
 	Summary   []QuestionSummaryRow
 	// Sent: the reviewer sent the answers; Done: the agent marked the set done.
 	Sent bool
@@ -27,8 +25,10 @@ type QuestionCard struct {
 	// Answer is the sent answers in one line, for the folded card.
 	Answer string
 
-	Thread     []ThreadEntry
-	Replying   bool
+	Thread []ThreadEntry
+	// ReplyingID and ReplyDraft are set while the card's reply form is open;
+	// the shared replyForm partial reads them.
+	ReplyingID string
 	ReplyDraft string
 }
 
@@ -56,17 +56,19 @@ type QuestionSummaryRow struct {
 	Answer string
 }
 
-// StepNum is the step on screen, counted from 1; PrevIndex and NextIndex are
-// the steps Back and Next go to (NextIndex past the last is the Review list).
+// StepCount is how many questions the set holds.
+func (c QuestionCard) StepCount() int { return len(c.Steps) }
+
+// StepNum is the step on screen counted from 1, which is also the index Next
+// goes to (past the last, the Review list); PrevIndex is where Back goes.
 func (c QuestionCard) StepNum() int   { return c.StepIndex + 1 }
 func (c QuestionCard) PrevIndex() int { return c.StepIndex - 1 }
-func (c QuestionCard) NextIndex() int { return c.StepIndex + 1 }
 
 // IsLast reports whether the step on screen is the set's last one.
-func (c QuestionCard) IsLast() bool { return c.StepIndex == c.StepCount-1 }
+func (c QuestionCard) IsLast() bool { return c.StepIndex == len(c.Steps)-1 }
 
-// OneTap reports whether a pick sends the set at once: one step, pick one.
-func (c QuestionCard) OneTap() bool { return c.StepCount == 1 && !c.Steps[0].Multi }
+// Reviewing reports whether the card shows the Review list.
+func (c QuestionCard) Reviewing() bool { return c.StepIndex == len(c.Steps) }
 
 // StepAnswered reports whether the step on screen has an answer, which is what
 // lets a pick-any step move on.
@@ -83,13 +85,14 @@ func (s QuestionSet) LineGrounded() bool {
 // Ungrounded reports a set whose lines are not in the diff.
 func (s QuestionSet) Ungrounded() bool { return s.AnchorStatus == anchorUngrounded }
 
-// AnchorLabel is where the set points: "L41-42", "L41" or "file".
+// AnchorLabel is where the set points, in the comment cards' format: "L41-L42",
+// "L41" or "file".
 func (s QuestionSet) AnchorLabel() string {
 	switch {
 	case s.Kind == QuestionKindFile:
 		return "file"
 	case s.ToLine > s.FromLine:
-		return fmt.Sprintf("L%d-%d", s.FromLine, s.ToLine)
+		return fmt.Sprintf("L%d-L%d", s.FromLine, s.ToLine)
 	}
 	return fmt.Sprintf("L%d", s.FromLine)
 }
@@ -124,36 +127,28 @@ func answerText(st QuestionStep, a QuestionAnswer) string {
 
 // questionCard builds set's card from the review state.
 func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]ThreadEntry) QuestionCard {
-	c := QuestionCard{QuestionSet: set, StepCount: len(set.Steps), Sent: questionSetSent(set, s.QuestionAnswers),
+	c := QuestionCard{QuestionSet: set, Sent: questionSetSent(set, s.QuestionAnswers),
 		Done: s.QuestionsDone[set.ID], Thread: threads[set.ID]}
 	if s.ReplyingID == set.ID {
-		c.Replying, c.ReplyDraft = true, s.ReplyDraft
+		c.ReplyingID, c.ReplyDraft = set.ID, s.ReplyDraft
+	}
+	if !c.Sent {
+		c.StepIndex = s.questionStepAt(set)
 	}
 	var answers []string
 	for i, st := range set.Steps {
 		a := s.QuestionAnswers[questionAnswerKey(set.ID, st.ID)]
-		label := st.Header
+		text := answerText(st, a)
+		answers = append(answers, text)
+		label, chip := st.Header, st.Header
 		if label == "" {
-			label = st.Prompt
+			label, chip = st.Prompt, fmt.Sprintf("%d", i+1)
 		}
-		c.Summary = append(c.Summary, QuestionSummaryRow{Index: i, Label: label, Answer: answerText(st, a)})
-		answers = append(answers, answerText(st, a))
+		c.Summary = append(c.Summary, QuestionSummaryRow{Index: i, Label: label, Answer: text})
+		c.Chips = append(c.Chips, QuestionChip{Index: i, Label: chip, Current: i == c.StepIndex, Answered: a.answered()})
 	}
 	c.Answer = strings.Join(answers, " · ")
-	if c.Sent {
-		return c
-	}
-	c.StepIndex = s.questionStepAt(set)
-	c.Reviewing = c.StepIndex == len(set.Steps)
-	for i, st := range set.Steps {
-		label := st.Header
-		if label == "" {
-			label = fmt.Sprintf("%d", i+1)
-		}
-		c.Chips = append(c.Chips, QuestionChip{Index: i, Label: label, Current: i == c.StepIndex,
-			Answered: s.QuestionAnswers[questionAnswerKey(set.ID, st.ID)].answered()})
-	}
-	if c.Reviewing {
+	if c.Sent || c.Reviewing() {
 		return c
 	}
 	c.Step = set.Steps[c.StepIndex]
