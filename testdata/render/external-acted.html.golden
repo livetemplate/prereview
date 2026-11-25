@@ -55,7 +55,7 @@
       >End session</button>
     </form></span>
 </header>
-<div class="layout layout-external">
+<div class="banner-slot" data-key="banners"></div><div class="layout layout-external" data-key="layout">
   <main class="viewer ext-viewer">
     <form method="POST" class="region-toggle">
   <button

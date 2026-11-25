@@ -658,21 +658,23 @@
 </div>
 
 
+<div class="banner-slot" data-key="banners">
 
 
 
 
 
-
+</div>
 
 
 <div
   class="drawer-backdrop"
+  data-key="drawer-backdrop"
   lvt-on:click="closeFiles"
   aria-label="Close file list"
 ></div>
 
-<div class="layout show-resolved">
+<div class="layout show-resolved" data-key="layout">
 <dialog
   id="files-drawer"
   open
