@@ -92,7 +92,7 @@ type QuestionAnswer struct {
 }
 
 // OneTap reports whether a pick sends the set at once: one question, pick one.
-// Every other set ends on a Review list with Send.
+// Every other set is sent with Submit.
 func (s QuestionSet) OneTap() bool { return len(s.Steps) == 1 && !s.Steps[0].Multi }
 
 // answered reports whether a carries an answer: a pick or a typed one.

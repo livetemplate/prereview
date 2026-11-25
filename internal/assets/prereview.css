@@ -3909,7 +3909,9 @@ dialog#files-drawer .file-row > .viewed-changed {
 .question-hint { font-weight: 400; color: var(--pico-muted-color); }
 .question-options { display: flex; flex-direction: column; gap: 0.35rem; }
 .question-option-form, .question-inline { margin: 0; }
-.question-inline { display: inline; }
+/* Scoped to the card: inside the diff, `.code form { display: block }` would
+   otherwise put Change on a line of its own. */
+.question-card .question-inline { display: inline; }
 .question-option {
   display: block; width: 100%; min-height: 44px; margin: 0; padding: 0.45rem 0.65rem;
   text-align: left; font: inherit; color: inherit;
@@ -3928,15 +3930,16 @@ dialog#files-drawer .file-row > .viewed-changed {
 .question-other textarea { min-height: 4rem; margin: 0; font-size: 0.9rem; }
 .question-steps { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
 .question-step { margin: 0; padding: 0.1rem 0.6rem; min-height: 28px; font-size: 0.75rem; border-radius: 999px; background: var(--surface); color: var(--pico-muted-color); border: 1px solid var(--border-strong); width: auto; }
-.question-step.is-answered { color: var(--pico-color); }
+.question-step.is-answered { color: var(--text-strong); }
 .question-step.is-current { color: var(--accent); border-color: var(--accent); font-weight: 700; }
 .question-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.45rem; }
 .question-actions button { width: auto; margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 36px; }
-.question-count { margin-right: auto; font-size: 0.78rem; color: var(--pico-muted-color); }
-button.question-link { margin-left: 0.4rem; font-size: 0.8rem; }
-.question-summary-row { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.35rem 0; border-bottom: 1px dashed var(--border-strong); }
-.question-summary-label { color: var(--pico-muted-color); }
+.question-card button.question-link { margin-left: 0.5rem; font-size: 0.8rem; }
 .question-answer { margin: 0.1rem 0 0.2rem; }
+/* Reply: a small button like the comment card's, not a full-width one. */
+.question-reply { margin-top: 0.45rem; }
+.question-reply form { margin: 0; }
+.question-reply button { width: auto; margin: 0; padding: 0.15rem 0.6rem; font-size: 0.75rem; min-height: 28px; }
 
 
 /* The file-head annotation group. It reuses .line-marks — the same badge a diff

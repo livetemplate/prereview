@@ -118,10 +118,9 @@ func withoutEntry[V any](m map[string]V, k string) map[string]V {
 	return out
 }
 
-// saveAnswer records a for a set's step and saves the answers file. A one-tap
-// set is sent at once. Otherwise a pick-one answer or a typed one moves the
-// card to the next step (or the Review list after the last); a pick-any toggle
-// stays.
+// saveAnswer records a for a set's question and saves the answers file. A
+// one-tap set is sent at once. Otherwise a pick-one answer or a typed one moves
+// the card to the next unanswered question, if any; a pick-any toggle stays.
 func (c *PrereviewController) saveAnswer(state *PrereviewState, set *QuestionSet, step int, a QuestionAnswer) error {
 	a.SetID, a.StepID, a.At = set.ID, set.Steps[step].ID, time.Now().UnixNano()
 	a.Sent = set.OneTap()
@@ -136,7 +135,9 @@ func (c *PrereviewController) saveAnswer(state *PrereviewState, set *QuestionSet
 		state.QuestionView = withoutEntry(state.QuestionView, set.ID)
 		c.scheduleEmit()
 	case !set.Steps[step].Multi || a.Other != "":
-		state.QuestionView = withEntry(state.QuestionView, set.ID, step+1)
+		if next := nextUnanswered(*set, answers, step); next >= 0 {
+			state.QuestionView = withEntry(state.QuestionView, set.ID, next)
+		}
 	}
 	return nil
 }
@@ -194,29 +195,28 @@ func (c *PrereviewController) AnswerQuestionOther(state PrereviewState, ctx *liv
 	return state, c.saveAnswer(&state, set, step, QuestionAnswer{Other: body})
 }
 
-// QuestionStepTo moves a card to a step (Back, a chip, Next, Change on the
-// Review list), or with index = the step count, to the Review list.
+// QuestionStepTo shows a set's question by index: a tap on its tab.
 func (c *PrereviewController) QuestionStepTo(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	set, err := findQuestionSet(&state, ctx.GetString("set"))
 	if err != nil {
 		return state, err
 	}
 	i := ctx.GetInt("index")
-	if i < 0 || i > len(set.Steps) {
+	if i < 0 || i >= len(set.Steps) {
 		return state, fmt.Errorf("step %d is out of range", i)
 	}
 	state.QuestionView = withEntry(state.QuestionView, set.ID, i)
 	return state, nil
 }
 
-// SendQuestionAnswers sends a set's answers to the agent: every step must be
-// answered.
+// SendQuestionAnswers is Submit: it sends a set's answers to the agent, once
+// every question is answered.
 func (c *PrereviewController) SendQuestionAnswers(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	return c.markQuestionSent(state, ctx.GetString("set"), true)
 }
 
 // ChangeQuestionAnswers takes a sent set back, until the agent marks it done:
-// the card reopens on its Review list, and Send delivers the new answers.
+// the card reopens on its first question, and Submit sends the new answers.
 func (c *PrereviewController) ChangeQuestionAnswers(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	setID := ctx.GetString("set")
 	if state.QuestionsDone[setID] {
@@ -226,8 +226,8 @@ func (c *PrereviewController) ChangeQuestionAnswers(state PrereviewState, ctx *l
 }
 
 // markQuestionSent sets or clears Sent on every step of a set, saves, and
-// re-emits so the agent's snapshot follows. Sending closes the card's view;
-// taking it back opens the Review list.
+// re-emits so the agent's snapshot follows. Either way the card's tab resets:
+// a sent card folds, and one taken back opens on its first question.
 func (c *PrereviewController) markQuestionSent(state PrereviewState, setID string, sent bool) (PrereviewState, error) {
 	set, err := findQuestionSet(&state, setID)
 	if err != nil {
@@ -249,11 +249,7 @@ func (c *PrereviewController) markQuestionSent(state PrereviewState, setID strin
 		return state, err
 	}
 	state.QuestionAnswers = answers
-	if sent {
-		state.QuestionView = withoutEntry(state.QuestionView, setID)
-	} else {
-		state.QuestionView = withEntry(state.QuestionView, setID, len(set.Steps))
-	}
+	state.QuestionView = withEntry(state.QuestionView, setID, 0)
 	c.scheduleEmit()
 	return state, nil
 }
