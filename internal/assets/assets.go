@@ -75,14 +75,6 @@ var geistSemiBold []byte
 //go:embed mermaid.min.js
 var mermaidJS []byte
 
-// mermaidInitJS is prereview's own loader: it lazy-fetches mermaidJS when a
-// page has a diagram and renders each fence to SVG. Kept a standalone file
-// (not inlined in prereview.tmpl) so it stays out of livetemplate's template
-// tree.
-//
-//go:embed mermaid-init.js
-var mermaidInitJS []byte
-
 // ClientJS returns the embedded livetemplate client browser bundle.
 func ClientJS() []byte { return clientJS }
 
@@ -116,6 +108,3 @@ func GeistSemiBold() []byte { return geistSemiBold }
 
 // MermaidJS returns the embedded mermaid UMD bundle.
 func MermaidJS() []byte { return mermaidJS }
-
-// MermaidInitJS returns prereview's mermaid loader/renderer script.
-func MermaidInitJS() []byte { return mermaidInitJS }

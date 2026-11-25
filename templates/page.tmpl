@@ -88,18 +88,25 @@
      `fill: currentColor` honors the menu-item color cascade. */}}
 {{template "moreMenu" $}}
 
-{{template "statusBanners" $}}{{template "skillNotice" $}}
+{{/* The banners sit in one always-present wrapper so the page's top-level
+     children never change in number: a banner appearing as a bare sibling made
+     morphdom pair the elements after it by position (the backdrop into the
+     banner, .layout into the backdrop) and rebuild .layout, which detached the
+     view under the pointer and lost the click on it. display:contents keeps the
+     banners flex children of <body>. */}}
+<div class="banner-slot" data-key="banners">{{template "statusBanners" $}}{{template "skillNotice" $}}</div>
 
 {{/* Backdrop is rendered when the drawer is open on mobile. Any tap submits
      CloseFiles via lvt-on:click — simpler and more reliable than a form-wrapped
      button which had submission edge cases. */}}
 <div
   class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}"
+  data-key="drawer-backdrop"
   lvt-on:click="closeFiles"
   aria-label="Close file list"
 ></div>
 
-<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .LiveShowing}} live-showing{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .LiveShowing}} live-showing{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}" data-key="layout">
 {{template "fileDrawer" $}}
 
 <main class="viewer"
@@ -324,8 +331,6 @@
 </div>{{/* .theme-root */}}
 <script defer src="/livetemplate-client.js"></script>
 <script defer src="/prereview-handlers.js"></script>
-{{/* Lazy mermaid renderer; standalone file keeps it out of livetemplate's template tree. See internal/assets/mermaid-init.js. */}}
-<script defer src="/mermaid-init.js"></script>
 </body>
 </html>
 

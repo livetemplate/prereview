@@ -553,21 +553,23 @@
 </div>
 
 
+<div class="banner-slot" data-key="banners">
 
 
 
 
 
-
+</div>
 
 
 <div
   class="drawer-backdrop"
+  data-key="drawer-backdrop"
   lvt-on:click="closeFiles"
   aria-label="Close file list"
 ></div>
 
-<div class="layout">
+<div class="layout" data-key="layout">
 <dialog
   id="files-drawer"
   open
@@ -977,8 +979,6 @@
 </div>
 </div><script defer src="/livetemplate-client.js"></script>
 <script defer src="/prereview-handlers.js"></script>
-
-<script defer src="/mermaid-init.js"></script>
 </body>
 </html>
 

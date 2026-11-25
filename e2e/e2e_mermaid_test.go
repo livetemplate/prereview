@@ -21,15 +21,17 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	cdpruntime "github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/chromedp"
 )
 
-// mermaidDoc exercises both paths: a valid flowchart (source lines 6-7) and a
-// deliberately invalid diagram (line 13). Built with explicit \n so the
+// mermaidDoc exercises both paths: a valid flowchart (source lines 6-7), a
+// deliberately invalid diagram (line 13), and a copy of the first flowchart
+// (lines 18-19), which shares its data-key. Built with explicit \n so the
 // fences' backticks can appear literally.
 //
 //	1: # Mermaid Demo
@@ -46,6 +48,13 @@ import (
 //	12: ```mermaid
 //	13: notadiagramtype lol
 //	14: ```
+//	15:
+//	16: Same flow again:
+//	17:
+//	18: ```mermaid
+//	19: graph TD
+//	20:   A[Start] --> B[End]
+//	21: ```
 const mermaidDoc = "# Mermaid Demo\n\n" +
 	"A flow:\n\n" +
 	"```mermaid\n" +
@@ -55,6 +64,11 @@ const mermaidDoc = "# Mermaid Demo\n\n" +
 	"Broken diagram below:\n\n" +
 	"```mermaid\n" +
 	"notadiagramtype lol\n" +
+	"```\n\n" +
+	"Same flow again:\n\n" +
+	"```mermaid\n" +
+	"graph TD\n" +
+	"  A[Start] --> B[End]\n" +
 	"```\n"
 
 func setupFixtureMermaidRepo(t *testing.T) string {
@@ -80,20 +94,7 @@ func setupFixtureMermaidRepo(t *testing.T) string {
 func TestE2E_MermaidRendersAndStaysCommentable(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureMermaidRepo(t), 1200, 800)
 
-	var consoleLines []string
-	chromedp.ListenTarget(p.ctx, func(ev any) {
-		if e, ok := ev.(*cdpruntime.EventConsoleAPICalled); ok {
-			parts := []string{string(e.Type)}
-			for _, a := range e.Args {
-				if a.Value != nil {
-					parts = append(parts, string(a.Value))
-				} else {
-					parts = append(parts, a.Description)
-				}
-			}
-			consoleLines = append(consoleLines, strings.Join(parts, " "))
-		}
-	})
+	rec := recordConsole(p)
 
 	// diagram.md is the single changed file, so prereview auto-selects it and
 	// renders Markdown by default — no clickFile needed (mirrors
@@ -104,7 +105,7 @@ func TestE2E_MermaidRendersAndStaysCommentable(t *testing.T) {
 
 	diag := func(html string) string {
 		return "\n--- server ---\n" + p.stderr.String() +
-			"\n--- console ---\n" + strings.Join(consoleLines, "\n") +
+			"\n--- console ---\n" + strings.Join(rec.matching(""), "\n") +
 			"\n--- html ---\n" + html
 	}
 
@@ -137,6 +138,14 @@ func TestE2E_MermaidRendersAndStaysCommentable(t *testing.T) {
 	if !strings.Contains(failText, "notadiagramtype lol") {
 		t.Errorf("fallback should keep the raw definition visible; text=%q%s", failText, diag(failHTML))
 	}
+	if warnings := rec.matching("prereview: mermaid diagram"); len(warnings) != 1 {
+		t.Errorf("want one render warning for the broken diagram, got %d: %q%s", len(warnings), warnings, diag(failHTML))
+	}
+
+	// 2b. The two identical diagrams each get their own key and SVG.
+	//     gets its own SVG.
+	waitJSTrueDiag(t, p.ctx, `[...document.querySelectorAll('.md-mermaid')].filter(b => b.querySelector(':scope > .md-mermaid-svg > svg')).length === 2`,
+		15*time.Second, "both identical diagrams are drawn in their own container", func() string { return diag(html) })
 
 	// 3. Comment on the diagram block. Find the .md-block that owns the SVG
 	//    and click its .md-rendered (the selectBlock click target — the SVG
@@ -216,7 +225,7 @@ func TestE2E_MermaidRendersAndStaysCommentable(t *testing.T) {
 
 	// No console errors — a render throw or a security-level rejection would
 	// surface here (warnings tolerated).
-	for _, line := range consoleLines {
+	for _, line := range rec.matching("") {
 		if strings.HasPrefix(line, "error ") {
 			t.Errorf("browser console error: %s%s", line, diag(html))
 		}
@@ -226,7 +235,8 @@ func TestE2E_MermaidRendersAndStaysCommentable(t *testing.T) {
 // TestE2E_MermaidRevisionRerenders: a diagram whose source changes re-renders
 // after Refresh. The container is lvt-ignore (morphdom must not clobber the SVG
 // mermaid injects), so only a new data-key, a hash of the source, makes the
-// client replace it. Without the key the old SVG stayed (#115 A′1's spike).
+// client replace it. Without the key the old SVG stayed (#115 A′1's spike); with
+// a key shared by an identical diagram, the old element stayed beside the new.
 func TestE2E_MermaidRevisionRerenders(t *testing.T) {
 	t.Setenv("PREREVIEW_EDIT_SETTLE", "1s")
 	repo := setupFixtureMermaidRepo(t)
@@ -248,4 +258,53 @@ func TestE2E_MermaidRevisionRerenders(t *testing.T) {
 		t.Fatalf("click refresh: %v%s", err, diag())
 	}
 	waitJSTrueDiag(t, p.ctx, svgHas("Begin"), 15*time.Second, "the revised diagram re-renders", diag)
+	// The doc holds an identical copy of the edited diagram. A shared data-key
+	// left the old copy in the page beside the new one.
+	waitJSTrueDiag(t, p.ctx, `document.querySelectorAll('.md-mermaid').length === 3`, 5*time.Second,
+		"the edited diagram's old element is gone", diag)
+}
+
+// TestE2E_MermaidRetriesAfterFailedLoad: a failed /mermaid.min.js load leaves
+// the page's diagrams as source, and the next diagram that arrives loads the
+// library again instead of inheriting the cached failure.
+func TestE2E_MermaidRetriesAfterFailedLoad(t *testing.T) {
+	t.Setenv("PREREVIEW_EDIT_SETTLE", "1s")
+	repo := setupFixtureMermaidRepo(t)
+	p := bootChromeAgainstRepo(t, repo, 1200, 800, "--agent")
+	diag := captureDiag(t, p)
+
+	var requests atomic.Int32
+	chromedp.ListenTarget(p.ctx, func(ev any) {
+		if e, ok := ev.(*fetch.EventRequestPaused); ok {
+			first := requests.Add(1) == 1
+			go func() {
+				if first {
+					_ = chromedp.Run(p.ctx, fetch.FailRequest(e.RequestID, "ConnectionFailed"))
+					return
+				}
+				_ = chromedp.Run(p.ctx, fetch.ContinueRequest(e.RequestID))
+			}()
+		}
+	})
+	if err := chromedp.Run(p.ctx, fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*/mermaid.min.js"}})); err != nil {
+		t.Fatalf("enable request interception: %v", err)
+	}
+	p.waitReady()
+
+	waitJSTrueDiag(t, p.ctx, `document.querySelectorAll('.md-mermaid-failed').length === 3`, 15*time.Second,
+		"every diagram falls back after the failed load", diag)
+
+	revised := mermaidDoc + "\nA new flow:\n\n```mermaid\ngraph LR\n  X[Retry] --> Y[Drawn]\n```\n"
+	if err := os.WriteFile(filepath.Join(repo, "diagram.md"), []byte(revised), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	waitJSTrueDiag(t, p.ctx, refreshBtnVisibleJS, 15*time.Second, "refresh nudge", diag)
+	if err := chromedp.Run(p.ctx, chromedp.Click(`.refresh-prompt button[name="refreshDiff"]`, chromedp.ByQuery)); err != nil {
+		t.Fatalf("click refresh: %v%s", err, diag())
+	}
+	waitJSTrueDiag(t, p.ctx, `[...document.querySelectorAll('.md-mermaid svg')].some(s => s.textContent.includes('Retry'))`,
+		25*time.Second, "the new diagram loads the library again and renders", diag)
+	if got := requests.Load(); got != 2 {
+		t.Errorf("want 2 requests for /mermaid.min.js (the failed one and the retry), got %d%s", got, diag())
+	}
 }

@@ -55,7 +55,7 @@
       >Quit</button>
     </form></span>
 </header>
-<div class="layout layout-external">
+<div class="banner-slot" data-key="banners"></div><div class="layout layout-external" data-key="layout">
   <main class="viewer ext-viewer">
     <div class="preview-stage ext-stage"
          lvt-fx:proxy-bridge="setProxyURL"
@@ -120,8 +120,6 @@
 </div>
 </div><script defer src="/livetemplate-client.js"></script>
 <script defer src="/prereview-handlers.js"></script>
-
-<script defer src="/mermaid-init.js"></script>
 </body>
 </html>
 

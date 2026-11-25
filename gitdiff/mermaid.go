@@ -50,14 +50,34 @@ func fencedCodeRaw(fcb *ast.FencedCodeBlock, src []byte) []byte {
 	return buf
 }
 
-// MermaidHTML wraps a diagram definition in the container the client
-// renderer turns into SVG. Three load-bearing pieces:
+// MermaidKeys renders the diagrams of one view. Each gets a data-key that is
+// unique on the page: morphdom indexes keyed elements across the whole patch
+// root, so two diagrams sharing a key leave a stale copy behind when one of
+// them is edited. The key hashes the view's scope and the definition, plus
+// how many identical definitions came before it in this view. So it changes
+// when the definition does, which forces a re-insert past lvt-ignore, and it
+// stays put when unrelated lines move.
+type MermaidKeys struct {
+	scope string
+	seen  map[string]int
+}
+
+// NewMermaidKeys starts the diagrams of one view, such as one file's Markdown
+// or the walkthrough's Diagrams tab. scope must differ between views that can
+// be on screen together.
+func NewMermaidKeys(scope string) *MermaidKeys {
+	return &MermaidKeys{scope: scope, seen: map[string]int{}}
+}
+
+// HTML wraps a diagram definition in the container the client renderer
+// turns into SVG. Three load-bearing pieces:
 //
 //   - lvt-ignore: livetemplate's morphdom skips this element and its whole
 //     subtree, so a later server DOM patch (adding a comment elsewhere, a
 //     scroll directive, …) never clobbers the SVG mermaid injects here.
-//   - class="mermaid" on the <pre>: the selector mermaid.run / our init
-//     script scan for; the diagram definition is its textContent.
+//   - lvt-x:mermaid: arms the client handler in handlers/src/mermaid.ts,
+//     which reads the definition from the <pre>'s textContent. The registry
+//     ignores an empty value, so it carries a constant.
 //   - html.EscapeString: untrusted repo content can't inject markup (matching
 //     the pipeline's safe default). The browser decodes the entities back
 //     when it computes textContent, so the mermaid parser still sees the
@@ -65,13 +85,15 @@ func fencedCodeRaw(fcb *ast.FencedCodeBlock, src []byte) []byte {
 //
 // The trailing newline goldmark leaves on the last fence line is trimmed so
 // the definition mermaid parses has no spurious blank final line.
-func MermaidHTML(raw []byte) string {
+func (k *MermaidKeys) HTML(raw []byte) string {
 	def := strings.TrimRight(string(raw), "\n")
 	if def == "" {
 		return ""
 	}
+	n := k.seen[def]
+	k.seen[def] = n + 1
 	h := fnv.New64a()
-	h.Write([]byte(def))
-	return fmt.Sprintf(`<div class="md-mermaid" data-key="mmd-%x" lvt-ignore><pre class="mermaid">`, h.Sum64()) +
+	fmt.Fprintf(h, "%s\x00%d\x00%s", k.scope, n, def)
+	return fmt.Sprintf(`<div class="md-mermaid" data-key="mmd-%x" lvt-x:mermaid="svg" lvt-ignore><pre class="mermaid">`, h.Sum64()) +
 		html.EscapeString(def) + `</pre></div>`
 }

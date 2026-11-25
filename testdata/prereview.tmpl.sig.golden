@@ -378,7 +378,7 @@
       <button type="button" command="show-modal" commandfor="confirm-quit" class="contrast" title="Stop the prereview server">Quit</button>
     </form>{{end}}</span>
 </header>
-{{template "skillNotice" $}}<div class="layout layout-external">
+<div class="banner-slot" data-key="banners">{{template "skillNotice" $}}</div><div class="layout layout-external" data-key="layout">
   <main class="viewer ext-viewer">
 {{template "liveStage" $}}
   </main>
@@ -1056,12 +1056,13 @@
 
 {{template "moreMenu" $}}
 
-{{template "statusBanners" $}}{{template "skillNotice" $}}
+
+<div class="banner-slot" data-key="banners">{{template "statusBanners" $}}{{template "skillNotice" $}}</div>
 
 
-<div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" lvt-on:click="closeFiles" aria-label="Close file list"></div>
+<div class="drawer-backdrop{{if .FileDrawerOpen}} open{{end}}" data-key="drawer-backdrop" lvt-on:click="closeFiles" aria-label="Close file list"></div>
 
-<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .LiveShowing}} live-showing{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}">
+<div class="layout{{if .FocusMode}} focus-mode{{end}}{{if .LiveShowing}} live-showing{{end}}{{if .TocCollapsed}} toc-collapsed{{end}}{{if .HideMarks}} marks-hidden{{end}}{{if .ShowResolved}} show-resolved{{end}}" data-key="layout">
 {{template "fileDrawer" $}}
 
 <main class="viewer" lvt-fx:viewport-report="reportViewport" data-lvt-viewport-items=".line, .md-block">{{if .LiveAvailable}}<div class="live-wrap{{if not .LiveShowing}} live-hidden{{end}}" data-key="live-wrap">{{template "liveStage" $}}</div>{{end}}
@@ -1196,8 +1197,6 @@
 </div>
 <script defer src="/livetemplate-client.js"></script>
 <script defer src="/prereview-handlers.js"></script>
-
-<script defer src="/mermaid-init.js"></script>
 </body>
 </html>
 
