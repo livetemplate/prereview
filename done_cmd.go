@@ -103,9 +103,29 @@ func runDone(args []string) error {
 	if err := appendMarks(dir, review.ProcessedFileName, ids); err != nil {
 		return err
 	}
-	fmt.Printf("marked %d comment(s) as worked on\n", len(ids))
+	fmt.Println(doneSummary(csvPath, ids))
 	printNote(note)
 	return nil
+}
+
+// doneSummary is done's result line. With comments only it is the line agents
+// and tests already read ("marked N comment(s) as worked on"); question sets are
+// named beside it.
+func doneSummary(csvPath string, ids []string) string {
+	sets := 0
+	for _, id := range ids {
+		if kind, _ := review.ResolveTarget(csvPath, id); kind == review.TargetQuestionSet {
+			sets++
+		}
+	}
+	switch comments := len(ids) - sets; {
+	case sets == 0:
+		return fmt.Sprintf("marked %d comment(s) as worked on", comments)
+	case comments == 0:
+		return fmt.Sprintf("marked %d question set(s) as worked on", sets)
+	default:
+		return fmt.Sprintf("marked %d comment(s) and %d question set(s) as worked on", comments, sets)
+	}
 }
 
 // validateDoneIDs accepts the ids `done` can close: comments, and question

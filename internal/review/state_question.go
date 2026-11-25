@@ -254,3 +254,51 @@ func (s PrereviewState) FileQuestionCards() []QuestionCard {
 	}
 	return out
 }
+
+// QuestionCountLines counts the question cards on each diff row, keyed
+// "<line>-<side>" like CommentCountLines, so a question adds to its row's badge,
+// folds with the row, and pins the row out of the diff's folds.
+func (s PrereviewState) QuestionCountLines() map[string]int {
+	out := map[string]int{}
+	for end, cards := range s.QuestionsByEndLine() {
+		for _, c := range cards {
+			countRowSides(out, end, c.Side)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// QuestionOpenLines marks rows with an unresolved question: open, as an
+// unresolved comment is, so the row's badge reads open.
+func (s PrereviewState) QuestionOpenLines() map[string]bool {
+	out := map[string]bool{}
+	for end, cards := range s.QuestionsByEndLine() {
+		for _, c := range cards {
+			if !c.Resolved {
+				for _, k := range rowKeysFor(end, c.Side) {
+					out[k] = true
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// BlockQuestions is the open file's line-grounded question cards grouped by
+// rendered block (Markdown or the HTML preview), like BlockComments, so they
+// render under their block and count toward its marker.
+func (s PrereviewState) BlockQuestions() map[string][]QuestionCard {
+	var cards []QuestionCard
+	for _, c := range s.questionCards() {
+		if c.LineGrounded() {
+			cards = append(cards, c)
+		}
+	}
+	return groupByBlock(s, cards, func(c QuestionCard) int { return c.ToLine })
+}

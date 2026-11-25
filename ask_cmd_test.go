@@ -86,8 +86,8 @@ func TestAsk_DoneAndReplyTakeSetIDs(t *testing.T) {
 	if res := runBin(t, "", "reply", "--out", root, "--body", "Added two retries.", "q-refresh"); res.exit != 0 {
 		t.Fatalf("reply on a set: exit %d, %s", res.exit, res.stderr)
 	}
-	if res := runBin(t, "", "done", "--out", root, "q-refresh", "c1"); res.exit != 0 {
-		t.Fatalf("done on a set and a comment: exit %d, %s", res.exit, res.stderr)
+	if res := runBin(t, "", "done", "--out", root, "q-refresh", "c1"); res.exit != 0 || !strings.Contains(res.stdout, "marked 1 comment(s) and 1 question set(s)") {
+		t.Fatalf("done on a set and a comment: exit %d, stdout %q, %s", res.exit, res.stdout, res.stderr)
 	}
 	if got := strings.Join(processedIDs(t, root), "\n"); !strings.Contains(got, `"id":"q-refresh"`) || !strings.Contains(got, `"id":"c1"`) {
 		t.Errorf("processed = %s, want q-refresh and c1", got)

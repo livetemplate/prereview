@@ -353,3 +353,72 @@ func TestE2E_QuestionNav(t *testing.T) {
 	tapIn(t, p, card+` button[name='pickQuestionOption']`, "answer it", diag)
 	waitJSDiag(t, p, `!document.querySelector('.ann-nav-label') || !/\b1 open\b/.test(document.querySelector('.ann-nav-label').textContent)`, "a submitted question leaves the count", diag)
 }
+
+// TestE2E_QuestionFold: a question is a row annotation like a comment. On an
+// unchanged line far from the change it is pinned out of the diff's folds,
+// counts in its row's badge, and the badge collapses and reopens it.
+func TestE2E_QuestionFold(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoBigDiff(t), 1200, 800, "--agent") // big.go: line 20 changed of 40
+	p.waitReady()
+	diag := captureDiag(t, p)
+	p.clickFile("big.go")
+	runAgentVerb(t, p, "ask", `{"id":"qf","file":"big.go","from_line":35,"to_line":35,
+	 "steps":[{"id":"s","prompt":"ASK-FAR Keep this line?","options":[{"label":"Yes"},{"label":"No"}]}]}`)
+	card := `.code .question-card[data-key='question-qf']`
+	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+card+`"); return !!c && c.offsetParent !== null; })()`, "the question on folded line 35 has a visible card", diag)
+	if n := countSel(t, p, `.code .fold-row`); n < 1 {
+		t.Errorf("the rest of the file must still fold; got %d fold rows%s", n, diag())
+	}
+	badge := `document.querySelector("` + card + `").closest('.line-row').querySelector('.line-marks')`
+	if got := evalStr(t, p, `((`+badge+` || {}).textContent || '').trim()`); got != "1" {
+		t.Errorf("the row badge reads %q, want 1%s", got, diag())
+	}
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(badge+`.click(), true`, nil)); err != nil {
+		t.Fatal(err)
+	}
+	waitJSDiag(t, p, `document.querySelector("`+card+`").offsetParent === null`, "the badge collapses the card", diag)
+	if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector("`+card+`").closest('.line-row').querySelector('.line-marks').click(), true`, nil)); err != nil {
+		t.Fatal(err)
+	}
+	waitJSDiag(t, p, `document.querySelector("`+card+`").offsetParent !== null`, "and opens it again", diag)
+}
+
+// TestE2E_QuestionPlacements: a question shows with its block's comments in the
+// rendered Markdown view, and in the HTML preview's card behind its block's
+// marker.
+func TestE2E_QuestionPlacements(t *testing.T) {
+	t.Run("markdown", func(t *testing.T) {
+		p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdown(t), 1200, 800, "--agent") // docs.md: prose line 4 is its own block
+		p.waitReady()
+		diag := captureDiag(t, p)
+		p.clickFile("docs.md")
+		runAgentVerb(t, p, "ask", `{"id":"qm","file":"docs.md","from_line":4,"to_line":4,
+		 "steps":[{"id":"s","prompt":"ASK-MD Keep the edit?","options":[{"label":"Yes"},{"label":"No"}]}]}`)
+		waitJSDiag(t, p, `(() => { const c = document.querySelector(".md-view .question-card[data-key='question-qm']"); return !!c && c.offsetParent !== null; })()`, "the question under its rendered block", diag)
+	})
+	t.Run("html", func(t *testing.T) {
+		p, diag := bootHTMLPreview(t, setupFixtureHTMLRegionRepo(t), 1200, 800) // region.html: line 4 is the top section
+		runAgentVerb(t, p, "ask", `{"id":"qh","file":"region.html","from_line":4,"to_line":4,
+		 "steps":[{"id":"s","prompt":"ASK-HTML Keep the top section?","options":[{"label":"Yes"},{"label":"No"}]}]}`)
+		marker := `.preview-pins .area-overlay[data-id="MB-4-4"] .pin-btn`
+		waitJSDiag(t, p, `(() => { const b = document.querySelector('`+marker+`'); return !!b && b.textContent.trim() === '1'; })()`, "a marker counting the question", diag)
+		tapCentred(t, p, marker, "tap the marker", diag)
+		waitJSDiag(t, p, `!!document.querySelector(".preview-card .question-card[data-key='question-qh'] button[name='pickQuestionOption']")`, "the question in the preview's card", diag)
+	})
+}
+
+// TestE2E_QuestionWaiting: an unanswered question is the reviewer's work: the
+// Queue panel says it is waiting and End session warns, until it is answered.
+func TestE2E_QuestionWaiting(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 1200, 800, "--agent")
+	p.waitReady()
+	diag := captureDiag(t, p)
+	p.clickFile("edited.go")
+	runAgentVerb(t, p, "ask", oneTapSet)
+	card := `.question-card[data-key='question-q1']`
+	waitJSDiag(t, p, `!!document.querySelector("`+card+`")`, "the question", diag)
+	waitJSDiag(t, p, `((document.querySelector('.queue-awaiting-answer') || {}).textContent || '').includes('1 question waiting for your answer')`, "the Queue's waiting line", diag)
+	waitJSDiag(t, p, `!!document.querySelector('#confirm-end-session .end-warn-answer')`, "End session warns", diag)
+	tapIn(t, p, card+` button[name='pickQuestionOption']`, "answer it", diag)
+	waitJSDiag(t, p, `!document.querySelector('.queue-awaiting-answer') && !document.querySelector('#confirm-end-session .end-warn-answer')`, "answered: no line, no warning", diag)
+}

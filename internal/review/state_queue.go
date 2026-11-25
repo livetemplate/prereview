@@ -297,6 +297,20 @@ func (s PrereviewState) BlockedCount() int { return s.countQueue(queueBlocked) }
 // DraftCount is the number of held (not-yet-enqueued) comments.
 func (s PrereviewState) DraftCount() int { return s.countQueue(queueDraft) }
 
+// AwaitingAnswerCount is how many of the agent's question sets wait on the
+// reviewer: not submitted, resolved or hidden. Whole review, like
+// AwaitingPickCount: it warns before End session, and a count limited to the
+// open file would let a question on another file be left unanswered.
+func (s PrereviewState) AwaitingAnswerCount() int {
+	n := 0
+	for _, set := range s.scopedQuestionSets() {
+		if !questionSetSent(set, s.QuestionAnswers) && !s.questionResolved(set) && !s.QuestionStatus[set.ID].Hidden {
+			n++
+		}
+	}
+	return n
+}
+
 // AwaitingApplyCount is how many suggestions the reviewer has ACCEPTED but the agent has
 // not yet written to the file (#171).
 //

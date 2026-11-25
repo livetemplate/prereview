@@ -402,7 +402,7 @@ func (s PrereviewState) fileHeadQuizShowing() bool {
 // number the shared row badge shows there. Counts file-level and area comments
 // alongside the head quiz questions, because they all collapse together.
 func (s PrereviewState) FileHeadAnnotationCount() int {
-	return len(s.FileLevelComments()) + len(s.AreaComments()) + len(s.FileQuizItems())
+	return len(s.FileLevelComments()) + len(s.AreaComments()) + len(s.FileQuizItems()) + len(s.FileQuestionCards())
 }
 
 // FileHeadHasOpen reports whether anything at the file head is still open work,
@@ -420,6 +420,11 @@ func (s PrereviewState) FileHeadHasOpen() bool {
 	}
 	for _, it := range s.FileQuizItems() {
 		if !it.Answered {
+			return true
+		}
+	}
+	for _, c := range s.FileQuestionCards() {
+		if !c.Resolved {
 			return true
 		}
 	}

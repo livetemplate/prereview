@@ -52,7 +52,7 @@
     {{$suggestionCount := index $.SuggestionCountLines $rowkey -}}
     {{$hasComment := gt $commentCount 0 -}}
     {{$hasSuggestion := gt $suggestionCount 0 -}}
-    {{$hasQuiz := gt (index $.QuizCountLines $rowkey) 0 -}}
+    {{$hasQuiz := or (gt (index $.QuizCountLines $rowkey) 0) (gt (index $.QuestionCountLines $rowkey) 0) -}}
     {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
     <div class="line-row{{if or $hasComment $hasSuggestion $hasQuiz}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* #115: a walkthrough step starts here. Above the line, inside the row,

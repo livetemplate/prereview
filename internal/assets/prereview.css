@@ -2052,7 +2052,9 @@ header.file-head .file-head-comment button svg { display: block; }
 .past-eof .inline-comment.is-resolved,
 .past-eof .inline-suggestion.sg-accept,
 .past-eof .inline-suggestion.sg-reject,
-.past-eof .inline-suggestion.is-applied { display: none; }
+.past-eof .inline-suggestion.is-applied,
+.code .question-card.is-resolved,
+.md-view .question-card.is-resolved { display: none; }
 /* #212: an answered quiz question (answered before this visit — `is-settled`) is done
    work, so it folds behind the row's green badge like a resolved comment. The server
    already said so (QuizOpenLines → collapsed, badge is-done); this is the half that was
@@ -2068,6 +2070,9 @@ header.file-head .file-head-comment button svg { display: block; }
    reviewer had just opened (#173). */
 .line-row.row-toggled .quiz-card:not(.is-settled),
 .md-block.row-toggled .quiz-card:not(.is-settled),
+.line-row.row-toggled .question-card:not(.is-resolved),
+.md-block.row-toggled .question-card:not(.is-resolved),
+.file-head-marks.row-toggled .file-head-cards > .question-card:not(.is-resolved),
 .file-head-marks.row-toggled .file-head-cards > .quiz-card:not(.is-settled),
 .line-row.row-toggled .inline-comment:not(.is-resolved),
 .line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
@@ -2101,7 +2106,11 @@ header.file-head .file-head-comment button svg { display: block; }
 .layout.show-resolved .md-view .inline-comment.is-resolved,
 .layout.show-resolved .md-view .inline-suggestion.sg-accept,
 .layout.show-resolved .md-view .inline-suggestion.sg-reject,
-.layout.show-resolved .md-view .inline-suggestion.is-applied { display: block; }
+.layout.show-resolved .md-view .inline-suggestion.is-applied,
+.line-row.row-toggled .question-card.is-resolved,
+.md-block.row-toggled .question-card.is-resolved,
+.layout.show-resolved .code .question-card.is-resolved,
+.layout.show-resolved .md-view .question-card.is-resolved { display: block; }
 /* #218: annotations past the end of a shrunk file. A separated block after the last
    line; its head row carries the shared fold badge, right-aligned like the file head. */
 .past-eof {

@@ -482,6 +482,9 @@ func (s PrereviewState) AnnotationCountLines() map[string]int {
 	for k, n := range s.QuizCountLines() {
 		out[k] += n
 	}
+	for k, n := range s.QuestionCountLines() {
+		out[k] += n
+	}
 	if len(out) == 0 {
 		return nil
 	}
@@ -499,6 +502,9 @@ func (s PrereviewState) AnnotationOpenLines() map[string]bool {
 		out[k] = true
 	}
 	for k := range s.QuizOpenLines() {
+		out[k] = true
+	}
+	for k := range s.QuestionOpenLines() {
 		out[k] = true
 	}
 	if len(out) == 0 {
@@ -1006,12 +1012,18 @@ func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
 	if len(blocks) == 0 {
 		return nil
 	}
-	comments, suggestions := s.BlockComments(), s.BlockSuggestions()
+	comments, suggestions, questions := s.BlockComments(), s.BlockSuggestions(), s.BlockQuestions()
 	out := map[string]BlockAnn{}
 	for _, blk := range blocks {
 		key := markdownBlockKey(blk.start, blk.end)
 		var ba BlockAnn
 		for _, c := range comments[key] {
+			ba.Total++
+			if !c.Resolved {
+				ba.Open = true
+			}
+		}
+		for _, c := range questions[key] {
 			ba.Total++
 			if !c.Resolved {
 				ba.Open = true

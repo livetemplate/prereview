@@ -3,6 +3,7 @@
 {{- range index $.BlockComments $key -}}
   {{- template "commentCardFull" . -}}
 {{- end -}}
+{{- range index $.BlockQuestions $key}}{{template "questionCard" .}}{{end -}}
 {{- if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be) -}}
 {{template "composer" $}}
 {{- end}}
@@ -263,6 +264,9 @@
   {{- /* #206 */ -}}
   {{- if .AwaitingPickCount}}
   <p class="end-warn end-warn-pick" role="alert"><small><strong>{{.AwaitingPickCount}} fork{{if ne .AwaitingPickCount 1}}s{{end}} awaiting your pick.</strong> The agent offered alternatives and is waiting for you to accept one. Ending now leaves {{if eq .AwaitingPickCount 1}}that comment{{else}}those comments{{end}} unaddressed.</small></p>
+  {{- end}}
+  {{- if .AwaitingAnswerCount}}
+  <p class="end-warn end-warn-pick end-warn-answer" role="alert"><small><strong>{{.AwaitingAnswerCount}} question{{if ne .AwaitingAnswerCount 1}}s{{end}} waiting for your answer.</strong> The agent asked and is waiting for you to choose. Ending now leaves {{if eq .AwaitingAnswerCount 1}}it{{else}}them{{end}} unanswered.</small></p>
   {{- end}}
   {{- /* */ -}}
   <footer>
