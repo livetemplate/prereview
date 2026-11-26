@@ -37,8 +37,11 @@ func TestCommentHiddenFromView(t *testing.T) {
 		{true, true, false, true},    // resolved, group off, re-hidden → hidden
 	}
 	for _, tc := range cases {
-		s := PrereviewState{ShowResolved: tc.showResolved}
-		c := Comment{Resolved: tc.resolved, Hidden: tc.hidden}
+		s := PrereviewState{}
+		if tc.showResolved {
+			s.setAnnFilter("f.go", AnnFilter{Show: annShowAll})
+		}
+		c := Comment{File: "f.go", Resolved: tc.resolved, Hidden: tc.hidden}
 		if got := s.commentHiddenFromView(c); got != tc.wantHidden {
 			t.Errorf("resolved=%v hidden=%v show=%v: got hidden=%v want %v",
 				tc.resolved, tc.hidden, tc.showResolved, got, tc.wantHidden)
@@ -47,11 +50,12 @@ func TestCommentHiddenFromView(t *testing.T) {
 }
 
 // TestVisibleCommentsExcludesIndividuallyHidden guards the removed fast-path:
-// with ShowResolved on, an individually-hidden resolved comment must still be
-// excluded (the old `if ShowResolved { return all }` would have leaked it).
+// with resolved shown on the Annotations page, an individually-hidden resolved
+// comment must still be excluded (the old `if ShowResolved { return all }` would
+// have leaked it).
 func TestVisibleCommentsExcludesIndividuallyHidden(t *testing.T) {
 	s := PrereviewState{
-		ShowResolved: true,
+		AnnFilters: map[string]AnnFilter{annListKey: {Show: annShowAll}},
 		Comments: []Comment{
 			{ID: "open"},
 			{ID: "res", Resolved: true},

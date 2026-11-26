@@ -222,7 +222,7 @@ func TestToggleShowResolved_FlashWhenNone(t *testing.T) {
 	// No resolved comments → flash, no toggle.
 	st := PrereviewState{Comments: []Comment{{ID: "a", Resolved: false}}}
 	st, _ = c.ToggleShowResolved(st, kbCtx("toggleShowResolved"))
-	if st.ShowResolved {
+	if st.ShowResolved() {
 		t.Error("should not toggle ShowResolved when there are no resolved comments")
 	}
 	if st.Flash == "" {
@@ -232,7 +232,7 @@ func TestToggleShowResolved_FlashWhenNone(t *testing.T) {
 	// A resolved comment present → toggles and clears the flash.
 	st = PrereviewState{Flash: "stale", Comments: []Comment{{ID: "a", Resolved: true}}}
 	st, _ = c.ToggleShowResolved(st, kbCtx("toggleShowResolved"))
-	if !st.ShowResolved {
+	if !st.ShowResolved() {
 		t.Error("expected ShowResolved to toggle on when a resolved comment exists")
 	}
 	if st.Flash != "" {

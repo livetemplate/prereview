@@ -153,14 +153,14 @@ func TestSuggestionViews_GroupingAndToggle(t *testing.T) {
 	if len(st.FileSuggestions()) != 2 {
 		t.Errorf("FileSuggestions: want 2, got %d", len(st.FileSuggestions()))
 	}
-	// HideSuggestions blanks every rendering surface but not the count (total
-	// available drives the toggle label).
-	st.HideSuggestions = true
+	// Suggestions off in the file's filter blanks every rendering surface but
+	// not the count (total available drives the toggle label).
+	st.setAnnFilter(st.SelectedFile, AnnFilter{Off: []string{navSuggestion}})
 	if st.SuggestionsByEndLine() != nil || st.FileSuggestions() != nil {
-		t.Errorf("HideSuggestions should blank the render surfaces")
+		t.Errorf("Suggestions off should blank the render surfaces")
 	}
 	if st.SuggestionCount() != 2 {
-		t.Errorf("SuggestionCount should ignore HideSuggestions, got %d", st.SuggestionCount())
+		t.Errorf("SuggestionCount should ignore the filter, got %d", st.SuggestionCount())
 	}
 }
 
@@ -201,7 +201,7 @@ func TestVisibleLines_SuggestionRevealsFoldedLine(t *testing.T) {
 	}
 
 	// Hidden suggestions have no box, so they keep no row.
-	st.HideSuggestions = true
+	st.setAnnFilter(st.SelectedFile, AnnFilter{Off: []string{navSuggestion}})
 	if hasLine(st.VisibleLines(), 8) {
 		t.Error("with suggestions hidden, line 8 should fold again")
 	}

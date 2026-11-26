@@ -49,13 +49,13 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 // and area comments render in the head; resolved ones stay and collapse, #165).
 // CommentsByEndLine and the end-of-file block split exactly this set by whether a row exists.
 func (s PrereviewState) inlineComment(c Comment) bool {
-	return c.File == s.SelectedFile && !c.IsFileLevel() && !c.IsAreaLevel() && !c.Hidden
+	return c.File == s.SelectedFile && !c.IsFileLevel() && !c.IsAreaLevel() && !c.Hidden && s.annFilter(c.File).kindOn(navComment)
 }
 
 // inlineSuggestions is the suggestion counterpart: the selected file's visible
 // suggestions, split the same way by SuggestionsByEndLine and the end-of-file block.
 func (s PrereviewState) inlineSuggestions() []Suggestion {
-	if s.SelectedFile == "" || s.HideSuggestions {
+	if s.SelectedFile == "" || s.HideSuggestions() {
 		return nil
 	}
 	var out []Suggestion
@@ -252,8 +252,8 @@ func isHidden(hidden map[string]string, sg Suggestion) bool {
 }
 
 // HiddenSuggestionCount is how many of the SELECTED file's suggestions are
-// currently hidden (fingerprint-matching), driving the View menu's "N hidden ·
-// show". Zero-arg.
+// currently hidden (fingerprint-matching), driving the Annotations filter's
+// "Unhide suggestions". Zero-arg.
 func (s PrereviewState) HiddenSuggestionCount() int { return len(s.hiddenOnSelected()) }
 
 // hiddenOnSelected is the selected file's in-scope suggestions hidden against
@@ -293,7 +293,7 @@ func (m *HiddenMark) add(id string) {
 // markerSuggestions is hiddenOnSelected for the markers: none while the global
 // Hide suggestions toggle is on, which already says suggestions are off.
 func (s PrereviewState) markerSuggestions() []Suggestion {
-	if s.HideSuggestions {
+	if s.HideSuggestions() {
 		return nil
 	}
 	return s.hiddenOnSelected()
@@ -704,7 +704,7 @@ func (s PrereviewState) AwaitingLines() map[string]bool {
 
 // SuggestionCount is the number of suggestions on the selected file, used to
 // label the toolbar toggle and gate its visibility. Counts regardless of the
-// HideSuggestions toggle (it's the total available, not the shown count).
+// Annotations filter (it's the total available, not the shown count).
 func (s PrereviewState) SuggestionCount() int {
 	if s.SelectedFile == "" {
 		return 0
@@ -818,7 +818,7 @@ func groupByKey(sugs []Suggestion) [][]Suggestion {
 // when toggled off): the input BlockSuggestions groups per block. The line/code
 // view uses SuggestionsByEndLine.
 func (s PrereviewState) FileSuggestions() []Suggestion {
-	if s.SelectedFile == "" || s.HideSuggestions {
+	if s.SelectedFile == "" || s.HideSuggestions() {
 		return nil
 	}
 	var out []Suggestion

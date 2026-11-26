@@ -848,11 +848,17 @@
   fill="none"
 /></svg></button></form>
     <div
-      class="tb-dropdown ann-nav-kind"
+      class="tb-dropdown ann-filter"
       lvt-el:toggleClass:on:click="open"
       lvt-el:removeClass:on:click-away="open"
     >
-      <button type="button" class="outline" aria-haspopup="menu" title="Which items to step through">All<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+      <button type="button" class="outline ann-filter-trigger" aria-haspopup="menu" title="Choose what shows here, and what the arrows step through"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
+  d="M3 5h18l-7 8v6l-4-2v-4z"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linejoin="round"
+/></svg><span>Annotations: Open</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
   d="M6 9l6 6 6-6"
   stroke="currentColor"
   stroke-width="2"
@@ -860,13 +866,67 @@
   stroke-linejoin="round"
   fill="none"
 /></svg></button>
-      <div class="tb-dropdown-panel" role="menu" aria-label="Step through">
-        <form method="POST"><input type="hidden" name="kind" value=""><button type="submit" name="setNavKind" class="menu-item is-on" role="menuitemradio" aria-checked="true"><span class="menu-label">All</span></button></form><form method="POST"><input type="hidden" name="kind" value="comment"><button type="submit" name="setNavKind" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-label">Comments</span></button></form><form method="POST"><input type="hidden" name="kind" value="suggestion"><button type="submit" name="setNavKind" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-label">Suggestions</span></button></form><form method="POST"><input type="hidden" name="kind" value="quiz"><button type="submit" name="setNavKind" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-label">Quiz</span></button></form><form method="POST"><input type="hidden" name="kind" value="question"><button type="submit" name="setNavKind" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-label">Questions</span></button></form>
+      <div class="tb-dropdown-panel ann-filter-panel" role="menu" aria-label="Annotations filter">
+        <div class="menu-heading" role="presentation">Show</div>
+        <form method="POST"><input type="hidden" name="show" value="open"><button type="submit" name="setAnnShow" class="menu-item is-on" role="menuitemradio" aria-checked="true"><span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span><span class="menu-label">Open</span><span class="menu-meta">1</span></button></form><form method="POST"><input type="hidden" name="show" value="all"><button type="submit" name="setAnnShow" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span><span class="menu-label">All, with resolved <kbd class="kbd-hint" aria-hidden="true">r</kbd></span><span class="menu-meta">1</span></button></form><form method="POST"><input type="hidden" name="show" value="none"><button type="submit" name="setAnnShow" class="menu-item" role="menuitemradio" aria-checked="false"><span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span><span class="menu-label">None</span></button></form>
+        <div class="menu-heading" role="presentation">Kinds</div>
+        <form method="POST"><input type="hidden" name="kind" value="comment"><button type="submit" name="toggleAnnKind" class="menu-item is-on" role="menuitemcheckbox" aria-checked="true"><span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span><span class="menu-label">Comments</span><span class="menu-meta">1</span></button></form><form method="POST"><input type="hidden" name="kind" value="suggestion"><button type="submit" name="toggleAnnKind" class="menu-item is-on" role="menuitemcheckbox" aria-checked="true"><span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span><span class="menu-label">Suggestions <kbd class="kbd-hint" aria-hidden="true">s</kbd></span></button></form><form method="POST"><input type="hidden" name="kind" value="question"><button type="submit" name="toggleAnnKind" class="menu-item is-on" role="menuitemcheckbox" aria-checked="true"><span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span><span class="menu-label">Questions</span></button></form><form method="POST"><input type="hidden" name="kind" value="quiz"><button type="submit" name="toggleAnnKind" class="menu-item is-on" role="menuitemcheckbox" aria-checked="true"><span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span><span class="menu-label">Quiz</span></button></form>
+        
+        
       </div>
     </div>
     <span class="ann-nav-actions">
       
-      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
+      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Collapse this bar" title="Collapse this bar">×</button></form>
     </span>
   </div>
   

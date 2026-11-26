@@ -103,24 +103,54 @@ func TestE2E_AnnotationNav(t *testing.T) {
 	navStep(t, p, "navNext", diag)
 	waitNavLabel(t, p, "1 / 3 open", "› wraps to the first item", diag)
 
-	// The filter narrows the stops; the cursor stays where it was.
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.ann-nav-kind > button`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.ann-nav-kind.open button[name="setNavKind"]`, chromedp.ByQuery),
-		chromedp.Evaluate(`[...document.querySelectorAll('.ann-nav-kind button[name="setNavKind"]')].find(b=>b.textContent.trim()==='Suggestions').click()`, nil),
-	); err != nil {
-		t.Fatalf("pick the Suggestions filter: %v%s", err, diag())
+	// The Annotations filter is per file: Comments off on app.go hides its
+	// comment card and drops it as a stop; folded.go's items stay stops.
+	pickAnnFilter(t, p, "toggleAnnKind", "comment", diag)
+	waitNavLabel(t, p, "2 open", "app.go's comment is no longer a stop", diag)
+	if n := evalInt(t, p, `document.querySelectorAll('.inline-comment').length`); n != 0 {
+		t.Errorf("Comments off should hide app.go's comment card, got %d%s", n, diag())
 	}
-	waitNavLabel(t, p, "1 open", "only the one undecided suggestion is left", diag)
 	navStep(t, p, "navPrev", diag)
-	waitNavLabel(t, p, "1 / 1 open", "‹ under the filter", diag)
-	expectInView(t, p, `.inline-suggestion[data-key="sg-far"]`, "the filtered stop", diag)
+	waitNavLabel(t, p, "2 / 2 open", "‹ wraps to folded.go's suggestion", diag)
+	expectInView(t, p, `.inline-suggestion[data-key="sg-far"]`, "folded.go's suggestion, its file filter untouched", diag)
 
-	if err := chromedp.Run(p.ctx,
+	// None on folded.go drops its stops; the bar stays at 0 (#212).
+	pickAnnFilter(t, p, "setAnnShow", "none", diag)
+	waitNavLabel(t, p, "0 open", "None leaves nothing to step to", diag)
+
+	// × collapses the bar to its filter chip, which brings it back.
+	ctx, cancel := within(p, 10*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx,
 		chromedp.Click(`.ann-nav button[name="dismissNav"]`, chromedp.ByQuery),
-		chromedp.WaitNotPresent(`.ann-nav`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.ann-nav.is-collapsed .ann-filter-trigger`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("× should put the bar away: %v%s", err, diag())
+		t.Fatalf("× should collapse the bar to its filter: %v%s", err, diag())
+	}
+	if got := evalStr(t, p, `document.querySelector('.ann-nav.is-collapsed .ann-filter-trigger').textContent.trim()`); got != "Annotations: None" {
+		t.Errorf("chip label = %q, want %q%s", got, "Annotations: None", diag())
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.ann-nav.is-collapsed button[name="expandNav"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.ann-nav:not(.is-collapsed) .ann-nav-label`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("the chip should bring the bar back: %v%s", err, diag())
+	}
+}
+
+// pickAnnFilter opens the Annotations filter and clicks the row whose form
+// carries value for the named action (setAnnShow/show or toggleAnnKind/kind).
+func pickAnnFilter(t *testing.T, p *runningPrereview, action, value string, diag func() string) {
+	t.Helper()
+	ctx, cancel := within(p, 10*time.Second)
+	defer cancel()
+	js := `[...document.querySelectorAll('.ann-filter button[name="` + action + `"]')].find(b=>b.form.querySelector('input[value="` + value + `"]')).click()`
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.ann-filter > button`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.ann-filter.open button[name="`+action+`"]`, chromedp.ByQuery),
+		chromedp.Evaluate(js, nil),
+	); err != nil {
+		t.Fatalf("filter %s=%s: %v%s", action, value, err, diag())
 	}
 }
 

@@ -68,17 +68,14 @@ func revealItem(state *PrereviewState, it NavItem) {
 	}
 }
 
-// SetNavKind filters the bar to one kind ("" = all). The cursor stays, so the next
-// step continues from the same place in the document.
-func (c *PrereviewController) SetNavKind(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	if k := ctx.GetString("kind"); navKindIndex(k) >= 0 {
-		state.NavKind = k
-	}
+// DismissNav collapses the row to its chip for this session (NavCollapsed).
+func (c *PrereviewController) DismissNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.NavDismissed = true
 	return state, nil
 }
 
-// DismissNav puts the bar away for this session.
-func (c *PrereviewController) DismissNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.NavDismissed = true
+// ExpandNav brings the collapsed row back.
+func (c *PrereviewController) ExpandNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.NavDismissed = false
 	return state, nil
 }

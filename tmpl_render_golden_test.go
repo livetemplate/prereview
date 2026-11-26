@@ -351,7 +351,8 @@ func renderFixtures() []renderFixture {
 
 	// after Resolve all: every listed comment resolved, the notice offering Undo
 	resolvedAll := goBase()
-	resolvedAll.ShowAllComments, resolvedAll.ShowResolved = true, true
+	resolvedAll.ShowAllComments = true
+	resolvedAll.AnnFilters = map[string]review.AnnFilter{":annotations": {Show: "all"}}
 	resolvedAll.Comments = []review.Comment{
 		{ID: "c1", File: "app.go", Body: "fix this", Kind: "line", FromLine: 2, ToLine: 2, Side: "new", Resolved: true},
 		{ID: "c2", File: "app.go", Body: "and this", Kind: "line", FromLine: 3, ToLine: 3, Side: "new", Resolved: true},

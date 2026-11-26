@@ -3835,8 +3835,14 @@ dialog#files-drawer .file-row > .viewed-changed {
 .ann-nav button[disabled] { opacity: 0.35; }
 .ann-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ann-nav ~ .ck-strip:not(.is-idle) { top: 2.2rem; } /* --ann-nav-h */
-.ann-nav-kind > button { display: inline-flex; align-items: center; gap: 0.2rem; }
-.ann-nav-kind .tb-dropdown-panel { left: 0; right: auto; min-width: 10rem; } /* opens rightward: the chip sits left of centre */
+.ann-filter-trigger { display: inline-flex; align-items: center; gap: 0.3rem; }
+.ann-filter-trigger svg { display: block; flex-shrink: 0; }
+.ann-filter .tb-dropdown-panel { left: 0; right: auto; min-width: 15rem; } /* opens rightward: the chip sits left of centre */
+.ann-filter-panel .menu-heading {
+  padding: 0.4rem 0.75rem 0.15rem; font-size: 0.68rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--pico-muted-color);
+}
+.ann-filter-panel .menu-heading:not(:first-child) { border-top: 1px solid var(--pico-muted-border-color); margin-top: 0.25rem; padding-top: 0.5rem; }
 .ann-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 /* #115 A3: the walkthrough's step bar, an .ann-nav variant. After the .ann-nav rules
    on purpose: at equal specificity they would win (fixed height, min-height: 0). */

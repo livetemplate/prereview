@@ -168,20 +168,20 @@
     <form method="POST"><button type="submit" name="navPrev" class="outline ann-nav-step" aria-label="Previous open item" title="Previous open item (p)">{{template "iconChevronLeft"}}</button></form>
     <span class="ann-nav-label">{{$.NavLabel}}</span>
     <form method="POST"><button type="submit" name="navNext" class="outline ann-nav-step" aria-label="Next open item" title="Next open item (n)">{{template "iconChevronRight"}}</button></form>
-    <div
-      class="tb-dropdown ann-nav-kind"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
-      <button type="button" class="outline" aria-haspopup="menu" title="Which items to step through">{{$.NavKindLabel}}{{template "iconChevronDown"}}</button>
-      <div class="tb-dropdown-panel" role="menu" aria-label="Step through">
-        {{range $.NavKinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="setNavKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}"><span class="menu-label">{{.Label}}</span></button></form>{{end}}
-      </div>
-    </div>
+    {{template "annFilter" $}}
     <span class="ann-nav-actions">
       {{if $.HasQuiz}}<form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="toggleUnderstand" class="outline" title="Open the quiz overview">Overview</button></form>{{end}}
-      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
+      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Collapse this bar" title="Collapse this bar">×</button></form>
     </span>
+  </div>
+  {{else if $.NavCollapsed}}
+  {{- /* The row collapsed to its filter, by × or because nothing is open while
+       the file has annotations: the filter stays one click away. */}}
+  <div class="ann-nav is-collapsed" role="navigation" aria-label="Annotations">
+    {{template "annFilter" $}}
+    {{- if $.NavDismissed}}
+    <span class="ann-nav-actions"><form method="POST"><button type="submit" name="expandNav" class="outline" title="Show the open-items bar">Show open items</button></form></span>
+    {{- end}}
   </div>
   {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
   {{/* File-level comments + composer. Lives above the body branch so

@@ -171,7 +171,7 @@ func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]Threa
 // questionCards is the cards for the open file's sets that stand on their own:
 // a set asked `for` a thread renders in that thread instead (ThreadViews).
 func (s PrereviewState) questionCards() []QuestionCard {
-	if s.SelectedFile == "" || len(s.QuestionSets) == 0 {
+	if s.SelectedFile == "" || len(s.QuestionSets) == 0 || !s.kindShownHere(navQuestion) {
 		return nil
 	}
 	return s.questionCardsWhere(func(set QuestionSet) bool {
@@ -372,7 +372,7 @@ func (s PrereviewState) QuestionsByEndLine() map[int][]QuestionCard {
 func (s PrereviewState) FileQuestionCards() []QuestionCard {
 	var out []QuestionCard
 	for _, c := range s.questionCards() {
-		if !c.LineGrounded() && (!c.Resolved || s.ShowResolved) {
+		if !c.LineGrounded() && (!c.Resolved || s.ShowResolved()) {
 			out = append(out, c)
 		}
 	}

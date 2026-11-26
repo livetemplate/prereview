@@ -215,12 +215,6 @@ type PrereviewState struct {
 	// inline as suggestion boxes on the selected file.
 	Suggestions []Suggestion `json:"suggestions"`
 
-	// HideSuggestions toggles the inline suggestion boxes off for the current
-	// view (a declutter, so the reviewer can read the doc without the proposed
-	// edits overlaid). Session-scoped (survives reconnect via persist); does not
-	// affect the underlying suggestions.
-	HideSuggestions bool `json:"hide_suggestions" lvt:"persist"`
-
 	// Decisions are the reviewer's recorded verdicts on suggestions (issue #98
 	// Phase 2), loaded from the server-owned .prereview/suggestion-decisions.jsonl
 	// every Mount (the file is the source of truth — not lvt:"persist"). Overlaid
@@ -555,9 +549,9 @@ type PrereviewState struct {
 	// shows no bar. Set by noteNav.
 	NavSeen bool `json:"nav_seen"`
 
-	// NavKind filters the stepper to one kind ("comment", "suggestion", "quiz");
-	// "" steps through all of them. Session-scoped.
-	NavKind string `json:"nav_kind"`
+	// AnnFilters is each surface's Annotations filter (annfilter.go), keyed by
+	// file path, "live:"+URL, or annListKey. Only changed surfaces are stored.
+	AnnFilters map[string]AnnFilter `json:"ann_filters" lvt:"persist"`
 
 	// NavAt is the stepper's cursor: the sort position of the last item it stepped
 	// to (nil before the first step). A position, not an index, so "next" after the
@@ -604,14 +598,6 @@ type PrereviewState struct {
 	// one iframe, so it has no block-level scroll target.) Cleared by
 	// ClearSelection, by clicking a line, and by SelectFile.
 	URLHashScrollAnchor string `json:"url_hash_scroll_anchor" lvt:"persist"`
-
-	// ShowResolved, when true, includes resolved comments in the inline
-	// comment stream + all-comments view. Default false so the viewer
-	// focuses on what's still actionable. A durable per-user view pref: NOT
-	// lvt:"persist" — it lives in the on-disk prefs file (see uiprefs.go) so it
-	// survives a server relaunch, not just a reload; applyUIPrefs reloads it on
-	// every Mount/OnConnect.
-	ShowResolved bool `json:"show_resolved"`
 
 	// MoreMenuOpen drives the 3-dots overflow menu in the top bar where
 	// secondary controls (All comments, Show resolved) live on narrow
@@ -698,13 +684,6 @@ type PrereviewState struct {
 	// already overlays/modals, so the flag is a harmless no-op there.
 	// Durable per-user view pref (uiprefs.go), like FileView.
 	FocusMode bool `json:"focus_mode"`
-
-	// HideMarks, when true, hides the per-line comment/suggestion count badges
-	// (#151) AND their inline cards in the diff, so a reviewer can read the raw
-	// diff clean. Toggled from the overflow menu (ToggleMarks); focus mode hides
-	// them too (CSS). Applies on all viewports (unlike FocusMode's side-column
-	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
-	HideMarks bool `json:"hide_marks"`
 
 	// ShowBoxes outlines every annotation's box on the live site and on an HTML
 	// file's preview. Off, an annotation is only its corner marker, so it never
@@ -816,26 +795,23 @@ func (s PrereviewState) scopedComments() []Comment {
 	return out
 }
 
-// commentHiddenFromView is the single visibility rule for resolved/hidden
-// state, replacing the copy-pasted `c.Resolved && !s.ShowResolved` guards
-// scattered across the view helpers (issue #88). A RESOLVED comment is omitted
-// from every view when either the whole resolved group is hidden (ShowResolved
-// off) OR it has been individually re-hidden (Hidden). Non-resolved comments are
-// never hidden by this rule — Hidden is meaningless on them.
+// commentHiddenFromView is the visibility rule for a comment drawn on its own
+// surface (the file, or the live-site page): that surface's Annotations filter
+// decides, through commentHiddenOn.
 func (s PrereviewState) commentHiddenFromView(c Comment) bool {
-	return c.Resolved && (!s.ShowResolved || c.Hidden)
+	return commentHiddenOn(s.annFilter(commentSurface(c)), c)
 }
 
-// VisibleComments returns the in-scope Comments filtered by the resolved/hidden view
-// rule. Zero-arg so the framework eagerly evaluates and the template iterates the
-// filtered list directly. Note there is no `if ShowResolved { return all }`
-// fast-path: an individually-hidden resolved comment must stay out even when the
-// group is shown.
+// VisibleComments returns the in-scope Comments the Annotations page shows,
+// under the page's own filter. Zero-arg so the framework eagerly evaluates and
+// the template iterates the filtered list directly. An individually hidden
+// resolved comment stays out even when resolved items are shown.
 func (s PrereviewState) VisibleComments() []Comment {
 	scoped := s.scopedComments()
+	list := s.annFilter(annListKey)
 	out := make([]Comment, 0, len(scoped))
 	for _, c := range scoped {
-		if s.commentHiddenFromView(c) || !s.passesListFilter(c) {
+		if commentHiddenOn(list, c) || !s.passesListFilter(c) {
 			continue
 		}
 		out = append(out, c)

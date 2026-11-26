@@ -11,7 +11,7 @@ import (
 // unresolved comments, undecided suggestions, unanswered quiz questions, and the
 // agent's questions not yet submitted. n/p step the same list.
 
-// Nav kinds: the filter values (NavKind) and NavPos.Kind.
+// Nav kinds: NavPos.Kind, and the kinds of the Annotations filter (annfilter.go).
 const (
 	navComment    = "comment"
 	navSuggestion = "suggestion"
@@ -19,15 +19,10 @@ const (
 	navQuestion   = "question"
 )
 
-// navKindTable is the filter chip's menu, in order. An item kind's index here is
-// also its tiebreak rank on a shared line (comment, suggestion, question).
-var navKindTable = []struct{ Kind, Label string }{
-	{"", "All"}, {navComment, "Comments"}, {navSuggestion, "Suggestions"}, {navQuiz, "Quiz"}, {navQuestion, "Questions"},
-}
+// navKindRank is each kind's tiebreak rank on a shared line.
+var navKindRank = []string{navComment, navSuggestion, navQuiz, navQuestion}
 
-func navKindIndex(kind string) int {
-	return slices.IndexFunc(navKindTable, func(k struct{ Kind, Label string }) bool { return k.Kind == kind })
-}
+func navKindIndex(kind string) int { return slices.Index(navKindRank, kind) }
 
 // NavPos is a stepper position: the sort key of an item. The cursor stores the last
 // target's key rather than its index, so deciding or resolving that item (which
@@ -70,33 +65,32 @@ type NavItem struct {
 	Region bool // a live-site annotation (#114): a step shows the live site, not a file
 }
 
-// navItems is every open item in the review, sorted, before the kind filter.
-func (s PrereviewState) navItems() []NavItem {
+// NavItems is the stepper's stops in document order: every open item whose own
+// surface's filter shows it.
+func (s PrereviewState) NavItems() []NavItem {
 	var out []NavItem
 	for i, c := range s.scopedComments() {
 		// A request (Run judges, Quiz me) is the agent's work, not a reviewer's note.
-		if !c.Resolved && c.Request == "" {
+		if !c.Resolved && c.Request == "" && s.annFilter(commentSurface(c)).stops(navComment) {
 			body := !c.IsFileLevel() && !c.IsAreaLevel()
 			out = append(out, NavItem{File: c.File, Side: c.Side, Pos: NavPos{Body: body, Line: c.ToLine, Kind: navComment, Seq: i, ID: c.ID}, Region: c.IsRegionLevel()})
 		}
 	}
-	if !s.HideSuggestions {
-		decisions := s.DecisionsBySuggestion()
-		for i, sg := range s.visibleSuggestions() {
-			if s.undecidedIn(decisions, sg.ID) {
-				out = append(out, NavItem{File: sg.File, Side: sg.Side, Pos: NavPos{Body: true, Line: sg.ToLine, Kind: navSuggestion, Seq: i, ID: sg.ID}})
-			}
+	decisions := s.DecisionsBySuggestion()
+	for i, sg := range s.visibleSuggestions() {
+		if s.undecidedIn(decisions, sg.ID) && s.annFilter(sg.File).stops(navSuggestion) {
+			out = append(out, NavItem{File: sg.File, Side: sg.Side, Pos: NavPos{Body: true, Line: sg.ToLine, Kind: navSuggestion, Seq: i, ID: sg.ID}})
 		}
 	}
 	for _, it := range s.allQuizItems() {
-		if !it.Answered {
+		if !it.Answered && s.annFilter(it.File).stops(navQuiz) {
 			out = append(out, NavItem{File: it.File, Side: it.Side, Pos: NavPos{Body: it.LineGrounded(), Line: it.FromLine, Kind: navQuiz, Seq: it.Num, ID: it.ID}})
 		}
 	}
 	// The agent's questions wait on the reviewer until submitted, resolved or
 	// hidden (hiding drops a suggestion from the list too).
 	for i, set := range s.scopedQuestionSets() {
-		if s.questionAwaitingAnswer(set) {
+		if s.questionAwaitingAnswer(set) && s.annFilter(set.File).stops(navQuestion) {
 			out = append(out, NavItem{File: set.File, Side: set.Side, Pos: NavPos{Body: set.LineGrounded(), Line: set.FromLine, Kind: navQuestion, Seq: i, ID: set.ID}})
 		}
 	}
@@ -106,15 +100,6 @@ func (s PrereviewState) navItems() []NavItem {
 	}
 	slices.SortFunc(out, func(a, b NavItem) int { return a.Pos.compare(b.Pos) })
 	return out
-}
-
-// NavItems is the stepper's list under the current kind filter.
-func (s PrereviewState) NavItems() []NavItem {
-	all := s.navItems()
-	if s.NavKind == "" {
-		return all
-	}
-	return slices.DeleteFunc(all, func(it NavItem) bool { return it.Pos.Kind != s.NavKind })
 }
 
 // navStep picks the next (delta>0) or previous item relative to the cursor, wrapping.
@@ -161,42 +146,33 @@ func (s PrereviewState) NavLabel() string {
 	return fmt.Sprintf("%d open", len(items))
 }
 
-// NavKindOption is one row of the filter chip's menu.
-type NavKindOption struct {
-	Kind, Label string
-	On          bool
-}
-
-// NavKinds is the filter chip's menu, the active row marked.
-func (s PrereviewState) NavKinds() []NavKindOption {
-	out := make([]NavKindOption, len(navKindTable))
-	for i, k := range navKindTable {
-		out[i] = NavKindOption{Kind: k.Kind, Label: k.Label, On: k.Kind == s.NavKind}
-	}
-	return out
-}
-
-// NavKindLabel names the active filter on its chip.
-func (s PrereviewState) NavKindLabel() string {
-	if i := navKindIndex(s.NavKind); i >= 0 {
-		return navKindTable[i].Label
-	}
-	return navKindTable[0].Label
-}
-
-// ShowNav gates the bar: the reviewer hasn't put it away, a file view is showing
-// (not a full-page view, not a live site), and the review has open items, or had
-// some this visit (NavSeen), so deciding the last one leaves the bar at "0 open"
-// rather than pulling it out from under the reviewer (#212's rule). It counts
-// before the filter, so a filter that matches nothing still leaves the chip.
-func (s PrereviewState) ShowNav() bool {
-	// Hidden while walking a walkthrough (#115): its step bar takes the slot, and
-	// two bars would stack on a phone.
+// navSlot: a file view is showing (not a full-page view, not a live site, not a
+// walkthrough, whose step bar takes the slot so two bars don't stack on a phone).
+func (s PrereviewState) navSlot() bool {
 	_, _, _, walking := s.walkPos()
-	if s.NavDismissed || s.fileCovered() || walking {
+	return !s.fileCovered() && !walking
+}
+
+// ShowNav gates the open-items row: the reviewer hasn't collapsed it, and the
+// review has open items, or had some this visit (NavSeen), so deciding the last
+// one leaves "0 open" rather than pulling the row out from under the reviewer
+// (#212's rule). It counts after each file's filter.
+func (s PrereviewState) ShowNav() bool {
+	return !s.NavDismissed && s.navSlot() && (s.NavSeen || len(s.NavItems()) > 0)
+}
+
+// NavCollapsed shows the row as a chip carrying the filter's label: the
+// reviewer collapsed it with ×, or the row is gone but the open file still has
+// annotations of some kind or state. Either way the filter stays one click away,
+// so no filter setting can hide its own control.
+func (s PrereviewState) NavCollapsed() bool {
+	if !s.navSlot() {
 		return false
 	}
-	return s.NavSeen || len(s.navItems()) > 0
+	if s.NavDismissed {
+		return true
+	}
+	return !s.NavSeen && len(s.NavItems()) == 0 && s.hasAnnotations()
 }
 
 // fileCovered: something covers the file view: a full-page view (the views
@@ -208,7 +184,7 @@ func (s PrereviewState) fileCovered() bool {
 // noteNav sets NavSeen once the review has open items. Called wherever items
 // arrive: Mount, the watcher's reload (LLMStatusChanged), a new comment, a step.
 func (s *PrereviewState) noteNav() {
-	if !s.NavSeen && len(s.navItems()) > 0 {
+	if !s.NavSeen && len(s.NavItems()) > 0 {
 		s.NavSeen = true
 	}
 }

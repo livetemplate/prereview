@@ -20,7 +20,8 @@ func twoFileState() PrereviewState {
 	return PrereviewState{
 		SingleFile:   "b.md",
 		SelectedFile: "b.md",
-		ShowResolved: true, // so nothing is dropped by the resolved rule instead of by scope
+		// Show all on both files, so nothing is dropped by the resolved rule instead of by scope.
+		AnnFilters: map[string]AnnFilter{"a.md": {Show: annShowAll}, "b.md": {Show: annShowAll}, annListKey: {Show: annShowAll}},
 		Comments: []Comment{
 			{ID: "a1", File: "a.md", Body: "stale", FromLine: 1, ToLine: 1},
 			{ID: "a2", File: "a.md", Body: "stale resolved", FromLine: 2, ToLine: 2, Resolved: true},

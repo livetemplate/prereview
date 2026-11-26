@@ -178,7 +178,7 @@ func TestHiddenSuggestionLines(t *testing.T) {
 	if m := got["4-new"]; m.IDs != "a" || m.Label != "1 hidden suggestion" {
 		t.Errorf("4-new mark = %+v", *m)
 	}
-	st.HideSuggestions = true
+	st.setAnnFilter(st.SelectedFile, AnnFilter{Off: []string{navSuggestion}})
 	if got := st.HiddenSuggestionLines(); got != nil {
 		t.Errorf("Hide suggestions on: want no markers, got %v", keysOf(got))
 	}

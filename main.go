@@ -65,7 +65,7 @@ var templatesFS embed.FS
 var templateOrder = []string{
 	"page.tmpl", // the shell / entry template — MUST be first
 	// one file per UI component (define-only; parse order among them is irrelevant)
-	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
+	"toolbar.tmpl", "viewmenu.tmpl", "annfilter.tmpl", "workqueue.tmpl", "overlays.tmpl",
 	"toc.tmpl", "banners.tmpl", "external.tmpl", "livestage.tmpl", "moremenu.tmpl",
 	"filedrawer.tmpl", "filetree.tmpl", "allcomments.tmpl", "understand.tmpl", "checks.tmpl", "library.tmpl",
 	// the {{with .CurrentDiff}} file-view sub-views

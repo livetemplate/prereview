@@ -183,6 +183,10 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// re-zeroed only on reconnect, where Mount reloads it — hence this check lives
 	// here, never in Mount, where the prior set is always empty).
 	prevSuggestionIDs := suggestionIDSet(state.Suggestions)
+	prevQuestionIDs := map[string]bool{}
+	for _, set := range state.QuestionSets {
+		prevQuestionIDs[set.ID] = true
+	}
 	c.applyLLMStatus(&state)
 	// The watcher also fires this on a processed.jsonl change (the agent marked a
 	// comment "worked on"), so refresh the per-comment badges here too — a cheap
@@ -215,6 +219,9 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	} else {
 		c.applyQuestionAnswers(&state)
 	}
+	// A brand-new question set turns Questions back on in its file's filter,
+	// as a new suggestion does (#116); a revision keeps its id.
+	state.revealKind(navQuestion, newItemFiles(prevQuestionIDs, state.QuestionSets, func(q QuestionSet) (string, string) { return q.ID, q.File }))
 	// ...and on an explain.jsonl change (#115): reload the walkthrough and ground
 	// it. Gated like judgments below: the fan-out fires for every agent signal.
 	// (Edits to the reviewed files reach it through RefreshDiff → Mount.)
@@ -234,9 +241,7 @@ func (c *PrereviewController) LLMStatusChanged(state PrereviewState, ctx *livete
 	// fresh proposals. Gated on a genuinely-new ID (a revision re-appends the same
 	// id and a status/processed tick adds none), so the reviewer can still keep
 	// suggestions hidden across unrelated updates.
-	if state.HideSuggestions && hasNewSuggestion(prevSuggestionIDs, state.Suggestions) {
-		state.HideSuggestions = false
-	}
+	state.revealKind(navSuggestion, newItemFiles(prevSuggestionIDs, state.Suggestions, func(sg Suggestion) (string, string) { return sg.ID, sg.File }))
 	switch {
 	case prev == LLMStateWorking && state.LLMState == LLMStateDone:
 		// The agent just finished a batch and edited files, so this tab's diff is
