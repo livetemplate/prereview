@@ -50,6 +50,8 @@ func runQuestions(args []string) error {
 		switch {
 		case q.Resolved:
 			state = "resolved"
+		case q.Replaced:
+			state = "replaced"
 		case len(q.Answers) > 0:
 			state = "answered"
 		}

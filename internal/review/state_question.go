@@ -31,9 +31,12 @@ type QuestionCard struct {
 	// question's thread. That card's Reply stands in for this one's, and a
 	// comment's Resolve covers it (questionResolved); elsewhere, answering
 	// closes it.
+	// Replaced: a newer set in the same thread took its place before the
+	// reviewer submitted it (questionReplaced).
 	Resolved bool
 	Hidden   bool
 	InThread bool
+	Replaced bool
 	// Answer is the sent answers in one line, for the folded card.
 	Answer string
 
@@ -130,7 +133,7 @@ func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]Threa
 		Done: s.QuestionsDone[set.ID], Thread: threads[set.ID],
 		QueueState: s.questionRowState(set, awaiting),
 		Resolved:   s.questionResolved(set), Hidden: s.QuestionStatus[set.ID].Hidden,
-		InThread: s.inThread(set)}
+		InThread: s.inThread(set), Replaced: s.questionReplaced(set)}
 	if s.ReplyingID == set.ID {
 		c.ReplyingID, c.ReplyDraft = set.ID, s.ReplyDraft
 	}
@@ -275,10 +278,25 @@ func (s PrereviewState) questionResolved(set QuestionSet) bool {
 }
 
 // questionAwaitingAnswer reports whether set waits on the reviewer: not
-// submitted, resolved or hidden. The stepper and the End-session warning share
-// it.
+// submitted, resolved, hidden or replaced. The stepper and the End-session
+// warning share it.
 func (s PrereviewState) questionAwaitingAnswer(set QuestionSet) bool {
-	return !questionSetSent(set, s.QuestionAnswers) && !s.questionResolved(set) && !s.QuestionStatus[set.ID].Hidden
+	return !questionSetSent(set, s.QuestionAnswers) && !s.questionResolved(set) &&
+		!s.QuestionStatus[set.ID].Hidden && !s.questionReplaced(set)
+}
+
+// questionReplaced reports whether set was replaced: it sits in a thread, the
+// reviewer has not submitted it, and the agent has since asked a newer set in
+// that thread. Its options answer a question the agent has moved past, so the
+// card drops them.
+func (s PrereviewState) questionReplaced(set QuestionSet) bool {
+	if questionSetSent(set, s.QuestionAnswers) || !s.inThread(set) {
+		return false
+	}
+	at := set.askedAt()
+	return slices.ContainsFunc(s.QuestionSets, func(o QuestionSet) bool {
+		return o.ID != set.ID && o.For == set.For && o.askedAt() > at
+	})
 }
 
 // questionsResolved is questionResolved for every in-scope set, by id: what the

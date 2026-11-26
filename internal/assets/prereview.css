@@ -3048,6 +3048,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 .inline-comment .ic-actions form,
 .question-card .ic-actions form { margin: 0; }
+.question-replaced { margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--pico-muted-color); }
 /* #149 conversation thread — agent replies (and, later, reviewer replies) rendered
    under a comment/suggestion. Each entry is a small card indented from the left with
    an author-coloured rail; the agent's uses --accent, the reviewer's the muted colour. */

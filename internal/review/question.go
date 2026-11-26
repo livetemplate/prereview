@@ -268,18 +268,21 @@ func saveJSONLMap[T any](path string, m map[string]T) error {
 // StreamQuestion is a question set as the agent reads it in a snapshot: where
 // it is, and the reviewer's answer to each step, by label.
 type StreamQuestion struct {
-	ID           string                 `json:"id"`
-	For          string                 `json:"for,omitempty"`
-	File         string                 `json:"file"`
-	FromLine     int                    `json:"from_line"`
-	ToLine       int                    `json:"to_line"`
-	Side         string                 `json:"side"`
-	AnchorStatus string                 `json:"anchor_status,omitempty"`
+	ID           string `json:"id"`
+	For          string `json:"for,omitempty"`
+	File         string `json:"file"`
+	FromLine     int    `json:"from_line"`
+	ToLine       int    `json:"to_line"`
+	Side         string `json:"side"`
+	AnchorStatus string `json:"anchor_status,omitempty"`
 	// Resolved: the reviewer closed the set. Build nothing new for it, and
 	// `done` it so it stops coming.
+	// Replaced: a newer set in the same thread took its place before the
+	// reviewer submitted it (prereview questions --all only).
+	Replaced bool                   `json:"replaced,omitempty"`
 	Resolved bool                   `json:"resolved,omitempty"`
 	Answers  []StreamQuestionAnswer `json:"answers"`
-	Thread       []StreamReply          `json:"thread,omitempty"`
+	Thread   []StreamReply          `json:"thread,omitempty"`
 }
 
 // StreamQuestionAnswer is one step's answer. Picked carries the option
@@ -348,7 +351,9 @@ func LoadQuestions(csvPath string, all bool) ([]StreamQuestion, error) {
 	}
 	resolved := st.questionsResolved()
 	for _, s := range st.scopedQuestionSets() {
-		out = append(out, toStreamQuestion(s, st.QuestionAnswers, resolved[s.ID], threads[s.ID]))
+		q := toStreamQuestion(s, st.QuestionAnswers, resolved[s.ID], threads[s.ID])
+		q.Replaced = st.questionReplaced(s)
+		out = append(out, q)
 	}
 	return out, nil
 }

@@ -205,10 +205,12 @@ When your agent can't go on without your choice, it asks with options instead of
 writing a question you have to answer by typing. It asks before it builds: which
 of two ways to go, or a value it would otherwise guess, such as a limit, a default
 or which apps a change covers. The question appears as a card under the lines it
-is about, at the top of the file for a question about the whole file, or inside
-a thread when it answers your reply there: on a comment, a suggestion or a quiz
-question. Ask "what are the options?" in any of those threads and the agent
-answers with a card.
+is about, or at the top of the file for a question about the whole file. When it
+answers your reply in a thread on a comment, a suggestion or a quiz question, it
+appears inside that thread. Ask "what are the options?" in any of those threads and the agent
+answers with a card. When the agent asks again in the same thread, an earlier
+card you have not answered loses its options, so you can't pick an old choice by
+mistake.
 
 - **Tap an option.** One is marked *Recommended*. For a single question, the tap
   sends your answer to the agent.

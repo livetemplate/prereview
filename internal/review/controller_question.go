@@ -1,6 +1,7 @@
 package review
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -99,6 +100,10 @@ func (s PrereviewState) scopedQuestionSets() []QuestionSet {
 }
 
 // findQuestionSet returns the set with id.
+// errQuestionReplaced refuses an answer to a replaced set, from a page that
+// still shows its options.
+var errQuestionReplaced = errors.New("a newer question replaced this one")
+
 func findQuestionSet(state *PrereviewState, id string) (*QuestionSet, error) {
 	i := slices.IndexFunc(state.QuestionSets, func(s QuestionSet) bool { return s.ID == id })
 	if i < 0 {
@@ -112,6 +117,9 @@ func questionTarget(state *PrereviewState, setID, stepID string) (*QuestionSet, 
 	set, err := findQuestionSet(state, setID)
 	if err != nil {
 		return nil, 0, err
+	}
+	if state.questionReplaced(*set) {
+		return nil, 0, errQuestionReplaced
 	}
 	j := slices.IndexFunc(set.Steps, func(st QuestionStep) bool { return st.ID == stepID })
 	if j < 0 {
@@ -252,6 +260,9 @@ func (c *PrereviewController) markQuestionSent(state PrereviewState, setID strin
 	set, err := findQuestionSet(&state, setID)
 	if err != nil {
 		return state, err
+	}
+	if sent && state.questionReplaced(*set) {
+		return state, errQuestionReplaced
 	}
 	answers := maps.Clone(state.QuestionAnswers)
 	for _, st := range set.Steps {

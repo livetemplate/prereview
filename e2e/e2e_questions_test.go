@@ -537,3 +537,66 @@ func TestE2E_QuizReachesAgent(t *testing.T) {
 		time.Sleep(150 * time.Millisecond)
 	}
 }
+
+// TestE2E_QuizReplyShowsLive: a reviewer reply on a quiz question shows in its
+// thread as soon as it is posted, with and without a question card in that
+// thread (the demo's reply reached the queue but not the card).
+func TestE2E_QuizReplyShowsLive(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 390, 844, "--agent")
+	p.waitReadyAt(390, 844)
+	diag := captureDiag(t, p)
+	p.clickFile("edited.go")
+	runAgentVerb(t, p, "quiz", `{"id":"z1","file":"edited.go","questions":[{"id":"zq1","probe":"consequence",
+	 "prompt":"QUIZ-T What did line 4 change?","options":["x","y"],"answer":0,"why":"w","from_line":4,"to_line":4,"side":"new"}]}`)
+	card := `.quiz-card[data-key='quiz-zq1']`
+	waitJSDiag(t, p, `!!document.querySelector("`+card+`")`, "the quiz question", diag)
+	reply := func(body string) {
+		t.Helper()
+		tapIn(t, p, card+` button[name='openReply']`, "Reply", diag)
+		if err := chromedp.Run(p.ctx,
+			chromedp.WaitVisible(card+` .reply-form textarea`, chromedp.ByQuery),
+			chromedp.SendKeys(card+` .reply-form textarea`, body, chromedp.ByQuery),
+			chromedp.Click(card+` button[name='postReply']`, chromedp.ByQuery),
+		); err != nil {
+			t.Fatalf("reply: %v%s", err, diag())
+		}
+		waitJSDiag(t, p, `[...document.querySelectorAll("`+card+` .thread-body")].some(e => e.textContent === "`+body+`")`, "the reply "+body+" in the thread", diag)
+		// On screen too: below a tall card in the thread, it once landed out of view.
+		onScreen := `(() => { const e = [...document.querySelectorAll("` + card + ` .thread-body")].find(e => e.textContent === "` + body + `"); const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()`
+		waitJSDiag(t, p, onScreen, "the reply "+body+" on screen", diag)
+	}
+	reply("FIRST-R what other options")
+	mustCLI(t, p, "reply", "--out", p.repo, review.QuizThreadID("z1", "zq1"), "--body", "AGENT-R see the card")
+	runAgentVerb(t, p, "ask", `{"id":"q-live","for":"z1:zq1","file":"edited.go","from_line":4,"to_line":4,
+	 "steps":[{"id":"pick","prompt":"ASK-LIVE Which way?","options":[{"label":"One"},{"label":"Two"}],"recommended":0}]}`)
+	waitJSDiag(t, p, `!!document.querySelector("`+card+` .question-card[data-key='question-q-live']")`, "the card in the thread", diag)
+	reply("SECOND-R what other options are there")
+}
+
+// TestE2E_QuestionReplaced: when the agent asks a newer set in a thread, the
+// older unanswered card there drops its options, so an old choice can't be
+// picked by mistake, and it no longer counts as open.
+func TestE2E_QuestionReplaced(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 390, 844, "--agent")
+	p.waitReadyAt(390, 844)
+	diag := captureDiag(t, p)
+	p.clickFile("edited.go")
+	runAgentVerb(t, p, "quiz", `{"id":"z1","file":"edited.go","questions":[{"id":"zq1","probe":"consequence",
+	 "prompt":"QUIZ-T What did line 4 change?","options":["x","y"],"answer":0,"why":"w","from_line":4,"to_line":4,"side":"new"}]}`)
+	ask := func(id string) {
+		runAgentVerb(t, p, "ask", `{"id":"`+id+`","for":"z1:zq1","file":"edited.go","from_line":4,"to_line":4,
+		 "steps":[{"id":"pick","prompt":"ASK-`+id+` Which way?","options":[{"label":"One"},{"label":"Two"}],"recommended":0}]}`)
+	}
+	card := func(id string) string { return `.quiz-card[data-key='quiz-zq1'] .question-card[data-key='question-` + id + `']` }
+	ask("q-old")
+	waitJSDiag(t, p, `!!document.querySelector("`+card("q-old")+` button[name='pickQuestionOption']")`, "the first card with its options", diag)
+	label := `(document.querySelector('.ann-nav-label') || {}).textContent || ''`
+	before := evalStr(t, p, label)
+	ask("q-new")
+	waitJSDiag(t, p, `!!document.querySelector("`+card("q-new")+` button[name='pickQuestionOption']")`, "the newer card with its options", diag)
+	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+card("q-old")+`"); return c.classList.contains('is-replaced') && !c.querySelector('button[name="pickQuestionOption"], button[name="openQuestionOther"]') && /Replaced by a newer question below/.test(c.textContent); })()`, "the older card replaced, without options", diag)
+	// The newer card adds one open item and the replaced one leaves: the count holds.
+	if got := evalStr(t, p, label); got != before {
+		t.Errorf("the bar reads %q after the replacement, want %q as before%s", got, before, diag())
+	}
+}

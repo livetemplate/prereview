@@ -362,9 +362,9 @@ non-zero, like `done`). Keep it to a sentence or two.
 array — the conversation so far, oldest first, each entry `{author, body, at}`. When an
 item's **last thread entry is the reviewer's**, they've replied to steer you: read the
 thread, address their latest point, and `prereview reply` with what you changed.
-When their reply asks you to choose, or asks what the options are ("what other
-options?", "which is better?"), answer with a question set in that thread
-(`prereview ask` with `"for"`, see *Ask with options*), not a prose list.
+When they ask you to choose, or ask what the options are ("what other options?",
+"which is better?"), don't answer with a prose list. Ask a question set in that
+thread instead (`prereview ask` with `"for"`, see *Ask with options*).
 
 **You never re-answer yourself.** The snapshot only carries items that need you — a
 **fresh** comment, or one the **reviewer replied on last**. Once you reply, the item
@@ -512,7 +512,9 @@ JSON
 - **Anchor it** like a comment: `kind` `line` (the default) or `text` with the lines
   it is about, or `file`. When it answers a thread, set `"for"` to the id you would
   `reply` on: a comment's or suggestion's id, or a quiz question's `<quiz-id>:<question-id>`.
-  The set then shows in that card, as your reply.
+  The set then shows in that card, as your reply. A newer set in the same thread
+  replaces an older one the reviewer has not sent: its options go, and it stops
+  waiting on them.
 - **Park the comment** with `reply --answered` ("Asked which way to go; pick an
   option."), and leave those lines alone until the answer comes.
 

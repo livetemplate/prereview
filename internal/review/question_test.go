@@ -1,6 +1,7 @@
 package review
 
 import (
+	"errors"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -207,5 +208,37 @@ func TestThreadViews_CardInTimeOrder(t *testing.T) {
 	}
 	if want := []string{"before", "q1", "after", "q2"}; !slices.Equal(got, want) {
 		t.Errorf("thread order = %v, want %v", got, want)
+	}
+}
+
+// TestQuestionReplaced: in a thread, an unsubmitted set is replaced once the
+// agent asks a newer one there, and stops waiting on the reviewer. A submitted
+// set, a set on its own line and the newest set are not.
+func TestQuestionReplaced(t *testing.T) {
+	step := []QuestionStep{{ID: "s", Prompt: "p", Options: []QuestionOption{{Label: "a"}, {Label: "b"}}}}
+	s := PrereviewState{
+		Comments: []Comment{{ID: "c1", File: "a.go", FromLine: 1, ToLine: 1}},
+		QuestionSets: []QuestionSet{
+			{ID: "old", For: "c1", File: "a.go", CreatedAt: "2026-11-26T10:00:00.1Z", Steps: step},
+			{ID: "sent", For: "c1", File: "a.go", CreatedAt: "2026-11-26T10:00:00.2Z", Steps: step},
+			{ID: "new", For: "c1", File: "a.go", CreatedAt: "2026-11-26T10:00:00.3Z", Steps: step},
+			{ID: "line", File: "a.go", FromLine: 1, ToLine: 1, CreatedAt: "2026-11-26T09:00:00Z", Steps: step},
+		},
+		QuestionAnswers: map[string]QuestionAnswer{
+			questionAnswerKey("sent", "s"): {SetID: "sent", StepID: "s", Picked: []int{0}, Sent: true},
+		},
+	}
+	for id, want := range map[string]bool{"old": true, "sent": false, "new": false, "line": false} {
+		set := s.QuestionSets[slices.IndexFunc(s.QuestionSets, func(q QuestionSet) bool { return q.ID == id })]
+		if got := s.questionReplaced(set); got != want {
+			t.Errorf("questionReplaced(%s) = %v, want %v", id, got, want)
+		}
+	}
+	if n := s.AwaitingAnswerCount(); n != 2 { // new and line
+		t.Errorf("AwaitingAnswerCount = %d, want 2 (a replaced set no longer waits)", n)
+	}
+	// A page that still shows the old options can't answer it.
+	if _, _, err := questionTarget(&s, "old", "s"); !errors.Is(err, errQuestionReplaced) {
+		t.Errorf("a pick on a replaced set: err = %v, want errQuestionReplaced", err)
 	}
 }
