@@ -261,6 +261,25 @@ type StreamQuiz struct {
 	Taken  bool   `json:"taken"`
 	Score  int    `json:"score"`
 	Total  int    `json:"total"`
+	// Answers is each answered question: the option picked and whether it was
+	// right, so the agent can see what the reviewer misread.
+	Answers []StreamQuizAnswer `json:"answers,omitempty"`
+	// Threads carries each question whose thread ends with the reviewer: a reply
+	// for the agent to answer (`prereview reply "<quizID>:<questionID>"`).
+	Threads []StreamQuizThread `json:"threads,omitempty"`
+}
+
+// StreamQuizAnswer is the reviewer's answer to one quiz question.
+type StreamQuizAnswer struct {
+	Question string `json:"question"`
+	Picked   string `json:"picked"`
+	Correct  bool   `json:"correct"`
+}
+
+// StreamQuizThread is a quiz question's conversation, by question id.
+type StreamQuizThread struct {
+	Question string        `json:"question"`
+	Thread   []StreamReply `json:"thread"`
 }
 
 // StreamReply is one consumer-facing thread entry (#149): who said it, what, when.

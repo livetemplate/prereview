@@ -249,6 +249,7 @@ func (q Question) Jumpable() bool {
 // quizzes as this file's comprehension record.
 func (s PrereviewState) QuizResults() []StreamQuiz {
 	var out []StreamQuiz
+	threads := s.Threads()
 	for _, q := range s.Quizzes {
 		// File is "" for a quiz on the whole change; Total and Score count only the
 		// questions in the review's scope.
@@ -263,6 +264,12 @@ func (s PrereviewState) QuizResults() []StreamQuiz {
 				if a.Choice == qu.Answer {
 					r.Score++
 				}
+				if a.Choice >= 0 && a.Choice < len(qu.Options) {
+					r.Answers = append(r.Answers, StreamQuizAnswer{Question: qu.ID, Picked: qu.Options[a.Choice], Correct: a.Choice == qu.Answer})
+				}
+			}
+			if th := threads[QuizThreadID(q.ID, qu.ID)]; hasUnreadReviewerReply(th) {
+				r.Threads = append(r.Threads, StreamQuizThread{Question: qu.ID, Thread: toStreamThread(th)})
 			}
 		}
 		if r.Total > 0 {
@@ -307,6 +314,19 @@ func (s PrereviewState) QuizByEndLine() map[int][]QuizItem {
 		out[end] = append(out[end], it)
 	}
 	return out
+}
+
+// BlockQuizItems is the open file's line-grounded quiz questions grouped by
+// rendered block (Markdown or the HTML preview), like BlockComments, so a quiz
+// question renders under its block there too.
+func (s PrereviewState) BlockQuizItems() map[string][]QuizItem {
+	var items []QuizItem
+	for _, it := range s.QuizItems() {
+		if it.LineGrounded() {
+			items = append(items, it)
+		}
+	}
+	return groupByBlock(s, items, func(it QuizItem) int { return it.EndLine() })
 }
 
 // FileQuizItems are the questions that have no valid position inside the diff, so

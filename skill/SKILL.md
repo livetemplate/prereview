@@ -623,9 +623,10 @@ Make every wrong option plausible - something a careful reader might actually
 believe. A quiz you can pass without reading the diff is worthless.
 
 **The reviewer can reply to a question.** A quiz is a conversation, not a verdict:
-they may say an option is ambiguous, or that a question is wrong. Those
-replies arrive in the snapshot's `thread` exactly like a reply on a comment, and
-you answer with `prereview reply` — addressing the question by the composite id
+they may say an option is ambiguous, or that a question is wrong. Each quiz in a
+snapshot's `quizzes` carries `answers` (the option picked per question, and whether
+it was right) and `threads`: each question whose thread ends with the reviewer. You
+answer with `prereview reply` — addressing the question by the composite id
 `"<quizID>:<questionID>"`, since a question id is only unique within its quiz:
 
 ```bash

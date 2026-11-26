@@ -4,6 +4,7 @@
   {{- template "commentCardFull" . -}}
 {{- end -}}
 {{- range index $.BlockQuestions $key}}{{template "questionCard" .}}{{end -}}
+{{- range index $.BlockQuizItems $key}}{{template "quizCard" .}}{{end -}}
 {{- if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be) -}}
 {{template "composer" $}}
 {{- end}}

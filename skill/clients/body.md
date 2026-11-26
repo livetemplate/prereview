@@ -110,7 +110,8 @@ question about its file as a whole or about something absent. Never guess line
 numbers - prereview flags a cited line that is not in the diff.
 
 Then `done` the request comment and `reply` a one-line summary. The reviewer can
-reply to an individual question to query or challenge it; answer with
+reply to an individual question to query or challenge it; a `watch` snapshot's
+`quizzes[].threads` carries the reply. Answer with
 `prereview reply "<quizID>:<questionID>" --body "..."`, and re-submit the quiz
 with the same id if they are right that a question needs fixing.
 

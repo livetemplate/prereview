@@ -134,7 +134,7 @@
   <p class="empty">Binary file — cannot display.</p>
   {{end}}{{end}}{{end}}{{end}}{{end}}
 === blockComments ===
-{{$bs := .StartLine}}{{$be := .EndLine}}{{$key := printf "MB-%d-%d" $bs $be}}{{range index $.BlockComments $key}}{{template "commentCardFull" .}}{{end}}{{range index $.BlockQuestions $key}}{{template "questionCard" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
+{{$bs := .StartLine}}{{$be := .EndLine}}{{$key := printf "MB-%d-%d" $bs $be}}{{range index $.BlockComments $key}}{{template "commentCardFull" .}}{{end}}{{range index $.BlockQuestions $key}}{{template "questionCard" .}}{{end}}{{range index $.BlockQuizItems $key}}{{template "quizCard" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}}{{template "composer" $}}{{end}}
 === blockSuggestions ===
 {{$key := printf "MB-%d-%d" .StartLine .EndLine}}{{range index $.BlockSuggestions $key}}{{template "suggestionCard" .}}{{end}}{{with index $.HiddenSuggestionBlocks $key}}{{template "hiddenMarker" .}}{{end}}
 === bootCard ===

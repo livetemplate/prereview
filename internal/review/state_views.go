@@ -1012,7 +1012,7 @@ func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
 	if len(blocks) == 0 {
 		return nil
 	}
-	comments, suggestions, questions := s.BlockComments(), s.BlockSuggestions(), s.BlockQuestions()
+	comments, suggestions, questions, quiz := s.BlockComments(), s.BlockSuggestions(), s.BlockQuestions(), s.BlockQuizItems()
 	out := map[string]BlockAnn{}
 	for _, blk := range blocks {
 		key := markdownBlockKey(blk.start, blk.end)
@@ -1026,6 +1026,12 @@ func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
 		for _, c := range questions[key] {
 			ba.Total++
 			if !c.Resolved {
+				ba.Open = true
+			}
+		}
+		for _, it := range quiz[key] {
+			ba.Total++
+			if !it.Answered {
 				ba.Open = true
 			}
 		}

@@ -422,3 +422,70 @@ func TestE2E_QuestionWaiting(t *testing.T) {
 	tapIn(t, p, card+` button[name='pickQuestionOption']`, "answer it", diag)
 	waitJSDiag(t, p, `!document.querySelector('.queue-awaiting-answer') && !document.querySelector('#confirm-end-session .end-warn-answer')`, "answered: no line, no warning", diag)
 }
+
+// lastQuizzes is the quizzes field of the newest snapshot in the event log.
+func lastQuizzes(t *testing.T, p *runningPrereview) []review.StreamQuiz {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(p.repo, ".prereview", "events.jsonl"))
+	if err != nil {
+		return nil
+	}
+	var last []review.StreamQuiz
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		var ev review.StreamEvent
+		if json.Unmarshal([]byte(line), &ev) == nil && ev.Event == "snapshot" {
+			last = ev.Quizzes
+		}
+	}
+	return last
+}
+
+// TestE2E_QuizReachesAgent (P6): a quiz question on a rendered Markdown block
+// shows under that block; answering it reaches the agent with the option picked;
+// a reply on it reaches the agent as the question's thread.
+func TestE2E_QuizReachesAgent(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepoMarkdown(t), 1200, 800, "--agent") // docs.md: prose line 4 is its own block
+	p.waitReady()
+	diag := captureDiag(t, p)
+	p.clickFile("docs.md")
+	runAgentVerb(t, p, "quiz", `{"id":"zm","file":"docs.md","questions":[{"id":"q1","probe":"consequence",
+	 "prompt":"QUIZ-MD What did the edit change?","options":["the title","the second clause"],"answer":1,
+	 "why":"line 4 was edited","from_line":4,"to_line":4,"side":"new"}]}`)
+	card := `.md-view .quiz-card[data-key='quiz-q1']`
+	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+card+`"); return !!c && c.offsetParent !== null; })()`, "the quiz question under its rendered block", diag)
+
+	tapIn(t, p, card+` .quiz-options li:nth-child(2) button[name='answerQuestion']`, "answer", diag)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		qs := lastQuizzes(t, p)
+		if len(qs) == 1 && len(qs[0].Answers) == 1 && qs[0].Answers[0].Picked == "the second clause" && qs[0].Answers[0].Correct {
+			break
+		}
+		if time.Now().After(deadline) {
+			got, _ := json.Marshal(qs)
+			t.Fatalf("the answer never reached the agent; last quizzes: %s%s", got, diag())
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+
+	tapIn(t, p, card+` button[name='openReply']`, "Reply", diag)
+	if err := chromedp.Run(p.ctx,
+		chromedp.WaitVisible(card+` .reply-form textarea`, chromedp.ByQuery),
+		chromedp.SendKeys(card+` .reply-form textarea`, "option 1 is ambiguous", chromedp.ByQuery),
+		chromedp.Click(card+` button[name='postReply']`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("reply: %v%s", err, diag())
+	}
+	deadline = time.Now().Add(10 * time.Second)
+	for {
+		qs := lastQuizzes(t, p)
+		if len(qs) == 1 && len(qs[0].Threads) == 1 && qs[0].Threads[0].Question == "q1" {
+			break
+		}
+		if time.Now().After(deadline) {
+			got, _ := json.Marshal(qs)
+			t.Fatalf("the reply never reached the agent; last quizzes: %s%s", got, diag())
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+}
