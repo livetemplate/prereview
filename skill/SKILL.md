@@ -512,7 +512,8 @@ JSON
 - **Anchor it** like a comment: `kind` `line` (the default) or `text` with the lines
   it is about, or `file`. When it answers a thread, set `"for"` to the id you would
   `reply` on: a comment's or suggestion's id, or a quiz question's `<quiz-id>:<question-id>`.
-  The set then shows in that card, as your reply. A newer set in the same thread
+  The set then shows in that card, as your reply: the thread no longer waits on
+  you, and its `thread` gains an `Asked: …` entry. A newer set in the same thread
   replaces an older one the reviewer has not sent: its options go, and it stops
   waiting on them.
 - **Park the comment** with `reply --answered` ("Asked which way to go; pick an

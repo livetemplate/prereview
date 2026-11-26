@@ -60,6 +60,9 @@ type ThreadEntry struct {
 	At       int64  `json:"at"`
 	Name     string `json:"name,omitempty"`
 	RemoteID string `json:"remote_id,omitempty"`
+	// Question is the set an agent entry stands for: `ask --for` writes one, so
+	// the thread reads as answered and the card renders in its place.
+	Question string `json:"question,omitempty"`
 }
 
 // Who is how the card names the entry's author: the remote author of an

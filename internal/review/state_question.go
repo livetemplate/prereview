@@ -193,25 +193,48 @@ func (s PrereviewState) lineQuestionCards() []QuestionCard {
 
 // ThreadViews is every thread as its card renders it, by target id: the
 // replies, with each question set the agent asked in the thread (`ask --for`)
-// placed among them by when it was asked, as the agent's reply. Every file's,
-// so the All comments view has them too.
+// as the agent's reply. `ask` writes an agent entry naming the set, so the
+// card takes that entry's place; a set with no entry goes in by when it was
+// asked. Every file's, so the All comments view has them too.
 func (s PrereviewState) ThreadViews() map[string][]ThreadItem {
 	threads := s.Threads()
-	out := make(map[string][]ThreadItem, len(threads))
-	for id, th := range threads {
-		out[id] = threadItems(th)
-	}
+	var list []QuestionCard
 	if len(s.QuestionSets) > 0 {
-		for _, c := range s.questionCardsWhere(s.inThread) {
-			items := out[c.For]
-			at := c.askedAt()
-			i := slices.IndexFunc(items, func(it ThreadItem) bool { return it.At > at })
-			if i < 0 || at == 0 {
-				i = len(items)
+		list = s.questionCardsWhere(s.inThread)
+	}
+	cards := make(map[string]*QuestionCard, len(list))
+	for i := range list {
+		cards[list[i].ID] = &list[i]
+	}
+	out := make(map[string][]ThreadItem, len(threads))
+	placed := map[string]bool{}
+	for id, th := range threads {
+		items := make([]ThreadItem, 0, len(th))
+		for _, e := range th {
+			it := ThreadItem{ThreadEntry: e}
+			if c := cards[e.Question]; c != nil && c.For == id {
+				if placed[c.ID] {
+					continue // re-asked to revise: the card keeps its first place
+				}
+				it.Question, placed[c.ID] = c, true
 			}
-			out[c.For] = slices.Insert(items, i, ThreadItem{
-				ThreadEntry: ThreadEntry{TargetID: c.For, Author: AuthorAgent, At: at}, Question: &c})
+			items = append(items, it)
 		}
+		out[id] = items
+	}
+	for i := range list {
+		c := &list[i]
+		if placed[c.ID] {
+			continue
+		}
+		items := out[c.For]
+		at := c.askedAt()
+		i := slices.IndexFunc(items, func(it ThreadItem) bool { return it.At > at })
+		if i < 0 || at == 0 {
+			i = len(items)
+		}
+		out[c.For] = slices.Insert(items, i, ThreadItem{
+			ThreadEntry: ThreadEntry{TargetID: c.For, Author: AuthorAgent, At: at}, Question: c})
 	}
 	if len(out) == 0 {
 		return nil

@@ -571,6 +571,16 @@ func TestE2E_QuizReplyShowsLive(t *testing.T) {
 	 "steps":[{"id":"pick","prompt":"ASK-LIVE Which way?","options":[{"label":"One"},{"label":"Two"}],"recommended":0}]}`)
 	waitJSDiag(t, p, `!!document.querySelector("`+card+` .question-card[data-key='question-q-live']")`, "the card in the thread", diag)
 	reply("SECOND-R what other options are there")
+	// A card is the agent's answer: asking one hands the thread back to the
+	// reviewer, so the Queue stops counting a reply as awaiting the agent.
+	awaiting := `!!document.querySelector('.q-awaiting-reply')`
+	waitJSDiag(t, p, awaiting, "the reply counts as awaiting the agent", diag)
+	runAgentVerb(t, p, "ask", `{"id":"q-live2","for":"z1:zq1","file":"edited.go","from_line":4,"to_line":4,
+	 "steps":[{"id":"pick","prompt":"ASK-LIVE2 Which way?","options":[{"label":"Three"},{"label":"Four"}],"recommended":0}]}`)
+	waitJSDiag(t, p, `!`+awaiting, "the card answers the reply: nothing awaits the agent", diag)
+	if n := evalInt(t, p, `document.querySelectorAll("`+card+` .thread-body").length`); n != 3 {
+		t.Errorf("the thread shows %d text entries, want 3 (the ask entries render as cards)%s", n, diag())
+	}
 }
 
 // TestE2E_QuestionReplaced: when the agent asks a newer set in a thread, the

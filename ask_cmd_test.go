@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,6 +114,31 @@ func TestAsk_ForAnyThread(t *testing.T) {
 		if want := q.ID == "q2"; q.Replaced != want {
 			t.Errorf("%s: replaced = %v, want %v", q.ID, q.Replaced, want)
 		}
+	}
+	// Each set in a thread is the agent's reply there, written once: a revision
+	// of q3 adds no second entry.
+	if res := askWith(t, root, strings.Replace(askPayload, `"id":"q-refresh"`, `"id":"q3","for":"z1:zq1"`, 1)); res.exit != 0 {
+		t.Fatalf("revise q3: %s", res.stderr)
+	}
+	asked := map[string]string{}
+	raw, err := os.ReadFile(filepath.Join(root, ".prereview", review.AgentRepliesFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		var e review.ThreadEntry
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			t.Fatalf("%v: %s", err, line)
+		}
+		if e.Question != "" {
+			if _, dup := asked[e.Question]; dup {
+				t.Errorf("%s has two thread entries", e.Question)
+			}
+			asked[e.Question] = e.TargetID
+		}
+	}
+	if want := map[string]string{"q0": "c1", "q1": "s1", "q2": "z1:zq1", "q3": "z1:zq1"}; !maps.Equal(asked, want) {
+		t.Errorf("thread entries for the sets = %v, want %v", asked, want)
 	}
 	nested := strings.Replace(askPayload, `"id":"q-refresh"`, `"id":"q9","for":"q0"`, 1)
 	if res := askWith(t, root, nested); res.exit == 0 || !strings.Contains(res.stderr, "is a question set") {

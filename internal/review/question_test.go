@@ -1,8 +1,8 @@
 package review
 
 import (
-	"errors"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -240,5 +240,33 @@ func TestQuestionReplaced(t *testing.T) {
 	// A page that still shows the old options can't answer it.
 	if _, _, err := questionTarget(&s, "old", "s"); !errors.Is(err, errQuestionReplaced) {
 		t.Errorf("a pick on a replaced set: err = %v, want errQuestionReplaced", err)
+	}
+}
+
+// TestThreadViews_CardAtItsEntry: the agent entry `ask --for` writes is where
+// the card renders, once, even when a revision wrote a second entry.
+func TestThreadViews_CardAtItsEntry(t *testing.T) {
+	step := []QuestionStep{{ID: "s", Prompt: "p", Options: []QuestionOption{{Label: "a"}, {Label: "b"}}}}
+	s := PrereviewState{
+		Comments: []Comment{{ID: "c1", File: "a.go", FromLine: 1, ToLine: 1}},
+		ThreadEntries: []ThreadEntry{
+			{TargetID: "c1", Author: AuthorReviewer, Body: "options?", At: 1},
+			{TargetID: "c1", Author: AuthorAgent, Body: "Asked: p", At: 2, Question: "q1"},
+			{TargetID: "c1", Author: AuthorReviewer, Body: "later", At: 3},
+			{TargetID: "c1", Author: AuthorAgent, Body: "Asked: p", At: 4, Question: "q1"},
+		},
+		// CreatedAt far later: the entry, not the time, places the card.
+		QuestionSets: []QuestionSet{{ID: "q1", For: "c1", File: "a.go", CreatedAt: "2030-01-01T00:00:00Z", Steps: step}},
+	}
+	var got []string
+	for _, it := range s.ThreadViews()["c1"] {
+		if it.Question != nil {
+			got = append(got, "card:"+it.Question.ID)
+		} else {
+			got = append(got, it.Body)
+		}
+	}
+	if want := []string{"options?", "card:q1", "later"}; !slices.Equal(got, want) {
+		t.Errorf("thread = %v, want %v", got, want)
 	}
 }

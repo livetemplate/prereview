@@ -70,10 +70,13 @@ func runAsk(args []string) error {
 		return err
 	}
 	csvPath := filepath.Join(dir, review.CommentsFileName)
+	revised := map[string]bool{}
 	for _, s := range sets {
-		if kind, _ := review.ResolveTarget(csvPath, s.ID); kind != "" && kind != review.TargetQuestionSet {
+		kind, _ := review.ResolveTarget(csvPath, s.ID)
+		if kind != "" && kind != review.TargetQuestionSet {
 			return fmt.Errorf("id %q is already a %s in this review; pick another", s.ID, kind)
 		}
+		revised[s.ID] = kind == review.TargetQuestionSet
 		if err := checkAskFor(csvPath, s.For); err != nil {
 			return err
 		}
@@ -96,10 +99,21 @@ func runAsk(args []string) error {
 		return nil
 	}
 	vs := make([]any, len(sets))
-	for i := range sets {
-		vs[i] = sets[i]
+	var replies []any
+	for i, s := range sets {
+		vs[i] = s
+		// A set in a thread is the agent's reply there: an entry naming it
+		// hands the thread back to the reviewer, as `reply` would. Re-asking an
+		// open set revises it and needs none.
+		if s.For != "" && !revised[s.ID] {
+			replies = append(replies, review.ThreadEntry{TargetID: s.For, Author: review.AuthorAgent,
+				Body: "Asked: " + s.Steps[0].Prompt, At: time.Now().UnixNano(), Question: s.ID})
+		}
 	}
-	return review.AppendJSONL(filepath.Join(dir, review.QuestionsFileName), vs...)
+	if err := review.AppendJSONL(filepath.Join(dir, review.QuestionsFileName), vs...); err != nil {
+		return err
+	}
+	return review.AppendJSONL(filepath.Join(dir, review.AgentRepliesFileName), replies...)
 }
 
 // parseAskInput decodes, normalizes and validates every set before the caller
