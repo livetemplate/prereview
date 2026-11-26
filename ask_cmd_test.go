@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,7 @@ func TestAsk_RefusesBadPayloads(t *testing.T) {
 	for _, tc := range []struct{ name, payload, want string }{
 		{"one option", strings.Replace(askPayload, `,{"label":"Sign out at once"}`, "", 1), "2 to 4 options"},
 		{"bad second set", "[" + askPayload + `,{"file":"a.go","from_line":1,"steps":[]}]`, "question set 2"},
-		{"unknown for", strings.Replace(askPayload, `"file"`, `"for":"nope","file"`, 1), "unknown comment id"},
+		{"unknown for", strings.Replace(askPayload, `"file"`, `"for":"nope","file"`, 1), "unknown id nope"},
 		{"id taken by a comment", strings.Replace(askPayload, `"id":"q-refresh"`, `"id":"c1"`, 1), "already a comment"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,6 +74,35 @@ func TestAsk_RefusesBadPayloads(t *testing.T) {
 				t.Fatal("a refused payload was written")
 			}
 		})
+	}
+}
+
+// TestAsk_ForAnyThread: a set can reply in a comment's, a suggestion's or a
+// quiz question's thread (the targets `reply` takes), but not in another set's.
+func TestAsk_ForAnyThread(t *testing.T) {
+	root := t.TempDir()
+	seedStore(t, root, []csv.Row{row("c1")})
+	verb := func(name, payload string) {
+		t.Helper()
+		f := filepath.Join(t.TempDir(), name+".json")
+		if err := os.WriteFile(f, []byte(payload), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if res := runBin(t, "", name, "--out", root, "--file", f); res.exit != 0 {
+			t.Fatalf("%s: %s", name, res.stderr)
+		}
+	}
+	verb("suggest", `{"id":"s1","file":"a.go","from_line":1,"to_line":1,"original":"a","proposed":"b"}`)
+	verb("quiz", `{"id":"z1","file":"a.go","questions":[{"id":"zq1","probe":"consequence","prompt":"What changed?","options":["x","y"],"answer":0,"why":"w","from_line":1,"to_line":1,"side":"new"}]}`)
+	for i, target := range []string{"c1", "s1", review.QuizThreadID("z1", "zq1")} {
+		payload := strings.Replace(askPayload, `"id":"q-refresh"`, fmt.Sprintf(`"id":"q%d","for":%q`, i, target), 1)
+		if res := askWith(t, root, payload); res.exit != 0 {
+			t.Errorf("for %s: exit %d, %s", target, res.exit, res.stderr)
+		}
+	}
+	nested := strings.Replace(askPayload, `"id":"q-refresh"`, `"id":"q9","for":"q0"`, 1)
+	if res := askWith(t, root, nested); res.exit == 0 || !strings.Contains(res.stderr, "is a question set") {
+		t.Errorf("for a question set: exit %d, %s; want it refused", res.exit, res.stderr)
 	}
 }
 

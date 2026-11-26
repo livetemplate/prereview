@@ -26,8 +26,10 @@ type QuestionCard struct {
 	Done       bool
 	QueueState string
 	// Resolved and Hidden are the reviewer's resolve and hide (QuestionStatus).
-	// InThread: the card renders in its comment's thread, where the comment's
-	// own Resolve, Reply and Hide stand in for the card's.
+	// InThread: the card renders in a comment's, suggestion's or quiz
+	// question's thread. That card's Reply stands in for this one's, and a
+	// comment's Resolve covers it (questionResolved); elsewhere, answering
+	// closes it.
 	Resolved bool
 	Hidden   bool
 	InThread bool
@@ -165,7 +167,7 @@ func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]Threa
 
 // questionCards is the cards for the open file's sets that stand on their own:
 // a set asked `for` a comment renders in that comment's thread instead
-// (QuestionsByComment).
+// (QuestionsByThread).
 func (s PrereviewState) questionCards() []QuestionCard {
 	if s.SelectedFile == "" || len(s.QuestionSets) == 0 {
 		return nil
@@ -187,10 +189,11 @@ func (s PrereviewState) lineQuestionCards() []QuestionCard {
 	return out
 }
 
-// QuestionsByComment is the question cards asked `for` each comment, by comment
-// id: the comment card renders them after its thread, as the agent's reply.
-// Every file's, so the All comments view has them too.
-func (s PrereviewState) QuestionsByComment() map[string][]QuestionCard {
+// QuestionsByThread is the question cards asked `for` each thread, by the
+// thread's id (a comment's or suggestion's id, or a quiz question's thread id):
+// the card renders them after its thread, as the agent's reply. Every file's,
+// so the All comments view has them too.
+func (s PrereviewState) QuestionsByThread() map[string][]QuestionCard {
 	if len(s.QuestionSets) == 0 {
 		return nil
 	}
@@ -213,11 +216,25 @@ func (s PrereviewState) forComment(set QuestionSet) (*Comment, bool) {
 	return &s.Comments[i], true
 }
 
-// inThread reports whether set renders in a comment's thread: it names a
-// comment that exists.
+// inThread reports whether set renders in a thread: it names a comment, a
+// suggestion or a quiz question that exists (the targets `prereview reply`
+// takes).
 func (s PrereviewState) inThread(set QuestionSet) bool {
-	_, ok := s.forComment(set)
-	return ok
+	if set.For == "" {
+		return false
+	}
+	if _, ok := s.forComment(set); ok {
+		return true
+	}
+	if slices.ContainsFunc(s.Suggestions, func(sg Suggestion) bool { return sg.ID == set.For }) {
+		return true
+	}
+	if qid, quest, ok := SplitQuizThreadID(set.For); ok {
+		return slices.ContainsFunc(s.Quizzes, func(q Quiz) bool {
+			return q.ID == qid && slices.ContainsFunc(q.Questions, func(qu Question) bool { return qu.ID == quest })
+		})
+	}
+	return false
 }
 
 // questionResolved reports whether set is closed: the reviewer resolved it, or

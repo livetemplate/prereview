@@ -370,7 +370,7 @@
   {{- template "thread" (index $.Threads .ID) -}}
   {{- /* the agent's questions for this comment (prereview ask --for): a reply
          with options, after the thread */ -}}
-  {{- range index $.QuestionsByComment .ID}}{{template "questionCard" .}}{{end -}}
+  {{- range index $.QuestionsByThread .ID}}{{template "questionCard" .}}{{end -}}
   {{- /* #149 reviewer reply — the inline form when open on this card. */ -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
@@ -502,6 +502,7 @@
   {{- end -}}
   {{- /* #149 conversation thread — the agent's replies + reviewer follow-ups. */ -}}
   {{- template "thread" (index $.Threads .ID) -}}
+  {{- range index $.QuestionsByThread .ID}}{{template "questionCard" .}}{{end -}}
   {{- /* #149 reviewer reply — inline form when open, else a Reply button. */ -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
@@ -651,6 +652,7 @@
          thread machinery comments and suggestions use — the only new part is the
          composite target id, since a question id is unique only within its quiz. */ -}}
   {{- template "thread" .Thread -}}
+  {{- range index $.QuestionsByThread .ThreadID}}{{template "questionCard" .}}{{end -}}
   {{if .Replying}}
   <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
     <input type="hidden" name="id" value="{{.ThreadID}}">
@@ -719,8 +721,8 @@
   {{- end}}
   {{- end}}
   {{- template "thread" .Thread -}}
-  {{- /* resolve / reply: the comment card's action row. In a comment's thread
-         the comment's own row stands in for it. */ -}}
+  {{- /* resolve / reply: the comment card's action row. In a thread, the
+         card it replies on carries the row. */ -}}
   {{- if not .InThread}}
   {{- if .ReplyingID}}{{template "replyForm" .}}{{end}}
   <div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleQuestionResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>

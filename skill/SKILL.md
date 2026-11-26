@@ -362,6 +362,9 @@ non-zero, like `done`). Keep it to a sentence or two.
 array — the conversation so far, oldest first, each entry `{author, body, at}`. When an
 item's **last thread entry is the reviewer's**, they've replied to steer you: read the
 thread, address their latest point, and `prereview reply` with what you changed.
+When their reply asks you to choose, or asks what the options are ("what other
+options?", "which is better?"), answer with a question set in that thread
+(`prereview ask` with `"for"`, see *Ask with options*), not a prose list.
 
 **You never re-answer yourself.** The snapshot only carries items that need you — a
 **fresh** comment, or one the **reviewer replied on last**. Once you reply, the item
@@ -507,7 +510,9 @@ JSON
   (give each a short `header`); the reviewer steps through them and sends them
   together. Use `"multi": true` for a question with any number of answers.
 - **Anchor it** like a comment: `kind` `line` (the default) or `text` with the lines
-  it is about, or `file`. When it answers a comment, set `"for"` to the comment's id.
+  it is about, or `file`. When it answers a thread, set `"for"` to the id you would
+  `reply` on: a comment's or suggestion's id, or a quiz question's `<quiz-id>:<question-id>`.
+  The set then shows in that card, as your reply.
 - **Park the comment** with `reply --answered` ("Asked which way to go; pick an
   option."), and leave those lines alone until the answer comes.
 
@@ -517,7 +522,7 @@ each question's `picked` option labels, or `other`, their typed answer. Then:
 1. Build what they picked (or what they typed).
 2. `prereview reply --out "<STORE>" <set-id> --body "…"` with one line on what you did,
    and `prereview done --out "<STORE>" <set-id>`. `done` the comment too, if the set was
-   `for` one.
+   `for` one (a suggestion or quiz question takes only the `reply`).
 
 A set with `"resolved": true` is one the reviewer closed: build nothing new for it, and
 `done` it. A set keeps coming back until you `done` it. A set whose `thread` ends with the reviewer

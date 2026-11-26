@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -334,6 +335,42 @@ func TestE2E_QuestionInThread(t *testing.T) {
 	waitQuestions(t, p, "after resolving the comment", func(qs []review.StreamQuestion) bool {
 		return len(qs) == 1 && qs[0].ID == "q-cfg" && qs[0].Resolved
 	}, diag)
+}
+
+// TestE2E_QuestionInQuizAndSuggestionThreads: the agent can answer a reply on a
+// quiz question or a suggestion with options, not only one on a comment: the
+// set renders once, inside that card, after its thread, and the pick reaches
+// the agent with the thread it was asked in.
+func TestE2E_QuestionInQuizAndSuggestionThreads(t *testing.T) {
+	p := bootChromeAgainstPrereview(t, 390, 844, "--agent")
+	p.waitReadyAt(390, 844)
+	diag := captureDiag(t, p)
+	p.clickFile("edited.go")
+	runAgentVerb(t, p, "quiz", `{"id":"z1","file":"edited.go","questions":[{"id":"zq1","probe":"consequence",
+	 "prompt":"QUIZ-T What did line 4 change?","options":["x","y"],"answer":0,"why":"w","from_line":4,"to_line":4,"side":"new"}]}`)
+	runAgentVerb(t, p, "suggest", `{"id":"s-t","file":"edited.go","from_line":4,"to_line":4,"side":"new","original":"","proposed":"SUGG-T"}`)
+	waitJSDiag(t, p, `!!document.querySelector(".quiz-card[data-key='quiz-zq1']")`, "the quiz question", diag)
+	waitJSDiag(t, p, `!!document.querySelector(".inline-suggestion[data-key='sg-s-t']")`, "the suggestion", diag)
+
+	for _, tc := range []struct{ name, card, target, label string }{
+		{"quiz", `.quiz-card[data-key='quiz-zq1']`, review.QuizThreadID("z1", "zq1"), "Wrap the cause"},
+		{"suggestion", `.inline-suggestion[data-key='sg-s-t']`, "s-t", "Keep the old name"},
+	} {
+		id := "q-" + tc.name
+		runAgentVerb(t, p, "ask", `{"id":"`+id+`","for":"`+tc.target+`","file":"edited.go","from_line":4,"to_line":4,
+		 "steps":[{"id":"pick","prompt":"ASK-T Which way?","options":[{"label":"`+tc.label+`"},{"label":"Something simpler"}],"recommended":0}]}`)
+		inThread := tc.card + ` .question-card[data-key='question-` + id + `']`
+		waitJSDiag(t, p, `!!document.querySelector("`+inThread+`")`, "the question inside the "+tc.name+" card", diag)
+		if n := evalInt(t, p, `document.querySelectorAll(".question-card[data-key='question-`+id+`']").length`); n != 1 {
+			t.Fatalf("%s: the question renders %d times, want once (in the thread)%s", tc.name, n, diag())
+		}
+		tapIn(t, p, inThread+` button[name='pickQuestionOption']`, "pick in the "+tc.name+" thread", diag)
+		waitQuestions(t, p, "after the "+tc.name+" pick", func(qs []review.StreamQuestion) bool {
+			return slices.ContainsFunc(qs, func(q review.StreamQuestion) bool {
+				return q.ID == id && q.For == tc.target && len(q.Answers) == 1 && q.Answers[0].Picked[0] == tc.label
+			})
+		}, diag)
+	}
 }
 
 // TestE2E_QuestionNav: an unanswered question is an open item in the ‹ › bar,

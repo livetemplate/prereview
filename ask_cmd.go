@@ -34,7 +34,8 @@ func runAsk(args []string) error {
 				"      \"file\": \"auth/session.go\",\n"+
 				"      \"kind\": \"line\",              // line (default) | text | file\n"+
 				"      \"from_line\": 41, \"to_line\": 42, \"side\": \"new\",\n"+
-				"      \"for\":  \"<comment-id>\",       // optional: show it in that comment's thread\n"+
+				"      \"for\":  \"<id>\",               // optional: reply in that comment's, suggestion's\n"+
+				"                                    // or quiz question's thread\n"+
 				"      \"steps\": [                     // 1 to 4 questions\n"+
 				"        {\"id\": \"on-fail\", \"header\": \"Refresh\",\n"+
 				"         \"prompt\": \"When a token refresh fails, what should happen?\",\n"+
@@ -69,15 +70,13 @@ func runAsk(args []string) error {
 		return err
 	}
 	csvPath := filepath.Join(dir, review.CommentsFileName)
-	var fors []string
 	for _, s := range sets {
 		if kind, _ := review.ResolveTarget(csvPath, s.ID); kind != "" && kind != review.TargetQuestionSet {
 			return fmt.Errorf("id %q is already a %s in this review; pick another", s.ID, kind)
 		}
-		fors = append(fors, s.For)
-	}
-	if err := checkForIDs(csvPath, fors); err != nil {
-		return err
+		if err := checkAskFor(csvPath, s.For); err != nil {
+			return err
+		}
 	}
 	verb := "asked"
 	if *check {
@@ -122,4 +121,20 @@ func parseAskInput(raw []byte) ([]review.QuestionSet, error) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+// checkAskFor checks a set's `for`: a thread the set can reply in, which is
+// any id `prereview reply` takes except another question set.
+func checkAskFor(csvPath, id string) error {
+	if id == "" {
+		return nil
+	}
+	switch kind, _ := review.ResolveTarget(csvPath, id); kind {
+	case review.TargetComment, review.TargetSuggestion, review.TargetQuizQuestion:
+		return nil
+	case review.TargetQuestionSet:
+		return fmt.Errorf("\"for\": %s is a question set; ask a new set instead, or revise it with the same id", id)
+	default:
+		return fmt.Errorf("\"for\": unknown id %s (a comment, suggestion or quiz question; `prereview comments --json` lists comment ids)", id)
+	}
 }

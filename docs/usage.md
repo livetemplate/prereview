@@ -206,7 +206,9 @@ writing a question you have to answer by typing. It asks before it builds: which
 of two ways to go, or a value it would otherwise guess, such as a limit, a default
 or which apps a change covers. The question appears as a card under the lines it
 is about, at the top of the file for a question about the whole file, or inside
-your comment's thread when it answers a comment.
+a thread when it answers your reply there: on a comment, a suggestion or a quiz
+question. Ask "what are the options?" in any of those threads and the agent
+answers with a card.
 
 - **Tap an option.** One is marked *Recommended*. For a single question, the tap
   sends your answer to the agent.

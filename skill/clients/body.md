@@ -58,7 +58,10 @@ shows the format). Park the comment with `reply --answered` ("Asked which way to
 an option.") and edit nothing until they answer. The reviewer taps an answer; read
 it with `prereview questions --out <STORE> --json` (or in a `watch` snapshot's
 `questions`): `picked` option labels, or `other`, a typed answer. Build it, `reply` on the
-set id, then `prereview done --out <STORE> <set-id>`.
+set id, then `prereview done --out <STORE> <set-id>`. When the reviewer replies asking
+what the options are, or which to pick, answer the same way, not with a prose list. Set the
+set's `"for"` to the id you would `reply` on: a comment, a suggestion, or a quiz question's
+`<quiz-id>:<question-id>`.
 
 Re-run `prereview comments --json` for more (the reviewer can keep commenting);
 dedupe by `id`. Stop when the reviewer clicks End session. If your harness can
