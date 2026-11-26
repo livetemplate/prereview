@@ -3,7 +3,9 @@ package review
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"slices"
 
@@ -302,23 +304,62 @@ func actionableQuestions(sets []QuestionSet, answers map[string]QuestionAnswer, 
 		if !hasUnreadReviewerReply(thread) && ((!sent && !resolved) || done[s.ID]) {
 			continue
 		}
-		q := StreamQuestion{ID: s.ID, For: s.For, File: s.File, FromLine: s.FromLine, ToLine: s.ToLine,
-			Side: s.Side, AnchorStatus: s.AnchorStatus, Resolved: resolved, Answers: []StreamQuestionAnswer{}, Thread: toStreamThread(thread)}
-		if sent {
-			for _, st := range s.Steps {
-				a := answers[questionAnswerKey(s.ID, st.ID)]
-				sa := StreamQuestionAnswer{Step: st.ID, Prompt: st.Prompt, Other: a.Other}
-				for _, i := range a.Picked {
-					if i >= 0 && i < len(st.Options) {
-						sa.Picked = append(sa.Picked, st.Options[i].Label)
-					}
-				}
-				q.Answers = append(q.Answers, sa)
-			}
-		}
-		out = append(out, q)
+		out = append(out, toStreamQuestion(s, answers, resolved, thread))
 	}
 	return out
+}
+
+// toStreamQuestion is set as the agent reads it; its answers only once sent.
+func toStreamQuestion(s QuestionSet, answers map[string]QuestionAnswer, resolved bool, thread []ThreadEntry) StreamQuestion {
+	q := StreamQuestion{ID: s.ID, For: s.For, File: s.File, FromLine: s.FromLine, ToLine: s.ToLine,
+		Side: s.Side, AnchorStatus: s.AnchorStatus, Resolved: resolved, Answers: []StreamQuestionAnswer{}, Thread: toStreamThread(thread)}
+	if !questionSetSent(s, answers) {
+		return q
+	}
+	for _, st := range s.Steps {
+		a := answers[questionAnswerKey(s.ID, st.ID)]
+		sa := StreamQuestionAnswer{Step: st.ID, Prompt: st.Prompt, Other: a.Other}
+		for _, i := range a.Picked {
+			if i >= 0 && i < len(st.Options) {
+				sa.Picked = append(sa.Picked, st.Options[i].Label)
+			}
+		}
+		q.Answers = append(q.Answers, sa)
+	}
+	return q
+}
+
+// LoadQuestions is `prereview questions`: the question sets of the store whose
+// CSV is at csvPath, as the agent reads them. By default only the ones to act
+// on, exactly what a snapshot's questions field carries; with all, every set,
+// unanswered ones with empty answers.
+func LoadQuestions(csvPath string, all bool) ([]StreamQuestion, error) {
+	rows, err := csv.Read(csvPath)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	st := PrereviewState{
+		SingleFile:      SessionScope(csvPath),
+		Comments:        CommentsFromRows(rows),
+		QuestionSets:    LoadQuestionSets(csvPath),
+		QuestionAnswers: loadQuestionAnswers(QuestionAnswersPath(csvPath)),
+		QuestionStatus:  loadQuestionStatus(QuestionStatusPath(csvPath)),
+		QuestionsDone:   doneMarks(csvPath),
+		ThreadEntries:   loadThreads(csvPath),
+	}
+	threads, resolved := st.Threads(), st.questionsResolved()
+	if !all {
+		out := actionableQuestions(st.scopedQuestionSets(), st.QuestionAnswers, resolved, st.QuestionsDone, threads)
+		if out == nil {
+			out = []StreamQuestion{}
+		}
+		return out, nil
+	}
+	out := []StreamQuestion{}
+	for _, s := range st.scopedQuestionSets() {
+		out = append(out, toStreamQuestion(s, st.QuestionAnswers, resolved[s.ID], threads[s.ID]))
+	}
+	return out, nil
 }
 
 // questionSetSent reports whether the reviewer has sent set s: every step is

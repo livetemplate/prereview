@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,5 +95,40 @@ func TestAsk_DoneAndReplyTakeSetIDs(t *testing.T) {
 	}
 	if res := runBin(t, "", "done", "--out", root, "q-refresh", "bogus"); res.exit == 0 || !strings.Contains(res.stderr, "bogus") {
 		t.Errorf("an unknown id next to a set id must still fail: exit %d, %s", res.exit, res.stderr)
+	}
+}
+
+// TestQuestions_ListsWhatToActOn: `prereview questions --json` is the polling
+// read of a snapshot's questions: nothing until the reviewer sends a set, then
+// the set with its labels, and --all lists unanswered sets too.
+func TestQuestions_ListsWhatToActOn(t *testing.T) {
+	root := t.TempDir()
+	if res := askWith(t, root, askPayload); res.exit != 0 {
+		t.Fatalf("ask: %s", res.stderr)
+	}
+	read := func(args ...string) []review.StreamQuestion {
+		t.Helper()
+		res := runBin(t, "", append([]string{"questions", "--out", root, "--json"}, args...)...)
+		if res.exit != 0 {
+			t.Fatalf("questions: exit %d, %s", res.exit, res.stderr)
+		}
+		var qs []review.StreamQuestion
+		if err := json.Unmarshal([]byte(res.stdout), &qs); err != nil {
+			t.Fatalf("questions --json is not a JSON array: %v\n%s", err, res.stdout)
+		}
+		return qs
+	}
+	if qs := read(); len(qs) != 0 {
+		t.Fatalf("an unanswered set is listed as work: %+v", qs)
+	}
+	if qs := read("--all"); len(qs) != 1 || qs[0].ID != "q-refresh" || len(qs[0].Answers) != 0 {
+		t.Fatalf("--all = %+v, want the unanswered set", qs)
+	}
+	ans := `{"set_id":"q-refresh","step_id":"on-fail","picked":[1],"sent":true,"at":1}` + "\n"
+	if err := os.WriteFile(filepath.Join(root, ".prereview", review.QuestionAnswersFileName), []byte(ans), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if qs := read(); len(qs) != 1 || qs[0].Answers[0].Picked[0] != "Sign out at once" {
+		t.Fatalf("after Submit = %+v, want the set with its label", qs)
 	}
 }

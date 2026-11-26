@@ -34,6 +34,7 @@ Subcommands (for the coding agent; each takes --out <STORE>):
   done       mark comments worked on (validated against comments.csv; --file -/--all-open)
   reply      post a thread reply on a comment or suggestion so the reviewer sees what you did (--body/--file)
   ask        ask the reviewer to choose from options, one recommended, before you build (--file/stdin)
+  questions  list the question sets you asked and their answers (--json; --all for unanswered ones)
   quiz       submit a comprehension quiz about a file's diff for the reviewer to answer (--file/stdin)
   explain    submit a walkthrough of the whole change for the reviewer to follow (--file/stdin)
   status     echo the agent's status to the review UI: status <working|done> [message]
@@ -181,6 +182,14 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "ask" {
 		if err := runAsk(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "prereview ask:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "questions" {
+		if err := runQuestions(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "prereview questions:", err)
 			os.Exit(1)
 		}
 		return

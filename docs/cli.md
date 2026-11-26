@@ -214,6 +214,9 @@ prereview import    [--out <dir>] [--file <payload.json>]
   ambiguous. Up to four questions per set; writes `.prereview/questions.jsonl`.
   The answers arrive in a snapshot's `questions` once the reviewer sends them,
   and `prereview done <id>` closes the set.
+- `prereview questions` - list the question sets you asked and their answers:
+  by default the ones to act on (`--all` for every set; `--json` for the
+  snapshot's shape). For agents that poll instead of using `watch`.
 - `prereview quiz` - submit a comprehension quiz about the change for the
   reviewer to answer; writes `.prereview/quiz.jsonl`.
 - `prereview explain` - submit a walkthrough of the whole change: steps in reading
