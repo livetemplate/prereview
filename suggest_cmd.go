@@ -133,10 +133,20 @@ func parseSuggestionsInput(raw []byte) ([]review.Suggestion, error) {
 // checkFor refuses a payload whose "for" names a comment the review doesn't have
 // (#204): the group would hang off nothing, so nothing is appended.
 func checkFor(sugs []review.Suggestion, csvPath string) error {
+	fors := make([]string, len(sugs))
+	for i, s := range sugs {
+		fors[i] = s.For
+	}
+	return checkForIDs(csvPath, fors)
+}
+
+// checkForIDs refuses any non-empty "for" that names no comment in the review.
+// Shared by `suggest` and `ask`.
+func checkForIDs(csvPath string, fors []string) error {
 	var ids []string
-	for _, s := range sugs {
-		if s.For != "" {
-			ids = append(ids, s.For)
+	for _, f := range fors {
+		if f != "" {
+			ids = append(ids, f)
 		}
 	}
 	if len(ids) == 0 {

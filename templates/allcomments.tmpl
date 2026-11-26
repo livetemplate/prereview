@@ -51,7 +51,7 @@
         </button>
       </form>
       {{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}
-      {{- template "thread" (index $.Threads .ID) -}}
+      {{- template "thread" (index $.ThreadViews .ID) -}}
       {{- if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}
       <div class="ac-actions">
         {{if .IsRegionLevel -}}

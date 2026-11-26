@@ -499,6 +499,21 @@ func (c *PrereviewController) JumpToSuggestion(state PrereviewState, ctx *livete
 	return state, err
 }
 
+// JumpToQuestion opens the file a question set is on, from its Queue row, and
+// scrolls its card into view.
+func (c *PrereviewController) JumpToQuestion(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	set, err := findQuestionSet(&state, ctx.GetString("id"))
+	if err != nil {
+		return state, fmt.Errorf("jumpToQuestion: %w", err)
+	}
+	id, line := set.ID, set.ToLine
+	state, err = c.selectFileForJump(state, set.File)
+	if err == nil {
+		state.scrollToQuestion(id, line)
+	}
+	return state, err
+}
+
 // selectFileForJump switches the view to file (loading its diff if it changed)
 // and closes the full-page views (all comments, quiz, Library), preserving unsaved composer text (#105).
 // Shared by JumpToComment/JumpToSuggestion; each sets its own scroll target after

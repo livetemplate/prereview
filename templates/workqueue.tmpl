@@ -42,7 +42,7 @@
       {{/* #164: reviewer-reply reopens are whole-review (AwaitingReplyCount), so this line
            sits OUTSIDE the per-file HasQueue guard — a reply on another file must still be
            reachable when the current file's own queue is empty. */}}
-      {{if .AwaitingReplyCount}}<div class="queue-awaiting-reply"><span class="q-num q-awaiting-reply">{{.AwaitingReplyCount}}</span> repl{{if eq .AwaitingReplyCount 1}}y{{else}}ies{{end}} awaiting the agent (whole review)</div>{{end}}{{if .AwaitingPickCount}}<div class="queue-awaiting-pick"><span class="q-num q-pick">{{.AwaitingPickCount}}</span> fork{{if ne .AwaitingPickCount 1}}s{{end}} awaiting your pick: the agent offered alternatives, accept one (whole review)</div>{{end}}
+      {{if .AwaitingReplyCount}}<div class="queue-awaiting-reply"><span class="q-num q-awaiting-reply">{{.AwaitingReplyCount}}</span> repl{{if eq .AwaitingReplyCount 1}}y{{else}}ies{{end}} awaiting the agent (whole review)</div>{{end}}{{if .AwaitingPickCount}}<div class="queue-awaiting-pick"><span class="q-num q-pick">{{.AwaitingPickCount}}</span> fork{{if ne .AwaitingPickCount 1}}s{{end}} awaiting your pick: the agent offered alternatives, accept one (whole review)</div>{{end}}{{if .AwaitingAnswerCount}}<div class="queue-awaiting-pick queue-awaiting-answer"><span class="q-num q-pick">{{.AwaitingAnswerCount}}</span> question{{if ne .AwaitingAnswerCount 1}}s{{end}} waiting for your answer (whole review)</div>{{end}}
       {{if .HasQueue}}
       <div class="queue-legend"><span class="q-num q-queued">{{.QueuedCount}}</span> queued{{if .BlockedCount}} · <span class="q-num q-blocked">{{.BlockedCount}}</span> need re-anchoring{{end}}{{if .AnsweredCount}} · <span class="q-num q-answered">{{.AnsweredCount}}</span> answered{{end}} · <span class="q-num q-done">{{.DoneCount}}</span> done{{if .DraftCount}} · <span class="q-num q-draft">{{.DraftCount}}</span> draft{{end}}{{if .QueueHiddenCount}} · <span class="q-num q-elsewhere">{{.QueueHiddenCount}}</span> on other files{{end}}</div>
       {{/* #171: accepted edits the agent hasn't written to the file yet. prereview never
@@ -58,8 +58,8 @@
       <div class="queue-row queue-{{.State}} queue-kind-{{.Kind}}">
         <form method="POST" class="queue-jump-form">
           <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" name="{{if eq .Kind "suggestion"}}jumpToSuggestion{{else}}jumpToComment{{end}}" class="queue-item" title="Go to this {{.Kind}}">
-            {{if eq .Kind "suggestion"}}<span class="queue-kind-icon" aria-hidden="true">✦</span>{{end}}
+          <button type="submit" name="{{if eq .Kind "suggestion"}}jumpToSuggestion{{else if eq .Kind "question"}}jumpToQuestion{{else}}jumpToComment{{end}}" class="queue-item" title="Go to this {{.Kind}}">
+            {{if eq .Kind "suggestion"}}<span class="queue-kind-icon" aria-hidden="true">✦</span>{{else if eq .Kind "question"}}<span class="queue-kind-icon" aria-hidden="true">?</span>{{end}}
             <span class="queue-badge queue-badge-{{.State}}">{{.State}}</span>
             <span class="queue-body">{{.Body}}</span>
             <span class="queue-loc" title="{{.File}}{{if .Line}}:{{.Line}}{{end}}">{{.File}}{{if .Line}}:{{.Line}}{{end}}</span>

@@ -60,6 +60,9 @@ type ThreadEntry struct {
 	At       int64  `json:"at"`
 	Name     string `json:"name,omitempty"`
 	RemoteID string `json:"remote_id,omitempty"`
+	// Question is the set an agent entry stands for: `ask --for` writes one, so
+	// the thread reads as answered and the card renders in its place.
+	Question string `json:"question,omitempty"`
 }
 
 // Who is how the card names the entry's author: the remote author of an
@@ -77,6 +80,25 @@ func (e ThreadEntry) When() string {
 		return ""
 	}
 	return time.Unix(0, e.At).Format(clockLayout)
+}
+
+// ThreadItem is one entry of a thread as a card renders it: a reply, or, with
+// Question set, a question set the agent asked in the thread.
+type ThreadItem struct {
+	ThreadEntry
+	Question *QuestionCard
+}
+
+// threadItems wraps a thread's replies for its card.
+func threadItems(entries []ThreadEntry) []ThreadItem {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]ThreadItem, len(entries))
+	for i, e := range entries {
+		out[i].ThreadEntry = e
+	}
+	return out
 }
 
 // AgentRepliesPath / ReviewerRepliesPath resolve the two sidecars for a store whose

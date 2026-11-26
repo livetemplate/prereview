@@ -187,8 +187,8 @@ shortcut asks for exactly this.
 **Alternatives.** When a comment leaves a choice that is yours to make (tone, audience,
 scope), the agent may offer two versions as linked boxes ("alternative 1 of 2")
 instead of picking one. It marks your comment *answered*. Accepting one rejects the other. Reject
-both and the agent asks which direction you want; reply on the comment and it works from
-your reply instead. The Queue panel and the End-session dialog count the choices still
+both and the agent asks which direction you want (see *Questions from your agent*); reply on
+the comment and it works from your reply instead. The Queue panel and the End-session dialog count the choices still
 awaiting your pick.
 
 Your decisions reach the agent the same way comments do — continuously, no
@@ -198,6 +198,40 @@ suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
 **Hide** on one box sets just that one aside: it leaves "1 hidden suggestion ·
 Show" on its line, and **Show** brings it back. The suggestion stays open for the
 agent either way.
+
+## Questions from your agent
+
+When your agent can't go on without your choice, it asks with options instead of
+writing a question you have to answer by typing. It asks before it builds: which
+of two ways to go, or a value it would otherwise guess, such as a limit, a default
+or which apps a change covers. The question appears as a card under the lines it
+is about, or at the top of the file for a question about the whole file. When it
+answers your reply in a thread on a comment, a suggestion or a quiz question, it
+appears inside that thread. Ask "what are the options?" in any of those threads and the agent
+answers with a card. When the agent asks again in the same thread, an earlier
+card you have not answered loses its options, so you can't pick an old choice by
+mistake.
+
+- **Tap an option.** One is marked *Recommended*. For a single question, the tap
+  sends your answer to the agent.
+- **Several questions** show as tabs. A pick moves to the next unanswered one, and
+  you can tap any tab to go back. **Submit** at the bottom sends them all once
+  every question is answered. A question marked *Pick any* takes several options.
+- **Something else…** takes a typed answer when no option fits.
+- **Change** reopens a sent card, until the agent marks it done. Your new answer
+  reaches the agent the same way.
+
+Once you've sent it, a question is work for the agent like a comment. Its card
+and its row in the Queue read *queued*, then *worked on* when the agent is done.
+A reply on its thread hands it back. While the queue is paused, your answer
+waits for Resume. A question still waiting for you counts in the ‹ › bar and in
+the Queue ("N questions waiting for your answer"), and End session warns about
+it.
+
+Like a comment, a question card has **Resolve** (closes it, and tells the agent
+it isn't needed) and **Reply**; like a suggestion, **Hide** sets it aside and
+leaves a *Show* in its place. A question inside your comment's thread follows
+that comment: resolving the comment resolves the question too.
 
 ## Understand
 

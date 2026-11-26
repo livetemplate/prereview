@@ -2,6 +2,7 @@ package review
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/livetemplate/prereview/csv"
@@ -29,7 +30,7 @@ type QuizItem struct {
 	// machinery, and Thread the conversation so far. Carried on the row so the card
 	// partial stays self-contained.
 	ThreadID   string
-	Thread     []ThreadEntry
+	Thread     []ThreadItem
 	Replying   bool
 	ReplyDraft string
 	Answered   bool
@@ -119,7 +120,7 @@ func (s PrereviewState) withThreads(items []QuizItem) []QuizItem {
 	if len(items) == 0 {
 		return items
 	}
-	threads := s.Threads()
+	threads := s.ThreadViews()
 	for i := range items {
 		items[i].Thread = threads[items[i].ThreadID]
 		if s.ReplyingID == items[i].ThreadID {
@@ -249,6 +250,7 @@ func (q Question) Jumpable() bool {
 // quizzes as this file's comprehension record.
 func (s PrereviewState) QuizResults() []StreamQuiz {
 	var out []StreamQuiz
+	threads := s.Threads()
 	for _, q := range s.Quizzes {
 		// File is "" for a quiz on the whole change; Total and Score count only the
 		// questions in the review's scope.
@@ -263,6 +265,12 @@ func (s PrereviewState) QuizResults() []StreamQuiz {
 				if a.Choice == qu.Answer {
 					r.Score++
 				}
+				if a.Choice >= 0 && a.Choice < len(qu.Options) {
+					r.Answers = append(r.Answers, StreamQuizAnswer{Question: qu.ID, Picked: qu.Options[a.Choice], Correct: a.Choice == qu.Answer})
+				}
+			}
+			if th := threads[QuizThreadID(q.ID, qu.ID)]; hasUnreadReviewerReply(th) {
+				r.Threads = append(r.Threads, StreamQuizThread{Question: qu.ID, Thread: toStreamThread(th)})
 			}
 		}
 		if r.Total > 0 {
@@ -293,18 +301,29 @@ func (s PrereviewState) QuizPending() bool {
 // it, which was a worse re-implementation of the diff view; anchoring the
 // question to the line makes the code its own context.
 func (s PrereviewState) QuizByEndLine() map[int][]QuizItem {
-	if s.SelectedFile == "" {
-		return nil
-	}
 	out := map[int][]QuizItem{}
-	for _, it := range s.QuizItems() {
-		// Only questions with a resolved line have a row to render under;
-		// unanchored and ungrounded ones go to the file head (FileQuizItems).
-		if !it.LineGrounded() {
-			continue
-		}
+	for _, it := range s.lineQuizItems() {
 		end := it.EndLine()
 		out[end] = append(out[end], it)
+	}
+	return out
+}
+
+// BlockQuizItems is the open file's line-grounded quiz questions grouped by
+// rendered block (Markdown or the HTML preview), like BlockComments, so a quiz
+// question renders under its block there too.
+func (s PrereviewState) BlockQuizItems() map[string][]QuizItem {
+	return groupByBlock(s, s.lineQuizItems(), func(it QuizItem) int { return it.EndLine() })
+}
+
+// lineQuizItems is the open file's quiz questions with a line in the diff: the
+// ones a row or a rendered block shows. FileQuizItems is the rest.
+func (s PrereviewState) lineQuizItems() []QuizItem {
+	var out []QuizItem
+	for _, it := range s.QuizItems() {
+		if it.LineGrounded() {
+			out = append(out, it)
+		}
 	}
 	return out
 }
@@ -337,91 +356,32 @@ func (s PrereviewState) FileQuizItems() []QuizItem {
 	return out
 }
 
-// QuizCountLines counts the quiz questions anchored to each row, keyed
-// "<line>-<side>" exactly like CommentCountLines — so a question contributes to
-// the row's annotation badge and can be collapsed with everything else on that
-// line. A quiz question is an annotation; it collapses like one.
-func (s PrereviewState) QuizCountLines() map[string]int {
-	out := map[string]int{}
-	for end, items := range s.QuizByEndLine() {
-		for _, it := range items {
-			countRowSides(out, end, it.Side)
-		}
+// fileHeadAnnotations is every annotation at the file head: file-level and
+// area comments, and quiz questions and the agent's questions with no line in
+// the diff. They collapse together under one badge (FileHeadRowKey).
+func (s PrereviewState) fileHeadAnnotations() []rowAnnotation {
+	var out []rowAnnotation
+	for _, c := range s.FileLevelComments() {
+		out = append(out, rowAnnotation{Open: !c.Resolved, Showing: !c.Resolved})
 	}
-	if len(out) == 0 {
-		return nil
+	for _, c := range s.AreaComments() {
+		out = append(out, rowAnnotation{Open: !c.Resolved, Showing: !c.Resolved})
 	}
-	return out
-}
-
-// QuizOpenLines marks rows carrying an UNANSWERED question — open work, so the
-// badge reads open (yellow) rather than done, matching an unresolved comment.
-func (s PrereviewState) QuizOpenLines() map[string]bool {
-	return s.quizLinesWhere(func(it QuizItem) bool { return !it.Answered })
-}
-
-// quizShowingLines marks rows with a quiz card showing by default: unanswered, or
-// answered THIS visit (#212). That is what rowState means by "open" — a badge click
-// there records "hide", and after a reload (when the row's default becomes
-// collapsed) the toggle expires instead of flipping into a reveal. The badge
-// COLOUR uses QuizOpenLines instead: an answered question is done.
-func (s PrereviewState) quizShowingLines() map[string]bool {
-	return s.quizLinesWhere(func(it QuizItem) bool { return !it.Settled })
-}
-
-// quizLinesWhere keys every inline question matching pred to its row(s).
-func (s PrereviewState) quizLinesWhere(pred func(QuizItem) bool) map[string]bool {
-	out := map[string]bool{}
-	for end, items := range s.QuizByEndLine() {
-		for _, it := range items {
-			if pred(it) {
-				for _, k := range rowKeysFor(end, it.Side) {
-					out[k] = true
-				}
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-// fileHeadQuizShowing: a file-head question card is showing by default (see
-// quizShowingLines) — so for rowState the head group is open.
-func (s PrereviewState) fileHeadQuizShowing() bool {
 	for _, it := range s.FileQuizItems() {
-		if !it.Settled {
-			return true
-		}
+		out = append(out, rowAnnotation{Open: !it.Answered, Showing: !it.Settled})
 	}
-	return false
+	for _, c := range s.FileQuestionCards() {
+		out = append(out, rowAnnotation{Open: !c.Resolved, Showing: !c.Resolved})
+	}
+	return out
 }
 
 // FileHeadAnnotationCount is how many annotations sit at the file head — the
-// number the shared row badge shows there. Counts file-level and area comments
-// alongside the head quiz questions, because they all collapse together.
-func (s PrereviewState) FileHeadAnnotationCount() int {
-	return len(s.FileLevelComments()) + len(s.AreaComments()) + len(s.FileQuizItems())
-}
+// number the shared head badge shows.
+func (s PrereviewState) FileHeadAnnotationCount() int { return len(s.fileHeadAnnotations()) }
 
 // FileHeadHasOpen reports whether anything at the file head is still open work,
 // which is what makes the shared badge read "open" rather than "done".
 func (s PrereviewState) FileHeadHasOpen() bool {
-	for _, c := range s.FileLevelComments() {
-		if !c.Resolved {
-			return true
-		}
-	}
-	for _, c := range s.AreaComments() {
-		if !c.Resolved {
-			return true
-		}
-	}
-	for _, it := range s.FileQuizItems() {
-		if !it.Answered {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(s.fileHeadAnnotations(), func(a rowAnnotation) bool { return a.Open })
 }

@@ -209,6 +209,14 @@ prereview done      [--out <dir>] [--file <f>|-] [--all-open] <comment-id>...
 prereview status    [--out <dir>] <working|done> [message]
 prereview suggest   [--out <dir>] [--file <payload.json>]
 prereview import    [--out <dir>] [--file <payload.json>]
+- `prereview ask` - ask the reviewer to choose from two to four options, one
+  recommended, before you build: a direction, or data that is missing or
+  ambiguous. Up to four questions per set; writes `.prereview/questions.jsonl`.
+  The answers arrive in a snapshot's `questions` once the reviewer sends them,
+  and `prereview done <id>` closes the set.
+- `prereview questions` - list the question sets you asked and their answers:
+  by default the ones to act on (`--all` for every set; `--json` for the
+  snapshot's shape). For agents that poll instead of using `watch`.
 - `prereview quiz` - submit a comprehension quiz about the change for the
   reviewer to answer; writes `.prereview/quiz.jsonl`.
 - `prereview explain` - submit a walkthrough of the whole change: steps in reading

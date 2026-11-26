@@ -489,6 +489,23 @@ type PrereviewState struct {
 	Quizzes     []Quiz                `json:"quizzes"`
 	QuizAnswers map[string]QuizAnswer `json:"quiz_answers"`
 
+	// QuestionSets are the agent's questions (.prereview/questions.jsonl) and
+	// QuestionAnswers the reviewer's picks keyed questionAnswerKey; QuestionsDone
+	// holds the sets the agent marked done (processed.jsonl). Re-read like
+	// Quizzes, never persisted. QuestionsSeen is questions.jsonl's fingerprint
+	// at the last grounding, so the watcher grounds again only when it moved.
+	QuestionSets    []QuestionSet             `json:"question_sets"`
+	QuestionAnswers map[string]QuestionAnswer `json:"question_answers"`
+	QuestionsDone   map[string]bool           `json:"questions_done"`
+	QuestionStatus  map[string]QuestionStatus `json:"question_status"`
+	QuestionsSeen   string                    `json:"questions_seen"`
+	// QuestionView is the question (tab) each set's card shows, by set id, and
+	// QuestionOther the question whose "Something else" box is
+	// open. Session-only, like QuizJustAnswered: a reload lands on the first
+	// unanswered step.
+	QuestionView  map[string]int    `json:"question_view"`
+	QuestionOther map[string]string `json:"question_other"`
+
 	// Explanations are the agent's walkthroughs of the change (#115,
 	// .prereview/explain.jsonl), newest last, grounded by applyExplain. Re-read
 	// like Quizzes, never persisted. ExplainSeen is explain.jsonl's fingerprint at
@@ -878,6 +895,12 @@ func (s PrereviewState) ResolvedCount() int {
 	n := 0
 	for _, c := range s.scopedComments() {
 		if c.Resolved {
+			n++
+		}
+	}
+	// Resolved question sets follow the same toggle (questionCards).
+	for _, set := range s.scopedQuestionSets() {
+		if s.QuestionStatus[set.ID].Resolved {
 			n++
 		}
 	}

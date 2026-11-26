@@ -34,6 +34,8 @@ func (c *PrereviewController) navGo(state PrereviewState, delta int) (PrereviewS
 			state.scrollToSuggestion(pos.ID, pos.Line)
 		case navQuiz:
 			state.ScrollToItemKey = "qz:" + pos.ID
+		case navQuestion:
+			state.scrollToQuestion(pos.ID, pos.Line)
 		}
 		revealItem(&state, *it)
 	}

@@ -482,12 +482,13 @@ func TestQuizResultsWholeChange(t *testing.T) {
 		}}},
 		QuizAnswers: map[string]QuizAnswer{answerKey("w", "q2"): {QuizID: "w", QuestionID: "q2", Choice: 1}},
 	}
-	if got := fmt.Sprint(s.QuizResults()); got != "[{ w true 1 2}]" {
-		t.Errorf("results = %s, want [{ w true 1 2}]", got)
+	// Answers and Threads are empty here: the questions have no options, and no thread.
+	if got := fmt.Sprint(s.QuizResults()); got != "[{ w true 1 2 [] []}]" {
+		t.Errorf("results = %s, want [{ w true 1 2 [] []}]", got)
 	}
 	s.SingleFile = "a.go"
-	if got := fmt.Sprint(s.QuizResults()); got != "[{ w false 0 1}]" {
-		t.Errorf("single-file results = %s, want [{ w false 0 1}]", got)
+	if got := fmt.Sprint(s.QuizResults()); got != "[{ w false 0 1 [] []}]" {
+		t.Errorf("single-file results = %s, want [{ w false 0 1 [] []}]", got)
 	}
 }
 
@@ -511,5 +512,34 @@ func TestQuizPending(t *testing.T) {
 	s.Comments[0].Processed = true
 	if s.QuizPending() {
 		t.Error("a request the agent marked done is no longer pending")
+	}
+}
+
+// TestQuizResults_AnswersAndThreads (P6): the snapshot's quiz row carries each
+// answer's picked option and whether it was right, and a question whose thread
+// ends with the reviewer, so the agent can answer it.
+func TestQuizResults_AnswersAndThreads(t *testing.T) {
+	s := PrereviewState{
+		Quizzes: []Quiz{{ID: "z", File: "a.go", Questions: []Question{
+			{ID: "q1", Options: []string{"yes", "no"}, Answer: 0},
+			{ID: "q2", Options: []string{"red", "blue"}, Answer: 1},
+		}}},
+		QuizAnswers: map[string]QuizAnswer{
+			answerKey("z", "q1"): {QuizID: "z", QuestionID: "q1", Choice: 1},
+		},
+		ThreadEntries: []ThreadEntry{{TargetID: QuizThreadID("z", "q2"), Author: AuthorReviewer, Body: "option 2 is ambiguous", At: 1}},
+	}
+	r := s.QuizResults()
+	if len(r) != 1 {
+		t.Fatalf("results = %+v", r)
+	}
+	if a := r[0].Answers; len(a) != 1 || a[0].Question != "q1" || a[0].Picked != "no" || a[0].Correct {
+		t.Errorf("answers = %+v, want q1 picked no, wrong", a)
+	}
+	if th := r[0].Threads; len(th) != 1 || th[0].Question != "q2" || th[0].Thread[0].Body != "option 2 is ambiguous" {
+		t.Errorf("threads = %+v, want q2's reply", th)
+	}
+	if n := s.AwaitingReplyCount(); n != 1 {
+		t.Errorf("AwaitingReplyCount = %d, want the quiz reply counted", n)
 	}
 }

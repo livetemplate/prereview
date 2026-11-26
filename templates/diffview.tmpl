@@ -40,21 +40,17 @@
            composing-marker must also match the SELECTED side, or they render
            on both rows. */ -}}
     {{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end -}}
-    {{- /* #151: how many comments / suggestions render on THIS row (this line, this
-           side)? CommentCountLines/SuggestionCountLines are keyed "<line>-<side>" and
-           are built from the SAME filtered maps the card ranges below render, so a
-           badge's number matches what actually renders on the row (never both
-           old+new). $hasComment/$hasSuggestion (count>0) drive the #136 presence gate.
+    {{- /* #151: how many annotations, of any kind, render on THIS row (this line, this
+           side)? AnnotationCountLines is keyed "<line>-<side>" and built from the SAME
+           filtered maps the card ranges below render (lineAnnotations), so a badge's
+           number matches what actually renders on the row (never both old+new).
+           $hasMarks (count>0) drives the #136 presence gate.
            A zero-arg map lookup — NOT an assign-inside-range, which breaks the
            framework's live render. */ -}}
     {{$rowkey := printf "%d-%s" $ln $lside -}}
-    {{$commentCount := index $.CommentCountLines $rowkey -}}
-    {{$suggestionCount := index $.SuggestionCountLines $rowkey -}}
-    {{$hasComment := gt $commentCount 0 -}}
-    {{$hasSuggestion := gt $suggestionCount 0 -}}
-    {{$hasQuiz := gt (index $.QuizCountLines $rowkey) 0 -}}
+    {{$hasMarks := gt (index $.AnnotationCountLines $rowkey) 0 -}}
     {{$lkey := printf "L%d-%d" .OldNum .NewNum -}}
-    <div class="line-row{{if or $hasComment $hasSuggestion $hasQuiz}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
+    <div class="line-row{{if $hasMarks}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">
       {{- /* #115: a walkthrough step starts here. Above the line, inside the row,
              so the row keeps its key and stays out of the folds (VisibleLines). */ -}}
       {{- $rm := index $.RowMarks $lkey}}{{if $rm}}{{if $rm.Step}}<div class="step-mark">{{$rm.Step.Label}}{{range $rm.Step.Risks}} <span class="ck-pill ck-fail risk-chip">{{.}}</span>{{end}}</div>{{end}}{{if $rm.Move}}<form method="POST" class="move-mark"><input type="hidden" name="file" value="{{$rm.Move.File}}"><input type="hidden" name="side" value="{{$rm.Move.Side}}"><input type="hidden" name="line" value="{{$rm.Move.Line}}"><button type="submit" name="jumpToAnchor" class="move-jump" title="Go to the other end of the move">{{$rm.Move.Label}}</button></form>{{end}}{{if $rm.Moved}}<i class="moved-flag" aria-hidden="true"></i>{{end}}{{if $rm.Since}}<i class="since-flag" aria-hidden="true"></i>{{end}}{{end}}
@@ -86,7 +82,7 @@
              re-render (#173). lvt-el keeps the tap instant; the server render converges.
              Sibling of .line so the click can't bubble to selectLine; sits in the reserved
              right padding. */ -}}
-      {{- if or $hasComment $hasSuggestion $hasQuiz -}}
+      {{- if $hasMarks -}}
       <span class="line-margin">
         <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}"
                 lvt-on:click="toggleRow"
@@ -110,6 +106,8 @@
       {{- /* quiz questions anchored to this line (#191) — an annotation like the
              two above, so the code the question asks about IS its context */ -}}
       {{- range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end -}}
+      {{- /* the agent's questions about this line (prereview ask) */ -}}
+      {{- range (index $.QuestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "questionCard" .}}{{end}}{{end -}}
       {{- /* the selected check's findings ending on this row (new side only — keyed
              by $rowkey, so a del row never matches) */ -}}
       {{- range (index $.FindingsByRow $rowkey)}}{{template "findingCard" .}}{{end -}}

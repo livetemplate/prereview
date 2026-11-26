@@ -2029,33 +2029,19 @@ header.file-head .file-head-comment button svg { display: block; }
   background: var(--accent);
   box-shadow: 0 0 0 1.5px var(--surface);
 }
-/* #165: HANDLED annotations auto-collapse to their state badge, so the document reads clean
-   once work is done — a RESOLVED comment or an ACCEPTED/REJECTED suggestion tucks behind its
-   badge (accented-yellow while accepted-but-unapplied, green once applied/rejected/resolved).
-   Everything still PENDING stays visible inline: an unresolved comment, an UNDECIDED
-   suggestion (so a proposed edit is right there to accept), and a suggestion awaiting the
-   agent — being reverted (sg-revert). Collapsed cards are
-   reachable by clicking the badge (`.row-toggled`) or globally via "Show resolved"
-   (.show-resolved). The M4 status/revert controls live inside the revealed card.
-   #171: `.is-applied` collapses too, and NOT only via sg-accept. The agent can apply an
-   edit the reviewer never accepted (applied != decided), which carries is-applied but no
-   sg-* class — so without this it never collapsed and its badge stayed amber "open"
-   forever, even though the edit was already in the file. Applied is terminal. */
-.code .inline-comment.is-resolved,
-.code .inline-suggestion.sg-accept,
-.code .inline-suggestion.sg-reject,
-.code .inline-suggestion.is-applied,
-.md-view .inline-comment.is-resolved,
-.md-view .inline-suggestion.sg-accept,
-.md-view .inline-suggestion.sg-reject,
-.md-view .inline-suggestion.is-applied,
-.past-eof .inline-comment.is-resolved,
-.past-eof .inline-suggestion.sg-accept,
-.past-eof .inline-suggestion.sg-reject,
-.past-eof .inline-suggestion.is-applied { display: none; }
+/* #165: HANDLED annotations collapse to their row's badge, so the document reads
+   clean once work is done. Every card carries `.is-closed` when its work is done: a
+   resolved comment or question, a decided or applied suggestion (#171: applied
+   counts even when the reviewer never accepted it), a settled quiz question. Open
+   work stays inline. A collapsed card comes back with its row's badge
+   (`.row-toggled`) or "Show resolved" (`.show-resolved`). One class, so these
+   fold rules are one list for every kind. */
+.code .is-closed,
+.md-view .is-closed,
+.past-eof .is-closed { display: none; }
 /* #212: an answered quiz question (answered before this visit — `is-settled`) is done
    work, so it folds behind the row's green badge like a resolved comment. The server
-   already said so (QuizOpenLines → collapsed, badge is-done); this is the half that was
+   already said so (lineAnnotations: not Showing → collapsed, badge is-done); this is the half that was
    missing, so every taken quiz reopened fully expanded. A question answered THIS visit is
    not settled and stays open with its explanation (QuizJustAnswered). */
 .quiz-card.is-settled { display: none; }
@@ -2066,42 +2052,12 @@ header.file-head .file-head-comment button svg { display: block; }
    `.row-toggled` is emitted by the SERVER (state.ToggledRows). It used to be a client-only
    class, which meant the next re-render morphed it away and silently re-collapsed a card the
    reviewer had just opened (#173). */
-.line-row.row-toggled .quiz-card:not(.is-settled),
-.md-block.row-toggled .quiz-card:not(.is-settled),
-.file-head-marks.row-toggled .file-head-cards > .quiz-card:not(.is-settled),
-.line-row.row-toggled .inline-comment:not(.is-resolved),
-.line-row.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
-.md-block.row-toggled .inline-comment:not(.is-resolved),
-.md-block.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied),
-.past-eof.row-toggled .inline-comment:not(.is-resolved),
-.past-eof.row-toggled .inline-suggestion:not(.sg-accept):not(.sg-reject):not(.is-applied) { display: none; }
-.line-row.row-toggled .quiz-card.is-settled,
+:is(.line-row, .md-block, .past-eof).row-toggled :is(.inline-comment, .inline-suggestion, .quiz-card, .question-card):not(.is-closed),
+.file-head-marks.row-toggled .file-head-cards > :is(.quiz-card, .question-card):not(.is-closed) { display: none; }
+:is(.line-row, .md-block, .past-eof).row-toggled .is-closed,
 .file-head-marks.row-toggled .file-head-cards > .quiz-card.is-settled,
 .layout.show-resolved .quiz-card.is-settled,
-.line-row.row-toggled .inline-comment.is-resolved,
-.line-row.row-toggled .inline-suggestion.sg-accept,
-.line-row.row-toggled .inline-suggestion.sg-reject,
-.line-row.row-toggled .inline-suggestion.is-applied,
-.md-block.row-toggled .inline-comment.is-resolved,
-.md-block.row-toggled .inline-suggestion.sg-accept,
-.md-block.row-toggled .inline-suggestion.sg-reject,
-.md-block.row-toggled .inline-suggestion.is-applied,
-.past-eof.row-toggled .inline-comment.is-resolved,
-.past-eof.row-toggled .inline-suggestion.sg-accept,
-.past-eof.row-toggled .inline-suggestion.sg-reject,
-.past-eof.row-toggled .inline-suggestion.is-applied,
-.layout.show-resolved .past-eof .inline-comment.is-resolved,
-.layout.show-resolved .past-eof .inline-suggestion.sg-accept,
-.layout.show-resolved .past-eof .inline-suggestion.sg-reject,
-.layout.show-resolved .past-eof .inline-suggestion.is-applied,
-.layout.show-resolved .code .inline-comment.is-resolved,
-.layout.show-resolved .code .inline-suggestion.sg-accept,
-.layout.show-resolved .code .inline-suggestion.sg-reject,
-.layout.show-resolved .code .inline-suggestion.is-applied,
-.layout.show-resolved .md-view .inline-comment.is-resolved,
-.layout.show-resolved .md-view .inline-suggestion.sg-accept,
-.layout.show-resolved .md-view .inline-suggestion.sg-reject,
-.layout.show-resolved .md-view .inline-suggestion.is-applied { display: block; }
+.layout.show-resolved :is(.code, .md-view, .past-eof) .is-closed { display: block; }
 /* #218: annotations past the end of a shrunk file. A separated block after the last
    line; its head row carries the shared fold badge, right-aligned like the file head. */
 .past-eof {
@@ -2133,7 +2089,9 @@ header.file-head .file-head-comment button svg { display: block; }
 .layout.marks-hidden .code .inline-suggestion,
 .layout.focus-mode .code .inline-suggestion,
 .layout.marks-hidden .code .sg-hidden-marker,
-.layout.focus-mode .code .sg-hidden-marker { display: none; }
+.layout.focus-mode .code .sg-hidden-marker,
+.layout.marks-hidden .code .question-card,
+.layout.focus-mode .code .question-card { display: none; }
 /* With the badges gone, reclaim their reserved right padding. */
 .layout.marks-hidden .code .line-row.has-line-marks .content,
 .layout.focus-mode .code .line-row.has-line-marks .content { padding-right: 0; }
@@ -2643,7 +2601,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
    red→green before/after mini-diff shows the change. Read-only in Phase 1 — the
    accept/reject action row arrives in Phase 2. Themes across schemes×modes
    via the --accent / --pr-add / --pr-del tokens (never hard-coded). */
-.inline-suggestion {
+.inline-suggestion,
+.question-card {
   margin: 0.45rem 0.4rem; padding: 0.5rem 0.7rem;
   background: color-mix(in srgb, var(--accent) 8%, var(--pr-comment-bg));
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--pr-comment-bd));
@@ -2653,15 +2612,18 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   font-family: var(--sans);
   font-size: 0.82rem; line-height: 1.5;
 }
-.inline-suggestion > header {
+.inline-suggestion > header,
+.question-card > header {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem;
   color: var(--text-muted); margin-bottom: 0.4rem;
 }
-.inline-suggestion .sg-label {
+.inline-suggestion .sg-label,
+.question-card .sg-label {
   display: inline-flex; align-items: center; gap: 0.3rem;
   font-weight: 600; color: var(--accent);
 }
-.inline-suggestion .sg-label svg { flex: none; }
+.inline-suggestion .sg-label svg,
+.question-card .sg-label svg { flex: none; }
 .inline-suggestion .sg-note { margin-bottom: 0.45rem; }
 .inline-suggestion .sg-diff {
   display: flex; flex-direction: column; gap: 2px;
@@ -2690,7 +2652,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   border-left-width: 4px;
   background: color-mix(in srgb, var(--accent) 13%, var(--pr-comment-bg));
 }
-.inline-suggestion .sg-group-tag {
+.inline-suggestion .sg-group-tag,
+.question-card .sg-group-tag {
   font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -2698,16 +2661,20 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 }
 /* Hide controls — a quiet declutter affordance floated to the header's right edge,
    so it never competes with the accept/reject buttons below. */
-.inline-suggestion .sg-hide-actions {
+.inline-suggestion .sg-hide-actions,
+.question-card .sg-hide-actions {
   float: right; display: inline-flex; gap: 0.5rem; margin-left: 0.5rem;
 }
-.inline-suggestion .sg-hide-actions form { display: inline; margin: 0; }
+.inline-suggestion .sg-hide-actions form,
+.question-card .sg-hide-actions form { display: inline; margin: 0; }
 .inline-suggestion .sg-hide-btn,
+.question-card .sg-hide-btn,
 .sg-hidden-marker .sg-hide-btn {
   width: auto; margin: 0; padding: 0; border: 0; background: none; box-shadow: none;
   font-size: 0.72rem; color: var(--pico-muted-color); cursor: pointer; line-height: 1.2;
 }
 .inline-suggestion .sg-hide-btn:hover,
+.question-card .sg-hide-btn:hover,
 .sg-hidden-marker .sg-hide-btn:hover { color: var(--accent); text-decoration: underline; }
 /* #204 ripple: the comment's follow-on suggestions, one row of actions. */
 .ripple-row {
@@ -3049,7 +3016,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   opacity: 0.7;
 }
 .inline-comment.is-resolved .body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
-.inline-comment .resolved-badge {
+.inline-comment .resolved-badge,
+.question-card .resolved-badge {
   background: var(--pr-add-bg); color: var(--pr-add);
   padding: 0 0.35rem; border-radius: 999px; font-weight: 600;
   font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
@@ -3071,12 +3039,16 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .inline-comment .req-prompt .req-more { color: var(--pico-primary); font-size: 0.85em; white-space: nowrap; }
 .inline-comment .req-prompt .req-more::after { content: "Read more"; }
 .inline-comment .req-prompt[open] .req-more::after { content: "Show less"; }
-.inline-comment .ic-actions { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
-.inline-comment .ic-actions button {
+.inline-comment .ic-actions,
+.question-card .ic-actions { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
+.inline-comment .ic-actions button,
+.question-card .ic-actions button {
   padding: 0.15rem 0.5rem; font-size: 0.72rem; margin: 0;
   min-height: 26px; min-width: auto; line-height: 1.2;
 }
-.inline-comment .ic-actions form { margin: 0; }
+.inline-comment .ic-actions form,
+.question-card .ic-actions form { margin: 0; }
+.question-replaced { margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--pico-muted-color); }
 /* #149 conversation thread — agent replies (and, later, reviewer replies) rendered
    under a comment/suggestion. Each entry is a small card indented from the left with
    an author-coloured rail; the agent's uses --accent, the reviewer's the muted colour. */
@@ -3091,7 +3063,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.03em; color: var(--pico-muted-color);
 }
-.thread-agent .thread-author { color: var(--accent); }
+.thread-agent .thread-author,
+.question-card .thread-author { color: var(--accent); }
 .thread-when { font-size: 0.66rem; color: var(--pico-muted-color); }
 .thread-body { white-space: pre-wrap; word-break: break-word; font-size: 0.82rem; }
 /* #149 reviewer reply form + the awaiting-agent badge. */
@@ -3892,6 +3865,49 @@ dialog#files-drawer .file-row > .viewed-changed {
 /* The stepper centres its target, and the sticky bar sits above it: keep a quiz
    card clear of the bar when the head is scrolled to. */
 .quiz-card { scroll-margin-top: 7rem; }
+/* The agent's question (questionCard, `prereview ask`): a card like a quiz
+   question's, with options sized as 44px tap targets, the recommended one
+   outlined, and a step row when the set has several questions. */
+.question-card { white-space: normal; scroll-margin-top: 7rem; }
+/* In a comment's thread the card is the agent's reply: flush with the thread,
+   no outer margin or shadow of its own. */
+.inline-comment .question-card { margin: 0.4rem 0 0.2rem; box-shadow: none; }
+/* ...and its header keeps the question card's layout, not the comment
+   header's space-between. */
+.inline-comment .question-card > header { justify-content: flex-start; font-weight: 400; }
+.question-card.is-resolved { opacity: 0.7; border-left-color: var(--pico-muted-color); }
+.question-prompt { font-weight: 600; margin: 0.2rem 0 0.45rem; color: var(--text-strong); }
+.question-hint { font-weight: 400; color: var(--pico-muted-color); }
+.question-options { display: flex; flex-direction: column; gap: 0.35rem; }
+.question-option-form, .question-inline { margin: 0; }
+/* Scoped to the card: inside the diff, `.code form { display: block }` would
+   otherwise put Change on a line of its own. */
+.question-card .question-inline { display: inline; }
+.question-option {
+  display: block; width: 100%; min-height: 44px; margin: 0; padding: 0.45rem 0.65rem;
+  text-align: left; font: inherit; color: inherit;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+}
+.question-option:hover, .question-option.is-recommended { border-color: var(--accent); }
+.question-option.is-picked { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.question-option.is-other { color: var(--pico-muted-color); }
+.question-option.is-other.is-picked { color: inherit; }
+.question-option-label { font-weight: 600; }
+.question-option-detail { display: block; font-size: 0.8rem; color: var(--pico-muted-color); font-weight: 400; }
+.question-rec { float: right; margin-left: 0.4rem; font-size: 0.68rem; font-weight: 700; color: var(--accent); }
+.question-box { display: inline-block; width: 14px; height: 14px; margin-right: 0.4rem; vertical-align: -2px; border: 1.5px solid var(--pico-muted-color); border-radius: 3px; }
+.question-option.is-picked .question-box { background: var(--accent); border-color: var(--accent); }
+.question-other { display: flex; flex-direction: column; gap: 0.3rem; margin: 0; padding: 0.45rem 0.65rem; border: 1px solid var(--accent); border-radius: var(--radius-md); background: var(--surface); }
+.question-other textarea { min-height: 4rem; margin: 0; font-size: 0.9rem; }
+.question-steps { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
+.question-step { margin: 0; padding: 0.1rem 0.6rem; min-height: 28px; font-size: 0.75rem; border-radius: 999px; background: var(--surface); color: var(--pico-muted-color); border: 1px solid var(--border-strong); width: auto; }
+.question-step.is-answered { color: var(--text-strong); }
+.question-step.is-current { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+.question-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.45rem; }
+.question-actions button { width: auto; margin: 0; padding: 0.3rem 0.9rem; font-size: 0.85rem; min-height: 36px; }
+.question-card button.question-link { margin-left: 0.5rem; font-size: 0.8rem; }
+.question-answer { margin: 0.1rem 0 0.2rem; }
+
 
 /* The file-head annotation group. It reuses .line-marks — the same badge a diff
    row shows — so collapsing a file comment, an area comment or an unanchored quiz

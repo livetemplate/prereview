@@ -93,6 +93,10 @@ type StreamEvent struct {
 	// without one. Omitted entirely when no quiz exists, so the snapshot shape is
 	// unchanged for every review that doesn't use the feature.
 	Quizzes []StreamQuiz `json:"quizzes,omitempty"` // ready / snapshot
+	// Questions are the agent's question sets the reviewer has answered and the
+	// agent has not marked done (actionableQuestions). Omitted when there are
+	// none, so a review that never asks keeps the snapshot it had.
+	Questions []StreamQuestion `json:"questions,omitempty"` // snapshot
 	// SkillUpdated is set on the `ready` event when this launch refreshed the
 	// installed prereview skill to match the (possibly self-updated) binary — so
 	// the agent's loaded skill is now stale. The agent should re-read the skill
@@ -257,6 +261,25 @@ type StreamQuiz struct {
 	Taken  bool   `json:"taken"`
 	Score  int    `json:"score"`
 	Total  int    `json:"total"`
+	// Answers is each answered question: the option picked and whether it was
+	// right, so the agent can see what the reviewer misread.
+	Answers []StreamQuizAnswer `json:"answers,omitempty"`
+	// Threads carries each question whose thread ends with the reviewer: a reply
+	// for the agent to answer (`prereview reply "<quizID>:<questionID>"`).
+	Threads []StreamQuizThread `json:"threads,omitempty"`
+}
+
+// StreamQuizAnswer is the reviewer's answer to one quiz question.
+type StreamQuizAnswer struct {
+	Question string `json:"question"`
+	Picked   string `json:"picked"`
+	Correct  bool   `json:"correct"`
+}
+
+// StreamQuizThread is a quiz question's conversation, by question id.
+type StreamQuizThread struct {
+	Question string        `json:"question"`
+	Thread   []StreamReply `json:"thread"`
 }
 
 // StreamReply is one consumer-facing thread entry (#149): who said it, what, when.
@@ -423,10 +446,10 @@ func (e *EventStream) EmitReady(repo, csvPath string, paused, skillUpdated bool,
 // (`[]` when nothing is actionable). decided is the fingerprint-matched decision
 // map (state.DecisionsBySuggestion) — only decided, non-outdated suggestions ship.
 // writeWith is the skills per kind of agent text (skills.WriteWith).
-func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, quizzes []StreamQuiz, writeWith map[string][]string, paused bool, ts time.Time) error {
+func (e *EventStream) EmitSnapshot(comments []Comment, suggestions []Suggestion, decided map[string]SuggestionDecision, threadByID map[string][]ThreadEntry, applied map[string]bool, quizzes []StreamQuiz, questions []StreamQuestion, writeWith map[string][]string, paused bool, ts time.Time) error {
 	csnap := actionableComments(comments, threadByID)
 	dsnap := actionableDecisions(suggestions, decided, threadByID, applied)
-	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Quizzes: quizzes, WriteWith: writeWith, Paused: paused}, ts)
+	return e.emit(StreamEvent{Event: "snapshot", Comments: &csnap, Suggestions: &dsnap, Quizzes: quizzes, Questions: questions, WriteWith: writeWith, Paused: paused}, ts)
 }
 
 // EmitFilesChanged tells the agent that reviewed files changed under it (#213),

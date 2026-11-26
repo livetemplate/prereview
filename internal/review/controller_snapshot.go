@@ -28,7 +28,8 @@ func (c *PrereviewController) flushSnapshot(state *PrereviewState) error {
 		// SCOPED slices (#171) — the agent must not be handed the previous file's work.
 		// persist() above deliberately saves the FULL state.Comments: it's the tab's
 		// copy of every row, and scoping it would hide other files' rows from this tab.
-		if err := c.Emitter.EmitSnapshot(state.scopedComments(), state.scopedSuggestions(), state.DecisionsBySuggestion(), state.Threads(), state.Applied, state.QuizResults(), c.WriteWith(), c.isPaused(), time.Now()); err != nil {
+		c.applyQuestionAnswers(state) // the agent's latest done marks
+		if err := c.emitSnapshotOf(state); err != nil {
 			return fmt.Errorf("emit snapshot event: %w", err)
 		}
 	}

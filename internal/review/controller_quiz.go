@@ -166,6 +166,7 @@ func (c *PrereviewController) AnswerQuestion(state PrereviewState, ctx *livetemp
 		state.QuizJustAnswered = map[string]bool{}
 	}
 	state.QuizJustAnswered[answerKey(quizID, questionID)] = true
+	c.scheduleEmit() // the agent sees the answer in its next snapshot
 	return state, nil
 }
 
@@ -184,6 +185,7 @@ func (c *PrereviewController) RetakeQuiz(state PrereviewState, ctx *livetemplate
 	if err := saveQuizAnswers(c.quizAnswersPath(), state.QuizAnswers); err != nil {
 		return state, fmt.Errorf("persist quiz retake: %w", err)
 	}
+	c.scheduleEmit()
 	return state, nil
 }
 

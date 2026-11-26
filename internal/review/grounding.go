@@ -154,6 +154,7 @@ func (c *PrereviewController) lazyCitable(state *PrereviewState) func() *citable
 func (c *PrereviewController) groundUnderstand(state *PrereviewState) {
 	files := c.lazyCitable(state)
 	c.groundQuizzes(state, files)
+	c.groundQuestions(state, files)
 	c.applyExplainWith(state, files)
 	state.Moves = nil
 	if f := files(); f != nil {

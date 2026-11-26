@@ -3,6 +3,8 @@
 {{- range index $.BlockComments $key -}}
   {{- template "commentCardFull" . -}}
 {{- end -}}
+{{- range index $.BlockQuestions $key}}{{template "questionCard" .}}{{end -}}
+{{- range index $.BlockQuizItems $key}}{{template "quizCard" .}}{{end -}}
 {{- if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be) -}}
 {{template "composer" $}}
 {{- end}}
@@ -264,6 +266,9 @@
   {{- if .AwaitingPickCount}}
   <p class="end-warn end-warn-pick" role="alert"><small><strong>{{.AwaitingPickCount}} fork{{if ne .AwaitingPickCount 1}}s{{end}} awaiting your pick.</strong> The agent offered alternatives and is waiting for you to accept one. Ending now leaves {{if eq .AwaitingPickCount 1}}that comment{{else}}those comments{{end}} unaddressed.</small></p>
   {{- end}}
+  {{- if .AwaitingAnswerCount}}
+  <p class="end-warn end-warn-pick end-warn-answer" role="alert"><small><strong>{{.AwaitingAnswerCount}} question{{if ne .AwaitingAnswerCount 1}}s{{end}} waiting for your answer.</strong> The agent asked and is waiting for you to choose. Ending now leaves {{if eq .AwaitingAnswerCount 1}}it{{else}}them{{end}} unanswered.</small></p>
+  {{- end}}
   {{- /* */ -}}
   <footer>
     <form method="POST">
@@ -325,7 +330,7 @@
 {{define "sourceBadge"}}<small class="source-badge" title="Imported from {{.Name}}">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{with .Author}} · {{.}}{{end}}</small>{{end}}
 
 {{define "commentCardFull" -}}
-<div class="inline-comment{{if .Resolved}} is-resolved{{end}}{{if .AnchorOutdated}} is-outdated{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}"
+<div class="inline-comment{{if .Resolved}} is-resolved is-closed{{end}}{{if .AnchorOutdated}} is-outdated{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}"
      data-key="{{.ID}}"
      lvt-fx:animate="fade"
      {{- /* the targeted comment (just saved, or jumped to via n/p) scrolls into
@@ -362,7 +367,7 @@
   {{- with index $.RippleByComment .ID}}<div class="ripple-row" role="group" aria-label="Follow-on edits"><span class="ripple-count">Follow-on edits: {{.Open}} open of {{.Total}}</span>{{if .Acceptable}}<form method="POST"><button type="submit" name="acceptRipple" value="{{.CommentID}}" class="accept">Accept all</button></form>{{end}}{{if .Open}}<form method="POST"><button type="submit" name="rejectRipple" value="{{.CommentID}}" class="outline reject">Reject all</button></form>{{end}}{{if .NeedPick}}<small class="ripple-pick">{{.NeedPick}} set{{if gt .NeedPick 1}}s{{end}} of alternatives need{{if eq .NeedPick 1}}s{{end}} your pick</small>{{end}}</div>{{end -}}
   {{- /* #149 conversation thread — the agent's replies ("what I did") + the
          reviewer's follow-ups, rendered under the body. Empty → nothing renders. */ -}}
-  {{- template "thread" (index $.Threads .ID) -}}
+  {{- template "thread" (index $.ThreadViews .ID) -}}
   {{- /* #149 reviewer reply — the inline form when open on this card. */ -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
@@ -438,14 +443,33 @@
 {{- if . -}}
 <div class="thread">
   {{- range . -}}
-  <div class="thread-entry thread-{{.Author}}">
-    <div class="thread-meta"><span class="thread-author">{{.Who}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
-    <div class="thread-body">{{.Body}}</div>
-  </div>
+  {{- /* a question set the agent asked here (ask --for) is its reply, in time order */ -}}
+  {{- if .Question}}{{template "questionCard" .Question}}{{else -}}
+  {{template "threadEntry" .}}
+  {{- end}}
   {{- end -}}
 </div>
 {{- end -}}
 {{- end}}
+
+{{/* replies — a question card's own thread: the replies alone. A set is never
+     asked in another set's thread, and a separate partial keeps "thread" →
+     "questionCard" from recursing: livetemplate leaves a recursive call
+     un-inlined, which rebinds $ to the argument. */}}
+{{define "replies" -}}
+{{- if . -}}
+<div class="thread">
+  {{- range . -}}
+  {{template "threadEntry" .}}
+  {{- end -}}
+</div>
+{{- end -}}
+{{- end}}
+
+{{define "threadEntry"}}<div class="thread-entry thread-{{.Author}}">
+    <div class="thread-meta"><span class="thread-author">{{.Who}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
+    <div class="thread-body">{{.Body}}</div>
+  </div>{{end}}
 
 {{/* suggestionCard — one LLM-proposed edit (issue #98), rendered inline like a
      comment but visually distinct (sparkle icon, accent-tinted chrome, a
@@ -459,7 +483,7 @@
 {{$d := index $.DecisionsBySuggestion .ID -}}
 {{$applied := index $.Applied .ID -}}
 {{$g := index $.SuggestionGroups .ID -}}
-<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}"
+<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}{{if or $d.Verdict $applied}} is-closed{{end}}"
      data-key="sg-{{.ID}}"
      {{- if eq $.ScrollToItemKey (printf "sg:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}
      lvt-fx:animate="fade">
@@ -493,7 +517,7 @@
   <details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{- .OriginalText -}}</pre></details>
   {{- end -}}
   {{- /* #149 conversation thread — the agent's replies + reviewer follow-ups. */ -}}
-  {{- template "thread" (index $.Threads .ID) -}}
+  {{- template "thread" (index $.ThreadViews .ID) -}}
   {{- /* #149 reviewer reply — inline form when open, else a Reply button. */ -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
@@ -559,7 +583,7 @@
          renders. A file/area comment has no line anchor, but its thread is keyed by
          comment ID like any other, so the agent's "what I did" replies and the
          reviewer's follow-ups belong here too (#167). */ -}}
-  {{- template "thread" (index $.Threads .ID) -}}
+  {{- template "thread" (index $.ThreadViews .ID) -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
   {{- end -}}
@@ -617,7 +641,7 @@
 <span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>
 {{- end -}}
 {{- end}}
-{{define "quizCard"}}<div class="quiz-card{{if .Answered}} is-answered{{end}}{{if .Settled}} is-settled{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
+{{define "quizCard"}}<div class="quiz-card{{if .Answered}} is-answered{{end}}{{if .Settled}} is-settled is-closed{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
   {{/* The scroll target is the HEAD, not the card: the client centres whatever it
        scrolls to, and a card with four options is taller than a phone screen — so
        centring the card put the question itself off the top of the viewport. */}}
@@ -662,6 +686,72 @@
   <form method="POST" class="quiz-card-actions"><input type="hidden" name="id" value="{{.ThreadID}}"><button type="submit" name="openReply" class="outline quiz-reply-btn">Reply</button></form>
   {{end}}
 </div>
+{{end}}
+
+{{/* questionCard — a question set the agent asked (`prereview ask`): the step on
+     screen with its options, a tab per question and Submit, or once sent, the answer in one line.
+     `.` is a QuestionCard; $card keeps it inside the ranges. Each option is its own
+     POST form, as on the quiz card. */}}
+{{define "questionCard"}}{{$card := .}}{{- if .Hidden}}<form method="POST" class="sg-hidden-marker question-hidden-marker" data-key="question-{{.ID}}"><input type="hidden" name="id" value="{{.ID}}"><span class="sg-hidden-label">1 hidden question</span> <button type="submit" name="showQuestion" class="sg-hide-btn">Show</button></form>
+{{- else}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}{{if .Resolved}} is-resolved is-closed{{end}}{{if .Replaced}} is-replaced{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}">
+  {{- /* label · step count · line span · status badges, Hide at the right: the
+         suggestion card's header, since the agent wrote this card too. In a
+         thread it is the agent's reply, so it takes a reply's header instead. */ -}}
+  <header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>{{if .InThread}}<span class="thread-author">agent</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}{{else}}<span class="sg-label">{{template "iconQuiz"}} question</span>{{end}}
+    {{- if gt .StepCount 1}} <small class="sg-group-tag">{{.StepCount}} questions</small>{{end}}{{if not .InThread}} · <small>{{.AnchorLabel}}</small>{{end}}
+    {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
+    {{- if .Replaced}} · <small class="resolved-badge">replaced</small>{{end}}
+    {{- if .Done}} · {{template "processedBadge"}}{{end}}
+    {{- if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}
+    {{- if and .Ungrounded (not .InThread)}} · <small class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ not in this diff</small>{{end}}
+    {{- if not .InThread}}<span class="sg-hide-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideQuestion" class="sg-hide-btn" title="Hide this question from view">Hide</button></form></span>{{end}}
+  </header>
+  {{- /* a replaced card keeps its question but drops the options: a newer
+         set in the thread took its place */ -}}
+  {{- if or .Sent .Resolved .Replaced}}
+  {{- if .Sent}}
+  <div class="question-answer">You picked <b>{{.Answer}}</b>{{if and (not .Done) (not .Resolved)}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="changeQuestionAnswers" class="ck-link question-link">Change</button></form>{{end}}</div>
+  {{- else}}
+  <p class="question-prompt">{{.FirstPrompt}}</p>
+  {{- if .Replaced}}
+  <p class="question-replaced">Replaced by a newer question below.</p>
+  {{- end}}
+  {{- end}}
+  {{- else}}
+  {{- if gt .StepCount 1}}
+  <div class="question-steps" role="tablist" aria-label="Questions">
+    {{- range .Chips}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{$card.ID}}"><input type="hidden" name="index" value="{{.Index}}"><button type="submit" name="questionStepTo" role="tab" aria-selected="{{if .Current}}true{{else}}false{{end}}" class="question-step{{if .Current}} is-current{{end}}{{if .Answered}} is-answered{{end}}">{{if .Answered}}✓ {{end}}{{.Label}}</button></form>{{end -}}
+  </div>
+  {{- end}}
+  <p class="question-prompt">{{.Step.Prompt}}{{if .Step.Multi}} <small class="question-hint">Pick any.</small>{{end}}</p>
+  <div class="question-options">
+    {{- range .Options}}
+    <form method="POST" class="question-option-form"><input type="hidden" name="set" value="{{$card.ID}}"><input type="hidden" name="step" value="{{$card.Step.ID}}"><input type="hidden" name="choice" value="{{.Index}}"><button type="submit" name="pickQuestionOption" class="question-option{{if .Recommended}} is-recommended{{end}}{{if .Picked}} is-picked{{end}}"{{if $card.Step.Multi}} aria-pressed="{{if .Picked}}true{{else}}false{{end}}"{{end}}>{{if $card.Step.Multi}}<span class="question-box" aria-hidden="true"></span>{{end}}<span class="question-option-label">{{.Label}}</span>{{if .Recommended}}<span class="question-rec">Recommended</span>{{end}}{{if .Detail}}<span class="question-option-detail">{{.Detail}}</span>{{end}}</button></form>
+    {{- end}}
+    {{- if .OtherOpen}}
+    <form method="POST" class="question-other" lvt-on:keydown="answerQuestionOther" lvt-key="Mod+Enter"><input type="hidden" name="set" value="{{.ID}}"><input type="hidden" name="step" value="{{.Step.ID}}"><label class="question-option-label" for="qo-{{.ID}}">Something else</label>
+      <textarea id="qo-{{.ID}}" name="body" required lvt-autofocus placeholder="Your answer">{{.Other}}</textarea>
+      <div class="question-actions"><button type="submit" name="closeQuestionOther" class="secondary outline" formnovalidate>Cancel</button><button type="submit" name="answerQuestionOther">Send</button></div>
+    </form>
+    {{- else}}
+    <form method="POST" class="question-option-form"><input type="hidden" name="set" value="{{.ID}}"><input type="hidden" name="step" value="{{.Step.ID}}"><button type="submit" name="openQuestionOther" class="question-option is-other{{if .Other}} is-picked{{end}}"><span class="question-option-label">{{if .Other}}{{.Other}}{{else}}Something else…{{end}}</span></button></form>
+    {{- end}}
+  </div>
+  {{- if not .OneTap}}
+  <div class="question-actions"><form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="sendQuestionAnswers"{{if not .Complete}} disabled title="Answer every question first"{{end}}>Submit</button></form></div>
+  {{- end}}
+  {{- end}}
+  {{- template "replies" .Thread -}}
+  {{- /* resolve / reply: the comment card's action row. In a thread, the
+         card it replies on carries the row. */ -}}
+  {{- if not .InThread}}
+  {{- if .ReplyingID}}{{template "replyForm" .}}{{end}}
+  <div class="ic-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="toggleQuestionResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button></form>
+    {{- if not .ReplyingID}}{{template "replyButton" .}}{{end -}}
+  </div>
+  {{- end}}
+</div>
+{{- end}}
 {{end}}
 
 {{/* replyForm — the #149 reviewer reply form, shared by every card that takes a

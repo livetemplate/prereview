@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/livetemplate/prereview/csv"
 	"github.com/livetemplate/prereview/internal/library"
 	"github.com/livetemplate/prereview/internal/review"
 )
@@ -132,43 +131,13 @@ func runReply(args []string) error {
 // AND there is nothing to validate against, it is almost always a wrong --out, so
 // that is a distinct, actionable error rather than a bare "unknown id".
 func validateReplyTarget(csvPath, id string) (isComment bool, err error) {
-	known := false
-	// cerr is intentionally SOFT: a reply targets a comment OR a suggestion, so an
-	// unreadable/missing comments.csv is only fatal when there are also no
-	// suggestions (handled by the wrong-`--out` branch below), not on its own.
-	rows, cerr := csv.Read(csvPath)
-	for _, r := range rows {
-		if r.ID == id {
-			return true, nil
-		}
+	kind, empty := review.ResolveTarget(csvPath, id)
+	switch {
+	case kind != "":
+		return kind == review.TargetComment, nil
+	case empty:
+		return false, fmt.Errorf("no comments, suggestions, quizzes or questions found at %s — is --out the review's directory?", filepath.Dir(csvPath))
 	}
-	sugs := review.LoadSuggestions(csvPath)
-	for _, s := range sugs {
-		if s.ID == id {
-			known = true
-		}
-	}
-	// ...or a quiz question (#191), addressed as "<quizID>:<questionID>" because a
-	// question id is unique only WITHIN its quiz while a thread target is global.
-	quizzes := review.LoadQuizzes(csvPath)
-	if qid, quest, ok := review.SplitQuizThreadID(id); ok {
-		for _, q := range quizzes {
-			if q.ID != qid {
-				continue
-			}
-			for _, qu := range q.Questions {
-				if qu.ID == quest {
-					known = true
-				}
-			}
-		}
-	}
-	if known {
-		return false, nil
-	}
-	if (cerr != nil || len(rows) == 0) && len(sugs) == 0 && len(quizzes) == 0 {
-		return false, fmt.Errorf("no comments, suggestions or quizzes found at %s — is --out the review's directory?", filepath.Dir(csvPath))
-	}
-	return false, fmt.Errorf("unknown id %q — not a comment, suggestion, or quiz question "+
-		"(a question is addressed as \"<quizID>:<questionID>\"; use `prereview comments --json` to list comment ids)", id)
+	return false, fmt.Errorf("unknown id %q — not a comment, suggestion, quiz question or question set "+
+		"(a quiz question is addressed as \"<quizID>:<questionID>\"; use `prereview comments --json` to list comment ids)", id)
 }

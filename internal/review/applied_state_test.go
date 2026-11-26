@@ -28,12 +28,12 @@ func TestApplied_WithoutAVerdictIsDoneNotOpen(t *testing.T) {
 	if s.suggestionAcceptedPending("s1") {
 		t.Error("applied is not accepted-pending — there is nothing left to apply")
 	}
-	if len(s.SuggestionOpenLines()) != 0 {
-		t.Errorf("SuggestionOpenLines = %v, want empty — an applied suggestion is done, not open",
-			s.SuggestionOpenLines())
+	if len(s.AnnotationOpenLines()) != 0 {
+		t.Errorf("AnnotationOpenLines = %v, want empty — an applied suggestion is done, not open",
+			s.AnnotationOpenLines())
 	}
 	// It stays COUNTED (the badge still exists, just green) — collapse is CSS, not exclusion.
-	if len(s.SuggestionCountLines()) == 0 {
+	if len(s.AnnotationCountLines()) == 0 {
 		t.Error("an applied suggestion must still be counted — it collapses behind its badge, " +
 			"it does not vanish")
 	}

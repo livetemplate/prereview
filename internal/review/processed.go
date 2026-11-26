@@ -110,18 +110,33 @@ func (c *PrereviewController) applyProcessed(state *PrereviewState) {
 // == false for every comment — which is why --all-open kept re-marking work already done.
 func applyProcessedMarks(comments []Comment, csvPath string) {
 	applyImportSources(comments, csvPath) // the other id-keyed sidecar every read path needs
-	pc := loadMarkCounts(ProcessedPath(csvPath))
+	done := doneMarks(csvPath)
 	ac := loadMarkCounts(AnsweredPath(csvPath)) // #205: a plain set, never netted
-	if len(pc) == 0 && len(ac) == 0 {
-		return
-	}
-	rc := loadMarkCounts(ReenqueuePath(csvPath)) // re-enqueue tombstones (#119)
+	// No early return on an empty done set: a re-enqueue that cancels every
+	// mark must still clear the Processed flag it set before.
 	for i := range comments {
 		id := comments[i].ID
-		// Done only while processed marks outnumber re-enqueue marks.
-		comments[i].Processed = pc[id] > rc[id]
+		comments[i].Processed = done[id]
 		comments[i].Answered = ac[id] > 0
 	}
+}
+
+// doneMarks is every id the agent marked done (`prereview done`) that is still
+// done: its processed marks outnumber its re-enqueue tombstones (#119). The
+// one rule for comments and question sets alike.
+func doneMarks(csvPath string) map[string]bool {
+	pc := loadMarkCounts(ProcessedPath(csvPath))
+	if len(pc) == 0 {
+		return nil
+	}
+	rc := loadMarkCounts(ReenqueuePath(csvPath))
+	out := make(map[string]bool, len(pc))
+	for id, n := range pc {
+		if n > rc[id] {
+			out[id] = true
+		}
+	}
+	return out
 }
 
 // reenqueueComment records a re-enqueue tombstone (#119) so a done comment moves

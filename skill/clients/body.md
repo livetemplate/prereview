@@ -51,8 +51,17 @@ instead of `done`, so it reads "answered" rather than "edited":
 
 A comment can leave a taste call open: two defensible ways, where the right one depends on
 the reviewer's audience, tone or product scope, not on anything in the code. Don't pick
-one silently. Ask with `reply --answered`, naming both options, and edit nothing until
-they answer.
+one silently, and don't ask in prose: ask with clickable options, also when data you need
+is missing. Run `prereview ask --out <STORE> --file -` with a set of one to four
+questions, each with two to four options and a `recommended` one (`prereview ask --help`
+shows the format). Park the comment with `reply --answered` ("Asked which way to go; pick
+an option.") and edit nothing until they answer. The reviewer taps an answer; read
+it with `prereview questions --out <STORE> --json` (or in a `watch` snapshot's
+`questions`): `picked` option labels, or `other`, a typed answer. Build it, `reply` on the
+set id, then `prereview done --out <STORE> <set-id>`. When the reviewer replies asking
+what the options are, or which to pick, answer the same way, not with a prose list. Set the
+set's `"for"` to the id you would `reply` on: a comment, a suggestion, or a quiz question's
+`<quiz-id>:<question-id>`.
 
 Re-run `prereview comments --json` for more (the reviewer can keep commenting);
 dedupe by `id`. Stop when the reviewer clicks End session. If your harness can
@@ -104,7 +113,8 @@ question about its file as a whole or about something absent. Never guess line
 numbers - prereview flags a cited line that is not in the diff.
 
 Then `done` the request comment and `reply` a one-line summary. The reviewer can
-reply to an individual question to query or challenge it; answer with
+reply to an individual question to query or challenge it; a `watch` snapshot's
+`quizzes[].threads` carries the reply. Answer with
 `prereview reply "<quizID>:<questionID>" --body "..."`, and re-submit the quiz
 with the same id if they are right that a question needs fixing.
 

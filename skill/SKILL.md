@@ -210,7 +210,9 @@ then look across it for:
 
 1. **Set aside requests** (`"request"` set): they are tasks, not edits. Handle each
    after the edits, as its section below says. A comment that leaves a taste call open
-   gets alternatives, not an edit (*Offer alternatives* under *Suggested edits*).
+   gets alternatives, not an edit (*Offer alternatives* under *Suggested edits*). One that
+   leaves the direction open, or lacks data you need, gets a question with options
+   (*Ask with options*).
 2. **On overlap, the later wins.** Two comments overlap when they share a file and
    lines, or one is a `kind=file` comment and the other a line in that file. When the
    later one restates, narrows or contradicts the earlier, make one edit for the later. Mark both ids `done` and
@@ -315,7 +317,8 @@ drafts, resolved rows, ids already marked and comments you answered, and prints 
 skipped.
 
 **Answered with no edit? Use `reply --answered`, not `done`.** Sometimes the right response
-is an answer — why it is the way it is — or a question back, and you change nothing.
+is an answer — why it is the way it is — and you change nothing. (To ask which way to go,
+or for data you lack, ask with options instead: see *Ask with options*.)
 `done` would tell the reviewer an edit was made; a plain `reply` leaves the comment reading
 "queued" forever. Settle it with the reply itself:
 
@@ -359,6 +362,9 @@ non-zero, like `done`). Keep it to a sentence or two.
 array — the conversation so far, oldest first, each entry `{author, body, at}`. When an
 item's **last thread entry is the reviewer's**, they've replied to steer you: read the
 thread, address their latest point, and `prereview reply` with what you changed.
+When they ask you to choose, or ask what the options are ("what other options?",
+"which is better?"), don't answer with a prose list. Ask a question set in that
+thread instead (`prereview ask` with `"for"`, see *Ask with options*).
 
 **You never re-answer yourself.** The snapshot only carries items that need you — a
 **fresh** comment, or one the **reviewer replied on last**. Once you reply, the item
@@ -463,12 +469,71 @@ whose thread ends with you reads as handled (see the `reject` rule above):
 - **One accepted**: apply it and `applied`, `done` the comment, `reply` on it which one
   you took and why, and "took `-a`" on the other card.
 - **Both rejected, or the reviewer replied on the comment instead**: with a reply, edit
-  from it and `done` the comment; with none, ask on the comment which direction they
-  want and edit nothing. Then `reply` on each card naming the comment ("superseded; reject
-  this card", or "asked on `<comment-id>`").
+  from it and `done` the comment. With none, ask which direction they want with options
+  (*Ask with options*, `for` the comment) and edit nothing. Then `reply` on each card
+  naming the comment ("superseded; reject this card", or "asked on `<comment-id>`").
 
 If the review ends with a fork unpicked, apply neither: tell the user in chat which
 comment still waits on a pick.
+
+## Ask with options (`prereview ask`)
+
+When you can't go on without the reviewer's choice, ask with clickable options instead
+of a prose question. They answer with a tap, and the answer reaches you in a snapshot.
+Ask when:
+
+- **The direction is open**: two or more reasonable ways differ in behaviour or scope,
+  and nothing in the code, the file or the comment settles it ("retry or sign out?").
+  Ask before you build either.
+- **Data is missing or ambiguous**: a value you would otherwise guess (a limit, a
+  default, a name, which apps a change covers).
+
+Don't ask what the code or the comment already answers; decide it yourself. A choice
+between two finished wordings of a passage is a fork (*Offer alternatives*), not a
+question. At most one question set per comment, and about two per batch.
+
+```bash
+prereview ask --out "<STORE>" <<'JSON'
+{"id":"<comment-id>-q","for":"<comment-id>","file":"auth/session.go","from_line":41,"to_line":42,
+ "steps":[{"id":"on-fail","prompt":"When a token refresh fails, what should happen?",
+   "options":[{"label":"Retry twice, then sign out","detail":"Covers brief network drops."},
+              {"label":"Sign out at once","detail":"Any blip sends the user to sign-in."}],
+   "recommended":0}]}
+JSON
+```
+
+- **Write it like a good picker.** Two to four options, each a short label with a
+  one-line `detail` on what it means for the user. **Always set `recommended`** to the
+  option you would pick. The reviewer can always type their own answer, so don't add
+  an "other" option.
+- **Several things to settle at once?** Put up to four questions in one set's `steps`
+  (give each a short `header`); the reviewer steps through them and sends them
+  together. Use `"multi": true` for a question with any number of answers.
+- **Anchor it** like a comment: `kind` `line` (the default) or `text` with the lines
+  it is about, or `file`. When it answers a thread, set `"for"` to the id you would
+  `reply` on: a comment's or suggestion's id, or a quiz question's `<quiz-id>:<question-id>`.
+  The set then shows in that card, as your reply: the thread no longer waits on
+  you, and its `thread` gains an `Asked: …` entry. A newer set in the same thread
+  replaces an older one the reviewer has not sent: its options go, and it stops
+  waiting on them.
+- **Park the comment** with `reply --answered` ("Asked which way to go; pick an
+  option."), and leave those lines alone until the answer comes.
+
+The next snapshot's `questions[]` carries each set the reviewer sent: `answers[]` with
+each question's `picked` option labels, or `other`, their typed answer. Then:
+
+1. Build what they picked (or what they typed).
+2. `prereview reply --out "<STORE>" <set-id> --body "…"` with one line on what you did,
+   and `prereview done --out "<STORE>" <set-id>`. `done` the comment too, if the set was
+   `for` one (a suggestion or quiz question takes only the `reply`).
+
+A set with `"resolved": true` is one the reviewer closed: build nothing new for it, and
+`done` it. A set keeps coming back until you `done` it. A set whose `thread` ends with the reviewer
+means they replied instead of picking, or with a follow-up: act on the reply. They can
+change an answer until you `done` it; the set then comes back with the new answers, so
+undo what the old one built and build the new one. Re-asking an open set's id revises it;
+after `done`, ask with a new id. A set the reviewer never answered by the end of the
+review: build nothing for it, and tell the user in chat what is still waiting on them.
 
 ## Walkthroughs (`prereview explain`, #115)
 
@@ -566,9 +631,10 @@ Make every wrong option plausible - something a careful reader might actually
 believe. A quiz you can pass without reading the diff is worthless.
 
 **The reviewer can reply to a question.** A quiz is a conversation, not a verdict:
-they may say an option is ambiguous, or that a question is wrong. Those
-replies arrive in the snapshot's `thread` exactly like a reply on a comment, and
-you answer with `prereview reply` — addressing the question by the composite id
+they may say an option is ambiguous, or that a question is wrong. Each quiz in a
+snapshot's `quizzes` carries `answers` (the option picked per question, and whether
+it was right) and `threads`: each question whose thread ends with the reviewer. You
+answer with `prereview reply` — addressing the question by the composite id
 `"<quizID>:<questionID>"`, since a question id is only unique within its quiz:
 
 ```bash

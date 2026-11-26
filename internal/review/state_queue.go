@@ -23,10 +23,12 @@ const (
 	queueDone     = "done"     // the agent marked it worked-on (processed.jsonl / applied.jsonl)
 )
 
-// Queue item kinds — a queue row is either a comment or an accepted suggestion.
+// Queue item kinds — a queue row is a comment, an accepted suggestion, or a
+// question set the reviewer submitted.
 const (
 	queueKindComment    = "comment"
 	queueKindSuggestion = "suggestion"
+	queueKindQuestion   = "question"
 )
 
 // QueueState classifies a comment for the queue view. A comment leaves the queue ("")
@@ -138,6 +140,44 @@ func (s PrereviewState) suggestionQueueState(sg Suggestion) string {
 	return "" // undecided
 }
 
+// questionQueueState classifies a question set like an accepted suggestion: a
+// set the reviewer submitted is the agent's work, queued until the agent marks
+// it done. An unsubmitted set is the reviewer's own work, so it is not queued
+// ("").
+func (s PrereviewState) questionQueueState(set QuestionSet) string {
+	switch {
+	case s.questionResolved(set):
+		return "" // closed by the reviewer, like a resolved comment
+	case s.QuestionsDone[set.ID]:
+		return queueDone
+	case questionSetSent(set, s.QuestionAnswers):
+		return queueQueued
+	}
+	return ""
+}
+
+// questionRowState is a set's queue state under the reply-reopen overlay: what
+// its Queue row and its card's badge say.
+func (s PrereviewState) questionRowState(set QuestionSet, awaiting map[string]bool) string {
+	return reopenIfReplied(s.questionQueueState(set), set.ID, awaiting)
+}
+
+// queueQuestionSets is the queue panel's question sets: this file's, or with
+// QueueGlobal the whole review's, like queueSuggestions.
+func (s PrereviewState) queueQuestionSets() []QuestionSet {
+	scoped := s.scopedQuestionSets()
+	if s.QueueGlobal {
+		return scoped
+	}
+	var out []QuestionSet
+	for _, set := range scoped {
+		if set.File == s.SelectedFile {
+			out = append(out, set)
+		}
+	}
+	return out
+}
+
 // queueComments / queueSuggestions are what the QUEUE PANEL shows: by default the work
 // that will be — or has been — applied to the file you are looking at (#171). The queue
 // answers "what is happening to the document in front of me", which is what it's for in a
@@ -215,6 +255,11 @@ func (s PrereviewState) QueueHiddenCount() int {
 			n++
 		}
 	}
+	for _, set := range s.scopedQuestionSets() {
+		if set.File != s.SelectedFile && s.questionRowState(set, awaiting) != "" {
+			n++
+		}
+	}
 	return n
 }
 
@@ -228,6 +273,11 @@ func (s PrereviewState) countQueue(state string) int {
 	}
 	for _, sg := range s.queueSuggestions() {
 		if reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting) == state {
+			n++
+		}
+	}
+	for _, set := range s.queueQuestionSets() {
+		if s.questionRowState(set, awaiting) == state {
 			n++
 		}
 	}
@@ -252,6 +302,20 @@ func (s PrereviewState) BlockedCount() int { return s.countQueue(queueBlocked) }
 
 // DraftCount is the number of held (not-yet-enqueued) comments.
 func (s PrereviewState) DraftCount() int { return s.countQueue(queueDraft) }
+
+// AwaitingAnswerCount is how many of the agent's question sets wait on the
+// reviewer: not submitted, resolved or hidden. Whole review, like
+// AwaitingPickCount: it warns before End session, and a count limited to the
+// open file would let a question on another file be left unanswered.
+func (s PrereviewState) AwaitingAnswerCount() int {
+	n := 0
+	for _, set := range s.scopedQuestionSets() {
+		if s.questionAwaitingAnswer(set) {
+			n++
+		}
+	}
+	return n
+}
 
 // AwaitingApplyCount is how many suggestions the reviewer has ACCEPTED but the agent has
 // not yet written to the file (#171).
@@ -334,6 +398,12 @@ func (s PrereviewState) AwaitingReplyCount() int {
 	for _, sg := range s.scopedSuggestions() {
 		n += trailingReviewerReplies(threads[sg.ID])
 	}
+	for _, set := range s.scopedQuestionSets() {
+		n += trailingReviewerReplies(threads[set.ID])
+	}
+	for _, it := range s.allQuizItems() { // the quizzes still shown, as the cards are
+		n += trailingReviewerReplies(threads[it.ThreadID])
+	}
 	return n
 }
 
@@ -378,7 +448,7 @@ func (s PrereviewState) AgentWorkingLabel() string {
 // marker and route its jump to the right target).
 type QueueItem struct {
 	ID    string
-	Kind  string // queueKindComment | queueKindSuggestion
+	Kind  string // queueKindComment | queueKindSuggestion | queueKindQuestion
 	File  string // the row's location: the file, or a live-site annotation's page URL
 	Line  int    // new-side line (0 for file/region/area comments)
 	Body  string // the comment text (a request's summary) / suggestion note, shown truncated by CSS
@@ -407,6 +477,17 @@ func (s PrereviewState) QueueItems() []QueueItem {
 			continue
 		}
 		add(QueueItem{ID: sg.ID, Kind: queueKindSuggestion, File: sg.File, Line: sg.ToLine, Body: suggestionQueueBody(sg), State: st})
+	}
+	for _, set := range s.queueQuestionSets() {
+		st := s.questionRowState(set, awaiting)
+		if st == "" {
+			continue
+		}
+		line := set.ToLine
+		if set.Kind == QuestionKindFile {
+			line = 0
+		}
+		add(QueueItem{ID: set.ID, Kind: queueKindQuestion, File: set.File, Line: line, Body: set.Steps[0].Prompt, State: st})
 	}
 	var out []QueueItem
 	for _, st := range queueOrder { // a "" state (resolved, un-queued) has no bucket here
@@ -506,6 +587,11 @@ func (s PrereviewState) outstandingAgentWork() int {
 	}
 	for _, sg := range s.scopedSuggestions() {
 		if st := reopenIfReplied(s.suggestionQueueState(sg), sg.ID, awaiting); st == queueQueued || st == queueBlocked {
+			n++
+		}
+	}
+	for _, set := range s.scopedQuestionSets() {
+		if s.questionRowState(set, awaiting) == queueQueued {
 			n++
 		}
 	}

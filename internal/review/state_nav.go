@@ -8,20 +8,21 @@ import (
 
 // state_nav.go is the open-items stepper (#193): one ‹ N / M open › bar that walks
 // every annotation still waiting on the reviewer, in document order across files —
-// unresolved comments, undecided suggestions, unanswered quiz questions. n/p step
-// the same list.
+// unresolved comments, undecided suggestions, unanswered quiz questions, and the
+// agent's questions not yet submitted. n/p step the same list.
 
 // Nav kinds: the filter values (NavKind) and NavPos.Kind.
 const (
 	navComment    = "comment"
 	navSuggestion = "suggestion"
 	navQuiz       = "quiz"
+	navQuestion   = "question"
 )
 
 // navKindTable is the filter chip's menu, in order. An item kind's index here is
 // also its tiebreak rank on a shared line (comment, suggestion, question).
 var navKindTable = []struct{ Kind, Label string }{
-	{"", "All"}, {navComment, "Comments"}, {navSuggestion, "Suggestions"}, {navQuiz, "Quiz"},
+	{"", "All"}, {navComment, "Comments"}, {navSuggestion, "Suggestions"}, {navQuiz, "Quiz"}, {navQuestion, "Questions"},
 }
 
 func navKindIndex(kind string) int {
@@ -90,6 +91,13 @@ func (s PrereviewState) navItems() []NavItem {
 	for _, it := range s.allQuizItems() {
 		if !it.Answered {
 			out = append(out, NavItem{File: it.File, Side: it.Side, Pos: NavPos{Body: it.LineGrounded(), Line: it.FromLine, Kind: navQuiz, Seq: it.Num, ID: it.ID}})
+		}
+	}
+	// The agent's questions wait on the reviewer until submitted, resolved or
+	// hidden (hiding drops a suggestion from the list too).
+	for i, set := range s.scopedQuestionSets() {
+		if s.questionAwaitingAnswer(set) {
+			out = append(out, NavItem{File: set.File, Side: set.Side, Pos: NavPos{Body: set.LineGrounded(), Line: set.FromLine, Kind: navQuestion, Seq: i, ID: set.ID}})
 		}
 	}
 	rankOf := s.fileRank()

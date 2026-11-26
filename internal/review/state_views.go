@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
@@ -307,22 +308,6 @@ func markAt(out map[string]*HiddenMark, key, id string) {
 }
 
 // HiddenSuggestionLines maps each diff row ("<line>-<side>", the keys
-// SuggestionCountLines uses) to the marker for the suggestions hidden there.
-// VisibleLines keeps these rows out of folds, so the marker stays where the card was.
-func (s PrereviewState) HiddenSuggestionLines() map[string]*HiddenMark {
-	sgs := s.markerSuggestions()
-	if len(sgs) == 0 {
-		return nil
-	}
-	out := map[string]*HiddenMark{}
-	for _, sg := range sgs {
-		for _, k := range rowKeysFor(sg.ToLine, sg.Side) {
-			markAt(out, k, sg.ID)
-		}
-	}
-	return out
-}
-
 // HiddenSuggestionBlocks is the block-view counterpart, keyed by markdownBlockKey,
 // over whichever block view is showing: rendered Markdown, or the HTML preview's
 // comment anchors (both render blockSuggestions).
@@ -391,24 +376,13 @@ func (s PrereviewState) undecidedIn(decisions map[string]SuggestionDecision, id 
 // suggestionAcceptedPending reports it was accepted but the agent has not applied it yet —
 // the badge is accentuated yellow, signalling "yet to be applied".
 func (s PrereviewState) suggestionAcceptedPending(id string) bool {
-	d, ok := s.DecisionsBySuggestion()[id]
-	return ok && d.Verdict == verdictAccept && !s.Applied[id]
+	return s.acceptedIn(s.DecisionsBySuggestion(), id)
 }
 
-// countByLine collapses a by-ToLine suggestion grouping into per-row counts keyed
-// "<toLine>-<side>" (both sides for a whole-line suggestion), driving the right-
-// margin badges. Nil when empty.
-func countByLine(byLine map[int][]Suggestion) map[string]int {
-	out := map[string]int{}
-	for ln, sgs := range byLine {
-		for _, sg := range sgs {
-			countRowSides(out, ln, sg.Side)
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+// acceptedIn is suggestionAcceptedPending against an already-built decisions map.
+func (s PrereviewState) acceptedIn(decisions map[string]SuggestionDecision, id string) bool {
+	d, ok := decisions[id]
+	return ok && d.Verdict == verdictAccept && !s.Applied[id]
 }
 
 // SuggestionsByEndLine renders ALL of the selected file's suggestions inline (#165);
@@ -425,18 +399,59 @@ func (s PrereviewState) SuggestionsByEndLine() map[int][]Suggestion {
 	return out
 }
 
-// SuggestionOpenLines reports, per line-row, whether the row has any UNDECIDED suggestion
-// (#165) — drives the yellow "open" badge. An accepted-pending suggestion is NOT open (it
-// gets the accentuated-yellow badge via SuggestionAcceptedLines); an applied/rejected one
-// is done (green).
-func (s PrereviewState) SuggestionOpenLines() map[string]bool {
+// rowAnnotation is one annotation as the row hooks see it: where it hangs and
+// what its row's badge and default visibility take from it.
+type rowAnnotation struct {
+	Line int
+	Side string
+	// Open: unresolved, undecided or unanswered work (a yellow badge).
+	Open bool
+	// Accepted: an accepted suggestion the agent has not applied (#165).
+	Accepted bool
+	// Showing: the card shows by default. That is Open, except a quiz question
+	// answered this visit stays showing with its explanation (#212).
+	Showing bool
+}
+
+// lineAnnotations is every annotation on the open file's diff rows, of every
+// kind: the one list the row badge, its colour, the row's default visibility
+// and the fold pins read. Adding a kind is one loop here.
+func (s PrereviewState) lineAnnotations() []rowAnnotation {
+	var out []rowAnnotation
+	for ln, cs := range s.CommentsByEndLine() {
+		for _, c := range cs {
+			out = append(out, rowAnnotation{Line: ln, Side: c.Side, Open: !c.Resolved, Showing: !c.Resolved})
+		}
+	}
+	if sgs := s.SuggestionsByEndLine(); len(sgs) > 0 {
+		decisions := s.DecisionsBySuggestion()
+		for ln, list := range sgs {
+			for _, sg := range list {
+				open := s.undecidedIn(decisions, sg.ID)
+				out = append(out, rowAnnotation{Line: ln, Side: sg.Side, Open: open, Accepted: s.acceptedIn(decisions, sg.ID), Showing: open})
+			}
+		}
+	}
+	for end, items := range s.QuizByEndLine() {
+		for _, it := range items {
+			out = append(out, rowAnnotation{Line: end, Side: it.Side, Open: !it.Answered, Showing: !it.Settled})
+		}
+	}
+	for end, cards := range s.QuestionsByEndLine() {
+		for _, c := range cards {
+			out = append(out, rowAnnotation{Line: end, Side: c.Side, Open: !c.Resolved, Showing: !c.Resolved})
+		}
+	}
+	return out
+}
+
+// annotationLinesWhere keys every line annotation pred accepts to its row(s).
+func (s PrereviewState) annotationLinesWhere(pred func(rowAnnotation) bool) map[string]bool {
 	out := map[string]bool{}
-	for ln, sgs := range s.SuggestionsByEndLine() {
-		for _, sg := range sgs {
-			if s.suggestionUndecided(sg.ID) {
-				for _, k := range rowKeysFor(ln, sg.Side) {
-					out[k] = true
-				}
+	for _, a := range s.lineAnnotations() {
+		if pred(a) {
+			for _, k := range rowKeysFor(a.Line, a.Side) {
+				out[k] = true
 			}
 		}
 	}
@@ -446,41 +461,12 @@ func (s PrereviewState) SuggestionOpenLines() map[string]bool {
 	return out
 }
 
-// SuggestionAcceptedLines reports, per line-row, whether the row has any ACCEPTED-but-
-// unapplied suggestion (#165) — drives the accentuated-yellow "accepted" badge. Loses to
-// "open" on a mixed row (an undecided item is more urgent), which the template's
-// is-open→is-accepted→is-done ladder enforces.
-func (s PrereviewState) SuggestionAcceptedLines() map[string]bool {
-	out := map[string]bool{}
-	for ln, sgs := range s.SuggestionsByEndLine() {
-		for _, sg := range sgs {
-			if s.suggestionAcceptedPending(sg.ID) {
-				for _, k := range rowKeysFor(ln, sg.Side) {
-					out[k] = true
-				}
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-// AnnotationCountLines is the per-row TOTAL — comments + suggestions — driving the one
-// unified right-margin badge (#165: a single badge per line, not one per kind).
+// AnnotationCountLines is the per-row total of every kind of annotation,
+// driving the one right-margin badge (#165) and the fold pins.
 func (s PrereviewState) AnnotationCountLines() map[string]int {
 	out := map[string]int{}
-	for k, n := range s.CommentCountLines() {
-		out[k] += n
-	}
-	for k, n := range s.SuggestionCountLines() {
-		out[k] += n
-	}
-	// #191: a quiz question is an annotation on the line, so it counts toward the
-	// row badge and collapses with the rest.
-	for k, n := range s.QuizCountLines() {
-		out[k] += n
+	for _, a := range s.lineAnnotations() {
+		countRowSides(out, a.Line, a.Side)
 	}
 	if len(out) == 0 {
 		return nil
@@ -488,31 +474,18 @@ func (s PrereviewState) AnnotationCountLines() map[string]int {
 	return out
 }
 
-// AnnotationOpenLines reports, per row, whether ANY annotation is open (unresolved
-// comment / undecided suggestion) — the unified badge is yellow.
+// AnnotationOpenLines reports, per row, whether any annotation is open — the
+// unified badge is yellow.
 func (s PrereviewState) AnnotationOpenLines() map[string]bool {
-	out := map[string]bool{}
-	for k := range s.CommentOpenLines() {
-		out[k] = true
-	}
-	for k := range s.SuggestionOpenLines() {
-		out[k] = true
-	}
-	for k := range s.QuizOpenLines() {
-		out[k] = true
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return s.annotationLinesWhere(func(a rowAnnotation) bool { return a.Open })
 }
 
 // AnnotationAcceptedLines reports, per row, whether the row has any accepted-but-unapplied
 // suggestion (#165) — the badge is accentuated yellow (else it falls through to open→yellow
-// or done→green). Only suggestions have an accepted state. The template checks it AFTER
-// AnnotationOpenLines, so open wins on a mixed row.
+// or done→green). The template checks it AFTER AnnotationOpenLines, so open wins on a
+// mixed row.
 func (s PrereviewState) AnnotationAcceptedLines() map[string]bool {
-	return s.SuggestionAcceptedLines()
+	return s.annotationLinesWhere(func(a rowAnnotation) bool { return a.Accepted })
 }
 
 // The two default visibilities a row can have (#165): a row with any OPEN annotation shows
@@ -520,7 +493,8 @@ func (s PrereviewState) AnnotationAcceptedLines() map[string]bool {
 // ToggledRows stores which of these the reviewer was flipping away from.
 const (
 	// FileHeadRowKey is the row key for the file-head annotation group: file-level
-	// comments, image-area comments, and quiz questions with no line. They render
+	// comments, image-area comments, and quiz questions and the agent's questions
+	// with no line (fileHeadAnnotations). They render
 	// above the diff rather than in a row, so they had no badge and no way to be
 	// collapsed at all — for comments as much as for quizzes. Giving the group a
 	// key lets it reuse toggleRow / ToggledRows / RowToggled unchanged, instead of
@@ -537,19 +511,53 @@ const (
 
 // rowState is a row's DEFAULT card visibility — what the reviewer sees before any toggle.
 // Keyed like the badge: "<line>-<side>" in the diff, "MB-<start>-<end>" in the md-view.
-func (s PrereviewState) rowState(key string) string {
+func (s PrereviewState) rowState(key string) string { return s.newRowStates().of(key) }
+
+// rowStates answers rowState for many keys, building each lookup (the showing
+// rows, the blocks, the file head) at most once: RowToggled asks for every
+// toggled row on each render.
+type rowStates struct {
+	s       PrereviewState
+	lines   map[string]bool
+	blocks  map[string]BlockAnn
+	head    *bool
+	pastEnd *bool
+}
+
+func (s PrereviewState) newRowStates() *rowStates { return &rowStates{s: s} }
+
+func (r *rowStates) of(key string) string {
 	open := false
 	switch {
 	case key == PastEndRowKey:
-		open = s.PastEndHasOpen()
+		if r.pastEnd == nil {
+			v := r.s.PastEndHasOpen()
+			r.pastEnd = &v
+		}
+		open = *r.pastEnd
 	case key == FileHeadRowKey:
-		// The file head has no line, so AnnotationOpenLines never carries it; ask
-		// the head group directly (its badge colour comes from the same call).
-		open = s.FileHeadHasOpen() || s.fileHeadQuizShowing()
+		// The file head has no line, so the line list never carries it.
+		if r.head == nil {
+			v := slices.ContainsFunc(r.s.fileHeadAnnotations(), func(a rowAnnotation) bool { return a.Showing })
+			r.head = &v
+		}
+		open = *r.head
 	case strings.HasPrefix(key, "MB-"):
-		open = s.BlockAnnotations()[key].Open
+		if r.blocks == nil {
+			r.blocks = r.s.BlockAnnotations()
+			if r.blocks == nil {
+				r.blocks = map[string]BlockAnn{}
+			}
+		}
+		open = r.blocks[key].Showing
 	default:
-		open = s.AnnotationOpenLines()[key] || s.quizShowingLines()[key]
+		if r.lines == nil {
+			r.lines = r.s.annotationLinesWhere(func(a rowAnnotation) bool { return a.Showing })
+			if r.lines == nil {
+				r.lines = map[string]bool{}
+			}
+		}
+		open = r.lines[key]
 	}
 	if open {
 		return rowStateOpen
@@ -573,8 +581,9 @@ func (s PrereviewState) RowToggled() map[string]bool {
 		return nil
 	}
 	out := map[string]bool{}
+	states := s.newRowStates()
 	for key, was := range s.ToggledRows {
-		if was == s.rowState(key) {
+		if was == states.of(key) {
 			out[key] = true
 		}
 	}
@@ -584,60 +593,27 @@ func (s PrereviewState) RowToggled() map[string]bool {
 	return out
 }
 
-// CommentCountLines reports, per line-row (keyed "<toLine>-<side>", e.g. "4-new"),
-// HOW MANY comments render on that row — driving the #151 right-margin count badge
-// (and, via count>0, the #136 presence marks). Derived from the SAME filtered map the
-// cards render from (CommentsByEndLine), so the badge's number always equals the cards
-// actually rendered — side, individually-hidden, resolved filter, and file scope are
-// all inherited. Zero-arg so the framework pre-computes it (a method WITH an arg
-// silently breaks rendering); the row looks itself up as
-// {{index $.CommentCountLines (printf "%d-%s" $ln $lside)}}. Nil when none, so a
-// missing key indexes to 0. (SuggestionCountLines is its counterpart below.)
-func (s PrereviewState) CommentCountLines() map[string]int {
-	out := map[string]int{}
-	for ln, cs := range s.CommentsByEndLine() {
-		for _, c := range cs {
-			countRowSides(out, ln, c.Side)
-		}
-	}
-	if len(out) == 0 {
+// HiddenSuggestionLines maps each diff row ("<line>-<side>", the keys
+// AnnotationCountLines uses) to the marker for the suggestions hidden there.
+// VisibleLines keeps these rows out of folds, so the marker stays where the card was.
+func (s PrereviewState) HiddenSuggestionLines() map[string]*HiddenMark {
+	sgs := s.markerSuggestions()
+	if len(sgs) == 0 {
 		return nil
+	}
+	out := map[string]*HiddenMark{}
+	for _, sg := range sgs {
+		for _, k := range rowKeysFor(sg.ToLine, sg.Side) {
+			markAt(out, k, sg.ID)
+		}
 	}
 	return out
 }
 
-// CommentOpenLines reports, per line-row, whether the row has any OPEN (unresolved)
-// comment (#165). Drives the badge colour: yellow when open work remains, else green
-// (all resolved). "Yellow wins on a mixed line" falls out — one open comment flags it.
-func (s PrereviewState) CommentOpenLines() map[string]bool {
-	out := map[string]bool{}
-	for ln, cs := range s.CommentsByEndLine() {
-		for _, c := range cs {
-			if !c.Resolved {
-				for _, k := range rowKeysFor(ln, c.Side) {
-					out[k] = true
-				}
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-// SuggestionCountLines counts ALL suggestions per row (#165) — open + accepted. The
-// badge colour (yellow if any open, else green) comes from SuggestionOpenLines; the
-// accepted ones collapse to that badge via CSS rather than being excluded here.
-func (s PrereviewState) SuggestionCountLines() map[string]int {
-	return countByLine(s.SuggestionsByEndLine())
-}
-
-// HasMarks reports whether the selected file has any per-line comment/suggestion
-// badges — i.e. whether the "Hide annotations" toggle (ToggleMarks) has anything to
-// act on. Gates that menu entry. Reads the same memoized count maps the badges use.
+// HasMarks reports whether the selected file has any row badge, of any kind —
+// whether the "Hide annotations" toggle (ToggleMarks) has anything to act on.
 func (s PrereviewState) HasMarks() bool {
-	return len(s.CommentCountLines()) > 0 || len(s.SuggestionCountLines()) > 0
+	return len(s.AnnotationCountLines()) > 0
 }
 
 // Threads groups the loaded conversation entries (#149) by target ID (a comment or
@@ -937,6 +913,8 @@ type BlockAnn struct {
 	Total    int
 	Open     bool
 	Accepted bool
+	// Showing: a card in the block shows by default (rowState's default).
+	Showing bool
 }
 
 // HTMLMarker is one commented block of an HTML file's preview: its marker shows
@@ -1006,27 +984,21 @@ func (s PrereviewState) BlockAnnotations() map[string]BlockAnn {
 	if len(blocks) == 0 {
 		return nil
 	}
-	comments, suggestions := s.BlockComments(), s.BlockSuggestions()
+	anns := s.lineAnnotations() // the same list, and rules, the diff rows use
 	out := map[string]BlockAnn{}
 	for _, blk := range blocks {
-		key := markdownBlockKey(blk.start, blk.end)
 		var ba BlockAnn
-		for _, c := range comments[key] {
-			ba.Total++
-			if !c.Resolved {
-				ba.Open = true
+		for _, a := range anns {
+			if a.Line < blk.start || a.Line > blk.end {
+				continue
 			}
-		}
-		for _, sg := range suggestions[key] {
 			ba.Total++
-			if s.suggestionUndecided(sg.ID) {
-				ba.Open = true
-			} else if s.suggestionAcceptedPending(sg.ID) {
-				ba.Accepted = true
-			}
+			ba.Open = ba.Open || a.Open
+			ba.Accepted = ba.Accepted || (a.Accepted && !a.Open)
+			ba.Showing = ba.Showing || a.Showing
 		}
 		if ba.Total > 0 {
-			out[key] = ba
+			out[markdownBlockKey(blk.start, blk.end)] = ba
 		}
 	}
 	if len(out) == 0 {
@@ -1355,6 +1327,11 @@ func (s *PrereviewState) scrollToComment(id string, line int) {
 
 func (s *PrereviewState) scrollToSuggestion(id string, line int) {
 	s.ScrollToItemKey = "sg:" + id
+	s.focusPreviewBlock(line)
+}
+
+func (s *PrereviewState) scrollToQuestion(id string, line int) {
+	s.ScrollToItemKey = "qs:" + id
 	s.focusPreviewBlock(line)
 }
 

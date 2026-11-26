@@ -220,7 +220,7 @@
     </div>
     {{end}}
     <div class="file-head-cards">
-      {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}
+      {{range $.FileQuizItems}}{{template "quizCard" .}}{{end}}{{range $.FileQuestionCards}}{{template "questionCard" .}}{{end}}
   {{/* The file composer opens as a blocking modal (below), not inline here — a
        mid-page scroll position used to leave it off-screen. Area mode keeps its
        inline composer (it anchors to the image region). This section still lists

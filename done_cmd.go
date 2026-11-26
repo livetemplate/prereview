@@ -74,6 +74,7 @@ func runDone(args []string) error {
 	csvPath := filepath.Join(dir, review.CommentsFileName)
 
 	var note string // what --all-open deliberately left out; printed after the result
+	sets := 0       // how many ids are question sets (explicit ids only)
 	if *allOpen {
 		if len(ids) > 0 {
 			return fmt.Errorf("--all-open cannot be combined with explicit ids or --file")
@@ -94,18 +95,59 @@ func runDone(args []string) error {
 			fs.Usage()
 			return fmt.Errorf("no comment id given")
 		}
-		if err := validateIDs(csvPath, ids); err != nil {
+		n, err := validateDoneIDs(csvPath, ids)
+		if err != nil {
 			return err
 		}
+		sets = n
 	}
 	ids = dedupe(ids)
 
 	if err := appendMarks(dir, review.ProcessedFileName, ids); err != nil {
 		return err
 	}
-	fmt.Printf("marked %d comment(s) as worked on\n", len(ids))
+	fmt.Println(doneSummary(len(ids), sets))
 	printNote(note)
 	return nil
+}
+
+// doneSummary is done's result line. With comments only it is the line agents
+// and tests already read ("marked N comment(s) as worked on"); question sets are
+// named beside it.
+func doneSummary(ids, sets int) string {
+	switch comments := ids - sets; {
+	case sets == 0:
+		return fmt.Sprintf("marked %d comment(s) as worked on", comments)
+	case comments == 0:
+		return fmt.Sprintf("marked %d question set(s) as worked on", sets)
+	default:
+		return fmt.Sprintf("marked %d comment(s) and %d question set(s) as worked on", comments, sets)
+	}
+}
+
+// validateDoneIDs accepts the ids `done` can close: comments, and question
+// sets the agent asked (`prereview ask`). Anything else fails, named. It
+// returns how many of the ids are question sets.
+func validateDoneIDs(csvPath string, ids []string) (sets int, err error) {
+	var unknown []string
+	empty := false
+	for _, id := range ids {
+		switch kind, none := review.ResolveTarget(csvPath, id); kind {
+		case review.TargetComment:
+		case review.TargetQuestionSet:
+			sets++
+		default:
+			unknown = append(unknown, id)
+			empty = none
+		}
+	}
+	switch {
+	case len(unknown) == 0:
+		return sets, nil
+	case empty:
+		return 0, fmt.Errorf("no comments found at %s — is --out the review's directory?", csvPath)
+	}
+	return 0, fmt.Errorf("unknown comment or question set id(s): %s (use `prereview comments --json` to list comment ids)", strings.Join(unknown, ", "))
 }
 
 // printNote emits a non-empty skip note on its own line.
