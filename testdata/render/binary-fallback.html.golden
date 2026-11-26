@@ -88,6 +88,10 @@
     lvt-key="s"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="toggleFileView"
+    lvt-key="d"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleFocusMode"
     lvt-key="."
     lvt-mod:skip-when-typing
@@ -130,7 +134,7 @@
   /><path
     d="M16 16l5 5"
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"
-  /></svg></button>
+  /></svg><span class="tb-word">Search</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">⌘K</kbd></button>
   </form>
   
   <div class="title">
@@ -138,155 +142,92 @@
   </div>
   
   <div class="toolbar-inline">
-    <div class="tb-group tb-counters">
-      
-      <small class="auto-saved-long">2 files · 2 changed · 0/2 viewed</small>
-    </div>
-    
-    <div class="tb-group tb-toggles">
-      
-      
-      
-      
-      
-      <form method="POST" class="tb-radios" aria-label="File view">
-        <label><input
-          type="radio"
-          name="view"
-          value="diff"
-          checked
-          lvt-on:change="setFileViewMode"
-        >Diff</label>
-        <label><input
-          type="radio"
-          name="view"
-          value="file"
+    <div class="tb-group tb-views">
+      <form method="POST">
+        <button
+          type="submit"
+          name="toggleFocusMode"
+          class="tb-btn"
+          aria-pressed="false"
+          title="Focus: hide the side columns"
           
-          lvt-on:change="setFileViewMode"
-        >File</label>
-      </form>
-      
-    </div>
-    
-    
-    <div
-      class="tb-dropdown"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
-      <button
-        type="button"
-        class="contrast theme-toggle tb-dropdown-trigger"
-        aria-haspopup="menu"
-        title="View options — focus, color scheme &amp; mode, comment filters, help"
-      ><span class="tb-label">View</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-  d="M6 9l6 6 6-6"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
-  fill="none"
-/></svg></button>
-      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
-        
-        
-        <form method="POST">
-          <button
-            type="submit"
-            name="toggleFocusMode"
-            class="menu-item"
-            role="menuitem"
-          >
-            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
   d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"
   stroke="currentColor"
   stroke-width="1.8"
   stroke-linecap="round"
   stroke-linejoin="round"
   fill="none"
-/></svg></span>
-            <span class="menu-label">Focus <kbd class="kbd-hint" aria-hidden="true">.</kbd></span>
-          </button>
-        </form>
-        
-        
-        <form method="POST">
-          <button
-            type="submit"
-            name="cycleScheme"
-            class="menu-item"
-            role="menuitem"
-          >
-            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+/></svg><span class="tb-word">Focus</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">.</kbd></button>
+      </form>
+      <form method="POST">
+        <button
+          type="submit"
+          name="toggleCommentList"
+          class="tb-btn"
+          aria-pressed="false"
+          title="No annotations yet"
+          disabled
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg><span class="tb-word">Annotations</span><span class="tb-count">0</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">a</kbd></button>
+      </form>
+      <form method="POST">
+        <button
+          type="submit"
+          name="toggleUnderstand"
+          class="tb-btn"
+          aria-pressed="false"
+          title="No walkthrough or quiz yet, and no agent to make one"
+          disabled
+        ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="tb-word">Understand</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">z</kbd></button>
+      </form>
+    </div>
+    <div class="tb-group tb-prefs">
+      <form method="POST">
+        <button
+          type="submit"
+          name="cycleScheme"
+          class="tb-btn"
+          title="Color scheme: Solarized. Next: Gruvbox"
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
   d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z"
   stroke="currentColor"
   stroke-width="1.8"
   fill="none"
   stroke-linejoin="round"
-/><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg></span>
-            <span class="menu-label">Scheme: Solarized</span>
-            <span class="menu-meta">Gruvbox →</span>
-          </button>
-        </form>
-        <form method="POST">
-          <button
-            type="submit"
-            name="cycleTheme"
-            class="menu-item"
-            role="menuitem"
-          >
-            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+/><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg><span class="tb-word">Solarized</span></button>
+      </form>
+      <form method="POST">
+        <button
+          type="submit"
+          name="cycleTheme"
+          class="tb-btn"
+          title="Mode: System. Next: Light"
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
   cx="12"
   cy="12"
   r="8.5"
   stroke="currentColor"
   stroke-width="1.8"
   fill="none"
-/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg></span>
-            <span class="menu-label">Mode: System</span>
-            <span class="menu-meta">Light →</span>
-          </button>
-        </form>
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        <form method="POST">
-          <button
-            type="submit"
-            name="toggleKeyboardHelp"
-            class="menu-item"
-            role="menuitem"
-          >
-            <span class="menu-icon" aria-hidden="true">?</span>
-            <span class="menu-label">Keyboard shortcuts</span>
-          </button>
-        </form>
-        
-        <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
-          <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg><span class="tb-word">System</span></button>
+      </form>
+      <form method="POST">
+        <button
+          type="submit"
+          name="toggleKeyboardHelp"
+          class="tb-btn"
+          title="Keyboard shortcuts"
+        ><span class="tb-glyph" aria-hidden="true">?</span><span class="tb-word">Shortcuts</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">?</kbd></button>
+      </form>
+      <a class="tb-btn" href="/_usage" target="_blank" rel="noopener" title="Usage guide (opens a new tab)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2z"
     stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
-  /></svg></span>
-          <span class="menu-label">Usage guide</span>
-        </a>
-      </div>
+  /></svg><span class="tb-word">Guide</span></a>
     </div>
+
   </div>
   
   
@@ -451,24 +392,22 @@
     <button
       type="submit"
       name="toggleFileView"
-      class="menu-item"
-      role="menuitem"
+      class="menu-item is-on"
+      role="menuitemcheckbox"
+      aria-checked="true"
     >
-      <span class="menu-icon">
-        
-        
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
-    d="M6 3h8l4 4v14H6z"
-    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
-  /><path
-    d="M14 3v4h4"
-    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
-  /></svg>
-        
-      </span>
-      <span class="menu-label">View file</span>
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span>
+      <span class="menu-label">Diff <kbd class="kbd-hint" aria-hidden="true">d</kbd></span>
     </button>
   </form>
+  
   
   
   
@@ -560,7 +499,11 @@
     </form>
   </div>
   <div class="drawer-head">
-    <strong>2 files</strong>
+    <div class="drawer-stats">
+      <strong>2 files · 2 changed</strong>
+      <small>0 of 2 viewed</small>
+      <progress class="drawer-viewed" value="0" max="2" aria-label="Files viewed"></progress>
+    </div>
     <form method="POST">
       <button
         type="submit"
@@ -667,7 +610,26 @@
 
 
 <article>
+<div class="file-sticky" data-key="file-sticky">
   <header class="file-head"><span class="file-head-name" title="archive.zip"><strong class="fh-base">archive.zip</strong> <small>file added</small></span>
+    
+    <span class="file-head-view" role="toolbar" aria-label="How this file shows">
+      <span class="fh-seg">
+        <form method="POST"><input type="hidden" name="view" value="rendered"><button type="submit" name="setMarkdownView" class="fh-btn" aria-pressed="false" title="Only for Markdown and HTML files" disabled>Preview</button></form>
+        <form method="POST"><input type="hidden" name="view" value="raw"><button type="submit" name="setMarkdownView" class="fh-btn" aria-pressed="false" title="Only for Markdown and HTML files" disabled>Raw</button></form>
+      </span>
+      <form method="POST"><button type="submit" name="toggleFileView" class="fh-btn" aria-pressed="true" title="Mark what changed; off shows the plain file"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 4h7v16H4zM13 4h7v16h-7z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /><path
+    d="M6 11h3M6 13h3M16 9v6M14 12h4"
+    stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+  /></svg><span>Diff</span> <kbd class="kbd-hint" aria-hidden="true">d</kbd></button></form>
+      <form method="POST"><button type="submit" name="toggleHideWhitespace" class="fh-btn" aria-pressed="false" title="Only in a diff" disabled>Whitespace</button></form>
+      <form method="POST"><button type="submit" name="toggleFoldMechanical" class="fh-btn" aria-pressed="false" title="No mechanical changes to fold" disabled>Fold</button></form>
+      <form method="POST" class="region-toggle"><button type="button" class="fh-btn" title="Only on an image or the HTML preview" disabled><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span class="annotate-word"> Annotate</span></button></form>
+      <form method="POST"><button type="submit" name="toggleBoxes" class="fh-btn" aria-pressed="false" title="Only on the HTML preview, once it has annotations" disabled>Boxes <kbd class="kbd-hint" aria-hidden="true">b</kbd></button></form>
+    </span>
     
     <span class="file-head-actions">
     
@@ -690,11 +652,11 @@
     
     
     
-    
-    
     </span>
   </header>
   
+  
+</div>
   
   
   
@@ -778,10 +740,11 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>b</kbd></dt><dd>Show / hide annotation boxes</dd></div>
-    <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
+    <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All annotations</dd></div>
     <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
-    <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
-    <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
+    <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved annotations here</dd></div>
+    <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions here</dd></div>
+    <div class="kbd-row"><dt><kbd>d</kbd></dt><dd>Diff: mark changes, or show the plain file</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>
     <div class="kbd-row"><dt><kbd>?</kbd></dt><dd>Keyboard shortcuts</dd></div>
     <div class="kbd-row"><dt><kbd>Esc</kbd></dt><dd>Cancel / close</dd></div>

@@ -55,7 +55,7 @@ func TestE2E_HideSuggestions(t *testing.T) {
 		t.Fatalf("hiding the group should drop every alternative: %v%s", err, diag())
 	}
 
-	// "Show hidden suggestions" (View menu) brings all three back.
+	// "Unhide suggestions" (the Annotations filter) brings all three back.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Evaluate(`document.querySelector('button[name="showHiddenSuggestions"]').click()`, nil),
 		chromedp.WaitVisible(`.inline-suggestion[data-key="sg-lone"]`, chromedp.ByQuery),

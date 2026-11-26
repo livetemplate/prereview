@@ -31,9 +31,16 @@ the full tree when you want to comment on something that didn't change.
 
 **Markdown and HTML render by default.** Tap a rendered block — a heading,
 paragraph, list item — to select its *source* lines, so the comment still
-anchors to real line numbers and round-trips with the raw view. The
-**Preview ⇄ Raw** toggle switches to source; long documents get a
-table-of-contents sidebar.
+anchors to real line numbers and round-trips with the raw view. **Raw** on the
+file's header switches to source; long documents get a table-of-contents sidebar.
+
+**The file's header holds its view controls.** On a desktop, **Preview | Raw**,
+**Diff**, **Whitespace**, **Fold**, **Annotate** and **Boxes** sit beside the file
+name; on a phone, all but Boxes are in the ⋯ menu. Turning **Diff** off (<kbd>d</kbd>) shows
+the plain file. They always show; one that doesn't apply to the open file is greyed out,
+and its tooltip says why. The toolbar keeps what acts on the whole review:
+Search, Focus, Annotations, Understand, the color scheme and mode, Shortcuts and
+the Guide.
 
 **Annotate an image region.** On an image, drag a rectangle to select an area
 and comment on it. The box is stored as fractions of the image, so it survives
@@ -48,11 +55,10 @@ worked on or answered a box, it turns dashed with a ✓ until you resolve it, an
 **Annotations** panel shows its reply, with a **Reply** button to push back. Boxes on
 an image comment work the same way.
 
-**See every comment in one place.** **All comments** (in the **View ▾** menu, or
-press <kbd>a</kbd>) lists every comment across all files, of every kind, each with
-a jump back to its source. **Show / hide resolved** keeps
-addressed comments out of the way (or hide a single resolved one to declutter
-without turning the whole group off). **Resolve all** resolves every listed
+**See every comment in one place.** **Annotations** in the toolbar (or
+<kbd>a</kbd>) lists every comment across all files, of every kind, each with a
+jump back to its source. Its count reads open, then resolved ("1 +3"), with ⚠ when
+a comment lost its place in the file. **Resolve all** resolves every listed
 comment that's still open, and its notice offers **Undo** until you close the
 list.
 
@@ -67,8 +73,8 @@ changed, and a bar marks them in the diff. You can comment on them as usual.
 **Show the full diff** compares what you last saw with the file now, removed lines
 included, and **Dismiss** clears the notice.
 
-**Cut the noise.** **Hide whitespace changes** in the View menu shows a line that
-changed only in whitespace, such as a re-indent, as unchanged. A block of code that
+**Cut the noise.** **Whitespace** on the file's header shows a line that changed
+only in whitespace, such as a re-indent, as unchanged. A block of code that
 moved, within a file or to another, is labelled "Moved from …" and "Moved to …" at
 its two ends, each a link to the other.
 
@@ -98,8 +104,18 @@ are Markdown files in `~/.config/prereview/shortcuts/`, and whole-file ones go i
 comment, an undecided suggestion, an unanswered quiz question), a bar at the top
 of the file reads "N open". **‹** and **›** (or <kbd>p</kbd> and <kbd>n</kbd>)
 step through those items in document order across files, opening each one's file
-and scrolling it into view. The chip next to the count limits the steps to
-comments, suggestions or quiz questions, and **×** hides the bar for the session.
+and scrolling it into view.
+
+**Choose what each file shows.** The **Annotations** filter on that bar sets what
+the open file shows: **Open** (the default), **All**, which adds resolved ones
+(<kbd>r</kbd>), or **None**, so the file reads clean. Its **Kinds** turn
+comments, suggestions, questions and quiz questions on or off; <kbd>s</kbd>
+toggles suggestions. Each file keeps its own setting for the session, and the
+arrows skip what a file hides. To set aside a single resolved comment, hide just
+that one; **Unhide** in the filter brings it back.
+
+**×** shrinks the bar to just the filter. When nothing is open but the file has
+annotations, the filter stays as that small chip, so it's always one click away.
 
 **Search across files.** Press <kbd>⌘</kbd><kbd>K</kbd> (or <kbd>Ctrl</kbd><kbd>K</kbd>)
 to open a search palette. It matches file names and line contents across the
@@ -193,8 +209,9 @@ awaiting your pick.
 
 Your decisions reach the agent the same way comments do — continuously, no
 hand-off step. prereview never edits your files itself; the agent does, so an
-accepted edit shows up as a normal diff you can commit. Use **Show / hide
-suggestions** (or press <kbd>s</kbd>) to toggle the boxes while you read.
+accepted edit shows up as a normal diff you can commit. Turn **Suggestions** off
+in the file's Annotations filter (or press <kbd>s</kbd>) to hide the boxes while
+you read.
 **Hide** on one box sets just that one aside: it leaves "1 hidden suggestion ·
 Show" on its line, and **Show** brings it back. The suggestion stays open for the
 agent either way.
@@ -259,7 +276,7 @@ how many there are.
 **Concerns, risks and impact.** The agent can group the steps by what the change
 does, each group under its own heading. A group it marks mechanical, such as a
 rename, folds in the diff behind **Show N mechanical lines**: tap to read them, or
-turn **Fold mechanical changes** off in the View menu. A change any other step
+turn **Fold** off on the file's header. A change any other step
 cites, or no step cites, never folds. Steps can carry risk chips (concurrency,
 security, …) and an **Affects** list of code outside the diff the step touches,
 such as a caller or a test; prereview checks those lines exist.
@@ -549,8 +566,9 @@ shows them:
 
 ## Themes & modes
 
-The toolbar's palette button cycles the **color scheme** (Solarized, Gruvbox,
-Catppuccin) and the mode button cycles **Light / Dark / System**. Both the code
+The toolbar's scheme button, labelled with the current scheme, cycles the
+**color scheme** (Solarized, Gruvbox, Catppuccin), and the mode button cycles
+**Light / Dark / System**. Both the code
 syntax colors and the rest of the UI recolor instantly, with no reload. System
 mode follows your OS setting.
 

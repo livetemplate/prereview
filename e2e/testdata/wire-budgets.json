@@ -5,27 +5,27 @@
   },
   "ArrowDown again": {
     "raw": 320,
-    "deflated": 183
+    "deflated": 184
   },
   "ArrowUp": {
     "raw": 318,
-    "deflated": 183
+    "deflated": 185
   },
   "Diff → File view": {
-    "raw": 278201,
-    "deflated": 21318
+    "raw": 287761,
+    "deflated": 21615
   },
   "Escape": {
     "raw": 73,
     "deflated": 69
   },
   "Escape the edit": {
-    "raw": 5294,
-    "deflated": 1800
+    "raw": 5328,
+    "deflated": 1818
   },
   "File → Diff view": {
-    "raw": 53638,
-    "deflated": 6725
+    "raw": 54693,
+    "deflated": 6648
   },
   "Library: checks tab": {
     "raw": 4118,
@@ -44,12 +44,12 @@
     "deflated": 326
   },
   "Preview → Raw": {
-    "raw": 26550,
-    "deflated": 4997
+    "raw": 27038,
+    "deflated": 4981
   },
   "Raw → Preview": {
-    "raw": 38788,
-    "deflated": 6643
+    "raw": 43137,
+    "deflated": 6776
   },
   "agent edits big.go on disk": {
     "raw": 310,
@@ -60,92 +60,92 @@
     "deflated": 53
   },
   "agent replies on a comment": {
-    "raw": 947,
-    "deflated": 468
+    "raw": 894,
+    "deflated": 418
   },
   "agent status done": {
     "raw": 609,
-    "deflated": 363
+    "deflated": 364
   },
   "agent status working": {
-    "raw": 495,
-    "deflated": 301
+    "raw": 422,
+    "deflated": 233
   },
   "agent suggests an edit on guide.md": {
-    "raw": 6217,
-    "deflated": 1588
+    "raw": 5645,
+    "deflated": 1727
   },
   "all comments off": {
-    "raw": 62743,
-    "deflated": 9143
+    "raw": 69082,
+    "deflated": 10274
   },
   "all comments on": {
-    "raw": 5351,
-    "deflated": 1624
+    "raw": 6896,
+    "deflated": 2064
   },
   "click a Markdown block": {
     "raw": 3446,
-    "deflated": 1494
+    "deflated": 1495
   },
   "click a line": {
-    "raw": 4588,
-    "deflated": 1842
+    "raw": 4611,
+    "deflated": 1843
   },
   "click a nearby line (extend)": {
-    "raw": 5013,
-    "deflated": 1912
+    "raw": 5056,
+    "deflated": 1918
   },
   "click another line": {
-    "raw": 4757,
-    "deflated": 1960
+    "raw": 4780,
+    "deflated": 1964
   },
   "close Library": {
-    "raw": 62595,
-    "deflated": 9117
+    "raw": 68938,
+    "deflated": 10296
   },
   "close Queue dropdown": {
     "raw": 0,
     "deflated": 0
   },
   "close Understand": {
-    "raw": 62558,
-    "deflated": 9089
+    "raw": 68933,
+    "deflated": 10272
   },
   "close it (Escape)": {
-    "raw": 1963,
-    "deflated": 890
+    "raw": 1203,
+    "deflated": 647
   },
   "close search": {
     "raw": 109,
     "deflated": 88
   },
   "cycle scheme": {
-    "raw": 169,
-    "deflated": 118
+    "raw": 186,
+    "deflated": 127
   },
   "cycle theme mode": {
-    "raw": 642,
-    "deflated": 360
+    "raw": 658,
+    "deflated": 367
   },
   "delete a comment": {
-    "raw": 1782,
-    "deflated": 822
+    "raw": 2921,
+    "deflated": 1179
   },
   "edit a comment": {
-    "raw": 8468,
-    "deflated": 2973
+    "raw": 8502,
+    "deflated": 2986
   },
   "hide annotations": {
-    "raw": 529,
-    "deflated": 339
+    "raw": 1163,
+    "deflated": 585
   },
   "hide whitespace off": {
-    "raw": 392,
-    "deflated": 247
+    "raw": 410,
+    "deflated": 244
   },
   "hide whitespace on": {
-    "raw": 469,
-    "deflated": 307
+    "raw": 479,
+    "deflated": 300
   },
   "keyboard help off (?)": {
     "raw": 103,
@@ -156,24 +156,24 @@
     "deflated": 136
   },
   "next file (j)": {
-    "raw": 156770,
-    "deflated": 9039
+    "raw": 163823,
+    "deflated": 9217
   },
   "open Library": {
     "raw": 7219,
-    "deflated": 2348
+    "deflated": 2345
   },
   "open Queue dropdown (client-only)": {
     "raw": 0,
     "deflated": 0
   },
   "open Understand": {
-    "raw": 2067,
-    "deflated": 761
+    "raw": 2093,
+    "deflated": 773
   },
   "open a reply": {
     "raw": 1054,
-    "deflated": 543
+    "deflated": 545
   },
   "open big.go": {
     "raw": 225,
@@ -184,32 +184,32 @@
     "deflated": 850
   },
   "open the file-comment box (c)": {
-    "raw": 4681,
-    "deflated": 1923
+    "raw": 4675,
+    "deflated": 1918
   },
   "post the reply": {
-    "raw": 1592,
-    "deflated": 676
+    "raw": 1612,
+    "deflated": 695
   },
   "prev file (k)": {
-    "raw": 58215,
-    "deflated": 7817
+    "raw": 60236,
+    "deflated": 8135
   },
   "resolve a comment": {
-    "raw": 2521,
-    "deflated": 840
+    "raw": 2327,
+    "deflated": 937
   },
   "save the block comment": {
-    "raw": 5600,
-    "deflated": 1821
+    "raw": 6774,
+    "deflated": 2270
   },
   "save the comment": {
-    "raw": 14012,
-    "deflated": 3789
+    "raw": 15657,
+    "deflated": 4258
   },
   "save the second comment": {
-    "raw": 6206,
-    "deflated": 2092
+    "raw": 7415,
+    "deflated": 2509
   },
   "scroll back up": {
     "raw": 0,
@@ -217,23 +217,23 @@
   },
   "scroll down (viewport report)": {
     "raw": 220,
-    "deflated": 126
+    "deflated": 124
   },
   "show annotations": {
-    "raw": 572,
-    "deflated": 366
+    "raw": 1149,
+    "deflated": 579
   },
   "switch back to big.go": {
-    "raw": 58349,
-    "deflated": 7959
+    "raw": 60370,
+    "deflated": 8221
   },
   "switch to guide.md": {
-    "raw": 36188,
-    "deflated": 6216
+    "raw": 41022,
+    "deflated": 6529
   },
   "switch to small.go": {
-    "raw": 6269,
-    "deflated": 1862
+    "raw": 7000,
+    "deflated": 2201
   },
   "toggle file drawer": {
     "raw": 449,
@@ -245,11 +245,11 @@
   },
   "type a block comment": {
     "raw": 192,
-    "deflated": 125
+    "deflated": 128
   },
   "type a reply": {
     "raw": 254,
-    "deflated": 158
+    "deflated": 161
   },
   "type a search query": {
     "raw": 5416,
@@ -261,10 +261,10 @@
   },
   "type in the composer": {
     "raw": 220,
-    "deflated": 144
+    "deflated": 145
   },
   "unresolve it": {
-    "raw": 1107,
-    "deflated": 544
+    "raw": 1669,
+    "deflated": 803
   }
 }

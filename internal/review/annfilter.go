@@ -181,7 +181,7 @@ type AnnFilterPanel struct {
 // AnnFilterView is the open surface's filter panel.
 func (s PrereviewState) AnnFilterView() AnnFilterPanel {
 	f := s.openFilter()
-	counts := s.annCounts()
+	counts := s.annCounts(s.annSurface())
 	label := "Open"
 	switch f.Show {
 	case annShowAll:
@@ -227,10 +227,9 @@ type annCount struct {
 	byKind                         map[string]int
 }
 
-// annCounts counts the open surface's annotations before the filter: open and
-// resolved, and per kind in any state.
-func (s PrereviewState) annCounts() annCount {
-	key := s.annSurface()
+// annCounts counts a surface's annotations before the filter: open and
+// resolved, and per kind in any state. annListKey counts the whole review.
+func (s PrereviewState) annCounts(key string) annCount {
 	n := annCount{byKind: map[string]int{}}
 	add := func(kind string, resolved bool) {
 		n.byKind[kind]++
@@ -293,4 +292,14 @@ func (s PrereviewState) hasAnnotations() bool {
 		}
 	}
 	return false
+}
+
+// AnnTotals is the whole review's annotations for the toolbar's Annotations
+// button: open, resolved, and comments whose anchor was lost (outdated).
+type AnnTotals struct{ Open, Resolved, Outdated int }
+
+// AnnotationTotals counts every kind across the review, before any filter.
+func (s PrereviewState) AnnotationTotals() AnnTotals {
+	c := s.annCounts(annListKey)
+	return AnnTotals{Open: c.open, Resolved: c.resolved, Outdated: s.OutdatedCount()}
 }

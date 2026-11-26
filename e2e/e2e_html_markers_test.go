@@ -144,7 +144,7 @@ func openHTMLComposer(t *testing.T, p *runningPrereview, box previewBox, what st
 	t.Helper()
 	var ir struct{ Left, Top, Width, Height float64 }
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		armAnnotate(),
 		chromedp.WaitVisible(`.region-overlay[data-surface="html"]`, chromedp.ByQuery),
 		// Let the region-select directive attach first: a drag that beats it is lost.
 		chromedp.Sleep(300*time.Millisecond),

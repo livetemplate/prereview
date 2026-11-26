@@ -294,7 +294,7 @@ func TestE2E_QuestionResolveHide(t *testing.T) {
 		return len(qs) == 1 && qs[0].ID == "q1" && qs[0].Resolved && len(qs[0].Answers) == 0
 	}, diag)
 	waitJSDiag(t, p, `(c => !!c && c.offsetParent === null)(document.querySelector("`+card+`"))`, "a resolved card folds away like a resolved comment", diag)
-	p.openViewItem("toggleShowResolved")
+	p.viewAction("toggleShowResolved")
 	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+card+`"); return !!c && c.offsetParent !== null && c.classList.contains('is-resolved') && c.querySelector("button[name='toggleQuestionResolved']").textContent === 'Reopen'; })()`, "Show resolved shows it, with Reopen", diag)
 	tapIn(t, p, card+` button[name='toggleQuestionResolved']`, "Reopen", diag)
 	waitJSDiag(t, p, `(() => { const c = document.querySelector("`+card+`"); return !!c && !c.classList.contains('is-resolved') && !!c.querySelector("button[name='pickQuestionOption']"); })()`, "Reopen brings the options back", diag)

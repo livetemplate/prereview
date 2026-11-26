@@ -47,7 +47,7 @@ func TestE2E_AnnFilterPerFile(t *testing.T) {
 	waitAnnFilterLabel(t, p, "Annotations: Open", "a file nobody has touched starts at Open", diag)
 
 	// None on app.go: its badges and cards go, and only folded.go's stop is left.
-	pickAnnFilter(t, p, "setAnnShow", "none", diag)
+	p.clickFilterRow("setAnnShow", "none")
 	waitAnnFilterLabel(t, p, "Annotations: None", "app.go set to None", diag)
 	waitNavLabel(t, p, "1 open", "app.go's items stop being stops", diag)
 	if evalInt(t, p, `document.querySelectorAll(".layout.marks-hidden").length`) == 0 {
@@ -67,7 +67,7 @@ func TestE2E_AnnFilterPerFile(t *testing.T) {
 	// open items and wasn't seen this visit, so it collapses to its chip, and
 	// the chip still carries the filter.
 	p.clickFile("folded.go")
-	pickAnnFilter(t, p, "setAnnShow", "none", diag)
+	p.clickFilterRow("setAnnShow", "none")
 	waitNavLabel(t, p, "0 open", "nothing open anywhere", diag)
 	ctx, cancel := within(p, 15*time.Second)
 	defer cancel()
@@ -77,7 +77,10 @@ func TestE2E_AnnFilterPerFile(t *testing.T) {
 	); err != nil {
 		t.Fatalf("reload: %v%s", err, diag())
 	}
-	p.clickFile("app.go")
+	// The reload keeps folded.go open (the last file); open app.go if needed.
+	if evalInt(t, p, `document.querySelectorAll('main.viewer .file-head-name[title="app.go"]').length`) == 0 {
+		p.clickFile("app.go")
+	}
 	if err := chromedp.Run(ctx, chromedp.WaitVisible(`.ann-nav.is-collapsed .ann-filter-trigger`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("with nothing open the filter must stay reachable as a chip: %v%s", err, diag())
 	}

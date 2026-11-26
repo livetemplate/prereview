@@ -72,7 +72,7 @@ func TestE2E_ReviewerReplyRoundTrip(t *testing.T) {
 	); err != nil {
 		t.Fatalf("resolve: %v\nstderr: %s", err, p.stderr.String())
 	}
-	p.openViewItem("toggleShowResolved")
+	p.viewAction("toggleShowResolved")
 	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("show resolved: %v", err)
 	}

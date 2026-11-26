@@ -122,19 +122,26 @@
     <button
       type="submit"
       name="toggleFileView"
-      class="menu-item{{if .FileView}} is-on{{end}}"
-      role="menuitem"
+      class="menu-item{{if not .FileView}} is-on{{end}}"
+      role="menuitemcheckbox"
+      aria-checked="{{if .FileView}}false{{else}}true{{end}}"
     >
-      <span class="menu-icon">
-        {{if .FileView}}
-        {{/* Diff icon (split rectangles with plus/minus) — shown when current view is plain file. */}}
-        {{template "iconDiff"}}
-        {{else}}
-        {{/* File icon (document) — shown when current view is diff. */}}
-        {{template "iconFile"}}
-        {{end}}
-      </span>
-      <span class="menu-label">{{if .FileView}}Show diff{{else}}View file{{end}}</span>
+      <span class="menu-icon">{{if .FileView}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
+      <span class="menu-label">Diff{{with index $.KeyHint "toggleFileView"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+    </button>
+  </form>
+  {{end}}
+  {{if .CanAnnotate}}
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleRegionSelect"
+      class="menu-item{{if .RegionSelectArmed}} is-on{{end}}"
+      role="menuitemcheckbox"
+      aria-checked="{{if .RegionSelectArmed}}true{{else}}false{{end}}"
+    >
+      <span class="menu-icon">{{template "iconAnnotate"}}</span>
+      <span class="menu-label">{{if .RegionSelectArmed}}Annotating — tap to stop{{else}}Annotate{{end}}</span>
     </button>
   </form>
   {{end}}
@@ -148,7 +155,7 @@
       role="menuitem"
     >
       <span class="menu-icon">{{template "iconComments"}}</span>
-      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}Annotations{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
       <span class="menu-meta">{{.CommentCount}}</span>
     </button>
   </form>

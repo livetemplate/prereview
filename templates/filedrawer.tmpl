@@ -27,7 +27,11 @@
     </form>
   </div>
   <div class="drawer-head">
-    <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
+    <div class="drawer-stats">
+      <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}}</strong>
+      <small>{{.ScopeViewedCount}} of {{.ScopeFileCount}} viewed</small>
+      <progress class="drawer-viewed" value="{{.ScopeViewedCount}}" max="{{.ScopeFileCount}}" aria-label="Files viewed"></progress>
+    </div>
     <form method="POST">
       <button
         type="submit"
@@ -38,7 +42,7 @@
     </form>
   </div>
   {{/* The all-comments overview button used to live here, but the sidebar is for
-       files (#111) — it's reachable from the toolbar "View ▾" dropdown, the mobile
+       files (#111) — it's reachable from the toolbar's Annotations button, the mobile
        ⋮ menu, and the `a` shortcut. */}}
   {{/* Base picker — native select so iOS renders the platform wheel
        (a text input opens the keyboard with autofill noise). Options

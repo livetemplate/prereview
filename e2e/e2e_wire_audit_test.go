@@ -211,10 +211,12 @@ func TestE2E_WireAudit(t *testing.T) {
 			return ""
 		}
 	}
-	radio := func(value, action string) func() string {
+	// viewBtn clicks a file-header view button; with value, the one whose form
+	// carries view=value (Preview | Raw).
+	viewBtn := func(action, value string) func() string {
 		return func() string {
-			if !js(fmt.Sprintf(`(() => { const r = [...document.querySelectorAll('input[name="view"][value=%q]')].find(r => r.getAttribute('lvt-on:change') === %q); if (!r) return false; r.click(); return true })()`, value, action)) {
-				return "no radio " + action + "=" + value
+			if !js(fmt.Sprintf(`(() => { const b = [...document.querySelectorAll('.file-head-view button[name=%q]')].find(b => !%q || (b.form.querySelector('input[name="view"]')||{}).value === %q); if (!b || b.disabled) return false; b.click(); return true })()`, action, value, value)) {
+				return "no view button " + action + "=" + value
 			}
 			return ""
 		}
@@ -326,8 +328,8 @@ func TestE2E_WireAudit(t *testing.T) {
 		mustWrite(t, p.repo, "big.go", strings.Replace(string(b), "return n + 10\n", "return n + 10 // agent\n", 1))
 		return ""
 	})
-	step("Diff → File view", radio("file", "setFileViewMode"))
-	step("File → Diff view", radio("diff", "setFileViewMode"))
+	step("Diff → File view", viewBtn("toggleFileView", ""))
+	step("File → Diff view", viewBtn("toggleFileView", ""))
 	step("next file (j)", key("j"))
 	step("prev file (k)", key("k"))
 	step("switch to guide.md", func() string { p.clickFile("guide.md"); return "" })
@@ -344,8 +346,8 @@ func TestE2E_WireAudit(t *testing.T) {
 	})
 	step("type a block comment", typeInto(`.composer textarea`, "tighten this"))
 	step("save the block comment", buttonIn(".composer", "addComment"))
-	step("Preview → Raw", radio("raw", "setMarkdownView"))
-	step("Raw → Preview", radio("rendered", "setMarkdownView"))
+	step("Preview → Raw", viewBtn("setMarkdownView", "raw"))
+	step("Raw → Preview", viewBtn("setMarkdownView", "rendered"))
 	step("switch to small.go", func() string { p.clickFile("small.go"); return "" })
 	step("switch back to big.go", func() string { p.clickFile("big.go"); return "" })
 	step("agent inserts 6 lines mid-file in big.go", func() string {

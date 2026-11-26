@@ -105,7 +105,7 @@ func TestE2E_AnnotationNav(t *testing.T) {
 
 	// The Annotations filter is per file: Comments off on app.go hides its
 	// comment card and drops it as a stop; folded.go's items stay stops.
-	pickAnnFilter(t, p, "toggleAnnKind", "comment", diag)
+	p.clickFilterRow("toggleAnnKind", "comment")
 	waitNavLabel(t, p, "2 open", "app.go's comment is no longer a stop", diag)
 	if n := evalInt(t, p, `document.querySelectorAll('.inline-comment').length`); n != 0 {
 		t.Errorf("Comments off should hide app.go's comment card, got %d%s", n, diag())
@@ -115,7 +115,7 @@ func TestE2E_AnnotationNav(t *testing.T) {
 	expectInView(t, p, `.inline-suggestion[data-key="sg-far"]`, "folded.go's suggestion, its file filter untouched", diag)
 
 	// None on folded.go drops its stops; the bar stays at 0 (#212).
-	pickAnnFilter(t, p, "setAnnShow", "none", diag)
+	p.clickFilterRow("setAnnShow", "none")
 	waitNavLabel(t, p, "0 open", "None leaves nothing to step to", diag)
 
 	// × collapses the bar to its filter chip, which brings it back.
@@ -135,22 +135,6 @@ func TestE2E_AnnotationNav(t *testing.T) {
 		chromedp.WaitVisible(`.ann-nav:not(.is-collapsed) .ann-nav-label`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("the chip should bring the bar back: %v%s", err, diag())
-	}
-}
-
-// pickAnnFilter opens the Annotations filter and clicks the row whose form
-// carries value for the named action (setAnnShow/show or toggleAnnKind/kind).
-func pickAnnFilter(t *testing.T, p *runningPrereview, action, value string, diag func() string) {
-	t.Helper()
-	ctx, cancel := within(p, 10*time.Second)
-	defer cancel()
-	js := `[...document.querySelectorAll('.ann-filter button[name="` + action + `"]')].find(b=>b.form.querySelector('input[value="` + value + `"]')).click()`
-	if err := chromedp.Run(ctx,
-		chromedp.Click(`.ann-filter > button`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.ann-filter.open button[name="`+action+`"]`, chromedp.ByQuery),
-		chromedp.Evaluate(js, nil),
-	); err != nil {
-		t.Fatalf("filter %s=%s: %v%s", action, value, err, diag())
 	}
 }
 

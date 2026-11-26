@@ -205,7 +205,7 @@ func TestE2E_CountBadges(t *testing.T) {
 	if err := chromedp.Run(p.ctx, chromedp.Emulate(device.Reset), chromedp.EmulateViewport(1200, 800), chromedp.Sleep(150*time.Millisecond)); err != nil {
 		t.Fatalf("restore desktop viewport: %v", err)
 	}
-	p.openViewItem("toggleMarks")
+	p.viewAction("toggleMarks")
 	if err := chromedp.Run(p.ctx, chromedp.Sleep(200*time.Millisecond)); err != nil {
 		t.Fatalf("settle after hide: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestE2E_CountBadges(t *testing.T) {
 		t.Errorf("Hide annotations left %d inline comments visible%s", n, diag())
 	}
 	// Toggling back restores them.
-	p.openViewItem("toggleMarks")
+	p.viewAction("toggleMarks")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.code .line-marks`, chromedp.ByQuery),
 	); err != nil {
@@ -225,7 +225,7 @@ func TestE2E_CountBadges(t *testing.T) {
 
 	// --- Focus mode hides the badges too — and the rule reaches the PHONE (it is
 	//     NOT trapped in the desktop-only focus-mode media query). ---
-	p.openViewItem("toggleFocusMode")
+	p.viewAction("toggleFocusMode")
 	if err := chromedp.Run(p.ctx, chromedp.Sleep(200*time.Millisecond)); err != nil {
 		t.Fatalf("settle after focus: %v", err)
 	}

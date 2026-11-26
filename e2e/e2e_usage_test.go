@@ -83,16 +83,14 @@ func TestE2E_UsagePage(t *testing.T) {
 		t.Fatalf("keyboard-help modal is missing the /_usage link%s", diag())
 	}
 
-	// 2. The desktop "View ▾" dropdown holds a Usage-guide link. Open it for
-	//    real so the item's reachability through the dropdown is exercised.
+	// 2. The desktop toolbar has a Guide link.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.tb-dropdown-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.tb-dropdown.open .tb-dropdown-panel a[href="/_usage"]`, chromedp.ByQuery),
+		chromedp.WaitVisible(`header.bar .tb-prefs a[href="/_usage"]`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("View dropdown is missing the Usage-guide link: %v%s", err, diag())
+		t.Fatalf("toolbar is missing the Guide link: %v%s", err, diag())
 	}
 	// The link opens in a new tab so the review session is left intact.
-	if got := evalStr(`document.querySelector('.tb-dropdown-panel a[href="/_usage"]').target`); got != "_blank" {
+	if got := evalStr(`document.querySelector('header.bar .tb-prefs a[href="/_usage"]').target`); got != "_blank" {
 		t.Fatalf("Usage-guide link target = %q, want _blank%s", got, diag())
 	}
 

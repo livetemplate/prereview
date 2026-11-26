@@ -4,7 +4,7 @@
 // comment. With "Show resolved" ON, a reviewer can hide ONE resolved comment
 // (it drops out of the diff) without turning the whole resolved group back off;
 // the hidden state is durable in comments.csv (survives a reload), and an
-// "Unhide" affordance in the View menu brings them all back.
+// "Unhide resolved" in the Annotations filter brings them all back.
 //
 // Run with: go test -tags=browser -run TestE2E_HideResolved ./e2e/...
 
@@ -63,7 +63,7 @@ func TestE2E_HideResolvedComment(t *testing.T) {
 	}
 
 	// Show resolved → both reappear (as .is-resolved), each with a Hide button.
-	p.openViewItem("toggleShowResolved")
+	p.viewAction("toggleShowResolved")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.inline-comment.is-resolved button[name='hideComment']`, chromedp.ByQuery),
 	); err != nil {
@@ -114,8 +114,8 @@ func TestE2E_HideResolvedComment(t *testing.T) {
 		t.Fatalf("after reload, hidden comment should stay hidden; want 1 card, got %d", n)
 	}
 
-	// Unhide all (View menu item, only present while hidden ones exist) → both back.
-	p.openViewItem("unhideAllResolved")
+	// Unhide resolved (a filter row, only present while hidden ones exist) → both back.
+	p.viewAction("unhideAllResolved")
 	if err := chromedp.Run(p.ctx, chromedp.Sleep(350*time.Millisecond)); err != nil {
 		t.Fatalf("unhide all: %v", err)
 	}

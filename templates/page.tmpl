@@ -126,24 +126,11 @@
 {{else if .LiveView}}{{else}}
 {{with .CurrentDiff}}
 <article>
+{{- /* The file header and the bars under it stick as one group, so they stack at
+     whatever height the header wraps to and none covers another. A selected
+     check sticks with them; the idle checks summary scrolls away below. */}}
+<div class="file-sticky" data-key="file-sticky">
 {{template "fileHeader" $}}
-  {{if $.ViewingVersion}}
-  {{/* Read-only banner while viewing a historical version. Commenting is gated
-       off (line coords don't match disk); this is the way back to the live diff. */}}
-  <div class="version-view-banner" role="status">
-    <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
-    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
-  </div>
-  {{end}}
-  {{- /* #115 B4: what changed since you last had this file open. Trimmed so it
-       adds nothing while there is nothing to say. */}}
-  {{- with $.SinceLookNotice}}
-  <div class="since-look" role="status">
-    <span>{{.Label}}</span>
-    <form method="POST" class="toast-dismiss-form"><button type="submit" name="diffSinceLook" class="outline">Show the full diff</button></form>
-    <form method="POST" class="toast-dismiss-form"><button type="submit" name="dismissSinceLook" class="outline">Dismiss</button></form>
-  </div>
-  {{- end}}
   {{- /* #115 the walkthrough's step bar: the step being read and where it points,
        ‹ › through the stops across files. Takes the stepper's slot while walking.
        Trimmed so it adds nothing to the page while no walk is on. */}}
@@ -183,7 +170,26 @@
     <span class="ann-nav-actions"><form method="POST"><button type="submit" name="expandNav" class="outline" title="Show the open-items bar">Show open items</button></form></span>
     {{- end}}
   </div>
-  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
+  {{end}}{{if $.CheckStrip}}{{if $.CheckStrip.Selected}}{{template "checksStrip" $}}{{end}}{{end}}
+</div>
+  {{if $.ViewingVersion}}
+  {{/* Read-only banner while viewing a historical version. Commenting is gated
+       off (line coords don't match disk); this is the way back to the live diff. */}}
+  <div class="version-view-banner" role="status">
+    <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
+  </div>
+  {{end}}
+  {{- /* #115 B4: what changed since you last had this file open. Trimmed so it
+       adds nothing while there is nothing to say. */}}
+  {{- with $.SinceLookNotice}}
+  <div class="since-look" role="status">
+    <span>{{.Label}}</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="diffSinceLook" class="outline">Show the full diff</button></form>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="dismissSinceLook" class="outline">Dismiss</button></form>
+  </div>
+  {{- end}}
+  {{if $.CheckStrip}}{{if not $.CheckStrip.Selected}}{{template "checksStrip" $}}{{end}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
   {{/* File-level comments + composer. Lives above the body branch so
        it's visible for every preview mode (line view, markdown blocks,
        HTML blocks, binary preview, "no diff content" placeholder).

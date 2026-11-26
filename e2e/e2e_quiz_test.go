@@ -86,15 +86,12 @@ func evalStr(t *testing.T, p *runningPrereview, js string) string {
 	return s
 }
 
-// waitForQuizEntry polls for the quiz menu entry to exist in the DOM.
-//
-// It deliberately does NOT use WaitVisible: the entry lives inside the "View ▾"
-// dropdown panel, which is closed (and therefore not visible) until clicked, so
-// WaitVisible would hang forever on an element that is present and working.
+// waitForQuizEntry polls until the toolbar's Understand button carries a quiz
+// score: the quiz arrived (the button itself is always there).
 func waitForQuizEntry(t *testing.T, p *runningPrereview) {
 	t.Helper()
 	for i := 0; i < 60; i++ {
-		if evalInt(t, p, `document.querySelectorAll(".tb-dropdown-panel button[name='toggleUnderstand']").length`) > 0 {
+		if evalInt(t, p, `document.querySelectorAll("header.bar button[name='toggleUnderstand'] .tb-count").length`) > 0 {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -102,10 +99,10 @@ func waitForQuizEntry(t *testing.T, p *runningPrereview) {
 	t.Fatalf("quiz entry never appeared after `prereview quiz` (watcher fan-out)\nstderr: %s", p.stderr.String())
 }
 
-// openQuiz opens the View dropdown and clicks the quiz entry.
+// openQuiz clicks the toolbar's Understand button.
 func openQuiz(t *testing.T, p *runningPrereview) {
 	t.Helper()
-	p.openViewItem("toggleUnderstand")
+	p.viewAction("toggleUnderstand")
 	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.quiz .quiz-list`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("quiz view never rendered: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -117,10 +114,11 @@ func TestE2E_QuizAppearsLiveAndAnswers(t *testing.T) {
 	p.waitReady()
 	p.clickFile("edited.go")
 
-	// Before the agent submits anything there is no quiz, so no menu entry. (The
-	// file header's Understand button is there from the start: it is how you ask.)
-	if n := evalInt(t, p, `document.querySelectorAll(".tb-dropdown-panel button[name='toggleUnderstand']").length`); n != 0 {
-		t.Fatalf("the quiz entry must not appear before a quiz exists, found %d", n)
+	// Before the agent submits anything there is no quiz, so no score on the
+	// toolbar's Understand button. (The button is there from the start: it is
+	// how you ask for one.)
+	if n := evalInt(t, p, `document.querySelectorAll("header.bar button[name='toggleUnderstand'] .tb-count").length`); n != 0 {
+		t.Fatalf("no quiz score before a quiz exists, found %d", n)
 	}
 
 	submitQuiz(t, p, quizJSON)

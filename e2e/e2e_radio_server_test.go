@@ -31,15 +31,18 @@ func TestE2E_ToolbarRadioFollowsServer(t *testing.T) {
 	); err != nil {
 		t.Fatalf("switch to Raw from the phone menu: %v%s", err, diag())
 	}
-	var raw, preview bool
-	if err := chromedp.Run(ctx,
-		chromedp.WaitVisible(`form[aria-label="Markdown view"]`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('form[aria-label="Markdown view"] input[value="raw"]').checked`, &raw),
-		chromedp.Evaluate(`document.querySelector('form[aria-label="Markdown view"] input[value="rendered"]').checked`, &preview),
-	); err != nil {
-		t.Fatalf("read the desktop radios: %v%s", err, diag())
+	var raw, preview string
+	pressed := func(value string) string {
+		return `(()=>{const i=document.querySelector('.file-head-view input[name="view"][value="` + value + `"]');return i?i.form.querySelector('button').getAttribute('aria-pressed'):"missing"})()`
 	}
-	if !raw || preview {
-		t.Errorf("desktop Markdown radios: raw=%v preview=%v, want Raw checked%s", raw, preview, diag())
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible(`.file-head-view`, chromedp.ByQuery),
+		chromedp.Evaluate(pressed("raw"), &raw),
+		chromedp.Evaluate(pressed("rendered"), &preview),
+	); err != nil {
+		t.Fatalf("read the desktop Preview | Raw: %v%s", err, diag())
+	}
+	if raw != "true" || preview != "false" {
+		t.Errorf("desktop Preview | Raw: raw=%s preview=%s, want Raw pressed%s", raw, preview, diag())
 	}
 }

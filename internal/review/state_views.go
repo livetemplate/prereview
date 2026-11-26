@@ -1395,8 +1395,8 @@ func (s PrereviewState) CanAnnotate() bool {
 
 // FileShowing reports that a file is loaded and on screen. A combined session
 // keeps the file loaded behind the live site, so CurrentDiff alone doesn't say
-// it shows; the file-only controls (Diff | File, Prev/Next, the View menu's
-// file items, the TOC) key on this.
+// it shows; the file-only controls (the file header's view buttons, Prev/Next,
+// Focus, the TOC) key on this.
 func (s PrereviewState) FileShowing() bool { return s.CurrentDiff != nil && !s.LiveShowing() }
 
 // FocusedComment returns the region annotation the user tapped to locate

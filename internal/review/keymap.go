@@ -68,10 +68,11 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"Mod+k"}, Display: "⌘/Ctrl + K", Action: "openSearch", Label: "Search files"},
 	{Keys: []string{"l"}, Display: "l", Action: "toggleLiveView", Label: "Switch between the files and the live site", LiveOnly: true},
 	{Keys: []string{"b"}, Display: "b", Action: "toggleBoxes", Label: "Show / hide annotation boxes"},
-	{Keys: []string{"a"}, Display: "a", Action: "toggleCommentList", Label: "All comments"},
+	{Keys: []string{"a"}, Display: "a", Action: "toggleCommentList", Label: "All annotations"},
 	{Keys: []string{"z"}, Display: "z", Action: "toggleUnderstand", Label: "Understand this change"},
-	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved comments"},
-	{Keys: []string{"s"}, Display: "s", Action: "toggleSuggestions", Label: "Show / hide suggestions"},
+	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved annotations here"},
+	{Keys: []string{"s"}, Display: "s", Action: "toggleSuggestions", Label: "Show / hide suggestions here"},
+	{Keys: []string{"d"}, Display: "d", Action: "toggleFileView", Label: "Diff: mark changes, or show the plain file"},
 	{Keys: []string{"q"}, Display: "q", Action: "toggleAgentPause", Label: "Pause / resume the agent queue", StreamOnly: true},
 	{Keys: []string{"."}, Display: ".", Action: "toggleFocusMode", Label: "Focus mode (hide side columns)"},
 	{Keys: []string{"?"}, Display: "?", Action: "toggleKeyboardHelp", Label: "Keyboard shortcuts"},
@@ -128,7 +129,11 @@ func boolIndex(b bool) int {
 // attach to, so it's harmless — and leaving it in keeps the lookup a pure map
 // over the keymap. Zero-arg so livetemplate auto-invokes it (a method-with-arg
 // would silently break rendering).
-func (s PrereviewState) KeyHint() map[string]string {
+func (s PrereviewState) KeyHint() map[string]string { return keyHints }
+
+// keyHints is built once: the keymap is static, and templates read it many
+// times per render. Read-only after init.
+var keyHints = func() map[string]string {
 	m := make(map[string]string, len(keyBindings))
 	for _, b := range keyBindings {
 		if b.Action != "" {
@@ -139,4 +144,4 @@ func (s PrereviewState) KeyHint() map[string]string {
 		}
 	}
 	return m
-}
+}()
