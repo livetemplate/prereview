@@ -100,6 +100,20 @@ func TestAsk_ForAnyThread(t *testing.T) {
 			t.Errorf("for %s: exit %d, %s", target, res.exit, res.stderr)
 		}
 	}
+	// A newer set in the quiz question's thread replaces q2 there.
+	if res := askWith(t, root, strings.Replace(askPayload, `"id":"q-refresh"`, `"id":"q3","for":"z1:zq1"`, 1)); res.exit != 0 {
+		t.Fatalf("q3: %s", res.stderr)
+	}
+	res := runBin(t, "", "questions", "--out", root, "--all", "--json")
+	var qs []review.StreamQuestion
+	if err := json.Unmarshal([]byte(res.stdout), &qs); err != nil {
+		t.Fatalf("questions --all --json: %v\n%s", err, res.stdout)
+	}
+	for _, q := range qs {
+		if want := q.ID == "q2"; q.Replaced != want {
+			t.Errorf("%s: replaced = %v, want %v", q.ID, q.Replaced, want)
+		}
+	}
 	nested := strings.Replace(askPayload, `"id":"q-refresh"`, `"id":"q9","for":"q0"`, 1)
 	if res := askWith(t, root, nested); res.exit == 0 || !strings.Contains(res.stderr, "is a question set") {
 		t.Errorf("for a question set: exit %d, %s; want it refused", res.exit, res.stderr)

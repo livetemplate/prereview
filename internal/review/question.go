@@ -342,7 +342,10 @@ func LoadQuestions(csvPath string, all bool) ([]StreamQuestion, error) {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
-	st := PrereviewState{SingleFile: SessionScope(csvPath), Comments: CommentsFromRows(rows), ThreadEntries: loadThreads(csvPath)}
+	// Suggestions and quizzes too: a set in their threads is replaced the same
+	// way (questionReplaced needs to find its thread).
+	st := PrereviewState{SingleFile: SessionScope(csvPath), Comments: CommentsFromRows(rows), ThreadEntries: loadThreads(csvPath),
+		Suggestions: LoadSuggestions(csvPath), Quizzes: LoadQuizzes(csvPath)}
 	loadQuestionState(csvPath, &st)
 	threads := st.Threads()
 	out := []StreamQuestion{}
