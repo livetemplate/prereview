@@ -156,6 +156,12 @@ func (s PrereviewState) questionQueueState(set QuestionSet) string {
 	return ""
 }
 
+// questionRowState is a set's queue state under the reply-reopen overlay: what
+// its Queue row and its card's badge say.
+func (s PrereviewState) questionRowState(set QuestionSet, awaiting map[string]bool) string {
+	return reopenIfReplied(s.questionQueueState(set), set.ID, awaiting)
+}
+
 // queueQuestionSets is the queue panel's question sets: this file's, or with
 // QueueGlobal the whole review's, like queueSuggestions.
 func (s PrereviewState) queueQuestionSets() []QuestionSet {
@@ -250,7 +256,7 @@ func (s PrereviewState) QueueHiddenCount() int {
 		}
 	}
 	for _, set := range s.scopedQuestionSets() {
-		if set.File != s.SelectedFile && reopenIfReplied(s.questionQueueState(set), set.ID, awaiting) != "" {
+		if set.File != s.SelectedFile && s.questionRowState(set, awaiting) != "" {
 			n++
 		}
 	}
@@ -271,7 +277,7 @@ func (s PrereviewState) countQueue(state string) int {
 		}
 	}
 	for _, set := range s.queueQuestionSets() {
-		if reopenIfReplied(s.questionQueueState(set), set.ID, awaiting) == state {
+		if s.questionRowState(set, awaiting) == state {
 			n++
 		}
 	}
@@ -304,7 +310,7 @@ func (s PrereviewState) DraftCount() int { return s.countQueue(queueDraft) }
 func (s PrereviewState) AwaitingAnswerCount() int {
 	n := 0
 	for _, set := range s.scopedQuestionSets() {
-		if !questionSetSent(set, s.QuestionAnswers) && !s.questionResolved(set) && !s.QuestionStatus[set.ID].Hidden {
+		if s.questionAwaitingAnswer(set) {
 			n++
 		}
 	}
@@ -467,7 +473,7 @@ func (s PrereviewState) QueueItems() []QueueItem {
 		add(QueueItem{ID: sg.ID, Kind: queueKindSuggestion, File: sg.File, Line: sg.ToLine, Body: suggestionQueueBody(sg), State: st})
 	}
 	for _, set := range s.queueQuestionSets() {
-		st := reopenIfReplied(s.questionQueueState(set), set.ID, awaiting)
+		st := s.questionRowState(set, awaiting)
 		if st == "" {
 			continue
 		}
@@ -579,7 +585,7 @@ func (s PrereviewState) outstandingAgentWork() int {
 		}
 	}
 	for _, set := range s.scopedQuestionSets() {
-		if reopenIfReplied(s.questionQueueState(set), set.ID, awaiting) == queueQueued {
+		if s.questionRowState(set, awaiting) == queueQueued {
 			n++
 		}
 	}

@@ -1370,6 +1370,11 @@ func (s *PrereviewState) scrollToSuggestion(id string, line int) {
 	s.focusPreviewBlock(line)
 }
 
+func (s *PrereviewState) scrollToQuestion(id string, line int) {
+	s.ScrollToItemKey = "qs:" + id
+	s.focusPreviewBlock(line)
+}
+
 // focusPreviewBlock focuses the HTML preview's block holding line, the way a
 // marker tap does. It does nothing outside the HTML preview.
 func (s *PrereviewState) focusPreviewBlock(line int) {

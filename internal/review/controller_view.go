@@ -506,10 +506,10 @@ func (c *PrereviewController) JumpToQuestion(state PrereviewState, ctx *livetemp
 	if err != nil {
 		return state, fmt.Errorf("jumpToQuestion: %w", err)
 	}
-	id := set.ID
+	id, line := set.ID, set.ToLine
 	state, err = c.selectFileForJump(state, set.File)
 	if err == nil {
-		state.ScrollToItemKey = "qs:" + id
+		state.scrollToQuestion(id, line)
 	}
 	return state, err
 }

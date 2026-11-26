@@ -96,7 +96,7 @@ func (s PrereviewState) navItems() []NavItem {
 	// The agent's questions wait on the reviewer until submitted, resolved or
 	// hidden (hiding drops a suggestion from the list too).
 	for i, set := range s.scopedQuestionSets() {
-		if !questionSetSent(set, s.QuestionAnswers) && !s.questionResolved(set) && !s.QuestionStatus[set.ID].Hidden {
+		if s.questionAwaitingAnswer(set) {
 			out = append(out, NavItem{File: set.File, Side: set.Side, Pos: NavPos{Body: set.LineGrounded(), Line: set.FromLine, Kind: navQuestion, Seq: i, ID: set.ID}})
 		}
 	}

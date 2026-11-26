@@ -250,7 +250,7 @@ func (c *PrereviewController) markQuestionSent(state PrereviewState, setID strin
 		return state, err
 	}
 	state.QuestionAnswers = answers
-	state.QuestionView = withEntry(state.QuestionView, setID, 0)
+	state.QuestionView = withoutEntry(state.QuestionView, setID)
 	c.scheduleEmit()
 	return state, nil
 }

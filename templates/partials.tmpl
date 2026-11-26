@@ -682,7 +682,8 @@
   <header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}><span class="sg-label">{{template "iconQuiz"}} question</span>
     {{- if gt .StepCount 1}} <small class="sg-group-tag">{{.StepCount}} questions</small>{{end}} · <small>{{.AnchorLabel}}</small>
     {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
-    {{- with .QueueState}} · <small class="queue-badge queue-badge-{{.}}">{{.}}</small>{{end}}
+    {{- if .Done}} · {{template "processedBadge"}}{{end}}
+    {{- if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}
     {{- if .Ungrounded}} · <small class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ not in this diff</small>{{end}}
     {{- if not .InThread}}<span class="sg-hide-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideQuestion" class="sg-hide-btn" title="Hide this question from view">Hide</button></form></span>{{end}}
   </header>

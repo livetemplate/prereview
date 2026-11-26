@@ -126,7 +126,7 @@ func answerText(st QuestionStep, a QuestionAnswer) string {
 func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]ThreadEntry, awaiting map[string]bool) QuestionCard {
 	c := QuestionCard{QuestionSet: set, Sent: questionSetSent(set, s.QuestionAnswers),
 		Done: s.QuestionsDone[set.ID], Thread: threads[set.ID],
-		QueueState: reopenIfReplied(s.questionQueueState(set), set.ID, awaiting),
+		QueueState: s.questionRowState(set, awaiting),
 		Resolved:   s.questionResolved(set), Hidden: s.QuestionStatus[set.ID].Hidden,
 		InThread:   s.inThread(set)}
 	if s.ReplyingID == set.ID {
@@ -175,6 +175,18 @@ func (s PrereviewState) questionCards() []QuestionCard {
 	})
 }
 
+// lineQuestionCards is the open file's question cards with a line in the diff:
+// the ones a row or a rendered block shows.
+func (s PrereviewState) lineQuestionCards() []QuestionCard {
+	var out []QuestionCard
+	for _, c := range s.questionCards() {
+		if c.LineGrounded() {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // QuestionsByComment is the question cards asked `for` each comment, by comment
 // id: the comment card renders them after its thread, as the agent's reply.
 // Every file's, so the All comments view has them too.
@@ -189,10 +201,23 @@ func (s PrereviewState) QuestionsByComment() map[string][]QuestionCard {
 	return out
 }
 
+// forComment is the comment a set was asked for, if it exists.
+func (s PrereviewState) forComment(set QuestionSet) (*Comment, bool) {
+	if set.For == "" {
+		return nil, false
+	}
+	i := slices.IndexFunc(s.Comments, func(c Comment) bool { return c.ID == set.For })
+	if i < 0 {
+		return nil, false
+	}
+	return &s.Comments[i], true
+}
+
 // inThread reports whether set renders in a comment's thread: it names a
 // comment that exists.
 func (s PrereviewState) inThread(set QuestionSet) bool {
-	return set.For != "" && slices.ContainsFunc(s.Comments, func(c Comment) bool { return c.ID == set.For })
+	_, ok := s.forComment(set)
+	return ok
 }
 
 // questionResolved reports whether set is closed: the reviewer resolved it, or
@@ -202,7 +227,15 @@ func (s PrereviewState) questionResolved(set QuestionSet) bool {
 	if s.QuestionStatus[set.ID].Resolved {
 		return true
 	}
-	return set.For != "" && slices.ContainsFunc(s.Comments, func(c Comment) bool { return c.ID == set.For && c.Resolved })
+	c, ok := s.forComment(set)
+	return ok && c.Resolved
+}
+
+// questionAwaitingAnswer reports whether set waits on the reviewer: not
+// submitted, resolved or hidden. The stepper and the End-session warning share
+// it.
+func (s PrereviewState) questionAwaitingAnswer(set QuestionSet) bool {
+	return !questionSetSent(set, s.QuestionAnswers) && !s.questionResolved(set) && !s.QuestionStatus[set.ID].Hidden
 }
 
 // questionsResolved is questionResolved for every in-scope set, by id: what the
@@ -218,14 +251,22 @@ func (s PrereviewState) questionsResolved() map[string]bool {
 }
 
 // questionCardsWhere builds the cards for the in-scope sets keep accepts. A
-// resolved set follows "Show resolved", as a resolved comment does.
+// resolved card is kept, as a resolved inline comment is: the page folds it
+// behind its row's badge, and "Show resolved" opens it.
 func (s PrereviewState) questionCardsWhere(keep func(QuestionSet) bool) []QuestionCard {
-	threads, awaiting := s.Threads(), s.AwaitingAgent()
-	var out []QuestionCard
+	var (
+		out      []QuestionCard
+		threads  map[string][]ThreadEntry
+		awaiting map[string]bool
+	)
 	for _, set := range s.scopedQuestionSets() {
-		if keep(set) && (!s.questionResolved(set) || s.ShowResolved) {
-			out = append(out, s.questionCard(set, threads, awaiting))
+		if !keep(set) {
+			continue
 		}
+		if threads == nil {
+			threads, awaiting = s.Threads(), s.AwaitingAgent()
+		}
+		out = append(out, s.questionCard(set, threads, awaiting))
 	}
 	return out
 }
@@ -234,21 +275,20 @@ func (s PrereviewState) questionCardsWhere(keep func(QuestionSet) bool) []Questi
 // line they end on, like QuizByEndLine.
 func (s PrereviewState) QuestionsByEndLine() map[int][]QuestionCard {
 	out := map[int][]QuestionCard{}
-	for _, c := range s.questionCards() {
-		if c.LineGrounded() {
-			out[c.ToLine] = append(out[c.ToLine], c)
-		}
+	for _, c := range s.lineQuestionCards() {
+		out[c.ToLine] = append(out[c.ToLine], c)
 	}
 	return out
 }
 
 // FileQuestionCards is the open file's other question cards, for the file
 // head: file sets, and sets whose lines are not in the diff (shown with a
-// warning, never dropped). The exact complement of QuestionsByEndLine.
+// warning, never dropped). The complement of QuestionsByEndLine, except that a
+// resolved one follows "Show resolved", as a file-level comment does.
 func (s PrereviewState) FileQuestionCards() []QuestionCard {
 	var out []QuestionCard
 	for _, c := range s.questionCards() {
-		if !c.LineGrounded() {
+		if !c.LineGrounded() && (!c.Resolved || s.ShowResolved) {
 			out = append(out, c)
 		}
 	}
@@ -294,11 +334,5 @@ func (s PrereviewState) QuestionOpenLines() map[string]bool {
 // rendered block (Markdown or the HTML preview), like BlockComments, so they
 // render under their block and count toward its marker.
 func (s PrereviewState) BlockQuestions() map[string][]QuestionCard {
-	var cards []QuestionCard
-	for _, c := range s.questionCards() {
-		if c.LineGrounded() {
-			cards = append(cards, c)
-		}
-	}
-	return groupByBlock(s, cards, func(c QuestionCard) int { return c.ToLine })
+	return groupByBlock(s, s.lineQuestionCards(), func(c QuestionCard) int { return c.ToLine })
 }
