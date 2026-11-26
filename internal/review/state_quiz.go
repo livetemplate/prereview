@@ -301,16 +301,8 @@ func (s PrereviewState) QuizPending() bool {
 // it, which was a worse re-implementation of the diff view; anchoring the
 // question to the line makes the code its own context.
 func (s PrereviewState) QuizByEndLine() map[int][]QuizItem {
-	if s.SelectedFile == "" {
-		return nil
-	}
 	out := map[int][]QuizItem{}
-	for _, it := range s.QuizItems() {
-		// Only questions with a resolved line have a row to render under;
-		// unanchored and ungrounded ones go to the file head (FileQuizItems).
-		if !it.LineGrounded() {
-			continue
-		}
+	for _, it := range s.lineQuizItems() {
 		end := it.EndLine()
 		out[end] = append(out[end], it)
 	}
@@ -321,13 +313,19 @@ func (s PrereviewState) QuizByEndLine() map[int][]QuizItem {
 // rendered block (Markdown or the HTML preview), like BlockComments, so a quiz
 // question renders under its block there too.
 func (s PrereviewState) BlockQuizItems() map[string][]QuizItem {
-	var items []QuizItem
+	return groupByBlock(s, s.lineQuizItems(), func(it QuizItem) int { return it.EndLine() })
+}
+
+// lineQuizItems is the open file's quiz questions with a line in the diff: the
+// ones a row or a rendered block shows. FileQuizItems is the rest.
+func (s PrereviewState) lineQuizItems() []QuizItem {
+	var out []QuizItem
 	for _, it := range s.QuizItems() {
 		if it.LineGrounded() {
-			items = append(items, it)
+			out = append(out, it)
 		}
 	}
-	return groupByBlock(s, items, func(it QuizItem) int { return it.EndLine() })
+	return out
 }
 
 // FileQuizItems are the questions that have no valid position inside the diff, so

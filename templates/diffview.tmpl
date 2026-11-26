@@ -40,7 +40,7 @@
            composing-marker must also match the SELECTED side, or they render
            on both rows. */ -}}
     {{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end -}}
-    {{- /* #151: how many comments / suggestions render on THIS row (this line, this
+    {{- /* #151: how many annotations, of any kind, render on THIS row (this line, this
            side)? AnnotationCountLines is keyed "<line>-<side>" and built from the SAME
            filtered maps the card ranges below render (lineAnnotations), so a badge's
            number matches what actually renders on the row (never both old+new).

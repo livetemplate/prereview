@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/livetemplate/prereview/internal/review"
@@ -41,12 +39,7 @@ func runQuestions(args []string) error {
 		return err
 	}
 	if *asJSON {
-		if err := review.RecordPoll(dir); err != nil { // a pickup, as for comments --json (#194)
-			fmt.Fprintf(os.Stderr, "prereview questions: could not record the agent cursor: %v\n", err)
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(sets)
+		return printAgentJSON(dir, "questions", sets)
 	}
 	if len(sets) == 0 {
 		fmt.Println("no questions")
@@ -60,7 +53,15 @@ func runQuestions(args []string) error {
 		case len(q.Answers) > 0:
 			state = "answered"
 		}
-		fmt.Printf("%s  %s:%d  %s\n", q.ID, q.File, q.FromLine, state)
+		where := q.File
+		switch {
+		case q.FromLine == 0: // a set about the whole file
+		case q.ToLine > q.FromLine:
+			where = fmt.Sprintf("%s:%d-%d", q.File, q.FromLine, q.ToLine)
+		default:
+			where = fmt.Sprintf("%s:%d", q.File, q.FromLine)
+		}
+		fmt.Printf("%s  %s  %s\n", q.ID, where, state)
 	}
 	return nil
 }

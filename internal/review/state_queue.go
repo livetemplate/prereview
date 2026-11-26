@@ -401,12 +401,8 @@ func (s PrereviewState) AwaitingReplyCount() int {
 	for _, set := range s.scopedQuestionSets() {
 		n += trailingReviewerReplies(threads[set.ID])
 	}
-	for _, q := range s.Quizzes {
-		for _, qu := range q.Questions {
-			if s.inScope(q.fileOf(qu)) {
-				n += trailingReviewerReplies(threads[QuizThreadID(q.ID, qu.ID)])
-			}
-		}
+	for _, it := range s.allQuizItems() { // the quizzes still shown, as the cards are
+		n += trailingReviewerReplies(threads[it.ThreadID])
 	}
 	return n
 }

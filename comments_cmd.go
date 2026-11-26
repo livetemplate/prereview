@@ -48,16 +48,7 @@ func runComments(args []string) error {
 	}
 
 	if *asJSON {
-		// --json is the agent-facing read: record it as a pickup so a one-shot
-		// client's review doesn't sit at "nobody picked this up" (#194). The human
-		// table is someone eyeballing the store, not a pickup. Best-effort: the read
-		// is the contract, the indicator an enrichment.
-		if err := review.RecordPoll(dir); err != nil {
-			fmt.Fprintf(os.Stderr, "prereview comments: could not record the agent cursor: %v\n", err)
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(comments) // non-nil slice ⇒ `[]` when empty, never `null`
+		return printAgentJSON(dir, "comments", comments) // non-nil slice ⇒ `[]` when empty, never `null`
 	}
 
 	if len(comments) == 0 {
@@ -68,6 +59,20 @@ func runComments(args []string) error {
 		fmt.Printf("%s  %s  %s\n", c.ID, commentLocation(c), firstLine(c.Body))
 	}
 	return nil
+}
+
+// printAgentJSON is an agent-facing read (`comments --json`, `questions --json`):
+// it records the read as a pickup, so a one-shot client's review doesn't sit at
+// "nobody picked this up" (#194), then prints v as indented JSON. The human table
+// is someone eyeballing the store, not a pickup. Best-effort: the read is the
+// contract, the indicator an enrichment.
+func printAgentJSON(dir, verb string, v any) error {
+	if err := review.RecordPoll(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "prereview %s: could not record the agent cursor: %v\n", verb, err)
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
 }
 
 // commentLocation renders a comment's anchor for the human table: file:line for

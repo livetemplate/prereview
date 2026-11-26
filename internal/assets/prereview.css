@@ -2029,27 +2029,19 @@ header.file-head .file-head-comment button svg { display: block; }
   background: var(--accent);
   box-shadow: 0 0 0 1.5px var(--surface);
 }
-/* #165: HANDLED annotations auto-collapse to their state badge, so the document reads clean
-   once work is done — a RESOLVED comment or an ACCEPTED/REJECTED suggestion tucks behind its
-   badge (accented-yellow while accepted-but-unapplied, green once applied/rejected/resolved).
-   Everything still PENDING stays visible inline: an unresolved comment, an UNDECIDED
-   suggestion (so a proposed edit is right there to accept), and a suggestion awaiting the
-   agent — being reverted (sg-revert). Collapsed cards are
-   reachable by clicking the badge (`.row-toggled`) or globally via "Show resolved"
-   (.show-resolved). The M4 status/revert controls live inside the revealed card.
-   #171: `.is-applied` collapses too, and NOT only via sg-accept. The agent can apply an
-   edit the reviewer never accepted (applied != decided), which carries is-applied but no
-   sg-* class — so without this it never collapsed and its badge stayed amber "open"
-   forever, even though the edit was already in the file. Applied is terminal. */
-/* Every card carries `.is-closed` when its work is done: a resolved comment or
-   question, a decided or applied suggestion, a settled quiz question. One class,
-   so these fold rules are one list for every kind. */
+/* #165: HANDLED annotations collapse to their row's badge, so the document reads
+   clean once work is done. Every card carries `.is-closed` when its work is done: a
+   resolved comment or question, a decided or applied suggestion (#171: applied
+   counts even when the reviewer never accepted it), a settled quiz question. Open
+   work stays inline. A collapsed card comes back with its row's badge
+   (`.row-toggled`) or "Show resolved" (`.show-resolved`). One class, so these
+   fold rules are one list for every kind. */
 .code .is-closed,
 .md-view .is-closed,
 .past-eof .is-closed { display: none; }
 /* #212: an answered quiz question (answered before this visit — `is-settled`) is done
    work, so it folds behind the row's green badge like a resolved comment. The server
-   already said so (QuizOpenLines → collapsed, badge is-done); this is the half that was
+   already said so (lineAnnotations: not Showing → collapsed, badge is-done); this is the half that was
    missing, so every taken quiz reopened fully expanded. A question answered THIS visit is
    not settled and stays open with its explanation (QuizJustAnswered). */
 .quiz-card.is-settled { display: none; }

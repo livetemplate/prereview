@@ -15,8 +15,7 @@ import (
 // Mount grounds once with the quizzes, after the file list is in.
 func (c *PrereviewController) loadQuestions(state *PrereviewState) {
 	state.QuestionsSeen = statusFingerprint(QuestionsPath(c.CSVPath))
-	state.QuestionSets = LoadQuestionSets(c.CSVPath)
-	c.applyQuestionAnswers(state)
+	loadQuestionState(c.CSVPath, state)
 }
 
 // applyQuestions loads and grounds the question sets: the watcher's and the
@@ -47,20 +46,40 @@ func (c *PrereviewController) groundQuestions(state *PrereviewState, citableFile
 // reviewer's answers and the agent's done marks. A review with no sets reads
 // neither file.
 func (c *PrereviewController) applyQuestionAnswers(state *PrereviewState) {
+	loadQuestionAnswerState(c.CSVPath, state)
+}
+
+// loadQuestionState loads the store's question sets and everything said about
+// them: the one loader the live review and `prereview questions` share.
+func loadQuestionState(csvPath string, state *PrereviewState) {
+	state.QuestionSets = LoadQuestionSets(csvPath)
+	loadQuestionAnswerState(csvPath, state)
+}
+
+// loadQuestionAnswerState loads what changes while the sets stay put: the
+// reviewer's answers and status marks, and the agent's done marks. A review with
+// no sets reads none of them.
+func loadQuestionAnswerState(csvPath string, state *PrereviewState) {
 	if len(state.QuestionSets) == 0 {
 		state.QuestionAnswers, state.QuestionsDone, state.QuestionStatus = nil, nil, nil
 		return
 	}
-	state.QuestionAnswers = loadQuestionAnswers(QuestionAnswersPath(c.CSVPath))
-	state.QuestionsDone = doneMarks(c.CSVPath)
-	state.QuestionStatus = loadQuestionStatus(QuestionStatusPath(c.CSVPath))
+	state.QuestionAnswers = loadQuestionAnswers(QuestionAnswersPath(csvPath))
+	state.QuestionsDone = doneMarks(csvPath)
+	state.QuestionStatus = loadQuestionStatus(QuestionStatusPath(csvPath))
+}
+
+// streamQuestions is the sets the agent must act on, as it reads them: the
+// snapshot's questions field and `prereview questions`.
+func (s PrereviewState) streamQuestions(threads map[string][]ThreadEntry) []StreamQuestion {
+	return actionableQuestions(s.scopedQuestionSets(), s.QuestionAnswers, s.questionsResolved(), s.QuestionsDone, threads)
 }
 
 // emitSnapshotOf emits state's snapshot: the one argument list both the
 // debounced emit and the final flush send.
 func (c *PrereviewController) emitSnapshotOf(st *PrereviewState) error {
 	threads := st.Threads()
-	questions := actionableQuestions(st.scopedQuestionSets(), st.QuestionAnswers, st.questionsResolved(), st.QuestionsDone, threads)
+	questions := st.streamQuestions(threads)
 	return c.Emitter.EmitSnapshot(st.scopedComments(), st.scopedSuggestions(), st.DecisionsBySuggestion(), threads, st.Applied, st.QuizResults(), questions, c.WriteWith(), c.isPaused(), time.Now())
 }
 

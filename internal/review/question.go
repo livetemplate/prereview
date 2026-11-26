@@ -331,31 +331,22 @@ func toStreamQuestion(s QuestionSet, answers map[string]QuestionAnswer, resolved
 
 // LoadQuestions is `prereview questions`: the question sets of the store whose
 // CSV is at csvPath, as the agent reads them. By default only the ones to act
-// on, exactly what a snapshot's questions field carries; with all, every set,
+// on, as a snapshot's questions field carries them (less anchor_status, which
+// needs the change index only the server builds); with all, every set,
 // unanswered ones with empty answers.
 func LoadQuestions(csvPath string, all bool) ([]StreamQuestion, error) {
 	rows, err := csv.Read(csvPath)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
-	st := PrereviewState{
-		SingleFile:      SessionScope(csvPath),
-		Comments:        CommentsFromRows(rows),
-		QuestionSets:    LoadQuestionSets(csvPath),
-		QuestionAnswers: loadQuestionAnswers(QuestionAnswersPath(csvPath)),
-		QuestionStatus:  loadQuestionStatus(QuestionStatusPath(csvPath)),
-		QuestionsDone:   doneMarks(csvPath),
-		ThreadEntries:   loadThreads(csvPath),
-	}
-	threads, resolved := st.Threads(), st.questionsResolved()
-	if !all {
-		out := actionableQuestions(st.scopedQuestionSets(), st.QuestionAnswers, resolved, st.QuestionsDone, threads)
-		if out == nil {
-			out = []StreamQuestion{}
-		}
-		return out, nil
-	}
+	st := PrereviewState{SingleFile: SessionScope(csvPath), Comments: CommentsFromRows(rows), ThreadEntries: loadThreads(csvPath)}
+	loadQuestionState(csvPath, &st)
+	threads := st.Threads()
 	out := []StreamQuestion{}
+	if !all {
+		return append(out, st.streamQuestions(threads)...), nil
+	}
+	resolved := st.questionsResolved()
 	for _, s := range st.scopedQuestionSets() {
 		out = append(out, toStreamQuestion(s, st.QuestionAnswers, resolved[s.ID], threads[s.ID]))
 	}

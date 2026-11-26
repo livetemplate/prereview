@@ -36,13 +36,13 @@ func TestAnnotationBadges_StateModel(t *testing.T) {
 		t.Errorf("a resolved-only line must still render (was the vanish bug); got %d", got)
 	}
 	// Count = all comments; open map = only rows with an unresolved one.
-	if s.CommentCountLines()["3-new"] != 2 || s.CommentCountLines()["7-new"] != 1 {
-		t.Errorf("comment counts wrong: %v", s.CommentCountLines())
+	if s.AnnotationCountLines()["3-new"] != 2 || s.AnnotationCountLines()["7-new"] != 1 {
+		t.Errorf("comment counts wrong: %v", s.AnnotationCountLines())
 	}
-	if !s.CommentOpenLines()["3-new"] {
+	if !s.AnnotationOpenLines()["3-new"] {
 		t.Error("line 3 has an open comment → yellow")
 	}
-	if s.CommentOpenLines()["7-new"] {
+	if s.AnnotationOpenLines()["7-new"] {
 		t.Error("line 7 is all-resolved → green (not open)")
 	}
 
@@ -51,23 +51,23 @@ func TestAnnotationBadges_StateModel(t *testing.T) {
 	if got := len(s.SuggestionsByEndLine()[4]); got != 2 {
 		t.Errorf("both line-4 suggestions render inline (decided collapses via CSS, not exclusion); got %d", got)
 	}
-	if s.SuggestionCountLines()["4-new"] != 2 || s.SuggestionCountLines()["5-new"] != 1 {
-		t.Errorf("suggestion counts wrong: %v", s.SuggestionCountLines())
+	if s.AnnotationCountLines()["4-new"] != 2 || s.AnnotationCountLines()["5-new"] != 1 {
+		t.Errorf("suggestion counts wrong: %v", s.AnnotationCountLines())
 	}
 	// OPEN map = undecided only. Line 4 has sOpen (undecided) → open; line 5's sApp is
 	// applied → not open.
-	if !s.SuggestionOpenLines()["4-new"] {
+	if !s.AnnotationOpenLines()["4-new"] {
 		t.Error("line 4 has an undecided suggestion → open (yellow)")
 	}
-	if s.SuggestionOpenLines()["5-new"] {
+	if s.AnnotationOpenLines()["5-new"] {
 		t.Error("line 5's only suggestion is applied → not open")
 	}
 	// ACCEPTED map = accepted-but-unapplied. Line 4 has sAcc → accepted; line 5's sApp is
 	// applied (done), not accepted-pending.
-	if !s.SuggestionAcceptedLines()["4-new"] {
+	if !s.AnnotationAcceptedLines()["4-new"] {
 		t.Error("line 4 has an accepted-but-unapplied suggestion → accepted (accentuated yellow)")
 	}
-	if s.SuggestionAcceptedLines()["5-new"] {
+	if s.AnnotationAcceptedLines()["5-new"] {
 		t.Error("line 5's suggestion is applied, not accepted-pending")
 	}
 	// The three predicates are mutually exclusive per suggestion.
