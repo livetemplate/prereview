@@ -2,6 +2,7 @@ package review
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/livetemplate/prereview/csv"
@@ -357,96 +358,32 @@ func (s PrereviewState) FileQuizItems() []QuizItem {
 	return out
 }
 
-// QuizCountLines counts the quiz questions anchored to each row, keyed
-// "<line>-<side>" exactly like CommentCountLines — so a question contributes to
-// the row's annotation badge and can be collapsed with everything else on that
-// line. A quiz question is an annotation; it collapses like one.
-func (s PrereviewState) QuizCountLines() map[string]int {
-	out := map[string]int{}
-	for end, items := range s.QuizByEndLine() {
-		for _, it := range items {
-			countRowSides(out, end, it.Side)
-		}
+// fileHeadAnnotations is every annotation at the file head: file-level and
+// area comments, and quiz questions and the agent's questions with no line in
+// the diff. They collapse together under one badge (FileHeadRowKey).
+func (s PrereviewState) fileHeadAnnotations() []rowAnnotation {
+	var out []rowAnnotation
+	for _, c := range s.FileLevelComments() {
+		out = append(out, rowAnnotation{Open: !c.Resolved, Showing: !c.Resolved})
 	}
-	if len(out) == 0 {
-		return nil
+	for _, c := range s.AreaComments() {
+		out = append(out, rowAnnotation{Open: !c.Resolved, Showing: !c.Resolved})
 	}
-	return out
-}
-
-// QuizOpenLines marks rows carrying an UNANSWERED question — open work, so the
-// badge reads open (yellow) rather than done, matching an unresolved comment.
-func (s PrereviewState) QuizOpenLines() map[string]bool {
-	return s.quizLinesWhere(func(it QuizItem) bool { return !it.Answered })
-}
-
-// quizShowingLines marks rows with a quiz card showing by default: unanswered, or
-// answered THIS visit (#212). That is what rowState means by "open" — a badge click
-// there records "hide", and after a reload (when the row's default becomes
-// collapsed) the toggle expires instead of flipping into a reveal. The badge
-// COLOUR uses QuizOpenLines instead: an answered question is done.
-func (s PrereviewState) quizShowingLines() map[string]bool {
-	return s.quizLinesWhere(func(it QuizItem) bool { return !it.Settled })
-}
-
-// quizLinesWhere keys every inline question matching pred to its row(s).
-func (s PrereviewState) quizLinesWhere(pred func(QuizItem) bool) map[string]bool {
-	out := map[string]bool{}
-	for end, items := range s.QuizByEndLine() {
-		for _, it := range items {
-			if pred(it) {
-				for _, k := range rowKeysFor(end, it.Side) {
-					out[k] = true
-				}
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-// fileHeadQuizShowing: a file-head question card is showing by default (see
-// quizShowingLines) — so for rowState the head group is open.
-func (s PrereviewState) fileHeadQuizShowing() bool {
 	for _, it := range s.FileQuizItems() {
-		if !it.Settled {
-			return true
-		}
+		out = append(out, rowAnnotation{Open: !it.Answered, Showing: !it.Settled})
 	}
-	return false
+	for _, c := range s.FileQuestionCards() {
+		out = append(out, rowAnnotation{Open: !c.Resolved, Showing: !c.Resolved})
+	}
+	return out
 }
 
 // FileHeadAnnotationCount is how many annotations sit at the file head — the
-// number the shared row badge shows there. Counts file-level and area comments
-// alongside the head quiz questions, because they all collapse together.
-func (s PrereviewState) FileHeadAnnotationCount() int {
-	return len(s.FileLevelComments()) + len(s.AreaComments()) + len(s.FileQuizItems()) + len(s.FileQuestionCards())
-}
+// number the shared head badge shows.
+func (s PrereviewState) FileHeadAnnotationCount() int { return len(s.fileHeadAnnotations()) }
 
 // FileHeadHasOpen reports whether anything at the file head is still open work,
 // which is what makes the shared badge read "open" rather than "done".
 func (s PrereviewState) FileHeadHasOpen() bool {
-	for _, c := range s.FileLevelComments() {
-		if !c.Resolved {
-			return true
-		}
-	}
-	for _, c := range s.AreaComments() {
-		if !c.Resolved {
-			return true
-		}
-	}
-	for _, it := range s.FileQuizItems() {
-		if !it.Answered {
-			return true
-		}
-	}
-	for _, c := range s.FileQuestionCards() {
-		if !c.Resolved {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(s.fileHeadAnnotations(), func(a rowAnnotation) bool { return a.Open })
 }

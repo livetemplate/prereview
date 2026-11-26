@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/livetemplate/prereview/gitdiff"
@@ -467,23 +468,58 @@ func (s PrereviewState) SuggestionAcceptedLines() map[string]bool {
 	return out
 }
 
-// AnnotationCountLines is the per-row TOTAL — comments + suggestions — driving the one
-// unified right-margin badge (#165: a single badge per line, not one per kind).
-func (s PrereviewState) AnnotationCountLines() map[string]int {
-	out := map[string]int{}
-	for k, n := range s.CommentCountLines() {
-		out[k] += n
+// rowAnnotation is one annotation as the row hooks see it: where it hangs and
+// what its row's badge and default visibility take from it.
+type rowAnnotation struct {
+	Line int
+	Side string
+	// Open: unresolved, undecided or unanswered work (a yellow badge).
+	Open bool
+	// Accepted: an accepted suggestion the agent has not applied (#165).
+	Accepted bool
+	// Showing: the card shows by default. That is Open, except a quiz question
+	// answered this visit stays showing with its explanation (#212).
+	Showing bool
+}
+
+// lineAnnotations is every annotation on the open file's diff rows, of every
+// kind: the one list the row badge, its colour, the row's default visibility
+// and the fold pins read. Adding a kind is one loop here.
+func (s PrereviewState) lineAnnotations() []rowAnnotation {
+	var out []rowAnnotation
+	for ln, cs := range s.CommentsByEndLine() {
+		for _, c := range cs {
+			out = append(out, rowAnnotation{Line: ln, Side: c.Side, Open: !c.Resolved, Showing: !c.Resolved})
+		}
 	}
-	for k, n := range s.SuggestionCountLines() {
-		out[k] += n
+	for ln, sgs := range s.SuggestionsByEndLine() {
+		for _, sg := range sgs {
+			open := s.suggestionUndecided(sg.ID)
+			out = append(out, rowAnnotation{Line: ln, Side: sg.Side, Open: open, Accepted: s.suggestionAcceptedPending(sg.ID), Showing: open})
+		}
 	}
-	// #191: a quiz question is an annotation on the line, so it counts toward the
-	// row badge and collapses with the rest.
-	for k, n := range s.QuizCountLines() {
-		out[k] += n
+	for end, items := range s.QuizByEndLine() {
+		for _, it := range items {
+			out = append(out, rowAnnotation{Line: end, Side: it.Side, Open: !it.Answered, Showing: !it.Settled})
+		}
 	}
-	for k, n := range s.QuestionCountLines() {
-		out[k] += n
+	for end, cards := range s.QuestionsByEndLine() {
+		for _, c := range cards {
+			out = append(out, rowAnnotation{Line: end, Side: c.Side, Open: !c.Resolved, Showing: !c.Resolved})
+		}
+	}
+	return out
+}
+
+// annotationLinesWhere keys every line annotation pred accepts to its row(s).
+func (s PrereviewState) annotationLinesWhere(pred func(rowAnnotation) bool) map[string]bool {
+	out := map[string]bool{}
+	for _, a := range s.lineAnnotations() {
+		if pred(a) {
+			for _, k := range rowKeysFor(a.Line, a.Side) {
+				out[k] = true
+			}
+		}
 	}
 	if len(out) == 0 {
 		return nil
@@ -491,34 +527,31 @@ func (s PrereviewState) AnnotationCountLines() map[string]int {
 	return out
 }
 
-// AnnotationOpenLines reports, per row, whether ANY annotation is open (unresolved
-// comment / undecided suggestion) — the unified badge is yellow.
-func (s PrereviewState) AnnotationOpenLines() map[string]bool {
-	out := map[string]bool{}
-	for k := range s.CommentOpenLines() {
-		out[k] = true
-	}
-	for k := range s.SuggestionOpenLines() {
-		out[k] = true
-	}
-	for k := range s.QuizOpenLines() {
-		out[k] = true
-	}
-	for k := range s.QuestionOpenLines() {
-		out[k] = true
+// AnnotationCountLines is the per-row total of every kind of annotation,
+// driving the one right-margin badge (#165) and the fold pins.
+func (s PrereviewState) AnnotationCountLines() map[string]int {
+	out := map[string]int{}
+	for _, a := range s.lineAnnotations() {
+		countRowSides(out, a.Line, a.Side)
 	}
 	if len(out) == 0 {
 		return nil
 	}
 	return out
+}
+
+// AnnotationOpenLines reports, per row, whether any annotation is open — the
+// unified badge is yellow.
+func (s PrereviewState) AnnotationOpenLines() map[string]bool {
+	return s.annotationLinesWhere(func(a rowAnnotation) bool { return a.Open })
 }
 
 // AnnotationAcceptedLines reports, per row, whether the row has any accepted-but-unapplied
 // suggestion (#165) — the badge is accentuated yellow (else it falls through to open→yellow
-// or done→green). Only suggestions have an accepted state. The template checks it AFTER
-// AnnotationOpenLines, so open wins on a mixed row.
+// or done→green). The template checks it AFTER AnnotationOpenLines, so open wins on a
+// mixed row.
 func (s PrereviewState) AnnotationAcceptedLines() map[string]bool {
-	return s.SuggestionAcceptedLines()
+	return s.annotationLinesWhere(func(a rowAnnotation) bool { return a.Accepted })
 }
 
 // The two default visibilities a row can have (#165): a row with any OPEN annotation shows
@@ -549,13 +582,12 @@ func (s PrereviewState) rowState(key string) string {
 	case key == PastEndRowKey:
 		open = s.PastEndHasOpen()
 	case key == FileHeadRowKey:
-		// The file head has no line, so AnnotationOpenLines never carries it; ask
-		// the head group directly (its badge colour comes from the same call).
-		open = s.FileHeadHasOpen() || s.fileHeadQuizShowing()
+		// The file head has no line, so the line list never carries it.
+		open = slices.ContainsFunc(s.fileHeadAnnotations(), func(a rowAnnotation) bool { return a.Showing })
 	case strings.HasPrefix(key, "MB-"):
 		open = s.BlockAnnotations()[key].Open
 	default:
-		open = s.AnnotationOpenLines()[key] || s.quizShowingLines()[key]
+		open = s.annotationLinesWhere(func(a rowAnnotation) bool { return a.Showing })[key]
 	}
 	if open {
 		return rowStateOpen
@@ -643,7 +675,7 @@ func (s PrereviewState) SuggestionCountLines() map[string]int {
 // badges — i.e. whether the "Hide annotations" toggle (ToggleMarks) has anything to
 // act on. Gates that menu entry. Reads the same memoized count maps the badges use.
 func (s PrereviewState) HasMarks() bool {
-	return len(s.CommentCountLines()) > 0 || len(s.SuggestionCountLines()) > 0
+	return len(s.AnnotationCountLines()) > 0
 }
 
 // Threads groups the loaded conversation entries (#149) by target ID (a comment or

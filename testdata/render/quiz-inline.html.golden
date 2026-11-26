@@ -292,6 +292,25 @@
         
         
         
+        <form method="POST">
+          <button
+            type="submit"
+            name="toggleMarks"
+            class="menu-item is-on"
+            role="menuitem"
+          >
+            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span>
+            <span class="menu-label">Hide annotations</span>
+          </button>
+        </form>
+        
         
         
         
@@ -545,6 +564,25 @@
   </form>
   
   
+  
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleMarks"
+      class="menu-item is-on"
+      role="menuitem"
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M5 12l4 4 10-10"
+  stroke="currentColor"
+  stroke-width="2.2"
+  fill="none"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+/></svg></span>
+      <span class="menu-label">Hide annotations</span>
+    </button>
+  </form>
   
   
   
@@ -957,7 +995,7 @@
                 title="Show/hide this line's annotations">
           <span class="line-mark is-done" aria-hidden="true">1</span>
         </button>
-      </span><div class="quiz-card is-answered is-settled" data-key="quiz-q1" id="qc-q1">
+      </span><div class="quiz-card is-answered is-settled is-closed" data-key="quiz-q1" id="qc-q1">
   
   <div class="quiz-card-head">
     <span class="quiz-probe quiz-probe-consequence">consequence</span>
