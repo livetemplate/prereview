@@ -105,7 +105,7 @@
           {{- /* */ -}}<span class="anno-body">{{.Body}}</span></button>
         </form>
         {{- /* #248: the agent's replies, and the reviewer's reply form */ -}}
-        {{- template "thread" (index $.Threads .ID) -}}
+        {{- template "thread" (index $.ThreadViews .ID) -}}
         {{- if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end -}}
         {{- /* resolve / edit / delete */ -}}
         <div class="ic-actions">

@@ -113,7 +113,7 @@ func parseAskInput(raw []byte) ([]review.QuestionSet, error) {
 	for i := range parsed {
 		s := review.NormalizeQuestionSet(parsed[i])
 		if s.CreatedAt == "" {
-			s.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+			s.CreatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		}
 		if err := review.ValidateQuestionSet(s); err != nil {
 			return nil, fmt.Errorf("question set %d (%s): %w", i+1, s.ID, err)

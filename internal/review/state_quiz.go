@@ -30,7 +30,7 @@ type QuizItem struct {
 	// machinery, and Thread the conversation so far. Carried on the row so the card
 	// partial stays self-contained.
 	ThreadID   string
-	Thread     []ThreadEntry
+	Thread     []ThreadItem
 	Replying   bool
 	ReplyDraft string
 	Answered   bool
@@ -120,7 +120,7 @@ func (s PrereviewState) withThreads(items []QuizItem) []QuizItem {
 	if len(items) == 0 {
 		return items
 	}
-	threads := s.Threads()
+	threads := s.ThreadViews()
 	for i := range items {
 		items[i].Thread = threads[items[i].ThreadID]
 		if s.ReplyingID == items[i].ThreadID {

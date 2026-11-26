@@ -181,3 +181,31 @@ func TestStream_QuestionLifecycle(t *testing.T) {
 		t.Fatalf("after done: got %+v, want none", got)
 	}
 }
+
+// TestThreadViews_CardInTimeOrder: a set asked in a thread sits among the
+// thread's replies by when it was asked; one with no time goes last.
+func TestThreadViews_CardInTimeOrder(t *testing.T) {
+	at := func(s string) int64 { tm, _ := time.Parse(time.RFC3339Nano, s); return tm.UnixNano() }
+	s := PrereviewState{
+		Comments: []Comment{{ID: "c1", File: "a.go", FromLine: 1, ToLine: 1}},
+		ThreadEntries: []ThreadEntry{
+			{TargetID: "c1", Author: AuthorReviewer, Body: "before", At: at("2026-11-26T10:00:00.2Z")},
+			{TargetID: "c1", Author: AuthorAgent, Body: "after", At: at("2026-11-26T10:00:00.6Z")},
+		},
+		QuestionSets: []QuestionSet{
+			{ID: "q1", For: "c1", File: "a.go", CreatedAt: "2026-11-26T10:00:00.4Z", Steps: []QuestionStep{{ID: "s", Prompt: "p", Options: []QuestionOption{{Label: "a"}}}}},
+			{ID: "q2", For: "c1", File: "a.go", Steps: []QuestionStep{{ID: "s", Prompt: "p", Options: []QuestionOption{{Label: "a"}}}}},
+		},
+	}
+	var got []string
+	for _, it := range s.ThreadViews()["c1"] {
+		if it.Question != nil {
+			got = append(got, it.Question.ID)
+		} else {
+			got = append(got, it.Body)
+		}
+	}
+	if want := []string{"before", "q1", "after", "q2"}; !slices.Equal(got, want) {
+		t.Errorf("thread order = %v, want %v", got, want)
+	}
+}

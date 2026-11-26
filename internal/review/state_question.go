@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 // QuestionCard is a question set as its card renders it: the question on
@@ -65,7 +66,6 @@ func (c QuestionCard) FirstPrompt() string { return c.Steps[0].Prompt }
 
 // StepCount is how many questions the set holds.
 func (c QuestionCard) StepCount() int { return len(c.Steps) }
-
 
 // LineGrounded reports whether the set renders under a line of the diff: a
 // line or text set whose lines exist. The rest render at the file head.
@@ -130,7 +130,7 @@ func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]Threa
 		Done: s.QuestionsDone[set.ID], Thread: threads[set.ID],
 		QueueState: s.questionRowState(set, awaiting),
 		Resolved:   s.questionResolved(set), Hidden: s.QuestionStatus[set.ID].Hidden,
-		InThread:   s.inThread(set)}
+		InThread: s.inThread(set)}
 	if s.ReplyingID == set.ID {
 		c.ReplyingID, c.ReplyDraft = set.ID, s.ReplyDraft
 	}
@@ -166,8 +166,7 @@ func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]Threa
 }
 
 // questionCards is the cards for the open file's sets that stand on their own:
-// a set asked `for` a comment renders in that comment's thread instead
-// (QuestionsByThread).
+// a set asked `for` a thread renders in that thread instead (ThreadViews).
 func (s PrereviewState) questionCards() []QuestionCard {
 	if s.SelectedFile == "" || len(s.QuestionSets) == 0 {
 		return nil
@@ -189,19 +188,46 @@ func (s PrereviewState) lineQuestionCards() []QuestionCard {
 	return out
 }
 
-// QuestionsByThread is the question cards asked `for` each thread, by the
-// thread's id (a comment's or suggestion's id, or a quiz question's thread id):
-// the card renders them after its thread, as the agent's reply. Every file's,
+// ThreadViews is every thread as its card renders it, by target id: the
+// replies, with each question set the agent asked in the thread (`ask --for`)
+// placed among them by when it was asked, as the agent's reply. Every file's,
 // so the All comments view has them too.
-func (s PrereviewState) QuestionsByThread() map[string][]QuestionCard {
-	if len(s.QuestionSets) == 0 {
+func (s PrereviewState) ThreadViews() map[string][]ThreadItem {
+	threads := s.Threads()
+	out := make(map[string][]ThreadItem, len(threads))
+	for id, th := range threads {
+		out[id] = threadItems(th)
+	}
+	if len(s.QuestionSets) > 0 {
+		for _, c := range s.questionCardsWhere(s.inThread) {
+			items := out[c.For]
+			at := c.askedAt()
+			i := slices.IndexFunc(items, func(it ThreadItem) bool { return it.At > at })
+			if i < 0 || at == 0 {
+				i = len(items)
+			}
+			out[c.For] = slices.Insert(items, i, ThreadItem{
+				ThreadEntry: ThreadEntry{TargetID: c.For, Author: AuthorAgent, At: at}, Question: &c})
+		}
+	}
+	if len(out) == 0 {
 		return nil
 	}
-	out := map[string][]QuestionCard{}
-	for _, c := range s.questionCardsWhere(s.inThread) {
-		out[c.For] = append(out[c.For], c)
-	}
 	return out
+}
+
+// askedAt is when the agent asked the set, in nanoseconds; 0 when unknown.
+func (s QuestionSet) askedAt() int64 {
+	t, err := time.Parse(time.RFC3339, s.CreatedAt)
+	if err != nil {
+		return 0
+	}
+	return t.UnixNano()
+}
+
+// When is when the agent asked the set, as a thread entry shows its time.
+func (c QuestionCard) When() string {
+	return ThreadEntry{At: c.askedAt()}.When()
 }
 
 // forComment is the comment a set was asked for, if it exists.

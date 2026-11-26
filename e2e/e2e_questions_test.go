@@ -357,12 +357,23 @@ func TestE2E_QuestionInQuizAndSuggestionThreads(t *testing.T) {
 		{"suggestion", `.inline-suggestion[data-key='sg-s-t']`, "s-t", "Keep the old name"},
 	} {
 		id := "q-" + tc.name
+		mustCLI(t, p, "reply", "--out", p.repo, tc.target, "--body", "BEFORE-T")
 		runAgentVerb(t, p, "ask", `{"id":"`+id+`","for":"`+tc.target+`","file":"edited.go","from_line":4,"to_line":4,
 		 "steps":[{"id":"pick","prompt":"ASK-T Which way?","options":[{"label":"`+tc.label+`"},{"label":"Something simpler"}],"recommended":0}]}`)
-		inThread := tc.card + ` .question-card[data-key='question-` + id + `']`
-		waitJSDiag(t, p, `!!document.querySelector("`+inThread+`")`, "the question inside the "+tc.name+" card", diag)
+		mustCLI(t, p, "reply", "--out", p.repo, tc.target, "--body", "AFTER-T")
+		inThread := tc.card + ` .thread > .question-card[data-key='question-` + id + `']`
+		waitJSDiag(t, p, `!!document.querySelector("`+inThread+`") && /AFTER-T/.test(document.querySelector("`+tc.card+`").textContent)`, "the question inside the "+tc.name+" thread", diag)
 		if n := evalInt(t, p, `document.querySelectorAll(".question-card[data-key='question-`+id+`']").length`); n != 1 {
 			t.Fatalf("%s: the question renders %d times, want once (in the thread)%s", tc.name, n, diag())
+		}
+		// The card is the agent's reply: between the two replies, in time
+		// order, under a reply's header rather than a line label.
+		order := evalStr(t, p, `[...document.querySelector("`+tc.card+` .thread").children].map(e => e.classList.contains('question-card') ? 'CARD' : e.querySelector('.thread-body').textContent).join(',')`)
+		if order != "BEFORE-T,CARD,AFTER-T" {
+			t.Errorf("%s: the thread reads %q, want BEFORE-T,CARD,AFTER-T%s", tc.name, order, diag())
+		}
+		if h := evalStr(t, p, `document.querySelector("`+inThread+` header").textContent`); !strings.HasPrefix(strings.TrimSpace(h), "agent") || strings.Contains(h, "L4") {
+			t.Errorf("%s: the card header reads %q, want the agent's reply header without a line label%s", tc.name, h, diag())
 		}
 		tapIn(t, p, inThread+` button[name='pickQuestionOption']`, "pick in the "+tc.name+" thread", diag)
 		waitQuestions(t, p, "after the "+tc.name+" pick", func(qs []review.StreamQuestion) bool {

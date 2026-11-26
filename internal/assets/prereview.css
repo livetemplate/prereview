@@ -3062,7 +3062,8 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.03em; color: var(--pico-muted-color);
 }
-.thread-agent .thread-author { color: var(--accent); }
+.thread-agent .thread-author,
+.question-card .thread-author { color: var(--accent); }
 .thread-when { font-size: 0.66rem; color: var(--pico-muted-color); }
 .thread-body { white-space: pre-wrap; word-break: break-word; font-size: 0.82rem; }
 /* #149 reviewer reply form + the awaiting-agent badge. */

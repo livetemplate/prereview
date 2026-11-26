@@ -367,10 +367,7 @@
   {{- with index $.RippleByComment .ID}}<div class="ripple-row" role="group" aria-label="Follow-on edits"><span class="ripple-count">Follow-on edits: {{.Open}} open of {{.Total}}</span>{{if .Acceptable}}<form method="POST"><button type="submit" name="acceptRipple" value="{{.CommentID}}" class="accept">Accept all</button></form>{{end}}{{if .Open}}<form method="POST"><button type="submit" name="rejectRipple" value="{{.CommentID}}" class="outline reject">Reject all</button></form>{{end}}{{if .NeedPick}}<small class="ripple-pick">{{.NeedPick}} set{{if gt .NeedPick 1}}s{{end}} of alternatives need{{if eq .NeedPick 1}}s{{end}} your pick</small>{{end}}</div>{{end -}}
   {{- /* #149 conversation thread — the agent's replies ("what I did") + the
          reviewer's follow-ups, rendered under the body. Empty → nothing renders. */ -}}
-  {{- template "thread" (index $.Threads .ID) -}}
-  {{- /* the agent's questions for this comment (prereview ask --for): a reply
-         with options, after the thread */ -}}
-  {{- range index $.QuestionsByThread .ID}}{{template "questionCard" .}}{{end -}}
+  {{- template "thread" (index $.ThreadViews .ID) -}}
   {{- /* #149 reviewer reply — the inline form when open on this card. */ -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
@@ -446,14 +443,33 @@
 {{- if . -}}
 <div class="thread">
   {{- range . -}}
-  <div class="thread-entry thread-{{.Author}}">
-    <div class="thread-meta"><span class="thread-author">{{.Who}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
-    <div class="thread-body">{{.Body}}</div>
-  </div>
+  {{- /* a question set the agent asked here (ask --for) is its reply, in time order */ -}}
+  {{- if .Question}}{{template "questionCard" .Question}}{{else -}}
+  {{template "threadEntry" .}}
+  {{- end}}
   {{- end -}}
 </div>
 {{- end -}}
 {{- end}}
+
+{{/* replies — a question card's own thread: the replies alone. A set is never
+     asked in another set's thread, and a separate partial keeps "thread" →
+     "questionCard" from recursing: livetemplate leaves a recursive call
+     un-inlined, which rebinds $ to the argument. */}}
+{{define "replies" -}}
+{{- if . -}}
+<div class="thread">
+  {{- range . -}}
+  {{template "threadEntry" .}}
+  {{- end -}}
+</div>
+{{- end -}}
+{{- end}}
+
+{{define "threadEntry"}}<div class="thread-entry thread-{{.Author}}">
+    <div class="thread-meta"><span class="thread-author">{{.Who}}</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}</div>
+    <div class="thread-body">{{.Body}}</div>
+  </div>{{end}}
 
 {{/* suggestionCard — one LLM-proposed edit (issue #98), rendered inline like a
      comment but visually distinct (sparkle icon, accent-tinted chrome, a
@@ -501,8 +517,7 @@
   <details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{- .OriginalText -}}</pre></details>
   {{- end -}}
   {{- /* #149 conversation thread — the agent's replies + reviewer follow-ups. */ -}}
-  {{- template "thread" (index $.Threads .ID) -}}
-  {{- range index $.QuestionsByThread .ID}}{{template "questionCard" .}}{{end -}}
+  {{- template "thread" (index $.ThreadViews .ID) -}}
   {{- /* #149 reviewer reply — inline form when open, else a Reply button. */ -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
@@ -568,7 +583,7 @@
          renders. A file/area comment has no line anchor, but its thread is keyed by
          comment ID like any other, so the agent's "what I did" replies and the
          reviewer's follow-ups belong here too (#167). */ -}}
-  {{- template "thread" (index $.Threads .ID) -}}
+  {{- template "thread" (index $.ThreadViews .ID) -}}
   {{- if eq $.ReplyingID .ID -}}
   {{- template "replyForm" $ -}}
   {{- end -}}
@@ -652,7 +667,6 @@
          thread machinery comments and suggestions use — the only new part is the
          composite target id, since a question id is unique only within its quiz. */ -}}
   {{- template "thread" .Thread -}}
-  {{- range index $.QuestionsByThread .ThreadID}}{{template "questionCard" .}}{{end -}}
   {{if .Replying}}
   <form method="POST" class="reply-form" lvt-on:keydown="postReply" lvt-key="Mod+Enter">
     <input type="hidden" name="id" value="{{.ThreadID}}">
@@ -681,13 +695,14 @@
 {{define "questionCard"}}{{$card := .}}{{- if .Hidden}}<form method="POST" class="sg-hidden-marker question-hidden-marker" data-key="question-{{.ID}}"><input type="hidden" name="id" value="{{.ID}}"><span class="sg-hidden-label">1 hidden question</span> <button type="submit" name="showQuestion" class="sg-hide-btn">Show</button></form>
 {{- else}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}{{if .Resolved}} is-resolved is-closed{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}">
   {{- /* label · step count · line span · status badges, Hide at the right: the
-         suggestion card's header, since the agent wrote this card too */ -}}
-  <header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}><span class="sg-label">{{template "iconQuiz"}} question</span>
-    {{- if gt .StepCount 1}} <small class="sg-group-tag">{{.StepCount}} questions</small>{{end}} · <small>{{.AnchorLabel}}</small>
+         suggestion card's header, since the agent wrote this card too. In a
+         thread it is the agent's reply, so it takes a reply's header instead. */ -}}
+  <header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>{{if .InThread}}<span class="thread-author">agent</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}{{else}}<span class="sg-label">{{template "iconQuiz"}} question</span>{{end}}
+    {{- if gt .StepCount 1}} <small class="sg-group-tag">{{.StepCount}} questions</small>{{end}}{{if not .InThread}} · <small>{{.AnchorLabel}}</small>{{end}}
     {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
     {{- if .Done}} · {{template "processedBadge"}}{{end}}
     {{- if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}
-    {{- if .Ungrounded}} · <small class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ not in this diff</small>{{end}}
+    {{- if and .Ungrounded (not .InThread)}} · <small class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ not in this diff</small>{{end}}
     {{- if not .InThread}}<span class="sg-hide-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideQuestion" class="sg-hide-btn" title="Hide this question from view">Hide</button></form></span>{{end}}
   </header>
   {{- if or .Sent .Resolved}}
@@ -720,7 +735,7 @@
   <div class="question-actions"><form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="sendQuestionAnswers"{{if not .Complete}} disabled title="Answer every question first"{{end}}>Submit</button></form></div>
   {{- end}}
   {{- end}}
-  {{- template "thread" .Thread -}}
+  {{- template "replies" .Thread -}}
   {{- /* resolve / reply: the comment card's action row. In a thread, the
          card it replies on carries the row. */ -}}
   {{- if not .InThread}}
