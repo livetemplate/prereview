@@ -13,7 +13,8 @@ livetemplate (`stageTemplates` in `store.go` → `WithParseFiles`, ordered by
   markup becomes the `"prereview"` entry) and **must be parsed first**. It calls
   each component with `{{template "x" $}}`.
 - **Component files** — each `{{define}}`-only, one UI component apiece:
-  `toolbar.tmpl`, `viewmenu.tmpl`, `workqueue.tmpl`, `moremenu.tmpl`,
+  `toolbar.tmpl`, `toolbarbuttons.tmpl`, `annfilter.tmpl`, `checks.tmpl`,
+  `workqueue.tmpl`, `moremenu.tmpl`,
   `banners.tmpl`, `filedrawer.tmpl`, `allcomments.tmpl`, `toc.tmpl`,
   `overlays.tmpl`, `external.tmpl`, and the file-view sub-views
   `fileheader.tmpl` / `binaryview.tmpl` / `htmlview.tmpl` / `markdownview.tmpl` /

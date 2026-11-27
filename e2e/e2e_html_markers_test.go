@@ -18,7 +18,7 @@ import (
 // the marker ticks once the agent has worked on every open comment; tapping it
 // scrolls the block's cards into view and shows each comment's box where it
 // was drawn, each in its own colour, which its card shares; Show boxes and
-// Hide annotations apply; the marker follows the block when the preview
+// the filter's None apply; the marker follows the block when the preview
 // resizes; and each shown box's corner bar resolves, deletes and hides.
 func TestE2E_HTMLMarkers(t *testing.T) {
 	for _, vp := range []struct {

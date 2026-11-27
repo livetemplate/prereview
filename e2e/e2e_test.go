@@ -1951,7 +1951,7 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 
 	// Cancel the edit, go back to the list — via the `a` shortcut, the same way the list is
 	// opened above. The old `.drawer-all-comments` button no longer exists (#111 removed the
-	// sidebar entry; it lives in the View menu now), so clicking it waited forever on a node
+	// sidebar entry; it is the toolbar's Annotations button now), so clicking it waited forever on a node
 	// that is never rendered.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='clearSelection']`, chromedp.ByQuery),

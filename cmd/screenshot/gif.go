@@ -969,11 +969,9 @@ func gifThemes(allocCtx context.Context, url, outDir string) {
 		}
 		step(ctx, chromedp.WaitVisible(`.code`, chromedp.ByQuery), chromedp.Sleep(200*time.Millisecond))
 		check(rec.capture(ctx, 180)) // Solarized (default)
-		// The scheme/mode buttons live in the desktop "View ▾" dropdown, so a
-		// chromedp.Click would block on visibility — clickJS fires the DOM click
-		// directly. But the click bubbles to the dropdown's toggleClass and pops the
-		// menu open; close it after each click so every frame shows the clean
-		// full-UI recolour (the whole UI + syntax recolour regardless of the menu).
+		// clickJS fires the DOM click directly on the toolbar's scheme/mode
+		// buttons. Closing any open dropdown after each click keeps every frame
+		// a clean full-UI recolour.
 		const closeMenu = `document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`
 		// Cycle the scheme twice: Gruvbox, then Catppuccin.
 		for range 2 {

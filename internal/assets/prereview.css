@@ -2047,7 +2047,7 @@ header.file-head .file-head-comment button svg { display: block; }
   display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.28rem;
   margin: 0; padding: 0; border: 0; background: none; cursor: pointer;
 }
-/* #151 review note: "Hide annotations" (marks-hidden, via the overflow menu) and
+/* #151 review note: the Annotations filter's None (marks-hidden) and
    focus mode both hide the per-line count badges AND their inline cards in the diff,
    so the reviewer reads the raw code clean. Scoped to .code so it never blanks the
    all-comments overview or the md/html block-comment views (which reuse
