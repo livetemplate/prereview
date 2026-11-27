@@ -934,6 +934,13 @@ header.bar button[name="endSession"]:focus-visible {
   box-shadow: 0 4px 14px rgba(0,0,0,.18);
   padding: 0.35rem;
   z-index: 50;
+  /* Fixed, so a menu taller than the screen can't be reached by scrolling the
+     page: it fits the space below the bar and scrolls itself. dvh tracks
+     iOS Safari's moving toolbars; vh is the fallback. */
+  max-height: calc(100vh - var(--pr-bar-h) - 0.75rem);
+  max-height: calc(100dvh - var(--pr-bar-h) - 0.75rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .more-menu.is-open { display: block; }
 .more-menu form { margin: 0; }

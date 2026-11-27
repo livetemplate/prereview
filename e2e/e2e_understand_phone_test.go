@@ -65,3 +65,32 @@ func TestE2E_UnderstandPhoneMenu(t *testing.T) {
 		})
 	}
 }
+
+// TestE2E_PhoneMenuScrolls: on a short phone screen the ⋯ menu is taller than
+// the space below the bar. It must fit on screen and scroll itself, since it is
+// fixed and scrolling the page can't reach its last items.
+func TestE2E_PhoneMenuScrolls(t *testing.T) {
+	p := bootChromeAgainstRepo(t, setupFixtureRepo(t), 375, 560, "--agent")
+	diag := captureDiag(t, p)
+	ctx, cancel := within(p, 20*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(375, 560),
+		chromedp.Navigate(p.url),
+		chromedp.WaitVisible(`header.bar .more-trigger`, chromedp.ByQuery),
+		chromedp.Sleep(time.Second), // the client attaches its listeners
+		chromedp.Click(`.more-trigger`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.more-menu.is-open`, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("open the ⋯ menu: %v%s", err, diag())
+	}
+	got := evalStr(t, p, `(()=>{const m=document.querySelector('.more-menu');const r=m.getBoundingClientRect();
+		if (r.bottom>innerHeight) return 'menu runs off screen: bottom '+r.bottom+' > '+innerHeight;
+		if (m.scrollHeight<=m.clientHeight) return 'menu fits without scrolling ('+m.scrollHeight+'px); the test needs a taller menu';
+		m.scrollTop=m.scrollHeight;
+		const last=[...m.querySelectorAll('button.menu-item')].pop().getBoundingClientRect();
+		return last.bottom<=r.bottom+1?'ok':'last item still hidden after scrolling: '+last.bottom+' > '+r.bottom})()`)
+	if got != "ok" {
+		t.Errorf("%s%s", got, diag())
+	}
+}
