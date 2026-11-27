@@ -74,3 +74,36 @@ func TestE2E_AnnotationsPage(t *testing.T) {
 	waitJSDiag(t, p, `!document.querySelector('.all-comments .ac-list') && /The filter hides every annotation/.test(document.querySelector('.all-comments .ac-empty-msg').textContent) && !!document.querySelector('.all-comments .ann-filter')`,
 		"None lists nothing and keeps the filter", diag)
 }
+
+// TestE2E_AnnotationsPageHeadAligned: the page header's buttons (the filter,
+// Resolve all, Back) share one height, and those on one row share a vertical
+// centre, on a phone (where the header wraps) and on a desktop.
+func TestE2E_AnnotationsPageHeadAligned(t *testing.T) {
+	for _, vp := range [][2]int64{{390, 844}, {1400, 900}} {
+		dir := setupFixtureRepo(t)
+		seedReviewStore(t, dir, csv.Row{ID: "c1", File: "edited.go", FromLine: 4, ToLine: 4, Side: "new",
+			Body: "check the greeting", Kind: "line", CreatedAt: time.Date(2026, 11, 27, 9, 0, 0, 0, time.UTC)})
+		p := bootChromeAgainstRepo(t, dir, int(vp[0]), int(vp[1]))
+		diag := captureDiag(t, p)
+		ctx, cancel := within(p, 20*time.Second)
+		if err := chromedp.Run(ctx,
+			chromedp.EmulateViewport(vp[0], vp[1]),
+			chromedp.Navigate(p.url),
+			chromedp.WaitVisible(`header.bar`, chromedp.ByQuery),
+			chromedp.Sleep(time.Second), // the client attaches its listeners
+			chromedp.Evaluate(`document.querySelector('button[name="toggleCommentList"]').click()`, nil),
+			chromedp.WaitVisible(`section.all-comments .ac-head .ann-filter-trigger`, chromedp.ByQuery),
+		); err != nil {
+			cancel()
+			t.Fatalf("%dpx: open the Annotations page: %v%s", vp[0], err, diag())
+		}
+		cancel()
+		got := evalStr(t, p, `(()=>{const bs=[...document.querySelectorAll('.all-comments .ac-head .ann-filter-trigger, .all-comments .ac-head > form > button')].map(b=>b.getBoundingClientRect());
+			const hs=bs.map(r=>Math.round(r.height)), cs=bs.map(r=>Math.round(r.top+r.height/2));
+			const sameRowOff=bs.some((a,i)=>bs.some((b,j)=>Math.abs(a.top-b.top)<a.height/2 && Math.abs(cs[i]-cs[j])>1));
+			return (bs.length>=3 && Math.max(...hs)-Math.min(...hs)<=1 && !sameRowOff)?'ok':'heights '+hs+' centres '+cs})()`)
+		if got != "ok" {
+			t.Errorf("%dpx: header buttons differ: %s%s", vp[0], got, diag())
+		}
+	}
+}
