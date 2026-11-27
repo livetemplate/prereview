@@ -5,9 +5,11 @@
      can't unfold the file) and turns the bar into a finding stepper. All server
      state — no custom JS. */}}
 {{define "checksButton"}}{{with $.CheckSummary}}
-    {{- /* #279: with judges on the file the button is a menu (Run judges, All
-           checks), so Run judges no longer needs a bar above the code. */ -}}
-    {{if .JudgesRun}}<div
+    {{- /* #279: the button is a menu (Run judges, All checks), so Run judges
+           needs no bar above the code. Run judges is always listed; with no
+           judges on the file it is greyed out with the reason, like every other
+           control that can't act. */ -}}
+    <div
       class="tb-dropdown file-head-checks checks-dropdown"
       lvt-el:toggleClass:on:click="open"
       lvt-el:removeClass:on:click-away="open"
@@ -19,19 +21,13 @@
         title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}{{if .JudgeWaiting}}, waiting on your agent for {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}{{end}}."
       >{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
       <div class="tb-dropdown-panel checks-panel" role="menu" aria-label="Checks">
-        {{if .NeedsAgent}}<p class="checks-menu-note" role="none">Run judges — needs an agent. <a href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></p>
+        {{if not .JudgesRun}}<form method="POST" title="No judges on this file"><button type="submit" name="runJudges" class="menu-item" role="menuitem" disabled><span class="menu-label">Run judges<small class="menu-why">No judges on this file</small></span></button></form>
+        {{else if .NeedsAgent}}<p class="checks-menu-note" role="none">Run judges — needs an agent. <a href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></p>
         {{else if .JudgeWaiting}}<p class="checks-menu-note is-waiting" role="status">Asked your agent · {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}</p>
         {{else}}<form method="POST"><button type="submit" name="runJudges" class="menu-item" role="menuitem"><span class="menu-label">{{if .JudgeTimedOut}}No answer yet — run judges again{{else if .JudgesStale}}Re-run judges ({{.JudgesStale}} stale){{else}}Run judges ({{.JudgesRun}}){{end}}</span></button></form>
         {{end}}<form method="POST"><button type="submit" name="openChecks" class="menu-item" role="menuitem"><span class="menu-label">All checks</span></button></form>
       </div>
-    </div>{{else}}<form method="POST" class="file-head-checks">
-      <button
-        type="submit"
-        name="openChecks"
-        class="checks-trigger{{if .Failing}} is-failing{{else if .Running}} is-running{{else}} is-passing{{end}}"
-        title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}. Opens the Checks page."
-      >{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
-    </form>{{end}}
+    </div>
 {{end}}{{end}}
 
 {{define "libraryButton"}}

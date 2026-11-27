@@ -956,12 +956,13 @@ header.bar button[name="endSession"]:focus-visible {
 }
 .more-menu button.menu-item:hover,
 .more-menu button.menu-item:focus { background: var(--pico-card-sectioning-background-color); }
-.more-menu button.menu-item:disabled { opacity: 0.55; cursor: default; background: none; }
-.more-menu .menu-why { display: block; font-size: 0.75rem; font-weight: 400; color: var(--pico-muted-color); }
+.more-menu button.menu-item:disabled,
+.tb-dropdown-panel button.menu-item:disabled { opacity: 0.55; cursor: default; background: none; }
+:is(.more-menu, .tb-dropdown-panel) .menu-why { display: block; font-size: 0.75rem; font-weight: 400; color: var(--pico-muted-color); }
 /* A disabled button gets no mouse events in Safari or Firefox, so its own title
    never shows. Disabled buttons let the hover through to their form, which
    carries the title saying why. */
-header.bar .tb-btn:disabled, .file-head .fh-btn:disabled, .more-menu button.menu-item:disabled { pointer-events: none; }
+header.bar .tb-btn:disabled, .file-head .fh-btn:disabled, :is(.more-menu, .tb-dropdown-panel) button.menu-item:disabled { pointer-events: none; }
 .more-menu button.menu-item .menu-icon {
   flex: 0 0 1.2rem; display: inline-flex; align-items: center; justify-content: center;
   color: var(--pico-muted-color);
