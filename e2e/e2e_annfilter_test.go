@@ -69,14 +69,11 @@ func TestE2E_AnnFilterPerFile(t *testing.T) {
 	p.clickFile("folded.go")
 	p.clickFilterRow("setAnnShow", "none")
 	waitNavLabel(t, p, "0 open", "nothing open anywhere", diag)
+	// waitReadyAt reloads and waits for the client to connect: a click before
+	// it does is lost, which made the clickFile below time out now and then.
+	p.waitReadyAt(1280, 900)
 	ctx, cancel := within(p, 15*time.Second)
 	defer cancel()
-	if err := chromedp.Run(ctx,
-		chromedp.Navigate(p.url),
-		chromedp.WaitVisible(`#files-drawer button.file-btn`, chromedp.ByQuery),
-	); err != nil {
-		t.Fatalf("reload: %v%s", err, diag())
-	}
 	// The reload keeps folded.go open (the last file); open app.go if needed.
 	if evalInt(t, p, `document.querySelectorAll('main.viewer .file-head-name[title="app.go"]').length`) == 0 {
 		p.clickFile("app.go")
