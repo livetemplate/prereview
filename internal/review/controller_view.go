@@ -145,7 +145,7 @@ func (c *PrereviewController) ToggleShowResolved(state PrereviewState, ctx *live
 		state.Flash = "No resolved comments"
 		return state, nil
 	}
-	state.editAnnFilter(func(f AnnFilter) AnnFilter { return f.flipShow(annShowAll) })
+	state.editAnnShow(func(f AnnFilter) AnnFilter { return f.flipShow(annShowAll) })
 	state.Flash = ""
 	return state, nil
 }
@@ -214,7 +214,7 @@ func (c *PrereviewController) ToggleRow(state PrereviewState, ctx *livetemplate.
 // ToggleMarks switches the open surface's Annotations filter between None
 // (no badges or cards, #151, so the diff reads clean) and Open.
 func (c *PrereviewController) ToggleMarks(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.editAnnFilter(func(f AnnFilter) AnnFilter { return f.flipShow(annShowNone) })
+	state.editAnnShow(func(f AnnFilter) AnnFilter { return f.flipShow(annShowNone) })
 	state.MoreMenuOpen = false
 	return state, nil
 }
@@ -570,7 +570,7 @@ func (c *PrereviewController) SetAnnShow(state PrereviewState, ctx *livetemplate
 	if show != annShowOpen && show != annShowAll && show != annShowNone {
 		return state, nil
 	}
-	state.editAnnFilter(func(f AnnFilter) AnnFilter { f.Show = show; return f })
+	state.editAnnShow(func(f AnnFilter) AnnFilter { f.Show = show; return f })
 	state.MoreMenuOpen = false
 	return state, nil
 }

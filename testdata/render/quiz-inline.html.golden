@@ -933,8 +933,6 @@
       <button type="button" class="line-marks"
               lvt-on:click="toggleRow"
               data-row="file"
-              lvt-el:toggleClass:on:click="row-toggled"
-              data-lvt-target="closest:.file-head-marks"
               aria-label="Show or hide this file's annotations"
               title="Show/hide this file's annotations"><span class="line-mark is-open" aria-hidden="true">2</span></button>
     </div>
@@ -1017,8 +1015,6 @@
         <button type="button" class="line-marks"
                 lvt-on:click="toggleRow"
                 data-row="1-new"
-                lvt-el:toggleClass:on:click="row-toggled"
-                data-lvt-target="closest:.line-row"
                 aria-label="Show or hide the annotations on this line"
                 title="Show/hide this line's annotations">
           <span class="line-mark is-open" aria-hidden="true">1</span>
@@ -1069,8 +1065,6 @@
         <button type="button" class="line-marks"
                 lvt-on:click="toggleRow"
                 data-row="2-new"
-                lvt-el:toggleClass:on:click="row-toggled"
-                data-lvt-target="closest:.line-row"
                 aria-label="Show or hide the annotations on this line"
                 title="Show/hide this line's annotations">
           <span class="line-mark is-done" aria-hidden="true">1</span>

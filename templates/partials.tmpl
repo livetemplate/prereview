@@ -20,8 +20,6 @@
     {{if gt $.PastEndCount 0}}<button type="button" class="line-marks"
             lvt-on:click="toggleRow"
             data-row="eof"
-            lvt-el:toggleClass:on:click="row-toggled"
-            data-lvt-target="closest:.past-eof"
             aria-label="Show or hide the annotations past the end of the file"
             title="Show/hide the annotations past the end of the file"><span class="line-mark{{if $.PastEndHasOpen}} is-open{{else if $.PastEndHasAccepted}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{$.PastEndCount}}</span></button>{{end}}
   </div>

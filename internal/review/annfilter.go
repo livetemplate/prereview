@@ -110,6 +110,18 @@ func (s *PrereviewState) setAnnFilter(key string, f AnnFilter) {
 	s.AnnFilters[key] = f
 }
 
+// editAnnShow is editAnnFilter for a Show choice (Open, All, None). It also
+// drops the badge peeks (ToggledRows) when the surface is the open file, so the
+// file then shows exactly what the filter says: a resolved card a badge opened
+// folds again when the reviewer picks Open, even if Open was already on. Row keys
+// are not scoped by file, so the open file's are all of them.
+func (s *PrereviewState) editAnnShow(edit func(AnnFilter) AnnFilter) {
+	s.editAnnFilter(edit)
+	if s.annSurface() == s.SelectedFile {
+		s.ToggledRows = nil
+	}
+}
+
 // annSurface is the key of what the reviewer is looking at: the Annotations
 // page, a live-site page, or the open file.
 func (s PrereviewState) annSurface() string {
