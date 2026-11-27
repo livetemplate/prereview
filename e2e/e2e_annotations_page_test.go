@@ -35,6 +35,10 @@ func TestE2E_AnnotationsPage(t *testing.T) {
 	if got := textOf(t, p, `.all-comments .ac-head strong`); got != "Annotations" {
 		t.Errorf("page title = %q, want Annotations", got)
 	}
+	// The heading names the page, so the filter button doesn't repeat it.
+	if got := textOf(t, p, `.all-comments .ann-filter-trigger`); got != "Filter: Open" {
+		t.Errorf("page filter button = %q, want Filter: Open", got)
+	}
 	waitJSDiag(t, p, `!!document.querySelector('.all-comments .ac-item[data-key="c1"]') && !!document.querySelector('.all-comments .ac-row[data-key="q:q1"]') && document.querySelectorAll('.all-comments .ac-row[data-key^="z:"]').length > 0`,
 		"the comment, the question and the quiz are listed", diag)
 

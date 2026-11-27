@@ -81,7 +81,7 @@
 <form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">{{.Label}}</button></form>
 === annFilter ===
 {{with $.AnnFilterView}}<div class="tb-dropdown ann-filter" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="outline ann-filter-trigger" aria-haspopup="menu" title="Choose what shows here, and what the arrows step through">{{template "iconFilter"}}<span>Annotations: {{.Label}}</span>{{template "iconChevronDown"}}</button>
+      <button type="button" class="outline ann-filter-trigger" aria-haspopup="menu" title="Choose what shows here, and what the arrows step through">{{template "iconFilter"}}<span>{{if $.ShowAllComments}}Filter{{else}}Annotations{{end}}: {{.Label}}</span>{{template "iconChevronDown"}}</button>
       <div class="tb-dropdown-panel ann-filter-panel" role="menu" aria-label="Annotations filter">
         <div class="menu-heading" role="presentation">Show</div>
         {{range .Shows}}<form method="POST"><input type="hidden" name="show" value="{{.Value}}"><button type="submit" name="setAnnShow" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}"><span class="menu-icon">{{if .On}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span><span class="menu-label">{{.Label}}{{if eq .Value "all"}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{end}}</span>{{if .Count}}<span class="menu-meta">{{.Count}}</span>{{end}}</button></form>{{end}}
