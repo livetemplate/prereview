@@ -399,7 +399,7 @@ type PrereviewState struct {
 	// user later with state from minutes ago.
 	LastDeletedComment *Comment `json:"last_deleted_comment"`
 
-	// LastResolvedIDs is what the All comments screen's Resolve all just
+	// LastResolvedIDs is what the Annotations page's Resolve all just
 	// resolved, so its notice can undo exactly those. Cleared with
 	// LastDeletedComment (clearUndo) and by closing the screen.
 	LastResolvedIDs []string `json:"last_resolved_ids"`
@@ -464,7 +464,7 @@ type PrereviewState struct {
 	FrontBoxID  string          `json:"front_box_id"`
 	HiddenBoxes map[string]bool `json:"hidden_boxes"`
 
-	// CommentListFilter narrows the All comments screen: "" lists every
+	// CommentListFilter is the Annotations page's Live site chip: "" lists every
 	// comment, CommentFilterAnnotations only the live site's (region) ones.
 	CommentListFilter string `json:"comment_list_filter"`
 
@@ -773,7 +773,7 @@ func (s PrereviewState) inScope(file string) bool {
 }
 
 // scopedComments is the SINGLE source every FILE-AGNOSTIC surface iterates — the
-// queue (QueueItems and its counts), the all-comments view (VisibleComments), and the
+// queue (QueueItems and its counts), the Annotations page (AnnotationList), and the
 // global counts — so an out-of-scope comment can never leak into one of them. The
 // per-file surfaces (CommentsByEndLine and friends) already narrow to SelectedFile and
 // don't go through here. Its suggestion twin is scopedSuggestions.
@@ -802,62 +802,9 @@ func (s PrereviewState) commentHiddenFromView(c Comment) bool {
 	return commentHiddenOn(s.annFilter(commentSurface(c)), c)
 }
 
-// VisibleComments returns the in-scope Comments the Annotations page shows,
-// under the page's own filter. Zero-arg so the framework eagerly evaluates and
-// the template iterates the filtered list directly. An individually hidden
-// resolved comment stays out even when resolved items are shown.
-func (s PrereviewState) VisibleComments() []Comment {
-	scoped := s.scopedComments()
-	list := s.annFilter(annListKey)
-	out := make([]Comment, 0, len(scoped))
-	for _, c := range scoped {
-		if commentHiddenOn(list, c) || !s.passesListFilter(c) {
-			continue
-		}
-		out = append(out, c)
-	}
-	return out
-}
-
-// CommentFilterAnnotations is the All comments filter that lists only the
-// live site's annotations (region comments).
+// CommentFilterAnnotations is the Annotations page's Live site chip: only the
+// live site's boxes (region comments).
 const CommentFilterAnnotations = "annotations"
-
-// passesListFilter reports whether the All comments screen's filter keeps c.
-func (s PrereviewState) passesListFilter(c Comment) bool {
-	return s.CommentListFilter != CommentFilterAnnotations || c.IsRegionLevel()
-}
-
-// AnnotationsListed is how many live-site annotations the All comments screen
-// would list with the Annotations filter: the count on that filter's button.
-func (s PrereviewState) AnnotationsListed() int {
-	n := 0
-	for _, c := range s.scopedComments() {
-		if s.regionVisible(c) {
-			n++
-		}
-	}
-	return n
-}
-
-// UnresolvedListed is how many comments the All comments screen lists that
-// aren't resolved: what Resolve all resolves.
-func (s PrereviewState) UnresolvedListed() int {
-	n := 0
-	for _, c := range s.Comments {
-		if s.resolvable(c) {
-			n++
-		}
-	}
-	return n
-}
-
-// resolvable reports whether Resolve all resolves c: in scope, open, and
-// passing the screen's filter. The screen lists every such comment
-// (commentHiddenFromView hides only resolved ones).
-func (s PrereviewState) resolvable(c Comment) bool {
-	return !c.Resolved && s.inScope(c.File) && s.passesListFilter(c)
-}
 
 // CommentCount is the number of in-scope comments — the all-comments view's header
 // total. Zero-arg because livetemplate only pre-computes zero-arg methods; the

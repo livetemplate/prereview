@@ -62,13 +62,13 @@ func TestVisibleCommentsExcludesIndividuallyHidden(t *testing.T) {
 			{ID: "res-hidden", Resolved: true, Hidden: true},
 		},
 	}
-	vis := s.VisibleComments()
+	vis := listedComments(s)
 	if len(vis) != 2 {
 		t.Fatalf("want 2 visible, got %d: %+v", len(vis), vis)
 	}
 	for _, c := range vis {
 		if c.ID == "res-hidden" {
-			t.Error("individually-hidden resolved comment leaked into VisibleComments")
+			t.Error("individually-hidden resolved comment leaked into the Annotations page")
 		}
 	}
 	if n := s.HiddenResolvedCount(); n != 1 {

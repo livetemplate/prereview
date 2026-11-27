@@ -1533,10 +1533,12 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
   margin-bottom: 0.5rem; position: sticky; top: 0;
   background: var(--pico-card-background-color); z-index: 5;
 }
-.all-comments .ac-head button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
-.all-comments .ac-resolve-all { margin: 0 0.4rem 0 auto; } /* beside Back, not centred */
+.all-comments .ac-head > form button,
+.all-comments .ac-head .ac-filter button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
+.all-comments .ac-resolve-all { margin: 0 0.4rem 0 0; } /* beside Back, not centred */
 .all-comments .ac-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-.all-comments .ac-item { margin: 0; }
+.all-comments .ac-item,
+.all-comments .ac-row { margin: 0; }
 .all-comments .ac-jump { margin: 0; }
 .all-comments .ac-jump-btn {
   display: block; width: 100%; padding: 0.5rem 0.6rem; margin: 0;
@@ -1546,22 +1548,26 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
   transition: background 100ms ease;
 }
 .all-comments .ac-jump-btn:hover { background: #c7daf3; }
-.all-comments .ac-item.is-resolved .ac-jump-btn {
+.all-comments .ac-item.is-resolved .ac-jump-btn,
+.all-comments .ac-row.is-settled .ac-jump-btn {
   background: var(--pico-card-sectioning-background-color, #f4f4f4);
   border-color: var(--pico-muted-color); opacity: 0.7;
 }
 .all-comments .ac-item.is-resolved .ac-body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
 .all-comments .ac-where { font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.25rem; }
+/* A suggestion, question or quiz row names its kind; a comment's card needs no tag. */
+.all-comments .ac-kind { font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
 .all-comments .ac-body { white-space: pre-wrap; word-break: break-word; }
-/* All / Annotations filter: beside the title, or on its own row on a phone. */
+/* The Annotations filter and the Live site chip sit beside the title; the chip goes to its own row on a phone. */
 .all-comments .ac-head { flex-wrap: wrap; gap: 0.4rem; }
 .all-comments .ac-head strong,
 .all-comments .ac-head button { white-space: nowrap; }
-.all-comments .ac-filter { display: flex; gap: 0.3rem; margin: 0 auto 0 0.6rem; }
-.all-comments .ac-filter ~ .ac-resolve-all { margin-left: 0; }
+.all-comments .ac-head .ann-filter { margin: 0 auto 0 0.6rem; }
+.all-comments .ac-head .ann-filter:has(+ .ac-filter) { margin-right: 0; }
+.all-comments .ac-filter { display: flex; gap: 0.3rem; margin: 0 auto 0 0.4rem; }
 @media (max-width: 600px) {
   .all-comments .ac-filter { order: 1; flex-basis: 100%; margin: 0; }
-  .all-comments .ac-filter ~ .ac-resolve-all { margin-left: auto; }
+  .all-comments .ac-head .ann-filter:has(+ .ac-filter) { margin-right: auto; }
 }
 /* The card a marker tap opened. */
 .all-comments .ac-item.is-target .ac-jump-btn { outline: 2px solid var(--accent); outline-offset: 1px; }

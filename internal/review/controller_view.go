@@ -26,7 +26,7 @@ func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livet
 	return state, nil
 }
 
-// OpenAnnotations opens All comments on the live site's annotations, from the
+// OpenAnnotations opens the Annotations page on the live site's annotations, from the
 // live page's count or a tap on an annotation's marker. With an id, that
 // annotation's card scrolls into view.
 func (c *PrereviewController) OpenAnnotations(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
@@ -105,7 +105,7 @@ func (c *PrereviewController) UnfocusAnnotation(state PrereviewState, ctx *livet
 	return state, nil
 }
 
-// SetCommentFilter switches the All comments screen between every comment
+// SetCommentFilter switches the Annotations page between every comment
 // ("") and the live site's annotations.
 func (c *PrereviewController) SetCommentFilter(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	switch f := ctx.GetString("filter"); f {
@@ -118,7 +118,7 @@ func (c *PrereviewController) SetCommentFilter(state PrereviewState, ctx *livete
 	return state, nil
 }
 
-// openCommentList opens the All comments screen (closing the other full-page
+// openCommentList opens the Annotations page (closing the other full-page
 // views) with filter applied.
 func (c *PrereviewController) openCommentList(state *PrereviewState, filter string) {
 	closeFullViews(state)
@@ -505,7 +505,7 @@ func (c *PrereviewController) JumpToQuestion(state PrereviewState, ctx *livetemp
 }
 
 // selectFileForJump switches the view to file (loading its diff if it changed)
-// and closes the full-page views (all comments, quiz, Library), preserving unsaved composer text (#105).
+// and closes the full-page views (Annotations, quiz, Library), preserving unsaved composer text (#105).
 // Shared by JumpToComment/JumpToSuggestion; each sets its own scroll target after
 // (or none). Clears both one-render scroll nudges so a caller that sets neither
 // leaves no stale target behind.

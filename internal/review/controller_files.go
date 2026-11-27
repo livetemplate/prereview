@@ -99,7 +99,7 @@ func (c *PrereviewController) enterFile(state *PrereviewState, path string, diff
 	state.CursorKey = ""            // line cursor was for the previous file's lines
 	state.RevealFile = ""           // a search-jump's full-file reveal was for the previous file
 	state.FileDrawerOpen = false
-	// Going to a file from a full-page view (all comments, quiz, Library) means
+	// Going to a file from a full-page view (Annotations, quiz, Library) means
 	// "leave this overview, look at that file"; otherwise the file would load
 	// invisibly behind it.
 	closeFullViews(state)

@@ -47,9 +47,9 @@ func twoFileState() PrereviewState {
 func TestScope_FileAgnosticSurfacesShowOnlyTheReviewedFile(t *testing.T) {
 	s := twoFileState()
 
-	for _, c := range s.VisibleComments() {
+	for _, c := range listedComments(s) {
 		if c.File != "b.md" {
-			t.Errorf("VisibleComments leaked %s (%s)", c.ID, c.File)
+			t.Errorf("AnnotationList leaked %s (%s)", c.ID, c.File)
 		}
 	}
 	if got := s.CommentCount(); got != 1 {
@@ -84,8 +84,8 @@ func TestScope_FileAgnosticSurfacesShowOnlyTheReviewedFile(t *testing.T) {
 	// Threads/AwaitingAgent are keyed by ID and consumed only as by-ID lookups from an
 	// already-scoped card, so they may legitimately carry out-of-scope ids. Assert the
 	// property that actually matters: nothing renders them for an out-of-scope target.
-	if len(s.VisibleComments()) != 1 || s.VisibleComments()[0].ID != "b1" {
-		t.Fatalf("precondition: only b1 should render, got %v", s.VisibleComments())
+	if len(listedComments(s)) != 1 || listedComments(s)[0].ID != "b1" {
+		t.Fatalf("precondition: only b1 should render, got %v", listedComments(s))
 	}
 }
 
@@ -99,8 +99,8 @@ func TestScope_DirectoryReviewSeesEveryFile(t *testing.T) {
 	if got := s.CommentCount(); got != 3 {
 		t.Errorf("CommentCount = %d, want 3 — a directory review spans every file", got)
 	}
-	if got := len(s.VisibleComments()); got != 3 {
-		t.Errorf("VisibleComments = %d, want 3", got)
+	if got := len(listedComments(s)); got != 3 {
+		t.Errorf("AnnotationList comments = %d, want 3", got)
 	}
 	if got := s.ResolvedCount(); got != 1 {
 		t.Errorf("ResolvedCount = %d, want 1", got)
@@ -403,7 +403,7 @@ func TestScope_CommentOnAGoneFileLeavesTheAgentQueue(t *testing.T) {
 			"be resolved or deleted, not silently vanish", got)
 	}
 	found := false
-	for _, cm := range state.VisibleComments() {
+	for _, cm := range listedComments(state) {
 		if cm.ID == "ghost" {
 			found = true
 		}

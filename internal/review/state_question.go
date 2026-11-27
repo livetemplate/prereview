@@ -195,7 +195,7 @@ func (s PrereviewState) lineQuestionCards() []QuestionCard {
 // replies, with each question set the agent asked in the thread (`ask --for`)
 // as the agent's reply. `ask` writes an agent entry naming the set, so the
 // card takes that entry's place; a set with no entry goes in by when it was
-// asked. Every file's, so the All comments view has them too.
+// asked. Every file's, so the Annotations page has them too.
 func (s PrereviewState) ThreadViews() map[string][]ThreadItem {
 	threads := s.Threads()
 	var list []QuestionCard

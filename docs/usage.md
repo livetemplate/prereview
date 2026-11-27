@@ -55,12 +55,17 @@ worked on or answered a box, it turns dashed with a ✓ until you resolve it, an
 **Annotations** panel shows its reply, with a **Reply** button to push back. Boxes on
 an image comment work the same way.
 
-**See every comment in one place.** **Annotations** in the toolbar (or
-<kbd>a</kbd>) lists every comment across all files, of every kind, each with a
-jump back to its source. Its count reads open, then resolved ("1 +3"), with ⚠ when
-a comment lost its place in the file. **Resolve all** resolves every listed
+**See every annotation in one place.** **Annotations** in the toolbar (or
+<kbd>a</kbd>) lists the comments, suggestions, questions and quiz questions of
+every file, in file order. Each row jumps to its card on the file. The button's
+count reads open, then resolved ("1 +3"), with ⚠ when a comment lost its place in
+the file.
+
+The page has its own Annotations filter, separate from each file's. Use it to
+list resolved items too, or to drop a kind. **Resolve all** resolves every listed
 comment that's still open, and its notice offers **Undo** until you close the
-list.
+list. With the live site in the session, the **Live site** chip lists only its
+boxes.
 
 **Mark files viewed.** The circle beside a file in the drawer marks it viewed, and
 the mark remembers what the file held. If the file changes later, the drawer says

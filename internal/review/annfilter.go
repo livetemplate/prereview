@@ -239,59 +239,23 @@ func (s PrereviewState) annCounts(key string) annCount {
 			n.open++
 		}
 	}
-	onSurface := func(file string) bool { return key == annListKey || file == key }
-	for _, c := range s.scopedComments() {
-		if c.Request == "" && (key == annListKey || commentSurface(c) == key) {
-			add(navComment, c.Resolved)
-			if c.Resolved && c.Hidden {
-				n.hiddenResolved++
-			}
+	for _, e := range s.annotations() {
+		if e.Request || (key != annListKey && e.Surface != key) {
+			continue
 		}
-	}
-	decisions := s.DecisionsBySuggestion()
-	for _, sg := range s.visibleSuggestions() {
-		if onSurface(sg.File) {
-			add(navSuggestion, !s.undecidedIn(decisions, sg.ID))
-		}
-	}
-	for _, set := range s.scopedQuestionSets() {
-		if onSurface(set.File) {
-			add(navQuestion, !s.questionAwaitingAnswer(set))
-		}
-	}
-	for _, it := range s.allQuizItems() {
-		if onSurface(it.File) {
-			add(navQuiz, it.Answered)
+		add(e.Pos.Kind, e.Settled)
+		if e.Hidden {
+			n.hiddenResolved++
 		}
 	}
 	return n
 }
 
 // hasAnnotations reports whether the open surface has any annotation, in any
-// state, before the filter. It stops at the first one, cheapest source first.
+// state, before the filter.
 func (s PrereviewState) hasAnnotations() bool {
 	key := s.annSurface()
-	for _, c := range s.scopedComments() {
-		if c.Request == "" && commentSurface(c) == key {
-			return true
-		}
-	}
-	for _, sg := range s.visibleSuggestions() {
-		if sg.File == key {
-			return true
-		}
-	}
-	for _, set := range s.scopedQuestionSets() {
-		if set.File == key {
-			return true
-		}
-	}
-	for _, it := range s.allQuizItems() {
-		if it.File == key {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(s.annotations(), func(e annEntry) bool { return !e.Request && e.Surface == key })
 }
 
 // AnnTotals is the whole review's annotations for the toolbar's Annotations

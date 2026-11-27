@@ -1,10 +1,11 @@
 === allComments ===
 <section class="all-comments">
   <header class="ac-head">
-    <strong>All comments ({{.CommentCount}})</strong>
-    {{if .AnnotationsListed}}{{$annos := eq .CommentListFilter "annotations"}}<div class="ac-filter">
-      <button type="button" lvt-on:click="setCommentFilter" data-filter="" class="lib-chip{{if not $annos}} is-on{{end}}" aria-pressed="{{not $annos}}">All</button>
-      <button type="button" lvt-on:click="setCommentFilter" data-filter="annotations" class="lib-chip{{if $annos}} is-on{{end}}" aria-pressed="{{$annos}}" title="Only the live site's annotations">Annotations {{.AnnotationsListed}}</button>
+    <strong>Annotations</strong>
+    {{template "annFilter" $}}
+    {{if .AnnotationsListed}}{{$live := eq .CommentListFilter "annotations"}}<div class="ac-filter">
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="" class="lib-chip{{if not $live}} is-on{{end}}" aria-pressed="{{not $live}}">Everything</button>
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="annotations" class="lib-chip{{if $live}} is-on{{end}}" aria-pressed="{{$live}}" title="Only the boxes drawn on the live site">Live site {{.AnnotationsListed}}</button>
     </div>{{end}}
     {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
       <button type="submit" name="resolveAll" class="outline" title="Resolve every comment listed here">Resolve all {{.UnresolvedListed}}</button>
@@ -13,9 +14,9 @@
       <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
     </form>
   </header>
-  {{if .VisibleComments}}
+  {{if .AnnotationList}}
   <ul class="ac-list">
-    {{range .VisibleComments}}
+    {{range .AnnotationList}}{{with .Comment}}
     <li class="ac-item{{if .Resolved}} is-resolved{{end}}{{if eq $.ScrollToCommentID .ID}} is-target{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}" data-key="{{.ID}}"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}>
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
@@ -51,12 +52,23 @@
         {{template "deleteDialog" .}}
       </div>
     </li>
-    {{end}}
+    {{else}}
+    <li class="ac-row{{with .State}} is-settled{{end}}" data-key="{{.Key}}">
+      <form method="POST" class="ac-jump">
+        <input type="hidden" name="kind" value="{{.Kind}}">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button type="submit" name="jumpToAnnotation" class="ac-jump-btn" title="Open it on its file">
+          <div class="ac-where"><small class="ac-kind">{{.Label}}</small> <code>{{.File}}</code> · {{.Span}}{{with .State}} <small class="resolved-badge">{{.}}</small>{{end}}</div>
+          <div class="ac-body">{{.Text}}</div>
+        </button>
+      </form>
+    </li>
+    {{end}}{{end}}
   </ul>
   {{else}}
   
   <div class="ac-empty">
-    <p class="ac-empty-msg">{{if and (gt .CommentCount 0) (not .ShowResolved)}}{{.CommentCount}} resolved comment{{if ne .CommentCount 1}}s{{end}} hidden — toggle “Show resolved” to see them.{{else}}No comments yet.{{end}}</p>
+    <p class="ac-empty-msg">{{if .HasAnyAnnotation}}The filter hides every annotation. Change it above to see them.{{else}}No annotations yet.{{end}}</p>
     <form method="POST" style="margin:0">
       <button type="submit" name="toggleCommentList" class="contrast ac-empty-back" title="Return to the file you were viewing">← Back to file</button>
     </form>

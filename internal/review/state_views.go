@@ -1171,7 +1171,7 @@ func (s PrereviewState) RegionComments() []Comment {
 
 // AnnotationNumbers numbers each annotation that has a box on screen within
 // its surface, in the order they were made, keyed by ID: a live-site annotation
-// within its page (the number on its marker and on its card in All comments),
+// within its page (the number on its marker and on its card on the Annotations page),
 // and a comment drawn on an HTML preview within its file. Resolved and hidden
 // annotations keep their numbers, so resolving one never renumbers the rest.
 // Zero-arg for the template.

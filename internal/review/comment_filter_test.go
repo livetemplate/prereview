@@ -7,6 +7,7 @@ import "testing"
 // resolves only what it lists.
 func TestCommentListFilterAnnotations(t *testing.T) {
 	s := PrereviewState{
+		ShowAllComments: true,
 		Comments: []Comment{
 			{ID: "line", File: "app.go", Kind: "line", FromLine: 1, ToLine: 1},
 			{ID: "box1", Kind: commentKindRegion, URL: "/"},
@@ -14,7 +15,7 @@ func TestCommentListFilterAnnotations(t *testing.T) {
 			{ID: "box-done", Kind: commentKindRegion, URL: "/", Resolved: true},
 		},
 	}
-	if n := len(s.VisibleComments()); n != 3 {
+	if n := len(listedComments(s)); n != 3 {
 		t.Fatalf("no filter: %d listed, want 3 (resolved hidden)", n)
 	}
 	if n := s.AnnotationsListed(); n != 2 {
@@ -26,7 +27,7 @@ func TestCommentListFilterAnnotations(t *testing.T) {
 
 	s.CommentListFilter = CommentFilterAnnotations
 	var ids []string
-	for _, c := range s.VisibleComments() {
+	for _, c := range listedComments(s) {
 		ids = append(ids, c.ID)
 	}
 	if len(ids) != 2 || ids[0] != "box1" || ids[1] != "box2" {
@@ -35,4 +36,16 @@ func TestCommentListFilterAnnotations(t *testing.T) {
 	if n := s.UnresolvedListed(); n != 2 {
 		t.Errorf("annotations filter: UnresolvedListed = %d, want 2 (Resolve all must not reach the line comment)", n)
 	}
+}
+
+// listedComments is the comments the Annotations page lists for s.
+func listedComments(s PrereviewState) []Comment {
+	s.ShowAllComments = true
+	var out []Comment
+	for _, r := range s.AnnotationList() {
+		if r.Comment != nil {
+			out = append(out, *r.Comment)
+		}
+	}
+	return out
 }

@@ -69,36 +69,13 @@ type NavItem struct {
 // surface's filter shows it.
 func (s PrereviewState) NavItems() []NavItem {
 	var out []NavItem
-	for i, c := range s.scopedComments() {
+	for _, e := range s.annotations() {
 		// A request (Run judges, Quiz me) is the agent's work, not a reviewer's note.
-		if !c.Resolved && c.Request == "" && s.annFilter(commentSurface(c)).stops(navComment) {
-			body := !c.IsFileLevel() && !c.IsAreaLevel()
-			out = append(out, NavItem{File: c.File, Side: c.Side, Pos: NavPos{Body: body, Line: c.ToLine, Kind: navComment, Seq: i, ID: c.ID}, Region: c.IsRegionLevel()})
+		if !e.Settled && !e.Request && s.annFilter(e.Surface).stops(e.Pos.Kind) {
+			out = append(out, e.NavItem)
 		}
 	}
-	decisions := s.DecisionsBySuggestion()
-	for i, sg := range s.visibleSuggestions() {
-		if s.undecidedIn(decisions, sg.ID) && s.annFilter(sg.File).stops(navSuggestion) {
-			out = append(out, NavItem{File: sg.File, Side: sg.Side, Pos: NavPos{Body: true, Line: sg.ToLine, Kind: navSuggestion, Seq: i, ID: sg.ID}})
-		}
-	}
-	for _, it := range s.allQuizItems() {
-		if !it.Answered && s.annFilter(it.File).stops(navQuiz) {
-			out = append(out, NavItem{File: it.File, Side: it.Side, Pos: NavPos{Body: it.LineGrounded(), Line: it.FromLine, Kind: navQuiz, Seq: it.Num, ID: it.ID}})
-		}
-	}
-	// The agent's questions wait on the reviewer until submitted, resolved or
-	// hidden (hiding drops a suggestion from the list too).
-	for i, set := range s.scopedQuestionSets() {
-		if s.questionAwaitingAnswer(set) && s.annFilter(set.File).stops(navQuestion) {
-			out = append(out, NavItem{File: set.File, Side: set.Side, Pos: NavPos{Body: set.LineGrounded(), Line: set.FromLine, Kind: navQuestion, Seq: i, ID: set.ID}})
-		}
-	}
-	rankOf := s.fileRank()
-	for i := range out {
-		out[i].Pos.File = rankOf(out[i].File)
-	}
-	slices.SortFunc(out, func(a, b NavItem) int { return a.Pos.compare(b.Pos) })
+	sortByReview(s, out, func(it *NavItem) *NavItem { return it })
 	return out
 }
 

@@ -48,7 +48,7 @@ func TestE2E_LiveAnnotationsList(t *testing.T) {
 			run("tap the count", chromedp.Click(`header.bar button.live-count`, chromedp.ByQuery))
 			waitJSDiag(t, p, `!!document.querySelector('`+card+` .processed-badge')`, "the card shows worked on", diag)
 			waitJSDiag(t, p, `((document.querySelector('`+card+` .thread')||{}).textContent||'').includes('Moved the heading down 24px.')`, "the card shows the agent's reply", diag)
-			waitJSDiag(t, p, `!!document.querySelector('`+card+` .anno-label') && document.querySelector('.ac-filter button[aria-pressed="true"]').textContent.startsWith('Annotations')`, "the annotation label and the Annotations filter", diag)
+			waitJSDiag(t, p, `!!document.querySelector('`+card+` .anno-label') && document.querySelector('.ac-filter button[aria-pressed="true"]').textContent.startsWith('Live site')`, "the annotation label and the Live site chip", diag)
 
 			// Reply from the card.
 			run("open the reply", chromedp.Click(card+` button[name="openReply"]`, chromedp.ByQuery))
