@@ -73,6 +73,7 @@ var keyBindings = []KeyBinding{
 	{Keys: []string{"r"}, Display: "r", Action: "toggleShowResolved", Label: "Show / hide resolved annotations here"},
 	{Keys: []string{"s"}, Display: "s", Action: "toggleSuggestions", Label: "Show / hide suggestions here"},
 	{Keys: []string{"d"}, Display: "d", Action: "toggleFileView", Label: "Diff: mark changes, or show the plain file"},
+	{Keys: []string{"u"}, Display: "u", Action: "markUnread", Label: "Mark this file unread"},
 	{Keys: []string{"q"}, Display: "q", Action: "toggleAgentPause", Label: "Pause / resume the agent queue", StreamOnly: true},
 	{Keys: []string{"."}, Display: ".", Action: "toggleFocusMode", Label: "Focus mode (hide side columns)"},
 	{Keys: []string{"?"}, Display: "?", Action: "toggleKeyboardHelp", Label: "Keyboard shortcuts"},

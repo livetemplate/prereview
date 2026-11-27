@@ -39,6 +39,12 @@
       >{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
     </form>
     {{end}}
+    {{/* Mark unread: forget this file's Viewed mark and reading progress. Desktop
+         only (the ⋯ menu carries it on a phone); always shown, greyed out with
+         the reason when nothing has been read. */}}
+    <form method="POST" class="file-head-unread" title="{{if $.CanMarkUnread}}Forget that you read this file: its Viewed mark and reading progress{{else}}Nothing read in this file yet{{end}}">
+      <button type="submit" name="markUnread" class="outline"{{if not $.CanMarkUnread}} disabled{{end}}>Mark unread{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+    </form>
     {{/* Comment on the whole file — sits in context next to the filename. Hidden
          while the file composer is already open (self-toggle loop) or while
          viewing a historical version (read-only). */}}

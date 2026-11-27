@@ -71,7 +71,7 @@
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="{{.Path}}">
-      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark as not viewed{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed{{else if .ChangedSinceViewed}}Changed since you viewed it: mark viewed again{{else}}Mark viewed{{end}}">
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark unread{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed: tap to mark unread{{else if .ChangedSinceViewed}}Changed since you viewed it: mark viewed again{{else}}Mark viewed{{end}}">
         {{- if .IsViewed}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end -}}
       </button>
     </form>{{if .ChangedSinceViewed}}<small class="viewed-changed">changed since you viewed it</small>{{end}}

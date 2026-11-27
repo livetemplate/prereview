@@ -92,6 +92,10 @@
     lvt-key="d"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="markUnread"
+    lvt-key="u"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleFocusMode"
     lvt-key="."
     lvt-mod:skip-when-typing
@@ -561,6 +565,7 @@
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved annotations here</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions here</dd></div>
     <div class="kbd-row"><dt><kbd>d</kbd></dt><dd>Diff: mark changes, or show the plain file</dd></div>
+    <div class="kbd-row"><dt><kbd>u</kbd></dt><dd>Mark this file unread</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>
     <div class="kbd-row"><dt><kbd>?</kbd></dt><dd>Keyboard shortcuts</dd></div>
     <div class="kbd-row"><dt><kbd>Esc</kbd></dt><dd>Cancel / close</dd></div>

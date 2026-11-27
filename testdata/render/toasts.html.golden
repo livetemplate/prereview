@@ -92,6 +92,10 @@
     lvt-key="d"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="markUnread"
+    lvt-key="u"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleAgentPause"
     lvt-key="q"
     lvt-mod:skip-when-typing
@@ -421,6 +425,25 @@
   
   
   
+  <form method="POST" title="Nothing read in this file yet">
+    <button
+      type="submit"
+      name="markUnread"
+      class="menu-item"
+      role="menuitem"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.5"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Mark unread <kbd class="kbd-hint" aria-hidden="true">u</kbd><small class="menu-why">Nothing read in this file yet</small></span>
+    </button>
+  </form>
   <form method="POST" title="Only for Markdown and HTML files"><input type="hidden" name="view" value="rendered">
     <button
       type="submit"
@@ -839,6 +862,10 @@
     
     
     
+    <form method="POST" class="file-head-unread" title="Nothing read in this file yet">
+      <button type="submit" name="markUnread" class="outline" disabled>Mark unread <kbd class="kbd-hint" aria-hidden="true">u</kbd></button>
+    </form>
+    
     
     <form method="POST" class="file-head-comment">
       <button
@@ -1022,6 +1049,7 @@
     <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved annotations here</dd></div>
     <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions here</dd></div>
     <div class="kbd-row"><dt><kbd>d</kbd></dt><dd>Diff: mark changes, or show the plain file</dd></div>
+    <div class="kbd-row"><dt><kbd>u</kbd></dt><dd>Mark this file unread</dd></div>
     <div class="kbd-row"><dt><kbd>q</kbd></dt><dd>Pause / resume the agent queue</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>
     <div class="kbd-row"><dt><kbd>?</kbd></dt><dd>Keyboard shortcuts</dd></div>

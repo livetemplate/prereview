@@ -190,18 +190,19 @@ func (c *PrereviewController) CloseFiles(state PrereviewState, ctx *livetemplate
 }
 
 // ToggleViewed marks the file passed via the hidden `path` input viewed, with
-// its content now, or clears the mark (#115 B3). A file that changed since it
-// was viewed is marked again with its new content. Bound to the drawer's
-// per-file button.
+// its content now, or marks it unread (#115 B3): unmarking also forgets its
+// reading progress, as Mark unread does. A file that changed since it was viewed
+// is marked again with its new content. Bound to the drawer's per-file button.
 func (c *PrereviewController) ToggleViewed(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	path := ctx.GetString("path")
 	if path == "" {
 		return state, fmt.Errorf("toggleViewed: missing path")
 	}
-	marks := loadFileMarks(c.viewedPath())
 	if state.ViewedFiles[path] {
-		delete(marks, path)
-	} else if sha := c.fileSHA(path); sha != "" {
+		return c.MarkUnread(state, ctx)
+	}
+	marks := loadFileMarks(c.viewedPath())
+	if sha := c.fileSHA(path); sha != "" {
 		marks[path] = FileMark{SHA: sha, At: time.Now().UTC()}
 		delete(state.SinceLook, path) // viewing it settles what changed since
 		c.applySinceLook(&state)

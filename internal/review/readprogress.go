@@ -121,3 +121,72 @@ func (c *PrereviewController) JumpToReadFrontier(state PrereviewState, ctx *live
 	state.ScrollToReadKey = state.ReadFrontierKey()
 	return state, nil
 }
+
+// MarkUnread resets a file to untouched: its Viewed mark and its reading
+// progress go, and the view returns to the top so the bar and Jump to unread
+// start over. The file is the form's path when given (the file list), else the
+// open file (the file header, the ⋯ menu, the u key).
+func (c *PrereviewController) MarkUnread(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	path := ctx.GetString("path")
+	if path == "" {
+		path = state.SelectedFile
+	}
+	state.MoreMenuOpen = false
+	if path == "" {
+		return state, nil
+	}
+	if err := c.unmarkViewed(&state, path); err != nil {
+		return state, fmt.Errorf("markUnread: %w", err)
+	}
+	forgetReading(&state, path)
+	if path == state.SelectedFile {
+		state.ScrollToReadKey = state.firstViewKey()
+	}
+	return state, nil
+}
+
+// unmarkViewed drops path's Viewed mark, if it has one, and re-derives the
+// viewed sets.
+func (c *PrereviewController) unmarkViewed(state *PrereviewState, path string) error {
+	if !state.ViewedFiles[path] && !state.ChangedSinceViewed[path] {
+		return nil
+	}
+	marks := loadFileMarks(c.viewedPath())
+	delete(marks, path)
+	if err := saveFileMarks(c.viewedPath(), marks); err != nil {
+		return err
+	}
+	c.applyViewed(state)
+	return nil
+}
+
+// forgetReading drops path's reading progress and scroll-restore point.
+func forgetReading(state *PrereviewState, path string) {
+	delete(state.ReadThrough, path)
+	delete(state.LastReadTopKey, path)
+}
+
+// CanMarkUnread enables Mark unread: the open file has a Viewed mark or some
+// reading progress to reset.
+func (s PrereviewState) CanMarkUnread() bool {
+	f := s.SelectedFile
+	return f != "" && (s.ViewedFiles[f] || s.ChangedSinceViewed[f] || s.ReadThrough[f] > 0)
+}
+
+// firstViewKey is the data-key of the first line or block of the open file's
+// current view, the scroll target that puts the reviewer back at the top.
+func (s PrereviewState) firstViewKey() string {
+	if s.CurrentDiff == nil {
+		return ""
+	}
+	if s.ShowRenderedMarkdown() {
+		if bs := s.CurrentDiff.MarkdownBlocks; len(bs) > 0 {
+			return markdownBlockKey(bs[0].StartLine, bs[0].EndLine)
+		}
+		return ""
+	}
+	if ls := s.CurrentDiff.Lines; len(ls) > 0 {
+		return fmt.Sprintf("L%d-%d", ls[0].OldNum, ls[0].NewNum)
+	}
+	return ""
+}

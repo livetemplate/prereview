@@ -513,6 +513,10 @@
     </form>
     {{end}}
     
+    <form method="POST" class="file-head-unread" title="{{if $.CanMarkUnread}}Forget that you read this file: its Viewed mark and reading progress{{else}}Nothing read in this file yet{{end}}">
+      <button type="submit" name="markUnread" class="outline"{{if not $.CanMarkUnread}} disabled{{end}}>Mark unread{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+    </form>
+    
     {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
     <form method="POST" class="file-head-comment">
       <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
@@ -559,7 +563,7 @@
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="{{.Path}}">
-      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark as not viewed{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed{{else}}{{if .ChangedSinceViewed}}Changed since you viewed it: mark viewed again{{else}}Mark viewed{{end}}{{end}}">{{if .IsViewed}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end}}</button>
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark unread{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed: tap to mark unread{{else}}{{if .ChangedSinceViewed}}Changed since you viewed it: mark viewed again{{else}}Mark viewed{{end}}{{end}}">{{if .IsViewed}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end}}</button>
     </form>{{if .ChangedSinceViewed}}<small class="viewed-changed">changed since you viewed it</small>{{end}}
   </div>
 </li>
@@ -901,7 +905,13 @@
     </button>
   </form>
   {{end}}
-  {{$previewable := or $.IsMarkdown $.IsHTML}}{{$raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
+  
+  <form method="POST" title="{{if $.CanMarkUnread}}Forget that you read this file: its Viewed mark and reading progress{{else}}Nothing read in this file yet{{end}}">
+    <button type="submit" name="markUnread" class="menu-item" role="menuitem" {{if not $.CanMarkUnread}}disabled{{end}}>
+      <span class="menu-icon">{{template "iconViewedCircle"}}</span>
+      <span class="menu-label">Mark unread{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not $.CanMarkUnread}}<small class="menu-why">Nothing read in this file yet</small>{{end}}</span>
+    </button>
+  </form>{{$previewable := or $.IsMarkdown $.IsHTML}}{{$raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
   <form method="POST" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="rendered">
     <button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="menu-item menu-file-view{{if and $previewable (not $raw)}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $previewable (not $raw)}}true{{else}}false{{end}}" {{if not $previewable}}disabled{{end}}>
       <span class="menu-icon">{{if and $previewable (not $raw)}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
