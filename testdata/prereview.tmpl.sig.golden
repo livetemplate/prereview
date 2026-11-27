@@ -511,11 +511,11 @@
     <form method="POST" class="file-head-resume">
       <button type="submit" name="jumpToReadFrontier" class="outline" title="Jump to the first content you haven't read yet">{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
     </form>
-    {{end}}
-    
-    <form method="POST" class="file-head-unread" title="{{if $.CanMarkUnread}}Forget that you read this file: its Viewed mark and reading progress{{else}}Nothing read in this file yet{{end}}">
-      <button type="submit" name="markUnread" class="outline"{{if not $.CanMarkUnread}} disabled{{end}}>Mark unread{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+    {{else}}{{if $.CanMarkUnread}}
+    <form method="POST" class="file-head-resume">
+      <button type="submit" name="markUnread" class="outline" title="Forget that you read this file: its Viewed mark and reading progress">{{template "iconViewedCircle"}}<span class="resume-label">Mark unread</span>{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
     </form>
+    {{end}}{{end}}
     
     {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
     <form method="POST" class="file-head-comment">
@@ -905,13 +905,7 @@
     </button>
   </form>
   {{end}}
-  
-  <form method="POST" title="{{if $.CanMarkUnread}}Forget that you read this file: its Viewed mark and reading progress{{else}}Nothing read in this file yet{{end}}">
-    <button type="submit" name="markUnread" class="menu-item" role="menuitem" {{if not $.CanMarkUnread}}disabled{{end}}>
-      <span class="menu-icon">{{template "iconViewedCircle"}}</span>
-      <span class="menu-label">Mark unread{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not $.CanMarkUnread}}<small class="menu-why">Nothing read in this file yet</small>{{end}}</span>
-    </button>
-  </form>{{$previewable := or $.IsMarkdown $.IsHTML}}{{$raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
+  {{$previewable := or $.IsMarkdown $.IsHTML}}{{$raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
   <form method="POST" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="rendered">
     <button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="menu-item menu-file-view{{if and $previewable (not $raw)}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $previewable (not $raw)}}true{{else}}false{{end}}" {{if not $previewable}}disabled{{end}}>
       <span class="menu-icon">{{if and $previewable (not $raw)}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>

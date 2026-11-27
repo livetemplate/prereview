@@ -387,25 +387,6 @@
   
   
   
-  <form method="POST" title="Forget that you read this file: its Viewed mark and reading progress">
-    <button
-      type="submit"
-      name="markUnread"
-      class="menu-item"
-      role="menuitem"
-      
-    >
-      <span class="menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle
-  cx="12"
-  cy="12"
-  r="8"
-  stroke="currentColor"
-  stroke-width="1.5"
-  fill="none"
-/></svg></span>
-      <span class="menu-label">Mark unread <kbd class="kbd-hint" aria-hidden="true">u</kbd></span>
-    </button>
-  </form>
   <form method="POST" title="Only for Markdown and HTML files"><input type="hidden" name="view" value="rendered">
     <button
       type="submit"
@@ -794,10 +775,22 @@
     <span class="file-head-actions">
     
     
-    
-    <form method="POST" class="file-head-unread" title="Forget that you read this file: its Viewed mark and reading progress">
-      <button type="submit" name="markUnread" class="outline">Mark unread <kbd class="kbd-hint" aria-hidden="true">u</kbd></button>
+    <form method="POST" class="file-head-resume">
+      <button
+        type="submit"
+        name="markUnread"
+        class="outline"
+        title="Forget that you read this file: its Viewed mark and reading progress"
+      ><svg viewBox="0 0 24 24" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.5"
+  fill="none"
+/></svg><span class="resume-label">Mark unread</span> <kbd class="kbd-hint" aria-hidden="true">u</kbd></button>
     </form>
+    
     
     
     <form method="POST" class="file-head-comment">

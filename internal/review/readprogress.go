@@ -125,7 +125,7 @@ func (c *PrereviewController) JumpToReadFrontier(state PrereviewState, ctx *live
 // MarkUnread resets a file to untouched: its Viewed mark and its reading
 // progress go, and the view returns to the top so the bar and Jump to unread
 // start over. The file is the form's path when given (the file list), else the
-// open file (the file header, the ⋯ menu, the u key).
+// open file (the file header, the u key).
 func (c *PrereviewController) MarkUnread(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	path := ctx.GetString("path")
 	if path == "" {
@@ -166,8 +166,9 @@ func forgetReading(state *PrereviewState, path string) {
 	delete(state.LastReadTopKey, path)
 }
 
-// CanMarkUnread enables Mark unread: the open file has a Viewed mark or some
-// reading progress to reset.
+// CanMarkUnread: the open file has a Viewed mark or some reading progress to
+// reset. The file header shows Mark unread in Jump to unread's slot when this
+// holds and Jump to unread doesn't (the file is read to the end, or Viewed).
 func (s PrereviewState) CanMarkUnread() bool {
 	f := s.SelectedFile
 	return f != "" && (s.ViewedFiles[f] || s.ChangedSinceViewed[f] || s.ReadThrough[f] > 0)

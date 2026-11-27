@@ -181,7 +181,7 @@ func (s PrereviewState) ReadPercent() int {
 	if mark == 0 {
 		return 0
 	}
-	total := s.CurrentDiff.LastLine("new")
+	total := s.lastReadableLine()
 	if total == 0 {
 		return 0
 	}
@@ -189,6 +189,19 @@ func (s PrereviewState) ReadPercent() int {
 		return pct
 	}
 	return 100
+}
+
+// lastReadableLine is the furthest line the current view can report as read:
+// the last rendered block's end in a Markdown preview (trailing blank lines
+// belong to no block, so the file's own last line is never reported and a
+// file read to the end stopped at 99%), else the file's last new-side line.
+func (s PrereviewState) lastReadableLine() int {
+	if s.ShowRenderedMarkdown() {
+		if bs := s.CurrentDiff.MarkdownBlocks; len(bs) > 0 {
+			return bs[len(bs)-1].EndLine
+		}
+	}
+	return s.CurrentDiff.LastLine("new")
 }
 
 // scopedSuggestions drops the suggestions that belong to a DIFFERENT file than the one

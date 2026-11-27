@@ -83,18 +83,6 @@
        (fileheader.tmpl), with the same names. All are listed while a file is
        open; one that doesn't apply is disabled, with its reason under the label
        since a phone has no hover. */}}
-  <form method="POST" title="{{if $.CanMarkUnread}}Forget that you read this file: its Viewed mark and reading progress{{else}}Nothing read in this file yet{{end}}">
-    <button
-      type="submit"
-      name="markUnread"
-      class="menu-item"
-      role="menuitem"
-      {{if not $.CanMarkUnread}}disabled{{end}}
-    >
-      <span class="menu-icon">{{template "iconViewedCircle"}}</span>
-      <span class="menu-label">Mark unread{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not $.CanMarkUnread}}<small class="menu-why">Nothing read in this file yet</small>{{end}}</span>
-    </button>
-  </form>
   {{- $previewable := or $.IsMarkdown $.IsHTML}}
   {{- $raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
   <form method="POST" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="rendered">

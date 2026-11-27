@@ -72,10 +72,11 @@ the mark remembers what the file held. If the file changes later, the drawer say
 "changed since you viewed it"; undoing the change makes it viewed again. Marks last
 across sessions.
 
-**Mark a file unread.** **Mark unread** (<kbd>u</kbd>) forgets that you read the open
-file: its Viewed mark, and the reading-progress bar under its header that **Jump to
-unread** follows. It sits on the file's header; on a phone it is in the ⋯ menu.
-Tapping a file's tick in the drawer marks it unread the same way.
+**Mark a file unread.** While a file is partly read, its header offers **Jump to
+unread**, which follows the reading-progress bar under the header. Once you have read
+it to the end or marked it viewed, **Mark unread** (<kbd>u</kbd>) takes that place. It
+forgets both the Viewed mark and the reading progress. Tapping a file's tick in the
+drawer marks it unread the same way.
 
 **See what changed since you last looked.** Open a file that changed since you last
 had it open, usually after your agent edited it. A notice says how many lines

@@ -387,25 +387,6 @@
   
   
   
-  <form method="POST" title="Nothing read in this file yet">
-    <button
-      type="submit"
-      name="markUnread"
-      class="menu-item"
-      role="menuitem"
-      disabled
-    >
-      <span class="menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle
-  cx="12"
-  cy="12"
-  r="8"
-  stroke="currentColor"
-  stroke-width="1.5"
-  fill="none"
-/></svg></span>
-      <span class="menu-label">Mark unread <kbd class="kbd-hint" aria-hidden="true">u</kbd><small class="menu-why">Nothing read in this file yet</small></span>
-    </button>
-  </form>
   <form method="POST" title="Only for Markdown and HTML files"><input type="hidden" name="view" value="rendered">
     <button
       type="submit"
@@ -789,10 +770,6 @@
     <span class="file-head-actions">
     
     
-    
-    <form method="POST" class="file-head-unread" title="Nothing read in this file yet">
-      <button type="submit" name="markUnread" class="outline" disabled>Mark unread <kbd class="kbd-hint" aria-hidden="true">u</kbd></button>
-    </form>
     
     
     <form method="POST" class="file-head-comment">

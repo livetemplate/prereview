@@ -2121,8 +2121,7 @@ header.file-head .file-head-comment button svg { display: block; }
 }
 /* "Resume reading" chip — compact, matches the other file-head action chips. */
 .file-head-resume { margin: 0; }
-.file-head-resume button,
-.file-head-unread button {
+.file-head-resume button {
   width: auto; margin: 0; padding: 0.08rem 0.5rem;
   display: inline-flex; align-items: center; gap: 0.2rem;
   font-size: 0.76rem; white-space: nowrap;
@@ -4417,7 +4416,3 @@ header.bar .search-btn .tb-word, header.bar .search-btn .tb-kbd { display: none;
 /* The stepper's scroll anchor (NavAnchor): out of flow, so it adds no space or
    flex gap to the card it marks. */
 .nav-anchor { position: absolute; width: 0; height: 0; overflow: hidden; }
-
-/* Mark unread sits on the file header on a desktop; a phone has it in the ⋯ menu. */
-.file-head-unread { display: none; margin: 0; }
-@media (min-width: 900px) { .file-head-unread { display: inline-flex; } }
