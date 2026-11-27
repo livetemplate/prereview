@@ -363,34 +363,12 @@ func (c *PrereviewController) ToggleSuggestions(state PrereviewState, ctx *livet
 	return state, nil
 }
 
-// ToggleRawMarkdown flips a Markdown file between the rendered view
-// (default) and the raw line view. Closes the overflow menu so the
-// effect is immediately visible on mobile.
-func (c *PrereviewController) ToggleRawMarkdown(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RawMarkdown = !state.RawMarkdown
-	state.MoreMenuOpen = false
-	c.savePrefs(state)
-	return state, nil
-}
-
-// SetMarkdownView is the idempotent setter behind the desktop radio
-// group (Rendered / Raw). Reads form field `view`; anything other than
-// "raw" resolves to rendered. Unlike ToggleRawMarkdown, clicking the
-// already-active radio is a no-op for state — the value reflects the
-// final mode, not a flip.
+// SetMarkdownView is the idempotent setter behind Preview and Raw (the file
+// header, and the ⋯ menu on a phone). Reads form field `view`; anything other
+// than "raw" resolves to rendered. Clicking the one already on is a no-op for
+// state: the value is the final mode, not a flip.
 func (c *PrereviewController) SetMarkdownView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RawMarkdown = ctx.GetString("view") == "raw"
-	state.MoreMenuOpen = false
-	c.savePrefs(state)
-	return state, nil
-}
-
-// ToggleRawHTML is the .html/.htm equivalent of ToggleRawMarkdown:
-// flips the iframe preview off and the syntax-highlighted line view on
-// (and back). Closes the overflow menu so the change is visible on
-// mobile.
-func (c *PrereviewController) ToggleRawHTML(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RawHTML = !state.RawHTML
 	state.MoreMenuOpen = false
 	c.savePrefs(state)
 	return state, nil

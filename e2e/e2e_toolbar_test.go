@@ -169,8 +169,8 @@ func TestE2E_ToolbarButtons(t *testing.T) {
 		}
 	}
 	for _, sel := range []string{`.file-head-view input[value="raw"] ~ button`, `.file-head-view .region-toggle button`} {
-		if !evalBool(fmt.Sprintf(`(()=>{const b=document.querySelector(%q);return !!b && b.disabled && b.title.length>0})()`, sel)) {
-			t.Errorf("%s should be disabled with a title on a Go file%s", sel, diag())
+		if !evalBool(fmt.Sprintf(`(()=>{const b=document.querySelector(%q);const r=b&&b.getBoundingClientRect();const hit=r&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !!b && b.disabled && b.closest('form').title.length>0 && hit===b.closest('form')})()`, sel)) {
+			t.Errorf("%s should be disabled on a Go file, with the hover reaching its form's title%s", sel, diag())
 		}
 	}
 	if got := evalStr(`document.querySelector('.file-head-view button[name="toggleFileView"]').getAttribute('aria-pressed')`); got != "true" {
@@ -194,15 +194,18 @@ func TestE2E_ToolbarUnderstandDisabled(t *testing.T) {
 	p := bootChromeAgainstRepo(t, setupFixtureRepo(t), 1400, 900)
 	p.waitReadyAt(1400, 900)
 	p.clickFile("edited.go")
-	var disabled bool
+	var disabled, hoverReachesTitle bool
 	var title string
 	if err := chromedp.Run(p.ctx,
 		chromedp.Evaluate(`document.querySelector('header.bar button[name="toggleUnderstand"]').disabled`, &disabled),
-		chromedp.Evaluate(`document.querySelector('header.bar button[name="toggleUnderstand"]').title`, &title),
+		chromedp.Evaluate(`document.querySelector('header.bar button[name="toggleUnderstand"]').closest('form').title`, &title),
+		// A disabled button gets no hover in Safari or Firefox, so the pointer
+		// must land on the form that carries the tooltip.
+		chromedp.Evaluate(`(()=>{const b=document.querySelector('header.bar button[name="toggleUnderstand"]');const r=b.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b.closest('form')})()`, &hoverReachesTitle),
 	); err != nil {
 		t.Fatalf("read Understand: %v\nstderr: %s", err, p.stderr.String())
 	}
-	if !disabled || !strings.Contains(title, "no agent") {
-		t.Errorf("Understand disabled=%v title=%q, want disabled with a reason\nstderr: %s", disabled, title, p.stderr.String())
+	if !disabled || !strings.Contains(title, "no agent") || !hoverReachesTitle {
+		t.Errorf("Understand disabled=%v title=%q hoverReachesTitle=%v, want disabled with a reason on hover\nstderr: %s", disabled, title, hoverReachesTitle, p.stderr.String())
 	}
 }

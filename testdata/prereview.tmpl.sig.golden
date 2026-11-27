@@ -496,14 +496,14 @@
     {{$previewable := or $.IsMarkdown $.IsHTML}}{{$raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
     <span class="file-head-view" role="toolbar" aria-label="How this file shows">
       <span class="fh-seg">
-        <form method="POST"><input type="hidden" name="view" value="rendered"><button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="fh-btn" aria-pressed="{{if and $previewable (not $raw)}}true{{else}}false{{end}}" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"{{if not $previewable}} disabled{{end}}>Preview</button></form>
-        <form method="POST"><input type="hidden" name="view" value="raw"><button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="fh-btn" aria-pressed="{{if $raw}}true{{else}}false{{end}}" title="{{if $previewable}}Show the raw source{{else}}Only for Markdown and HTML files{{end}}"{{if not $previewable}} disabled{{end}}>Raw</button></form>
+        <form method="POST" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="rendered"><button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="fh-btn" aria-pressed="{{if and $previewable (not $raw)}}true{{else}}false{{end}}"{{if not $previewable}} disabled{{end}}>Preview</button></form>
+        <form method="POST" title="{{if $previewable}}Show the raw source{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="raw"><button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="fh-btn" aria-pressed="{{if $raw}}true{{else}}false{{end}}"{{if not $previewable}} disabled{{end}}>Raw</button></form>
       </span>
-      <form method="POST"><button type="submit" name="toggleFileView" class="fh-btn" aria-pressed="{{if and (not $.FileView) (not $.ShowRenderedHTML)}}true{{else}}false{{end}}" title="{{if $.ShowRenderedHTML}}Not in the HTML preview{{else}}Mark what changed; off shows the plain file{{end}}"{{if $.ShowRenderedHTML}} disabled{{end}}>{{template "iconDiff"}}<span>Diff</span>{{with index $.KeyHint "toggleFileView"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button></form>
-      <form method="POST"><button type="submit" name="toggleHideWhitespace" class="fh-btn" aria-pressed="{{if and $.ShowsDiffRows $.HideWhitespace}}true{{else}}false{{end}}" title="{{if $.ShowsDiffRows}}Show whitespace-only changes as unchanged{{else}}Only in a diff{{end}}"{{if not $.ShowsDiffRows}} disabled{{end}}>Whitespace</button></form>
-      <form method="POST"><button type="submit" name="toggleFoldMechanical" class="fh-btn" aria-pressed="{{if and $.HasMechanical (not $.UnfoldMechanical)}}true{{else}}false{{end}}" title="{{if $.HasMechanical}}Fold the changes the walkthrough calls mechanical{{else}}No mechanical changes to fold{{end}}"{{if not $.HasMechanical}} disabled{{end}}>Fold</button></form>
-      {{if $.CanAnnotate}}{{template "regionToggle" $}}{{else}}<form method="POST" class="region-toggle"><button type="button" class="fh-btn" title="Only on an image or the HTML preview" disabled>{{template "iconAnnotate"}}<span class="annotate-word"> Annotate</span></button></form>{{end}}
-      <form method="POST"><button type="submit" name="toggleBoxes" class="fh-btn" aria-pressed="{{if and $.HTMLMarkers $.ShowBoxes}}true{{else}}false{{end}}" title="{{if $.HTMLMarkers}}Outline every annotation's box{{else}}Only on the HTML preview, once it has annotations{{end}}"{{if not $.HTMLMarkers}} disabled{{end}}>Boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button></form>
+      <form method="POST" title="{{if $.ShowRenderedHTML}}Not in the HTML preview{{else}}Mark what changed; off shows the plain file{{end}}"><button type="submit" name="toggleFileView" class="fh-btn" aria-pressed="{{if and (not $.FileView) (not $.ShowRenderedHTML)}}true{{else}}false{{end}}"{{if $.ShowRenderedHTML}} disabled{{end}}>{{template "iconDiff"}}<span>Diff</span>{{with index $.KeyHint "toggleFileView"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button></form>
+      <form method="POST" title="{{if $.ShowsDiffRows}}Show whitespace-only changes as unchanged{{else}}Only in a diff{{end}}"><button type="submit" name="toggleHideWhitespace" class="fh-btn" aria-pressed="{{if and $.ShowsDiffRows $.HideWhitespace}}true{{else}}false{{end}}"{{if not $.ShowsDiffRows}} disabled{{end}}>Whitespace</button></form>
+      <form method="POST" title="{{if $.HasMechanical}}Fold the changes the walkthrough calls mechanical{{else}}No mechanical changes to fold{{end}}"><button type="submit" name="toggleFoldMechanical" class="fh-btn" aria-pressed="{{if and $.HasMechanical (not $.UnfoldMechanical)}}true{{else}}false{{end}}"{{if not $.HasMechanical}} disabled{{end}}>Fold</button></form>
+      {{if $.CanAnnotate}}{{template "regionToggle" $}}{{else}}<form method="POST" class="region-toggle" title="Only on an image or the HTML preview"><button type="button" class="fh-btn" disabled>{{template "iconAnnotate"}}<span class="annotate-word"> Annotate</span></button></form>{{end}}
+      <form method="POST" title="{{if $.HTMLMarkers}}Outline every annotation's box{{else}}Only on the HTML preview, once it has annotations{{end}}"><button type="submit" name="toggleBoxes" class="fh-btn" aria-pressed="{{if and $.HTMLMarkers $.ShowBoxes}}true{{else}}false{{end}}"{{if not $.HTMLMarkers}} disabled{{end}}>Boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button></form>
     </span>
     
     <span class="file-head-actions">
@@ -902,65 +902,72 @@
     </button>
   </form>
   {{end}}
-  {{if .IsMarkdown}}
-  <form method="POST">
-    <button type="submit" name="toggleRawMarkdown" class="menu-item{{if not .RawMarkdown}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">
-        {{if .RawMarkdown}}
-        {{template "iconRendered"}}
-        {{else}}
-        {{template "iconViewRaw"}}
-        {{end}}
-      </span>
-      <span class="menu-label">{{if .RawMarkdown}}Preview{{else}}View raw source{{end}}</span>
+  {{$previewable := or $.IsMarkdown $.IsHTML}}{{$raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
+  <form method="POST" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="rendered">
+    <button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="menu-item menu-file-view{{if and $previewable (not $raw)}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $previewable (not $raw)}}true{{else}}false{{end}}" {{if not $previewable}}disabled{{end}}>
+      <span class="menu-icon">{{if and $previewable (not $raw)}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Preview{{if not $previewable}}<small class="menu-why">Only for Markdown and HTML files</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if $previewable}}Show the raw source{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="raw">
+    <button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="menu-item menu-file-view{{if and $previewable $raw}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $previewable $raw}}true{{else}}false{{end}}" {{if not $previewable}}disabled{{end}}>
+      <span class="menu-icon">{{if and $previewable $raw}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Raw{{if not $previewable}}<small class="menu-why">Only for Markdown and HTML files</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if (not $.ShowRenderedHTML)}}Mark what changed; off shows the plain file{{else}}Not in the HTML preview{{end}}">
+    <button type="submit" name="toggleFileView" class="menu-item menu-file-view{{if and (not $.ShowRenderedHTML) (not $.FileView)}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and (not $.ShowRenderedHTML) (not $.FileView)}}true{{else}}false{{end}}" {{if not (not $.ShowRenderedHTML)}}disabled{{end}}>
+      <span class="menu-icon">{{if and (not $.ShowRenderedHTML) (not $.FileView)}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Diff{{with index $.KeyHint "toggleFileView"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not (not $.ShowRenderedHTML)}}<small class="menu-why">Not in the HTML preview</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if $.ShowsDiffRows}}Show whitespace-only changes as unchanged{{else}}Only in a diff{{end}}">
+    <button type="submit" name="toggleHideWhitespace" class="menu-item menu-file-view{{if and $.ShowsDiffRows $.HideWhitespace}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $.ShowsDiffRows $.HideWhitespace}}true{{else}}false{{end}}" {{if not $.ShowsDiffRows}}disabled{{end}}>
+      <span class="menu-icon">{{if and $.ShowsDiffRows $.HideWhitespace}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Whitespace{{if not $.ShowsDiffRows}}<small class="menu-why">Only in a diff</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if $.HasMechanical}}Fold the changes the walkthrough calls mechanical{{else}}No mechanical changes to fold{{end}}">
+    <button type="submit" name="toggleFoldMechanical" class="menu-item menu-file-view{{if and $.HasMechanical (not $.UnfoldMechanical)}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $.HasMechanical (not $.UnfoldMechanical)}}true{{else}}false{{end}}" {{if not $.HasMechanical}}disabled{{end}}>
+      <span class="menu-icon">{{if and $.HasMechanical (not $.UnfoldMechanical)}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Fold{{if not $.HasMechanical}}<small class="menu-why">No mechanical changes to fold</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if $.CanAnnotate}}Drag a box on the page to comment on that part{{else}}Only on an image or the HTML preview{{end}}">
+    <button type="submit" name="toggleRegionSelect" class="menu-item menu-file-view{{if and $.CanAnnotate $.RegionSelectArmed}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $.CanAnnotate $.RegionSelectArmed}}true{{else}}false{{end}}" {{if not $.CanAnnotate}}disabled{{end}}>
+      <span class="menu-icon">{{if and $.CanAnnotate $.RegionSelectArmed}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">{{if $.RegionSelectArmed}}Annotating — tap to stop{{else}}Annotate{{end}}{{if not $.CanAnnotate}}<small class="menu-why">Only on an image or the HTML preview</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if (gt (len $.HTMLMarkers) 0)}}Outline every annotation's box{{else}}Only on the HTML preview, once it has annotations{{end}}">
+    <button type="submit" name="toggleBoxes" class="menu-item menu-file-view{{if and (gt (len $.HTMLMarkers) 0) $.ShowBoxes}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and (gt (len $.HTMLMarkers) 0) $.ShowBoxes}}true{{else}}false{{end}}" {{if not (gt (len $.HTMLMarkers) 0)}}disabled{{end}}>
+      <span class="menu-icon">{{if and (gt (len $.HTMLMarkers) 0) $.ShowBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not (gt (len $.HTMLMarkers) 0)}}<small class="menu-why">Only on the HTML preview, once it has annotations</small>{{end}}</span>
     </button>
   </form>
   {{end}}
-  {{if .IsHTML}}
-  <form method="POST">
-    <button type="submit" name="toggleRawHTML" class="menu-item{{if not .RawHTML}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">
-        {{if .RawHTML}}
-        {{template "iconRendered"}}
-        {{else}}
-        {{template "iconViewRaw"}}
-        {{end}}
-      </span>
-      <span class="menu-label">{{if .RawHTML}}Preview{{else}}View raw source{{end}}</span>
-    </button>
-  </form>
-  {{end}}
-  {{if not .ShowRenderedHTML}}
-  <form method="POST">
-    <button type="submit" name="toggleFileView" class="menu-item{{if not .FileView}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if .FileView}}false{{else}}true{{end}}">
-      <span class="menu-icon">{{if .FileView}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
-      <span class="menu-label">Diff{{with index $.KeyHint "toggleFileView"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-    </button>
-  </form>
-  {{end}}
-  {{if .CanAnnotate}}
-  <form method="POST">
-    <button type="submit" name="toggleRegionSelect" class="menu-item{{if .RegionSelectArmed}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if .RegionSelectArmed}}true{{else}}false{{end}}">
-      <span class="menu-icon">{{template "iconAnnotate"}}</span>
-      <span class="menu-label">{{if .RegionSelectArmed}}Annotating — tap to stop{{else}}Annotate{{end}}</span>
-    </button>
-  </form>
-  {{end}}
-  {{end}}
-  {{if gt .CommentCount 0}}
-  <form method="POST">
-    <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem">
-      <span class="menu-icon">{{template "iconComments"}}</span>
-      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}Annotations{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-      <span class="menu-meta">{{.CommentCount}}</span>
+  {{if .LiveShowing}}
+  <form method="POST" title="{{if .RegionComments}}Outline every annotation's box on the page{{else}}No annotations on this page{{end}}">
+    <button type="submit" name="toggleBoxes" class="menu-item{{if and .RegionComments .ShowBoxes}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and .RegionComments .ShowBoxes}}true{{else}}false{{end}}" {{if not .RegionComments}}disabled{{end}}>
+      <span class="menu-icon">{{if and .RegionComments .ShowBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not .RegionComments}}<small class="menu-why">No annotations on this page</small>{{end}}</span>
     </button>
   </form>
   {{end}}
   
-  <form method="POST">
-    <button type="submit" name="toggleUnderstand" class="menu-item" role="menuitem" title="{{if or .ShowUnderstandEntry .ShowUnderstand}}Walk through the whole change, and quiz yourself on it{{else}}No walkthrough or quiz yet, and no agent to make one{{end}}" {{if not (or .ShowUnderstandEntry .ShowUnderstand)}}disabled{{end}}>
+  {{$annOn := or (gt .CommentCount 0) .ShowAllComments}}
+  <form method="POST"{{if not $annOn}} title="No annotations yet"{{end}}>
+    <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" {{if not $annOn}}disabled{{end}}>
+      <span class="menu-icon">{{template "iconComments"}}</span>
+      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}Annotations{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not $annOn}}<small class="menu-why">No annotations yet</small>{{end}}</span>
+      {{if gt .CommentCount 0}}<span class="menu-meta">{{.CommentCount}}</span>{{end}}
+    </button>
+  </form>
+  {{$undOn := or .ShowUnderstandEntry .ShowUnderstand}}
+  <form method="POST" title="{{if $undOn}}Walk through the whole change, and quiz yourself on it{{else}}No walkthrough or quiz yet, and no agent to make one{{end}}">
+    <button type="submit" name="toggleUnderstand" class="menu-item" role="menuitem" {{if not $undOn}}disabled{{end}}>
       <span class="menu-icon">{{template "iconQuiz"}}</span>
-      <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
+      <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not $undOn}}<small class="menu-why">No walkthrough or quiz yet, and no agent to make one</small>{{end}}</span>
       {{with .QuizScoreLabel}}<span class="menu-meta">{{.}}</span>{{end}}
     </button>
   </form>
@@ -996,22 +1003,6 @@
       <span class="menu-icon">{{template "iconSuggestion"}}</span>
       <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}</span>
       <span class="menu-meta">{{.SuggestionCount}}</span>
-    </button>
-  </form>
-  {{end}}{{if $.HasMechanical}}
-  
-  <form method="POST">
-    <button type="submit" name="toggleFoldMechanical" class="menu-item{{if not .UnfoldMechanical}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">{{if .UnfoldMechanical}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
-      <span class="menu-label">Fold mechanical changes</span>
-    </button>
-  </form>
-  {{end}}{{if $.ShowsDiffRows}}
-  
-  <form method="POST">
-    <button type="submit" name="toggleHideWhitespace" class="menu-item{{if .HideWhitespace}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">{{if .HideWhitespace}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
-      <span class="menu-label">Hide whitespace changes</span>
     </button>
   </form>
   {{end}}
@@ -1799,17 +1790,17 @@
 </header>
 === toolbarButtons ===
     <div class="tb-group tb-views">
-      <form method="POST">
-        <button type="submit" name="toggleFocusMode" class="tb-btn" aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}" title="{{if .FileShowing}}Focus: hide the side columns{{else}}Open a file to focus on it{{end}}" {{if not .FileShowing}}disabled{{end}}>{{template "iconFocus"}}<span class="tb-word">Focus</span>{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      <form method="POST" title="{{if .FileShowing}}Focus: hide the side columns{{else}}Open a file to focus on it{{end}}">
+        <button type="submit" name="toggleFocusMode" class="tb-btn" aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}" {{if not .FileShowing}}disabled{{end}}>{{template "iconFocus"}}<span class="tb-word">Focus</span>{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
       </form>
-      {{with .AnnotationTotals}}<form method="POST">
-        <button type="submit" name="toggleCommentList" class="tb-btn" aria-pressed="{{if $.ShowAllComments}}true{{else}}false{{end}}" title="{{if or .Open .Resolved $.ShowAllComments}}Every annotation in the review: {{.Open}} open, {{.Resolved}} resolved{{if .Outdated}}; {{.Outdated}} need re-anchoring{{end}}{{else}}No annotations yet{{end}}" {{if not (or .Open .Resolved $.ShowAllComments)}}disabled{{end}}>{{template "iconComments"}}<span class="tb-word">Annotations</span><span class="tb-count">{{.Open}}</span>{{if .Resolved}}<span class="tb-count-sub">+{{.Resolved}}</span>{{end}}{{if .Outdated}}<span class="tb-outdated" aria-label="{{.Outdated}} outdated">⚠{{.Outdated}}</span>{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      {{with .AnnotationTotals}}<form method="POST" title="{{if or .Open .Resolved $.ShowAllComments}}Every annotation in the review: {{.Open}} open, {{.Resolved}} resolved{{if .Outdated}}; {{.Outdated}} need re-anchoring{{end}}{{else}}No annotations yet{{end}}">
+        <button type="submit" name="toggleCommentList" class="tb-btn" aria-pressed="{{if $.ShowAllComments}}true{{else}}false{{end}}" {{if not (or .Open .Resolved $.ShowAllComments)}}disabled{{end}}>{{template "iconComments"}}<span class="tb-word">Annotations</span><span class="tb-count">{{.Open}}</span>{{if .Resolved}}<span class="tb-count-sub">+{{.Resolved}}</span>{{end}}{{if .Outdated}}<span class="tb-outdated" aria-label="{{.Outdated}} outdated">⚠{{.Outdated}}</span>{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
       </form>{{end}}
-      <form method="POST">
-        <button type="submit" name="toggleUnderstand" class="tb-btn" aria-pressed="{{if .ShowUnderstand}}true{{else}}false{{end}}" title="{{if or .ShowUnderstandEntry .ShowUnderstand}}Walk through the whole change, and quiz yourself on it{{else}}No walkthrough or quiz yet, and no agent to make one{{end}}" {{if not (or .ShowUnderstandEntry .ShowUnderstand)}}disabled{{end}}>{{template "iconQuiz"}}<span class="tb-word">Understand</span>{{with .QuizScoreLabel}}<span class="tb-count">{{.}}</span>{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      <form method="POST" title="{{if or .ShowUnderstandEntry .ShowUnderstand}}Walk through the whole change, and quiz yourself on it{{else}}No walkthrough or quiz yet, and no agent to make one{{end}}">
+        <button type="submit" name="toggleUnderstand" class="tb-btn" aria-pressed="{{if .ShowUnderstand}}true{{else}}false{{end}}" {{if not (or .ShowUnderstandEntry .ShowUnderstand)}}disabled{{end}}>{{template "iconQuiz"}}<span class="tb-word">Understand</span>{{with .QuizScoreLabel}}<span class="tb-count">{{.}}</span>{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
       </form>{{if .LiveShowing}}
-      <form method="POST">
-        <button type="submit" name="toggleBoxes" class="tb-btn" aria-pressed="{{if .ShowBoxes}}true{{else}}false{{end}}" title="{{if .RegionComments}}Outline every annotation's box on the page{{else}}No annotations on this page{{end}}" {{if not .RegionComments}}disabled{{end}}>{{template "iconAnnotate"}}<span class="tb-word">Boxes</span>{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      <form method="POST" title="{{if .RegionComments}}Outline every annotation's box on the page{{else}}No annotations on this page{{end}}">
+        <button type="submit" name="toggleBoxes" class="tb-btn" aria-pressed="{{if .ShowBoxes}}true{{else}}false{{end}}" {{if not .RegionComments}}disabled{{end}}>{{template "iconAnnotate"}}<span class="tb-word">Boxes</span>{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
       </form>{{end}}
     </div>
     <div class="tb-group tb-prefs">

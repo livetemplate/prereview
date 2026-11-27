@@ -143,13 +143,12 @@
   
   <div class="toolbar-inline">
     <div class="tb-group tb-views">
-      <form method="POST">
+      <form method="POST" title="Focus: hide the side columns">
         <button
           type="submit"
           name="toggleFocusMode"
           class="tb-btn"
           aria-pressed="false"
-          title="Focus: hide the side columns"
           
         ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
   d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"
@@ -160,26 +159,24 @@
   fill="none"
 /></svg><span class="tb-word">Focus</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">.</kbd></button>
       </form>
-      <form method="POST">
+      <form method="POST" title="No annotations yet">
         <button
           type="submit"
           name="toggleCommentList"
           class="tb-btn"
           aria-pressed="false"
-          title="No annotations yet"
           disabled
         ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
     stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
   /></svg><span class="tb-word">Annotations</span><span class="tb-count">0</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">a</kbd></button>
       </form>
-      <form method="POST">
+      <form method="POST" title="No walkthrough or quiz yet, and no agent to make one">
         <button
           type="submit"
           name="toggleUnderstand"
           class="tb-btn"
           aria-pressed="false"
-          title="No walkthrough or quiz yet, and no agent to make one"
           disabled
         ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="tb-word">Understand</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">z</kbd></button>
       </form>
@@ -386,15 +383,54 @@
   
   
   
-  
-  
-  <form method="POST">
+  <form method="POST" title="Only for Markdown and HTML files"><input type="hidden" name="view" value="rendered">
+    <button
+      type="submit"
+      name="setMarkdownView"
+      class="menu-item menu-file-view"
+      role="menuitemcheckbox"
+      aria-checked="false"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Preview<small class="menu-why">Only for Markdown and HTML files</small></span>
+    </button>
+  </form>
+  <form method="POST" title="Only for Markdown and HTML files"><input type="hidden" name="view" value="raw">
+    <button
+      type="submit"
+      name="setMarkdownView"
+      class="menu-item menu-file-view"
+      role="menuitemcheckbox"
+      aria-checked="false"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Raw<small class="menu-why">Only for Markdown and HTML files</small></span>
+    </button>
+  </form>
+  <form method="POST" title="Mark what changed; off shows the plain file">
     <button
       type="submit"
       name="toggleFileView"
-      class="menu-item is-on"
+      class="menu-item menu-file-view is-on"
       role="menuitemcheckbox"
       aria-checked="true"
+      
     >
       <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
   d="M5 12l4 4 10-10"
@@ -407,37 +443,14 @@
       <span class="menu-label">Diff <kbd class="kbd-hint" aria-hidden="true">d</kbd></span>
     </button>
   </form>
-  
-  
-  
-  
-  
-  <form method="POST">
-    <button
-      type="submit"
-      name="toggleUnderstand"
-      class="menu-item"
-      role="menuitem"
-      title="No walkthrough or quiz yet, and no agent to make one"
-      disabled
-    >
-      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
-      <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
-      
-    </button>
-  </form>
-  
-  
-  
-  
-  
-  
-  <form method="POST">
+  <form method="POST" title="Show whitespace-only changes as unchanged">
     <button
       type="submit"
       name="toggleHideWhitespace"
-      class="menu-item"
-      role="menuitem"
+      class="menu-item menu-file-view"
+      role="menuitemcheckbox"
+      aria-checked="false"
+      
     >
       <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
   cx="12"
@@ -447,9 +460,107 @@
   stroke-width="1.8"
   fill="none"
 /></svg></span>
-      <span class="menu-label">Hide whitespace changes</span>
+      <span class="menu-label">Whitespace</span>
     </button>
   </form>
+  <form method="POST" title="No mechanical changes to fold">
+    <button
+      type="submit"
+      name="toggleFoldMechanical"
+      class="menu-item menu-file-view"
+      role="menuitemcheckbox"
+      aria-checked="false"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Fold<small class="menu-why">No mechanical changes to fold</small></span>
+    </button>
+  </form>
+  <form method="POST" title="Only on an image or the HTML preview">
+    <button
+      type="submit"
+      name="toggleRegionSelect"
+      class="menu-item menu-file-view"
+      role="menuitemcheckbox"
+      aria-checked="false"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Annotate<small class="menu-why">Only on an image or the HTML preview</small></span>
+    </button>
+  </form>
+  <form method="POST" title="Only on the HTML preview, once it has annotations">
+    <button
+      type="submit"
+      name="toggleBoxes"
+      class="menu-item menu-file-view"
+      role="menuitemcheckbox"
+      aria-checked="false"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+  cx="12"
+  cy="12"
+  r="8"
+  stroke="currentColor"
+  stroke-width="1.8"
+  fill="none"
+/></svg></span>
+      <span class="menu-label">Boxes <kbd class="kbd-hint" aria-hidden="true">b</kbd><small class="menu-why">Only on the HTML preview, once it has annotations</small></span>
+    </button>
+  </form>
+  
+  
+  
+  
+  <form method="POST" title="No annotations yet">
+    <button
+      type="submit"
+      name="toggleCommentList"
+      class="menu-item"
+      role="menuitem"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg></span>
+      <span class="menu-label">Annotations <kbd class="kbd-hint" aria-hidden="true">a</kbd><small class="menu-why">No annotations yet</small></span>
+      
+    </button>
+  </form>
+  
+  <form method="POST" title="No walkthrough or quiz yet, and no agent to make one">
+    <button
+      type="submit"
+      name="toggleUnderstand"
+      class="menu-item"
+      role="menuitem"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
+      <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd><small class="menu-why">No walkthrough or quiz yet, and no agent to make one</small></span>
+      
+    </button>
+  </form>
+  
+  
+  
+  
   
   
   
@@ -677,20 +788,20 @@
     
     <span class="file-head-view" role="toolbar" aria-label="How this file shows">
       <span class="fh-seg">
-        <form method="POST"><input type="hidden" name="view" value="rendered"><button type="submit" name="setMarkdownView" class="fh-btn" aria-pressed="false" title="Only for Markdown and HTML files" disabled>Preview</button></form>
-        <form method="POST"><input type="hidden" name="view" value="raw"><button type="submit" name="setMarkdownView" class="fh-btn" aria-pressed="false" title="Only for Markdown and HTML files" disabled>Raw</button></form>
+        <form method="POST" title="Only for Markdown and HTML files"><input type="hidden" name="view" value="rendered"><button type="submit" name="setMarkdownView" class="fh-btn" aria-pressed="false" disabled>Preview</button></form>
+        <form method="POST" title="Only for Markdown and HTML files"><input type="hidden" name="view" value="raw"><button type="submit" name="setMarkdownView" class="fh-btn" aria-pressed="false" disabled>Raw</button></form>
       </span>
-      <form method="POST"><button type="submit" name="toggleFileView" class="fh-btn" aria-pressed="true" title="Mark what changed; off shows the plain file"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+      <form method="POST" title="Mark what changed; off shows the plain file"><button type="submit" name="toggleFileView" class="fh-btn" aria-pressed="true"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M4 4h7v16H4zM13 4h7v16h-7z"
     stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
   /><path
     d="M6 11h3M6 13h3M16 9v6M14 12h4"
     stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
   /></svg><span>Diff</span> <kbd class="kbd-hint" aria-hidden="true">d</kbd></button></form>
-      <form method="POST"><button type="submit" name="toggleHideWhitespace" class="fh-btn" aria-pressed="false" title="Show whitespace-only changes as unchanged">Whitespace</button></form>
-      <form method="POST"><button type="submit" name="toggleFoldMechanical" class="fh-btn" aria-pressed="false" title="No mechanical changes to fold" disabled>Fold</button></form>
-      <form method="POST" class="region-toggle"><button type="button" class="fh-btn" title="Only on an image or the HTML preview" disabled><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span class="annotate-word"> Annotate</span></button></form>
-      <form method="POST"><button type="submit" name="toggleBoxes" class="fh-btn" aria-pressed="false" title="Only on the HTML preview, once it has annotations" disabled>Boxes <kbd class="kbd-hint" aria-hidden="true">b</kbd></button></form>
+      <form method="POST" title="Show whitespace-only changes as unchanged"><button type="submit" name="toggleHideWhitespace" class="fh-btn" aria-pressed="false">Whitespace</button></form>
+      <form method="POST" title="No mechanical changes to fold"><button type="submit" name="toggleFoldMechanical" class="fh-btn" aria-pressed="false" disabled>Fold</button></form>
+      <form method="POST" class="region-toggle" title="Only on an image or the HTML preview"><button type="button" class="fh-btn" disabled><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2" fill="none"/><path d="M19 14v7M15.5 17.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span class="annotate-word"> Annotate</span></button></form>
+      <form method="POST" title="Only on the HTML preview, once it has annotations"><button type="submit" name="toggleBoxes" class="fh-btn" aria-pressed="false" disabled>Boxes <kbd class="kbd-hint" aria-hidden="true">b</kbd></button></form>
     </span>
     
     <span class="file-head-actions">

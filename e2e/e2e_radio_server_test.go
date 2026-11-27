@@ -24,8 +24,8 @@ func TestE2E_ToolbarRadioFollowsServer(t *testing.T) {
 
 	if err := chromedp.Run(ctx,
 		chromedp.Evaluate(`document.querySelector('button[name="toggleMoreMenu"]').click()`, nil),
-		chromedp.WaitVisible(`.more-menu.is-open button[name="toggleRawMarkdown"]`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.more-menu button[name="toggleRawMarkdown"]').click()`, nil),
+		chromedp.WaitVisible(`.more-menu.is-open input[name="view"][value="raw"] + button`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.more-menu input[name="view"][value="raw"] + button').click()`, nil),
 		chromedp.Poll(`!document.querySelector('.md-view')`, nil, chromedp.WithPollingTimeout(10*time.Second)),
 		chromedp.EmulateViewport(1200, 900),
 	); err != nil {

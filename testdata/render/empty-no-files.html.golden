@@ -143,13 +143,12 @@
   
   <div class="toolbar-inline">
     <div class="tb-group tb-views">
-      <form method="POST">
+      <form method="POST" title="Open a file to focus on it">
         <button
           type="submit"
           name="toggleFocusMode"
           class="tb-btn"
           aria-pressed="false"
-          title="Open a file to focus on it"
           disabled
         ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
   d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"
@@ -160,26 +159,24 @@
   fill="none"
 /></svg><span class="tb-word">Focus</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">.</kbd></button>
       </form>
-      <form method="POST">
+      <form method="POST" title="No annotations yet">
         <button
           type="submit"
           name="toggleCommentList"
           class="tb-btn"
           aria-pressed="false"
-          title="No annotations yet"
           disabled
         ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
     stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
   /></svg><span class="tb-word">Annotations</span><span class="tb-count">0</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">a</kbd></button>
       </form>
-      <form method="POST">
+      <form method="POST" title="No walkthrough or quiz yet, and no agent to make one">
         <button
           type="submit"
           name="toggleUnderstand"
           class="tb-btn"
           aria-pressed="false"
-          title="No walkthrough or quiz yet, and no agent to make one"
           disabled
         ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="tb-word">Understand</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">z</kbd></button>
       </form>
@@ -329,17 +326,34 @@
   
   
   
-  <form method="POST">
+  
+  <form method="POST" title="No annotations yet">
+    <button
+      type="submit"
+      name="toggleCommentList"
+      class="menu-item"
+      role="menuitem"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg></span>
+      <span class="menu-label">Annotations <kbd class="kbd-hint" aria-hidden="true">a</kbd><small class="menu-why">No annotations yet</small></span>
+      
+    </button>
+  </form>
+  
+  <form method="POST" title="No walkthrough or quiz yet, and no agent to make one">
     <button
       type="submit"
       name="toggleUnderstand"
       class="menu-item"
       role="menuitem"
-      title="No walkthrough or quiz yet, and no agent to make one"
       disabled
     >
       <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
-      <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
+      <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd><small class="menu-why">No walkthrough or quiz yet, and no agent to make one</small></span>
       
     </button>
   </form>
