@@ -1825,6 +1825,10 @@ main.viewer > article > .file-sticky {
 @media (max-width: 899px) {
   main.viewer > article > .file-sticky { display: contents; }
   main.viewer > article > .file-sticky > header.file-head { position: sticky; top: 0; z-index: 5; }
+  /* The filter bar below sticks above the header (z-index 7), so a menu opened
+     from the header (Checks, Versions) would open under it. Lift the header
+     while one is open. */
+  main.viewer > article > .file-sticky > header.file-head:has(.tb-dropdown.open) { z-index: 8; }
 }
 /* Basename: bold, one line, and last to give up space (it identifies the file). */
 main.viewer > article > .file-sticky > header.file-head .fh-base {
