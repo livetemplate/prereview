@@ -1116,8 +1116,8 @@ header.file-head .file-head-actions {
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 6px; font-size: 0.85rem;
 }
-.paused-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
-.agent-stall-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
+.paused-prompt { background: color-mix(in srgb, var(--pr-del) 12%, var(--surface)); }
+.agent-stall-prompt { background: color-mix(in srgb, var(--pr-del) 12%, var(--surface)); }
 /* Pause/resume toggle (#119): the paused state is visually distinct so it's
    obvious the agent is held. Used by the --external bar's inline Pause button
    (repo-mode's Pause moved into the Queue dropdown as .queue-pause-btn). */
@@ -3123,7 +3123,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   position: sticky; bottom: 0;
   margin: 0.4rem 0.4rem 0.2rem; padding: 0.4rem 0.6rem;
   display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-  background: var(--pr-del-bg); color: var(--pr-del);
+  background: linear-gradient(var(--pr-del-bg), var(--pr-del-bg)), var(--surface); color: var(--pr-del); /* solid: it floats over the code */
   border: 1px solid var(--pr-del); border-radius: 4px;
   font-size: 0.8rem; box-shadow: 0 -2px 8px rgba(0,0,0,.08); z-index: 8;
 }
@@ -3266,7 +3266,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   max-width: calc(100vw - 1.5rem);
   display: inline-flex; align-items: center; gap: 0.5rem;
   padding: 0.4rem 0.5rem 0.4rem 0.7rem;
-  background: var(--pr-add-bg); color: var(--pr-add);
+  /* The tint is translucent (it is the diff's added-line colour), so it sits
+     on the page colour: a toast floats over busy content and must stay solid. */
+  background: linear-gradient(var(--pr-add-bg), var(--pr-add-bg)), var(--surface); color: var(--pr-add);
   border: 1px solid var(--pr-add); border-radius: 6px;
   font-size: 0.8rem; line-height: 1.3;
   box-shadow: 0 2px 8px rgba(0,0,0,.1);

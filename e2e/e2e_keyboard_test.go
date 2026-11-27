@@ -546,6 +546,19 @@ func TestE2E_ShowResolvedFlash(t *testing.T) {
 	if !strings.Contains(strings.ToLower(msg), "no resolved") {
 		t.Errorf("flash text = %q, want a 'no resolved comments' message", msg)
 	}
+	// The toast floats over the page, so its background must be solid in every
+	// scheme and mode: a translucent tint let busy content show through.
+	var see string
+	_ = chromedp.Run(p.ctx, chromedp.Evaluate(`(()=>{const r=document.querySelector('.theme-root'),t=document.querySelector('.flash-toast'),bad=[];
+		for (const sc of ['solarized','gruvbox','catppuccin']) for (const m of ['light','dark']) {
+			r.setAttribute('data-scheme',sc); r.setAttribute('data-mode',m);
+			const c=getComputedStyle(t).backgroundColor, a=c.startsWith('rgba')?parseFloat(c.split(',')[3]):1;
+			if (a<1) bad.push(sc+'/'+m+' '+c);
+		}
+		return bad.join('; ')})()`, &see))
+	if see != "" {
+		t.Errorf("the toast's background shows the page through: %s", see)
+	}
 }
 
 // TestE2E_DesktopFilesToggle pins that "f" collapses/expands the file-tree
