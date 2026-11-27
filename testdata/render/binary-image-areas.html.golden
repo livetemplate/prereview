@@ -643,38 +643,6 @@
     </button>
   </form>
   
-  <form method="POST">
-    <button
-      type="submit"
-      name="toggleShowResolved"
-      class="menu-item"
-      role="menuitem"
-    >
-      <span class="menu-icon">
-        
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
-  cx="12"
-  cy="12"
-  r="8"
-  stroke="currentColor"
-  stroke-width="1.8"
-  fill="none"
-/></svg>
-        
-      </span>
-      <span class="menu-label">Show resolved <kbd class="kbd-hint" aria-hidden="true">r</kbd></span>
-      <span class="menu-meta">1</span>
-    </button>
-  </form>
-  
-  
-  
-  
-  
-  
-  
-  
-  
   
   
   

@@ -203,6 +203,15 @@ func TestE2E_WireAudit(t *testing.T) {
 			return ""
 		}
 	}
+	// annShow picks a Show row of the open file's Annotations filter.
+	annShow := func(value string) func() string {
+		return func() string {
+			if !js(fmt.Sprintf(`(() => { const i = document.querySelector('.ann-filter input[name="show"][value=%q]'); if (!i) return false; i.form.querySelector('button').click(); return true })()`, value)) {
+				return "no filter row " + value
+			}
+			return ""
+		}
+	}
 	buttonIn := func(scope, name string) func() string {
 		return func() string {
 			if !js(fmt.Sprintf(`(() => { const b = document.querySelector(%q + ' button[name=%q]'); if (!b) return false; b.click(); return true })()`, scope, name)) {
@@ -361,8 +370,8 @@ func TestE2E_WireAudit(t *testing.T) {
 	})
 	step("hide whitespace on", button("toggleHideWhitespace"))
 	step("hide whitespace off", button("toggleHideWhitespace"))
-	step("hide annotations", button("toggleMarks"))
-	step("show annotations", button("toggleMarks"))
+	step("hide annotations", annShow("none"))
+	step("show annotations", annShow("open"))
 	step("cycle theme mode", button("cycleTheme"))
 	step("cycle scheme", button("cycleScheme"))
 	step("toggle file drawer", button("toggleFiles"))

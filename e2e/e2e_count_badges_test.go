@@ -201,7 +201,7 @@ func TestE2E_CountBadges(t *testing.T) {
 		t.Errorf("the enlarged badge overlaps the code text (padding-right reserve too small)%s", diag())
 	}
 
-	// --- "Hide annotations" menu toggle removes ALL badges + inline cards. ---
+	// --- The filter's None removes ALL badges + inline cards. ---
 	if err := chromedp.Run(p.ctx, chromedp.Emulate(device.Reset), chromedp.EmulateViewport(1200, 800), chromedp.Sleep(150*time.Millisecond)); err != nil {
 		t.Fatalf("restore desktop viewport: %v", err)
 	}

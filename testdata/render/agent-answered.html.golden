@@ -629,33 +629,6 @@
   
   
   
-  
-  
-  <form method="POST">
-    <button
-      type="submit"
-      name="toggleMarks"
-      class="menu-item is-on"
-      role="menuitem"
-    >
-      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
-  d="M5 12l4 4 10-10"
-  stroke="currentColor"
-  stroke-width="2.2"
-  fill="none"
-  stroke-linecap="round"
-  stroke-linejoin="round"
-/></svg></span>
-      <span class="menu-label">Hide annotations</span>
-    </button>
-  </form>
-  
-  
-  
-  
-  
-  
-  
   <form method="POST">
     <button
       type="submit"

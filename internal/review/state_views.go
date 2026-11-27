@@ -610,12 +610,6 @@ func (s PrereviewState) HiddenSuggestionLines() map[string]*HiddenMark {
 	return out
 }
 
-// HasMarks reports whether the selected file has any row badge, of any kind —
-// whether the "Hide annotations" toggle (ToggleMarks) has anything to act on.
-func (s PrereviewState) HasMarks() bool {
-	return len(s.AnnotationCountLines()) > 0
-}
-
 // Threads groups the loaded conversation entries (#149) by target ID (a comment or
 // suggestion ID), so a card renders its own thread with {{index $.Threads .ID}}.
 // Entries arrive already sorted (loadThreads), so each group is chronological.

@@ -211,14 +211,6 @@ func (c *PrereviewController) ToggleRow(state PrereviewState, ctx *livetemplate.
 	return state, nil
 }
 
-// ToggleMarks switches the open surface's Annotations filter between None
-// (no badges or cards, #151, so the diff reads clean) and Open.
-func (c *PrereviewController) ToggleMarks(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.editAnnShow(func(f AnnFilter) AnnFilter { return f.flipShow(annShowNone) })
-	state.MoreMenuOpen = false
-	return state, nil
-}
-
 // ToggleBoxes shows or hides the outline of every annotation's box on the live
 // site and the HTML preview.
 func (c *PrereviewController) ToggleBoxes(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {

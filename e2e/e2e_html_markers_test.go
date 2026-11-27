@@ -84,7 +84,7 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 				t.Errorf("the block is outlined (%dpx) although every comment on it has its own box%s", w, diag())
 			}
 
-			// Show boxes, then Hide annotations.
+			// Show boxes, then the filter's None.
 			if err := chromedp.Run(p.ctx, chromedp.KeyEvent("b")); err != nil {
 				t.Fatalf("press b: %v", err)
 			}
@@ -92,13 +92,9 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			if err := chromedp.Run(p.ctx, chromedp.KeyEvent("b")); err != nil {
 				t.Fatalf("press b again: %v", err)
 			}
-			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="toggleMarks"]').click(), true`, nil)); err != nil {
-				t.Fatalf("hide annotations: %v", err)
-			}
+			p.clickFilterRow("setAnnShow", "none")
 			waitJSDiag(t, p, `getComputedStyle(document.querySelector('`+box+`')).display === 'none'`, "Hide annotations hides the marker", diag)
-			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="toggleMarks"]').click(), true`, nil)); err != nil {
-				t.Fatalf("show annotations: %v", err)
-			}
+			p.clickFilterRow("setAnnShow", "open")
 			waitJSDiag(t, p, `getComputedStyle(document.querySelector('`+box+`')).display !== 'none'`, "the marker back", diag)
 
 			// The marker follows the block when the preview resizes.

@@ -223,85 +223,9 @@
       {{with .QuizScoreLabel}}<span class="menu-meta">{{.}}</span>{{end}}
     </button>
   </form>
-  {{if gt .ResolvedCount 0}}
-  <form method="POST">
-    <button
-      type="submit"
-      name="toggleShowResolved"
-      class="menu-item{{if .ShowResolved}} is-on{{end}}"
-      role="menuitem"
-    >
-      <span class="menu-icon">
-        {{if .ShowResolved}}
-        {{template "iconCheck"}}
-        {{else}}
-        {{template "iconCircle16"}}
-        {{end}}
-      </span>
-      <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-      <span class="menu-meta">{{.ResolvedCount}}</span>
-    </button>
-  </form>
-  {{end}}
-  {{/* Unhide individually-hidden resolved comments (issue #88). */}}
-  {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
-  <form method="POST">
-    <button
-      type="submit"
-      name="unhideAllResolved"
-      class="menu-item"
-      role="menuitem"
-    >
-      <span class="menu-icon">{{template "iconCircle16"}}</span>
-      <span class="menu-label">Unhide</span>
-      <span class="menu-meta">{{.HiddenResolvedCount}}</span>
-    </button>
-  </form>
-  {{end}}
-  {{/* Suggestions toggle (issue #98) — mobile more-menu mirror. */}}
-  {{if gt .SuggestionCount 0}}
-  <form method="POST">
-    <button
-      type="submit"
-      name="toggleSuggestions"
-      class="menu-item{{if not .HideSuggestions}} is-on{{end}}"
-      role="menuitem"
-    >
-      <span class="menu-icon">{{template "iconSuggestion"}}</span>
-      <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}</span>
-      <span class="menu-meta">{{.SuggestionCount}}</span>
-    </button>
-  </form>
-  {{end}}
-  {{/* #151: hide/show the per-line count badges + inline cards — more-menu mirror. */}}
-  {{if or $.HasMarks (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
-  <form method="POST">
-    <button
-      type="submit"
-      name="toggleMarks"
-      class="menu-item{{if not .HideMarks}} is-on{{end}}"
-      role="menuitem"
-    >
-      <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
-      <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}</span>
-    </button>
-  </form>
-  {{end}}
-  {{/* Show individually-hidden suggestions — mobile more-menu mirror. */}}
-  {{if gt .HiddenSuggestionCount 0}}
-  <form method="POST">
-    <button
-      type="submit"
-      name="showHiddenSuggestions"
-      class="menu-item"
-      role="menuitem"
-    >
-      <span class="menu-icon">{{template "iconSuggestion"}}</span>
-      <span class="menu-label">Show hidden suggestions</span>
-      <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
-    </button>
-  </form>
-  {{end}}
+  {{/* Show resolved, suggestions, all-or-none and the two unhides live in the
+       file's Annotations filter (annfilter.tmpl), on a phone too, so the menu
+       doesn't repeat them. */}}
   {{if gt .DecisionCount 0}}
   <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
   {{end}}

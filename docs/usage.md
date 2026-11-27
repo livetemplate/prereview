@@ -36,9 +36,9 @@ file's header switches to source; long documents get a table-of-contents sidebar
 
 **The file's header holds its view controls.** On a desktop, **Preview | Raw**,
 **Diff**, **Whitespace**, **Fold**, **Annotate** and **Boxes** sit beside the file
-name; on a phone, all but Boxes are in the ⋯ menu. Turning **Diff** off (<kbd>d</kbd>) shows
-the plain file. They always show; one that doesn't apply to the open file is greyed out,
-and its tooltip says why. The toolbar keeps what acts on the whole review:
+name; on a phone, the ⋯ menu lists the same controls. Turning **Diff** off (<kbd>d</kbd>)
+shows the plain file. They always show. One that doesn't apply to the open file is
+greyed out, and its tooltip says why; on a phone, the reason shows under its name. The toolbar keeps what acts on the whole review:
 Search, Focus, Annotations, Understand, the color scheme and mode, Shortcuts and
 the Guide.
 
