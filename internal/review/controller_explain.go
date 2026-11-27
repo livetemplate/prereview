@@ -233,7 +233,7 @@ func understandTab(tab string) string {
 // ToggleUnderstand opens or closes the Understand page (#115), the "z" shortcut.
 // An optional "tab" opens it on that tab ("quiz" from the stepper's Overview).
 // Closes the overflow menu so the page is visible at once; not persisted, like
-// All comments.
+// the Annotations page.
 func (c *PrereviewController) ToggleUnderstand(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	toggleFullView(&state, &state.ShowUnderstand)
 	state.MoreMenuOpen = false

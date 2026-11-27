@@ -1,6 +1,8 @@
 package review
 
 import (
+	"fmt"
+
 	"github.com/livetemplate/livetemplate"
 )
 
@@ -19,6 +21,24 @@ func (c *PrereviewController) navGo(state PrereviewState, delta int) (PrereviewS
 	if it == nil {
 		return state, nil
 	}
+	return c.goToItem(state, *it)
+}
+
+// JumpToAnnotation opens an item from its row on the Annotations page (form
+// kind and id), as the stepper would, and closes the page.
+func (c *PrereviewController) JumpToAnnotation(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	kind, id := ctx.GetString("kind"), ctx.GetString("id")
+	for _, e := range state.annotations() {
+		if e.Pos.Kind == kind && e.Pos.ID == id {
+			return c.goToItem(state, e.NavItem)
+		}
+	}
+	return state, fmt.Errorf("jumpToAnnotation: no %s %q", kind, id)
+}
+
+// goToItem opens the item's file (or the live site), scrolls it into view, and moves
+// the stepper's cursor there.
+func (c *PrereviewController) goToItem(state PrereviewState, it NavItem) (PrereviewState, error) {
 	pos := it.Pos
 	if it.Region {
 		state = focusLive(state, pos.ID)
@@ -37,10 +57,11 @@ func (c *PrereviewController) navGo(state PrereviewState, delta int) (PrereviewS
 		case navQuestion:
 			state.scrollToQuestion(pos.ID, pos.Line)
 		}
-		revealItem(&state, *it)
+		revealItem(&state, it)
 	}
 	state.NavAt = &pos
 	state.NavSeen = true
+	state.NavSteps++
 	return state, nil
 }
 
@@ -68,17 +89,14 @@ func revealItem(state *PrereviewState, it NavItem) {
 	}
 }
 
-// SetNavKind filters the bar to one kind ("" = all). The cursor stays, so the next
-// step continues from the same place in the document.
-func (c *PrereviewController) SetNavKind(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	if k := ctx.GetString("kind"); navKindIndex(k) >= 0 {
-		state.NavKind = k
-	}
+// DismissNav collapses the row to its chip for this session (NavCollapsed).
+func (c *PrereviewController) DismissNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.NavDismissed = true
 	return state, nil
 }
 
-// DismissNav puts the bar away for this session.
-func (c *PrereviewController) DismissNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.NavDismissed = true
+// ExpandNav brings the collapsed row back.
+func (c *PrereviewController) ExpandNav(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	state.NavDismissed = false
 	return state, nil
 }

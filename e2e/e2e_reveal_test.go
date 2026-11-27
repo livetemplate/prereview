@@ -35,8 +35,8 @@ func TestE2E_RevealSuggestionsOnSubmit(t *testing.T) {
 	}
 
 	// Toggle the inline boxes OFF (the reviewer declutters to read the diff).
+	p.viewAction("toggleSuggestions") // the file's Annotations filter: Suggestions off
 	if err := chromedp.Run(p.ctx,
-		chromedp.Evaluate(`document.querySelector('button[name="toggleSuggestions"]').click()`, nil),
 		chromedp.WaitNotPresent(`.inline-suggestion`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("toggling suggestions off should hide the boxes: %v%s", err, diag())

@@ -26,7 +26,7 @@ func (c *PrereviewController) ToggleCommentList(state PrereviewState, ctx *livet
 	return state, nil
 }
 
-// OpenAnnotations opens All comments on the live site's annotations, from the
+// OpenAnnotations opens the Annotations page on the live site's annotations, from the
 // live page's count or a tap on an annotation's marker. With an id, that
 // annotation's card scrolls into view.
 func (c *PrereviewController) OpenAnnotations(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
@@ -105,7 +105,7 @@ func (c *PrereviewController) UnfocusAnnotation(state PrereviewState, ctx *livet
 	return state, nil
 }
 
-// SetCommentFilter switches the All comments screen between every comment
+// SetCommentFilter switches the Annotations page between every comment
 // ("") and the live site's annotations.
 func (c *PrereviewController) SetCommentFilter(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	switch f := ctx.GetString("filter"); f {
@@ -118,7 +118,7 @@ func (c *PrereviewController) SetCommentFilter(state PrereviewState, ctx *livete
 	return state, nil
 }
 
-// openCommentList opens the All comments screen (closing the other full-page
+// openCommentList opens the Annotations page (closing the other full-page
 // views) with filter applied.
 func (c *PrereviewController) openCommentList(state *PrereviewState, filter string) {
 	closeFullViews(state)
@@ -135,11 +135,8 @@ func (c *PrereviewController) openCommentList(state *PrereviewState, filter stri
 	}
 }
 
-// ToggleShowResolved flips whether resolved comments are visible in the
-// inline diff and the all-comments overview. Default off — resolved
-// comments add noise once they're handled. Bound to an entry in the
-// overflow menu. Closes the menu so the user can immediately see the
-// effect on the diff.
+// ToggleShowResolved (the r key) switches the open surface's Annotations filter
+// between Open and All. Closes the overflow menu so the effect shows at once.
 func (c *PrereviewController) ToggleShowResolved(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.MoreMenuOpen = false
 	// With no resolved comments, toggling has no visible effect — surface a
@@ -148,9 +145,8 @@ func (c *PrereviewController) ToggleShowResolved(state PrereviewState, ctx *live
 		state.Flash = "No resolved comments"
 		return state, nil
 	}
-	state.ShowResolved = !state.ShowResolved
+	state.editAnnShow(func(f AnnFilter) AnnFilter { return f.flipShow(annShowAll) })
 	state.Flash = ""
-	c.savePrefs(state)
 	return state, nil
 }
 
@@ -212,17 +208,6 @@ func (c *PrereviewController) ToggleRow(state PrereviewState, ctx *livetemplate.
 	// Record the default we're flipping AWAY FROM, so the toggle expires if that default
 	// later changes (RowToggled) instead of silently inverting into its opposite.
 	state.ToggledRows[key] = state.rowState(key)
-	return state, nil
-}
-
-// ToggleMarks flips whether the per-line comment/suggestion count badges (#151)
-// and their inline cards are shown in the diff. Off by default (badges visible);
-// when on, the diff reads clean so a reviewer can scan the raw code. Persisted
-// per-user. Closes the overflow menu so the effect is visible immediately.
-func (c *PrereviewController) ToggleMarks(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.HideMarks = !state.HideMarks
-	state.MoreMenuOpen = false
-	c.savePrefs(state)
 	return state, nil
 }
 
@@ -362,45 +347,20 @@ func (c *PrereviewController) ToggleFileScope(state PrereviewState, ctx *livetem
 	return state, nil
 }
 
-// ToggleSuggestions shows/hides the inline LLM suggestion boxes for the current
-// view (issue #98). A declutter toggle only — it never touches the underlying
-// suggestions. Session-scoped (HideSuggestions is lvt:"persist"), so it isn't a
-// durable per-user pref; closes the overflow menu so the effect is visible on
-// mobile.
+// ToggleSuggestions (the s key) turns Suggestions on or off in the open
+// surface's Annotations filter (issue #98). It never touches the suggestions.
 func (c *PrereviewController) ToggleSuggestions(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.HideSuggestions = !state.HideSuggestions
+	state.editAnnFilter(func(f AnnFilter) AnnFilter { return f.flipKind(navSuggestion) })
 	state.MoreMenuOpen = false
 	return state, nil
 }
 
-// ToggleRawMarkdown flips a Markdown file between the rendered view
-// (default) and the raw line view. Closes the overflow menu so the
-// effect is immediately visible on mobile.
-func (c *PrereviewController) ToggleRawMarkdown(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RawMarkdown = !state.RawMarkdown
-	state.MoreMenuOpen = false
-	c.savePrefs(state)
-	return state, nil
-}
-
-// SetMarkdownView is the idempotent setter behind the desktop radio
-// group (Rendered / Raw). Reads form field `view`; anything other than
-// "raw" resolves to rendered. Unlike ToggleRawMarkdown, clicking the
-// already-active radio is a no-op for state — the value reflects the
-// final mode, not a flip.
+// SetMarkdownView is the idempotent setter behind Preview and Raw (the file
+// header, and the ⋯ menu on a phone). Reads form field `view`; anything other
+// than "raw" resolves to rendered. Clicking the one already on is a no-op for
+// state: the value is the final mode, not a flip.
 func (c *PrereviewController) SetMarkdownView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RawMarkdown = ctx.GetString("view") == "raw"
-	state.MoreMenuOpen = false
-	c.savePrefs(state)
-	return state, nil
-}
-
-// ToggleRawHTML is the .html/.htm equivalent of ToggleRawMarkdown:
-// flips the iframe preview off and the syntax-highlighted line view on
-// (and back). Closes the overflow menu so the change is visible on
-// mobile.
-func (c *PrereviewController) ToggleRawHTML(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	state.RawHTML = !state.RawHTML
 	state.MoreMenuOpen = false
 	c.savePrefs(state)
 	return state, nil
@@ -515,7 +475,7 @@ func (c *PrereviewController) JumpToQuestion(state PrereviewState, ctx *livetemp
 }
 
 // selectFileForJump switches the view to file (loading its diff if it changed)
-// and closes the full-page views (all comments, quiz, Library), preserving unsaved composer text (#105).
+// and closes the full-page views (Annotations, quiz, Library), preserving unsaved composer text (#105).
 // Shared by JumpToComment/JumpToSuggestion; each sets its own scroll target after
 // (or none). Clears both one-render scroll nudges so a caller that sets neither
 // leaves no stale target behind.
@@ -591,4 +551,29 @@ func toggleFullView(state *PrereviewState, view *bool) {
 	open := !*view
 	closeFullViews(state)
 	*view = open
+}
+
+// SetAnnShow sets the open surface's Show: "open", "all" or "none".
+func (c *PrereviewController) SetAnnShow(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	show := ctx.GetString("show")
+	if show == "open" {
+		show = annShowOpen
+	}
+	if show != annShowOpen && show != annShowAll && show != annShowNone {
+		return state, nil
+	}
+	state.editAnnShow(func(f AnnFilter) AnnFilter { f.Show = show; return f })
+	state.MoreMenuOpen = false
+	return state, nil
+}
+
+// ToggleAnnKind turns one kind on or off in the open surface's filter.
+func (c *PrereviewController) ToggleAnnKind(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
+	kind := ctx.GetString("kind")
+	if navKindIndex(kind) < 0 {
+		return state, nil
+	}
+	state.editAnnFilter(func(f AnnFilter) AnnFilter { return f.flipKind(kind) })
+	state.MoreMenuOpen = false
+	return state, nil
 }

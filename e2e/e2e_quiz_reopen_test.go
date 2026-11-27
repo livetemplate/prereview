@@ -95,7 +95,7 @@ func clickRowBadge(t *testing.T, p *runningPrereview, id string) {
 // quizNavCount counts the open-items bar (#193), which replaced the quiz navigator.
 func quizNavCount(t *testing.T, p *runningPrereview) int {
 	t.Helper()
-	return evalInt(t, p, `document.querySelectorAll('.ann-nav').length`)
+	return evalInt(t, p, `document.querySelectorAll('.ann-nav:not(.is-collapsed)').length`)
 }
 
 // reopenFile reloads the page (a new visit: QuizJustAnswered is session-only)

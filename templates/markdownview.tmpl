@@ -30,14 +30,15 @@
              comments/suggestions. Done cards auto-collapse via CSS (like the diff view).
              #174: clicking flips the block away from that default — revealing its done
              cards, or collapsing its OPEN ones so they can be set aside. Server state
-             (ToggledRows), so a re-render can't morph the class away (#173). */ -}}
+             (ToggledRows), so a re-render can't morph the class away (#173). The class is
+             the server's alone, here and on every badge: an lvt-el:toggleClass copy
+             outlived the server clearing it (a filter choice, n/p), so a resolved card
+             stayed open under Open. */ -}}
       {{- $ba := index $.BlockAnnotations $mbkey -}}
       {{- if gt $ba.Total 0 -}}
       <button type="button" class="md-block-marks"
               lvt-on:click="toggleRow"
               data-row="{{$mbkey}}"
-              lvt-el:toggleClass:on:click="row-toggled"
-              data-lvt-target="closest:.md-block"
               aria-label="Show or hide the annotations in this block"
               title="Show/hide this block's annotations">
         <span class="line-mark{{if $ba.Open}} is-open{{else if $ba.Accepted}} is-accepted{{else}} is-done{{end}}" aria-hidden="true">{{$ba.Total}}</span>

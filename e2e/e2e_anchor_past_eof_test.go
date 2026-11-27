@@ -192,7 +192,7 @@ func TestE2E_SuggestionPastEOF(t *testing.T) {
 
 	// Raw view: the same block, still exactly once.
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.file-head-view input[name="view"][value="raw"]').form.querySelector('button').click()`, nil),
 		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
 		chromedp.WaitVisible(`section.past-eof .inline-suggestion`, chromedp.ByQuery),
 	); err != nil {

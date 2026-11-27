@@ -651,15 +651,9 @@ func (c *PrereviewController) ToggleResolved(state PrereviewState, ctx *livetemp
 	return state, nil
 }
 
-// ResolveAll resolves every comment the All comments screen lists that isn't
-// resolved, in one write, and keeps their IDs for the notice's Undo.
+// ResolveAll resolves every open comment the Annotations page lists, in one write, and keeps their IDs for the notice's Undo.
 func (c *PrereviewController) ResolveAll(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	var ids []string
-	for _, cm := range state.Comments {
-		if state.resolvable(cm) {
-			ids = append(ids, cm.ID)
-		}
-	}
+	ids := state.resolvableIDs()
 	if len(ids) == 0 {
 		return state, nil
 	}

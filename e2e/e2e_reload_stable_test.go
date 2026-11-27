@@ -65,7 +65,7 @@ func resolvedReloadStable(t *testing.T, extraArgs ...string) {
 	); err != nil {
 		t.Fatalf("seed resolved comment: %v\nstderr: %s", err, p.stderr.String())
 	}
-	p.openViewItem("toggleShowResolved")
+	p.viewAction("toggleShowResolved")
 	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("show resolved: %v\nstderr: %s", err, p.stderr.String())
 	}

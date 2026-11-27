@@ -33,7 +33,7 @@ func TestE2E_CommentOnFoldedLine(t *testing.T) {
 	ctx, cancel := within(p, 15*time.Second)
 	defer cancel()
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view button[name="toggleFileView"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("switch to File view: %v%s", err, diag())
@@ -41,7 +41,7 @@ func TestE2E_CommentOnFoldedLine(t *testing.T) {
 	addLineComment(t, p, 35, 35, "far from the change")
 
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view button[name="toggleFileView"]`, chromedp.ByQuery),
 		chromedp.WaitNotPresent(`.code.file-view`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("switch back to Diff view: %v%s", err, diag())

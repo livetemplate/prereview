@@ -47,7 +47,7 @@ Subcommands (for the coding agent; each takes --out <STORE>):
 
 // templatesFS holds the split template set (#122): page.tmpl is the page shell —
 // the entry template — and every other file is a {{define}}-only component it
-// invokes with {{template "x" $}} (toolbar, view menu, the file-view sub-views,
+// invokes with {{template "x" $}} (toolbar, toolbar buttons, the file-view sub-views,
 // the comment/icon partials, …). One component per file. They are staged to a
 // temp dir at startup because livetemplate.New requires template files on disk
 // (see stageTemplates). TestTemplateRenderGolden proves the split is rendering-
@@ -65,7 +65,7 @@ var templatesFS embed.FS
 var templateOrder = []string{
 	"page.tmpl", // the shell / entry template — MUST be first
 	// one file per UI component (define-only; parse order among them is irrelevant)
-	"toolbar.tmpl", "viewmenu.tmpl", "workqueue.tmpl", "overlays.tmpl",
+	"toolbar.tmpl", "toolbarbuttons.tmpl", "annfilter.tmpl", "workqueue.tmpl", "overlays.tmpl",
 	"toc.tmpl", "banners.tmpl", "external.tmpl", "livestage.tmpl", "moremenu.tmpl",
 	"filedrawer.tmpl", "filetree.tmpl", "allcomments.tmpl", "understand.tmpl", "checks.tmpl", "library.tmpl",
 	// the {{with .CurrentDiff}} file-view sub-views

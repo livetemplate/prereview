@@ -48,13 +48,14 @@ func answeredSince(createdAt string, asked time.Time) bool {
 func (s PrereviewState) CanExplain() bool { return s.AgentMode && len(s.ExplainPrompts) > 0 }
 
 // HasUnderstandContent: the Understand page has something on it, a walkthrough
-// or a quiz. Gates the menu entries.
+// or a quiz. One way ShowUnderstandEntry enables the Understand buttons.
 func (s PrereviewState) HasUnderstandContent() bool { return s.HasExplanation() || s.HasQuiz() }
 
-// ShowUnderstandEntry gates the file header's Understand button: there is
-// something on the page, or an agent to ask for it.
+// ShowUnderstandEntry enables the toolbar's Understand button: there is
+// something on the page, or an agent to ask for it. Quiz prompts count only
+// with an agent, since only an agent can answer one.
 func (s PrereviewState) ShowUnderstandEntry() bool {
-	return s.CanExplain() || len(s.QuizPrompts) > 0 || s.HasUnderstandContent()
+	return s.CanExplain() || (s.AgentMode && len(s.QuizPrompts) > 0) || s.HasUnderstandContent()
 }
 
 // UnderstandTabOn is the tab the page shows: the one asked for (Diagrams only
@@ -418,7 +419,7 @@ func (s PrereviewState) MechTitles() map[string]string {
 }
 
 // HasMechanical reports that the walkthrough has lines that fold, which is when
-// the View menu offers the switch.
+// the file header's Fold button is enabled.
 func (s PrereviewState) HasMechanical() bool { return len(s.Mechanical) > 0 }
 
 // foldedLines counts the changed lines in concern's foldable hunks, across

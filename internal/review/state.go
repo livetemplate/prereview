@@ -215,12 +215,6 @@ type PrereviewState struct {
 	// inline as suggestion boxes on the selected file.
 	Suggestions []Suggestion `json:"suggestions"`
 
-	// HideSuggestions toggles the inline suggestion boxes off for the current
-	// view (a declutter, so the reviewer can read the doc without the proposed
-	// edits overlaid). Session-scoped (survives reconnect via persist); does not
-	// affect the underlying suggestions.
-	HideSuggestions bool `json:"hide_suggestions" lvt:"persist"`
-
 	// Decisions are the reviewer's recorded verdicts on suggestions (issue #98
 	// Phase 2), loaded from the server-owned .prereview/suggestion-decisions.jsonl
 	// every Mount (the file is the source of truth — not lvt:"persist"). Overlaid
@@ -405,7 +399,7 @@ type PrereviewState struct {
 	// user later with state from minutes ago.
 	LastDeletedComment *Comment `json:"last_deleted_comment"`
 
-	// LastResolvedIDs is what the All comments screen's Resolve all just
+	// LastResolvedIDs is what the Annotations page's Resolve all just
 	// resolved, so its notice can undo exactly those. Cleared with
 	// LastDeletedComment (clearUndo) and by closing the screen.
 	LastResolvedIDs []string `json:"last_resolved_ids"`
@@ -470,7 +464,7 @@ type PrereviewState struct {
 	FrontBoxID  string          `json:"front_box_id"`
 	HiddenBoxes map[string]bool `json:"hidden_boxes"`
 
-	// CommentListFilter narrows the All comments screen: "" lists every
+	// CommentListFilter is the Annotations page's Live site chip: "" lists every
 	// comment, CommentFilterAnnotations only the live site's (region) ones.
 	CommentListFilter string `json:"comment_list_filter"`
 
@@ -555,14 +549,19 @@ type PrereviewState struct {
 	// shows no bar. Set by noteNav.
 	NavSeen bool `json:"nav_seen"`
 
-	// NavKind filters the stepper to one kind ("comment", "suggestion", "quiz");
-	// "" steps through all of them. Session-scoped.
-	NavKind string `json:"nav_kind"`
+	// AnnFilters is each surface's Annotations filter (annfilter.go), keyed by
+	// file path, "live:"+URL, or annListKey. Only changed surfaces are stored.
+	AnnFilters map[string]AnnFilter `json:"ann_filters" lvt:"persist"`
 
 	// NavAt is the stepper's cursor: the sort position of the last item it stepped
 	// to (nil before the first step). A position, not an index, so "next" after the
 	// current item is decided continues from there.
 	NavAt *NavPos `json:"nav_at"`
+
+	// NavSteps counts the stepper's steps this session. Each step keys a fresh
+	// scroll anchor in the target card (NavAnchor), so the client scrolls even
+	// when the step lands on the card it already scrolled to once.
+	NavSteps int `json:"nav_steps"`
 
 	// ScrollToItemKey scrolls a suggestion ("sg:<id>") or quiz question ("qz:<id>")
 	// into view on the next render, the stepper's counterpart of ScrollToCommentID
@@ -604,14 +603,6 @@ type PrereviewState struct {
 	// one iframe, so it has no block-level scroll target.) Cleared by
 	// ClearSelection, by clicking a line, and by SelectFile.
 	URLHashScrollAnchor string `json:"url_hash_scroll_anchor" lvt:"persist"`
-
-	// ShowResolved, when true, includes resolved comments in the inline
-	// comment stream + all-comments view. Default false so the viewer
-	// focuses on what's still actionable. A durable per-user view pref: NOT
-	// lvt:"persist" — it lives in the on-disk prefs file (see uiprefs.go) so it
-	// survives a server relaunch, not just a reload; applyUIPrefs reloads it on
-	// every Mount/OnConnect.
-	ShowResolved bool `json:"show_resolved"`
 
 	// MoreMenuOpen drives the 3-dots overflow menu in the top bar where
 	// secondary controls (All comments, Show resolved) live on narrow
@@ -698,13 +689,6 @@ type PrereviewState struct {
 	// already overlays/modals, so the flag is a harmless no-op there.
 	// Durable per-user view pref (uiprefs.go), like FileView.
 	FocusMode bool `json:"focus_mode"`
-
-	// HideMarks, when true, hides the per-line comment/suggestion count badges
-	// (#151) AND their inline cards in the diff, so a reviewer can read the raw
-	// diff clean. Toggled from the overflow menu (ToggleMarks); focus mode hides
-	// them too (CSS). Applies on all viewports (unlike FocusMode's side-column
-	// hiding, which is desktop-only). Durable per-user view pref (uiprefs.go).
-	HideMarks bool `json:"hide_marks"`
 
 	// ShowBoxes outlines every annotation's box on the live site and on an HTML
 	// file's preview. Off, an annotation is only its corner marker, so it never
@@ -794,7 +778,7 @@ func (s PrereviewState) inScope(file string) bool {
 }
 
 // scopedComments is the SINGLE source every FILE-AGNOSTIC surface iterates — the
-// queue (QueueItems and its counts), the all-comments view (VisibleComments), and the
+// queue (QueueItems and its counts), the Annotations page (AnnotationList), and the
 // global counts — so an out-of-scope comment can never leak into one of them. The
 // per-file surfaces (CommentsByEndLine and friends) already narrow to SelectedFile and
 // don't go through here. Its suggestion twin is scopedSuggestions.
@@ -816,72 +800,16 @@ func (s PrereviewState) scopedComments() []Comment {
 	return out
 }
 
-// commentHiddenFromView is the single visibility rule for resolved/hidden
-// state, replacing the copy-pasted `c.Resolved && !s.ShowResolved` guards
-// scattered across the view helpers (issue #88). A RESOLVED comment is omitted
-// from every view when either the whole resolved group is hidden (ShowResolved
-// off) OR it has been individually re-hidden (Hidden). Non-resolved comments are
-// never hidden by this rule — Hidden is meaningless on them.
+// commentHiddenFromView is the visibility rule for a comment drawn on its own
+// surface (the file, or the live-site page): that surface's Annotations filter
+// decides, through commentHiddenOn.
 func (s PrereviewState) commentHiddenFromView(c Comment) bool {
-	return c.Resolved && (!s.ShowResolved || c.Hidden)
+	return commentHiddenOn(s.annFilter(commentSurface(c)), c)
 }
 
-// VisibleComments returns the in-scope Comments filtered by the resolved/hidden view
-// rule. Zero-arg so the framework eagerly evaluates and the template iterates the
-// filtered list directly. Note there is no `if ShowResolved { return all }`
-// fast-path: an individually-hidden resolved comment must stay out even when the
-// group is shown.
-func (s PrereviewState) VisibleComments() []Comment {
-	scoped := s.scopedComments()
-	out := make([]Comment, 0, len(scoped))
-	for _, c := range scoped {
-		if s.commentHiddenFromView(c) || !s.passesListFilter(c) {
-			continue
-		}
-		out = append(out, c)
-	}
-	return out
-}
-
-// CommentFilterAnnotations is the All comments filter that lists only the
-// live site's annotations (region comments).
+// CommentFilterAnnotations is the Annotations page's Live site chip: only the
+// live site's boxes (region comments).
 const CommentFilterAnnotations = "annotations"
-
-// passesListFilter reports whether the All comments screen's filter keeps c.
-func (s PrereviewState) passesListFilter(c Comment) bool {
-	return s.CommentListFilter != CommentFilterAnnotations || c.IsRegionLevel()
-}
-
-// AnnotationsListed is how many live-site annotations the All comments screen
-// would list with the Annotations filter: the count on that filter's button.
-func (s PrereviewState) AnnotationsListed() int {
-	n := 0
-	for _, c := range s.scopedComments() {
-		if s.regionVisible(c) {
-			n++
-		}
-	}
-	return n
-}
-
-// UnresolvedListed is how many comments the All comments screen lists that
-// aren't resolved: what Resolve all resolves.
-func (s PrereviewState) UnresolvedListed() int {
-	n := 0
-	for _, c := range s.Comments {
-		if s.resolvable(c) {
-			n++
-		}
-	}
-	return n
-}
-
-// resolvable reports whether Resolve all resolves c: in scope, open, and
-// passing the screen's filter. The screen lists every such comment
-// (commentHiddenFromView hides only resolved ones).
-func (s PrereviewState) resolvable(c Comment) bool {
-	return !c.Resolved && s.inScope(c.File) && s.passesListFilter(c)
-}
 
 // CommentCount is the number of in-scope comments — the all-comments view's header
 // total. Zero-arg because livetemplate only pre-computes zero-arg methods; the

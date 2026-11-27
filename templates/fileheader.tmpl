@@ -6,13 +6,30 @@
            so a long/deep path never wraps into a multi-line block (see .fh-dir /
            .fh-base). Title carries the full path for hover/long-press. */ -}}
     <span class="file-head-name" title="{{.Path}}">{{if $.SelectedFileDir}}<span class="fh-dir">{{$.SelectedFileDir}}</span>{{end}}<strong class="fh-base">{{$.SelectedFileBase}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    {{/* This file's view controls (desktop; the ⋯ menu carries them on a phone).
+         All six always show, so the header never shifts between files; one that
+         doesn't apply to this file is disabled, with a title saying why. */}}
+    {{- $previewable := or $.IsMarkdown $.IsHTML}}
+    {{- $raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
+    <span class="file-head-view" role="toolbar" aria-label="How this file shows">
+      <span class="fh-seg">
+        <form method="POST" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="rendered"><button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="fh-btn" aria-pressed="{{if and $previewable (not $raw)}}true{{else}}false{{end}}"{{if not $previewable}} disabled{{end}}>Preview</button></form>
+        <form method="POST" title="{{if $previewable}}Show the raw source{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="raw"><button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="fh-btn" aria-pressed="{{if $raw}}true{{else}}false{{end}}"{{if not $previewable}} disabled{{end}}>Raw</button></form>
+      </span>
+      <form method="POST" title="{{if $.ShowRenderedHTML}}Not in the HTML preview{{else}}Mark what changed; off shows the plain file{{end}}"><button type="submit" name="toggleFileView" class="fh-btn" aria-pressed="{{if and (not $.FileView) (not $.ShowRenderedHTML)}}true{{else}}false{{end}}"{{if $.ShowRenderedHTML}} disabled{{end}}>{{template "iconDiff"}}<span>Diff</span>{{with index $.KeyHint "toggleFileView"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button></form>
+      <form method="POST" title="{{if $.ShowsDiffRows}}Show whitespace-only changes as unchanged{{else}}Only in a diff{{end}}"><button type="submit" name="toggleHideWhitespace" class="fh-btn" aria-pressed="{{if and $.ShowsDiffRows $.HideWhitespace}}true{{else}}false{{end}}"{{if not $.ShowsDiffRows}} disabled{{end}}>Whitespace</button></form>
+      <form method="POST" title="{{if $.HasMechanical}}Fold the changes the walkthrough calls mechanical{{else}}No mechanical changes to fold{{end}}"><button type="submit" name="toggleFoldMechanical" class="fh-btn" aria-pressed="{{if and $.HasMechanical (not $.UnfoldMechanical)}}true{{else}}false{{end}}"{{if not $.HasMechanical}} disabled{{end}}>Fold</button></form>
+      {{if $.CanAnnotate}}{{template "regionToggle" $}}{{else}}<form method="POST" class="region-toggle" title="Only on an image or the HTML preview"><button type="button" class="fh-btn" disabled>{{template "iconAnnotate"}}<span class="annotate-word"> Annotate</span></button></form>{{end}}
+      <form method="POST" title="{{if $.HTMLMarkers}}Outline every annotation's box{{else}}Only on the HTML preview, once it has annotations{{end}}"><button type="submit" name="toggleBoxes" class="fh-btn" aria-pressed="{{if and $.HTMLMarkers $.ShowBoxes}}true{{else}}false{{end}}"{{if not $.HTMLMarkers}} disabled{{end}}>Boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button></form>
+    </span>
     {{/* Right-aligned action group: comment-on-file + the versions control. Both
          are compact chips sharing one row so the sticky header stays a single
          thin line on every viewport. */}}
     <span class="file-head-actions">
-    {{/* #128: jump to the read frontier — the first unread content. Shown only
-         when the file is partly read (some progress, not all), so it never
-         clutters a fresh or finished file. */}}
+    {{/* One slot for reading (#128): Jump to unread while the file is partly
+         read; once it is read to the end or marked Viewed, Mark unread takes its
+         place (forget the Viewed mark and reading progress). Empty on a fresh
+         file, so it never clutters one. */}}
     {{if $.HasReadFrontier}}
     <form method="POST" class="file-head-resume">
       <button
@@ -21,6 +38,15 @@
         class="outline"
         title="Jump to the first content you haven't read yet"
       >{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
+    </form>
+    {{else if $.CanMarkUnread}}
+    <form method="POST" class="file-head-resume">
+      <button
+        type="submit"
+        name="markUnread"
+        class="outline"
+        title="Forget that you read this file: its Viewed mark and reading progress"
+      >{{template "iconViewedCircle"}}<span class="resume-label">Mark unread</span>{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
     </form>
     {{end}}
     {{/* Comment on the whole file — sits in context next to the filename. Hidden
@@ -36,12 +62,6 @@
         aria-label="Comment on file"
       >{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
-    {{end}}
-    {{/* #115: "Understand" — the walkthrough of the whole change and the file's
-         quiz (#191), on one page. The page asks the agent for either; this button
-         only opens it, so it is one tap on a phone. */}}
-    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.ShowUnderstandEntry}}
-    <form method="POST" style="margin:0"><button type="submit" name="toggleUnderstand" class="quiz-trigger" title="Walk through the whole change, and quiz yourself on it">{{template "iconQuiz"}}<span class="quiz-trigger-label">Understand</span></button></form>
     {{end}}
     {{if $.ShowChecks}}{{template "checksButton" $}}{{end}}
     {{/* Versions panel (#90): the selected file's version timeline with view +

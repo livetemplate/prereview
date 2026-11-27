@@ -22,7 +22,7 @@ import (
 
 func TestE2E_KbdHintInButtons(t *testing.T) {
 	repo := setupFixtureRepo(t)
-	// Seed comments so the "All comments" + "Show resolved" items render.
+	// Seed an open and a resolved comment so the Annotations filter renders.
 	pdir := filepath.Join(repo, ".prereview")
 	if err := os.MkdirAll(pdir, 0o755); err != nil {
 		t.Fatal(err)
@@ -52,21 +52,26 @@ func TestE2E_KbdHintInButtons(t *testing.T) {
 		t.Fatalf("emulate fine pointer: %v", err)
 	}
 
-	// Open the View dropdown so its menu items are in the layout.
+	// Open the Annotations filter so its rows are in the layout.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.tb-dropdown-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.tb-dropdown.open .tb-dropdown-panel`, chromedp.ByQuery),
+		chromedp.Click(`.ann-filter > button`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.ann-filter.open .ann-filter-panel`, chromedp.ByQuery),
 	); err != nil {
-		t.Fatalf("open View dropdown: %v%s", err, diag())
+		t.Fatalf("open the Annotations filter: %v%s", err, diag())
 	}
 
 	// The chip for a button is single-sourced from the keymap: the KeyHint for
 	// the button's action == the Display key. Assert the rendered chip text
 	// matches the expected key for each shortcut-bearing button.
 	cases := []struct{ sel, wantKey, where string }{
-		{`.tb-dropdown-panel button[name="toggleFocusMode"] .kbd-hint`, ".", "Focus"},
-		{`.tb-dropdown-panel button[name="toggleCommentList"] .kbd-hint`, "a", "All comments"},
-		{`.tb-dropdown-panel button[name="toggleShowResolved"] .kbd-hint`, "r", "Show resolved"},
+		{`header.bar button[name="openSearch"] .kbd-hint`, "⌘K", "Search"},
+		{`header.bar button[name="toggleFocusMode"] .kbd-hint`, ".", "Focus"},
+		{`header.bar button[name="toggleCommentList"] .kbd-hint`, "a", "Annotations"},
+		{`header.bar button[name="toggleUnderstand"] .kbd-hint`, "z", "Understand"},
+		{`header.bar button[name="toggleKeyboardHelp"] .kbd-hint`, "?", "Shortcuts"},
+		{`.file-head-view button[name="toggleFileView"] .kbd-hint`, "d", "Diff"},
+		{`.ann-filter-panel input[value="all"] ~ button .kbd-hint`, "r", "Show: All"},
+		{`.ann-filter-panel input[value="suggestion"] ~ button .kbd-hint`, "s", "Kinds: Suggestions"},
 		{`.nav-prev button .kbd-hint`, "k", "Prev"},
 		{`.nav-next button .kbd-hint`, "j", "Next"},
 		{`.file-head-comment button .kbd-hint`, "c", "Comment on file"},
@@ -80,16 +85,16 @@ func TestE2E_KbdHintInButtons(t *testing.T) {
 
 	// The chip is inside the label so it reads "Focus .", but aria-hidden keeps
 	// it out of the accessible name (which stays "Focus", not "Focus period").
-	if v := evalStr(`document.querySelector('.tb-dropdown-panel button[name="toggleFocusMode"] .kbd-hint').getAttribute('aria-hidden')`); v != "true" {
+	if v := evalStr(`document.querySelector('header.bar button[name="toggleFocusMode"] .kbd-hint').getAttribute('aria-hidden')`); v != "true" {
 		t.Errorf("Focus chip aria-hidden = %q, want true%s", v, diag())
 	}
 
 	// Shown on a fine pointer…
-	if d := evalStr(`getComputedStyle(document.querySelector('.tb-dropdown-panel button[name="toggleFocusMode"] .kbd-hint')).display`); d == "none" {
+	if d := evalStr(`getComputedStyle(document.querySelector('header.bar button[name="toggleFocusMode"] .kbd-hint')).display`); d == "none" {
 		t.Errorf("chip hidden on a fine pointer (display:none)%s", diag())
 	}
 	// …and a button WITHOUT a shortcut (cycleScheme) shows no chip.
-	if evalStr(`String(!!document.querySelector('.tb-dropdown-panel button[name="cycleScheme"] .kbd-hint'))`) != "false" {
+	if evalStr(`String(!!document.querySelector('header.bar button[name="cycleScheme"] .kbd-hint'))`) != "false" {
 		t.Errorf("cycleScheme (no shortcut) unexpectedly has a chip%s", diag())
 	}
 

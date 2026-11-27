@@ -193,9 +193,11 @@ func TestE2E_ChecksPage(t *testing.T) {
 			if got := textOf(t, p, `.ck-strip .ck-pos-long`); got != "finding 1 of 1 in this file" {
 				t.Errorf("stepper says %q%s", got, diag())
 			}
-			// The stepper is one row at every width (it wrapped on a phone).
+			// The stepper is one row at every width (it wrapped on a phone). A
+			// new row starts only below the previous one: rounding tops to a grid
+			// split items a few pixels apart once the header above them moved.
 			var rows int
-			if err := chromedp.Run(ctx, chromedp.Evaluate(`new Set([...document.querySelector('.ck-strip').children].filter(e => e.offsetParent).map(e => Math.round(e.getBoundingClientRect().top / 8))).size`, &rows)); err != nil || rows != 1 {
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`(() => { const rs = [...document.querySelector('.ck-strip').children].filter(e => e.offsetParent).map(e => e.getBoundingClientRect()).sort((a, b) => a.top - b.top); let rows = 0, bottom = -Infinity; for (const r of rs) { if (r.top >= bottom) { rows++; bottom = r.bottom } else { bottom = Math.max(bottom, r.bottom) } } return rows })()`, &rows)); err != nil || rows != 1 {
 				t.Errorf("the stepper bar spans %d rows (%v)%s", rows, err, diag())
 			}
 			if got := textOf(t, p, `.code mark.check-finding`); got != "very" {

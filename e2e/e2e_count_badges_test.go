@@ -2,8 +2,8 @@
 
 // End-to-end for #151: per-line comment/suggestion COUNT badges. A line carrying
 // annotations shows a tap-sized right-margin badge per kind with the count; the
-// count equals the cards actually rendered on that row; the badges are hide-able
-// via the overflow menu ("Hide annotations") and in focus mode, and stay clickable
+// count equals the cards actually rendered on that row; the badges hide when
+// the Annotations filter is set to None and in focus mode, and stay clickable
 // on a phone-sized (coarse-pointer) viewport.
 //
 // Run with: go test -tags=browser -run TestE2E_CountBadges ./e2e/...
@@ -201,22 +201,22 @@ func TestE2E_CountBadges(t *testing.T) {
 		t.Errorf("the enlarged badge overlaps the code text (padding-right reserve too small)%s", diag())
 	}
 
-	// --- "Hide annotations" menu toggle removes ALL badges + inline cards. ---
+	// --- The filter's None removes ALL badges + inline cards. ---
 	if err := chromedp.Run(p.ctx, chromedp.Emulate(device.Reset), chromedp.EmulateViewport(1200, 800), chromedp.Sleep(150*time.Millisecond)); err != nil {
 		t.Fatalf("restore desktop viewport: %v", err)
 	}
-	p.openViewItem("toggleMarks")
+	p.viewAction("toggleMarks")
 	if err := chromedp.Run(p.ctx, chromedp.Sleep(200*time.Millisecond)); err != nil {
 		t.Fatalf("settle after hide: %v", err)
 	}
 	if n := intEval(`[...document.querySelectorAll('.code .line-marks')].filter(el => el.offsetParent !== null).length`); n != 0 {
-		t.Errorf("Hide annotations left %d badges visible%s", n, diag())
+		t.Errorf("Filter None left %d badges visible%s", n, diag())
 	}
 	if n := intEval(`[...document.querySelectorAll('.code .inline-comment')].filter(el => el.offsetParent !== null).length`); n != 0 {
-		t.Errorf("Hide annotations left %d inline comments visible%s", n, diag())
+		t.Errorf("Filter None left %d inline comments visible%s", n, diag())
 	}
 	// Toggling back restores them.
-	p.openViewItem("toggleMarks")
+	p.viewAction("toggleMarks")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.code .line-marks`, chromedp.ByQuery),
 	); err != nil {
@@ -225,7 +225,7 @@ func TestE2E_CountBadges(t *testing.T) {
 
 	// --- Focus mode hides the badges too — and the rule reaches the PHONE (it is
 	//     NOT trapped in the desktop-only focus-mode media query). ---
-	p.openViewItem("toggleFocusMode")
+	p.viewAction("toggleFocusMode")
 	if err := chromedp.Run(p.ctx, chromedp.Sleep(200*time.Millisecond)); err != nil {
 		t.Fatalf("settle after focus: %v", err)
 	}

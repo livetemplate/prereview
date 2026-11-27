@@ -1,0 +1,72 @@
+{{/* The desktop toolbar's buttons: the controls that act on the whole review,
+     each an icon, one word and its key. A toggle carries aria-pressed. A button
+     that can't act right now stays in place, disabled, with a title saying why,
+     so the bar never shifts. Called with the root state. */}}
+{{define "toolbarButtons"}}    <div class="tb-group tb-views">
+      <form method="POST" title="{{if .FileShowing}}Focus: hide the side columns{{else}}Open a file to focus on it{{end}}">
+        <button
+          type="submit"
+          name="toggleFocusMode"
+          class="tb-btn"
+          aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}"
+          {{if not .FileShowing}}disabled{{end}}
+        >{{template "iconFocus"}}<span class="tb-word">Focus</span>{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>
+      {{with .AnnotationTotals}}<form method="POST" title="{{if or .Open .Resolved $.ShowAllComments}}Every annotation in the review: {{.Open}} open, {{.Resolved}} resolved{{if .Outdated}}; {{.Outdated}} need re-anchoring{{end}}{{else}}No annotations yet{{end}}">
+        <button
+          type="submit"
+          name="toggleCommentList"
+          class="tb-btn"
+          aria-pressed="{{if $.ShowAllComments}}true{{else}}false{{end}}"
+          {{if not (or .Open .Resolved $.ShowAllComments)}}disabled{{end}}
+        >{{template "iconComments"}}<span class="tb-word">Annotations</span><span class="tb-count">{{.Open}}</span>{{if .Resolved}}<span class="tb-count-sub">+{{.Resolved}}</span>{{end}}{{if .Outdated}}<span class="tb-outdated" aria-label="{{.Outdated}} outdated">⚠{{.Outdated}}</span>{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>{{end}}
+      <form method="POST" title="{{if or .ShowUnderstandEntry .ShowUnderstand}}Walk through the whole change, and quiz yourself on it{{else}}No walkthrough or quiz yet, and no agent to make one{{end}}">
+        <button
+          type="submit"
+          name="toggleUnderstand"
+          class="tb-btn"
+          aria-pressed="{{if .ShowUnderstand}}true{{else}}false{{end}}"
+          {{if not (or .ShowUnderstandEntry .ShowUnderstand)}}disabled{{end}}
+        >{{template "iconQuiz"}}<span class="tb-word">Understand</span>{{with .QuizScoreLabel}}<span class="tb-count">{{.}}</span>{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>
+      {{- if .LiveShowing}}
+      <form method="POST" title="{{if .RegionComments}}Outline every annotation's box on the page{{else}}No annotations on this page{{end}}">
+        <button
+          type="submit"
+          name="toggleBoxes"
+          class="tb-btn"
+          aria-pressed="{{if .ShowBoxes}}true{{else}}false{{end}}"
+          {{if not .RegionComments}}disabled{{end}}
+        >{{template "iconAnnotate"}}<span class="tb-word">Boxes</span>{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>
+      {{- end}}
+    </div>
+    <div class="tb-group tb-prefs">
+      <form method="POST">
+        <button
+          type="submit"
+          name="cycleScheme"
+          class="tb-btn"
+          title="Color scheme: {{.SchemeLabel}}. Next: {{.NextSchemeLabel}}"
+        >{{template "iconPalette"}}<span class="tb-word">{{.SchemeLabel}}</span></button>
+      </form>
+      <form method="POST">
+        <button
+          type="submit"
+          name="cycleTheme"
+          class="tb-btn"
+          title="Mode: {{.ThemeModeLabel}}. Next: {{.NextThemeModeLabel}}"
+        >{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}<span class="tb-word">{{.ThemeModeLabel}}</span></button>
+      </form>
+      <form method="POST">
+        <button
+          type="submit"
+          name="toggleKeyboardHelp"
+          class="tb-btn"
+          title="Keyboard shortcuts"
+        ><span class="tb-glyph" aria-hidden="true">?</span><span class="tb-word">Shortcuts</span>{{with index $.KeyHint "toggleKeyboardHelp"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>
+      <a class="tb-btn" href="/_usage" target="_blank" rel="noopener" title="Usage guide (opens a new tab)">{{template "iconBook"}}<span class="tb-word">Guide</span></a>
+    </div>
+{{end}}

@@ -222,7 +222,7 @@ var requestSummaries = map[string]string{
 // request kind), which show their body as written.
 func (c Comment) RequestSummary() string { return requestSummaries[c.Request] }
 
-// Headline is what a one-line listing of comments shows (All comments, the
+// Headline is what a one-line listing of comments shows (the Annotations page, the
 // Queue): a request's summary, otherwise the comment's text.
 func (c Comment) Headline() string { return cmp.Or(c.RequestSummary(), c.Body) }
 

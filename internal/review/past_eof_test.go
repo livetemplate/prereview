@@ -111,7 +111,8 @@ func TestPastEndSuggestions(t *testing.T) {
 		t.Errorf("a per-card hidden suggestion must stay hidden, got %+v", got)
 	}
 	off := s
-	off.HideSuggestions = true
+	off.AnnFilters = nil
+	off.setAnnFilter(off.SelectedFile, AnnFilter{Off: []string{navSuggestion}})
 	if got := off.PastEndSuggestions(); len(got) != 0 {
 		t.Errorf("hide-suggestions must hide past-EOF suggestions too, got %+v", got)
 	}

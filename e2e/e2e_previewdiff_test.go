@@ -179,13 +179,13 @@ func TestE2E_PreviewDiffHighlight(t *testing.T) {
 		t.Errorf("added block's .md-rendered has no change-bar box-shadow (got %q)%s", shadow, diag())
 	}
 
-	// The toolbar's Diff/File toggle works in Preview mode too (the point of this
-	// follow-up): File shows the plain rendered doc with NO highlight, Diff
-	// restores it. The inline radio group is on the desktop toolbar at this width
-	// (>=900px); click by value via the setFileViewMode form.
+	// The file header's Diff toggle works in Preview mode too (the point of this
+	// follow-up): off shows the plain rendered doc with NO highlight, on
+	// restores it. value is the view to switch to; the toggle flips only when
+	// the other view is showing.
 	clickViewRadio := func(value string) {
 		js := fmt.Sprintf(
-			`(()=>{const el=document.querySelector('form[aria-label="File view"] input[value=%q]');if(!el)return false;el.click();return true})()`,
+			`(()=>{const b=document.querySelector('.file-head-view button[name="toggleFileView"]');if(!b)return false;const on=b.getAttribute('aria-pressed')==='true';if((%q==='file')===on)b.click();return true})()`,
 			value)
 		var ok bool
 		if err := chromedp.Run(p.ctx, chromedp.Evaluate(js, &ok)); err != nil || !ok {
@@ -217,7 +217,7 @@ func TestE2E_PreviewDiffHighlight(t *testing.T) {
 		chromedp.Evaluate(`(()=>{const w=window.innerWidth;return [...document.querySelectorAll('header.bar button')].some(b=>b.getBoundingClientRect().right > w + 1);})()`, &cropped),
 		// The Diff/File toggle must stay INLINE on the desktop bar (the request):
 		// visible with a non-zero box, not collapsed away.
-		chromedp.Evaluate(`(()=>{const f=document.querySelector('.toolbar-inline form[aria-label="File view"]');if(!f)return false;const r=f.getBoundingClientRect();return r.width>0&&r.height>0;})()`, &fileToggleShown),
+		chromedp.Evaluate(`(()=>{const f=document.querySelector('.file-head-view button[name="toggleFileView"]');if(!f)return false;const r=f.getBoundingClientRect();return r.width>0&&r.height>0;})()`, &fileToggleShown),
 	); err != nil {
 		t.Fatalf("crop probe at 1000px: %v%s", err, diag())
 	}

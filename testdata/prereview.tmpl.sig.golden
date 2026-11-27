@@ -1,10 +1,11 @@
 === allComments ===
 <section class="all-comments">
   <header class="ac-head">
-    <strong>All comments ({{.CommentCount}})</strong>
-    {{if .AnnotationsListed}}{{$annos := eq .CommentListFilter "annotations"}}<div class="ac-filter">
-      <button type="button" lvt-on:click="setCommentFilter" data-filter="" class="lib-chip{{if not $annos}} is-on{{end}}" aria-pressed="{{not $annos}}">All</button>
-      <button type="button" lvt-on:click="setCommentFilter" data-filter="annotations" class="lib-chip{{if $annos}} is-on{{end}}" aria-pressed="{{$annos}}" title="Only the live site's annotations">Annotations {{.AnnotationsListed}}</button>
+    <strong>Annotations</strong>
+    {{template "annFilter" $}}
+    {{if .AnnotationsListed}}{{$live := eq .CommentListFilter "annotations"}}<div class="ac-filter">
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="" class="lib-chip{{if not $live}} is-on{{end}}" aria-pressed="{{not $live}}">Everything</button>
+      <button type="button" lvt-on:click="setCommentFilter" data-filter="annotations" class="lib-chip{{if $live}} is-on{{end}}" aria-pressed="{{$live}}" title="Only the boxes drawn on the live site">Live site {{.AnnotationsListed}}</button>
     </div>{{end}}
     {{if .UnresolvedListed}}<form method="POST" class="ac-resolve-all">
       <button type="submit" name="resolveAll" class="outline" title="Resolve every comment listed here">Resolve all {{.UnresolvedListed}}</button>
@@ -13,9 +14,9 @@
       <button type="submit" name="toggleCommentList" class="outline contrast" title="Return to the file you were viewing">Back</button>
     </form>
   </header>
-  {{if .VisibleComments}}
+  {{if .AnnotationList}}
   <ul class="ac-list">
-    {{range .VisibleComments}}
+    {{range .AnnotationList}}{{with .Comment}}
     <li class="ac-item{{if .Resolved}} is-resolved{{end}}{{if eq $.ScrollToCommentID .ID}} is-target{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}" data-key="{{.ID}}"{{if eq $.ScrollToCommentID .ID}} lvt-fx:scroll="into-view"{{end}}>
       <form method="POST" class="ac-jump">
         <input type="hidden" name="id" value="{{.ID}}">
@@ -51,12 +52,23 @@
         {{template "deleteDialog" .}}
       </div>
     </li>
-    {{end}}
+    {{else}}
+    <li class="ac-row{{with .State}} is-settled{{end}}" data-key="{{.Key}}">
+      <form method="POST" class="ac-jump">
+        <input type="hidden" name="kind" value="{{.Kind}}">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button type="submit" name="jumpToAnnotation" class="ac-jump-btn" title="Open it on its file">
+          <div class="ac-where"><small class="ac-kind">{{.Label}}</small> <code>{{.File}}</code> · {{.Span}}{{with .State}} <small class="resolved-badge">{{.}}</small>{{end}}</div>
+          <div class="ac-body">{{.Text}}</div>
+        </button>
+      </form>
+    </li>
+    {{end}}{{end}}
   </ul>
   {{else}}
   
   <div class="ac-empty">
-    <p class="ac-empty-msg">{{if and (gt .CommentCount 0) (not .ShowResolved)}}{{.CommentCount}} resolved comment{{if ne .CommentCount 1}}s{{end}} hidden — toggle “Show resolved” to see them.{{else}}No comments yet.{{end}}</p>
+    <p class="ac-empty-msg">{{if .HasAnyAnnotation}}The filter hides every annotation. Change it above to see them.{{else}}No annotations yet.{{end}}</p>
     <form method="POST" style="margin:0">
       <button type="submit" name="toggleCommentList" class="contrast ac-empty-back" title="Return to the file you were viewing">← Back to file</button>
     </form>
@@ -67,6 +79,18 @@
 {{if .Ungrounded}}<span class="quiz-ungrounded" title="The walkthrough cites {{.Label}}, which isn't in this review. The agent may have it wrong.">⚠ {{.Label}} isn't in this review</span>{{else}}{{template "anchorJump" .}}{{end}}
 === anchorJump ===
 <form method="POST" style="margin:0"><input type="hidden" name="file" value="{{.File}}"><input type="hidden" name="side" value="{{.Side}}"><input type="hidden" name="line" value="{{.Line}}"><button type="submit" name="jumpToAnchor" class="quiz-jump" title="Go read the code this cites">{{.Label}}</button></form>
+=== annFilter ===
+{{with $.AnnFilterView}}<div class="tb-dropdown ann-filter" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+      <button type="button" class="outline ann-filter-trigger" aria-haspopup="menu" title="Choose what shows here, and what the arrows step through">{{template "iconFilter"}}<span>{{if $.ShowAllComments}}Filter{{else}}Annotations{{end}}: {{.Label}}</span>{{template "iconChevronDown"}}</button>
+      <div class="tb-dropdown-panel ann-filter-panel" role="menu" aria-label="Annotations filter">
+        <div class="menu-heading" role="presentation">Show</div>
+        {{range .Shows}}<form method="POST"><input type="hidden" name="show" value="{{.Value}}"><button type="submit" name="setAnnShow" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}"><span class="menu-icon">{{if .On}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span><span class="menu-label">{{.Label}}{{if eq .Value "all"}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{end}}</span>{{if .Count}}<span class="menu-meta">{{.Count}}</span>{{end}}</button></form>{{end}}
+        <div class="menu-heading" role="presentation">Kinds</div>
+        {{range .Kinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="toggleAnnKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{.On}}"><span class="menu-icon">{{if .On}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span><span class="menu-label">{{.Label}}{{if eq .Kind "suggestion"}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{end}}</span>{{if .Count}}<span class="menu-meta">{{.Count}}</span>{{end}}</button></form>{{end}}
+        {{if .HiddenResolved}}<form method="POST"><button type="submit" name="unhideAllResolved" class="menu-item" role="menuitem"><span class="menu-icon">{{template "iconCircle16"}}</span><span class="menu-label">Unhide resolved</span><span class="menu-meta">{{.HiddenResolved}}</span></button></form>{{end}}
+        {{if .HiddenSuggestions}}<form method="POST"><button type="submit" name="showHiddenSuggestions" class="menu-item" role="menuitem"><span class="menu-icon">{{template "iconSuggestion"}}</span><span class="menu-label">Unhide suggestions</span><span class="menu-meta">{{.HiddenSuggestions}}</span></button></form>{{end}}
+      </div>
+    </div>{{end}}
 === annotationBar ===
 <span class="anno-bar"><button type="button" class="anno-act" lvt-on:click="unfocusAnnotation" data-id="{{.ID}}" title="Hide" aria-label="Hide">{{template "iconEyeOff"}}</button><button type="button" class="anno-act" lvt-on:click="toggleResolved" data-id="{{.ID}}" title="{{if .Resolved}}Reopen{{else}}Resolve{{end}}" aria-label="{{if .Resolved}}Reopen{{else}}Resolve{{end}}">{{if .Resolved}}{{template "iconReopen"}}{{else}}{{template "iconCheck"}}{{end}}</button><button type="button" class="anno-act" lvt-on:click="deleteComment" data-id="{{.ID}}" title="Delete" aria-label="Delete">{{template "iconTrash"}}</button></span>
 === answeredBadge ===
@@ -229,17 +253,16 @@
           </li>
 
 === checksButton ===
-{{with $.CheckSummary}}{{if .JudgesRun}}<div class="tb-dropdown file-head-checks checks-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
+{{with $.CheckSummary}}<div class="tb-dropdown file-head-checks checks-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
       <button type="button" class="checks-trigger{{if .Failing}} is-failing{{else}}{{if .Running}} is-running{{else}} is-passing{{end}}{{end}}{{if .JudgeWaiting}} is-waiting{{end}}" aria-haspopup="menu" title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}{{if .JudgeWaiting}}, waiting on your agent for {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}{{end}}.">{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
       <div class="tb-dropdown-panel checks-panel" role="menu" aria-label="Checks">
-        {{if .NeedsAgent}}<p class="checks-menu-note" role="none">Run judges — needs an agent. <a href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></p>
+        {{if not .JudgesRun}}<form method="POST" title="No judges on this file"><button type="submit" name="runJudges" class="menu-item" role="menuitem" disabled><span class="menu-label">Run judges<small class="menu-why">No judges on this file</small></span></button></form>
+        {{else}}{{if .NeedsAgent}}<p class="checks-menu-note" role="none">Run judges — needs an agent. <a href="/_usage#judges" target="_blank" rel="noopener">How to start one</a></p>
         {{else}}{{if .JudgeWaiting}}<p class="checks-menu-note is-waiting" role="status">Asked your agent · {{.JudgeWaiting}} judge{{if ne .JudgeWaiting 1}}s{{end}}</p>
         {{else}}<form method="POST"><button type="submit" name="runJudges" class="menu-item" role="menuitem"><span class="menu-label">{{if .JudgeTimedOut}}No answer yet — run judges again{{else}}{{if .JudgesStale}}Re-run judges ({{.JudgesStale}} stale){{else}}Run judges ({{.JudgesRun}}){{end}}{{end}}</span></button></form>
-        {{end}}{{end}}<form method="POST"><button type="submit" name="openChecks" class="menu-item" role="menuitem"><span class="menu-label">All checks</span></button></form>
+        {{end}}{{end}}{{end}}<form method="POST"><button type="submit" name="openChecks" class="menu-item" role="menuitem"><span class="menu-label">All checks</span></button></form>
       </div>
-    </div>{{else}}<form method="POST" class="file-head-checks">
-      <button type="submit" name="openChecks" class="checks-trigger{{if .Failing}} is-failing{{else}}{{if .Running}} is-running{{else}} is-passing{{end}}{{end}}" title="Checks on this file: {{.Passed}} of {{.Total}} passed{{if .Running}}, {{.Running}} running{{end}}. Opens the Checks page.">{{template "iconCheckList"}}<span class="checks-trigger-label">Checks</span><span class="checks-count">{{.Passed}}/{{.Total}}</span></button>
-    </form>{{end}}
+    </div>
 {{end}}
 === checksStrip ===
 {{with $.CheckStrip}}
@@ -276,7 +299,7 @@
   </div>{{end}}
 {{end}}
 === commentCardFull ===
-<div class="inline-comment{{if .Resolved}} is-resolved is-closed{{end}}{{if .AnchorOutdated}} is-outdated{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}><header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} · <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}{{with .Source}} · {{template "sourceBadge" .}}{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}{{with index $.RippleByComment .ID}}<div class="ripple-row" role="group" aria-label="Follow-on edits"><span class="ripple-count">Follow-on edits: {{.Open}} open of {{.Total}}</span>{{if .Acceptable}}<form method="POST"><button type="submit" name="acceptRipple" value="{{.CommentID}}" class="accept">Accept all</button></form>{{end}}{{if .Open}}<form method="POST"><button type="submit" name="rejectRipple" value="{{.CommentID}}" class="outline reject">Reject all</button></form>{{end}}{{if .NeedPick}}<small class="ripple-pick">{{.NeedPick}} set{{if gt .NeedPick 1}}s{{end}} of alternatives need{{if eq .NeedPick 1}}s{{end}} your pick</small>{{end}}</div>{{end}}{{template "thread" (index $.ThreadViews .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}<div class="ic-actions">
+<div class="inline-comment{{if .Resolved}} is-resolved is-closed{{end}}{{if .AnchorOutdated}} is-outdated{{end}}{{with index $.AnnotationColors .ID}} {{.}}{{end}}" data-key="{{.ID}}" lvt-fx:animate="fade"{{if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}>{{if eq $.NavAnchor (printf "c:%s" .ID)}}<span class="nav-anchor" data-key="nav-{{$.NavSteps}}" lvt-fx:scroll="into-view" aria-hidden="true"></span>{{end}}<header><span>{{.LineSpan}} · <small>{{.Side}}</small>{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorEdited (not .Resolved) (not .Processed)}} · <small class="edited-badge" title="exactly these lines were edited — likely addressed; confirm and resolve">likely addressed</small>{{end}}{{if .AnchorOutdated}} · <small class="outdated-badge">outdated</small>{{end}}{{if .Draft}} · <small class="draft-badge">draft</small>{{end}}{{if .Processed}} · {{template "processedBadge"}}{{end}}{{if eq (index $.CommentQueueStates .ID) "answered"}} · {{template "answeredBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}{{with .Source}} · {{template "sourceBadge" .}}{{end}}</span></header>{{if .Snippet}}<div class="ic-snippet">{{.Snippet}}</div>{{end}}<div class="body">{{.Body}}</div>{{if .AnchorOutdated}}<details class="anchor-orig"><summary>⚠ the document changed here — originally anchored to:</summary><pre>{{.Anchor.Text}}</pre></details>{{end}}{{with index $.RippleByComment .ID}}<div class="ripple-row" role="group" aria-label="Follow-on edits"><span class="ripple-count">Follow-on edits: {{.Open}} open of {{.Total}}</span>{{if .Acceptable}}<form method="POST"><button type="submit" name="acceptRipple" value="{{.CommentID}}" class="accept">Accept all</button></form>{{end}}{{if .Open}}<form method="POST"><button type="submit" name="rejectRipple" value="{{.CommentID}}" class="outline reject">Reject all</button></form>{{end}}{{if .NeedPick}}<small class="ripple-pick">{{.NeedPick}} set{{if gt .NeedPick 1}}s{{end}} of alternatives need{{if eq .NeedPick 1}}s{{end}} your pick</small>{{end}}</div>{{end}}{{template "thread" (index $.ThreadViews .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{end}}<div class="ic-actions">
     <form method="POST">
       <input type="hidden" name="id" value="{{.ID}}">
       <button type="submit" name="toggleResolved" class="outline">{{if .Resolved}}Reopen{{else}}Resolve{{end}}</button>
@@ -345,7 +368,7 @@
 === diffView ===
 {{with $.CurrentDiff}}  
   <div class="code{{if eq .Note "file added"}} pure-add{{else}}{{if eq .Note "file deleted"}} pure-del{{end}}{{end}}{{if $.FileView}} file-view{{end}}{{if $.WrapLines}} wrap-lines{{end}}" data-key="code-{{.Path}}" data-path="{{.Path}}" lvt-fx:scroll="reset-on:data-path" lvt-fx:text-select="selectText" style="--diff-min-width: calc({{.MaxLineChars}}ch + 7ch)">{{range $.VisibleLines}}{{if or (eq .Kind "fold") (eq .Kind "mech")}}{{if eq .Kind "fold"}}<div class="line-row fold-row" data-key="F{{.OldNum}}-{{.NewNum}}" aria-hidden="true"><span class="fold-label">··· {{.Content}} unchanged line{{if ne .Content "1"}}s{{end}} ···</span></div>{{else}}<form method="POST" class="line-row mech-row" data-key="M{{.OldNum}}-{{.NewNum}}"><input type="hidden" name="hunk" value="{{.Group}}"><button type="submit" name="revealMechanical" class="mech-fold" title="The walkthrough calls these changes mechanical. Tap to read them.">Show {{.Content}} mechanical line{{if ne .Content "1"}}s{{end}} · {{index $.MechTitles .Group}}</button></form>{{end}}{{else}}{{$ln := .NewNum}}{{if not $ln}}{{$ln = .OldNum}}{{end}}{{$lside := "new"}}{{if eq .Kind "del"}}{{$lside = "old"}}{{end}}{{$rowkey := printf "%d-%s" $ln $lside}}{{$hasMarks := gt (index $.AnnotationCountLines $rowkey) 0}}{{$lkey := printf "L%d-%d" .OldNum .NewNum}}<div class="line-row{{if $hasMarks}} has-line-marks{{end}}{{if index $.RowToggled $rowkey}} row-toggled{{end}}" data-key="row-L{{.OldNum}}-{{.NewNum}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}-composing{{end}}">{{$rm := index $.RowMarks $lkey}}{{if $rm}}{{if $rm.Step}}<div class="step-mark">{{$rm.Step.Label}}{{range $rm.Step.Risks}} <span class="ck-pill ck-fail risk-chip">{{.}}</span>{{end}}</div>{{end}}{{if $rm.Move}}<form method="POST" class="move-mark"><input type="hidden" name="file" value="{{$rm.Move.File}}"><input type="hidden" name="side" value="{{$rm.Move.Side}}"><input type="hidden" name="line" value="{{$rm.Move.Line}}"><button type="submit" name="jumpToAnchor" class="move-jump" title="Go to the other end of the move">{{$rm.Move.Label}}</button></form>{{end}}{{if $rm.Moved}}<i class="moved-flag" aria-hidden="true"></i>{{end}}{{if $rm.Since}}<i class="since-flag" aria-hidden="true"></i>{{end}}{{end}}<div tabindex="0" lvt-on:click="selectLine" lvt-on:keydown="selectLine" lvt-key="Enter" data-line="{{$ln}}" data-side="{{if eq .Kind "del"}}old{{else}}new{{end}}" class="line {{.Kind}}{{if index $.SelectedLines $ln}} selected{{end}}{{if eq $.CursorKey $lkey}} is-cursor{{end}}"{{if eq $.CursorKey $lkey}} lvt-autofocus lvt-fx:scroll="into-view"{{else}}{{if eq $.ScrollToReadKey $lkey}} lvt-fx:scroll="into-view"{{end}}{{end}} data-key="{{$lkey}}"><span class="gutter"><span class="gutter-mark">{{if eq .Kind "add"}}+{{else}}{{if eq .Kind "del"}}-{{else}}&nbsp;{{end}}{{end}} </span>{{$ln}}</span><span class="content chroma" data-line-text>{{index $.LineDisplay $lkey}}</span></div>{{if $hasMarks}}<span class="line-margin">
-        <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.line-row" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
+        <button type="button" class="line-marks{{if index $.AwaitingLines $rowkey}} has-unread{{end}}" lvt-on:click="toggleRow" data-row="{{$rowkey}}" aria-label="Show or hide the annotations on this line" title="Show/hide this line's annotations">
           <span class="line-mark{{if index $.AnnotationOpenLines $rowkey}} is-open{{else}}{{if index $.AnnotationAcceptedLines $rowkey}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{index $.AnnotationCountLines $rowkey}}</span>
         </button>
       </span>{{end}}{{range (index $.CommentsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "commentCardFull" .}}{{end}}{{end}}{{range (index $.SuggestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "suggestionCard" .}}{{end}}{{end}}{{with index $.HiddenSuggestionLines $rowkey}}{{template "hiddenMarker" .}}{{end}}{{range (index $.QuizByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "quizCard" .}}{{end}}{{end}}{{range (index $.QuestionsByEndLine $ln)}}{{if or (eq .Side $lside) (eq .Side "")}}{{template "questionCard" .}}{{end}}{{end}}{{range (index $.FindingsByRow $rowkey)}}{{template "findingCard" .}}{{end}}{{if and (ne $.SelectionEndMax 0) (eq $.SelectionEndMax $ln) (eq $.SelectionSide $lside)}}{{template "composer" $}}{{end}}</div>
@@ -414,7 +437,11 @@
     </form>
   </div>
   <div class="drawer-head">
-    <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</strong>
+    <div class="drawer-stats">
+      <strong>{{len .Files}} file{{if ne (len .Files) 1}}s{{end}}{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}}</strong>
+      <small>{{.ScopeViewedCount}} of {{.ScopeFileCount}} viewed</small>
+      <progress class="drawer-viewed" value="{{.ScopeViewedCount}}" max="{{.ScopeFileCount}}" aria-label="Files viewed"></progress>
+    </div>
     <form method="POST">
       <button type="submit" name="closeFiles" class="outline close-btn" aria-label="Close">{{template "iconClose16"}}</button>
     </form>
@@ -465,6 +492,18 @@
 </dialog>
 === fileHeader ===
 {{with $.CurrentDiff}}  <header class="file-head">{{if gt $.ReadPercent 0}}<div class="read-progress-fill" style="width: {{$.ReadPercent}}%" aria-hidden="true"></div>{{end}}<span class="file-head-name" title="{{.Path}}">{{if $.SelectedFileDir}}<span class="fh-dir">{{$.SelectedFileDir}}</span>{{end}}<strong class="fh-base">{{$.SelectedFileBase}}</strong>{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    {{$previewable := or $.IsMarkdown $.IsHTML}}{{$raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
+    <span class="file-head-view" role="toolbar" aria-label="How this file shows">
+      <span class="fh-seg">
+        <form method="POST" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="rendered"><button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="fh-btn" aria-pressed="{{if and $previewable (not $raw)}}true{{else}}false{{end}}"{{if not $previewable}} disabled{{end}}>Preview</button></form>
+        <form method="POST" title="{{if $previewable}}Show the raw source{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="raw"><button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="fh-btn" aria-pressed="{{if $raw}}true{{else}}false{{end}}"{{if not $previewable}} disabled{{end}}>Raw</button></form>
+      </span>
+      <form method="POST" title="{{if $.ShowRenderedHTML}}Not in the HTML preview{{else}}Mark what changed; off shows the plain file{{end}}"><button type="submit" name="toggleFileView" class="fh-btn" aria-pressed="{{if and (not $.FileView) (not $.ShowRenderedHTML)}}true{{else}}false{{end}}"{{if $.ShowRenderedHTML}} disabled{{end}}>{{template "iconDiff"}}<span>Diff</span>{{with index $.KeyHint "toggleFileView"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button></form>
+      <form method="POST" title="{{if $.ShowsDiffRows}}Show whitespace-only changes as unchanged{{else}}Only in a diff{{end}}"><button type="submit" name="toggleHideWhitespace" class="fh-btn" aria-pressed="{{if and $.ShowsDiffRows $.HideWhitespace}}true{{else}}false{{end}}"{{if not $.ShowsDiffRows}} disabled{{end}}>Whitespace</button></form>
+      <form method="POST" title="{{if $.HasMechanical}}Fold the changes the walkthrough calls mechanical{{else}}No mechanical changes to fold{{end}}"><button type="submit" name="toggleFoldMechanical" class="fh-btn" aria-pressed="{{if and $.HasMechanical (not $.UnfoldMechanical)}}true{{else}}false{{end}}"{{if not $.HasMechanical}} disabled{{end}}>Fold</button></form>
+      {{if $.CanAnnotate}}{{template "regionToggle" $}}{{else}}<form method="POST" class="region-toggle" title="Only on an image or the HTML preview"><button type="button" class="fh-btn" disabled>{{template "iconAnnotate"}}<span class="annotate-word"> Annotate</span></button></form>{{end}}
+      <form method="POST" title="{{if $.HTMLMarkers}}Outline every annotation's box{{else}}Only on the HTML preview, once it has annotations{{end}}"><button type="submit" name="toggleBoxes" class="fh-btn" aria-pressed="{{if and $.HTMLMarkers $.ShowBoxes}}true{{else}}false{{end}}"{{if not $.HTMLMarkers}} disabled{{end}}>Boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button></form>
+    </span>
     
     <span class="file-head-actions">
     
@@ -472,16 +511,16 @@
     <form method="POST" class="file-head-resume">
       <button type="submit" name="jumpToReadFrontier" class="outline" title="Jump to the first content you haven't read yet">{{template "iconChevronDown"}}<span class="resume-label">Jump to unread</span></button>
     </form>
-    {{end}}
+    {{else}}{{if $.CanMarkUnread}}
+    <form method="POST" class="file-head-resume">
+      <button type="submit" name="markUnread" class="outline" title="Forget that you read this file: its Viewed mark and reading progress">{{template "iconViewedCircle"}}<span class="resume-label">Mark unread</span>{{with index $.KeyHint "markUnread"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+    </form>
+    {{end}}{{end}}
     
     {{if and (ne $.CommentMode "file") (not $.ViewingVersion)}}
     <form method="POST" class="file-head-comment">
       <button type="submit" name="openFileComment" class="contrast" title="Add a comment about the whole file" aria-label="Comment on file">{{template "iconChat14"}}<span class="file-head-comment-label">Comment on file{{with index $.KeyHint "openFileComment"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span></button>
     </form>
-    {{end}}
-    
-    {{if and (ne $.CommentMode "file") (not $.ViewingVersion) $.ShowUnderstandEntry}}
-    <form method="POST" style="margin:0"><button type="submit" name="toggleUnderstand" class="quiz-trigger" title="Walk through the whole change, and quiz yourself on it">{{template "iconQuiz"}}<span class="quiz-trigger-label">Understand</span></button></form>
     {{end}}
     {{if $.ShowChecks}}{{template "checksButton" $}}{{end}}
     
@@ -524,7 +563,7 @@
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="{{.Path}}">
-      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark as not viewed{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed{{else}}{{if .ChangedSinceViewed}}Changed since you viewed it: mark viewed again{{else}}Mark viewed{{end}}{{end}}">{{if .IsViewed}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end}}</button>
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="{{if .IsViewed}}Mark unread{{else}}Mark as viewed{{end}}" title="{{if .IsViewed}}Viewed: tap to mark unread{{else}}{{if .ChangedSinceViewed}}Changed since you viewed it: mark viewed again{{else}}Mark viewed{{end}}{{end}}">{{if .IsViewed}}{{template "iconViewedCheck"}}{{else}}{{template "iconViewedCircle"}}{{end}}</button>
     </form>{{if .ChangedSinceViewed}}<small class="viewed-changed">changed since you viewed it</small>{{end}}
   </div>
 </li>
@@ -578,6 +617,8 @@
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.4 5.2A9.8 9.8 0 0 1 12 5c5 0 8.5 4.5 9.5 7a13 13 0 0 1-2.6 3.6M6.4 6.4C4.4 7.7 3 9.8 2.5 12c1 2.5 4.5 7 9.5 7a9.6 9.6 0 0 0 4.2-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
 === iconFile ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /><path d="M14 3v4h4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round" /></svg>
+=== iconFilter ===
+<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
 === iconFocus ===
 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" /></svg>
 === iconFolder ===
@@ -815,7 +856,7 @@
   <button type="submit" name="toggleLiveView" class="live-toggle {{if .LiveShowing}}contrast{{else}}outline contrast{{end}}" aria-pressed="{{if .LiveShowing}}true{{else}}false{{end}}" title="{{if .LiveShowing}}Back to the files{{else}}Show the live site{{end}}{{with index $.KeyHint "toggleLiveView"}} ({{.}}){{end}}">Live</button>
 </form>
 === markdownView ===
-{{with $.CurrentDiff}}  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.md-block" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
+{{with $.CurrentDiff}}  <div class="md-view" data-key="md-{{.Path}}" lvt-spy="h1, h2, h3" lvt-fx:text-select="selectText" data-surface="block">{{range $.RenderedMarkdown}}{{$bs := .StartLine}}{{$be := .EndLine}}{{$mbkey := printf "MB-%d-%d" $bs $be}}{{$mbstatus := index $.BlockDiffStatus $mbkey}}<div class="md-block{{if and (ne $.SelectionEndMax 0) (ge $.SelectionEndMax $bs) (le $.SelectionEndMax $be)}} selected{{end}}{{if $mbstatus}} md-{{$mbstatus}}{{end}}{{if index $.RowToggled $mbkey}} row-toggled{{end}}" data-key="{{$mbkey}}"{{if or (eq $.ScrollHeadingBlockKey $mbkey) (eq $.ScrollToReadKey $mbkey)}} lvt-fx:scroll="into-view"{{end}}>{{$ba := index $.BlockAnnotations $mbkey}}{{if gt $ba.Total 0}}<button type="button" class="md-block-marks" lvt-on:click="toggleRow" data-row="{{$mbkey}}" aria-label="Show or hide the annotations in this block" title="Show/hide this block's annotations">
         <span class="line-mark{{if $ba.Open}} is-open{{else}}{{if $ba.Accepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$ba.Total}}</span>
       </button>{{end}}<div class="md-rendered" tabindex="0" lvt-on:click="selectBlock" lvt-on:keydown="selectBlock" lvt-key="Enter" data-from="{{$bs}}" data-to="{{$be}}">{{.HTML}}</div>{{template "blockComments" .}}{{template "blockSuggestions" .}}</div>{{end}}</div>{{end}}
 === moreMenu ===
@@ -864,139 +905,76 @@
     </button>
   </form>
   {{end}}
-  {{if .IsMarkdown}}
-  <form method="POST">
-    <button type="submit" name="toggleRawMarkdown" class="menu-item{{if not .RawMarkdown}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">
-        {{if .RawMarkdown}}
-        {{template "iconRendered"}}
-        {{else}}
-        {{template "iconViewRaw"}}
-        {{end}}
-      </span>
-      <span class="menu-label">{{if .RawMarkdown}}Preview{{else}}View raw source{{end}}</span>
+  {{$previewable := or $.IsMarkdown $.IsHTML}}{{$raw := or (and $.IsMarkdown $.RawMarkdown) (and $.IsHTML $.RawHTML)}}
+  <form method="POST" title="{{if $previewable}}Show the rendered file{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="rendered">
+    <button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="menu-item menu-file-view{{if and $previewable (not $raw)}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $previewable (not $raw)}}true{{else}}false{{end}}" {{if not $previewable}}disabled{{end}}>
+      <span class="menu-icon">{{if and $previewable (not $raw)}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Preview{{if not $previewable}}<small class="menu-why">Only for Markdown and HTML files</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if $previewable}}Show the raw source{{else}}Only for Markdown and HTML files{{end}}"><input type="hidden" name="view" value="raw">
+    <button type="submit" name="{{if $.IsHTML}}setHTMLView{{else}}setMarkdownView{{end}}" class="menu-item menu-file-view{{if and $previewable $raw}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $previewable $raw}}true{{else}}false{{end}}" {{if not $previewable}}disabled{{end}}>
+      <span class="menu-icon">{{if and $previewable $raw}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Raw{{if not $previewable}}<small class="menu-why">Only for Markdown and HTML files</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if (not $.ShowRenderedHTML)}}Mark what changed; off shows the plain file{{else}}Not in the HTML preview{{end}}">
+    <button type="submit" name="toggleFileView" class="menu-item menu-file-view{{if and (not $.ShowRenderedHTML) (not $.FileView)}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and (not $.ShowRenderedHTML) (not $.FileView)}}true{{else}}false{{end}}" {{if not (not $.ShowRenderedHTML)}}disabled{{end}}>
+      <span class="menu-icon">{{if and (not $.ShowRenderedHTML) (not $.FileView)}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Diff{{with index $.KeyHint "toggleFileView"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not (not $.ShowRenderedHTML)}}<small class="menu-why">Not in the HTML preview</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if $.ShowsDiffRows}}Show whitespace-only changes as unchanged{{else}}Only in a diff{{end}}">
+    <button type="submit" name="toggleHideWhitespace" class="menu-item menu-file-view{{if and $.ShowsDiffRows $.HideWhitespace}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $.ShowsDiffRows $.HideWhitespace}}true{{else}}false{{end}}" {{if not $.ShowsDiffRows}}disabled{{end}}>
+      <span class="menu-icon">{{if and $.ShowsDiffRows $.HideWhitespace}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Whitespace{{if not $.ShowsDiffRows}}<small class="menu-why">Only in a diff</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if $.HasMechanical}}Fold the changes the walkthrough calls mechanical{{else}}No mechanical changes to fold{{end}}">
+    <button type="submit" name="toggleFoldMechanical" class="menu-item menu-file-view{{if and $.HasMechanical (not $.UnfoldMechanical)}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $.HasMechanical (not $.UnfoldMechanical)}}true{{else}}false{{end}}" {{if not $.HasMechanical}}disabled{{end}}>
+      <span class="menu-icon">{{if and $.HasMechanical (not $.UnfoldMechanical)}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Fold{{if not $.HasMechanical}}<small class="menu-why">No mechanical changes to fold</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if $.CanAnnotate}}Drag a box on the page to comment on that part{{else}}Only on an image or the HTML preview{{end}}">
+    <button type="submit" name="toggleRegionSelect" class="menu-item menu-file-view{{if and $.CanAnnotate $.RegionSelectArmed}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and $.CanAnnotate $.RegionSelectArmed}}true{{else}}false{{end}}" {{if not $.CanAnnotate}}disabled{{end}}>
+      <span class="menu-icon">{{if and $.CanAnnotate $.RegionSelectArmed}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">{{if $.RegionSelectArmed}}Annotating — tap to stop{{else}}Annotate{{end}}{{if not $.CanAnnotate}}<small class="menu-why">Only on an image or the HTML preview</small>{{end}}</span>
+    </button>
+  </form>
+  <form method="POST" title="{{if (gt (len $.HTMLMarkers) 0)}}Outline every annotation's box{{else}}Only on the HTML preview, once it has annotations{{end}}">
+    <button type="submit" name="toggleBoxes" class="menu-item menu-file-view{{if and (gt (len $.HTMLMarkers) 0) $.ShowBoxes}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and (gt (len $.HTMLMarkers) 0) $.ShowBoxes}}true{{else}}false{{end}}" {{if not (gt (len $.HTMLMarkers) 0)}}disabled{{end}}>
+      <span class="menu-icon">{{if and (gt (len $.HTMLMarkers) 0) $.ShowBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not (gt (len $.HTMLMarkers) 0)}}<small class="menu-why">Only on the HTML preview, once it has annotations</small>{{end}}</span>
     </button>
   </form>
   {{end}}
-  {{if .IsHTML}}
-  <form method="POST">
-    <button type="submit" name="toggleRawHTML" class="menu-item{{if not .RawHTML}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">
-        {{if .RawHTML}}
-        {{template "iconRendered"}}
-        {{else}}
-        {{template "iconViewRaw"}}
-        {{end}}
-      </span>
-      <span class="menu-label">{{if .RawHTML}}Preview{{else}}View raw source{{end}}</span>
+  {{if .LiveShowing}}
+  <form method="POST" title="{{if .RegionComments}}Outline every annotation's box on the page{{else}}No annotations on this page{{end}}">
+    <button type="submit" name="toggleBoxes" class="menu-item{{if and .RegionComments .ShowBoxes}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{if and .RegionComments .ShowBoxes}}true{{else}}false{{end}}" {{if not .RegionComments}}disabled{{end}}>
+      <span class="menu-icon">{{if and .RegionComments .ShowBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
+      <span class="menu-label">Boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not .RegionComments}}<small class="menu-why">No annotations on this page</small>{{end}}</span>
     </button>
   </form>
   {{end}}
-  {{if not .ShowRenderedHTML}}
-  <form method="POST">
-    <button type="submit" name="toggleFileView" class="menu-item{{if .FileView}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">
-        {{if .FileView}}
-        
-        {{template "iconDiff"}}
-        {{else}}
-        
-        {{template "iconFile"}}
-        {{end}}
-      </span>
-      <span class="menu-label">{{if .FileView}}Show diff{{else}}View file{{end}}</span>
-    </button>
-  </form>
-  {{end}}
-  {{end}}
-  {{if gt .CommentCount 0}}
-  <form method="POST">
-    <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem">
+  
+  {{$annOn := or (gt .CommentCount 0) .ShowAllComments}}
+  <form method="POST"{{if not $annOn}} title="No annotations yet"{{end}}>
+    <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" {{if not $annOn}}disabled{{end}}>
       <span class="menu-icon">{{template "iconComments"}}</span>
-      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-      <span class="menu-meta">{{.CommentCount}}</span>
+      <span class="menu-label">{{if .ShowAllComments}}Back{{else}}Annotations{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not $annOn}}<small class="menu-why">No annotations yet</small>{{end}}</span>
+      {{if gt .CommentCount 0}}<span class="menu-meta">{{.CommentCount}}</span>{{end}}
     </button>
   </form>
-  {{end}}
-  {{if .HasUnderstandContent}}
-  <form method="POST">
-    <button type="submit" name="toggleUnderstand" class="menu-item" role="menuitem">
+  {{$undOn := or .ShowUnderstandEntry .ShowUnderstand}}
+  <form method="POST" title="{{if $undOn}}Walk through the whole change, and quiz yourself on it{{else}}No walkthrough or quiz yet, and no agent to make one{{end}}">
+    <button type="submit" name="toggleUnderstand" class="menu-item" role="menuitem" {{if not $undOn}}disabled{{end}}>
       <span class="menu-icon">{{template "iconQuiz"}}</span>
-      <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-      <span class="menu-meta">{{.QuizScoreLabel}}</span>
+      <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{if not $undOn}}<small class="menu-why">No walkthrough or quiz yet, and no agent to make one</small>{{end}}</span>
+      {{with .QuizScoreLabel}}<span class="menu-meta">{{.}}</span>{{end}}
     </button>
   </form>
-  {{end}}
-  {{if gt .ResolvedCount 0}}
-  <form method="POST">
-    <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">
-        {{if .ShowResolved}}
-        {{template "iconCheck"}}
-        {{else}}
-        {{template "iconCircle16"}}
-        {{end}}
-      </span>
-      <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-      <span class="menu-meta">{{.ResolvedCount}}</span>
-    </button>
-  </form>
-  {{end}}
   
-  {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
-  <form method="POST">
-    <button type="submit" name="unhideAllResolved" class="menu-item" role="menuitem">
-      <span class="menu-icon">{{template "iconCircle16"}}</span>
-      <span class="menu-label">Unhide</span>
-      <span class="menu-meta">{{.HiddenResolvedCount}}</span>
-    </button>
-  </form>
-  {{end}}
-  
-  {{if gt .SuggestionCount 0}}
-  <form method="POST">
-    <button type="submit" name="toggleSuggestions" class="menu-item{{if not .HideSuggestions}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">{{template "iconSuggestion"}}</span>
-      <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}</span>
-      <span class="menu-meta">{{.SuggestionCount}}</span>
-    </button>
-  </form>
-  {{end}}{{if $.HasMechanical}}
-  
-  <form method="POST">
-    <button type="submit" name="toggleFoldMechanical" class="menu-item{{if not .UnfoldMechanical}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">{{if .UnfoldMechanical}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
-      <span class="menu-label">Fold mechanical changes</span>
-    </button>
-  </form>
-  {{end}}{{if $.ShowsDiffRows}}
-  
-  <form method="POST">
-    <button type="submit" name="toggleHideWhitespace" class="menu-item{{if .HideWhitespace}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">{{if .HideWhitespace}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
-      <span class="menu-label">Hide whitespace changes</span>
-    </button>
-  </form>
-  {{end}}
-  
-  {{if or $.HasMarks (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
-  <form method="POST">
-    <button type="submit" name="toggleMarks" class="menu-item{{if not .HideMarks}} is-on{{end}}" role="menuitem">
-      <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
-      <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}</span>
-    </button>
-  </form>
-  {{end}}
-  
-  {{if gt .HiddenSuggestionCount 0}}
-  <form method="POST">
-    <button type="submit" name="showHiddenSuggestions" class="menu-item" role="menuitem">
-      <span class="menu-icon">{{template "iconSuggestion"}}</span>
-      <span class="menu-label">Show hidden suggestions</span>
-      <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
-    </button>
-  </form>
-  {{end}}
   {{if gt .DecisionCount 0}}
   <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
   {{end}}
@@ -1023,7 +1001,7 @@
   <div class="past-eof-head">
     <span class="past-eof-title">Past the end of the file</span>
     <small class="past-eof-note">Their lines no longer exist in this file.</small>
-    {{if gt $.PastEndCount 0}}<button type="button" class="line-marks" lvt-on:click="toggleRow" data-row="eof" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.past-eof" aria-label="Show or hide the annotations past the end of the file" title="Show/hide the annotations past the end of the file"><span class="line-mark{{if $.PastEndHasOpen}} is-open{{else}}{{if $.PastEndHasAccepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$.PastEndCount}}</span></button>{{end}}
+    {{if gt $.PastEndCount 0}}<button type="button" class="line-marks" lvt-on:click="toggleRow" data-row="eof" aria-label="Show or hide the annotations past the end of the file" title="Show/hide the annotations past the end of the file"><span class="line-mark{{if $.PastEndHasOpen}} is-open{{else}}{{if $.PastEndHasAccepted}} is-accepted{{else}} is-done{{end}}{{end}}" aria-hidden="true">{{$.PastEndCount}}</span></button>{{end}}
   </div>
   {{range $.PastEndComments}}{{template "commentCardFull" .}}{{end}}
   {{range $.PastEndSuggestions}}{{template "suggestionCard" .}}{{end}}{{with $.PastEndHidden}}{{template "hiddenMarker" .}}{{end}}
@@ -1076,19 +1054,8 @@
 {{else}}{{if .LiveView}}{{else}}
 {{with .CurrentDiff}}
 <article>
-{{template "fileHeader" $}}
-  {{if $.ViewingVersion}}
-  
-  <div class="version-view-banner" role="status">
-    <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
-    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
-  </div>
-  {{end}}{{with $.SinceLookNotice}}
-  <div class="since-look" role="status">
-    <span>{{.Label}}</span>
-    <form method="POST" class="toast-dismiss-form"><button type="submit" name="diffSinceLook" class="outline">Show the full diff</button></form>
-    <form method="POST" class="toast-dismiss-form"><button type="submit" name="dismissSinceLook" class="outline">Dismiss</button></form>
-  </div>{{end}}{{with $.WalkBar}}
+<div class="file-sticky" data-key="file-sticky">
+{{template "fileHeader" $}}{{with $.WalkBar}}
   <div class="ann-nav walk-bar" role="navigation" aria-label="Walkthrough">
     <div class="walk-bar-nav">
       <form method="POST"><button type="submit" name="walkPrev" class="outline ann-nav-step" aria-label="Previous step"{{if not .HasPrev}} disabled{{end}}>{{template "iconChevronLeft"}}</button></form>
@@ -1107,18 +1074,32 @@
     <form method="POST"><button type="submit" name="navPrev" class="outline ann-nav-step" aria-label="Previous open item" title="Previous open item (p)">{{template "iconChevronLeft"}}</button></form>
     <span class="ann-nav-label">{{$.NavLabel}}</span>
     <form method="POST"><button type="submit" name="navNext" class="outline ann-nav-step" aria-label="Next open item" title="Next open item (n)">{{template "iconChevronRight"}}</button></form>
-    <div class="tb-dropdown ann-nav-kind" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="outline" aria-haspopup="menu" title="Which items to step through">{{$.NavKindLabel}}{{template "iconChevronDown"}}</button>
-      <div class="tb-dropdown-panel" role="menu" aria-label="Step through">
-        {{range $.NavKinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="setNavKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}"><span class="menu-label">{{.Label}}</span></button></form>{{end}}
-      </div>
-    </div>
+    {{template "annFilter" $}}
     <span class="ann-nav-actions">
       {{if $.HasQuiz}}<form method="POST"><input type="hidden" name="tab" value="quiz"><button type="submit" name="toggleUnderstand" class="outline" title="Open the quiz overview">Overview</button></form>{{end}}
-      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Hide this bar" title="Hide this bar">×</button></form>
+      <form method="POST"><button type="submit" name="dismissNav" class="outline" aria-label="Collapse this bar" title="Collapse this bar">×</button></form>
     </span>
   </div>
-  {{end}}{{if $.CheckStrip}}{{template "checksStrip" $}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
+  {{else}}{{if $.NavCollapsed}}
+  <div class="ann-nav is-collapsed" role="navigation" aria-label="Annotations">
+    {{template "annFilter" $}}{{if $.NavDismissed}}
+    <span class="ann-nav-actions"><form method="POST"><button type="submit" name="expandNav" class="outline" title="Show the open-items bar">Show open items</button></form></span>{{end}}
+  </div>
+  {{end}}{{end}}{{if $.CheckStrip}}{{if $.CheckStrip.Selected}}{{template "checksStrip" $}}{{end}}{{end}}
+</div>
+  {{if $.ViewingVersion}}
+  
+  <div class="version-view-banner" role="status">
+    <span>{{if $.VersionViewDiff}}Comparing a previous version against the current file (read-only).{{else}}Viewing a previous version (read-only).{{end}}</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="exitVersionView" class="refresh-btn">Back to current</button></form>
+  </div>
+  {{end}}{{with $.SinceLookNotice}}
+  <div class="since-look" role="status">
+    <span>{{.Label}}</span>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="diffSinceLook" class="outline">Show the full diff</button></form>
+    <form method="POST" class="toast-dismiss-form"><button type="submit" name="dismissSinceLook" class="outline">Dismiss</button></form>
+  </div>{{end}}
+  {{if $.CheckStrip}}{{if not $.CheckStrip.Selected}}{{template "checksStrip" $}}{{end}}{{end}}{{with $.BootCard}}{{template "bootCard" .}}{{end}}
   
   
   {{$fcs := $.FileLevelComments}}
@@ -1127,7 +1108,7 @@
     
     {{if gt $.FileHeadAnnotationCount 0}}
     <div class="file-head-badge-row">
-      <button type="button" class="line-marks" lvt-on:click="toggleRow" data-row="file" lvt-el:toggleClass:on:click="row-toggled" data-lvt-target="closest:.file-head-marks" aria-label="Show or hide this file's annotations" title="Show/hide this file's annotations"><span class="line-mark{{if $.FileHeadHasOpen}} is-open{{else}} is-done{{end}}" aria-hidden="true">{{$.FileHeadAnnotationCount}}</span></button>
+      <button type="button" class="line-marks" lvt-on:click="toggleRow" data-row="file" aria-label="Show or hide this file's annotations" title="Show/hide this file's annotations"><span class="line-mark{{if $.FileHeadHasOpen}} is-open{{else}} is-done{{end}}" aria-hidden="true">{{$.FileHeadAnnotationCount}}</span></button>
     </div>
     {{end}}
     <div class="file-head-cards">
@@ -1335,13 +1316,16 @@
 
 
 
+
+
+
 === previewCard ===
 {{with $.PreviewCard}}<div class="preview-card{{if .Box}} on-box{{if .Right}} is-right{{end}}{{end}}" data-key="preview-card-{{.Block.StartLine}}-{{.Block.EndLine}}"{{with .Box}} style="--card-top:{{.PercentBottom}};--card-left:{{.PercentX}};--card-right:{{.PercentRight}};"{{end}}>{{if eq $.SelectionEndMax 0}}<div class="preview-card-head"><button type="button" class="outline close-btn" lvt-on:click="closePreviewCard" aria-label="Close">{{template "iconClose16"}}</button></div>{{end}}{{template "blockComments" .Block}}{{template "blockSuggestions" .Block}}
           </div>{{end}}
 === processedBadge ===
 <small class="processed-badge">worked on</small>
 === questionCard ===
-{{$card := .}}{{if .Hidden}}<form method="POST" class="sg-hidden-marker question-hidden-marker" data-key="question-{{.ID}}"><input type="hidden" name="id" value="{{.ID}}"><span class="sg-hidden-label">1 hidden question</span> <button type="submit" name="showQuestion" class="sg-hide-btn">Show</button></form>{{else}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}{{if .Resolved}} is-resolved is-closed{{end}}{{if .Replaced}} is-replaced{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}"><header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>{{if .InThread}}<span class="thread-author">agent</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}{{else}}<span class="sg-label">{{template "iconQuiz"}} question</span>{{end}}{{if gt .StepCount 1}} <small class="sg-group-tag">{{.StepCount}} questions</small>{{end}}{{if not .InThread}} · <small>{{.AnchorLabel}}</small>{{end}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Replaced}} · <small class="resolved-badge">replaced</small>{{end}}{{if .Done}} · {{template "processedBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if and .Ungrounded (not .InThread)}} · <small class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ not in this diff</small>{{end}}{{if not .InThread}}<span class="sg-hide-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideQuestion" class="sg-hide-btn" title="Hide this question from view">Hide</button></form></span>{{end}}
+{{$card := .}}{{if .Hidden}}<form method="POST" class="sg-hidden-marker question-hidden-marker" data-key="question-{{.ID}}"><input type="hidden" name="id" value="{{.ID}}"><span class="sg-hidden-label">1 hidden question</span> <button type="submit" name="showQuestion" class="sg-hide-btn">Show</button></form>{{else}}<div class="question-card{{if .Sent}} is-sent{{end}}{{if .Done}} is-done{{end}}{{if .Resolved}} is-resolved is-closed{{end}}{{if .Replaced}} is-replaced{{end}}" data-key="question-{{.ID}}" id="qs-{{.ID}}"><header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>{{if eq $.NavAnchor (printf "qs:%s" .ID)}}<span class="nav-anchor" data-key="nav-{{$.NavSteps}}" lvt-fx:scroll="into-view" aria-hidden="true"></span>{{end}}{{if .InThread}}<span class="thread-author">agent</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}{{else}}<span class="sg-label">{{template "iconQuiz"}} question</span>{{end}}{{if gt .StepCount 1}} <small class="sg-group-tag">{{.StepCount}} questions</small>{{end}}{{if not .InThread}} · <small>{{.AnchorLabel}}</small>{{end}}{{if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}{{if .Replaced}} · <small class="resolved-badge">replaced</small>{{end}}{{if .Done}} · {{template "processedBadge"}}{{end}}{{if eq .QueueState "queued"}} · {{template "queuedBadge"}}{{end}}{{if and .Ungrounded (not .InThread)}} · <small class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff">⚠ not in this diff</small>{{end}}{{if not .InThread}}<span class="sg-hide-actions"><form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideQuestion" class="sg-hide-btn" title="Hide this question from view">Hide</button></form></span>{{end}}
   </header>{{if or .Sent .Resolved .Replaced}}{{if .Sent}}
   <div class="question-answer">You picked <b>{{.Answer}}</b>{{if and (not .Done) (not .Resolved)}}<form method="POST" class="question-inline"><input type="hidden" name="set" value="{{.ID}}"><button type="submit" name="changeQuestionAnswers" class="ck-link question-link">Change</button></form>{{end}}</div>{{else}}
   <p class="question-prompt">{{.FirstPrompt}}</p>{{if .Replaced}}
@@ -1376,7 +1360,7 @@
 === quizCard ===
 <div class="quiz-card{{if .Answered}} is-answered{{end}}{{if .Settled}} is-settled is-closed{{end}}" data-key="quiz-{{.ID}}" id="qc-{{.ID}}">
   
-  <div class="quiz-card-head"{{if eq $.ScrollToItemKey (printf "qz:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>
+  <div class="quiz-card-head"{{if eq $.ScrollToItemKey (printf "qz:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>{{if eq $.NavAnchor (printf "qz:%s" .ID)}}<span class="nav-anchor" data-key="nav-{{$.NavSteps}}" lvt-fx:scroll="into-view" aria-hidden="true"></span>{{end}}
     <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}
   </div>
   <p class="quiz-prompt">{{.Prompt}}</p>
@@ -1655,7 +1639,8 @@
 </div>
 {{end}}
 === suggestionCard ===
-{{$d := index $.DecisionsBySuggestion .ID}}{{$applied := index $.Applied .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}{{if or $d.Verdict $applied}} is-closed{{end}}" data-key="sg-{{.ID}}"{{if eq $.ScrollToItemKey (printf "sg:%s" .ID)}} lvt-fx:scroll="into-view"{{end}} lvt-fx:animate="fade"><header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{with .For}} · <form method="POST" class="sg-for"><input type="hidden" name="id" value="{{.}}"><button type="submit" name="jumpToComment" class="sg-for-btn" title="Part of a change your comment asked for: go to it">for your comment</button></form>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
+{{$d := index $.DecisionsBySuggestion .ID}}{{$applied := index $.Applied .ID}}{{$g := index $.SuggestionGroups .ID}}<div class="inline-suggestion{{if .AnchorOutdated}} is-outdated{{end}}{{if $g.Total}} is-grouped{{end}}{{if $d.Verdict}} is-decided sg-{{$d.Verdict}}{{end}}{{if $applied}} is-applied{{end}}{{if or $d.Verdict $applied}} is-closed{{end}}" data-key="sg-{{.ID}}"{{if eq $.ScrollToItemKey (printf "sg:%s" .ID)}} lvt-fx:scroll="into-view"{{end}} lvt-fx:animate="fade">
+  {{if eq $.NavAnchor (printf "sg:%s" .ID)}}<span class="nav-anchor" data-key="nav-{{$.NavSteps}}" lvt-fx:scroll="into-view" aria-hidden="true"></span>{{end}}<header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>{{if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>{{with .For}} · <form method="POST" class="sg-for"><input type="hidden" name="id" value="{{.}}"><button type="submit" name="jumpToComment" class="sg-for-btn" title="Part of a change your comment asked for: go to it">for your comment</button></form>{{end}}{{if .AnchorMoved}} · <small class="moved-badge">moved</small>{{end}}{{if and .AnchorOutdated (not $applied)}} · <small class="outdated-badge">outdated</small>{{end}}{{if eq $d.Verdict "accept"}} · <small class="sg-verdict-badge sg-accept">{{if $applied}}applied{{else}}accepted{{end}}</small>{{end}}{{if eq $d.Verdict "reject"}} · <small class="sg-verdict-badge sg-reject" title="{{if $d.Auto}}not chosen — you accepted another alternative for this text{{else}}rejected by you{{end}}">{{if $d.Auto}}not chosen{{else}}rejected{{end}}</small>{{end}}{{if index $.AwaitingAgent .ID}} · {{template "awaitingBadge"}}{{end}}<span class="sg-hide-actions">{{if $g.Total}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestionGroup" class="sg-hide-btn" title="Hide all {{$g.Total}} alternatives for this text">Hide all</button></form>{{end}}<form method="POST"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="hideSuggestion" class="sg-hide-btn" title="Hide this suggestion from view">Hide</button></form>
     </span>
   </header>{{if .Note}}<div class="sg-note">{{.Note}}</div>{{end}}<div class="sg-diff{{if not .ProposedText}} is-deletion{{end}}">{{if .OriginalText}}<pre class="sg-old">{{.OriginalText}}</pre>{{end}}{{if .ProposedText}}<pre class="sg-new">{{.ProposedText}}</pre>{{else}}<p class="sg-del-note">delete — accepting removes {{.LineSpan}}</p>{{end}}
   </div>{{if and .AnchorOutdated (not $applied)}}<details class="anchor-orig"><summary>⚠ the document changed here — the original text is gone</summary><pre>{{.OriginalText}}</pre></details>{{end}}{{template "thread" (index $.ThreadViews .ID)}}{{if eq $.ReplyingID .ID}}{{template "replyForm" $}}{{else}}<div class="sg-reply-open">{{template "replyButton" .}}</div>{{end}}{{if $applied}}{{if $d.Revert}}<div class="sg-actions"><small class="sg-applied-status sg-reverting">Reverting — the agent will restore the original text.</small></div>{{else}}<div class="sg-actions">
@@ -1716,44 +1701,15 @@
   
   {{if not .ExternalMode}}
   <form method="POST">
-    <button type="submit" name="openSearch" class="search-btn outline contrast" aria-label="Search files" title="Search files (⌘/Ctrl + K)">{{template "iconSearch"}}</button>
+    <button type="submit" name="openSearch" class="search-btn outline contrast" aria-label="Search files" title="Search files (⌘/Ctrl + K)">{{template "iconSearch"}}<span class="tb-word">Search</span>{{with index $.KeyHint "openSearch"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">⌘K</kbd>{{end}}</button>
   </form>
   {{end}}
   <div class="title">
     <span class="title-main">{{if .ShowAllComments}}{{else}}{{if .LiveShowing}}<button type="button" class="live-count outline" lvt-on:click="openAnnotations" title="List the live site's annotations">{{template "iconChat14"}}{{len .RegionComments}}<span class="live-count-word"> annotation{{if ne (len .RegionComments) 1}}s{{end}}</span></button>{{else}}{{if .CurrentDiff}}<span class="title-file">{{.CurrentDiff.Path}}</span>{{else}}<small>Pick a file from {{len .Files}} file{{if ne (len .Files) 1}}s{{end}}</small>{{end}}{{end}}{{end}}</span>
-  </div>{{if .CanAnnotate}}{{template "regionToggle" $}}{{end}}
+  </div>{{if and .CanAnnotate .LiveShowing}}{{template "regionToggle" $}}{{end}}
   
   <div class="toolbar-inline">
-    {{if not .LiveShowing}}<div class="tb-group tb-counters">
-      
-      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
-    </div>{{end}}
-    {{if .FileShowing}}
-    <div class="tb-group tb-toggles">
-      
-      {{if .IsMarkdown}}
-      <form method="POST" class="tb-radios" aria-label="Markdown view">
-        <label><input type="radio" name="view" value="rendered" {{if not .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Preview</label>
-        <label><input type="radio" name="view" value="raw" {{if .RawMarkdown}}checked{{end}} lvt-on:change="setMarkdownView">Raw</label>
-      </form>
-      {{end}}
-      {{if .IsHTML}}
-      <form method="POST" class="tb-radios" aria-label="HTML view">
-        <label><input type="radio" name="view" value="rendered" {{if not .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Preview</label>
-        <label><input type="radio" name="view" value="raw" {{if .RawHTML}}checked{{end}} lvt-on:change="setHTMLView">Raw</label>
-      </form>
-      {{end}}
-      
-      {{if not .ShowRenderedHTML}}
-      <form method="POST" class="tb-radios" aria-label="File view">
-        <label><input type="radio" name="view" value="diff" {{if not .FileView}}checked{{end}} lvt-on:change="setFileViewMode">Diff</label>
-        <label><input type="radio" name="view" value="file" {{if .FileView}}checked{{end}} lvt-on:change="setFileViewMode">File</label>
-      </form>
-      {{end}}
-    </div>
-    {{end}}
-    
-{{template "viewMenu" $}}
+{{template "toolbarButtons" $}}
   </div>
   
   {{if and (gt (len .Files) 1) (not .LiveShowing)}}
@@ -1783,6 +1739,34 @@
     </button>
   </form>
 </header>
+=== toolbarButtons ===
+    <div class="tb-group tb-views">
+      <form method="POST" title="{{if .FileShowing}}Focus: hide the side columns{{else}}Open a file to focus on it{{end}}">
+        <button type="submit" name="toggleFocusMode" class="tb-btn" aria-pressed="{{if .FocusMode}}true{{else}}false{{end}}" {{if not .FileShowing}}disabled{{end}}>{{template "iconFocus"}}<span class="tb-word">Focus</span>{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>
+      {{with .AnnotationTotals}}<form method="POST" title="{{if or .Open .Resolved $.ShowAllComments}}Every annotation in the review: {{.Open}} open, {{.Resolved}} resolved{{if .Outdated}}; {{.Outdated}} need re-anchoring{{end}}{{else}}No annotations yet{{end}}">
+        <button type="submit" name="toggleCommentList" class="tb-btn" aria-pressed="{{if $.ShowAllComments}}true{{else}}false{{end}}" {{if not (or .Open .Resolved $.ShowAllComments)}}disabled{{end}}>{{template "iconComments"}}<span class="tb-word">Annotations</span><span class="tb-count">{{.Open}}</span>{{if .Resolved}}<span class="tb-count-sub">+{{.Resolved}}</span>{{end}}{{if .Outdated}}<span class="tb-outdated" aria-label="{{.Outdated}} outdated">⚠{{.Outdated}}</span>{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>{{end}}
+      <form method="POST" title="{{if or .ShowUnderstandEntry .ShowUnderstand}}Walk through the whole change, and quiz yourself on it{{else}}No walkthrough or quiz yet, and no agent to make one{{end}}">
+        <button type="submit" name="toggleUnderstand" class="tb-btn" aria-pressed="{{if .ShowUnderstand}}true{{else}}false{{end}}" {{if not (or .ShowUnderstandEntry .ShowUnderstand)}}disabled{{end}}>{{template "iconQuiz"}}<span class="tb-word">Understand</span>{{with .QuizScoreLabel}}<span class="tb-count">{{.}}</span>{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>{{if .LiveShowing}}
+      <form method="POST" title="{{if .RegionComments}}Outline every annotation's box on the page{{else}}No annotations on this page{{end}}">
+        <button type="submit" name="toggleBoxes" class="tb-btn" aria-pressed="{{if .ShowBoxes}}true{{else}}false{{end}}" {{if not .RegionComments}}disabled{{end}}>{{template "iconAnnotate"}}<span class="tb-word">Boxes</span>{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>{{end}}
+    </div>
+    <div class="tb-group tb-prefs">
+      <form method="POST">
+        <button type="submit" name="cycleScheme" class="tb-btn" title="Color scheme: {{.SchemeLabel}}. Next: {{.NextSchemeLabel}}">{{template "iconPalette"}}<span class="tb-word">{{.SchemeLabel}}</span></button>
+      </form>
+      <form method="POST">
+        <button type="submit" name="cycleTheme" class="tb-btn" title="Mode: {{.ThemeModeLabel}}. Next: {{.NextThemeModeLabel}}">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}<span class="tb-word">{{.ThemeModeLabel}}</span></button>
+      </form>
+      <form method="POST">
+        <button type="submit" name="toggleKeyboardHelp" class="tb-btn" title="Keyboard shortcuts"><span class="tb-glyph" aria-hidden="true">?</span><span class="tb-word">Shortcuts</span>{{with index $.KeyHint "toggleKeyboardHelp"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">{{.}}</kbd>{{end}}</button>
+      </form>
+      <a class="tb-btn" href="/_usage" target="_blank" rel="noopener" title="Usage guide (opens a new tab)">{{template "iconBook"}}<span class="tb-word">Guide</span></a>
+    </div>
+
 === treeNode ===
 {{if .IsDir}}<li class="tree-dir" data-key="dir:{{.Path}}">
   <details data-key="{{.Path}}" lvt-ignore-attrs{{if .DefaultOpen}} open{{end}}>
@@ -1812,154 +1796,6 @@
 </section>
 === versionSummary ===
 {{if .Initial}}<span class="vs-note">Initial version — the starting point.</span>{{else}}{{if .Deleted}}<span class="vs-note">File removed at this version.</span>{{else}}{{if .Binary}}<span class="vs-note">Binary file changed.</span>{{else}}<span class="vs-stat"><span class="vs-add">+{{.Added}}</span> <span class="vs-rem">−{{.Removed}}</span></span>{{end}}{{end}}{{end}}
-=== viewMenu ===
-    <div class="tb-dropdown" lvt-el:toggleClass:on:click="open" lvt-el:removeClass:on:click-away="open">
-      <button type="button" class="contrast theme-toggle tb-dropdown-trigger" aria-haspopup="menu" title="View options — focus, color scheme &amp; mode, comment filters, help"><span class="tb-label">View</span>{{template "iconChevronDown"}}</button>
-      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
-        {{if .FileShowing}}
-        
-        <form method="POST">
-          <button type="submit" name="toggleFocusMode" class="menu-item{{if .FocusMode}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{template "iconFocus"}}</span>
-            <span class="menu-label">{{if .FocusMode}}Exit focus{{else}}Focus{{end}}{{with index $.KeyHint "toggleFocusMode"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        <form method="POST">
-          <button type="submit" name="cycleScheme" class="menu-item" role="menuitem">
-            <span class="menu-icon">{{template "iconPalette"}}</span>
-            <span class="menu-label">Scheme: {{.SchemeLabel}}</span>
-            <span class="menu-meta">{{.NextSchemeLabel}} →</span>
-          </button>
-        </form>
-        <form method="POST">
-          <button type="submit" name="cycleTheme" class="menu-item" role="menuitem">
-            <span class="menu-icon">{{if eq .ThemeMode "light"}}{{template "iconThemeLight"}}{{else}}{{if eq .ThemeMode "dark"}}{{template "iconThemeDark"}}{{else}}{{template "iconThemeSystem"}}{{end}}{{end}}</span>
-            <span class="menu-label">Mode: {{.ThemeModeLabel}}</span>
-            <span class="menu-meta">{{.NextThemeModeLabel}} →</span>
-          </button>
-        </form>
-        
-        {{if gt .CommentCount 0}}
-        <form method="POST">
-          <button type="submit" name="toggleCommentList" class="menu-item{{if .ShowAllComments}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{template "iconComments"}}</span>
-            <span class="menu-label">{{if .ShowAllComments}}Back{{else}}All comments{{end}}{{with index $.KeyHint "toggleCommentList"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{.CommentCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if .HasUnderstandContent}}
-        <form method="POST">
-          <button type="submit" name="toggleUnderstand" class="menu-item{{if .ShowUnderstand}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{template "iconQuiz"}}</span>
-            <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{.QuizScoreLabel}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if gt .ResolvedCount 0}}
-        <form method="POST">
-          <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{if .ShowResolved}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
-            <span class="menu-label">{{if .ShowResolved}}Hide resolved{{else}}Show resolved{{end}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{.ResolvedCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if and .ShowResolved (gt .HiddenResolvedCount 0)}}
-        <form method="POST">
-          <button type="submit" name="unhideAllResolved" class="menu-item" role="menuitem">
-            <span class="menu-icon">{{template "iconCircle16"}}</span>
-            <span class="menu-label">Unhide</span>
-            <span class="menu-meta">{{.HiddenResolvedCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if gt .SuggestionCount 0}}
-        <form method="POST">
-          <button type="submit" name="toggleSuggestions" class="menu-item{{if not .HideSuggestions}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{template "iconSuggestion"}}</span>
-            <span class="menu-label">{{if .HideSuggestions}}Show suggestions{{else}}Hide suggestions{{end}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-            <span class="menu-meta">{{.SuggestionCount}}</span>
-          </button>
-        </form>
-        {{end}}{{if $.HasMechanical}}
-        
-        <form method="POST">
-          <button type="submit" name="toggleFoldMechanical" class="menu-item{{if not .UnfoldMechanical}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{if .UnfoldMechanical}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
-            <span class="menu-label">Fold mechanical changes</span>
-          </button>
-        </form>
-        {{end}}{{if $.ShowsDiffRows}}
-        
-        <form method="POST">
-          <button type="submit" name="toggleHideWhitespace" class="menu-item{{if .HideWhitespace}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{if .HideWhitespace}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
-            <span class="menu-label">Hide whitespace changes</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if or $.HasMarks (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
-        <form method="POST">
-          <button type="submit" name="toggleMarks" class="menu-item{{if not .HideMarks}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{if .HideMarks}}{{template "iconCircle16"}}{{else}}{{template "iconCheck"}}{{end}}</span>
-            <span class="menu-label">{{if .HideMarks}}Show annotations{{else}}Hide annotations{{end}}{{with index $.KeyHint "toggleMarks"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-          </button>
-        </form>
-        {{end}}{{if or (and $.LiveShowing $.RegionComments) (and $.FileShowing $.HTMLMarkers)}}
-        <form method="POST">
-          <button type="submit" name="toggleBoxes" class="menu-item{{if .ShowBoxes}} is-on{{end}}" role="menuitem">
-            <span class="menu-icon">{{if .ShowBoxes}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span>
-            <span class="menu-label">Show boxes{{with index $.KeyHint "toggleBoxes"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if gt .HiddenSuggestionCount 0}}
-        <form method="POST">
-          <button type="submit" name="showHiddenSuggestions" class="menu-item" role="menuitem">
-            <span class="menu-icon">{{template "iconSuggestion"}}</span>
-            <span class="menu-label">Show hidden suggestions</span>
-            <span class="menu-meta">{{.HiddenSuggestionCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        {{if gt .DecisionCount 0}}
-        <div class="menu-info sg-decision-count">{{.DecisionCount}} suggestion decision{{if ne .DecisionCount 1}}s{{end}} recorded</div>
-        {{end}}
-        
-        {{if and (gt .OutdatedCount 0) (not .ShowAllComments)}}
-        <form method="POST">
-          <button type="submit" name="toggleCommentList" class="menu-item" role="menuitem" title="{{.OutdatedCount}} comment{{if ne .OutdatedCount 1}}s{{end}} need re-anchoring — open the list to fix">
-            <span class="menu-icon">{{template "iconWarning"}}</span>
-            <span class="menu-label">Outdated</span>
-            <span class="menu-meta">{{.OutdatedCount}}</span>
-          </button>
-        </form>
-        {{end}}
-        
-        <form method="POST">
-          <button type="submit" name="toggleKeyboardHelp" class="menu-item" role="menuitem">
-            <span class="menu-icon" aria-hidden="true">?</span>
-            <span class="menu-label">Keyboard shortcuts</span>
-          </button>
-        </form>
-        
-        <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
-          <span class="menu-icon">{{template "iconBook"}}</span>
-          <span class="menu-label">Usage guide</span>
-        </a>
-      </div>
-    </div>
 === viewerPrompts ===
 {{if and .LastDeletedComment (not .Quitting)}}
 <div class="undo-toast" role="status">

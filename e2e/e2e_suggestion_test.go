@@ -118,10 +118,11 @@ func TestE2E_Suggestions(t *testing.T) {
 		t.Fatalf("code view: want exactly 1 suggestion box, got %d", countBoxes())
 	}
 
-	// Toggle OFF via the view-menu button → the box disappears; toggle ON → returns.
+	// Toggle OFF with the file's Annotations filter (Suggestions) → the box
+	// disappears; toggle ON → returns.
 	clickToggle := func() {
+		p.viewAction("toggleSuggestions")
 		if err := chromedp.Run(p.ctx,
-			chromedp.Evaluate(`document.querySelector('button[name="toggleSuggestions"]').click()`, nil),
 			chromedp.Sleep(250*time.Millisecond),
 		); err != nil {
 			t.Fatalf("toggle suggestions (click): %v\nstderr: %s", err, p.stderr.String())

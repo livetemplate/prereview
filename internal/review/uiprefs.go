@@ -27,15 +27,13 @@ import (
 // lvt:"persist": that is session-continuity across a reconnect, not a durable
 // user preference — and Base in particular (`HEAD~3`) is meaningless across repos.
 type UIPrefs struct {
-	ShowResolved bool   `json:"show_resolved"`
-	SchemeName   string `json:"scheme_name"`
-	ThemeMode    string `json:"theme_mode"`
-	FocusMode    bool   `json:"focus_mode"`
+	SchemeName string `json:"scheme_name"`
+	ThemeMode  string `json:"theme_mode"`
+	FocusMode  bool   `json:"focus_mode"`
 	// TocCollapsed hides the desktop table-of-contents column (#137). A durable
 	// desktop reading preference like FocusMode — its per-side twin — so it lives
 	// here, not in the relaunch-wiped session store.
 	TocCollapsed bool `json:"toc_collapsed"`
-	HideMarks    bool `json:"hide_marks"`
 	FileView     bool `json:"file_view"`
 	// ShowBoxes outlines every annotation's box on the live site and the HTML
 	// preview. The key keeps its first name so saved preferences still load.
@@ -145,12 +143,10 @@ func saveUIPrefs(path string, p UIPrefs) error {
 // zeroed on a reconnect.
 func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 	p := loadUIPrefs(c.UIPrefsPath)
-	state.ShowResolved = p.ShowResolved
 	state.SchemeName = p.SchemeName
 	state.ThemeMode = p.ThemeMode
 	state.FocusMode = p.FocusMode
 	state.TocCollapsed = p.TocCollapsed
-	state.HideMarks = p.HideMarks
 	state.FileView = p.FileView
 	state.ShowBoxes = p.ShowBoxes
 	state.UnfoldMechanical = p.UnfoldMechanical
@@ -174,12 +170,10 @@ func (c *PrereviewController) applyUIPrefs(state *PrereviewState) {
 // write must not fail the toggle the user just made.
 func (c *PrereviewController) savePrefs(state PrereviewState) {
 	if err := saveUIPrefs(c.UIPrefsPath, UIPrefs{
-		ShowResolved:     state.ShowResolved,
 		SchemeName:       state.SchemeName,
 		ThemeMode:        state.ThemeMode,
 		FocusMode:        state.FocusMode,
 		TocCollapsed:     state.TocCollapsed,
-		HideMarks:        state.HideMarks,
 		FileView:         state.FileView,
 		ShowBoxes:        state.ShowBoxes,
 		UnfoldMechanical: state.UnfoldMechanical,

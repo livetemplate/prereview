@@ -171,7 +171,7 @@ func (s PrereviewState) questionCard(set QuestionSet, threads map[string][]Threa
 // questionCards is the cards for the open file's sets that stand on their own:
 // a set asked `for` a thread renders in that thread instead (ThreadViews).
 func (s PrereviewState) questionCards() []QuestionCard {
-	if s.SelectedFile == "" || len(s.QuestionSets) == 0 {
+	if s.SelectedFile == "" || len(s.QuestionSets) == 0 || !s.kindShownHere(navQuestion) {
 		return nil
 	}
 	return s.questionCardsWhere(func(set QuestionSet) bool {
@@ -195,7 +195,7 @@ func (s PrereviewState) lineQuestionCards() []QuestionCard {
 // replies, with each question set the agent asked in the thread (`ask --for`)
 // as the agent's reply. `ask` writes an agent entry naming the set, so the
 // card takes that entry's place; a set with no entry goes in by when it was
-// asked. Every file's, so the All comments view has them too.
+// asked. Every file's, so the Annotations page has them too.
 func (s PrereviewState) ThreadViews() map[string][]ThreadItem {
 	threads := s.Threads()
 	var list []QuestionCard
@@ -372,7 +372,7 @@ func (s PrereviewState) QuestionsByEndLine() map[int][]QuestionCard {
 func (s PrereviewState) FileQuestionCards() []QuestionCard {
 	var out []QuestionCard
 	for _, c := range s.questionCards() {
-		if !c.LineGrounded() && (!c.Resolved || s.ShowResolved) {
+		if !c.LineGrounded() && (!c.Resolved || s.ShowResolved()) {
 			out = append(out, c)
 		}
 	}

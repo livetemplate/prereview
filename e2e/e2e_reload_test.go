@@ -54,7 +54,7 @@ func TestE2E_ResolvedStableAcrossReloads(t *testing.T) {
 
 	// Turn Show-resolved ON (a durable pref) so the resolved comment should stay
 	// visible — this is the condition #112 needs.
-	p.openViewItem("toggleShowResolved")
+	p.viewAction("toggleShowResolved")
 	if err := chromedp.Run(p.ctx, chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery)); err != nil {
 		t.Fatalf("show resolved: %v\nstderr: %s", err, p.stderr.String())
 	}

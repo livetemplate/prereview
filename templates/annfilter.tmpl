@@ -1,0 +1,19 @@
+{{/* The Annotations filter (annfilter.go): what the open surface shows of its
+     comments, suggestions, questions and quiz cards, and what ‹ › steps through
+     there. A client-only dropdown (lvt-el toggle + click-away, like the Versions
+     panel); every row is a plain POST. Called with the root state. */}}
+{{define "annFilter"}}{{with $.AnnFilterView}}<div
+      class="tb-dropdown ann-filter"
+      lvt-el:toggleClass:on:click="open"
+      lvt-el:removeClass:on:click-away="open"
+    >
+      <button type="button" class="outline ann-filter-trigger" aria-haspopup="menu" title="Choose what shows here, and what the arrows step through">{{template "iconFilter"}}<span>{{if $.ShowAllComments}}Filter{{else}}Annotations{{end}}: {{.Label}}</span>{{template "iconChevronDown"}}</button>
+      <div class="tb-dropdown-panel ann-filter-panel" role="menu" aria-label="Annotations filter">
+        <div class="menu-heading" role="presentation">Show</div>
+        {{range .Shows}}<form method="POST"><input type="hidden" name="show" value="{{.Value}}"><button type="submit" name="setAnnShow" class="menu-item{{if .On}} is-on{{end}}" role="menuitemradio" aria-checked="{{.On}}"><span class="menu-icon">{{if .On}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span><span class="menu-label">{{.Label}}{{if eq .Value "all"}}{{with index $.KeyHint "toggleShowResolved"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{end}}</span>{{if .Count}}<span class="menu-meta">{{.Count}}</span>{{end}}</button></form>{{end}}
+        <div class="menu-heading" role="presentation">Kinds</div>
+        {{range .Kinds}}<form method="POST"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="toggleAnnKind" class="menu-item{{if .On}} is-on{{end}}" role="menuitemcheckbox" aria-checked="{{.On}}"><span class="menu-icon">{{if .On}}{{template "iconCheck"}}{{else}}{{template "iconCircle16"}}{{end}}</span><span class="menu-label">{{.Label}}{{if eq .Kind "suggestion"}}{{with index $.KeyHint "toggleSuggestions"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}{{end}}</span>{{if .Count}}<span class="menu-meta">{{.Count}}</span>{{end}}</button></form>{{end}}
+        {{if .HiddenResolved}}<form method="POST"><button type="submit" name="unhideAllResolved" class="menu-item" role="menuitem"><span class="menu-icon">{{template "iconCircle16"}}</span><span class="menu-label">Unhide resolved</span><span class="menu-meta">{{.HiddenResolved}}</span></button></form>{{end}}
+        {{if .HiddenSuggestions}}<form method="POST"><button type="submit" name="showHiddenSuggestions" class="menu-item" role="menuitem"><span class="menu-icon">{{template "iconSuggestion"}}</span><span class="menu-label">Unhide suggestions</span><span class="menu-meta">{{.HiddenSuggestions}}</span></button></form>{{end}}
+      </div>
+    </div>{{end}}{{end}}

@@ -24,7 +24,7 @@
       class="search-btn outline contrast"
       aria-label="Search files"
       title="Search files (⌘/Ctrl + K)"
-    >{{template "iconSearch"}}</button>
+    >{{template "iconSearch"}}<span class="tb-word">Search</span>{{with index $.KeyHint "openSearch"}} <kbd class="kbd-hint tb-kbd" aria-hidden="true">⌘K</kbd>{{end}}</button>
   </form>
   {{end}}
   <div class="title">
@@ -36,110 +36,15 @@
       {{- end -}}
     </span>
   </div>
-  {{- if .CanAnnotate}}{{template "regionToggle" $}}{{end}}
-  {{/* Desktop-only inline chip group. On mobile these same actions live
-       in the 3-dots overflow menu below — single source of truth, just
-       presented in the layout that fits.
-
-       Grouped into .tb-group segments (counters | view toggles) with
-       a CSS divider between them; the prev/next and Quit forms below
-       form their own groups via .tb-group-divider on first-of-group. */}}
+  {{- /* Annotate on the live site, which has no file header; a file's sits on
+       its header (fileheader.tmpl), and in the ⋯ menu on a phone. */}}
+  {{- if and .CanAnnotate .LiveShowing}}{{template "regionToggle" $}}{{end}}
+  {{/* Desktop-only toolbar buttons (hidden below 900px, where the ⋯ menu
+       carries the same actions). Only what acts on the whole review lives here,
+       each as an icon, one word and its key; the controls for one file sit on
+       that file's header (fileheader.tmpl). */}}
   <div class="toolbar-inline">
-    {{if not .LiveShowing}}<div class="tb-group tb-counters">
-      {{/* File-count status text. The "Show resolved" filter and the
-           "⚠ outdated" button used to sit here; they now live in the
-           "View ▾" dropdown below (their toggleShowResolved /
-           toggleCommentList actions are unchanged), keeping the inline
-           bar to one short text chip so it can't crop the right edge. */}}
-      <small class="auto-saved-long">{{len .Files}} files{{if gt .ChangedFilesCount 0}} · {{.ChangedFilesCount}} changed{{end}} · {{.ScopeViewedCount}}/{{.ScopeFileCount}} viewed</small>
-    </div>{{end}}
-    {{if .FileShowing}}
-    <div class="tb-group tb-toggles">
-      {{/* Native HTML radio groups for view-mode toggles. Auto-submit
-           on change via livetemplate's `lvt-on:change` (same pattern as
-           the Base picker <select> in the file drawer). Setters
-           (SetMarkdownView / SetFileViewMode) read the form's `view`
-           field — idempotent, so clicking the already-active radio is a
-           genuine no-op (vs. the old toggle action which would have
-           flipped). Browser-native radio visuals beat any custom
-           segmented control: clear "one of N" affordance, no squish
-           bugs, accent-color matches the toolbar contrast. */}}
-      {{if .IsMarkdown}}
-      <form method="POST" class="tb-radios" aria-label="Markdown view">
-        <label><input
-          type="radio"
-          name="view"
-          value="rendered"
-          {{if not .RawMarkdown}}checked{{end}}
-          lvt-on:change="setMarkdownView"
-        >Preview</label>
-        <label><input
-          type="radio"
-          name="view"
-          value="raw"
-          {{if .RawMarkdown}}checked{{end}}
-          lvt-on:change="setMarkdownView"
-        >Raw</label>
-      </form>
-      {{end}}
-      {{if .IsHTML}}
-      <form method="POST" class="tb-radios" aria-label="HTML view">
-        <label><input
-          type="radio"
-          name="view"
-          value="rendered"
-          {{if not .RawHTML}}checked{{end}}
-          lvt-on:change="setHTMLView"
-        >Preview</label>
-        <label><input
-          type="radio"
-          name="view"
-          value="raw"
-          {{if .RawHTML}}checked{{end}}
-          lvt-on:change="setHTMLView"
-        >Raw</label>
-      </form>
-      {{end}}
-      {{/* Diff / File inline radios (desktop). Shown for code, HTML-raw, and
-           Markdown (raw + preview) — in preview the Diff/File choice gates the
-           rendered change-bars (#110), matching what it does in raw. Hidden in
-           HTML preview, whose highlight is deferred (it'd be a no-op there). On
-           mobile the whole inline bar collapses into the 3-dots menu, which
-           carries the same toggle. */}}
-      {{if not .ShowRenderedHTML}}
-      <form method="POST" class="tb-radios" aria-label="File view">
-        <label><input
-          type="radio"
-          name="view"
-          value="diff"
-          {{if not .FileView}}checked{{end}}
-          lvt-on:change="setFileViewMode"
-        >Diff</label>
-        <label><input
-          type="radio"
-          name="view"
-          value="file"
-          {{if .FileView}}checked{{end}}
-          lvt-on:change="setFileViewMode"
-        >File</label>
-      </form>
-      {{end}}
-    </div>
-    {{end}}
-    {{/* "View ▾" dropdown — groups the low-frequency toolbar controls (focus,
-         color scheme/mode, comment filters, help) so the inline bar stays to a
-         few primary chips and never crops the right edge. Built on the docs'
-         client primitive (reference/client-attributes.md): the trigger toggles
-         `.open` on the wrapper (closest-match click delegation), click-away
-         removes it — NO server state, NO custom JS. The `.open` class lives only
-         client-side; prereview has no background re-render, so every morph is
-         user-initiated and coincides with a click that already closed the menu
-         (item click, click-away, or keyboard action) — hence no lvt-ignore-attrs.
-         The same six actions are mirrored in the mobile .more-menu below; this is
-         the desktop presentation (the wrapper sits in desktop-only .toolbar-inline).
-         aria-expanded is intentionally omitted: a client class-toggle can't keep
-         it in sync. */}}
-{{template "viewMenu" $}}
+{{template "toolbarButtons" $}}
   </div>
   {{/* "Comment on file" used to live here; it now sits in the file header
        (.file-head) next to the filename, which declutters the toolbar. */}}

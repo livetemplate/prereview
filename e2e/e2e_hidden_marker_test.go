@@ -2,7 +2,7 @@
 
 // End-to-end for #233: hiding a suggestion leaves a "1 hidden suggestion · Show"
 // marker where its card was, so the reviewer brings it back from the line instead of
-// the View menu. In Diff view the row also stays out of the fold that would
+// the Annotations filter. In Diff view the row also stays out of the fold that would
 // otherwise swallow it. The suggestions arrive by `prereview suggest` after the page
 // has loaded, so every render here is a live update.
 //
@@ -26,7 +26,7 @@ func TestE2E_HiddenSuggestionMarker(t *testing.T) {
 	defer cancel()
 
 	// hideAndBringBack hides card, expects a marker in scope, taps its Show, and
-	// expects the card back. It never opens the View menu.
+	// expects the card back. It never opens the Annotations filter.
 	hideAndBringBack := func(where, card, scope string) {
 		t.Helper()
 		if err := chromedp.Run(ctx,

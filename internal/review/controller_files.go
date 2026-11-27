@@ -99,7 +99,7 @@ func (c *PrereviewController) enterFile(state *PrereviewState, path string, diff
 	state.CursorKey = ""            // line cursor was for the previous file's lines
 	state.RevealFile = ""           // a search-jump's full-file reveal was for the previous file
 	state.FileDrawerOpen = false
-	// Going to a file from a full-page view (all comments, quiz, Library) means
+	// Going to a file from a full-page view (Annotations, quiz, Library) means
 	// "leave this overview, look at that file"; otherwise the file would load
 	// invisibly behind it.
 	closeFullViews(state)
@@ -190,18 +190,19 @@ func (c *PrereviewController) CloseFiles(state PrereviewState, ctx *livetemplate
 }
 
 // ToggleViewed marks the file passed via the hidden `path` input viewed, with
-// its content now, or clears the mark (#115 B3). A file that changed since it
-// was viewed is marked again with its new content. Bound to the drawer's
-// per-file button.
+// its content now, or marks it unread (#115 B3): unmarking also forgets its
+// reading progress, as Mark unread does. A file that changed since it was viewed
+// is marked again with its new content. Bound to the drawer's per-file button.
 func (c *PrereviewController) ToggleViewed(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	path := ctx.GetString("path")
 	if path == "" {
 		return state, fmt.Errorf("toggleViewed: missing path")
 	}
-	marks := loadFileMarks(c.viewedPath())
 	if state.ViewedFiles[path] {
-		delete(marks, path)
-	} else if sha := c.fileSHA(path); sha != "" {
+		return c.MarkUnread(state, ctx)
+	}
+	marks := loadFileMarks(c.viewedPath())
+	if sha := c.fileSHA(path); sha != "" {
 		marks[path] = FileMark{SHA: sha, At: time.Now().UTC()}
 		delete(state.SinceLook, path) // viewing it settles what changed since
 		c.applySinceLook(&state)

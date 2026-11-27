@@ -576,7 +576,10 @@ func (p *runningPrereview) clickFile(path string) {
 	// plus a <strong class="fh-base"> holding only the BASENAME, so any nested path
 	// ("docs/logo.png") never matched and the helper blocked forever. Root-level files
 	// happened to work because there basename == path, which is why this hid for so long.
-	if err := chromedp.Run(p.ctx,
+	// Bounded: an unbounded wait here hung a whole suite run instead of failing.
+	ctx, cancel := context.WithTimeout(p.ctx, 20*time.Second)
+	defer cancel()
+	if err := chromedp.Run(ctx,
 		chromedp.WaitVisible(
 			fmt.Sprintf(`main.viewer .file-head-name[title=%q]`, path),
 			chromedp.ByQuery),
@@ -585,29 +588,78 @@ func (p *runningPrereview) clickFile(path string) {
 	}
 }
 
-// openViewItem opens the toolbar "View ▾" overflow dropdown and fires one of
-// its panel items by button name. The trigger is clicked for real (so the
-// item's reachability through the dropdown is exercised); WaitVisible proves
-// the panel opened and holds the item; then a JS .click() fires the form submit
-// robustly — the same click also closes the panel (the wrapper's
-// lvt-el:toggleClass), which is exactly the production behaviour. The dropdown's
-// own open/close/click-away mechanics are covered by TestE2E_ToolbarViewDropdown.
-// Desktop-width only (the dropdown lives in .toolbar-inline, hidden <900px where
-// the .more-menu takes over).
-//
-// This used to retry the trigger click to survive livetemplate/client#147 — a morph
-// stripping the client-only `.open` class, closing the menu under us at ~1-in-4. That
-// is fixed in client v0.18.1 (the client now preserves lvt-el class/attr state across a
-// morph), so the single-shot open is reliable again.
-func (p *runningPrereview) openViewItem(name string) {
+// viewAction fires one of the view actions that used to live in the "View ▾"
+// menu, wherever it lives now. The filter's actions (resolved, annotations,
+// suggestions, unhide) go through the open file's Annotations filter panel;
+// the rest are buttons on the toolbar or the file header. Desktop width only:
+// below 900px the ⋯ menu carries them.
+func (p *runningPrereview) viewAction(name string) {
 	p.t.Helper()
-	itemSel := fmt.Sprintf(`.tb-dropdown-panel button[name=%q]`, name)
-	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.tb-dropdown-trigger`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.tb-dropdown.open `+itemSel, chromedp.ByQuery),
-		chromedp.Evaluate(fmt.Sprintf(`document.querySelector('.tb-dropdown-panel button[name="%s"]').click()`, name), nil),
+	layoutHas := func(class string) bool {
+		var on bool
+		_ = chromedp.Run(p.ctx, chromedp.Evaluate(`!!document.querySelector('.layout.`+class+`')`, &on))
+		return on
+	}
+	switch name {
+	case "toggleShowResolved":
+		p.clickFilterRow("setAnnShow", map[bool]string{true: "open", false: "all"}[layoutHas("show-resolved")])
+	case "toggleMarks":
+		p.clickFilterRow("setAnnShow", map[bool]string{true: "open", false: "none"}[layoutHas("marks-hidden")])
+	case "toggleSuggestions":
+		p.clickFilterRow("toggleAnnKind", "suggestion")
+	case "unhideAllResolved", "showHiddenSuggestions":
+		p.clickFilterRow(name, "")
+	default:
+		ctx, cancel := context.WithTimeout(p.ctx, 10*time.Second)
+		defer cancel()
+		sel := fmt.Sprintf(`header.bar button[name=%q], .file-head-view button[name=%q]`, name, name)
+		if err := chromedp.Run(ctx,
+			chromedp.WaitVisible(sel, chromedp.ByQuery),
+			chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q).click()`, sel), nil),
+		); err != nil {
+			p.t.Fatalf("viewAction %s: %v\nstderr: %s", name, err, p.stderr.String())
+		}
+	}
+}
+
+// armAnnotate clicks Annotate: the one on screen (the file header's on a
+// desktop, the toolbar's on the live site), else, on a phone with the ⋯ menu
+// closed, the first enabled one by script.
+func armAnnotate() chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		var ok bool
+		js := `(()=>{const all=[...document.querySelectorAll('button[name="toggleRegionSelect"]')].filter(b=>!b.disabled);const b=all.find(b=>b.offsetParent!==null)||all[0];if(!b)return false;b.click();return true})()`
+		for i := 0; i < 100; i++ {
+			if err := chromedp.Evaluate(js, &ok).Do(ctx); err != nil {
+				return err
+			}
+			if ok {
+				return nil
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		return fmt.Errorf("no visible, enabled Annotate button")
+	})
+}
+
+// clickFilterRow opens the Annotations filter and clicks the row for action;
+// with value set, the row whose form carries that value.
+func (p *runningPrereview) clickFilterRow(action, value string) {
+	p.t.Helper()
+	ctx, cancel := context.WithTimeout(p.ctx, 10*time.Second)
+	defer cancel()
+	find := `[...document.querySelectorAll('.ann-filter button[name="` + action + `"]')]`
+	if value != "" {
+		find += `.find(b=>b.form.querySelector('input[value="` + value + `"]'))`
+	} else {
+		find += `[0]`
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`.ann-filter > button`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.ann-filter.open button[name="`+action+`"]`, chromedp.ByQuery),
+		chromedp.Evaluate(find+`.click()`, nil),
 	); err != nil {
-		p.t.Fatalf("openViewItem %s: %v\nstderr: %s", name, err, p.stderr.String())
+		p.t.Fatalf("filter %s=%s: %v\nstderr: %s", action, value, err, p.stderr.String())
 	}
 }
 
@@ -1200,7 +1252,7 @@ func TestE2E_DesktopReadingSurface(t *testing.T) {
 
 	var codeFam string
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view .fh-seg button[aria-pressed="false"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
 		chromedp.Evaluate(`getComputedStyle(document.querySelector('.code .content')).fontFamily`, &codeFam),
 	); err != nil {
@@ -1899,7 +1951,7 @@ func TestE2E_AllCommentsActions(t *testing.T) {
 
 	// Cancel the edit, go back to the list — via the `a` shortcut, the same way the list is
 	// opened above. The old `.drawer-all-comments` button no longer exists (#111 removed the
-	// sidebar entry; it lives in the View menu now), so clicking it waited forever on a node
+	// sidebar entry; it is the toolbar's Annotations button now), so clicking it waited forever on a node
 	// that is never rendered.
 	if err := chromedp.Run(p.ctx,
 		chromedp.Click(`button[name='clearSelection']`, chromedp.ByQuery),
@@ -2015,7 +2067,7 @@ func TestE2E_ResolveComment(t *testing.T) {
 
 	// Toggle "Show resolved" (now in the View dropdown) → the resolved comment
 	// reappears with is-resolved.
-	p.openViewItem("toggleShowResolved")
+	p.viewAction("toggleShowResolved")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery),
 	); err != nil {
@@ -2084,7 +2136,7 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	var fvAfter bool
 	var delAfter int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view button[name="toggleFileView"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvAfter),
 		chromedp.Evaluate(delRowsVisible, &delAfter),
@@ -2102,7 +2154,7 @@ func TestE2E_FileViewToggle(t *testing.T) {
 	var fvFinal bool
 	var delFinal int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view button[name="toggleFileView"]`, chromedp.ByQuery),
 		chromedp.Sleep(200*time.Millisecond),
 		chromedp.Evaluate(`document.querySelector('.code').classList.contains('file-view')`, &fvFinal),
 		chromedp.Evaluate(delRowsVisible, &delFinal),
@@ -2185,7 +2237,7 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	// Toggle to File view: whole file, no folds, no del.
 	var fileBtns, fileFolds, fileDels int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view button[name="toggleFileView"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.code.file-view`, chromedp.ByQuery),
 		chromedp.Sleep(200*time.Millisecond),
 		chromedp.Evaluate(lineBtns, &fileBtns),
@@ -2207,7 +2259,7 @@ func TestE2E_DiffFoldVsFullFile(t *testing.T) {
 	// Toggle back to Diff view: folds return.
 	var backBtns, backFolds int
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="File view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view button[name="toggleFileView"]`, chromedp.ByQuery),
 		chromedp.Sleep(250*time.Millisecond),
 		chromedp.Evaluate(lineBtns, &backBtns),
 		chromedp.Evaluate(foldRows, &backFolds),
@@ -2505,9 +2557,9 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 		chromedp.Evaluate(`(document.querySelector('.md-rendered h1')||{}).textContent||''`, &h1Text),
 		chromedp.Evaluate(`document.querySelectorAll('.md-rendered script').length`, &scriptCount),
 		chromedp.Evaluate(`document.querySelectorAll('.code .line').length`, &lineBtns),
-		chromedp.Evaluate(`!!document.querySelector('form[aria-label="Markdown view"]')`, &hasMdRadios),
-		chromedp.Evaluate(`(document.querySelector('form[aria-label="Markdown view"] input:checked')||{}).value||''`, &checkedView),
-		chromedp.Evaluate(`!!document.querySelector('form[aria-label="File view"]')`, &hasFileRadios),
+		chromedp.Evaluate(`!!document.querySelector('.file-head-view .fh-seg button:not([disabled])')`, &hasMdRadios),
+		chromedp.Evaluate(`((document.querySelector('.file-head-view .fh-seg button[aria-pressed="true"]')||{}).form||{querySelector:()=>({})}).querySelector('input').value||''`, &checkedView),
+		chromedp.Evaluate(`!!document.querySelector('.file-head-view button[name="toggleFileView"]')`, &hasFileRadios),
 	); err != nil {
 		t.Fatalf("render-default query: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -2565,7 +2617,7 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	var rawLineBtns int
 	var rawHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view .fh-seg button[aria-pressed="false"]`, chromedp.ByQuery),
 		chromedp.Sleep(350*time.Millisecond),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &rawHasMdView),
 		chromedp.Evaluate(`document.querySelectorAll('.code .line').length`, &rawLineBtns),
@@ -2586,7 +2638,7 @@ func TestE2E_MarkdownRenderAndComment(t *testing.T) {
 	// Toggle back to rendered: comment shows under its block again.
 	var backHasMdView, backHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view .fh-seg button[aria-pressed="false"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`!!document.querySelector('.md-view')`, &backHasMdView),
 		chromedp.Evaluate(`!!document.querySelector('.md-block .inline-comment')`, &backHasComment),
@@ -2704,7 +2756,7 @@ func TestE2E_MarkdownPerRowComment(t *testing.T) {
 	// Round-trip to raw line view: the comment shows on line 15.
 	var rawHasComment bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view .fh-seg button[aria-pressed="false"]`, chromedp.ByQuery),
 		chromedp.Sleep(350*time.Millisecond),
 		chromedp.Evaluate(`!!document.querySelector('.code .inline-comment')`, &rawHasComment),
 	); err != nil {
@@ -2719,7 +2771,7 @@ func TestE2E_MarkdownPerRowComment(t *testing.T) {
 	// proving per-row anchoring rather than whole-table.
 	var underRowD bool
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="Markdown view"] input[type="radio"]:not(:checked)`, chromedp.ByQuery),
+		chromedp.Click(`.file-head-view .fh-seg button[aria-pressed="false"]`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.md-view`, chromedp.ByQuery),
 		chromedp.Evaluate(`(()=>{const b=[...document.querySelectorAll('.md-block')].find(x=>x.querySelector('.inline-comment')); return b?b.textContent.includes('authrow EDITED'):false;})()`, &underRowD),
 	); err != nil {
@@ -3803,7 +3855,7 @@ func TestE2E_FocusModeDesktop(t *testing.T) {
 	// Enable focus mode (now in the View dropdown) → class present, BOTH columns
 	// hidden. The toolbar stays visible in focus mode, so the dropdown is still
 	// reachable as the restore affordance.
-	p.openViewItem("toggleFocusMode")
+	p.viewAction("toggleFocusMode")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.layout.focus-mode`, chromedp.ByQuery),
 		chromedp.Poll(
@@ -3815,7 +3867,7 @@ func TestE2E_FocusModeDesktop(t *testing.T) {
 	}
 
 	// Disable focus mode → class gone, both columns visible again.
-	p.openViewItem("toggleFocusMode")
+	p.viewAction("toggleFocusMode")
 	if err := chromedp.Run(p.ctx,
 		chromedp.Poll(
 			`!document.querySelector('.layout.focus-mode') && getComputedStyle(document.querySelector('#files-drawer')).display !== 'none' && getComputedStyle(document.querySelector('.toc-sidebar')).display !== 'none'`,
@@ -3942,7 +3994,7 @@ func TestE2E_SidebarCollapseDesktop(t *testing.T) {
 	); err != nil {
 		t.Fatalf("re-collapse toc before focus: %v\nstderr: %s", err, p.stderr.String())
 	}
-	p.openViewItem("toggleFocusMode")
+	p.viewAction("toggleFocusMode")
 	if err := chromedp.Run(p.ctx,
 		chromedp.WaitVisible(`.layout.focus-mode`, chromedp.ByQuery),
 		chromedp.Poll(
@@ -3952,7 +4004,7 @@ func TestE2E_SidebarCollapseDesktop(t *testing.T) {
 	); err != nil {
 		t.Fatalf("focus on over collapsed toc: %v\nstderr: %s", err, p.stderr.String())
 	}
-	p.openViewItem("toggleFocusMode")
+	p.viewAction("toggleFocusMode")
 	if err := chromedp.Run(p.ctx,
 		chromedp.Poll(
 			`!document.querySelector('.layout.focus-mode')`+
@@ -4505,7 +4557,7 @@ func TestE2E_HTMLPreviewRendersAndAutoHeights(t *testing.T) {
 
 	// Toggle to Raw → iframe gone, code line view appears.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="HTML view"] input[type=radio][value="raw"]`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.file-head-view input[name="view"][value="raw"]').form.querySelector('button').click()`, nil),
 		chromedp.WaitVisible(`.code .line`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("toggle to raw: %v%s", err, diag())
@@ -4513,7 +4565,7 @@ func TestE2E_HTMLPreviewRendersAndAutoHeights(t *testing.T) {
 
 	// And back — the preview iframe returns.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`form[aria-label="HTML view"] input[type=radio][value="rendered"]`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.file-head-view input[name="view"][value="rendered"]').form.querySelector('button').click()`, nil),
 		chromedp.WaitVisible(`iframe.html-preview`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("toggle back: %v%s", err, diag())
@@ -4840,8 +4892,7 @@ func TestE2E_ImageAreaComment(t *testing.T) {
 	// when disarmed the image carries no area-select directive (so touch can
 	// pinch-zoom/scroll to examine it). Arm it → the directive attaches.
 	if err := chromedp.Run(p.ctx,
-		chromedp.WaitVisible(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
-		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		armAnnotate(),
 	); err != nil {
 		t.Fatalf("arm region toggle on image: %v\nstderr: %s", err, p.stderr.String())
 	}
@@ -5000,7 +5051,7 @@ func TestE2E_ImageZoomGating(t *testing.T) {
 
 	// 2. Arm → capture directive attaches, touch-action locks to none, hint hidden.
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		armAnnotate(),
 		chromedp.WaitVisible(`.image-with-areas.is-armed img[lvt-fx\:area-select]`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("arm region toggle: %v\nstderr: %s", err, p.stderr.String())
@@ -5014,7 +5065,7 @@ func TestE2E_ImageZoomGating(t *testing.T) {
 
 	// 3. Disarm → back to examine mode (directive gone, zoomable again).
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		armAnnotate(),
 		chromedp.WaitNotPresent(`.image-with-areas img[lvt-fx\:area-select]`, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("disarm region toggle: %v\nstderr: %s", err, p.stderr.String())
@@ -5149,13 +5200,14 @@ func TestE2E_DeepLinkHash(t *testing.T) {
 	}
 }
 
-// openUnderstandTab opens the Understand page (#115) from the file header and
-// selects tab ("walkthrough" or "quiz").
+// openUnderstandTab opens the Understand page (#115) from the toolbar and
+// selects tab ("walkthrough" or "quiz"). A script click, so it works at phone
+// width too, where the toolbar's buttons are hidden.
 func (p *runningPrereview) openUnderstandTab(tab string) {
 	p.t.Helper()
 	sel := fmt.Sprintf(`button[name="setUnderstandTab"][data-tab=%q]`, tab)
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`.quiz-trigger[name="toggleUnderstand"]`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('header.bar button[name="toggleUnderstand"]').click()`, nil),
 		chromedp.WaitVisible(sel, chromedp.ByQuery),
 		chromedp.Click(sel, chromedp.ByQuery),
 		chromedp.WaitVisible(`.understand-tabs `+sel+`.is-on`, chromedp.ByQuery),

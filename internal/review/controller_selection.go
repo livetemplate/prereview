@@ -259,6 +259,7 @@ func (c *PrereviewController) SelectText(state PrereviewState, ctx *livetemplate
 // pixel rect (image) or a source line range (rendered HTML / code).
 func (c *PrereviewController) ToggleRegionSelect(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
 	state.RegionSelectArmed = !state.RegionSelectArmed
+	state.MoreMenuOpen = false // armed from the phone's ⋯ menu: close it to draw
 	return state, nil
 }
 

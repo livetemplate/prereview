@@ -132,7 +132,7 @@ func (s PrereviewState) withThreads(items []QuizItem) []QuizItem {
 
 // QuizItems is the open file's questions: the ones its diff renders inline.
 func (s PrereviewState) QuizItems() []QuizItem {
-	if s.SelectedFile == "" {
+	if s.SelectedFile == "" || !s.kindShownHere(navQuiz) {
 		return nil
 	}
 	var out []QuizItem

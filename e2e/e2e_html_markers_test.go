@@ -18,7 +18,7 @@ import (
 // the marker ticks once the agent has worked on every open comment; tapping it
 // scrolls the block's cards into view and shows each comment's box where it
 // was drawn, each in its own colour, which its card shares; Show boxes and
-// Hide annotations apply; the marker follows the block when the preview
+// the filter's None apply; the marker follows the block when the preview
 // resizes; and each shown box's corner bar resolves, deletes and hides.
 func TestE2E_HTMLMarkers(t *testing.T) {
 	for _, vp := range []struct {
@@ -84,7 +84,7 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 				t.Errorf("the block is outlined (%dpx) although every comment on it has its own box%s", w, diag())
 			}
 
-			// Show boxes, then Hide annotations.
+			// Show boxes, then the filter's None.
 			if err := chromedp.Run(p.ctx, chromedp.KeyEvent("b")); err != nil {
 				t.Fatalf("press b: %v", err)
 			}
@@ -92,13 +92,9 @@ func TestE2E_HTMLMarkers(t *testing.T) {
 			if err := chromedp.Run(p.ctx, chromedp.KeyEvent("b")); err != nil {
 				t.Fatalf("press b again: %v", err)
 			}
-			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="toggleMarks"]').click(), true`, nil)); err != nil {
-				t.Fatalf("hide annotations: %v", err)
-			}
+			p.clickFilterRow("setAnnShow", "none")
 			waitJSDiag(t, p, `getComputedStyle(document.querySelector('`+box+`')).display === 'none'`, "Hide annotations hides the marker", diag)
-			if err := chromedp.Run(p.ctx, chromedp.Evaluate(`document.querySelector('button[name="toggleMarks"]').click(), true`, nil)); err != nil {
-				t.Fatalf("show annotations: %v", err)
-			}
+			p.clickFilterRow("setAnnShow", "open")
 			waitJSDiag(t, p, `getComputedStyle(document.querySelector('`+box+`')).display !== 'none'`, "the marker back", diag)
 
 			// The marker follows the block when the preview resizes.
@@ -144,7 +140,7 @@ func openHTMLComposer(t *testing.T, p *runningPrereview, box previewBox, what st
 	t.Helper()
 	var ir struct{ Left, Top, Width, Height float64 }
 	if err := chromedp.Run(p.ctx,
-		chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+		armAnnotate(),
 		chromedp.WaitVisible(`.region-overlay[data-surface="html"]`, chromedp.ByQuery),
 		// Let the region-select directive attach first: a drag that beats it is lost.
 		chromedp.Sleep(300*time.Millisecond),

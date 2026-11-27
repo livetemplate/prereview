@@ -768,8 +768,8 @@ header.bar {
   position: sticky; top: 0; z-index: 30;
   min-height: var(--pr-bar-h);
   display: flex; align-items: center; gap: 0.4rem;
-  /* Defensive backstop: the "View ▾" dropdown keeps the inline chip set narrow
-     enough to stay on one line, but if a future addition (or a very long
+  /* Defensive backstop: the toolbar's breakpoints (words, then keys, drop)
+     keep the buttons narrow enough to stay on one line, but if a future addition (or a very long
      filename + every conditional button) still overflows, wrap to a second row
      instead of clipping off the right under body{overflow-x:hidden}. Wrap only
      engages when even a zero-width .title can't fit the fixed buttons. */
@@ -793,27 +793,16 @@ header.bar .live-count {
   font-size: 0.8rem; line-height: 1.4; vertical-align: middle;
 }
 
-/* Inline chip group — only shown on desktop where the toolbar has room.
-   Mobile users get the same controls inside the 3-dots overflow menu. */
+/* The toolbar buttons (toolbarbuttons.tmpl) — only shown on desktop where the
+   toolbar has room. Mobile users get the same controls in the ⋯ menu. */
 .toolbar-inline { display: none; align-items: center; gap: 0; flex-shrink: 0; }
-.toolbar-inline .auto-saved-long { font-size: 0.7rem; color: var(--pico-muted-color); }
-/* .tb-group is the segment primitive: an inline cluster of chips
-   (counters or toggles). Segments are visually separated by a thin
+/* .tb-group is the segment primitive: an inline cluster of buttons. Segments are visually separated by a thin
    vertical divider — supplied as the LEFT border of every group
    except the first. Same primitive applies to the nav arrows and the
    Quit button (which sit OUTSIDE .toolbar-inline as siblings in the
    header flex row, marked with .tb-action / class="nav-prev"). */
 .tb-group { display: inline-flex; align-items: center; gap: 0.8rem; padding: 0 0.6rem; }
 .tb-group:first-child { padding-left: 0; }
-/* `<small class="auto-saved-long">` defaults to inline + baseline
-   alignment, which sits at a slightly different vertical position than
-   the surrounding inline-flex checkbox/radio labels. Force it onto the
-   same flex baseline so "19 files · 0/19 viewed" lines up cleanly with
-   the checkboxes next to it. */
-.toolbar-inline .auto-saved-long {
-  display: inline-flex; align-items: center; line-height: 1.5;
-  padding-right: 0.4rem;
-}
 .tb-group + .tb-group,
 header.bar .toolbar-inline + .nav-prev,
 header.bar .nav-next + .tb-action,
@@ -821,14 +810,6 @@ header.bar .toolbar-inline + .tb-action {
   border-left: 1px solid var(--pico-muted-border-color);
   margin-left: 0.2rem;
   padding-left: 0.7rem;
-}
-/* Tablet band (desktop inline bar shown from 900px; below it the whole bar
-   collapses into the 3-dots menu). A Markdown file carries BOTH the Preview|Raw
-   and Diff|File radio groups inline, which pushes the bar to two rows here.
-   Drop the file-count counters (secondary — always in the file drawer, and the
-   full text returns above ~1100px) so the toggles stay on one row. */
-@media (min-width: 900px) and (max-width: 1100px) {
-  .toolbar-inline .tb-counters { display: none; }
 }
 /* A .tb-action form can hold two buttons (stream mode: "Hand off →" +
    "End session"). It's a plain block form, and Pico buttons default to
@@ -844,62 +825,13 @@ header.bar .tb-action button { width: auto; }
 .nav-label { display: none; }
 header.bar .nav-prev button,
 header.bar .nav-next button { gap: 0.3rem; }
-/* Segmented switch (issue #62: "radio buttons are misaligned"). The view-mode
-   toggles (Preview/Raw, Diff/File) render as the classic two-position control:
-   a RECESSED track (inset shadow) holding a RAISED neutral thumb for the active
-   segment, so the pair reads as one switch rather than a button beside a label.
-   Equal-min-width segments keep the halves balanced ("Raw" as wide as
-   "Preview"). The radio inputs stay for state, keyboard a11y, and form submit
-   but are visually removed; label:has(:checked) raises the active thumb. */
-/* inline-grid with 1fr auto-columns makes the segments EQUAL width (each sized
-   to the widest label), so the switch is symmetric and each label sits centered
-   in its half. */
-.tb-radios {
-  display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
-  /* Match the toolbar buttons' height so the control doesn't read as a shorter
-     element in the row; the segments (labels) stretch to fill the track. */
-  min-height: 33px; align-content: stretch;
-  margin: 0; padding: 3px; gap: 2px;
-  border: 1px solid var(--border-strong); border-radius: 8px;
-  background: var(--surface-muted);
-  box-shadow: inset 0 1px 2px rgba(0, 43, 54, .07);
-}
-.tb-radios label {
-  /* Reset Pico's base `label { margin-bottom }`. Our radio sits INSIDE the
-     label, so Pico's `[type=radio]~label` margin-reset doesn't match and a ~6px
-     bottom margin lands in the grid cell; the cell then sizes to the label's
-     MARGIN box, pinning the visible pill to the top of the track — the segments
-     read as "not vertically centered" (spotted in P7 signoff). */
-  margin: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  cursor: pointer; user-select: none;
-  font-size: 0.8125rem; font-weight: 500; line-height: 1.2;
-  color: var(--text-muted); padding: 4px 12px; border-radius: 6px;
-  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
-}
-.tb-radios label:hover:not(:has(input:checked)) { color: var(--text-strong); }
-/* Active = raised neutral thumb + accent-blue label: the color cue says which
-   half is on, the raise says it's a switch. */
-.tb-radios label:has(input:checked) {
-  background: var(--surface); color: var(--accent); font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 43, 54, .16), 0 1px 3px rgba(0, 43, 54, .10);
-}
-/* Visually removed but still in the layout + tab order (keyboard a11y) and
-   directly clickable (label-forwarding handles pill clicks; direct input
-   clicks must keep working too). */
-.tb-radios input[type="radio"] {
-  position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0;
-}
-.tb-radios label:has(input:focus-visible) {
-  outline: 2px solid var(--accent); outline-offset: 1px;
-}
 /* Toolbar button hierarchy (issue #62: the bar was a wall of identical
    solid-dark `class="contrast"` pills). One coherent 3-tier system, all
    keyed off the scheme tokens and targeted by existing selectors/`name=`
    so there are no markup changes:
 
      • SECONDARY (soft surface + hairline) — the chrome controls: the
-       "View ▾" dropdown trigger, Comment on file, and Prev/Next.
+       toolbar and file-header buttons, Comment on file, and Prev/Next.
      • PRIMARY (filled accent) — Hand off, the one forward action, so the
        eye lands on it.
      • DANGER (red, ghost) — Quit / End session, which stop the server, so
@@ -907,10 +839,11 @@ header.bar .nav-next button { gap: 0.3rem; }
 
    These rules fully self-manage background + color + border at every state
    (they do NOT consume Pico's --pico-color cascade), so the old
-   chip-label-vanishes-on-hover bug cannot reappear. Toggle state
-   (Rendered/Raw, File/Diff) now lives in the segmented control above; the
-   focus / scheme / mode / help controls live in the "View ▾" dropdown. */
-header.bar .theme-toggle,
+   chip-label-vanishes-on-hover bug cannot reappear. A toggle that is on
+   (aria-pressed) takes the accent; a disabled one dims in place. */
+header.bar .tb-btn,
+.file-head-view .fh-btn,
+.file-head-view .region-toggle button,
 header.bar button[name="openFileComment"],
 header.bar .nav-prev button,
 header.bar .nav-next button {
@@ -920,11 +853,13 @@ header.bar .nav-next button {
   border-radius: var(--radius-sm);
   transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
-header.bar .theme-toggle:hover,
+header.bar .tb-btn:hover:not([disabled]),
+.file-head-view .fh-btn:hover:not([disabled]),
 header.bar button[name="openFileComment"]:hover,
 header.bar .nav-prev button:hover,
 header.bar .nav-next button:hover,
-header.bar .theme-toggle:focus-visible,
+header.bar .tb-btn:focus-visible,
+.file-head-view .fh-btn:focus-visible,
 header.bar button[name="openFileComment"]:focus-visible,
 header.bar .nav-prev button:focus-visible,
 header.bar .nav-next button:focus-visible {
@@ -932,14 +867,13 @@ header.bar .nav-next button:focus-visible {
   color: var(--pico-h1-color);
   border-color: var(--accent);
 }
-/* The "View ▾" trigger reuses .theme-toggle so it reads as icon+text like the
-   rest of the bar rather than a bare chip. inline-flex + gap lays out the label
-   and chevron; no padding override, so it inherits the standard button
-   padding/height. */
-header.bar .theme-toggle {
-  display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+header.bar .tb-btn[aria-pressed="true"],
+.file-head-view .fh-btn[aria-pressed="true"],
+.file-head-view .region-toggle button[aria-pressed="true"] {
+  border-color: var(--accent); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--soft-bg));
 }
-header.bar .theme-toggle svg { display: block; }
+header.bar .tb-btn[disabled], .file-head-view .fh-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 header.bar .tb-label { white-space: nowrap; }
 /* PRIMARY — Hand off. */
 header.bar button[name="handOff"] {
@@ -1000,6 +934,13 @@ header.bar button[name="endSession"]:focus-visible {
   box-shadow: 0 4px 14px rgba(0,0,0,.18);
   padding: 0.35rem;
   z-index: 50;
+  /* Fixed, so a menu taller than the screen can't be reached by scrolling the
+     page: it fits the space below the bar and scrolls itself. dvh tracks
+     iOS Safari's moving toolbars; vh is the fallback. */
+  max-height: calc(100vh - var(--pr-bar-h) - 0.75rem);
+  max-height: calc(100dvh - var(--pr-bar-h) - 0.75rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .more-menu.is-open { display: block; }
 .more-menu form { margin: 0; }
@@ -1015,6 +956,13 @@ header.bar button[name="endSession"]:focus-visible {
 }
 .more-menu button.menu-item:hover,
 .more-menu button.menu-item:focus { background: var(--pico-card-sectioning-background-color); }
+.more-menu button.menu-item:disabled,
+.tb-dropdown-panel button.menu-item:disabled { opacity: 0.55; cursor: default; background: none; }
+:is(.more-menu, .tb-dropdown-panel) .menu-why { display: block; font-size: 0.75rem; font-weight: 400; color: var(--pico-muted-color); }
+/* A disabled button gets no mouse events in Safari or Firefox, so its own title
+   never shows. Disabled buttons let the hover through to their form, which
+   carries the title saying why. */
+header.bar .tb-btn:disabled, .file-head .fh-btn:disabled, :is(.more-menu, .tb-dropdown-panel) button.menu-item:disabled { pointer-events: none; }
 .more-menu button.menu-item .menu-icon {
   flex: 0 0 1.2rem; display: inline-flex; align-items: center; justify-content: center;
   color: var(--pico-muted-color);
@@ -1039,7 +987,7 @@ header.bar button[name="endSession"]:focus-visible {
 }
 .more-menu-backdrop.is-open { display: block; }
 
-/* "View ▾" dropdown (desktop). Docs lvt-el client pattern: the trigger toggles
+/* Dropdowns (Queue, Checks, Versions, the Annotations filter). Docs lvt-el client pattern: the trigger toggles
    `.open` on the wrapper, click-away removes it (no server state, no JS). The
    panel is absolutely positioned under the trigger (unlike .more-menu's fixed
    placement) — see the note on .tb-dropdown-panel for why that's clip-safe. */
@@ -1158,20 +1106,6 @@ header.file-head .file-head-actions {
 }
 .version-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .version-btn:disabled { opacity: 0.5; cursor: default; }
-/* The file header's Understand button. (It once sat beside the "Ask for
-   suggestions" trigger, which #275 folded into the file comment box.) */
-.quiz-trigger {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  margin: 0; padding: 0.2rem 0.55rem; min-height: 0;
-  font-size: 0.8rem; font-weight: 500; white-space: nowrap;
-  background: var(--soft-bg); color: var(--pico-h1-color);
-  border: 1px solid var(--pico-muted-border-color); border-radius: var(--radius-sm);
-  cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
-}
-.quiz-trigger:hover, .quiz-trigger:focus-visible {
-  background: var(--soft-bg-hover); border-color: var(--accent);
-}
-.quiz-trigger svg { display: block; color: var(--accent); }
 .version-restore { color: var(--pr-del); border-color: color-mix(in srgb, var(--pr-del) 45%, transparent); }
 .version-restore:hover:not(:disabled) { background: color-mix(in srgb, var(--pr-del) 14%, transparent); }
 /* Read-only banner while viewing a historical version. */
@@ -1182,8 +1116,8 @@ header.file-head .file-head-actions {
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 6px; font-size: 0.85rem;
 }
-.paused-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
-.agent-stall-prompt { background: color-mix(in srgb, var(--pr-del) 12%, transparent); }
+.paused-prompt { background: color-mix(in srgb, var(--pr-del) 12%, var(--surface)); }
+.agent-stall-prompt { background: color-mix(in srgb, var(--pr-del) 12%, var(--surface)); }
 /* Pause/resume toggle (#119): the paused state is visually distinct so it's
    obvious the agent is held. Used by the --external bar's inline Pause button
    (repo-mode's Pause moved into the Queue dropdown as .queue-pause-btn). */
@@ -1496,7 +1430,10 @@ dialog#files-drawer .drawer-head {
   border-bottom: 1px solid var(--pico-muted-border-color);
   gap: 0.5rem;
 }
-dialog#files-drawer .drawer-head strong { font-size: 0.85rem; color: var(--pico-muted-color); }
+dialog#files-drawer .drawer-head strong { font-size: 0.85rem; color: var(--pico-h1-color); }
+.drawer-stats { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
+.drawer-stats small { font-size: 0.78rem; color: var(--pico-muted-color); }
+.drawer-stats progress { height: 4px; margin: 0.25rem 0 0; }
 dialog#files-drawer .drawer-head form { margin: 0; }
 dialog#files-drawer .close-btn {
   margin: 0; padding: 0.25rem 0.4rem;
@@ -1610,10 +1547,14 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
   margin-bottom: 0.5rem; position: sticky; top: 0;
   background: var(--pico-card-background-color); z-index: 5;
 }
-.all-comments .ac-head button { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; }
-.all-comments .ac-resolve-all { margin: 0 0.4rem 0 auto; } /* beside Back, not centred */
+/* Every header button, the filter's trigger included, is one compact size. */
+.all-comments .ac-head > form button,
+.all-comments .ac-head .ac-filter button,
+.all-comments .ac-head .ann-filter-trigger { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; min-height: 30px; line-height: 1.2; }
+.all-comments .ac-resolve-all { margin: 0 0.4rem 0 0; } /* beside Back, not centred */
 .all-comments .ac-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-.all-comments .ac-item { margin: 0; }
+.all-comments .ac-item,
+.all-comments .ac-row { margin: 0; }
 .all-comments .ac-jump { margin: 0; }
 .all-comments .ac-jump-btn {
   display: block; width: 100%; padding: 0.5rem 0.6rem; margin: 0;
@@ -1623,22 +1564,33 @@ main.viewer > .all-comments { min-height: 100%; display: flex; flex-direction: c
   transition: background 100ms ease;
 }
 .all-comments .ac-jump-btn:hover { background: #c7daf3; }
-.all-comments .ac-item.is-resolved .ac-jump-btn {
+.all-comments .ac-item.is-resolved .ac-jump-btn,
+.all-comments .ac-row.is-settled .ac-jump-btn {
   background: var(--pico-card-sectioning-background-color, #f4f4f4);
   border-color: var(--pico-muted-color); opacity: 0.7;
 }
 .all-comments .ac-item.is-resolved .ac-body { text-decoration: line-through; text-decoration-color: var(--pico-muted-color); }
 .all-comments .ac-where { font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.25rem; }
+/* A suggestion, question or quiz row names its kind; a comment's card needs no tag. */
+.all-comments .ac-kind { font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
 .all-comments .ac-body { white-space: pre-wrap; word-break: break-word; }
-/* All / Annotations filter: beside the title, or on its own row on a phone. */
+/* The Annotations filter and the Live site chip sit beside the title; the chip goes to its own row on a phone. */
 .all-comments .ac-head { flex-wrap: wrap; gap: 0.4rem; }
 .all-comments .ac-head strong,
 .all-comments .ac-head button { white-space: nowrap; }
-.all-comments .ac-filter { display: flex; gap: 0.3rem; margin: 0 auto 0 0.6rem; }
-.all-comments .ac-filter ~ .ac-resolve-all { margin-left: 0; }
+.all-comments .ac-head .ann-filter { margin: 0 auto 0 0.6rem; }
+.all-comments .ac-head .ann-filter:has(+ .ac-filter) { margin-right: 0; }
+.all-comments .ac-filter { display: flex; gap: 0.3rem; margin: 0 auto 0 0.4rem; }
+/* On a phone the header is three rows: the title, with Resolve all and Back
+   on the right; the filter; then the Live site chips. The ::before is the
+   break after Back. */
 @media (max-width: 600px) {
-  .all-comments .ac-filter { order: 1; flex-basis: 100%; margin: 0; }
-  .all-comments .ac-filter ~ .ac-resolve-all { margin-left: auto; }
+  .all-comments .ac-head::before { content: ""; order: 1; flex-basis: 100%; height: 0; }
+  .all-comments .ac-head > :is(.ac-resolve-all, form:last-child) { order: 0; margin-left: auto; }
+  .all-comments .ac-head > .ac-resolve-all + form:last-child { margin-left: 0; }
+  .all-comments .ac-head .ann-filter,
+  .all-comments .ac-head .ann-filter:has(+ .ac-filter) { order: 2; margin: 0 auto 0 0; }
+  .all-comments .ac-filter { order: 3; flex-basis: 100%; margin: 0; }
 }
 /* The card a marker tap opened. */
 .all-comments .ac-item.is-target .ac-jump-btn { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -1838,7 +1790,7 @@ main.viewer > article { margin: 0; padding: 0; min-width: 0; max-width: 100%; }
 /* `main.viewer > article > header` beats Pico's `article > header` rules
    so our explicit padding isn't dropped — the filename would otherwise
    be clipped at the viewport edge with no margin. */
-main.viewer > article > header.file-head {
+main.viewer > article > .file-sticky > header.file-head {
   /* Pico CSS sets a negative margin on `article > header` to make the
      header bleed to the article's edges (assuming the article has padding).
      Our article has no padding, so we need margin: 0 explicitly — otherwise
@@ -1855,20 +1807,40 @@ main.viewer > article > header.file-head {
   padding: 0.55rem 0.75rem;
   background: var(--pico-card-background-color);
   border-bottom: 1px solid var(--pico-muted-border-color);
-  position: sticky; top: 0; z-index: 5;
   font-size: 0.85rem;
 }
+/* The file header and the bars under it (walkthrough, open items, a selected
+   check) stick as ONE group, so they stack at whatever height the header wraps
+   to; each sticking on its own at top:0 let a later bar cover the header. */
+main.viewer > article > .file-sticky {
+  position: sticky; top: 0; z-index: 7;
+  background: var(--pico-card-background-color);
+}
+@media (min-width: 900px) {
+  .file-sticky > .ann-nav, .file-sticky > .ck-strip:not(.is-idle) { position: static; }
+}
+/* A phone keeps the old stacking: its header holds no view controls (they're in
+   the ⋯ menu), and a stuck header plus the bar would cost too much reading
+   room, so the group dissolves and the bar sticks over the header as before. */
+@media (max-width: 899px) {
+  main.viewer > article > .file-sticky { display: contents; }
+  main.viewer > article > .file-sticky > header.file-head { position: sticky; top: 0; z-index: 5; }
+  /* The filter bar below sticks above the header (z-index 7), so a menu opened
+     from the header (Checks, Versions) would open under it. Lift the header
+     while one is open. */
+  main.viewer > article > .file-sticky > header.file-head:has(.tb-dropdown.open) { z-index: 8; }
+}
 /* Basename: bold, one line, and last to give up space (it identifies the file). */
-main.viewer > article > header.file-head .fh-base {
+main.viewer > article > .file-sticky > header.file-head .fh-base {
   font-size: 0.9rem; padding-left: 0; flex: 0 1 auto; min-width: 3ch;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* Directory prefix: muted, and the FIRST to truncate when the header is tight. */
-main.viewer > article > header.file-head .fh-dir {
+main.viewer > article > .file-sticky > header.file-head .fh-dir {
   color: var(--pico-muted-color); flex: 0 1 auto; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-main.viewer > article > header.file-head small { color: var(--pico-muted-color); font-size: 0.75rem; margin-left: 0.4rem; white-space: nowrap; }
+main.viewer > article > .file-sticky > header.file-head small { color: var(--pico-muted-color); font-size: 0.75rem; margin-left: 0.4rem; white-space: nowrap; }
 /* "Comment on file" lives in the sticky file header (moved out of the toolbar).
    Left group is the filename (+ note); the button is pushed right by the
    header's space-between. Secondary-button look, matching the bar's chrome
@@ -1899,7 +1871,6 @@ header.file-head .file-head-comment button:focus-visible {
 header.file-head .file-head-comment button svg { display: block; }
 .file-head-comment-label { display: none; }
 .versions-trigger-label { display: none; }
-.quiz-trigger-label { display: none; }
 .checks-trigger-label { display: none; }
 
 /* Diff viewer container — was <pre> but that preserves whitespace which
@@ -2076,7 +2047,7 @@ header.file-head .file-head-comment button svg { display: block; }
   display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.28rem;
   margin: 0; padding: 0; border: 0; background: none; cursor: pointer;
 }
-/* #151 review note: "Hide annotations" (marks-hidden, via the overflow menu) and
+/* #151 review note: the Annotations filter's None (marks-hidden) and
    focus mode both hide the per-line count badges AND their inline cards in the diff,
    so the reviewer reads the raw code clean. Scoped to .code so it never blanks the
    all-comments overview or the md/html block-comment views (which reuse
@@ -2322,7 +2293,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 /* ===== Keyboard-shortcuts help overlay =====
    Centered modal (works on desktop + mobile), driven by KeyHelpOpen. Reuses
    the toc-backdrop scrim pattern; the panel itself is a centered card rather
-   than the TOC's edge slide-in, since it's also opened from the View dropdown. */
+   than the TOC's edge slide-in, since it's also opened from the toolbar. */
 .kbd-help-backdrop { position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, 0.35); display: none; }
 .kbd-help-backdrop.is-open { display: block; }
 .kbd-help-modal {
@@ -3152,7 +3123,7 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   position: sticky; bottom: 0;
   margin: 0.4rem 0.4rem 0.2rem; padding: 0.4rem 0.6rem;
   display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-  background: var(--pr-del-bg); color: var(--pr-del);
+  background: linear-gradient(var(--pr-del-bg), var(--pr-del-bg)), var(--surface); color: var(--pr-del); /* solid: it floats over the code */
   border: 1px solid var(--pr-del); border-radius: 4px;
   font-size: 0.8rem; box-shadow: 0 -2px 8px rgba(0,0,0,.08); z-index: 8;
 }
@@ -3295,7 +3266,9 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   max-width: calc(100vw - 1.5rem);
   display: inline-flex; align-items: center; gap: 0.5rem;
   padding: 0.4rem 0.5rem 0.4rem 0.7rem;
-  background: var(--pr-add-bg); color: var(--pr-add);
+  /* The tint is translucent (it is the diff's added-line colour), so it sits
+     on the page colour: a toast floats over busy content and must stay solid. */
+  background: linear-gradient(var(--pr-add-bg), var(--pr-add-bg)), var(--surface); color: var(--pr-add);
   border: 1px solid var(--pr-add); border-radius: 6px;
   font-size: 0.8rem; line-height: 1.3;
   box-shadow: 0 2px 8px rgba(0,0,0,.1);
@@ -3416,12 +3389,10 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
   dialog#files-drawer[data-resizing] .resize-handle::after {
     background: #54aeff;
   }
-  /* The drawer is permanent on desktop — the whole `.drawer-head` is
-     mobile-only chrome: the "19 files" count is already in the toolbar's
-     `19 files · 0/19 viewed`, and the close X has nowhere meaningful to
-     "close" to. Mobile keeps both (count + exit affordance for the
-     overlay). */
-  dialog#files-drawer .drawer-head { display: none; }
+  /* The drawer is permanent on desktop: the head keeps the file counts (the
+     toolbar no longer carries them) but drops the close X, which has nowhere
+     to close to. */
+  dialog#files-drawer .drawer-head .close-btn { display: none; }
   /* Sidebar (file drawer) had NO desktop bump — the file list was the
      mobile 0.85rem on a big screen. Lift it to ≈ body size; keep it a
      touch below the toolbar (dense list vs chrome). */
@@ -3483,12 +3454,11 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      (issue: desktop prose too large). 16px is exactly that comfortable
      size. The generous 1.75 leading still gives prose room to breathe. */
   .md-rendered { font-size: 1rem; line-height: 1.75; }
-  main.viewer > article > header.file-head strong { font-size: 1.05rem; }
-  main.viewer > article > header.file-head small { font-size: 0.85rem; }
+  main.viewer > article > .file-sticky > header.file-head strong { font-size: 1.05rem; }
+  main.viewer > article > .file-sticky > header.file-head small { font-size: 0.85rem; }
   /* Desktop has room for the "Comment on file" text label; mobile stays icon-only. */
   .file-head-comment-label { display: inline; }
   .versions-trigger-label { display: inline; }
-  .quiz-trigger-label { display: inline; }
   .checks-trigger-label { display: inline; }
   /* The filename already headlines the diff (.file-head) and the
      all-comments view (.ac-head). Showing it again in the top bar is
@@ -3507,7 +3477,6 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
      the visible label is the explicit affordance per issue #11. */
   header.bar .nav-label { display: inline; font-weight: 500; font-size: 0.95rem; }
   .toolbar-inline { gap: 0.6rem; }
-  .toolbar-inline .auto-saved-long { font-size: 1rem; }
   /* Desktop has room — render chips inline and hide the overflow menu. */
   .toolbar-inline { display: inline-flex; }
   .more-trigger { display: none; }
@@ -3702,11 +3671,6 @@ main.viewer > .quiz { min-height: 100%; display: flex; flex-direction: column; }
 }
 .quiz .quiz-empty p { margin: 0; }
 
-/* "Quiz requested…" — the control while a request is queued. Not a button: there
-   is nothing useful a second tap could do, and the first version's silence is
-   exactly what made a real reviewer tap twice and queue a duplicate. */
-.quiz-trigger.is-pending { opacity: 0.6; cursor: default; }
-.quiz-trigger.is-pending svg { color: var(--pico-muted-color); }
 /* #115 the Understand page: tabs over the quiz page's frame, then the walkthrough. */
 .understand-tabs { margin: 0 0.5rem 0.75rem; }
 .walk-summary { margin: 0 0.5rem 0.75rem; }
@@ -3835,8 +3799,14 @@ dialog#files-drawer .file-row > .viewed-changed {
 .ann-nav button[disabled] { opacity: 0.35; }
 .ann-nav-label { font-size: 0.78rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ann-nav ~ .ck-strip:not(.is-idle) { top: 2.2rem; } /* --ann-nav-h */
-.ann-nav-kind > button { display: inline-flex; align-items: center; gap: 0.2rem; }
-.ann-nav-kind .tb-dropdown-panel { left: 0; right: auto; min-width: 10rem; } /* opens rightward: the chip sits left of centre */
+.ann-filter-trigger { display: inline-flex; align-items: center; gap: 0.3rem; }
+.ann-filter-trigger svg { display: block; flex-shrink: 0; }
+.ann-filter .tb-dropdown-panel { left: 0; right: auto; min-width: 15rem; } /* opens rightward: the chip sits left of centre */
+.ann-filter-panel .menu-heading {
+  padding: 0.4rem 0.75rem 0.15rem; font-size: 0.68rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--pico-muted-color);
+}
+.ann-filter-panel .menu-heading:not(:first-child) { border-top: 1px solid var(--pico-muted-border-color); margin-top: 0.25rem; padding-top: 0.5rem; }
 .ann-nav-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 /* #115 A3: the walkthrough's step bar, an .ann-nav variant. After the .ann-nav rules
    on purpose: at equal specificity they would win (fixed height, min-height: 0). */
@@ -4383,3 +4353,66 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
    and taps. */
 .live-wrap.live-hidden { display: none; }
 header.bar .live-toggle { margin: 0; }
+
+/* Desktop toolbar buttons (toolbarbuttons.tmpl): icon + one word + key, the
+   chrome's secondary look. A toggle that is on (aria-pressed) takes the accent;
+   a disabled one stays in place, dimmed, with its title saying why. */
+header.bar .tb-group { display: inline-flex; align-items: center; gap: 0.35rem; }
+header.bar .tb-group form { margin: 0; }
+header.bar .tb-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;
+  width: auto; margin: 0; text-decoration: none;
+  padding: 0.2rem 0.65rem; font-size: 0.9rem; min-height: 33px; line-height: 1.2;
+}
+header.bar .tb-btn svg { display: block; flex-shrink: 0; }
+header.bar .tb-glyph { font-weight: 700; width: 16px; text-align: center; }
+header.bar .tb-count { font-size: 0.75rem; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+header.bar .tb-count-sub { font-size: 0.75rem; color: var(--pico-muted-color); font-variant-numeric: tabular-nums; }
+header.bar .tb-outdated { font-size: 0.75rem; color: var(--mark); }
+header.bar .tb-kbd { font-size: 0.7rem; }
+/* The search button is icon-only on a phone; desktop adds its word and key. */
+header.bar .search-btn .tb-word, header.bar .search-btn .tb-kbd { display: none; }
+@media (min-width: 900px) {
+  header.bar .search-btn { display: inline-flex; align-items: center; gap: 0.35rem; width: auto; }
+  header.bar .search-btn .tb-word, header.bar .search-btn .tb-kbd { display: inline; }
+}
+/* Narrower desktops drop words, then keys; icons, counts and titles stay. The
+   preference buttons (scheme, mode, Shortcuts, Guide) go icon-only first. */
+@media (min-width: 900px) and (max-width: 1599px) {
+  header.bar .tb-prefs .tb-word { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1279px) {
+  header.bar .tb-kbd { display: none; }
+}
+/* The live site's bar also carries Live, Annotate, Boxes and the annotation
+   count, which must stay whole: drop keys and words a step earlier there. */
+@media (min-width: 900px) and (max-width: 1439px) {
+  header.bar:has(.live-count) .tb-kbd, header.bar:has(.live-count) .tb-views .tb-word { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1099px) {
+  header.bar .tb-btn .tb-word, header.bar .search-btn .tb-word { display: none; }
+}
+
+/* The file header's view controls (fileheader.tmpl): desktop only; the ⋯ menu
+   carries them on a phone. Same pressed/disabled language as the toolbar. */
+.file-head { flex-wrap: wrap; row-gap: 0.3rem; }
+.file-head-view { display: none; }
+@media (min-width: 900px) {
+  .file-head-view { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: auto; flex-wrap: wrap; }
+}
+.file-head-view form { margin: 0; }
+.file-head-view .fh-seg { display: inline-flex; }
+.file-head-view .fh-seg form + form .fh-btn { border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.file-head-view .fh-seg form:first-child .fh-btn { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.file-head-view .fh-btn, .file-head-view .region-toggle button {
+  display: inline-flex; align-items: center; gap: 0.25rem; width: auto; margin: 0; white-space: nowrap;
+  padding: 0.15rem 0.55rem; font-size: 0.8rem; min-height: 0; line-height: 1.3;
+}
+.file-head-view .fh-btn svg { display: block; }
+@media (min-width: 900px) {
+  header.file-head .file-head-view + .file-head-actions { margin-left: 0; }
+}
+
+/* The stepper's scroll anchor (NavAnchor): out of flow, so it adds no space or
+   flex gap to the card it marks. */
+.nav-anchor { position: absolute; width: 0; height: 0; overflow: hidden; }

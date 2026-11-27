@@ -88,6 +88,14 @@
     lvt-key="s"
     lvt-mod:skip-when-typing
   ></span><span
+    lvt-on:window:keydown="toggleFileView"
+    lvt-key="d"
+    lvt-mod:skip-when-typing
+  ></span><span
+    lvt-on:window:keydown="markUnread"
+    lvt-key="u"
+    lvt-mod:skip-when-typing
+  ></span><span
     lvt-on:window:keydown="toggleFocusMode"
     lvt-key="."
     lvt-mod:skip-when-typing
@@ -130,7 +138,7 @@
   /><path
     d="M16 16l5 5"
     stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"
-  /></svg></button>
+  /></svg><span class="tb-word">Search</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">⌘K</kbd></button>
   </form>
   
   <div class="title">
@@ -138,110 +146,89 @@
   </div>
   
   <div class="toolbar-inline">
-    <div class="tb-group tb-counters">
-      
-      <small class="auto-saved-long">2 files · 2 changed · 0/2 viewed</small>
-    </div>
-    
-    
-    <div
-      class="tb-dropdown"
-      lvt-el:toggleClass:on:click="open"
-      lvt-el:removeClass:on:click-away="open"
-    >
-      <button
-        type="button"
-        class="contrast theme-toggle tb-dropdown-trigger"
-        aria-haspopup="menu"
-        title="View options — focus, color scheme &amp; mode, comment filters, help"
-      ><span class="tb-label">View</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path
-  d="M6 9l6 6 6-6"
+    <div class="tb-group tb-views">
+      <form method="POST" title="Open a file to focus on it">
+        <button
+          type="submit"
+          name="toggleFocusMode"
+          class="tb-btn"
+          aria-pressed="false"
+          disabled
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+  d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"
   stroke="currentColor"
-  stroke-width="2"
+  stroke-width="1.8"
   stroke-linecap="round"
   stroke-linejoin="round"
   fill="none"
-/></svg></button>
-      <div class="tb-dropdown-panel" role="menu" aria-label="View options">
-        
-        
-        <form method="POST">
-          <button
-            type="submit"
-            name="cycleScheme"
-            class="menu-item"
-            role="menuitem"
-          >
-            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+/></svg><span class="tb-word">Focus</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">.</kbd></button>
+      </form>
+      <form method="POST" title="No annotations yet">
+        <button
+          type="submit"
+          name="toggleCommentList"
+          class="tb-btn"
+          aria-pressed="false"
+          disabled
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg><span class="tb-word">Annotations</span><span class="tb-count">0</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">a</kbd></button>
+      </form>
+      <form method="POST" title="No walkthrough or quiz yet, and no agent to make one">
+        <button
+          type="submit"
+          name="toggleUnderstand"
+          class="tb-btn"
+          aria-pressed="false"
+          disabled
+        ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span class="tb-word">Understand</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">z</kbd></button>
+      </form>
+    </div>
+    <div class="tb-group tb-prefs">
+      <form method="POST">
+        <button
+          type="submit"
+          name="cycleScheme"
+          class="tb-btn"
+          title="Color scheme: Solarized. Next: Gruvbox"
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
   d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.8 1.8-1.8H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z"
   stroke="currentColor"
   stroke-width="1.8"
   fill="none"
   stroke-linejoin="round"
-/><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg></span>
-            <span class="menu-label">Scheme: Solarized</span>
-            <span class="menu-meta">Gruvbox →</span>
-          </button>
-        </form>
-        <form method="POST">
-          <button
-            type="submit"
-            name="cycleTheme"
-            class="menu-item"
-            role="menuitem"
-          >
-            <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
+/><circle cx="7.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="12" cy="8" r="1.2" fill="currentColor"/><circle cx="16.5" cy="11.5" r="1.2" fill="currentColor"/></svg><span class="tb-word">Solarized</span></button>
+      </form>
+      <form method="POST">
+        <button
+          type="submit"
+          name="cycleTheme"
+          class="tb-btn"
+          title="Mode: System. Next: Light"
+        ><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle
   cx="12"
   cy="12"
   r="8.5"
   stroke="currentColor"
   stroke-width="1.8"
   fill="none"
-/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg></span>
-            <span class="menu-label">Mode: System</span>
-            <span class="menu-meta">Light →</span>
-          </button>
-        </form>
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        <form method="POST">
-          <button
-            type="submit"
-            name="toggleKeyboardHelp"
-            class="menu-item"
-            role="menuitem"
-          >
-            <span class="menu-icon" aria-hidden="true">?</span>
-            <span class="menu-label">Keyboard shortcuts</span>
-          </button>
-        </form>
-        
-        <a class="menu-item" role="menuitem" href="/_usage" target="_blank" rel="noopener">
-          <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg><span class="tb-word">System</span></button>
+      </form>
+      <form method="POST">
+        <button
+          type="submit"
+          name="toggleKeyboardHelp"
+          class="tb-btn"
+          title="Keyboard shortcuts"
+        ><span class="tb-glyph" aria-hidden="true">?</span><span class="tb-word">Shortcuts</span> <kbd class="kbd-hint tb-kbd" aria-hidden="true">?</kbd></button>
+      </form>
+      <a class="tb-btn" href="/_usage" target="_blank" rel="noopener" title="Usage guide (opens a new tab)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2z"
     stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
-  /></svg></span>
-          <span class="menu-label">Usage guide</span>
-        </a>
-      </div>
+  /></svg><span class="tb-word">Guide</span></a>
     </div>
+
   </div>
   
   
@@ -400,13 +387,36 @@
   
   
   
+  <form method="POST" title="No annotations yet">
+    <button
+      type="submit"
+      name="toggleCommentList"
+      class="menu-item"
+      role="menuitem"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+    d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
+    stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"
+  /></svg></span>
+      <span class="menu-label">Annotations <kbd class="kbd-hint" aria-hidden="true">a</kbd><small class="menu-why">No annotations yet</small></span>
+      
+    </button>
+  </form>
   
-  
-  
-  
-  
-  
-  
+  <form method="POST" title="No walkthrough or quiz yet, and no agent to make one">
+    <button
+      type="submit"
+      name="toggleUnderstand"
+      class="menu-item"
+      role="menuitem"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
+      <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd><small class="menu-why">No walkthrough or quiz yet, and no agent to make one</small></span>
+      
+    </button>
+  </form>
   
   
   
@@ -486,7 +496,11 @@
     </form>
   </div>
   <div class="drawer-head">
-    <strong>2 files</strong>
+    <div class="drawer-stats">
+      <strong>2 files · 2 changed</strong>
+      <small>0 of 2 viewed</small>
+      <progress class="drawer-viewed" value="0" max="2" aria-label="Files viewed"></progress>
+    </div>
     <form method="POST">
       <button
         type="submit"
@@ -725,10 +739,12 @@
     <div class="kbd-row"><dt><kbd>t</kbd></dt><dd>Toggle table of contents</dd></div>
     <div class="kbd-row"><dt><kbd>⌘/Ctrl &#43; K</kbd></dt><dd>Search files</dd></div>
     <div class="kbd-row"><dt><kbd>b</kbd></dt><dd>Show / hide annotation boxes</dd></div>
-    <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All comments</dd></div>
+    <div class="kbd-row"><dt><kbd>a</kbd></dt><dd>All annotations</dd></div>
     <div class="kbd-row"><dt><kbd>z</kbd></dt><dd>Understand this change</dd></div>
-    <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved comments</dd></div>
-    <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions</dd></div>
+    <div class="kbd-row"><dt><kbd>r</kbd></dt><dd>Show / hide resolved annotations here</dd></div>
+    <div class="kbd-row"><dt><kbd>s</kbd></dt><dd>Show / hide suggestions here</dd></div>
+    <div class="kbd-row"><dt><kbd>d</kbd></dt><dd>Diff: mark changes, or show the plain file</dd></div>
+    <div class="kbd-row"><dt><kbd>u</kbd></dt><dd>Mark this file unread</dd></div>
     <div class="kbd-row"><dt><kbd>.</kbd></dt><dd>Focus mode (hide side columns)</dd></div>
     <div class="kbd-row"><dt><kbd>?</kbd></dt><dd>Keyboard shortcuts</dd></div>
     <div class="kbd-row"><dt><kbd>Esc</kbd></dt><dd>Cancel / close</dd></div>

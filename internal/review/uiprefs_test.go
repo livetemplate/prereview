@@ -21,13 +21,12 @@ func TestUIPrefsRoundTrip(t *testing.T) {
 	}
 
 	want := UIPrefs{
-		ShowResolved: true,
-		SchemeName:   "gruvbox",
-		ThemeMode:    "dark",
-		FocusMode:    true,
-		FileView:     true,
-		RawMarkdown:  true,
-		RawHTML:      true,
+		SchemeName:  "gruvbox",
+		ThemeMode:   "dark",
+		FocusMode:   true,
+		FileView:    true,
+		RawMarkdown: true,
+		RawHTML:     true,
 
 		DisabledChecks: []string{"weasel-words"},
 		Editor:         EditorCustom,
@@ -67,7 +66,6 @@ func TestSavePrefsWritesOnlyViewFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ui-prefs.json")
 	c := &PrereviewController{UIPrefsPath: path}
 	c.savePrefs(PrereviewState{
-		ShowResolved: true,
 		SchemeName:   "catppuccin",
 		Base:         "HEAD~3", // per-repo — must not leak into the file
 		SelectedFile: "a.go",   // session continuity — must not leak either
@@ -82,8 +80,8 @@ func TestSavePrefsWritesOnlyViewFields(t *testing.T) {
 		t.Fatalf("unmarshal prefs: %v", err)
 	}
 	wantKeys := map[string]bool{
-		"show_resolved": true, "scheme_name": true, "theme_mode": true,
-		"focus_mode": true, "hide_marks": true, "file_view": true,
+		"scheme_name": true, "theme_mode": true,
+		"focus_mode": true, "file_view": true,
 		"raw_markdown": true, "raw_html": true,
 		"queue_global":      true, // #171: This file / All files — a view pref like the rest
 		"toc_collapsed":     true, // #137: desktop TOC column collapse — a durable view pref
@@ -108,14 +106,14 @@ func TestSavePrefsWritesOnlyViewFields(t *testing.T) {
 // disk and leaves per-repo/session fields (Base) untouched.
 func TestApplyUIPrefsOverlays(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ui-prefs.json")
-	if err := saveUIPrefs(path, UIPrefs{ShowResolved: true, SchemeName: "gruvbox", ThemeMode: "light"}); err != nil {
+	if err := saveUIPrefs(path, UIPrefs{SchemeName: "gruvbox", ThemeMode: "light"}); err != nil {
 		t.Fatal(err)
 	}
 	c := &PrereviewController{UIPrefsPath: path}
-	st := PrereviewState{Base: "HEAD~5", ShowResolved: false, SchemeName: "solarized"}
+	st := PrereviewState{Base: "HEAD~5", SchemeName: "solarized"}
 	c.applyUIPrefs(&st)
 
-	if !st.ShowResolved || st.SchemeName != "gruvbox" || st.ThemeMode != "light" {
+	if st.SchemeName != "gruvbox" || st.ThemeMode != "light" {
 		t.Errorf("applyUIPrefs did not overlay disk prefs: %+v", st)
 	}
 	if st.Base != "HEAD~5" {

@@ -49,13 +49,13 @@ func (s PrereviewState) CommentsByEndLine() map[int][]Comment {
 // and area comments render in the head; resolved ones stay and collapse, #165).
 // CommentsByEndLine and the end-of-file block split exactly this set by whether a row exists.
 func (s PrereviewState) inlineComment(c Comment) bool {
-	return c.File == s.SelectedFile && !c.IsFileLevel() && !c.IsAreaLevel() && !c.Hidden
+	return c.File == s.SelectedFile && !c.IsFileLevel() && !c.IsAreaLevel() && !c.Hidden && s.annFilter(c.File).kindOn(navComment)
 }
 
 // inlineSuggestions is the suggestion counterpart: the selected file's visible
 // suggestions, split the same way by SuggestionsByEndLine and the end-of-file block.
 func (s PrereviewState) inlineSuggestions() []Suggestion {
-	if s.SelectedFile == "" || s.HideSuggestions {
+	if s.SelectedFile == "" || s.HideSuggestions() {
 		return nil
 	}
 	var out []Suggestion
@@ -181,7 +181,7 @@ func (s PrereviewState) ReadPercent() int {
 	if mark == 0 {
 		return 0
 	}
-	total := s.CurrentDiff.LastLine("new")
+	total := s.lastReadableLine()
 	if total == 0 {
 		return 0
 	}
@@ -189,6 +189,19 @@ func (s PrereviewState) ReadPercent() int {
 		return pct
 	}
 	return 100
+}
+
+// lastReadableLine is the furthest line the current view can report as read:
+// the last rendered block's end in a Markdown preview (trailing blank lines
+// belong to no block, so the file's own last line is never reported and a
+// file read to the end stopped at 99%), else the file's last new-side line.
+func (s PrereviewState) lastReadableLine() int {
+	if s.ShowRenderedMarkdown() {
+		if bs := s.CurrentDiff.MarkdownBlocks; len(bs) > 0 {
+			return bs[len(bs)-1].EndLine
+		}
+	}
+	return s.CurrentDiff.LastLine("new")
 }
 
 // scopedSuggestions drops the suggestions that belong to a DIFFERENT file than the one
@@ -252,8 +265,8 @@ func isHidden(hidden map[string]string, sg Suggestion) bool {
 }
 
 // HiddenSuggestionCount is how many of the SELECTED file's suggestions are
-// currently hidden (fingerprint-matching), driving the View menu's "N hidden ·
-// show". Zero-arg.
+// currently hidden (fingerprint-matching), driving the Annotations filter's
+// "Unhide suggestions". Zero-arg.
 func (s PrereviewState) HiddenSuggestionCount() int { return len(s.hiddenOnSelected()) }
 
 // hiddenOnSelected is the selected file's in-scope suggestions hidden against
@@ -293,7 +306,7 @@ func (m *HiddenMark) add(id string) {
 // markerSuggestions is hiddenOnSelected for the markers: none while the global
 // Hide suggestions toggle is on, which already says suggestions are off.
 func (s PrereviewState) markerSuggestions() []Suggestion {
-	if s.HideSuggestions {
+	if s.HideSuggestions() {
 		return nil
 	}
 	return s.hiddenOnSelected()
@@ -610,12 +623,6 @@ func (s PrereviewState) HiddenSuggestionLines() map[string]*HiddenMark {
 	return out
 }
 
-// HasMarks reports whether the selected file has any row badge, of any kind —
-// whether the "Hide annotations" toggle (ToggleMarks) has anything to act on.
-func (s PrereviewState) HasMarks() bool {
-	return len(s.AnnotationCountLines()) > 0
-}
-
 // Threads groups the loaded conversation entries (#149) by target ID (a comment or
 // suggestion ID), so a card renders its own thread with {{index $.Threads .ID}}.
 // Entries arrive already sorted (loadThreads), so each group is chronological.
@@ -704,7 +711,7 @@ func (s PrereviewState) AwaitingLines() map[string]bool {
 
 // SuggestionCount is the number of suggestions on the selected file, used to
 // label the toolbar toggle and gate its visibility. Counts regardless of the
-// HideSuggestions toggle (it's the total available, not the shown count).
+// Annotations filter (it's the total available, not the shown count).
 func (s PrereviewState) SuggestionCount() int {
 	if s.SelectedFile == "" {
 		return 0
@@ -818,7 +825,7 @@ func groupByKey(sugs []Suggestion) [][]Suggestion {
 // when toggled off): the input BlockSuggestions groups per block. The line/code
 // view uses SuggestionsByEndLine.
 func (s PrereviewState) FileSuggestions() []Suggestion {
-	if s.SelectedFile == "" || s.HideSuggestions {
+	if s.SelectedFile == "" || s.HideSuggestions() {
 		return nil
 	}
 	var out []Suggestion
@@ -1171,7 +1178,7 @@ func (s PrereviewState) RegionComments() []Comment {
 
 // AnnotationNumbers numbers each annotation that has a box on screen within
 // its surface, in the order they were made, keyed by ID: a live-site annotation
-// within its page (the number on its marker and on its card in All comments),
+// within its page (the number on its marker and on its card on the Annotations page),
 // and a comment drawn on an HTML preview within its file. Resolved and hidden
 // annotations keep their numbers, so resolving one never renumbers the rest.
 // Zero-arg for the template.
@@ -1395,8 +1402,8 @@ func (s PrereviewState) CanAnnotate() bool {
 
 // FileShowing reports that a file is loaded and on screen. A combined session
 // keeps the file loaded behind the live site, so CurrentDiff alone doesn't say
-// it shows; the file-only controls (Diff | File, Prev/Next, the View menu's
-// file items, the TOC) key on this.
+// it shows; the file-only controls (the file header's view buttons, Prev/Next,
+// Focus, the TOC) key on this.
 func (s PrereviewState) FileShowing() bool { return s.CurrentDiff != nil && !s.LiveShowing() }
 
 // FocusedComment returns the region annotation the user tapped to locate
