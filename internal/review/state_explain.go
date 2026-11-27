@@ -48,7 +48,7 @@ func answeredSince(createdAt string, asked time.Time) bool {
 func (s PrereviewState) CanExplain() bool { return s.AgentMode && len(s.ExplainPrompts) > 0 }
 
 // HasUnderstandContent: the Understand page has something on it, a walkthrough
-// or a quiz. Gates the menu entries.
+// or a quiz. One way ShowUnderstandEntry enables the Understand buttons.
 func (s PrereviewState) HasUnderstandContent() bool { return s.HasExplanation() || s.HasQuiz() }
 
 // ShowUnderstandEntry enables the toolbar's Understand button: there is

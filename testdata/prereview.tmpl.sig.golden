@@ -956,15 +956,14 @@
     </button>
   </form>
   {{end}}
-  {{if .HasUnderstandContent}}
+  
   <form method="POST">
-    <button type="submit" name="toggleUnderstand" class="menu-item" role="menuitem">
+    <button type="submit" name="toggleUnderstand" class="menu-item" role="menuitem" title="{{if or .ShowUnderstandEntry .ShowUnderstand}}Walk through the whole change, and quiz yourself on it{{else}}No walkthrough or quiz yet, and no agent to make one{{end}}" {{if not (or .ShowUnderstandEntry .ShowUnderstand)}}disabled{{end}}>
       <span class="menu-icon">{{template "iconQuiz"}}</span>
       <span class="menu-label">{{if .ShowUnderstand}}Back{{else}}Understand{{end}}{{with index $.KeyHint "toggleUnderstand"}} <kbd class="kbd-hint" aria-hidden="true">{{.}}</kbd>{{end}}</span>
-      <span class="menu-meta">{{.QuizScoreLabel}}</span>
+      {{with .QuizScoreLabel}}<span class="menu-meta">{{.}}</span>{{end}}
     </button>
   </form>
-  {{end}}
   {{if gt .ResolvedCount 0}}
   <form method="POST">
     <button type="submit" name="toggleShowResolved" class="menu-item{{if .ShowResolved}} is-on{{end}}" role="menuitem">

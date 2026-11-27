@@ -949,6 +949,7 @@ header.bar button[name="endSession"]:focus-visible {
 }
 .more-menu button.menu-item:hover,
 .more-menu button.menu-item:focus { background: var(--pico-card-sectioning-background-color); }
+.more-menu button.menu-item:disabled { opacity: 0.45; cursor: default; background: none; }
 .more-menu button.menu-item .menu-icon {
   flex: 0 0 1.2rem; display: inline-flex; align-items: center; justify-content: center;
   color: var(--pico-muted-color);

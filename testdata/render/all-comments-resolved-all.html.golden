@@ -428,6 +428,20 @@
   </form>
   
   
+  <form method="POST">
+    <button
+      type="submit"
+      name="toggleUnderstand"
+      class="menu-item"
+      role="menuitem"
+      title="No walkthrough or quiz yet, and no agent to make one"
+      disabled
+    >
+      <span class="menu-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>
+      <span class="menu-label">Understand <kbd class="kbd-hint" aria-hidden="true">z</kbd></span>
+      
+    </button>
+  </form>
   
   <form method="POST">
     <button
