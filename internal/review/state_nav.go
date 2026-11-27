@@ -180,3 +180,17 @@ func (s PrereviewState) fileRank() func(string) int {
 		return len(rank)
 	}
 }
+
+// navAnchorPrefix is each kind's prefix in NavAnchor.
+var navAnchorPrefix = map[string]string{navComment: "c:", navSuggestion: "sg:", navQuiz: "qz:", navQuestion: "qs:"}
+
+// NavAnchor names the card the stepper last stepped to ("c:<id>", "sg:<id>",
+// "qz:<id>" or "qs:<id>"), or "" before the first step. That card carries an
+// anchor keyed by NavSteps: the client scrolls an element into view once, so a
+// new key per step is what scrolls again when ‹ › land on the same card.
+func (s PrereviewState) NavAnchor() string {
+	if s.NavAt == nil || s.NavSteps == 0 {
+		return ""
+	}
+	return navAnchorPrefix[s.NavAt.Kind] + s.NavAt.ID
+}

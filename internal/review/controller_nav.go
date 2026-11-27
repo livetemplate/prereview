@@ -61,6 +61,7 @@ func (c *PrereviewController) goToItem(state PrereviewState, it NavItem) (Prerev
 	}
 	state.NavAt = &pos
 	state.NavSeen = true
+	state.NavSteps++
 	return state, nil
 }
 

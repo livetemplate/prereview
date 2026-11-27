@@ -558,6 +558,11 @@ type PrereviewState struct {
 	// current item is decided continues from there.
 	NavAt *NavPos `json:"nav_at"`
 
+	// NavSteps counts the stepper's steps this session. Each step keys a fresh
+	// scroll anchor in the target card (NavAnchor), so the client scrolls even
+	// when the step lands on the card it already scrolled to once.
+	NavSteps int `json:"nav_steps"`
+
 	// ScrollToItemKey scrolls a suggestion ("sg:<id>") or quiz question ("qz:<id>")
 	// into view on the next render, the stepper's counterpart of ScrollToCommentID
 	// (comments keep that field, which also drives their focus).

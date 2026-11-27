@@ -990,7 +990,8 @@
   </footer></article></dialog></div></div>
   <div class="inline-suggestion"
      data-key="sg-s1"
-     lvt-fx:animate="fade"><header><span class="sg-label"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
+     lvt-fx:animate="fade">
+  <header><span class="sg-label"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path
     d="M12 3l1.8 4.9L18.7 9.7 13.8 11.5 12 16.4 10.2 11.5 5.3 9.7 10.2 7.9 12 3z"
     fill="currentColor"
   /><path

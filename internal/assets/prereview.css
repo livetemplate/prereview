@@ -4412,3 +4412,7 @@ header.bar .search-btn .tb-word, header.bar .search-btn .tb-kbd { display: none;
 @media (min-width: 900px) {
   header.file-head .file-head-view + .file-head-actions { margin-left: 0; }
 }
+
+/* The stepper's scroll anchor (NavAnchor): out of flow, so it adds no space or
+   flex gap to the card it marks. */
+.nav-anchor { position: absolute; width: 0; height: 0; overflow: hidden; }

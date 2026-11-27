@@ -339,6 +339,8 @@
             focus/scroll OUT of a composer you just opened (a prior comment stealing
             focus while you type the next one). */ -}}
      {{- if and (eq $.ScrollToCommentID .ID) (eq $.SelectionAnchor 0) (eq $.CommentMode "")}} lvt-fx:scroll="into-view" tabindex="-1" lvt-autofocus{{end}}>
+  {{- /* the stepper's anchor: see NavAnchor */ -}}
+  {{if eq $.NavAnchor (printf "c:%s" .ID)}}<span class="nav-anchor" data-key="nav-{{$.NavSteps}}" lvt-fx:scroll="into-view" aria-hidden="true"></span>{{end}}
   {{- /* line span · side · status badges */ -}}
   <header><span>{{.LineSpan}} · <small>{{.Side}}</small>
     {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
@@ -485,6 +487,7 @@
      data-key="sg-{{.ID}}"
      {{- if eq $.ScrollToItemKey (printf "sg:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}
      lvt-fx:animate="fade">
+  {{if eq $.NavAnchor (printf "sg:%s" .ID)}}<span class="nav-anchor" data-key="nav-{{$.NavSteps}}" lvt-fx:scroll="into-view" aria-hidden="true"></span>{{end}}
   {{- /* sparkle label · group tag · line span · drift status · verdict */ -}}
   <header><span class="sg-label">{{template "iconSuggestion"}} suggestion</span>
     {{- if $g.Total}} <small class="sg-group-tag" title="{{$g.Total}} alternatives for this text — accepting one auto-rejects the rest">alternative {{$g.Index}} of {{$g.Total}}</small>{{end}} · <small>{{.LineSpan}}</small>
@@ -643,7 +646,7 @@
   {{/* The scroll target is the HEAD, not the card: the client centres whatever it
        scrolls to, and a card with four options is taller than a phone screen — so
        centring the card put the question itself off the top of the viewport. */}}
-  <div class="quiz-card-head"{{if eq $.ScrollToItemKey (printf "qz:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>
+  <div class="quiz-card-head"{{if eq $.ScrollToItemKey (printf "qz:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>{{if eq $.NavAnchor (printf "qz:%s" .ID)}}<span class="nav-anchor" data-key="nav-{{$.NavSteps}}" lvt-fx:scroll="into-view" aria-hidden="true"></span>{{end}}
     <span class="quiz-probe quiz-probe-{{.Probe}}">{{.Probe}}</span>{{if .Ungrounded}}<span class="quiz-ungrounded" title="This question cites {{.AnchorLabel}}, which is not in this diff — treat it with suspicion">⚠ cites {{.AnchorLabel}}, not in this diff</span>{{end}}
   </div>
   <p class="quiz-prompt">{{.Prompt}}</p>
@@ -695,7 +698,7 @@
   {{- /* label · step count · line span · status badges, Hide at the right: the
          suggestion card's header, since the agent wrote this card too. In a
          thread it is the agent's reply, so it takes a reply's header instead. */ -}}
-  <header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>{{if .InThread}}<span class="thread-author">agent</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}{{else}}<span class="sg-label">{{template "iconQuiz"}} question</span>{{end}}
+  <header{{if eq $.ScrollToItemKey (printf "qs:%s" .ID)}} lvt-fx:scroll="into-view"{{end}}>{{if eq $.NavAnchor (printf "qs:%s" .ID)}}<span class="nav-anchor" data-key="nav-{{$.NavSteps}}" lvt-fx:scroll="into-view" aria-hidden="true"></span>{{end}}{{if .InThread}}<span class="thread-author">agent</span>{{if .When}} · <small class="thread-when">{{.When}}</small>{{end}}{{else}}<span class="sg-label">{{template "iconQuiz"}} question</span>{{end}}
     {{- if gt .StepCount 1}} <small class="sg-group-tag">{{.StepCount}} questions</small>{{end}}{{if not .InThread}} · <small>{{.AnchorLabel}}</small>{{end}}
     {{- if .Resolved}} · <small class="resolved-badge">resolved</small>{{end}}
     {{- if .Replaced}} · <small class="resolved-badge">replaced</small>{{end}}
