@@ -119,21 +119,20 @@ func quantizeFrame(src image.Image) *image.Paletted {
 	return dst
 }
 
+// encode writes the GIF to path. One flow runs per process, so any failure
+// recorded so far is this flow's (its seeds included), and the GIF it would
+// have replaced is kept.
 func (r *gifRec) encode(path string) error {
-	if len(r.frames) == 0 {
+	if len(r.frames) == 0 && len(failures) == 0 {
 		return fmt.Errorf("%s: no frames captured", filepath.Base(path))
 	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
+	var buf bytes.Buffer
+	if len(failures) == 0 {
+		if err := gif.EncodeAll(&buf, &gif.GIF{Image: r.frames, Delay: r.delays, LoopCount: 0}); err != nil {
+			return err
+		}
 	}
-	defer f.Close()
-	if err := gif.EncodeAll(f, &gif.GIF{Image: r.frames, Delay: r.delays, LoopCount: 0}); err != nil {
-		return err
-	}
-	info, _ := f.Stat()
-	log.Printf("wrote %s (%d frames, %d KB)", path, len(r.frames), info.Size()/1024)
-	return nil
+	return writeImage(path, buf.Bytes(), len(failures))
 }
 
 // runGif dispatches a single named flow against a running demo-repo server.
@@ -168,8 +167,12 @@ func runGif(allocCtx context.Context, url, name, repo, bin, outDir string) {
 		gifUnderstand(allocCtx, url, repo, bin, outDir)
 	case "alternatives":
 		gifAlternatives(allocCtx, url, repo, bin, outDir)
+	case "questions":
+		gifQuestions(allocCtx, url, repo, bin, outDir)
+	case "annotations":
+		gifAnnotations(allocCtx, url, repo, bin, outDir)
 	default:
-		log.Fatalf("unknown gif flow %q (have: hero|image|markdown|external|suggestion|search|themes|versions|thread|checks|learning|understand|alternatives)", name)
+		log.Fatalf("unknown gif flow %q (have: hero|image|markdown|external|suggestion|search|themes|versions|thread|checks|learning|understand|alternatives|questions|annotations)", name)
 	}
 }
 
@@ -305,7 +308,7 @@ func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
 		return
 	}
 	step(bctx,
-		chromedp.Evaluate(`[...document.querySelectorAll('button[name="selectFile"]')].find(b=>/payment\.go/.test(b.textContent))?.click()`, nil),
+		clickByText(`button[name="selectFile"]`, "payment.go"),
 		chromedp.Sleep(400*time.Millisecond),
 	)
 	if err := chromedp.Run(bctx, chromedp.Poll(`document.querySelector('.versions-count')?.textContent==='2'`, nil, chromedp.WithPollingTimeout(10*time.Second))); err != nil {
@@ -320,14 +323,14 @@ func gifVersions(allocCtx context.Context, url, repo, bin, outDir string) {
 
 	// Expand the top row (Agent edit, current) → reveals the AI changelog.
 	step(bctx,
-		chromedp.Evaluate(`document.querySelector('.version-row .version-summary-toggle')?.click()`, nil),
+		clickJS(`.version-row .version-summary-toggle`),
 		chromedp.Sleep(450*time.Millisecond))
 	check(rec.captureComposite(bctx, tctx, 240)) // changelog visible
 
 	// Expand the Original (baseline) row — it's non-current, so it carries the
 	// Diff/Restore actions — and diff it against the current file.
 	step(bctx,
-		chromedp.Evaluate(`document.querySelectorAll('.version-row .version-summary-toggle')[1]?.click()`, nil),
+		clickWhere(`document.querySelectorAll('.version-row .version-summary-toggle')[1]`),
 		chromedp.Sleep(400*time.Millisecond))
 	check(rec.captureComposite(bctx, tctx, 160)) // baseline row: View / Diff / Restore
 	step(bctx,
@@ -444,7 +447,7 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 		chromedp.Navigate(navURL(url, "payment.go")),
 		chromedp.WaitVisible(`.code`, chromedp.ByQuery),
 		chromedp.Poll(`!!document.querySelector('.thread .thread-agent')`, nil, chromedp.WithPollingTimeout(10*time.Second)),
-		chromedp.Evaluate(scrollCommentJS, nil),
+		scrollTo(`.inline-comment`),
 		chromedp.Sleep(300*time.Millisecond),
 	)
 	check(rec.captureComposite(bctx, tctx, 240)) // the agent's reply in the thread
@@ -453,7 +456,7 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 	step(bctx,
 		clickJS(`.inline-comment button[name="openReply"]`),
 		chromedp.WaitVisible(`.reply-form textarea`, chromedp.ByQuery),
-		chromedp.Evaluate(scrollCommentJS, nil),
+		scrollTo(`.inline-comment`),
 		chromedp.Sleep(150*time.Millisecond),
 	)
 	check(rec.captureComposite(bctx, tctx, 90)) // reply form open
@@ -462,7 +465,7 @@ func gifThread(allocCtx context.Context, url, repo, bin, outDir string) {
 	step(bctx,
 		clickJS(`.reply-form button[name="postReply"]`),
 		chromedp.Sleep(700*time.Millisecond),
-		chromedp.Evaluate(scrollCommentJS, nil),
+		scrollTo(`.inline-comment`),
 		chromedp.Sleep(200*time.Millisecond),
 	)
 	follow := append(replied[:len(replied):len(replied)],
@@ -514,10 +517,6 @@ func Refund(orderID string) error {
 }
 `
 
-// scrollCommentJS centers the inline comment card in the viewport so the
-// resolved strikethrough is visible in the captured frame.
-const scrollCommentJS = `(()=>{const c=document.querySelector('.inline-comment');if(c)c.scrollIntoView({block:'center'});})()`
-
 // gifHero — the full review→fix loop, browser stacked over terminal. The human
 // comments and hands off (browser); the Claude Code skill reads the comment and
 // edits payment.go (terminal, scripted per skill/SKILL.md); the fixed diff
@@ -562,6 +561,11 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	// Browser: open payment.go's diff.
 	if err := chromedp.Run(bctx, base(url, "payment.go", 1280, 800)...); err != nil {
 		fail("[gif:hero] open diff: %v", err)
+		return
+	}
+	// The lead animation is in Catppuccin light, the brightest scheme.
+	if err := chromedp.Run(bctx, setTheme("catppuccin", "light")); err != nil {
+		fail("[gif:hero] theme: %v", err)
 		return
 	}
 	check(rec.captureComposite(bctx, tctx, 130)) // diff open, terminal idle
@@ -635,21 +639,20 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 		chromedp.Navigate(navURL(url, "payment.go")),
 		chromedp.WaitVisible(`.code`, chromedp.ByQuery),
 		chromedp.Sleep(900*time.Millisecond),
-		chromedp.Evaluate(scrollCommentJS, nil),
+		scrollTo(`.inline-comment`),
 		chromedp.Sleep(200*time.Millisecond),
 	)
 	check(rec.captureComposite(bctx, tctx, 220)) // payoff: the fix landed
 
-	// Human resolves the comment (the real product action), then reveals
-	// resolved comments so the struck-through card stays visible (resolved rows
-	// are filtered from the diff by default — CommentsByEndLine honors
-	// ShowResolved). Settle, then scroll the resolved card into view.
+	// The reviewer resolves the comment. The file's Annotations filter starts on
+	// Open, which hides it; All brings the struck-through card back.
 	step(bctx,
-		chromedp.Evaluate(`(()=>{const b=document.querySelector('.inline-comment button[name="toggleResolved"]')||document.querySelector('button[name="toggleResolved"]');if(b)b.click();})()`, nil),
-		chromedp.Sleep(700*time.Millisecond),
-		chromedp.Evaluate(`(()=>{const b=document.querySelector('button[name="toggleShowResolved"]');if(b)b.click();})()`, nil),
-		chromedp.Sleep(900*time.Millisecond),
-		chromedp.Evaluate(`(()=>{const c=document.querySelector('.inline-comment.is-resolved')||document.querySelector('.inline-comment');if(c)c.scrollIntoView({block:'center'});})()`, nil),
+		clickJS(`.inline-comment button[name="toggleResolved"]`),
+		chromedp.Sleep(300*time.Millisecond),
+		clickJS(`.ann-filter form:has(input[name="show"][value="all"]) button[name="setAnnShow"]`),
+		chromedp.WaitVisible(`.inline-comment.is-resolved`, chromedp.ByQuery),
+		closeMenus(),
+		scrollTo(`.inline-comment.is-resolved`),
 		chromedp.Sleep(250*time.Millisecond),
 	)
 	check(rec.captureComposite(bctx, tctx, 220)) // loop closed: comment resolved
@@ -657,7 +660,7 @@ func gifHero(allocCtx context.Context, url, repo, outDir string) {
 	// --- The other direction (issue #98): the agent PROPOSES a follow-up edit and
 	// the human accepts it inline. Seed a suggestion on the now-fixed payment.go
 	// (line 8, the doc comment); the running server surfaces it on the next load. ---
-	_ = appendSuggestion(repo, `{"id":"hero-sg","file":"payment.go","from_line":8,"to_line":8,"original":"// Charge captures a payment for an order. Amount is in minor units (cents).","proposed":"// Charge captures a payment for an order, retrying transient gateway errors. Amount is in minor units (cents).","note":"note the retry behaviour"}`+"\n")
+	check(appendSuggestion(repo, `{"id":"hero-sg","file":"payment.go","from_line":8,"to_line":8,"original":"// Charge captures a payment for an order. Amount is in minor units (cents).","proposed":"// Charge captures a payment for an order, retrying transient gateway errors. Amount is in minor units (cents).","note":"note the retry behaviour"}`+"\n"))
 	propose := append(done[:len(done):len(done)],
 		termLine{"", "sp"},
 		termLine{"● Suggested an edit — payment.go:8", "bullet"},
@@ -732,8 +735,10 @@ func gifImage(allocCtx context.Context, url, outDir string) {
 		check(rec.capture(ctx, 130)) // the image, before annotation (examine/zoom mode)
 		// #57: arm the region toggle — images pinch-zoom by default, so capture
 		// the gesture only after switching to comment mode.
+		// The file header's Annotate: the ⋯ menu's copy comes first in the DOM,
+		// hidden on a desktop.
 		step(ctx,
-			chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+			chromedp.Click(`header.file-head button[name="toggleRegionSelect"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.image-with-areas.is-armed`, chromedp.ByQuery),
 			chromedp.Sleep(200*time.Millisecond),
 		)
@@ -798,7 +803,7 @@ func gifExternal(allocCtx context.Context, url, outDir string) {
 
 		// Arm region select → page-surface overlay appears.
 		if err := chromedp.Run(ctx,
-			chromedp.Click(`button[name="toggleRegionSelect"]`, chromedp.ByQuery),
+			chromedp.Click(`header.bar-external button[name="toggleRegionSelect"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.region-overlay[data-surface="page"]`, chromedp.ByQuery),
 			chromedp.Sleep(250*time.Millisecond),
 		); err != nil {
@@ -969,22 +974,12 @@ func gifThemes(allocCtx context.Context, url, outDir string) {
 		}
 		step(ctx, chromedp.WaitVisible(`.code`, chromedp.ByQuery), chromedp.Sleep(200*time.Millisecond))
 		check(rec.capture(ctx, 180)) // Solarized (default)
-		// clickJS fires the DOM click directly on the toolbar's scheme/mode
-		// buttons. Closing any open dropdown after each click keeps every frame
-		// a clean full-UI recolour.
-		const closeMenu = `document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`
 		// Cycle the scheme twice: Gruvbox, then Catppuccin.
-		for range 2 {
-			step(ctx, clickJS(`button[name="cycleScheme"]`), chromedp.Sleep(500*time.Millisecond),
-				chromedp.Evaluate(closeMenu, nil), chromedp.Sleep(150*time.Millisecond))
+		for _, scheme := range []string{"gruvbox", "catppuccin"} {
+			step(ctx, setTheme(scheme, ""))
 			check(rec.capture(ctx, 180))
 		}
-		// Flip the mode to Dark on the current scheme. The default is System and the
-		// cycle is System → Light → Dark, so it takes TWO clicks to land on Dark.
-		step(ctx,
-			clickJS(`button[name="cycleTheme"]`), chromedp.Sleep(300*time.Millisecond),
-			clickJS(`button[name="cycleTheme"]`), chromedp.Sleep(500*time.Millisecond),
-			chromedp.Evaluate(closeMenu, nil), chromedp.Sleep(150*time.Millisecond))
+		step(ctx, setTheme("catppuccin", "dark"))
 		check(rec.capture(ctx, 240)) // dark mode, held longest
 		return rec.encode(filepath.Join(outDir, "themes.gif"))
 	})

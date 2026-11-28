@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -229,7 +230,7 @@ func main() {
 		{"laptop-file-view-on", 1280, 800, []chromedp.Action{
 			chromedp.Click(`(//button[@name='selectFile'])[1]`, chromedp.BySearch),
 			chromedp.Sleep(400 * time.Millisecond),
-			chromedp.Click(`.toolbar-inline button[name='toggleFileView']`, chromedp.ByQuery),
+			chromedp.Click(`header.file-head button[name='toggleFileView']`, chromedp.ByQuery),
 			chromedp.Sleep(400 * time.Millisecond),
 		}},
 		{"laptop-composer-typing", 1280, 800, []chromedp.Action{
@@ -261,10 +262,7 @@ func main() {
 			// Open the inline comments-pill (only renders when there are
 			// existing comments — the repo's prereview.tmpl has a real one).
 			chromedp.Sleep(400 * time.Millisecond),
-			chromedp.Evaluate(`(() => {
-				const b = document.querySelector('.toolbar-inline button[name="toggleCommentList"]');
-				if (b) b.click();
-			})()`, nil),
+			clickJS(`.toolbar-inline button[name="toggleCommentList"]`),
 			chromedp.Sleep(500 * time.Millisecond),
 		}},
 		// NOTE: mutating scenarios (clicking Done, adding comments, opening
@@ -337,10 +335,69 @@ func runReadmeShots(allocCtx context.Context, url, outDir string) {
 		{"review-mobile", 390, 844, "payment.go:L18", []chromedp.Action{
 			typeComposer("Surface the gateway's real error here, not a generic string."),
 		}},
+		{"toolbar", 1280, 560, "payment.go", []chromedp.Action{
+			chromedp.WaitVisible(`header.file-head .file-head-view`, chromedp.ByQuery),
+			labelGroups(toolbarGroups),
+			chromedp.Sleep(200 * time.Millisecond),
+		}},
 	}
 	for _, s := range shots {
 		captureShot(allocCtx, url, s.name, s.w, s.h, s.frag, s.setup, outDir)
 	}
+}
+
+// toolbarGroups are the control groups toolbar.png labels, in reading order.
+// labelGroup is one outlined, numbered control group on a labelled shot.
+type labelGroup struct{ Sel, Label string }
+
+var toolbarGroups = []labelGroup{
+	{`.toolbar-inline`, "The whole review: Focus, Annotations, Understand, the theme, shortcuts and the guide"},
+	{`.library-trigger`, "The Library: your learnings, skills and checks"},
+	{`.queue-trigger`, "The Queue: whether your agent is connected, and what it's working on"},
+	{`header.file-head .file-head-view`, "This file: Preview or Raw, Diff, Whitespace, Fold, Annotate"},
+	{`header.file-head .file-head-actions`, "This file: reading progress, a comment on the whole file, its versions, and checks on prose"},
+}
+
+// labelGroups outlines each group with a numbered box and draws a key of the
+// numbers over the code below them. It is drawn into the page for the shot
+// only, and fails when a group's element is missing, so a moved control
+// breaks `make screenshots` instead of leaving a label on nothing.
+func labelGroups(groups []labelGroup) chromedp.Action {
+	items, _ := json.Marshal(groups)
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		var missing string
+		err := chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(`(()=>{
+  const groups = %s, ink = '#d33682';
+  const layer = document.createElement('div');
+  layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:99999;font:600 14px/1.35 system-ui,sans-serif';
+  const key = document.createElement('div');
+  key.style.cssText = 'position:absolute;right:24px;bottom:24px;max-width:560px;padding:12px 16px;border-radius:10px;background:#fff;color:#222;border:2px solid '+ink+';box-shadow:0 4px 16px rgba(0,0,0,.18)';
+  const badge = n => '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%%;background:'+ink+';color:#fff;font-size:13px;margin-right:8px;flex:none">'+n+'</span>';
+  for (const [i, g] of groups.entries()) {
+    const el = document.querySelector(g.Sel);
+    if (!el) return g.Sel;
+    const r = el.getBoundingClientRect(), n = i + 1;
+    const box = document.createElement('div');
+    box.style.cssText = 'position:absolute;border:2px solid '+ink+';border-radius:8px;left:'+(r.left-3)+'px;top:'+(r.top-3)+'px;width:'+(r.width+2)+'px;height:'+(r.height+2)+'px';
+    box.innerHTML = '<span style="position:absolute;left:-11px;bottom:-11px">'+badge(n)+'</span>';
+    layer.append(box);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;margin:4px 0';
+    row.innerHTML = badge(n) + '<span>' + g.Label + '</span>';
+    key.append(row);
+  }
+  layer.append(key);
+  document.body.append(layer);
+  return '';
+})()`, items), &missing))
+		if err != nil {
+			return err
+		}
+		if missing != "" {
+			return fmt.Errorf("labelGroups: no element for %s", missing)
+		}
+		return nil
+	})
 }
 
 func navURL(url, frag string) string {
@@ -440,39 +497,124 @@ func settled() chromedp.Action {
 		chromedp.WithPollingTimeout(5*time.Second))
 }
 
+// onNode runs body (with el bound) on the element the JS expression expr
+// evaluates to, and fails when it evaluates to nothing. A click or scroll that
+// silently does nothing would let a flow capture the wrong state with no error.
+func onNode(expr, body string) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		var found bool
+		js := fmt.Sprintf(`(()=>{const el=(%s);if(!el)return false;%s;return true;})()`, expr, body)
+		if err := chromedp.Run(ctx, chromedp.Evaluate(js, &found)); err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("no element for %s", expr)
+		}
+		return nil
+	})
+}
+
+// clickWhere clicks the element expr evaluates to.
+func clickWhere(expr string) chromedp.Action { return onNode(expr, `el.click()`) }
+
+func query(sel string) string { return fmt.Sprintf(`document.querySelector(%q)`, sel) }
+
 // scrollTo centres the first element matching sel.
 func scrollTo(sel string) chromedp.Action {
-	return chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q)?.scrollIntoView({block:'center'})`, sel), nil)
+	return onNode(query(sel), `el.scrollIntoView({block:'center'})`)
 }
 
 // clickByText clicks the first element matching sel whose text contains text.
 func clickByText(sel, text string) chromedp.Action {
-	return chromedp.Evaluate(fmt.Sprintf(`[...document.querySelectorAll(%q)].find(e=>e.textContent.includes(%q))?.click()`, sel, text), nil)
+	return clickWhere(fmt.Sprintf(`[...document.querySelectorAll(%q)].find(e=>e.textContent.includes(%q))`, sel, text))
 }
 
-func clickJS(sel string) chromedp.Action {
+// clickJS fires a DOM click on the first element matching sel, visible or not.
+func clickJS(sel string) chromedp.Action { return clickWhere(query(sel)) }
+
+// clickIfPresent clicks the first element matching sel when there is one: for
+// a control that is shown only sometimes, such as a notice's close button.
+func clickIfPresent(sel string) chromedp.Action {
+	return chromedp.Evaluate(fmt.Sprintf(`%s?.click()`, query(sel)), nil)
+}
+
+// closeMenus closes any toolbar dropdown a DOM click left open: a click on a
+// button inside one bubbles to its toggleClass and pops it open.
+func closeMenus() chromedp.Action {
+	return chromedp.Evaluate(`document.querySelectorAll('.tb-dropdown.open').forEach(d=>d.classList.remove('open'))`, nil)
+}
+
+// setTheme clicks the toolbar's scheme and mode buttons until .theme-root
+// shows scheme and mode ("" is System). capture-gifs.sh deletes the saved
+// prefs before each flow, so a flow's choice doesn't carry into the next.
+func setTheme(scheme, mode string) chromedp.Action {
+	return chromedp.Tasks{
+		cycleUntil("data-scheme", scheme, "cycleScheme"),
+		cycleUntil("data-mode", mode, "cycleTheme"),
+		closeMenus(),
+	}
+}
+
+// cycleUntil clicks the toolbar button until .theme-root's attr reads want,
+// waiting after each click for the attribute to change.
+func cycleUntil(attr, want, button string) chromedp.Action {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.Run(ctx, chromedp.Evaluate(
-			fmt.Sprintf(`(()=>{const b=document.querySelector(%q);if(b)b.click();})()`, sel), nil))
+		read := fmt.Sprintf(`document.querySelector('.theme-root').getAttribute(%q)||''`, attr)
+		for i := 0; ; i++ {
+			var got string
+			if err := chromedp.Run(ctx, chromedp.Evaluate(read, &got)); err != nil {
+				return err
+			}
+			if got == want {
+				return nil
+			}
+			if i == 4 {
+				return fmt.Errorf("setTheme: %s stuck at %q, want %q", attr, got, want)
+			}
+			if err := chromedp.Run(ctx,
+				clickJS(fmt.Sprintf(`header.bar button[name=%q]`, button)),
+				chromedp.Poll(fmt.Sprintf(`(%s) !== %q`, read, got), nil, chromedp.WithPollingTimeout(3*time.Second)),
+			); err != nil {
+				return err
+			}
+		}
 	})
 }
 
+// saveComment clicks Save on the open composer and returns the new card's id.
+func saveComment(ctx context.Context) string {
+	step(ctx, clickJS(saveBtn))
+	id := savedCommentID(ctx)
+	step(ctx, chromedp.Sleep(300*time.Millisecond))
+	return id
+}
+
 func captureShot(allocCtx context.Context, url, name string, w, h int, frag string, setup []chromedp.Action, outDir string) {
+	start := len(failures)
 	withCtx(allocCtx, "shot:"+name, func(ctx context.Context) error {
 		acts := base(url, frag, w, h)
 		acts = append(acts, setup...)
 		var buf []byte
 		acts = append(acts, chromedp.CaptureScreenshot(&buf))
 		if err := chromedp.Run(ctx, acts...); err != nil {
-			return err
+			return err // nothing written: the old PNG is kept
 		}
-		path := filepath.Join(outDir, name+".png")
-		if err := os.WriteFile(path, buf, 0o644); err != nil {
-			return err
-		}
-		fmt.Printf("wrote %s (%d bytes)\n", path, len(buf))
-		return nil
+		return writeImage(filepath.Join(outDir, name+".png"), buf, len(failures)-start)
 	})
+}
+
+// writeImage replaces path with data, atomically, unless failed steps went
+// into it: then the old file is kept, so a broken capture never replaces a
+// good image.
+func writeImage(path string, data []byte, failed int) error {
+	if failed > 0 {
+		return fmt.Errorf("%s: not written, %d step(s) failed; the old file is kept", filepath.Base(path), failed)
+	}
+	if err := library.WriteFileAtomic(path, data, 0o644); err != nil {
+		return err
+	}
+	log.Printf("wrote %s (%d KB)", path, len(data)/1024)
+	return nil
 }
 
 func findChromium() string {
