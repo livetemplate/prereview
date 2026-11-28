@@ -2126,7 +2126,8 @@ header.file-head .file-head-comment button svg { display: block; }
   display: inline-flex; align-items: center; gap: 0.2rem;
   font-size: 0.76rem; white-space: nowrap;
 }
-.file-head-resume button svg { flex: none; }
+/* Sized here: iconViewedCircle (Mark unread) has no width of its own. */
+.file-head-resume button svg { flex: none; width: 14px; height: 14px; }
 /* Keyboard line cursor (ArrowUp/Down). A left accent bar + outline marks the
    focused line so the user can see where Enter will comment. */
 .code .line.is-cursor { box-shadow: inset 3px 0 0 0 var(--pico-primary); outline: 1px solid var(--pico-primary-border); outline-offset: -1px; }
@@ -4377,11 +4378,14 @@ header.bar .search-btn .tb-word, header.bar .search-btn .tb-kbd { display: none;
   header.bar .search-btn .tb-word, header.bar .search-btn .tb-kbd { display: inline; }
 }
 /* Narrower desktops drop words, then keys; icons, counts and titles stay. The
-   preference buttons (scheme, mode, Shortcuts, Guide) go icon-only first. */
+   preference buttons (scheme, mode, Shortcuts, Guide) go icon-only first. Each
+   step leaves about 40px spare with counts on Annotations and the Queue
+   (TestE2E_ToolbarOneRowWithCounts): words fit from about 1180px, keys from
+   about 1300px. */
 @media (min-width: 900px) and (max-width: 1599px) {
   header.bar .tb-prefs .tb-word { display: none; }
 }
-@media (min-width: 900px) and (max-width: 1279px) {
+@media (min-width: 900px) and (max-width: 1359px) {
   header.bar .tb-kbd { display: none; }
 }
 /* The live site's bar also carries Live, Annotate, Boxes and the annotation
@@ -4389,7 +4393,7 @@ header.bar .search-btn .tb-word, header.bar .search-btn .tb-kbd { display: none;
 @media (min-width: 900px) and (max-width: 1439px) {
   header.bar:has(.live-count) .tb-kbd, header.bar:has(.live-count) .tb-views .tb-word { display: none; }
 }
-@media (min-width: 900px) and (max-width: 1099px) {
+@media (min-width: 900px) and (max-width: 1219px) {
   header.bar .tb-btn .tb-word, header.bar .search-btn .tb-word { display: none; }
 }
 

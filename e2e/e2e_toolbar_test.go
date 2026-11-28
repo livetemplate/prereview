@@ -209,3 +209,39 @@ func TestE2E_ToolbarUnderstandDisabled(t *testing.T) {
 		t.Errorf("Understand disabled=%v title=%q hoverReachesTitle=%v, want disabled with a reason on hover\nstderr: %s", disabled, title, hoverReachesTitle, p.stderr.String())
 	}
 }
+
+// TestE2E_ToolbarOneRowWithCounts: at every desktop breakpoint the toolbar
+// stays on one row when its buttons carry counts: Annotations with open and
+// resolved ("1 +1"), and the Queue with what's queued. The docs capture caught
+// the Queue wrapping to a second row at 1280px.
+func TestE2E_ToolbarOneRowWithCounts(t *testing.T) {
+	repo := setupFixtureRepo(t)
+	pdir := filepath.Join(repo, ".prereview")
+	if err := os.MkdirAll(pdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seed := "id,file,from_line,to_line,side,body,created_at,resolved,anchor,anchor_status,kind,area,url\n" +
+		"c1,edited.go,0,0,,settled,2026-06-30T12:00:00Z,true,,,file,,\n"
+	if err := os.WriteFile(filepath.Join(pdir, "comments.csv"), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := bootChromeAgainstRepo(t, repo, 1280, 860, "--agent")
+	diag := captureDiag(t, p)
+	p.waitReadyAt(1280, 860)
+	p.clickFile("edited.go")
+	addLineComment(t, p, 0, 4, "a queued comment")
+	waitJSDiag(t, p, `/\d/.test(document.querySelector('header.bar .queue-trigger').textContent)`, "the Queue shows a count", diag)
+	waitJSDiag(t, p, `/\+\s*1/.test(document.querySelector('header.bar button[name="toggleCommentList"]').textContent)`, "Annotations shows open and resolved", diag)
+	// Every desktop breakpoint, from where words drop to where they all show.
+	for _, w := range []int64{900, 1219, 1220, 1359, 1360, 1399, 1400, 1439, 1440, 1599, 1600, 1920} {
+		if err := chromedp.Run(p.ctx, chromedp.EmulateViewport(w, 860), chromedp.Sleep(150*time.Millisecond)); err != nil {
+			t.Fatalf("resize to %d: %v%s", w, err, diag())
+		}
+		if h := evalInt(t, p, `document.querySelector('header.bar').offsetHeight`); h > 70 {
+			t.Errorf("%dpx: toolbar wrapped with counts (height=%dpx)", w, h)
+		}
+		if evalInt(t, p, `(()=>{const w=window.innerWidth;return [...document.querySelectorAll('header.bar button, header.bar a')].filter(b=>b.getBoundingClientRect().right > w + 1).length})()`) != 0 {
+			t.Errorf("%dpx: a toolbar control extends past the right edge", w)
+		}
+	}
+}
