@@ -116,6 +116,13 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 	if len(bytes.TrimSpace(src)) == 0 {
 		return nil
 	}
+	// Front matter renders as its own key/value rows; the body is parsed with
+	// those lines emptied, so every block keeps its source line.
+	var out []MarkdownBlock
+	if fm, ok := parseFrontMatter(src); ok {
+		out = fm.blocks()
+		src = fm.blank
+	}
 	lineAt := func(off int) int {
 		if off < 0 {
 			off = 0
@@ -136,7 +143,6 @@ func RenderMarkdownBlocks(src []byte, currentPath string) []MarkdownBlock {
 	}
 
 	doc := mdRenderer.Parser().Parse(text.NewReader(src))
-	var out []MarkdownBlock
 	// cursor tracks "one line past the last emitted block" so nodes whose
 	// AST entry carries no source segments (goldmark's ThematicBreak being
 	// the load-bearing example — it leaves an empty Lines() set) still get
@@ -267,7 +273,7 @@ func RenderMarkdownDoc(src []byte) template.HTML {
 		return ""
 	}
 	var buf bytes.Buffer
-	if err := mdRenderer.Convert(src, &buf); err != nil {
+	if err := mdRenderer.Convert(withoutFrontMatter(src), &buf); err != nil {
 		return ""
 	}
 	// Standalone page: open external links (the doc's GitHub references) in a
@@ -293,6 +299,7 @@ func ExtractHeadings(src []byte) []Heading {
 		}
 		return bytes.Count(src[:off], []byte{'\n'}) + 1
 	}
+	src = withoutFrontMatter(src) // its keys are not headings
 	doc := mdRenderer.Parser().Parse(text.NewReader(src))
 	var out []Heading
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {

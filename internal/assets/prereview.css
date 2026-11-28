@@ -2532,6 +2532,13 @@ html { scroll-padding-top: calc(var(--pr-bar-h) + 0.5rem); }
 .md-rendered table.md-solo-table th,
 .md-rendered table.md-solo-table td { word-break: break-word; vertical-align: top; }
 .md-block:has(.md-solo-table) { margin-bottom: 0; border-radius: 0; }
+/* A page's YAML front matter (#294): compact key/value rows above the body,
+   one block per key so a reviewer can comment on its title alone. */
+.md-rendered table.md-frontmatter { font-size: 0.82rem; color: var(--pico-muted-color); }
+.md-rendered table.md-frontmatter th,
+.md-rendered table.md-frontmatter td { padding: 0.2rem 0.6rem; white-space: pre-wrap; }
+.md-rendered table.md-frontmatter tbody th { width: 9rem; font-weight: 600; text-align: left; }
+.md-rendered table.md-frontmatter thead th { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.72rem; text-align: left; }
 
 /* Inline comment cards — between the diff lines */
 /* Annotation-as-hero: the comment is the point of the tool, so it reads as

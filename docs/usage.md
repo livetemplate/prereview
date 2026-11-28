@@ -32,7 +32,9 @@ the full tree when you want to comment on something that didn't change.
 **Markdown and HTML render by default.** Tap a rendered block — a heading,
 paragraph, list item — to select its *source* lines, so the comment still
 anchors to real line numbers and round-trips with the raw view. **Raw** on the
-file's header switches to source; long documents get a table-of-contents sidebar.
+file's header switches to source; long documents get a table-of-contents sidebar. A
+page's YAML front matter shows as a small table above it, one row per key, so you
+can comment on its `title` or `description` like any other line.
 
 **The file's header holds its view controls.** On a desktop, **Preview | Raw**,
 **Diff**, **Whitespace**, **Fold**, **Annotate** and **Boxes** sit beside the file
