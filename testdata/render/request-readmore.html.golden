@@ -764,7 +764,7 @@
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="app.go">
-      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle
   cx="12"
   cy="12"
   r="8"
@@ -791,7 +791,7 @@
     </form>
     <form method="POST" class="file-viewed-form">
       <input type="hidden" name="path" value="README.md">
-      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" aria-hidden="true"><circle
+      <button type="submit" name="toggleViewed" class="viewed-toggle" aria-label="Mark as viewed" title="Mark viewed"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle
   cx="12"
   cy="12"
   r="8"
