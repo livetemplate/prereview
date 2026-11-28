@@ -4360,6 +4360,13 @@ input.check-path { margin: 0; width: 100%; padding: 0.15rem 0.4rem; height: auto
    the framed site keeps its route, scroll and state; it only stops taking space
    and taps. */
 .live-wrap.live-hidden { display: none; }
+/* Live fills the viewer: the framed site takes every pixel below the toolbar
+   (the region composer, when open, sits under it and the viewer scrolls), and
+   the page footer hides, since a phone has no height to spare. */
+.layout.live-showing main.viewer { display: flex; flex-direction: column; }
+.layout.live-showing .live-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.layout.live-showing .live-wrap .ext-stage { flex: 1 1 auto; height: auto; min-height: 20rem; }
+.theme-root:has(.layout.live-showing) .app-footer { display: none; }
 header.bar .live-toggle { margin: 0; }
 
 /* Desktop toolbar buttons (toolbarbuttons.tmpl): icon + one word + key, the
