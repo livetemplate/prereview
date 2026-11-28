@@ -26,7 +26,7 @@ as you save it. Nothing is committed, and nothing leaves your machine.
   or the last few commits.
 - **Review a plan before the agent builds it.** Open the agent's plan file, comment
   on the steps you disagree with, and the agent revises the plan before it writes
-  any code.
+  any code. End the review with **Approve and end** and the agent starts building.
 - **Edit docs and other prose.** Read a README or a design doc as GitHub renders it,
   comment on a block or a single phrase, and let the prose checks flag filler as
   you read.
@@ -56,6 +56,14 @@ Or have your agent set it up. Tell it:
 
 ## A tour
 
+**Find your way around.** The toolbar holds what acts on the whole review: search,
+Focus, the Annotations list, Understand, the Library, the Queue and the colour
+scheme. Each file's header holds what acts on that file: Preview or Raw, the diff,
+whitespace, folding, drawing boxes, its checks and its versions. On a phone, the
+**⋯** menu lists the same controls.
+
+<p align="center"><img src="docs/toolbar.png" alt="The desktop toolbar and a file header, each group of controls labelled" width="820"></p>
+
 **Comment on rendered docs.** Markdown and HTML render the way GitHub shows them,
 mermaid diagrams included. Tap a block and the comment anchors to its source lines.
 Select a word or phrase to comment on just those characters.
@@ -72,9 +80,17 @@ reviews the code and the running app, with one queue for both.
 
 **Talk it through.** Every comment is a thread. The agent replies to say what it did
 or to ask a question, and your answer goes straight back to it. The Queue shows
-whether an agent is connected and where each comment stands.
+whether an agent is connected and where each comment stands. When a file is also
+published somewhere people comment, such as a GitHub pull request or a Google Doc,
+the agent can import those comments into the review.
 
 <p align="center"><img src="docs/thread.gif" alt="A reviewer comments on a retry loop; the agent replies asking a question; the reviewer answers in the thread" width="820"></p>
+
+**Answer the agent's questions with a tap.** When the agent can't go on without a
+choice from you, it asks with options instead of a paragraph, and marks the one it
+would pick. You tap an answer or type your own, and the agent builds what you chose.
+
+<p align="center"><img src="docs/questions.gif" alt="The agent asks how to handle a failed refresh and offers two options. The reviewer taps one, and the agent replies with what it built." width="820"></p>
 
 **Take the agent's edits.** Ask for suggestions, in your own words or with a
 ready-made prompt in the file comment box, and each one appears as a before →
@@ -92,6 +108,12 @@ box. When the choice is yours to make, the agent offers two versions and you pic
 of the file with the agent's changelog. View it, diff it or restore it.
 
 <p align="center"><img src="docs/versions.gif" alt="The Versions panel with the agent's version and its changelog, then a diff against the original" width="820"></p>
+
+**See every annotation in one list.** **Annotations** lists the comments,
+suggestions and questions of every file. Filter it to what is open or to one kind,
+and resolve every comment listed with **Resolve all**, which you can undo.
+
+<p align="center"><img src="docs/annotations.gif" alt="The Annotations list across two files, filtered to suggestions, then Resolve all and its Undo" width="760"></p>
 
 **Checks and judges.** Built-in prose checks flag lines as you read, and you can
 write your own. A judge is a yes/no rubric your agent answers for the whole file.
