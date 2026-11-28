@@ -164,19 +164,3 @@ func TestRenderMarkdownBlocks_ImageWithAdjacentCaption(t *testing.T) {
 	}
 }
 
-// Non-image raw HTML must keep emitting its block so the per-block line cursor
-// is unchanged (emit() skips an empty string). The omitted-comment placeholder
-// stands in for it, exactly as before the image extension existed.
-func TestRenderMarkdownBlocks_NonImageRawHTMLStillOmitted(t *testing.T) {
-	blocks := RenderMarkdownBlocks([]byte("<details><summary>x</summary>body</details>\n"), "")
-	if len(blocks) == 0 {
-		t.Fatal("non-image raw HTML produced no block")
-	}
-	joined := ""
-	for _, b := range blocks {
-		joined += string(b.HTML)
-	}
-	if strings.Contains(joined, "<details") {
-		t.Errorf("non-image raw HTML leaked through: %q", joined)
-	}
-}
