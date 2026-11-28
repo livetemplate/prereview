@@ -122,10 +122,14 @@ func renderImageHTMLBlock(w util.BufWriter, source []byte, n ast.Node, entering 
 	if !entering {
 		return ast.WalkContinue, nil
 	}
-	if img, ok := sanitizeImageHTML(htmlBlockRaw(n.(*ast.HTMLBlock), source)); ok {
+	raw := htmlBlockRaw(n.(*ast.HTMLBlock), source)
+	if img, ok := sanitizeImageHTML(raw); ok {
 		_, _ = w.WriteString(img)
 	} else {
-		_, _ = w.WriteString(rawHTMLOmitted + "\n")
+		// Anything else renders through the allowlist (rawhtml.go); a block
+		// with nothing left (a comment, a lone <script>) renders nothing, so
+		// it leaves no empty block behind.
+		_, _ = w.WriteString(sanitizeHTMLBlock(raw))
 	}
 	return ast.WalkSkipChildren, nil
 }
@@ -134,10 +138,11 @@ func renderImageRawHTML(w util.BufWriter, source []byte, n ast.Node, entering bo
 	if !entering {
 		return ast.WalkContinue, nil
 	}
-	if img, ok := sanitizeImageHTML(rawHTMLRaw(n.(*ast.RawHTML), source)); ok {
+	raw := rawHTMLRaw(n.(*ast.RawHTML), source)
+	if img, ok := sanitizeImageHTML(raw); ok {
 		_, _ = w.WriteString(img)
 	} else {
-		_, _ = w.WriteString(rawHTMLOmitted)
+		_, _ = w.WriteString(sanitizeInlineTag(raw))
 	}
 	return ast.WalkSkipChildren, nil
 }

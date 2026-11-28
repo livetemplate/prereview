@@ -32,6 +32,7 @@ The link prereview prints carries a token: 32 random bytes, new for each launch,
 - **Everything else needs the cookie.** A request without it gets 403. Only the built-in assets and `/_server-pid` are open (`server.go:362`). Tokens are compared in constant time.
 - **The token stays out of logs and headers.** Every response sets `Referrer-Policy: no-referrer` (`token.go:128`). When the server's output goes to a file, prereview makes that file readable by you only (`token.go:140`).
 - **The HTML preview uses a separate key.** The sandboxed preview iframe gets no cookie, so it loads repo files through `/_files/<key>/`, a second per-launch key that only reads repo files (`token.go:110`). A root-absolute CSS `url(/…)` inside a previewed file isn't rewritten to use the key, so it doesn't load.
+- **Markdown shows raw HTML through an allowlist.** A Markdown file's raw HTML renders the way GitHub's preview does. Elements on an allowlist stay (`gitdiff/rawhtml.go:34`), and scripts, styles, iframes, forms, svg and media are dropped with their contents (`gitdiff/rawhtml.go:59`). Attributes are allowlisted too, so no `on*`, `style`, `class` or `id` gets through. A link keeps its `href` only if it is relative, http(s) or mailto, and an image only if it is a repo file.
 - **The library review has its own link.** "Review in prereview" starts a child server with its own token and sends you to it (`library_http.go:154`).
 - **A restart makes a new token.** Tabs from the old server get 403 until you open the new link.
 
