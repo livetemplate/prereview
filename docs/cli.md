@@ -137,7 +137,9 @@ hand-written CSV parser:
     optional `paused` / `skill_updated`.
   - **`snapshot`** — on every queue mutation (debounced). A **full snapshot** of
     the still-actionable queue: `{"event":"snapshot","seq":N,"comments":[…],
-    "suggestions":[…]}` (both arrays always present, `[]` when empty). Pre-filtered
+    "suggestions":[…],"questions":[…]}` (`comments` and `suggestions` always
+    present, `[]` when empty; `questions`, left out when empty, carries the
+    question sets the reviewer answered, resolved or replied on). Pre-filtered
     to what needs the agent — unresolved, non-outdated, non-draft, not-yet-`done`
     comments, plus any comment the reviewer just replied on. The consumer dedupes by
     `id`. `prereview comments --json` reports the same set, and both now honour
@@ -512,10 +514,15 @@ Alongside `comments.csv`, `.prereview/` holds a set of sidecar files. Those the
 | `reverted.jsonl` | **agent** (`prereview reverted`) | applied-suggestion revert acks (durable) |
 | `explain.jsonl` | **agent** (`prereview explain`) | walkthroughs of the change, shown on the Understand page (durable) |
 | `first-seen.json` | server | the diff each walkthrough was first seen against, so the page can say it predates the latest edit (durable) |
+| `questions.jsonl` | **agent** (`prereview ask`) | question sets with options, deduped by set id, last write wins (durable, append-only) |
+| `question-answers.jsonl` | server | the reviewer's picks per question set (durable) |
+| `question-status.jsonl` | server | the reviewer's resolve and hide per question set (durable) |
 | `agent-replies.jsonl` | **agent** (`prereview reply`) | agent thread replies (durable) |
 | `reviewer-replies.jsonl` | server | reviewer thread replies (durable) |
 | `llm-status.json` | **agent** (`prereview status`) | the agent's live working/done status (reset each launch) |
 | `agent-cursor.json` | **agent** (`prereview watch`, `comments --json`) | who is reading the queue: a watch heartbeat or a one-shot read, plus the last `seq` delivered — drives the Queue's agent line (reset each launch) |
+| `viewed.json` | server | the files marked viewed and what each held then (durable) |
+| `last-look.json` | server | what each file showed the last time it was on screen, for "changed since your last look" (durable) |
 | `versions/` | server | per-file version checkpoints + content blobs and their changelog (durable) |
 
 When an agent finishes a batch that edited files, prereview snapshots a new

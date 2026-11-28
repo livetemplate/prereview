@@ -46,7 +46,7 @@ character range within a line; `from_col`/`to_col` are the 0-based rune offsets)
 `file`, `area` (an image rectangle, `area` column holds `{x,y,w,h}` fractions), or
 `region` (a live-site rectangle anchored to `url`). `hidden` and `enqueued` are
 reviewer/queue view flags — ignore them. `request` is set (`judge`, `benchmark`,
-`quiz`; `extraction` on older rows) when prereview, not the reviewer, queued the
+`quiz`, `explain`; `extraction` on older rows) when prereview, not the reviewer, queued the
 row as a request to you; its body says exactly what to do. Older CSVs may have fewer trailing
 columns; index by position and default missing ones to empty. Full column docs:
 [skill/reference.md](../skill/reference.md#csv-schema).
@@ -79,13 +79,17 @@ In agent mode prereview emits one JSON object per line to stdout and to
   changed. `comments` is a full snapshot of every still-actionable comment (already
   filtered as above); `suggestions` is the reviewer's decisions on edits *you*
   proposed (see [Suggesting edits](#suggesting-edits)). Both arrays are always
-  present (`[]` when empty); dedupe by `id`.
+  present (`[]` when empty); dedupe by `id`. A `questions` array, left out when
+  empty, carries the question sets you asked with `prereview ask` that the reviewer
+  answered (see [Asking the reviewer](#asking-the-reviewer)).
 - `{"event":"files_changed","seq":N,"files":[…],"version":V,"cause":"edit"|"rollback"}`
   — reviewed files changed on disk under you (the reviewer edited them, or restored
   a version); re-read them before editing. `agent_watching:true` means none of the
   edits were yours.
-- `{"event":"end","seq":N}` — the reviewer clicked **End session**; the server
-  exits. The **only** terminator.
+- `{"event":"end","seq":N}` — the reviewer clicked **End session** or **Approve
+  and end**; the server exits. The **only** terminator. Approve and end adds
+  `"approved": true`: the reviewer approved the plan or change. Without it, ask
+  them before you go on.
 
 `watch` prints every event after `--since`, blocks for the next when caught up,
 returns a batch, and exits on `end` — loop by re-running with the highest `seq`
@@ -135,13 +139,27 @@ prereview never edits your files — you do — so an accepted edit shows up as 
 normal diff you can commit. Don't end your turn with an unapplied `accept`: once
 you stop watching, nothing else will ever apply it.
 
+### Asking the reviewer
+
+When you can't go on without the reviewer's choice, ask with options instead of a
+prose question. `prereview ask` takes a question set as JSON (up to four questions,
+two to four options each, one marked `recommended`) and shows it as a card the
+reviewer answers with a tap. The answers come back in a snapshot's `questions[]`;
+build what they picked, then `reply` and `done` the set's id. The payload is in
+[skill/reference.md](../skill/reference.md#agent-subcommands).
+
+Two more subcommands answer the reviewer's other requests. `prereview explain`
+posts a walkthrough of the change when a comment has `request` `explain`, and
+`prereview import` brings in comments left on a remote copy of a reviewed file,
+such as a pull request. Both are described in [cli.md](cli.md#subcommands).
+
 ## Why most agents poll instead
 
 prereview's `watch` loop asks the agent to (a) run the server in the background
 and (b) block-read a stream across many turns. Among current CLIs only Claude Code
 supports both robustly. The others either can't detach a background process or
 hang on a blocking read (verified against open issues in each repo), and aider has
-no watch mode at all. So for every non-Claude agent the integration polls
+no watch mode. So for every non-Claude agent the integration polls
 `prereview comments --json` once per turn instead:
 
 1. You run prereview (the installed command does this) and review in the browser.

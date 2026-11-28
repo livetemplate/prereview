@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Regenerate the animated README GIFs in docs/. Builds prereview, then records
-# thirteen scripted flows with chromedp and encodes them as pure-Go GIFs (no
+# its scripted flows with chromedp and encodes them as pure-Go GIFs (no
 # ffmpeg/gifsicle). One command so the GIFs never drift:
 #
 #   make gifs
@@ -35,6 +35,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Every flow runs even when one fails: a failed flow keeps its old GIF (encode
+# writes nothing after a failure), and the run exits 1 at the end, naming it.
+failed=()
+capture() { # <flow> <capture-tool args…>
+	local flow=$1
+	shift
+	echo "› capturing gif:$flow"
+	# Each flow starts from default view settings (theme, view, focus): the
+	# server reads the saved prefs on every page load.
+	rm -f "$PREREVIEW_UI_PREFS_PATH"
+	"$shot" --gif "$flow" "$@" --out docs || failed+=("$flow")
+}
+
 echo "› building prereview and the capture tool"
 GOWORK=off go build -o "$bin" .
 GOWORK=off go build -o "$shot" ./cmd/screenshot
@@ -65,20 +78,19 @@ JSON
 # suggestion runs before markdown so guide.md carries only the suggestion box
 # (no stray comment) in that capture.
 for flow in image suggestion search themes markdown; do
-	echo "› capturing gif:$flow"
-	"$shot" --gif "$flow" --url "$url" --out docs
+	capture "$flow" --url "$url"
 done
 
-echo "› capturing gif:hero"
-"$shot" --gif hero --url "$url" --repo "$demo" --out docs
+capture hero --url "$url" --repo "$demo"
 
 # ---- the agent flows: each on its OWN repo, server and per-user folders -----
 # These drive the agent-side subcommands and write state: versions edits
 # payment.go and records versions; thread replies; checks adds a judge; learning
-# accepts a learning and installs skills; alternatives records shortcut taps. A
+# accepts a learning and installs skills; alternatives records shortcut taps;
+# questions asks and answers; annotations resolves every comment. A
 # fresh repo, server and set of folders per flow keeps each out of the captures
 # above and out of each other. The flow gets the binary via --bin.
-for flow in versions thread checks learning understand alternatives; do
+for flow in versions thread checks learning understand alternatives questions annotations; do
 	echo "› creating demo repo and folders for gif:$flow"
 	rm -rf "$demo2"
 	bash cmd/screenshot/demo-repo.sh "$demo2" "$(pwd)/e2e/testdata/areacomments/diagram.png"
@@ -96,8 +108,7 @@ for flow in versions thread checks learning understand alternatives; do
 	[ -n "$url2" ] || { echo "server for gif:$flow failed:"; cat "$log2"; exit 1; }
 	start_watch "$demo2"
 
-	echo "› capturing gif:$flow"
-	"$shot" --gif "$flow" --url "$url2" --repo "$demo2" --bin "$bin" --out docs
+	capture "$flow" --url "$url2" --repo "$demo2" --bin "$bin"
 
 	stop_watch
 	kill "$srv2" 2>/dev/null || true
@@ -119,7 +130,10 @@ exturl=$(wait_ready "$extlog")
 [ -n "$exturl" ] || { echo "external UI failed:"; cat "$extlog"; exit 1; }
 start_watch "$extout"
 
-echo "› capturing gif:external"
-"$shot" --gif external --url "$exturl" --out docs
+capture external --url "$exturl"
 
+if [ ${#failed[@]} -gt 0 ]; then
+	echo "✗ ${#failed[@]} flow(s) failed, their GIFs left as they were: ${failed[*]}"
+	exit 1
+fi
 echo "› done → docs/*.gif (look at every frame: go run ./cmd/screenshot -dump docs/<name>.gif -out <dir>)"

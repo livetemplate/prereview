@@ -48,6 +48,11 @@ func TestE2E_MarkUnread(t *testing.T) {
 			// unread holds its slot.
 			slot := `header.file-head .file-head-resume button`
 			waitJSDiag(t, p, `[...document.querySelectorAll('`+slot+`')].map(b=>b.name).join() === 'markUnread'`, "Mark unread in Jump to unread's slot", diag)
+			// It is one compact chip like Comment on file: an unsized icon once
+			// filled the header (an svg with no width takes its container's).
+			if n := evalInt(t, p, `(()=>{const h=b=>b.getBoundingClientRect().height, m=document.querySelector('`+slot+`[name="markUnread"]'), c=document.querySelector('header.file-head button[name="openFileComment"]');return Math.round(h(m)-h(c));})()`); n > 2 {
+				t.Errorf("Mark unread is %dpx taller than Comment on file%s", n, diag())
+			}
 			if way == "key" {
 				if err := chromedp.Run(ctx, chromedp.KeyEvent("u")); err != nil {
 					t.Fatalf("press u: %v%s", err, diag())

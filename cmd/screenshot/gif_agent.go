@@ -70,7 +70,7 @@ func requestComment(bin, repo, kind string) (review.StreamComment, error) {
 // the stand-in agent answers sooner), so it doesn't cover the next frame.
 func clearFlash() chromedp.Action {
 	return chromedp.Tasks{
-		clickJS(`.flash-toast button[name="clearFlash"]`),
+		clickIfPresent(`.flash-toast button[name="clearFlash"]`),
 		chromedp.WaitNotPresent(`.flash-toast`, chromedp.ByQuery),
 	}
 }
@@ -112,7 +112,7 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 		check(rec.capture(ctx, 150)) // the doc, with the checks bar
 
 		step(ctx,
-			clickJS(`.ck-strip-sum[aria-expanded="false"]`), // the bar starts as one summary line
+			clickIfPresent(`.ck-strip-sum[aria-expanded="false"]`), // the bar starts as one summary line
 			chromedp.WaitVisible(`.ck-strip-list`, chromedp.ByQuery),
 			clickByText(`.ck-strip.is-idle .ck-strip-pick button`, "Filler"),
 			chromedp.WaitReady(`.code mark.check-finding`, chromedp.ByQuery),
@@ -136,7 +136,8 @@ func gifChecks(allocCtx context.Context, url, repo, bin, outDir string) {
 		step(ctx,
 			chromedp.Click(`.lib-back button`, chromedp.ByQuery),
 			chromedp.Click(`.checks-dropdown .checks-trigger`, chromedp.ByQuery),
-			chromedp.WaitVisible(`.checks-panel button[name="runJudges"]`, chromedp.ByQuery),
+			// Run judges is always listed, greyed out until a judge applies (#291).
+			chromedp.WaitVisible(`.checks-panel button[name="runJudges"]:not([disabled])`, chromedp.ByQuery),
 			chromedp.Sleep(200*time.Millisecond),
 		)
 		step(ctx, settled())
@@ -273,7 +274,7 @@ func gifUnderstand(allocCtx context.Context, url, repo, bin, outDir string) {
 		step(ctx, settled())
 		check(rec.capture(ctx, 120)) // the diff
 		step(ctx,
-			chromedp.Click(`.quiz-trigger[name="toggleUnderstand"]`, chromedp.ByQuery),
+			chromedp.Click(`.toolbar-inline button[name="toggleUnderstand"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`button[name="requestExplain"]`, chromedp.ByQuery),
 			chromedp.Click(`button[name="requestExplain"]`, chromedp.ByQuery),
 			chromedp.WaitVisible(`.understand .request-pending`, chromedp.ByQuery),
@@ -391,9 +392,7 @@ func gifAlternatives(allocCtx context.Context, url, repo, bin, outDir string) {
 		)
 		step(ctx, settled())
 		check(rec.capture(ctx, 160)) // a shortcut chip filled the comment
-		step(ctx, clickJS(saveBtn))
-		cid := savedCommentID(ctx)
-		step(ctx, chromedp.Sleep(300*time.Millisecond))
+		cid := saveComment(ctx)
 
 		const orig = "Transient gateway errors are retried with backoff."
 		note := "Shorter: keep the backoff detail or not?"
@@ -430,5 +429,134 @@ func gifAlternatives(allocCtx context.Context, url, repo, bin, outDir string) {
 		step(ctx, settled())
 		check(rec.capture(ctx, 280)) // picked one: accepted, waiting for the agent
 		return rec.encode(filepath.Join(outDir, "alternatives.gif"))
+	})
+}
+
+// gifQuestions — the agent asks with options (#290): the reviewer flags the
+// retry loop, the agent asks how it should wait between attempts, the reviewer
+// taps an option, and the agent replies with what it built.
+func gifQuestions(allocCtx context.Context, url, repo, bin, outDir string) {
+	withCtx(allocCtx, "gif:questions", func(ctx context.Context) error {
+		rec := &gifRec{}
+		if err := chromedp.Run(ctx, base(url, "payment.go:L13-L16", 1280, 800)...); err != nil {
+			return err
+		}
+		step(ctx,
+			typeComposer("The retry loop doesn't wait between attempts, so a failing gateway gets three calls at once."),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 150)) // the reviewer's comment
+		cid := saveComment(ctx)
+
+		set, _ := json.Marshal(map[string]any{
+			"id": cid + "-q", "for": cid, "file": "payment.go", "from_line": 13, "to_line": 16,
+			"steps": []map[string]any{{
+				"id": "wait", "prompt": "How should the retry loop wait between attempts?",
+				"options": []map[string]string{
+					{"label": "Back off: 100, 200, 400 ms", "detail": "A short outage recovers; a long one returns the error in under a second."},
+					{"label": "Wait 200 ms each time", "detail": "Simpler, but a busy gateway gets the same pace of calls."},
+				},
+				"recommended": 0,
+			}},
+		})
+		if _, err := agentOut(bin, string(set), "ask", "--out", repo); err != nil {
+			return err
+		}
+		card := `.question-card[data-key="question-` + cid + `-q"]`
+		step(ctx,
+			chromedp.WaitVisible(card+` button[name="pickQuestionOption"]`, chromedp.ByQuery),
+			scrollTo(card),
+			chromedp.Sleep(300*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 260)) // the question, its pick marked Recommended
+
+		step(ctx,
+			chromedp.Click(card+` button[name="pickQuestionOption"]`, chromedp.ByQuery),
+			chromedp.WaitReady(card+`.is-sent`, chromedp.ByQuery),
+			chromedp.Sleep(300*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 150)) // one tap sends the answer
+
+		const built = "Added the backoff: 100, 200 and 400 ms, then the error goes back to the caller."
+		if _, err := agentOut(bin, "", "reply", "--out", repo, cid+"-q", "--body", built); err != nil {
+			return err
+		}
+		if _, err := agentOut(bin, "", "done", "--out", repo, cid+"-q", cid); err != nil {
+			return err
+		}
+		step(ctx,
+			chromedp.Poll(fmt.Sprintf(`document.body.innerText.includes(%q)`, "Added the backoff"), nil, chromedp.WithPollingTimeout(10*time.Second)),
+			scrollTo(card),
+			chromedp.Sleep(300*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 300)) // the agent says what it built
+		return rec.encode(filepath.Join(outDir, "questions.gif"))
+	})
+}
+
+// gifAnnotations — every annotation in one list (#266/#291): comments and a
+// suggestion across two files, the list's filter narrowed to suggestions, then
+// Resolve all and its Undo.
+func gifAnnotations(allocCtx context.Context, url, repo, bin, outDir string) {
+	seedLineComment(allocCtx, url, "payment.go:L13-L16", "The retry loop doesn't wait between attempts.")
+	seedLineComment(allocCtx, url, "payment.go:L18", "Return the gateway's error, not a generic string.")
+	seedFileComment(allocCtx, url, "guide.md", "Open with what the reader has to do, then explain the flow.")
+	if _, err := agentOut(bin, `{"id":"sg-guide","file":"guide.md","from_line":12,"to_line":12,"original":"Transient gateway errors are retried with backoff.","proposed":"Transient gateway errors are retried with exponential backoff, up to maxRetries attempts.","note":"be specific about the backoff strategy"}`, "suggest", "--out", repo); err != nil {
+		fail("[gif:annotations] suggest: %v", err)
+		return
+	}
+	withCtx(allocCtx, "gif:annotations", func(ctx context.Context) error {
+		rec := &gifRec{}
+		if err := chromedp.Run(ctx, base(url, "payment.go", 1280, 800)...); err != nil {
+			return err
+		}
+		const list = `.ac-head`
+		step(ctx,
+			chromedp.Click(`.toolbar-inline button[name="toggleCommentList"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(list, chromedp.ByQuery),
+			chromedp.Sleep(300*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 220)) // every file's comments and suggestions
+
+		// Kinds: turn comments off, leaving the suggestion.
+		comments := list + ` .ann-filter form:has(input[name="kind"][value="comment"]) button[name="toggleAnnKind"]`
+		step(ctx,
+			chromedp.Click(list+` .ann-filter-trigger`, chromedp.ByQuery),
+			chromedp.WaitVisible(comments, chromedp.ByQuery),
+			chromedp.Sleep(250*time.Millisecond),
+		)
+		check(rec.capture(ctx, 130)) // the list's own filter
+		step(ctx,
+			chromedp.Click(comments, chromedp.ByQuery),
+			chromedp.Sleep(400*time.Millisecond),
+			closeMenus(),
+			chromedp.Sleep(150*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 170)) // suggestions only
+
+		step(ctx,
+			clickJS(comments),
+			chromedp.Sleep(400*time.Millisecond),
+			closeMenus(),
+			chromedp.Click(list+` button[name="resolveAll"]`, chromedp.ByQuery),
+			chromedp.WaitVisible(`button[name="undoResolveAll"]`, chromedp.ByQuery),
+			chromedp.Sleep(300*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 220)) // Resolve all, with its Undo
+
+		step(ctx,
+			chromedp.Click(`button[name="undoResolveAll"]`, chromedp.ByQuery),
+			chromedp.WaitNotPresent(`button[name="undoResolveAll"]`, chromedp.ByQuery),
+			chromedp.Sleep(400*time.Millisecond),
+		)
+		step(ctx, settled())
+		check(rec.capture(ctx, 200)) // undone: the comments are open again
+		return rec.encode(filepath.Join(outDir, "annotations.gif"))
 	})
 }

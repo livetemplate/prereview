@@ -19,6 +19,12 @@ isolate_under() { # <name>: a fresh set of per-user folders under $iso/<name>
 }
 isolate_under base
 export PREREVIEW_NO_UPDATE=1
+# Overrides that would reach past the isolated library (prompts, shortcuts,
+# quizzes, walkthrough guidance), change the printed URL, or retime the agent
+# states the frames show.
+unset PREREVIEW_PROMPTS_DIR PREREVIEW_SHORTCUTS_DIR PREREVIEW_QUIZZES_DIR PREREVIEW_EXPLAIN_DIR \
+	PREREVIEW_PUBLIC_URL PREREVIEW_AUTO_UPDATE \
+	PREREVIEW_AGENT_HEARTBEAT PREREVIEW_AGENT_STALE PREREVIEW_AGENT_STALL_AFTER PREREVIEW_EDIT_SETTLE
 watcher=""
 
 # A stand-in agent: a real `prereview watch` looping on the queue, so every

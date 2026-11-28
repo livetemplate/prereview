@@ -38,9 +38,11 @@ file's header switches to source; long documents get a table-of-contents sidebar
 **Diff**, **Whitespace**, **Fold**, **Annotate** and **Boxes** sit beside the file
 name; on a phone, the ⋯ menu lists the same controls. Turning **Diff** off (<kbd>d</kbd>)
 shows the plain file. They always show. One that doesn't apply to the open file is
-greyed out, and its tooltip says why; on a phone, the reason shows under its name. The toolbar keeps what acts on the whole review:
-Search, Focus, Annotations, Understand, the color scheme and mode, Shortcuts and
-the Guide.
+greyed out, and its tooltip says why; on a phone, the reason shows under its name.
+
+The toolbar keeps what acts on the whole review: Search, Focus, Annotations,
+Understand, the color scheme and mode, Shortcuts, the Guide, the Library and the
+Queue. While a live site shows, it also has **Boxes** for the site's annotations.
 
 **Annotate an image region.** On an image, drag a rectangle to select an area
 and comment on it. The box is stored as fractions of the image, so it survives
@@ -123,7 +125,8 @@ the open file shows: **Open** (the default), **All**, which adds resolved ones
 comments, suggestions, questions and quiz questions on or off; <kbd>s</kbd>
 toggles suggestions. Each file keeps its own setting for the session, and the
 arrows skip what a file hides. To set aside a single resolved comment, hide just
-that one; **Unhide** in the filter brings it back.
+that one; **Unhide resolved**, which the filter shows while something is hidden,
+brings it back.
 
 **×** shrinks the bar to just the filter. When nothing is open but the file has
 annotations, the filter stays as that small chip, so it's always one click away.
@@ -263,7 +266,7 @@ that comment: resolving the comment resolves the question too.
 
 ## Understand
 
-**Understand** in the file header (or <kbd>z</kbd>) opens a page for getting to
+**Understand** in the toolbar (or <kbd>z</kbd>) opens a page for getting to
 grips with a change before you accept it. It has a walkthrough of the whole change,
 its flow diagrams when the agent drew any, and a quiz on the change.
 
