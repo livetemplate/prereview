@@ -496,9 +496,17 @@ func (c *PrereviewController) selectFileForJump(state PrereviewState, file strin
 
 // ToggleLiveView switches surfaces in a combined session (#114): the header's
 // Live toggle and the "l" shortcut. It flips what is on screen, so from a
-// full-page view over the live site it brings the site back.
+// full-page view over the live site it brings the site back. Switching back to
+// the files opens the file that serves the page the site was on, when one of
+// the reviewed files does (fileForPage); otherwise the file open before stays.
 func (c *PrereviewController) ToggleLiveView(state PrereviewState, ctx *livetemplate.Context) (PrereviewState, error) {
-	showLive(&state, !state.LiveShowing())
+	wasLive := state.LiveShowing()
+	showLive(&state, !wasLive)
+	if wasLive && state.Combined() {
+		if f := fileForPage(state.CurrentURL, state.Files); f != "" && f != state.SelectedFile {
+			return c.selectFileForJump(state, f)
+		}
+	}
 	return state, nil
 }
 

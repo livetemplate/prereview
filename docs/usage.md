@@ -54,7 +54,9 @@ re-encoding and resizing.
 prereview proxies a running dev server, so you can drag a box on any part of the
 live page and comment. Add a directory (`--external <url> .`) to review its files in
 the same session: the **Live** toggle in the header (or <kbd>l</kbd>) switches
-between them, and both kinds of comment share one queue. The annotation re-pins as the page scrolls. Once the agent has
+between them, and both kinds of comment share one queue. Switching back to the
+files opens the file that serves the page you were on, such as `about.html` or
+`content/about.md` for `/about`, when one of the reviewed files does. The annotation re-pins as the page scrolls. Once the agent has
 worked on or answered a box, it turns dashed with a ✓ until you resolve it, and the
 **Annotations** panel shows its reply, with a **Reply** button to push back. Boxes on
 an image comment work the same way.
